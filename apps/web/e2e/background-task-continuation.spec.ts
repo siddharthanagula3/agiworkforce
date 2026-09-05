@@ -178,12 +178,15 @@ test.describe('background task continuation', () => {
 
     await selectComposerModel(page, model.name);
 
+    await page.getByRole('button', { name: /add attachments and tools/i }).click();
     const agiWorkToggle = page.getByRole('button', { name: 'AGI Work', exact: true });
     await expect(agiWorkToggle).toBeVisible({ timeout: 20_000 });
     if ((await agiWorkToggle.getAttribute('aria-pressed')) !== 'true') {
       await agiWorkToggle.click();
     }
     await expect(agiWorkToggle).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('composer-work-mode-chip')).toBeVisible();
 
     const marker = `bgtask-${Date.now()}`;
     const prompt = `Background task continuation check ${marker}. Reply with exactly one short sentence acknowledging this instruction. Do not ask follow-up questions.`;

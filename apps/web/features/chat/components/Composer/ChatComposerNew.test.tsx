@@ -228,9 +228,9 @@ describe('ChatComposerNew', () => {
     }
   });
 
-  it('keeps plus, textbox, and Send on one line (flex-nowrap) at rest', () => {
+  it('keeps plus, textbox, and Send in one row container at rest', () => {
     const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
-    const cluster = container.querySelector('.flex-nowrap') as HTMLElement | null;
+    const cluster = container.querySelector('.chat-composer-row') as HTMLElement | null;
     expect(cluster).toBeTruthy();
     expect(cluster!.className).toContain('min-w-0');
 
@@ -321,10 +321,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByTestId('composer-work-mode-chip')).toHaveTextContent('AGI Work');
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'test');
@@ -855,12 +852,13 @@ describe('ChatComposerNew', () => {
 
   it('renders the work-mode toggle ONLY when backed by host project data (never disconnected)', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /toggle web search/i })).not.toBeInTheDocument();
   });
 
-  it('renders the connected Chat | AGI Work segmented toggle when project data is provided', () => {
+  it('keeps the Chat | AGI Work toggle in the + menu at every width, never on the composer face', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
@@ -873,14 +871,20 @@ describe('ChatComposerNew', () => {
         }}
       />,
     );
+
+    expect(document.querySelector('.chat-composer-mode-inline')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    const modeGroup = document.querySelector('.chat-composer-mode-in-menu');
+    expect(modeGroup).not.toBeNull();
+    expect(modeGroup).not.toHaveClass('sm:hidden');
+
     const chatButton = screen.getByRole('button', { name: 'Chat' });
     expect(chatButton).toHaveAttribute('aria-pressed', 'true');
-    expect(chatButton.parentElement).toHaveClass('chat-composer-mode-inline');
-    expect(chatButton.closest('.chat-composer-container')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
-      'title',
-      'Chat: quick questions and conversation',
-    );
+    expect(chatButton).toHaveAttribute('title', 'Chat: quick questions and conversation');
+    expect(modeGroup?.contains(chatButton)).toBe(true);
     expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -889,9 +893,6 @@ describe('ChatComposerNew', () => {
       'title',
       'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
     );
-
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    expect(document.querySelector('.chat-composer-mode-in-menu')).not.toBeNull();
   });
 
   it('clicking AGI Work flips both buttons pressed state and rewrites the placeholder', () => {
@@ -908,6 +909,7 @@ describe('ChatComposerNew', () => {
         }}
       />,
     );
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     const chatButton = screen.getByRole('button', { name: 'Chat' });
     const agiWorkButton = screen.getByRole('button', { name: 'AGI Work' });
     const textarea = screen.getByRole('textbox', { name: /message input/i });
@@ -920,16 +922,76 @@ describe('ChatComposerNew', () => {
 
     expect(agiWorkButton).toHaveAttribute('aria-pressed', 'true');
     expect(chatButton).toHaveAttribute('aria-pressed', 'false');
-    expect(textarea).toHaveAttribute(
-      'placeholder',
-      'Describe a multi-step task and what it should deliver',
-    );
+    expect(textarea).toHaveAttribute('placeholder', 'Describe a task and what it should deliver');
 
     fireEvent.click(chatButton);
 
     expect(chatButton).toHaveAttribute('aria-pressed', 'true');
     expect(agiWorkButton).toHaveAttribute('aria-pressed', 'false');
     expect(textarea).toHaveAttribute('placeholder', 'How can I help you today?');
+  });
+
+  it('shows the selected work mode as a removable chip in the composer leading slot', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        placeholder="How can I help you today?"
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('composer-work-mode-chip')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+
+    const chip = screen.getByTestId('composer-work-mode-chip');
+    expect(chip).toHaveTextContent('AGI Work');
+    expect(chip).toHaveAttribute('aria-label', 'Turn off AGI Work');
+    expect(chip.closest('.chat-composer-row')).not.toBeNull();
+    expect(chip.previousElementSibling).toBe(
+      screen.getByRole('button', { name: /add attachments and tools/i }).parentElement,
+    );
+
+    fireEvent.click(chip);
+
+    expect(screen.queryByTestId('composer-work-mode-chip')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveAttribute(
+      'placeholder',
+      'How can I help you today?',
+    );
+  });
+
+  it('gives the text field its own wrappable row so narrow composers do not squeeze it', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const row = document.querySelector('.chat-composer-row');
+    expect(row).not.toBeNull();
+    expect(row).not.toHaveClass('flex-nowrap');
+
+    const field = document.querySelector('.chat-composer-field');
+    expect(field).not.toBeNull();
+    expect(field?.contains(screen.getByRole('textbox', { name: /message input/i }))).toBe(true);
+
+    const plusButton = screen.getByRole('button', { name: /add attachments and tools/i });
+    expect(plusButton.parentElement).toHaveClass('chat-composer-leading-end');
   });
 
   it('keeps only explicit task modes inside the + menu', () => {
@@ -1141,7 +1203,9 @@ describe('ChatComposerNew', () => {
     }
 
     function enterAgiWork() {
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+      fireEvent.keyDown(document, { key: 'Escape' });
     }
 
     it('is absent when the host provides no project data (no cosmetic control)', () => {
@@ -1186,10 +1250,7 @@ describe('ChatComposerNew', () => {
     it('a preselected project (URL entry) auto-enters AGI Work and shows the project on the chip', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
       render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
-      expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
+      expect(screen.getByTestId('composer-work-mode-chip')).toHaveTextContent('AGI Work');
       // WCAG 2.5.3: the accessible name carries the visible chip text, so a
       // voice-control user can say what they can read and a screen reader
       // announces WHICH project is scoped, not just that a picker exists.
@@ -1203,7 +1264,7 @@ describe('ChatComposerNew', () => {
     it('switching back to Chat clears the project selection (no hidden scope)', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
       render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+      fireEvent.click(screen.getByTestId('composer-work-mode-chip'));
       expect(picker.onSelectProject).toHaveBeenCalledWith(null);
       expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
     });
