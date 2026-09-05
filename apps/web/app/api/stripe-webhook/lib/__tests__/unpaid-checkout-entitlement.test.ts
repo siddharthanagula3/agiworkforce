@@ -18,6 +18,11 @@ vi.mock('../db', () => ({
   handleInvoicePaymentFailed: vi.fn(),
   handleChargeRefunded: vi.fn(),
   handleDisputeCreated: vi.fn(),
+  updateSubscriptionFromStripeSubscription: vi.fn(async () => undefined),
+  CreditService: {
+    getBalance: vi.fn(async () => null),
+    deductCredits: vi.fn(async () => undefined),
+  },
 }));
 
 import { dispatchStripeEvent } from '../handlers';

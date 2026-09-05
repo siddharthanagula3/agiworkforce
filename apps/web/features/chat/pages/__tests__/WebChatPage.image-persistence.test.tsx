@@ -144,6 +144,7 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
       </button>
     </>
   ),
+  SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
 }));
 
 vi.mock('../../components/messages/ChatMessageList', async () => {

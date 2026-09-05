@@ -4,7 +4,10 @@ import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { createMapSearchToolDefinition } from '@/lib/services/map-search-tool-service';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
-vi.mock('./tool-loop-anthropic', () => ({ buildToolLoopStream: provider.stream }));
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: provider.stream,
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),

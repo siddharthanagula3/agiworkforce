@@ -11,7 +11,10 @@ const loggerMocks = vi.hoisted(() => ({
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 
 const recordAuditEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent,
+  logSecurityEvent: vi.fn(async () => undefined),
+}));
 
 vi.mock('@/lib/price-tier-mapping', () => ({
   isPriceIdRegistered: (priceId: string | null | undefined) => priceId === 'price_current',

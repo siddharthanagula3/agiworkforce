@@ -6,7 +6,10 @@ import { PLACES_SEARCH_TOOL_NAME, type PlacesSearchPayload } from '@agiworkforce
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 const places = vi.hoisted(() => ({ execute: vi.fn() }));
 
-vi.mock('./tool-loop-anthropic', () => ({ buildToolLoopStream: provider.stream }));
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: provider.stream,
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
