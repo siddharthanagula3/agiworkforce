@@ -44,6 +44,7 @@ export {
   observedRoutePenalty,
   previewAutoRoute,
   resolveAutoRoute,
+  resolveTierMaximumProfile,
   CANARY_ENV,
   OBSERVED_HEALTH_ENV,
 } from './auto';
