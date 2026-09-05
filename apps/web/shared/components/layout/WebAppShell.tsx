@@ -57,6 +57,7 @@ import {
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
+import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
 import {
@@ -155,6 +156,8 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
   const toggleStar = useProjectStore((s) => s.toggleStar);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
 
+  const { isUnread, toggleUnread } = useUnreadConversations();
+
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
       conversations.map((c) => ({
@@ -166,8 +169,9 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
         archived: c.isArchived ?? false,
         projectId: c.projectId ?? undefined,
         messageCount: c.messageCount,
+        unread: isUnread(c.id),
       })),
-    [conversations],
+    [conversations, isUnread],
   );
 
   const sidebarProjects = useMemo<SidebarProject[]>(
@@ -224,6 +228,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
     },
     [conversations, updateConversation],
   );
+  const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => void updateConversation(sessionId, { projectId }),
     [updateConversation],
@@ -243,6 +248,19 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
     (projectId: string) => router.push(`/chat/projects/${encodeURIComponent(projectId)}`),
     [router],
   );
+  // Rename opens the same project-home page as Settings: that page's own
+  // kebab menu is where the rename field actually lives, this shell has no
+  // settings dialog of its own to open inline.
+  const handleProjectRename = handleProjectSettings;
+  const handleProjectShare = useCallback(async (projectId: string) => {
+    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(projectId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Project link copied');
+    } catch {
+      toast.error('Could not copy the project link');
+    }
+  }, []);
   const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
@@ -424,9 +442,12 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
     onTogglePin: handlePinSession,
     onStar: handleStarSession,
     onArchive: handleArchiveSession,
+    onMarkUnread: handleMarkUnreadSession,
     onMoveToProject: handleMoveToProjectSession,
     onProjectOpen: handleProjectOpen,
     onProjectNewChat: handleProjectNewChat,
+    onProjectRename: handleProjectRename,
+    onProjectShare: (id: string) => void handleProjectShare(id),
     onProjectSettings: handleProjectSettings,
     onProjectPin: handleProjectPin,
     onProjectDelete: handleProjectDelete,

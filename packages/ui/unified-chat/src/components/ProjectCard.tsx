@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
-import { FolderOpen, MoreHorizontal, Star } from 'lucide-react';
+import { FolderOpen, MoreHorizontal, Share2, Star } from 'lucide-react';
 import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
@@ -9,6 +9,7 @@ export interface ProjectCardProps {
   project: Project;
   active?: boolean;
   onSelect?: (project: Project) => void;
+  onShare?: (project: Project) => void;
   onEdit?: (project: Project) => void;
   onArchive?: (project: Project) => void;
   onUnarchive?: (project: Project) => void;
@@ -36,6 +37,7 @@ export function ProjectCard({
   project,
   active = false,
   onSelect,
+  onShare,
   onEdit,
   onArchive,
   onUnarchive,
@@ -89,7 +91,7 @@ export function ProjectCard({
     'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors';
 
   const archiveAction = project.isArchived ? onUnarchive : onArchive;
-  const hasMenu = !!(onEdit || archiveAction || onDelete);
+  const hasMenu = !!(onShare || onEdit || archiveAction || onDelete);
 
   return (
     <>
@@ -170,21 +172,25 @@ export function ProjectCard({
                     aria-label={`Options for ${project.name}`}
                     className="absolute right-0 top-full z-20 mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
                   >
-                    {/* Star / Unstar */}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={menuItemCls}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleStar(project.id);
-                        onStarChange?.(project.id, !project.starred);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <Star size={13} strokeWidth={1.75} aria-hidden="true" />
-                      {project.starred ? 'Unstar' : 'Star'}
-                    </button>
+                    {/* Order matches the leaders' project row menu: share,
+                        edit (rename + settings), archive, delete. Star lives
+                        as its own always-visible toggle beside the menu
+                        trigger, so it is not duplicated inside the menu. */}
+                    {onShare && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={menuItemCls}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onShare(project);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Share2 size={13} strokeWidth={1.75} aria-hidden="true" />
+                        Share
+                      </button>
+                    )}
 
                     {onEdit && (
                       <button
