@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-28
+Last updated: 2026-09-04
 
 Claude Code adapter. **Read `AGENTS.md` first and obey it**, it is the canonical
 contract for every agent. Nothing here overrides or weakens it; this file only
@@ -18,6 +18,10 @@ adds what is specific to Claude Code.
   runs against real data: name the controls it must not click, and require it
   to reproduce a finding before reporting it. See AGENTS.md §1 on verifying the
   instrument, which applies to the agent as much as to its harness.
+- Route delegated work with `.agents/skills/model-orchestration`: Fable 5.1
+  leads and arbitrates, Opus 5 takes difficult implementation, Sonnet 5 takes
+  exploration, research, browser work and simple edits. Coordinate through
+  named agent teammates and messages, not scripted workflow runs.
 - Use skills in `.agents/skills/` for repeatable procedures rather than
   re-deriving them. `skills-lock.json` pins their content hashes, so a reformat
   of any `SKILL.md` fails `scripts/verify-skills-lock.mjs` in CI.
