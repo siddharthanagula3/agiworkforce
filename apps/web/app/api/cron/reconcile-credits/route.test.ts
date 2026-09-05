@@ -17,6 +17,7 @@ vi.mock('@/lib/services/video-incident-alert-service', () => ({
 }));
 vi.mock('@/lib/support/handoff/config', () => ({
   getHandoffConfig: vi.fn(() => ({ fallbackEmail: 'ops@agiworkforce.com' })),
+  isValidEmail: vi.fn(() => true),
 }));
 vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: vi.fn(),
