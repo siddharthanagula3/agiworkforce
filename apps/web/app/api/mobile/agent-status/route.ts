@@ -5,8 +5,7 @@ import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { requireCurrentUserId } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { APPROVAL_CHECKPOINT_TTL_HOURS } from '@/lib/services/cloud-agent-run-service';
 
@@ -37,8 +36,7 @@ interface PendingPause {
 }
 
 async function handleGet(request: NextRequest) {
-  const userId = await requireCurrentUserId(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
 
   let pauseRows: unknown[];
   let runningRows: { running: number | string }[];

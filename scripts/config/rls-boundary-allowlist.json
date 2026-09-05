@@ -106,10 +106,6 @@
       "reason": "pending scoped migration"
     },
     {
-      "path": "apps/web/app/api/mobile/agent-status/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/mobile/content-report/route.ts",
       "reason": "pending scoped migration"
     },
@@ -127,18 +123,6 @@
     },
     {
       "path": "apps/web/app/api/portal/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/projects/[id]/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/projects/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/search/route.ts",
       "reason": "pending scoped migration"
     },
     {

@@ -15,9 +15,11 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: mockRequireCurrentUserId,
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+    userId: await mockRequireCurrentUserId(),
+    organizationId: null,
   })),
 }));
 
