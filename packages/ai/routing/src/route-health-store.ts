@@ -33,7 +33,15 @@ export interface RouteHealthKeyValueStore {
   batch(): RouteHealthKeyValueBatch;
 }
 
-export type RouteHealthScope = 'route' | 'credential';
+/**
+ * `shadow` is a third keyspace, not a flag on a route observation.
+ *
+ * A mirrored request was never served, so its outcome must never reach route
+ * ranking or a breaker. Keeping it in its own key prefix makes that structural:
+ * ranking reads the `route` scope and has no way to see a shadow event, rather
+ * than relying on every future reader remembering to filter one out.
+ */
+export type RouteHealthScope = 'route' | 'credential' | 'shadow';
 
 export type RouteBreakerState = 'closed' | 'open' | 'half_open';
 
@@ -77,6 +85,13 @@ const NONCE_START_INDEX = 2;
 const KEY_SEPARATOR = ':';
 const ROUTE_EVENTS_KEY_PREFIX = 'agi-rhealth:events';
 const CREDENTIAL_EVENTS_KEY_PREFIX = 'agi-rhealth:credential';
+const SHADOW_EVENTS_KEY_PREFIX = 'agi-rhealth:shadow';
+
+const EVENTS_KEY_PREFIX_BY_SCOPE: Readonly<Record<RouteHealthScope, string>> = {
+  route: ROUTE_EVENTS_KEY_PREFIX,
+  credential: CREDENTIAL_EVENTS_KEY_PREFIX,
+  shadow: SHADOW_EVENTS_KEY_PREFIX,
+};
 
 const EVENT_FIELD_NOW = 'nowMs';
 const EVENT_FIELD_CLASS = 'class';
@@ -219,8 +234,7 @@ export function resolveRouteHealthConfig(
 }
 
 export function routeHealthEventsKey(scope: RouteHealthScope, id: string): string {
-  const prefix = scope === 'credential' ? CREDENTIAL_EVENTS_KEY_PREFIX : ROUTE_EVENTS_KEY_PREFIX;
-  return [prefix, id].join(KEY_SEPARATOR);
+  return [EVENTS_KEY_PREFIX_BY_SCOPE[scope], id].join(KEY_SEPARATOR);
 }
 
 export interface RouteOutcomeEvent {

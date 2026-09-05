@@ -61,6 +61,23 @@ const POLICY_FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/auto-route-policy.json', import.meta.url),
 );
 
+/**
+ * Canary is a TypeScript-only stage, for the same reason observed health and
+ * organization policy are: it hashes a live request id the Rust resolver has no
+ * counterpart for, and a canary the breaker pulls needs the health signal the
+ * crate cannot read. Its cases live here rather than in the shared file.
+ *
+ * With no slot declaring a canary, every case here equals its shared-fixture
+ * case, which is exactly the property worth pinning: the day a canary is
+ * declared, this file moves and the diff names every route that changed.
+ */
+const CANARY_FIXTURE_PATH = fileURLToPath(
+  new URL('./fixtures/auto-route-canary.json', import.meta.url),
+);
+
+/** Ids spread across the hash space so a declared fraction cannot fall entirely on one side. */
+const CANARY_REQUEST_IDS = ['request-a', 'request-b', 'request-c', 'request-d'] as const;
+
 const OBSERVED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
 const PENALISED_FAILURE_RATE = 0.9;
 const PENALISED_LATENCY_MS = 4_000;
@@ -122,7 +139,9 @@ function encode(decision: ReturnType<typeof resolveAutoRoute>): string {
 function computeCases(): Record<string, string> {
   const cases: Record<string, string> = {};
   const record = (key: string, request: Parameters<typeof resolveAutoRoute>[0]): void => {
-    cases[key] = encode(resolveAutoRoute({ ...request, enableTaskFamilyStage: false }));
+    cases[key] = encode(
+      resolveAutoRoute({ ...request, enableTaskFamilyStage: false, enableCanary: false }),
+    );
   };
 
   for (const selection of aliases) {
@@ -233,6 +252,39 @@ function computeObservedCases(): Record<string, string> {
   return cases;
 }
 
+function canaryCaseKey(
+  selection: string,
+  taskType: RoutingTaskType,
+  subscriptionTier: string,
+  requestId: string,
+): string {
+  return `canary|${selection}|${taskType}|${subscriptionTier}|${OBSERVED_TRUST_MODE}|${requestId}`;
+}
+
+function computeCanaryCases(): Record<string, string> {
+  const cases: Record<string, string> = {};
+  for (const selection of aliases) {
+    for (const taskType of TASK_TYPES) {
+      for (const subscriptionTier of TIERS) {
+        for (const requestId of CANARY_REQUEST_IDS) {
+          cases[canaryCaseKey(selection, taskType, subscriptionTier, requestId)] = encode(
+            resolveAutoRoute({
+              selection,
+              taskType,
+              subscriptionTier,
+              trustMode: OBSERVED_TRUST_MODE,
+              enableTaskFamilyStage: false,
+              enableCanary: true,
+              requestId,
+            }),
+          );
+        }
+      }
+    }
+  }
+  return cases;
+}
+
 interface PolicyScenario {
   suffix: string;
   policy: (vendor: string, modelKey: string) => ModelAccessPolicy | null;
@@ -334,6 +386,10 @@ describe('auto-route cross-language conformance', () => {
         POLICY_FIXTURE_PATH,
         `${JSON.stringify(computePolicyCases(), null, FIXTURE_INDENT)}\n`,
       );
+      writeFileSync(
+        CANARY_FIXTURE_PATH,
+        `${JSON.stringify(computeCanaryCases(), null, FIXTURE_INDENT)}\n`,
+      );
       expect(Object.keys(computed).length).toBeGreaterThan(0);
     });
     return;
@@ -387,6 +443,50 @@ describe('auto-route cross-language conformance', () => {
         return observedRecorded[key.replace(FLAG_ON_SUFFIX, FLAG_OFF_SUFFIX)] !== value;
       });
       expect(moved.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('canary conformance', () => {
+    const canaryComputed = computeCanaryCases();
+    const canaryRecorded = JSON.parse(readFileSync(CANARY_FIXTURE_PATH, 'utf8')) as Record<
+      string,
+      string
+    >;
+
+    it('covers the same cases the fixture records', () => {
+      expect(Object.keys(canaryComputed).sort()).toEqual(Object.keys(canaryRecorded).sort());
+    });
+
+    it('reaches the recorded decision for every case', () => {
+      const drifted = Object.entries(canaryComputed).filter(
+        ([key, value]) => canaryRecorded[key] !== value,
+      );
+      expect(drifted).toEqual([]);
+    });
+
+    it('never answers with a canary from a slot that declares none', () => {
+      const declared = Object.entries(
+        (modelRegistry as unknown as { policies: { auto: { slots: Record<string, unknown> } } })
+          .policies.auto.slots,
+      ).filter(([, slot]) => (slot as { canary?: unknown }).canary !== undefined);
+      const served = Object.values(canaryRecorded).filter(
+        (value) => value.split(';')[3] === 'canary',
+      );
+      expect(served.length === 0 || declared.length > 0).toBe(true);
+    });
+
+    it('reproduces the shared fixture byte for byte while no slot declares a canary', () => {
+      const drifted = Object.entries(canaryRecorded)
+        .map(([key, value]) => {
+          const [, selection, taskType, subscriptionTier] = key.split('|');
+          return [
+            key,
+            value,
+            recorded[sharedCaseKey(selection!, taskType as RoutingTaskType, subscriptionTier!)],
+          ] as const;
+        })
+        .filter(([, canary, sharedValue]) => canary !== sharedValue);
+      expect(drifted).toEqual([]);
     });
   });
 

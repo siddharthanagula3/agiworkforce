@@ -36,10 +36,13 @@
 
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export {
+  canaryBucket,
+  canaryRoutingEnabled,
   observedHealthRankingEnabled,
   observedRouteHealthFromSnapshots,
   observedRoutePenalty,
   resolveAutoRoute,
+  CANARY_ENV,
   OBSERVED_HEALTH_ENV,
 } from './auto';
 export { getAutoCapabilityEnvelope } from './auto-capability-envelope';
@@ -116,6 +119,7 @@ export type {
   RoutingProfile,
   RoutingTrustMode,
   SelectedAutoRoute,
+  ShadowMirror,
   UnavailableAutoRoute,
 } from './auto';
 export {

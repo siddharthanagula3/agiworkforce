@@ -1458,6 +1458,45 @@
         },
         "description": {
           "$ref": "#/definitions/nonEmptyString"
+        },
+        "shadow": {
+          "$ref": "#/definitions/autoSlotShadow"
+        },
+        "canary": {
+          "$ref": "#/definitions/autoSlotCanary"
+        }
+      }
+    },
+    "autoSlotShadow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelKey", "dailyRequestCap"],
+      "properties": {
+        "modelKey": {
+          "$ref": "#/definitions/nonEmptyString",
+          "description": "The candidate that receives a mirrored copy of this slot's request. Its result is recorded and discarded, never served."
+        },
+        "dailyRequestCap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Requests this candidate may be mirrored per day. Mirroring costs real money, so the ceiling is declared before any mirror happens."
+        }
+      }
+    },
+    "autoSlotCanary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelKey", "trafficFraction"],
+      "properties": {
+        "modelKey": {
+          "$ref": "#/definitions/nonEmptyString",
+          "description": "The candidate that serves a fraction of this slot's traffic. The breaker can pull it back to the promoted sibling."
+        },
+        "trafficFraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Share of this slot's requests the candidate serves, decided by a deterministic hash of the request id."
         }
       }
     }
