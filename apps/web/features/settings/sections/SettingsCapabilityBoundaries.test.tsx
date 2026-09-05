@@ -49,11 +49,13 @@ describe('Web Settings capability boundaries', () => {
   it('shows only the notification channels with a real sender', async () => {
     render(<NotificationsSection />);
 
-    expect(screen.getByText('Four channels have a sender')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Project, usage, billing, security, connector, tips, and marketing/),
-    ).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
+    const scheduleSelect = screen.getByRole('combobox', { name: 'Scheduled task finished' });
+    const optionLabels = within(scheduleSelect)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(optionLabels).toEqual(['Off', 'Email', 'Mobile push', 'Email, Mobile push']);
+    expect(screen.queryByText(/project, usage, billing/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
   });
 
   it('offers the browser push channel that web-push delivery actually sends to', () => {
@@ -70,8 +72,8 @@ describe('Web Settings capability boundaries', () => {
     expect(screen.queryByText('Browser replies only')).not.toBeInTheDocument();
     expect(screen.queryByText(/Email, task, schedule, project/)).not.toBeInTheDocument();
     const scheduleEvent = screen.getByRole('region', { name: 'Scheduled task finished' });
-    expect(within(scheduleEvent).getByText('Email')).toBeInTheDocument();
-    expect(within(scheduleEvent).getByText('Mobile push')).toBeInTheDocument();
+    expect(within(scheduleEvent).getByRole('option', { name: 'Email' })).toBeInTheDocument();
+    expect(within(scheduleEvent).getByRole('option', { name: 'Mobile push' })).toBeInTheDocument();
   });
 
   it('does not imply unsupported account factors or trusted contacts', () => {

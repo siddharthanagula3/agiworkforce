@@ -13,24 +13,8 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
-  Switch: ({
-    checked,
-    onCheckedChange,
-    ...rest
-  }: {
-    checked: boolean;
-    onCheckedChange: () => void;
-    'aria-label'?: string;
-  }) => (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={rest['aria-label']}
-      onClick={() => onCheckedChange()}
-    />
-  ),
+vi.mock('@/features/notifications', () => ({
+  WebPushToggle: () => <button type="button" role="switch" aria-label="Agent run updates" />,
 }));
 
 beforeEach(() => {
@@ -45,49 +29,72 @@ beforeEach(() => {
 });
 
 describe('NotificationsSection grouping', () => {
-  it('lists each event once and offers its channels inside it', async () => {
+  it('lists each event once as a row with a channel select', async () => {
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
 
     expect(screen.getAllByText('Scheduled task finished')).toHaveLength(1);
 
-    const scheduleEvent = screen.getByRole('region', { name: 'Scheduled task finished' });
-    expect(within(scheduleEvent).getByText('Email')).toBeInTheDocument();
-    expect(within(scheduleEvent).getByText('Mobile push')).toBeInTheDocument();
-
-    const replyEvent = screen.getByRole('region', { name: 'Reply ready' });
-    expect(within(replyEvent).getByText('Browser')).toBeInTheDocument();
-    expect(within(replyEvent).queryByText('Email')).not.toBeInTheDocument();
-  });
-
-  it('names every switch by event and channel', async () => {
-    render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
-
-    expect(screen.getByRole('switch', { name: 'Reply ready, Browser' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    expect(screen.getByRole('switch', { name: 'Scheduled task finished, Email' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    );
+    const scheduleSelect = screen.getByRole('combobox', { name: 'Scheduled task finished' });
+    expect(within(scheduleSelect).getByRole('option', { name: 'Off' })).toBeInTheDocument();
+    expect(within(scheduleSelect).getByRole('option', { name: 'Email' })).toBeInTheDocument();
+    expect(within(scheduleSelect).getByRole('option', { name: 'Mobile push' })).toBeInTheDocument();
     expect(
-      screen.getByRole('switch', { name: 'Scheduled task finished, Mobile push' }),
-    ).toHaveAttribute('aria-checked', 'false');
+      within(scheduleSelect).getByRole('option', { name: 'Email, Mobile push' }),
+    ).toBeInTheDocument();
+
+    const replySelect = screen.getByRole('combobox', { name: 'Reply ready' });
+    expect(within(replySelect).getByRole('option', { name: 'Browser' })).toBeInTheDocument();
+    expect(replySelect).toHaveValue('browserReplyReady');
   });
 
-  it('saves the channel key behind the switch that was toggled', async () => {
+  it('reflects the loaded state as the select value', async () => {
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Scheduled task finished, Mobile push' }));
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
+    expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toHaveValue('off');
+  });
+
+  it('saves both channel keys when both are selected in one change', async () => {
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), {
+      target: { value: 'emailScheduleDone+mobilePushScheduleDone' },
+    });
+
+    await waitFor(() =>
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
+        browserReplyReady: true,
+        emailScheduleDone: true,
+        mobilePushScheduleDone: true,
+      }),
+    );
+  });
+
+  it('turns an event off by saving false for every one of its channels', async () => {
+    mocks.fetchPreferenceNamespace.mockResolvedValue({
+      browserReplyReady: true,
+      emailScheduleDone: true,
+      mobilePushScheduleDone: true,
+    });
+    render(<NotificationsSection />);
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toHaveValue(
+        'emailScheduleDone+mobilePushScheduleDone',
+      ),
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), {
+      target: { value: 'off' },
+    });
 
     await waitFor(() =>
       expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
         browserReplyReady: true,
         emailScheduleDone: false,
-        mobilePushScheduleDone: true,
+        mobilePushScheduleDone: false,
       }),
     );
   });
