@@ -938,17 +938,11 @@ export function BillingSection() {
       )}
 
       {canBuyTopUps && (
-        <section
-          id="top-up"
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
-            overflow: 'hidden',
-          }}
-        >
-          <SectionHeader title="Usage top-up" />
-          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div id="top-up">
+          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+            Usage top-up
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
                 {TOP_UP_UNITS_PER_USD} units for every $1
@@ -1108,7 +1102,7 @@ export function BillingSection() {
               />
             </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* Credit history section (settings-12-gap): the real per-task credit
