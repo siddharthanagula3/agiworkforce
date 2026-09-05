@@ -3,9 +3,8 @@ import 'server-only';
 import { readFile } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -88,8 +87,7 @@ async function handleDownloadBeta(request: NextRequest) {
     throw createError.notFound(`Download for platform "${platform}" is not configured.`);
   }
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   const [subscription] = await db.query<Pick<SubscriptionRow, 'status'>>(
     'select status from subscriptions where user_id = $1 limit 1',

@@ -22,6 +22,8 @@ const dbMocks = vi.hoisted(() => ({
   execute: vi.fn(),
 }));
 
+const SCOPED_USER_ID = 'user-123';
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -43,6 +45,14 @@ vi.mock('@/lib/server/stripe-upgrade-preview-token', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: dbMocks.query, execute: dbMocks.execute }),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: dbMocks.query, execute: dbMocks.execute },
+    userId: SCOPED_USER_ID,
+    organizationId: null,
+  })),
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {

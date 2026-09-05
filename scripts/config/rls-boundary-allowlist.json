@@ -90,10 +90,6 @@
       "reason": "QR device-pairing flow, the row is resolved by device_id shared with the CLI flow, not by a caller session"
     },
     {
-      "path": "apps/web/app/api/download-beta/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/feedback/route.ts",
       "reason": "pending scoped migration"
     },
@@ -164,14 +160,6 @@
     {
       "path": "apps/web/app/api/share/route.ts",
       "reason": "the GET reads a share by its unguessable token with no viewer subject, the POST insert already carries the authenticated user_id"
-    },
-    {
-      "path": "apps/web/app/api/upgrade/preview/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/upgrade/route.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/app/api/user/export/route.ts",
