@@ -5,29 +5,30 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+const AUDIT_SCOPE = { resolveOrganization: false } as const;
 
 async function handleGetActions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-audit-actions');
   if (rateLimitResponse) return rateLimitResponse;
 
   let userId: string;
+  let db: ScopedDb;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    ({ db, userId } = await getUserScopedDb(request, AUDIT_SCOPE));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized('Authentication required');
   }
-
-  const db = getNeonDb();
 
   try {
     const rows = await db.query<{ event_type: string }>(
