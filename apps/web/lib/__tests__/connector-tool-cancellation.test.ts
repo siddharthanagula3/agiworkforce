@@ -28,9 +28,10 @@ vi.mock('@/lib/github-app', () => ({
 }));
 
 const mockAssertResolvedPublicHostname = vi.fn();
-vi.mock('@/lib/egress-policy', () => {
+vi.mock('@/lib/egress-policy', async (importOriginal) => {
   class MockEgressError extends Error {}
   return {
+    ...(await importOriginal()),
     assertResolvedPublicHostname: (...a: unknown[]) => mockAssertResolvedPublicHostname(...a),
     EgressPolicyError: MockEgressError,
   };

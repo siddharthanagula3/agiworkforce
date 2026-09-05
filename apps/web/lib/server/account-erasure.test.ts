@@ -43,6 +43,16 @@ vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromPublicUrl: (value: string) =>
     value.startsWith('https://cdn/') ? value.slice(12) : null,
   objectKeyFromStorageUri: (value: string) => value,
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
+  deletePrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
+  getObject: vi.fn(),
+  getObjectStream: vi.fn(),
+  getPrivateObject: vi.fn(),
+  getPrivateObjectStream: vi.fn(),
+  isPrivateObjectStorageConfigured: vi.fn(() => true),
+  putPrivateObject: vi.fn(),
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
