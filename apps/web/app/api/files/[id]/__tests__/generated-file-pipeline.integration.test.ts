@@ -72,7 +72,7 @@ vi.mock('@/lib/server/media-storage', async () => {
       const end = range?.end ?? entry.data.byteLength - 1;
       const slice = entry.data.subarray(start, end + 1);
       return {
-        body: new Blob([slice]).stream() as ReadableStream<Uint8Array>,
+        body: new Blob([Uint8Array.from(slice)]).stream() as ReadableStream<Uint8Array>,
         contentType: entry.contentType,
         contentLength: slice.byteLength,
         contentRange: range ? `bytes ${start}-${end}/${entry.data.byteLength}` : undefined,

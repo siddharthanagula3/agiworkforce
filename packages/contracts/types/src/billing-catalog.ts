@@ -167,6 +167,10 @@ export function isBasicPlanTier(value: string | null | undefined): value is 'bas
   return value === 'basic';
 }
 
+export function isTeamPlanTier(value: string | null | undefined): value is 'team' {
+  return value === 'team';
+}
+
 export function isProPlanTier(value: string | null | undefined): value is 'pro' {
   return value === 'pro';
 }
