@@ -46,17 +46,27 @@ async function mintSignInTicket(): Promise<string> {
 async function applyTheme(page: Page, theme: CaptureTheme): Promise<void> {
   await page.addInitScript(
     (input: { key: string; theme: string }) => {
-      window.localStorage.setItem(input.key, input.theme);
+      // The init script also runs on documents that deny storage access, and an
+      // unguarded read there throws a page error the console audit then blames
+      // on the app.
+      try {
+        window.localStorage.setItem(input.key, input.theme);
+      } catch {
+        /* storage is unavailable on this document */
+      }
     },
     { key: THEME_STORAGE_KEY, theme },
   );
 }
 
 async function shoot(page: Page, name: string): Promise<void> {
-  const theme = await page.evaluate(
-    (key: string) => window.localStorage.getItem(key) ?? 'dark',
-    THEME_STORAGE_KEY,
-  );
+  const theme = await page.evaluate((key: string) => {
+    try {
+      return window.localStorage.getItem(key) ?? 'dark';
+    } catch {
+      return 'dark';
+    }
+  }, THEME_STORAGE_KEY);
   await page.screenshot({ path: `${SHOT_DIR}/slice-a-${name}-${theme}.png` });
 }
 
