@@ -35,6 +35,7 @@ import type { OpenAIChatCompletionChunk } from './types';
 
 export interface OpenAICompatAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
+  extraHeaders?: Record<string, string>;
 }
 
 export interface OpenAICompatAdapterSpec {
@@ -81,6 +82,9 @@ export function createOpenAICompatAdapter(
   const sdk = new OpenAI({
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),
     baseURL: baseUrl,
+    ...(config.extraHeaders && Object.keys(config.extraHeaders).length > 0
+      ? { defaultHeaders: config.extraHeaders }
+      : {}),
     ...(config.fetch ? { fetch: config.fetch } : {}),
   });
 

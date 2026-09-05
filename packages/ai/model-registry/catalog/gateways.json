@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "notes": "Declarative OpenAI-compatible and Anthropic-compatible gateway endpoints. Each entry names only env var names, never a literal base URL or key. packages/ai/providers/factory's createGatewayAdapter builds a working adapter straight from one of these entries plus a resolved env source, through createOpenAICompatAdapter, createOpenAIAdapter or createAnthropicAdapter, so a new gateway needs no dedicated provider package. Validated by scripts/validate-gateways.mjs. See docs/guides/add-a-gateway.md.",
+  "gateways": {
+    "openrouter_via_gateway": {
+      "id": "openrouter_via_gateway",
+      "displayName": "OpenRouter (gateway definition worked example)",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_GATEWAY_OPENROUTER_EXAMPLE_BASE_URL",
+      "apiKeyEnv": "AGI_GATEWAY_OPENROUTER_EXAMPLE_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/api/v1/models",
+        "requiresKey": false
+      },
+      "pricingSource": {
+        "kind": "remote",
+        "path": "/api/v1/models"
+      },
+      "host": "openrouter.ai",
+      "governance": {
+        "dataRetentionClass": "conditional",
+        "trainsOnInputs": "varies_by_route",
+        "source": "https://openrouter.ai/docs/features/privacy-and-logging",
+        "verifiedOn": "2026-09-05",
+        "note": "Worked example only: this gateway definition is not wired into live provider selection. The production OpenRouter route stays on its dedicated open_router harness and @agiworkforce/providers-openrouter package (packages/ai/model-registry/catalog/harnesses.json, packages/ai/model-registry/catalog/provider-governance.json). Every field here is real and verified against OpenRouter's own published endpoint and privacy docs, retrieved 2026-09-05, chosen because Part 1 of this change independently verified the same facts."
+      }
+    }
+  }
+}

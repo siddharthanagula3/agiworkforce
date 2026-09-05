@@ -46,6 +46,16 @@ import { createXAIAdapter, type XAIAdapterConfig } from '@agiworkforce/providers
 import { createZhipuAdapter, type ZhipuAdapterConfig } from '@agiworkforce/providers-zhipu';
 import type { ModelInfo, Provider, ProviderAdapter } from '@agiworkforce/types';
 
+export {
+  createGatewayAdapter,
+  type GatewayDefinition,
+  type GatewayEnvSource,
+  type GatewayGovernanceStub,
+  type GatewayModelsSource,
+  type GatewayPricingSource,
+  type GatewayProtocol,
+} from './gateway';
+
 export interface OpenAICompatRouteConfig extends OpenAICompatAdapterConfig {
   providerId: string;
   label: string;
