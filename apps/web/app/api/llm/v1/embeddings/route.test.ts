@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(async () => 'user-1'),
   reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
   finalize: vi.fn(async () => ({})),
-  getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })),
+  getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
   fetch: vi.fn(),
 }));
 
@@ -76,7 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env['GOOGLE_API_KEY'] = 'test-key';
   mocks.reserve.mockResolvedValue({ reservationId: 'reservation-1' } as never);
-  mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' } as never);
+  mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' } as never);
   vi.stubGlobal('fetch', mocks.fetch);
 });
 
