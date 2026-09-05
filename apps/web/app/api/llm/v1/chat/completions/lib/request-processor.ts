@@ -2581,6 +2581,21 @@ export async function processRequest(
     freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
 
   if (routeDecision.status === 'unavailable') {
+    const explicitRefusal = isAutoModeModelId(requestedModel)
+      ? null
+      : evaluateCandidateModelAccess(workspaceModelPolicy, routeSelection);
+    if (explicitRefusal && !explicitRefusal.allowed) {
+      logger.info(
+        {
+          requestId,
+          model: routeSelection,
+          code: explicitRefusal.code,
+          routeCode: routeDecision.code,
+        },
+        '[model-policy] explicitly requested model refused by workspace policy',
+      );
+      return { ok: false, response: modelPolicyDenialResponse(explicitRefusal) };
+    }
     logger.warn(
       {
         userId,
