@@ -17,6 +17,8 @@ vi.mock('@/lib/services/credit-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 2) },
   normalizeProviderId: (provider: string | null | undefined) => provider?.toLowerCase() ?? null,
+  isCacheTokensDisjointFromInput: vi.fn(() => false),
+  resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
@@ -31,6 +33,8 @@ const lifecycle = vi.hoisted(() => ({
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   finalizeManagedUsageRequest: lifecycle.finalize,
   markManagedUsageClientDelivered: lifecycle.delivered,
+  markManagedUsageProviderStarted: vi.fn(),
+  UPGRADE_HREF: '/pricing',
   MANAGED_CHAT_CONTRACT_VERSION: 'fixture-contract-version',
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
     constructor(

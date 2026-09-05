@@ -22,6 +22,11 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     getInputCostPerMtok: vi.fn(() => 300),
     getCacheWriteCostPerMtok: vi.fn(() => 300),
   },
+  CACHE_WRITE_FALLBACK_MULTIPLIERS: { write5m: 1.25, write1h: 2 },
+  isCacheTokensDisjointFromInput: vi.fn(() => false),
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
+  resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/prompt-cache-helper', () => ({
   calculateCacheSavings: vi.fn(() => ({
