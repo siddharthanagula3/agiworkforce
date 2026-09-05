@@ -16,6 +16,7 @@ import {
   stageAtOrAfter,
   stageCensus,
 } from '../scripts/lifecycle-stages.mjs';
+import { mergeOpenRouterSyncedCatalog } from '../scripts/openrouter-synced-catalog.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = JSON.parse(
@@ -24,6 +25,7 @@ const REGISTRY = JSON.parse(
 const CURATION = JSON.parse(
   fs.readFileSync(path.join(PACKAGE_ROOT, 'catalog', 'models.curation.json'), 'utf8'),
 );
+mergeOpenRouterSyncedCatalog(CURATION, path.join(PACKAGE_ROOT, 'catalog'));
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -114,6 +116,7 @@ test('the backfill census is the one the compiler prints', () => {
     Object.entries(REGISTRY.models).map(([modelKey, model]) => [modelKey, model.lifecycle.stage]),
   );
   const census = stageCensus(stages);
+  assert.equal(census.get(LIFECYCLE_STAGE.discovered), 428);
   assert.equal(census.get(LIFECYCLE_STAGE.promoted), 17);
   assert.equal(census.get(LIFECYCLE_STAGE.evaluated), 5);
   assert.equal(census.get(LIFECYCLE_STAGE.registered), 33);
@@ -121,7 +124,10 @@ test('the backfill census is the one the compiler prints', () => {
     [...census.values()].reduce((total, count) => total + count, 0),
     Object.keys(REGISTRY.models).length,
   );
-  assert.equal(formatStageCensus(stages), 'registered 33, evaluated 5, promoted 17');
+  assert.equal(
+    formatStageCensus(stages),
+    'discovered 428, registered 33, evaluated 5, promoted 17',
+  );
 });
 
 test('a model in a live routing slot is promoted', () => {

@@ -92,8 +92,8 @@ fn map_entry(entry: &serde_json::Value, cutoff_unix: i64) -> Option<Model> {
     let input_price_per_1m = parse_price_per_million(pricing, "prompt");
     let output_price_per_1m = parse_price_per_million(pricing, "completion");
     // OpenRouter uses a negative sentinel (-1) for its internal variable-priced
-    // router models (e.g. "openrouter/fusion"). Those aren't standard selectable
-    // models and would render as negative cost, drop them.
+    // router models. Those aren't standard selectable models and would render
+    // as negative cost, drop them.
     if input_price_per_1m < 0.0 || output_price_per_1m < 0.0 {
         return None;
     }

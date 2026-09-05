@@ -196,6 +196,10 @@
         "kind": {
           "$ref": "#/definitions/nonEmptyString"
         },
+        "role": {
+          "enum": ["router"],
+          "description": "Set only for a model entry that is itself a routing endpoint rather than a single served model, so a picker can filter it out of or into a routers-only view. Absent for every ordinary model."
+        },
         "familyPartner": {
           "$ref": "#/definitions/nonEmptyString"
         },

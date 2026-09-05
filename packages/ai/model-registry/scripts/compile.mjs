@@ -25,6 +25,7 @@ import {
   isLifecycleStage,
   stageAtOrBefore,
 } from './lifecycle-stages.mjs';
+import { mergeOpenRouterSyncedCatalog } from './openrouter-synced-catalog.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
@@ -160,6 +161,13 @@ const TOP_LEVEL_ORDER = [
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function loadCurationAndSynced() {
+  const curation = readJson(CURATION_JSON);
+  const synced = readJson(SYNCED_JSON);
+  mergeOpenRouterSyncedCatalog(curation, CATALOG_DIR);
+  return { curation, synced };
 }
 
 async function formatJson(obj, filepath) {
@@ -1934,6 +1942,7 @@ function buildNormalizedRegistry(
           providerModelId: model.apiModelId ?? model.id ?? modelKey,
           openRouterSlug: model.openRouterSlug,
           kind: model.modelType,
+          role: model.role,
           familyPartner: model.variantPartner,
           openWeight: model.openWeight,
           license: model.license,
@@ -2185,8 +2194,7 @@ function lifecycleStages(registry) {
 }
 
 async function generate() {
-  const curation = readJson(CURATION_JSON);
-  const synced = readJson(SYNCED_JSON);
+  const { curation, synced } = loadCurationAndSynced();
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
   const catalog = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   await writeJson(MODELS_JSON, catalog);
@@ -2210,8 +2218,7 @@ async function generate() {
 }
 
 async function check() {
-  const curation = readJson(CURATION_JSON);
-  const synced = readJson(SYNCED_JSON);
+  const { curation, synced } = loadCurationAndSynced();
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
   const built = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   const regenerated = await formatJson(built, MODELS_JSON);
@@ -2270,8 +2277,7 @@ function deltaTrips(baseline, next, threshold) {
 }
 
 async function refresh(threshold) {
-  const curation = readJson(CURATION_JSON);
-  const synced = readJson(SYNCED_JSON);
+  const { curation, synced } = loadCurationAndSynced();
   const dev = await loadModelsDev();
 
   const aaKey = process.env.ARTIFICIAL_ANALYSIS_API_KEY;
@@ -2335,8 +2341,7 @@ async function main() {
 export const FAMILY_CATALOG_DIR = CATALOG_DIR;
 
 export function loadFamilySnapshot() {
-  const curation = readJson(CURATION_JSON);
-  const synced = readJson(SYNCED_JSON);
+  const { curation, synced } = loadCurationAndSynced();
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
   const catalog = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   const registry = buildNormalizedRegistry(
