@@ -193,6 +193,31 @@ export const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [
   ),
 ];
 
+export type EndpointHostMatch = 'host' | 'hostSuffix' | 'domain' | 'baseUrl';
+
+export interface EndpointHostRule {
+  match: EndpointHostMatch;
+  pattern: string;
+  endpointClass: string;
+  longTtlPromptCache: boolean;
+  hostPattern?: string;
+}
+
+interface EndpointHostRecords {
+  rules: readonly EndpointHostRule[];
+  localHosts: readonly string[];
+  localHostSuffixes: readonly string[];
+}
+
+const endpointHostRecords = registry.endpointHosts as unknown as EndpointHostRecords;
+
+export const REGISTRY_ENDPOINT_HOST_RULES: readonly EndpointHostRule[] = endpointHostRecords.rules;
+
+export const REGISTRY_LOCAL_ENDPOINT_HOSTS: readonly string[] = endpointHostRecords.localHosts;
+
+export const REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES: readonly string[] =
+  endpointHostRecords.localHostSuffixes;
+
 export const INTRINSIC_CAPABILITY_NAMES = [
   'textInput',
   'imageInput',

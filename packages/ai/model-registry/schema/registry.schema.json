@@ -15,6 +15,7 @@
     "capabilities",
     "capabilityClasses",
     "governance",
+    "endpointHosts",
     "pricing",
     "limits",
     "benchmarks",
@@ -78,6 +79,9 @@
       "additionalProperties": {
         "$ref": "#/definitions/providerGovernance"
       }
+    },
+    "endpointHosts": {
+      "$ref": "#/definitions/endpointHosts"
     },
     "pricing": {
       "type": "object",
@@ -613,6 +617,59 @@
         },
         "confidence": {
           "enum": ["verified", "aggregated", "unknown"]
+        }
+      }
+    },
+    "endpointHostRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One rule mapping a provider endpoint to its payload-policy class. match host compares the hostname exactly, hostSuffix compares the tail, domain matches the domain or any subdomain, baseUrl compares the whole normalized URL.",
+      "required": ["match", "pattern", "endpointClass", "longTtlPromptCache"],
+      "properties": {
+        "match": {
+          "enum": ["host", "hostSuffix", "domain", "baseUrl"]
+        },
+        "pattern": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "endpointClass": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "longTtlPromptCache": {
+          "type": "boolean"
+        },
+        "hostPattern": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "endpointHosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules", "localHosts", "localHostSuffixes"],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/endpointHostRule"
+          }
+        },
+        "localHosts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        },
+        "localHostSuffixes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
         }
       }
     },
