@@ -747,6 +747,12 @@ export type ProcessedRequest = {
   usedFallback: boolean;
   fallbackReason: string | undefined;
   originalModel: string;
+  /**
+   * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
+   * the conversation's pinned model. Null on every turn that did not move.
+   */
+  movedFromModel?: string;
+  movedReason?: string;
   fallbackModels?: string[];
   /**
    * The workspace model policy snapshot this request was admitted against,
@@ -2642,8 +2648,15 @@ export async function processRequest(
     };
   }
 
+  let movedFromModel: string | null = null;
+  let movedReason: string | null = null;
+
   if (isAutoModeModelId(requestedModel) && routeAffinity?.modelKey) {
     const switchedModel = routeAffinity.modelKey !== routeDecision.modelKey;
+    if (switchedModel) {
+      movedFromModel = routeAffinity.modelKey;
+      movedReason = routeDecision.reason ?? null;
+    }
     logger.info(
       {
         userId,
@@ -3661,6 +3674,8 @@ export async function processRequest(
     usedFallback,
     fallbackReason,
     originalModel,
+    ...(movedFromModel ? { movedFromModel } : {}),
+    ...(movedFromModel && movedReason ? { movedReason } : {}),
     // Policy-filtered by the RESOLVER, not here: `organizationPolicy` is an
     // admission input, so a candidate the workspace may not run never enters
     // the plan and no rotation can land on one. An empty list is a

@@ -75,7 +75,11 @@ import {
   type InteractiveCardResponseRequest,
 } from '@/app/api/interactive-cards/response-contract';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
-import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
+import {
+  FALLBACK_REASON_HEADER,
+  MOVED_FROM_MODEL_HEADER,
+  MOVED_REASON_HEADER,
+} from '@/lib/chat-fallback-reason';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
@@ -988,6 +992,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
   const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
+  // D-2026-09-05-06. Persisted rather than per-turn, unlike the substitution
+  // code above: a continuity receipt the transcript forgets on reload would
+  // leave the move unexplained the next time the conversation is opened.
+  const movedFromModel = response.headers.get(MOVED_FROM_MODEL_HEADER)?.trim();
+  const movedReason = response.headers.get(MOVED_REASON_HEADER)?.trim();
   const isTurnContinuation = ctx.seedContent !== undefined;
   if (streamFallbackReason) {
     updateMessage(assistantMessageId, { fallbackReason: streamFallbackReason }, conversationId);
@@ -1460,6 +1469,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const buildAssistantMetadata = (): MessageMetadata | undefined => {
     const metadata: MessageMetadata = {};
+    if (movedFromModel) {
+      metadata.movedFromModel = movedFromModel;
+      if (movedReason) metadata.movedReason = movedReason;
+    }
     if (toolTimeline.length > 0) {
       metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
     }

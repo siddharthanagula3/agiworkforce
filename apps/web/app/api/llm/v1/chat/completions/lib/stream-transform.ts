@@ -7,7 +7,7 @@ import { buildServingRouteId } from './tool-loop-anthropic';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
-import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
+import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
@@ -764,6 +764,7 @@ export async function buildStreamResponse(
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
   addFallbackReasonHeader(streamHeaders, processed);
+  addModelEscalationHeaders(streamHeaders, processed);
   addSecretRedactionNoticeHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
@@ -1119,6 +1120,7 @@ export async function buildAdapterStreamResponse(
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
   addFallbackReasonHeader(streamHeaders, processed);
+  addModelEscalationHeaders(streamHeaders, processed);
   addSecretRedactionNoticeHeader(streamHeaders, processed);
   addRouteLaneHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });

@@ -180,6 +180,13 @@ export interface GeneratedFileMetadataEntry {
 }
 
 export interface MessageMetadata {
+  /**
+   * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
+   * the conversation's pinned model. Persisted, so the receipt survives a
+   * reload; absent on every turn that did not move.
+   */
+  movedFromModel?: string;
+  movedReason?: string;
   /** User-pinned message flag; persisted to messages.metadata and synced cross-device. */
   isPinned?: boolean;
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */

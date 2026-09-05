@@ -9,7 +9,7 @@ import {
   getCorsHeaders,
   withCorsRoute,
 } from '@/lib/cors';
-import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
+import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
@@ -560,6 +560,7 @@ async function dispatchChatCompletions(
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
       addFallbackReasonHeader(researchHeaders, processed);
+      addModelEscalationHeaders(researchHeaders, processed);
       addSecretRedactionNoticeHeader(researchHeaders, processed);
       addRouteLaneHeader(researchHeaders, processed);
 
@@ -672,6 +673,7 @@ async function dispatchChatCompletions(
           headers['X-Quota-Warning'] = processed.quotaWarningHeader;
         }
         addFallbackReasonHeader(headers, processed);
+        addModelEscalationHeaders(headers, processed);
         addSecretRedactionNoticeHeader(headers, processed);
         addRouteLaneHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
