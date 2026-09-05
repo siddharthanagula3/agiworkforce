@@ -162,11 +162,11 @@ SOFTWARE.
 
 ## Emil Kowalski design skills
 
-- **Upstream**: [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7` (`skills/emil-design-eng`, `skills/review-animations`, `skills/improve-animations`, `skills/find-animation-opportunities`, `skills/apple-design`, `skills/pick-ui-library`)
+- **Upstream**: [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7` (`skills/emil-design-eng`, `skills/review-animations`, `skills/find-animation-opportunities`, `skills/apple-design`, `skills/pick-ui-library`)
 - **License**: MIT
 - **Copyright**: © 2026 Emil Kowalski
-- **Imported into**: `.agents/skills/emil-design-eng/`, `.agents/skills/review-animations/`, `.agents/skills/improve-animations/`, `.agents/skills/find-animation-opportunities/`, `.agents/skills/apple-design/`, `.agents/skills/pick-ui-library/`
-- **Adoption**: Vendored all six skill directories as published. A top-level `version` frontmatter field (the fetched commit sha) was added to each; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+- **Imported into**: `.agents/skills/emil-design-eng/`, `.agents/skills/review-animations/`, `.agents/skills/find-animation-opportunities/`, `.agents/skills/apple-design/`, `.agents/skills/pick-ui-library/`
+- **Adoption**: Vendored five of the six skill directories as published; skills/improve-animations was dropped on 2026-09-05 because the skill supply-chain vetter rates its body, which quotes an injection phrase as an example, as not installable. A top-level `version` frontmatter field (the fetched commit sha) was added to each; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
 
 ## Microsoft frontend-design-review skill
 

@@ -18,7 +18,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:cdb8f95bc502e3d3bc36a800082e5806b37cbd9cc636e7525536abe8523ebc0f"
+      "computedHash": "sha256-tree-v1:fdc9eda5c874b26aa58990c905384f7d294f6270ef24bf1ed15b15c99af21d5c"
     },
     "antislop": {
       "path": ".agents/skills/antislop",
@@ -147,14 +147,6 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:00eb031c8a266fdacdb9c41f983df8cc450ab62dc093edc935211c454e2ffe9e"
-    },
-    "improve-animations": {
-      "path": ".agents/skills/improve-animations",
-      "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/improve-animations)",
-      "sourceType": "github",
-      "audience": "developer",
-      "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:f96d6bf5f3177a2adf01b0dd87f7942f2563a7c063817eaf14c9d0d2adb25d01"
     },
     "literature-review": {
       "path": ".agents/skills/literature-review",
