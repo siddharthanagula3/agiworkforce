@@ -264,6 +264,38 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().captureStream).toBeNull();
     });
 
+    it('sends the primary subtag the provider accepts, not the stored locale', async () => {
+      installCapture();
+      useVoiceInputStore.setState({ language: 'en-US' });
+      const fetchMock = stubFetch(() => ({
+        ok: true,
+        json: async () => ({ text: 'hello' }),
+        text: async () => '',
+      }));
+
+      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().stopListening();
+
+      const [, init] = transcribeCall(fetchMock);
+      expect(((init as RequestInit).body as FormData).get('language')).toBe('en');
+    });
+
+    it('omits the language when the stored tag is not one the catalog supports', async () => {
+      installCapture();
+      useVoiceInputStore.setState({ language: 'xx-YY' });
+      const fetchMock = stubFetch(() => ({
+        ok: true,
+        json: async () => ({ text: 'hello' }),
+        text: async () => '',
+      }));
+
+      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().stopListening();
+
+      const [, init] = transcribeCall(fetchMock);
+      expect(((init as RequestInit).body as FormData).get('language')).toBeNull();
+    });
+
     it('reports a transcription failure without keeping the recording', async () => {
       installCapture();
       stubFetch(() => ({ ok: false, status: 500 }));

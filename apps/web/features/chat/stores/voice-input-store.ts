@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { isSupportedLanguage } from '@agiworkforce/i18n';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
@@ -11,6 +12,7 @@ const DEFAULT_LANGUAGE = 'en-US';
 const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
 const CSRF_HEADER = 'x-csrf-token';
 const RECORDER_TIMESLICE_MS = 100;
+const LOCALE_SUBTAG_SEPARATOR = '-';
 
 export type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'error';
 
@@ -125,12 +127,22 @@ function releaseCapture(): void {
   rt.stopResolve = null;
 }
 
+// The store holds whatever BCP-47 tag the browser or the picker supplied, but the
+// transcription provider takes a bare ISO-639-1 code and rejects a region-qualified one
+// such as en-US outright. An unrecognised primary subtag is dropped rather than forced to
+// a default, which leaves the provider free to detect the language itself.
+export function toProviderLanguage(language: string): string {
+  const primary = language.split(LOCALE_SUBTAG_SEPARATOR)[0]?.trim().toLowerCase() ?? '';
+  return isSupportedLanguage(primary) ? primary : '';
+}
+
 async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
   const form = new FormData();
   const ext = blob.type.includes(MP4_CONTAINER) ? MP4_CONTAINER : DEFAULT_RECORDING_EXTENSION;
   form.append('file', blob, `recording.${ext}`);
   form.append('model', CLOUD_TRANSCRIPTION_MODEL);
-  if (language) form.append('language', language);
+  const providerLanguage = toProviderLanguage(language);
+  if (providerLanguage) form.append('language', providerLanguage);
 
   const response = await fetch(TRANSCRIBE_ENDPOINT, {
     method: 'POST',

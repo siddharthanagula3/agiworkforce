@@ -26,10 +26,11 @@ import {
   type PricedModel,
 } from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
-// Developer API keys (inference:write) authenticate here, and the RLS-scoped db helper
-// rejects sk_live_/sk_test_ bearers outright. Tenancy comes from the authenticated userId
-// that every managed-usage query is parameterised by.
-import { getNeonDb } from '@/lib/server/neon-db';
+// reserve_managed_usage_request_with_limits refuses any caller whose
+// current_app_user_id() does not equal the userId it is passed, so the reservation has to
+// run on a tenant-scoped handle. getUserScopedDb covers both a session cookie and a
+// developer API key (inference:write) bearer.
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   ManagedUsageRequestError,
@@ -85,6 +86,15 @@ const OUTPUT_TOKENS_PER_AUDIO_SECOND = 4;
 const UNCOMPRESSED_AUDIO_BYTES_PER_SECOND = 8_000;
 const COMPRESSED_AUDIO_BYTES_PER_SECOND = 2_000;
 const UNCOMPRESSED_AUDIO_TYPES = new Set(['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/flac']);
+
+const MIME_PARAMETER_SEPARATOR = ';';
+
+// MediaRecorder reports its container with the codec parameter attached, so every real
+// browser recording arrives as `audio/webm;codecs=opus` rather than the bare essence the
+// allowlist and the byte-rate table are keyed by.
+export function audioMimeEssence(value: string): string {
+  return value.split(MIME_PARAMETER_SEPARATOR)[0]?.trim().toLowerCase() ?? '';
+}
 
 function isUncompressedAudioHead(head: Uint8Array): boolean {
   const riffWave =
@@ -319,7 +329,8 @@ async function handleTranscriptions(request: NextRequest) {
       },
     );
   }
-  if (!file.type || !ALLOWED_AUDIO_TYPES.has(file.type)) {
+  const mimeEssence = audioMimeEssence(file.type);
+  if (!mimeEssence || !ALLOWED_AUDIO_TYPES.has(mimeEssence)) {
     return NextResponse.json(
       {
         error: {
@@ -396,13 +407,21 @@ async function handleTranscriptions(request: NextRequest) {
     forwardForm.append('language', language);
   }
 
-  const estimatedSeconds = estimateAudioSeconds(file.size, file.type, headBytes);
+  const estimatedSeconds = estimateAudioSeconds(file.size, mimeEssence, headBytes);
   const estimatedInputTokens = estimatedSeconds * INPUT_TOKENS_PER_AUDIO_SECOND;
   const estimatedCostCents = estimateTranscriptionCostCents(
     selectedModel,
     estimatedInputTokens,
     estimatedSeconds * OUTPUT_TOKENS_PER_AUDIO_SECOND,
   );
+
+  const scoped = await getUserScopedDb(request, { apiKeyScope: 'inference:write' });
+  if (scoped.userId !== userId) {
+    return managedUsageErrorResponse(
+      request,
+      new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch'),
+    );
+  }
 
   let reservation: ManagedUsageRequestReservation;
   try {
@@ -412,23 +431,22 @@ async function handleTranscriptions(request: NextRequest) {
         ? `agi.transcription.${randomUUID()}`
         : parseManagedUsageIdempotencyKey(idempotencyHeader);
     const subscription = await SubscriptionService.getSubscription(userId);
-    const billingDb = getNeonDb();
     await assertTierUnitAllowance({
-      db: billingDb,
+      db: scoped.db,
       userId,
       planTier: subscription?.plan_tier ?? 'free',
       unit: 'voice_minutes',
       requestedUnits: estimatedSeconds / 60,
     });
     reservation = await reserveManagedUsageRequest({
-      db: billingDb,
+      db: scoped.db,
       userId,
       idempotencyKey,
       requestHash: fingerprintManagedUsageRequest({
         model: selectedModel.id,
         language: typeof language === 'string' ? language : null,
         byteSize: file.size,
-        mimeType: file.type,
+        mimeType: mimeEssence,
       }),
       provider: selectedModel.provider,
       model: selectedModel.id,
@@ -437,15 +455,21 @@ async function handleTranscriptions(request: NextRequest) {
       isFlagship: false,
     });
   } catch (error) {
-    const managedError =
-      error instanceof ManagedUsageRequestError
-        ? error
-        : new ManagedUsageRequestError(
-            'Managed usage billing is temporarily unavailable.',
-            503,
-            'billing_unavailable',
-          );
-    return managedUsageErrorResponse(request, managedError);
+    if (error instanceof ManagedUsageRequestError) {
+      return managedUsageErrorResponse(request, error);
+    }
+    logger.error(
+      { event: 'transcription_reservation_failed', error, userId, model: selectedModel.id },
+      'Transcription reservation failed before any provider spend',
+    );
+    return managedUsageErrorResponse(
+      request,
+      new ManagedUsageRequestError(
+        'Managed usage billing is temporarily unavailable.',
+        503,
+        'billing_unavailable',
+      ),
+    );
   }
 
   async function releaseReservation(reason: string): Promise<void> {
