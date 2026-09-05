@@ -56,14 +56,28 @@ const RESPONSE_STYLES = [
 type ResponseStyle = (typeof RESPONSE_STYLES)[number]['value'];
 
 // The four traits mobile ships, on the same 0-100 scale with 50 neutral. The
-// server only acts on a value 20 or more away from neutral, so the labels name
-// the ends rather than implying fine-grained control that does not exist.
+// server only acts on a value 20 or more away from neutral, so the three
+// levels below sit safely past that threshold in either direction.
 const STYLE_TRAITS = [
-  { key: 'warmth', label: 'Warmth', low: 'Neutral', high: 'Warm' },
-  { key: 'enthusiasm', label: 'Enthusiasm', low: 'Measured', high: 'Energetic' },
-  { key: 'headersLists', label: 'Headers and lists', low: 'Prose', high: 'Structured' },
-  { key: 'emoji', label: 'Emoji', low: 'None', high: 'Welcome' },
+  { key: 'warmth', label: 'Warmth' },
+  { key: 'enthusiasm', label: 'Enthusiasm' },
+  { key: 'headersLists', label: 'Headers and lists' },
+  { key: 'emoji', label: 'Emoji' },
 ] as const;
+
+const TRAIT_LEVELS = [
+  { value: 'less', label: 'Less', score: 20 },
+  { value: 'default', label: 'Default', score: 50 },
+  { value: 'more', label: 'More', score: 80 },
+] as const;
+
+type TraitLevel = (typeof TRAIT_LEVELS)[number]['value'];
+
+function traitLevelFor(value: number): TraitLevel {
+  if (value <= 30) return 'less';
+  if (value >= 70) return 'more';
+  return 'default';
+}
 
 interface PersonalizationSettings {
   style: ResponseStyle;
@@ -506,37 +520,25 @@ export function GeneralSection() {
 
           {STYLE_TRAITS.map((trait) => (
             <FieldRow key={trait.key} label={trait.label} htmlFor={`general-trait-${trait.key}`}>
-              <span className="flex items-center gap-2">
-                <span className="w-16 shrink-0 text-right text-[12px] text-muted-foreground">
-                  {trait.low}
-                </span>
-                <input
-                  id={`general-trait-${trait.key}`}
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={10}
-                  value={personalization[trait.key]}
-                  onChange={(e) => {
-                    markDirty();
-                    const next = storedTrait(Number(e.target.value)) ?? 50;
-                    setPersonalization((current) => ({ ...current, [trait.key]: next }));
-                  }}
-                  disabled={!profilePreferencesReady || saving}
-                  aria-label={trait.label}
-                  aria-valuetext={
-                    personalization[trait.key] <= 30
-                      ? trait.low
-                      : personalization[trait.key] >= 70
-                        ? trait.high
-                        : 'Balanced'
-                  }
-                  className="h-6 w-full"
-                />
-                <span className="w-16 shrink-0 text-[12px] text-muted-foreground">
-                  {trait.high}
-                </span>
-              </span>
+              <select
+                id={`general-trait-${trait.key}`}
+                value={traitLevelFor(personalization[trait.key])}
+                onChange={(e) => {
+                  markDirty();
+                  const level = TRAIT_LEVELS.find((entry) => entry.value === e.target.value);
+                  if (!level) return;
+                  setPersonalization((current) => ({ ...current, [trait.key]: level.score }));
+                }}
+                disabled={!profilePreferencesReady || saving}
+                aria-label={trait.label}
+                className={SELECT_CLASS}
+              >
+                {TRAIT_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
             </FieldRow>
           ))}
 
@@ -576,7 +578,7 @@ export function GeneralSection() {
               {saving ? 'Saving...' : 'Save profile'}
             </button>
             {savedAt !== null && saveError === null && (
-              <span className="text-xs text-muted-foreground">Synced to your account.</span>
+              <span className="text-xs text-muted-foreground">Saved</span>
             )}
             {saveError !== null && <span className="text-xs text-danger">{saveError}</span>}
             {!preferencesLoaded && (
@@ -937,24 +939,18 @@ function ChatFontRow() {
 
   return (
     <Row label="Chat font" hint="Applies to message text. Code always stays monospace.">
-      <div className="flex gap-1" role="group" aria-label="Chat font">
+      <select
+        value={chatFont}
+        onChange={(event) => setChatFont(event.target.value as typeof chatFont)}
+        aria-label="Chat font"
+        className={SELECT_CLASS}
+      >
         {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={chatFont === option.value}
-            aria-label={`${option.label} chat font`}
-            onClick={() => setChatFont(option.value)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-              chatFont === option.value
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
+          <option key={option.value} value={option.value}>
             {option.label}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
     </Row>
   );
 }
