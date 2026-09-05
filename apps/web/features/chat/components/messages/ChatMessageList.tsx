@@ -248,6 +248,12 @@ export interface ChatMessageListProps {
   enableFollowUpSuggestions?: boolean;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
+  /**
+   * The reason the turn failed, owned by the send path rather than derived from
+   * the transcript. One failure gets one notice, and this is the surface that
+   * carries it: a page-level banner beside it said the same thing twice.
+   */
+  turnError?: string | null;
 }
 
 export interface MessageBranchGroup {
@@ -1096,8 +1102,10 @@ const ChatMessageListComponent = ({
   enableFollowUpSuggestions = FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT,
   onRegenerateWithModel,
   regenerateModelOptions,
+  turnError = null,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
+  const reportedTurnError = turnError?.trim() ? turnError.trim() : null;
   const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
@@ -1245,6 +1253,10 @@ const ChatMessageListComponent = ({
    * (Continue, stream-error, refusal) already own the last message, so the user
    * always gets an explicit "didn't complete" state plus Retry instead of a
    * silently missing answer.
+   *
+   * `turnError` is the send path reporting a failure it already knows about, so
+   * it skips the grace period, which only covers a turn that may still be
+   * running long.
    */
   const showIncompleteTurnNotice = Boolean(
     onRegenerate &&
@@ -1254,8 +1266,8 @@ const ChatMessageListComponent = ({
     !showStoppedNotice &&
     !showStreamErrorNotice &&
     !showRefusalNotice &&
-    isIncompleteTurn(lastMessage) &&
-    (lastMessage?.role !== 'user' || pastIncompleteTurnGrace),
+    (reportedTurnError !== null || isIncompleteTurn(lastMessage)) &&
+    (reportedTurnError !== null || lastMessage?.role !== 'user' || pastIncompleteTurnGrace),
   );
 
   // A turn that failed, was refused, stopped short, or is offering Continue
@@ -1755,7 +1767,7 @@ const ChatMessageListComponent = ({
             <TranscriptNotice
               tone="danger"
               icon={CircleAlert}
-              message={incompleteTurnNoticeMessage(lastMessage)}
+              message={reportedTurnError ?? incompleteTurnNoticeMessage(lastMessage)}
               action={{
                 label: 'Retry',
                 ariaLabel: 'Retry this turn',
@@ -1804,6 +1816,7 @@ const ChatMessageListComponent = ({
       showRefusalNotice,
       conversationId,
       showIncompleteTurnNotice,
+      reportedTurnError,
       prefersReducedMotion,
       showTypingIndicator,
       showFollowUps,
