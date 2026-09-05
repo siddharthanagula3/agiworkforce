@@ -10,12 +10,14 @@ import {
   DialogTitle,
   Label,
 } from '@agiworkforce/ui';
+import { MessageSquareText } from 'lucide-react';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { AGI_WORK_FEEDBACK_LABEL, AGI_WORK_LABEL } from '../../lib/agi-work';
 
 type FeedbackKind = 'bug' | 'feature' | 'general';
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
-type FeedbackVariant = 'general' | 'safety-appeal';
+type FeedbackVariant = 'general' | 'safety-appeal' | 'task';
 
 const FEEDBACK_KINDS: Array<{ value: FeedbackKind; label: string }> = [
   { value: 'general', label: 'General feedback' },
@@ -26,15 +28,19 @@ const FEEDBACK_KINDS: Array<{ value: FeedbackKind; label: string }> = [
 interface ComposerFeedbackDialogProps {
   conversationId?: string | null;
   messageId?: string | null;
+  runId?: string | null;
   finishReason?: 'refusal' | 'content_filter' | null;
   variant?: FeedbackVariant;
+  triggerClassName?: string;
 }
 
 export function ComposerFeedbackDialog({
   conversationId,
   messageId,
+  runId,
   finishReason,
   variant = 'general',
+  triggerClassName,
 }: ComposerFeedbackDialogProps) {
   const detailsId = useId();
   const [open, setOpen] = useState(false);
@@ -43,6 +49,7 @@ export function ComposerFeedbackDialog({
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isSafetyAppeal = variant === 'safety-appeal';
+  const isTaskFeedback = variant === 'task';
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -64,7 +71,9 @@ export function ComposerFeedbackDialog({
       const csrfToken = await getCsrfToken();
       const selectedKind = isSafetyAppeal
         ? 'Incorrect safety refusal'
-        : (FEEDBACK_KINDS.find((option) => option.value === kind)?.label ?? 'Feedback');
+        : isTaskFeedback
+          ? `${AGI_WORK_LABEL} task`
+          : (FEEDBACK_KINDS.find((option) => option.value === kind)?.label ?? 'Feedback');
       const response = await fetch('/api/feedback', {
         method: 'POST',
         credentials: 'include',
@@ -83,7 +92,9 @@ export function ComposerFeedbackDialog({
             page_path: window.location.pathname,
             ...(conversationId ? { conversation_id: conversationId } : {}),
             ...(isSafetyAppeal ? { feedback_context: 'safety_refusal' } : {}),
-            ...(isSafetyAppeal && messageId ? { message_id: messageId } : {}),
+            ...(isTaskFeedback ? { feedback_context: 'task_feedback' } : {}),
+            ...(isTaskFeedback && runId ? { run_id: runId } : {}),
+            ...((isSafetyAppeal || isTaskFeedback) && messageId ? { message_id: messageId } : {}),
             ...(isSafetyAppeal && finishReason ? { finish_reason: finishReason } : {}),
           },
         }),
@@ -111,14 +122,26 @@ export function ComposerFeedbackDialog({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        data-inline-link="true"
-        className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {isSafetyAppeal ? 'Report issue' : 'Feedback'}
-      </button>
+      {isTaskFeedback ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={AGI_WORK_FEEDBACK_LABEL}
+          title={AGI_WORK_FEEDBACK_LABEL}
+          className={triggerClassName}
+        >
+          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          data-inline-link="true"
+          className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {isSafetyAppeal ? 'Report issue' : 'Feedback'}
+        </button>
+      )}
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
@@ -127,12 +150,18 @@ export function ComposerFeedbackDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {isSafetyAppeal ? 'Report an incorrect refusal' : 'Share feedback'}
+              {isSafetyAppeal
+                ? 'Report an incorrect refusal'
+                : isTaskFeedback
+                  ? AGI_WORK_FEEDBACK_LABEL
+                  : 'Share feedback'}
             </DialogTitle>
             <DialogDescription>
               {isSafetyAppeal
                 ? 'Tell us why this request should have been allowed. Your report helps us improve safety decisions.'
-                : 'Tell us what worked, what did not, or what you would like AGI to do next.'}
+                : isTaskFeedback
+                  ? `Tell us how this ${AGI_WORK_LABEL} task went, what it got right, and where it went wrong.`
+                  : 'Tell us what worked, what did not, or what you would like AGI to do next.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -204,7 +233,9 @@ export function ComposerFeedbackDialog({
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {isSafetyAppeal
                     ? 'We include your app version, browser type, current AGI page, and refusal identifiers. Conversation content is not attached.'
-                    : 'We include your app version, browser type, and current AGI page so we can diagnose the report. Your prompt and conversation content are not attached.'}
+                    : isTaskFeedback
+                      ? 'We include your app version, browser type, current AGI page, and the identifiers for this task run so we can trace it. Your prompt and conversation content are not attached.'
+                      : 'We include your app version, browser type, and current AGI page so we can diagnose the report. Your prompt and conversation content are not attached.'}
                 </p>
               </div>
 
