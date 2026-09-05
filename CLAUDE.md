@@ -22,6 +22,10 @@ adds what is specific to Claude Code.
   leads and arbitrates, Opus 5 takes difficult implementation, Sonnet 5 takes
   exploration, research, browser work and simple edits. Coordinate through
   named agent teammates and messages, not scripted workflow runs.
+- Load `.agents/skills/agiworkforce-design` before any visible UI work; it
+  carries the design language and names which vendored design skill applies
+  at each stage (direction, gate, critique, guidelines, polish, browser
+  comparison).
 - Use skills in `.agents/skills/` for repeatable procedures rather than
   re-deriving them. `skills-lock.json` pins their content hashes, so a reformat
   of any `SKILL.md` fails `scripts/verify-skills-lock.mjs` in CI.
