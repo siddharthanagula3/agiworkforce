@@ -195,6 +195,8 @@
     "renameConversation": "Renombrar conversación",
     "saveTitle": "Guardar título",
     "shareConversation": "Compartir conversación",
+    "temporaryChat": "Chat temporal",
+    "temporaryChatRetentionNote": "No se guardará en tu historial y omite la memoria en este turno.",
     "toggleArtifacts": "Alternar panel de artefactos",
     "toggleArtifactsCount": "Alternar panel de artefactos ({{count}})",
     "toggleStats": "Estadísticas"

@@ -195,6 +195,8 @@
     "renameConversation": "Unterhaltung umbenennen",
     "saveTitle": "Titel speichern",
     "shareConversation": "Unterhaltung teilen",
+    "temporaryChat": "Temporärer Chat",
+    "temporaryChatRetentionNote": "Wird nicht in deinem Verlauf gespeichert und überspringt für diese Anfrage den Speicher.",
     "toggleArtifacts": "Artefakte-Bereich umschalten",
     "toggleArtifactsCount": "Artefakte-Bereich umschalten ({{count}})",
     "toggleStats": "Statistik"

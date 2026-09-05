@@ -641,6 +641,14 @@ interface ChatState {
   // Sidebar state
   sidebarCollapsed: boolean;
 
+  /**
+   * The composer's "Temporary chat" toggle is armed before any conversation
+   * exists to attach `isTemporary` to. This carries that intent from the
+   * plus menu to `createConversation`'s POST body; `setActiveConversation`
+   * clears it the moment a real conversation (new or existing) takes over.
+   */
+  pendingTemporaryChat: boolean;
+
   // Actions - Conversations
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
@@ -648,6 +656,7 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
+  setPendingTemporaryChat: (value: boolean) => void;
   setActiveConversationWithMessages: (
     id: string,
     messages: Message[],
@@ -859,6 +868,7 @@ const initialState = {
   memoryDisabledByConversation: {} as Record<string, boolean>,
   workModeByConversation: {} as Record<string, CloudWorkMode>,
   sidebarCollapsed: false,
+  pendingTemporaryChat: false,
 };
 
 /**
@@ -1129,6 +1139,7 @@ export const useChatStore = create<ChatState>()(
                 draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
                 error: null,
                 isLoading: deriveIsLoading({ ...state, activeConversationId }),
+                ...(id !== null ? { pendingTemporaryChat: false } : {}),
               };
             },
             undefined,
@@ -1823,6 +1834,9 @@ export const useChatStore = create<ChatState>()(
 
         setSidebarCollapsed: (collapsed) =>
           set({ sidebarCollapsed: collapsed }, undefined, 'chat/setSidebarCollapsed'),
+
+        setPendingTemporaryChat: (value) =>
+          set({ pendingTemporaryChat: value }, undefined, 'chat/setPendingTemporaryChat'),
 
         // Reset
         reset: () => set(initialState, undefined, 'chat/reset'),

@@ -18,7 +18,6 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
-  EyeOff,
   Image as ImageIcon,
   Video,
   FileText,
@@ -1060,13 +1059,23 @@ const ChatComposerNewComponent = ({
   ]);
 
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const setPendingTemporaryChat = useChatStore((s) => s.setPendingTemporaryChat);
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
-    return id ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false) : false;
+    return id
+      ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false)
+      : s.pendingTemporaryChat;
   });
   const [isSavingIncognito, setIsSavingIncognito] = useState(false);
   const handleIncognitoToggle = useCallback(async () => {
-    if (!activeConversationId || !onSetTemporaryChat) return;
+    // No conversation exists yet: arm the flag createConversation reads at
+    // creation. Nothing to save server-side until that POST happens.
+    if (!activeConversationId) {
+      setPendingTemporaryChat(!pendingTemporaryChat);
+      return;
+    }
+    if (!onSetTemporaryChat) return;
     setIsSavingIncognito(true);
     try {
       // AUDIT-FIX CMP-3: the host performs the PATCH and writes the SERVER's
@@ -1081,10 +1090,15 @@ const ChatComposerNewComponent = ({
     } finally {
       setIsSavingIncognito(false);
     }
-  }, [activeConversationId, isIncognito, onSetTemporaryChat]);
+  }, [
+    activeConversationId,
+    isIncognito,
+    onSetTemporaryChat,
+    pendingTemporaryChat,
+    setPendingTemporaryChat,
+  ]);
   const canToggleIncognito =
-    Boolean(activeConversationId) &&
-    Boolean(onSetTemporaryChat) &&
+    (activeConversationId ? Boolean(onSetTemporaryChat) : true) &&
     !isTurnActive &&
     !disabled &&
     !isSavingIncognito;
@@ -2708,9 +2722,9 @@ const ChatComposerNewComponent = ({
   if (officeCreationEnabled) {
     overflowActiveOptions.push({ label: 'Office files', Icon: FileText });
   }
-  if (isIncognito) {
-    overflowActiveOptions.push({ label: 'Temporary chat', Icon: EyeOff });
-  }
+  // Temporary chat deliberately does not join this chip: the founder keeps
+  // the composer face to plus, mode pill, Style, model trigger, mic, send,
+  // and the state already surfaces in the page header instead.
   const overflowActiveCount = overflowActiveOptions.length;
   const hasOverflowActive = overflowActiveCount > 0;
   const primaryOverflowActive = overflowActiveOptions[0];
@@ -3392,7 +3406,7 @@ const ChatComposerNewComponent = ({
                       handleMemoryToggle();
                       closeMenu();
                     }}
-                    showTemporaryChat={Boolean(activeConversationId && onSetTemporaryChat)}
+                    showTemporaryChat={!activeConversationId || Boolean(onSetTemporaryChat)}
                     temporaryChatSaving={isSavingIncognito}
                     isIncognito={isIncognito}
                     canToggleIncognito={canToggleIncognito}
@@ -4243,8 +4257,10 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
     prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject &&
-    // AUDIT-FIX CMP-3: the presence of this handler decides whether the
-    // "Temporary chat" control renders at all, so it must defeat memoisation.
+    // AUDIT-FIX CMP-3: without an active conversation the handler is unused
+    // (the toggle is local-only), but once one exists its presence decides
+    // whether the "Temporary chat" control can save, so it must defeat
+    // memoisation.
     prev.onSetTemporaryChat === next.onSetTemporaryChat
   );
 });

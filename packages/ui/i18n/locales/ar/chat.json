@@ -195,6 +195,8 @@
     "renameConversation": "إعادة تسمية المحادثة",
     "saveTitle": "حفظ العنوان",
     "shareConversation": "مشاركة المحادثة",
+    "temporaryChat": "محادثة مؤقتة",
+    "temporaryChatRetentionNote": "لن يتم حفظها في سجلك ويتم تخطي الذاكرة لهذه الجولة.",
     "toggleArtifacts": "تبديل لوحة العناصر",
     "toggleArtifactsCount": "تبديل لوحة العناصر ({{count}})",
     "toggleStats": "الإحصائيات"

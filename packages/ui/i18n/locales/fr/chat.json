@@ -195,6 +195,8 @@
     "renameConversation": "Renommer la conversation",
     "saveTitle": "Enregistrer le titre",
     "shareConversation": "Partager la conversation",
+    "temporaryChat": "Chat temporaire",
+    "temporaryChatRetentionNote": "Ne sera pas enregistré dans votre historique et ignore la mémoire pour ce message.",
     "toggleArtifacts": "Basculer le panneau des artefacts",
     "toggleArtifactsCount": "Basculer le panneau des artefacts ({{count}})",
     "toggleStats": "Statistiques"
