@@ -9,4 +9,6 @@ export type ToolApprovalReason =
   | 'account_default_read_only'
   | 'lethal_trifecta'
   | 'never_rememberable'
-  | 'risk_tier';
+  | 'risk_tier'
+  | 'policy_hard_block'
+  | 'harness_limit';

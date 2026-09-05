@@ -189,6 +189,14 @@ pub enum ToolApprovalReason {
     LethalTrifecta,
     NeverRememberable,
     RiskTier,
+    /// A refusal the harness owns outright: no answer to the prompt, and no
+    /// grant of any scope, lifts it. Desktop's computer-use layer raises it for
+    /// the always-blocked application categories, the protected-window and
+    /// system-UI regions, and sandboxed mode.
+    PolicyHardBlock,
+    /// A bound on the call itself rather than a judgement about the caller:
+    /// a rate ceiling, an oversized payload, an out-of-range coordinate.
+    HarnessLimit,
 }
 
 impl ToolApprovalReason {
@@ -196,7 +204,10 @@ impl ToolApprovalReason {
     /// unattended run there is no one to ask, so it denies instead of falling
     /// through to auto-allow.
     pub fn is_escalation(self) -> bool {
-        matches!(self, Self::LethalTrifecta | Self::NeverRememberable)
+        matches!(
+            self,
+            Self::LethalTrifecta | Self::NeverRememberable | Self::PolicyHardBlock
+        )
     }
 }
 
@@ -488,12 +499,14 @@ mod tests {
     fn only_a_declared_read_is_parallel_safe() {
         assert!(definition(ToolActionClass::Read, true).is_parallel_safe());
         assert!(!definition(ToolActionClass::Write, true).is_parallel_safe());
-        assert!(!ToolDefinition::undeclared(
-            String::from("mcp__acme__publish"),
-            String::new(),
-            serde_json::json!({})
-        )
-        .is_parallel_safe());
+        assert!(
+            !ToolDefinition::undeclared(
+                String::from("mcp__acme__publish"),
+                String::new(),
+                serde_json::json!({})
+            )
+            .is_parallel_safe()
+        );
     }
 
     #[test]
@@ -558,6 +571,24 @@ mod tests {
         assert!(ToolApprovalReason::LethalTrifecta.is_escalation());
         assert!(ToolApprovalReason::NeverRememberable.is_escalation());
         assert!(!ToolApprovalReason::AutoApprovalMode.is_escalation());
+    }
+
+    #[test]
+    fn a_hard_block_escalates_and_a_call_bound_does_not() {
+        assert!(ToolApprovalReason::PolicyHardBlock.is_escalation());
+        assert!(!ToolApprovalReason::HarnessLimit.is_escalation());
+    }
+
+    #[test]
+    fn the_new_reasons_carry_their_wire_names() {
+        assert_eq!(
+            serde_json::to_value([
+                ToolApprovalReason::PolicyHardBlock,
+                ToolApprovalReason::HarnessLimit,
+            ])
+            .expect("serialize"),
+            serde_json::json!(["policy_hard_block", "harness_limit"])
+        );
     }
 
     #[test]

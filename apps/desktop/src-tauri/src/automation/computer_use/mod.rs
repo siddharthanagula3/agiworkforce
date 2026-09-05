@@ -37,6 +37,7 @@
 mod action_executor;
 pub mod anthropic_agent;
 mod app_permissions;
+pub mod approval;
 pub mod consent;
 mod observe_plan_act;
 mod safety;
@@ -55,6 +56,7 @@ pub use app_permissions::{
     AppPermissionManager, AppPermissionRequest, PermissionDecision, PermissionStatus,
     ALWAYS_BLOCKED_BUNDLE_IDS, ALWAYS_BLOCKED_URL_HOSTS,
 };
+pub use approval::{action_class, action_tool_name, approval_request};
 pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
 pub use observe_plan_act::{ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult};
 pub use safety::{
