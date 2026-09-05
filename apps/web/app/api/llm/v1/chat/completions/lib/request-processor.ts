@@ -173,7 +173,7 @@ import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
+import { buildCapabilityPreamble } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
