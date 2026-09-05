@@ -59,7 +59,11 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
-import { getBillingPlanPricing, hasSelfServeUpgradePath } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  hasSelfServeUpgradePath,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
@@ -292,7 +296,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
   // error). Gate the Free fallback on the same readiness test the chat shell
   // and the pricing page use.
   const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
-  const isFreeTier = currentTier === 'free';
+  const isFreeTier = isFreeBillingPlanTier(currentTier);
   // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
   // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
   // label ("Max 15x"), the same source the chat sidebar and shared

@@ -4,6 +4,9 @@ import {
   getBillingPlanPricing,
   getNextUpgradeTier,
   isBillingPlanTier,
+  isContractPricedPlan,
+  isFreeOfChargePlanTier,
+  isPerSeatBillingPlan,
   isSelfServeIndividualPlanTier,
   normalizeBillingPlanTier,
   type BillingPlanTier,
@@ -105,8 +108,8 @@ function noUpgradeQuotaReason(code: string | undefined, currentTier: BillingPlan
 
 function planCanUpgradeTo(currentTier: BillingPlanTier, targetTier: PaidBillingPlanTier): boolean {
   if (!isSelfServeIndividualPlanTier(targetTier)) return false;
-  if (currentTier === 'team' || currentTier === 'enterprise') return false;
-  if (currentTier === 'local-only' || currentTier === 'byok' || currentTier === 'free') return true;
+  if (isPerSeatBillingPlan(currentTier) || isContractPricedPlan(currentTier)) return false;
+  if (isFreeOfChargePlanTier(currentTier)) return true;
   const currentIndex = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(
     currentTier as SelfServeIndividualPlanTier,
   );
@@ -143,10 +146,7 @@ export function resolveMediaPaywallSlot(input: {
   if (code === 'subscription_inactive') {
     return {
       feature: mediaFeature,
-      requiredTier:
-        currentTier === 'local-only' || currentTier === 'byok' || currentTier === 'free'
-          ? requiredTier
-          : currentTier,
+      requiredTier: isFreeOfChargePlanTier(currentTier) ? requiredTier : currentTier,
       reason: refusal.message,
       recoveryAction: 'manage_billing',
       showUpgradeCta: true,
@@ -177,11 +177,7 @@ export function resolveMediaPaywallSlot(input: {
     const resetAt = refusal.resetAt ?? quotaResetAt(code, usage);
     return {
       feature: quota.feature,
-      requiredTier:
-        nextTier ??
-        (currentTier === 'local-only' || currentTier === 'byok' || currentTier === 'free'
-          ? requiredTier
-          : currentTier),
+      requiredTier: nextTier ?? (isFreeOfChargePlanTier(currentTier) ? requiredTier : currentTier),
       reason: canUpgrade ? quota.reason : noUpgradeQuotaReason(code, currentTier),
       recoveryAction: canUpgrade ? 'upgrade' : 'view_usage',
       showUpgradeCta: canUpgrade || quota.kind !== 'rate_limit',
@@ -195,11 +191,7 @@ export function resolveMediaPaywallSlot(input: {
     const nextTier = getNextUpgradeTier(currentTier);
     return {
       feature: mediaFeature,
-      requiredTier:
-        nextTier ??
-        (currentTier === 'local-only' || currentTier === 'byok' || currentTier === 'free'
-          ? requiredTier
-          : currentTier),
+      requiredTier: nextTier ?? (isFreeOfChargePlanTier(currentTier) ? requiredTier : currentTier),
       reason: nextTier ? refusal.message : noUpgradeQuotaReason(code, currentTier),
       recoveryAction: nextTier ? refusal.recoveryAction : 'view_usage',
       showUpgradeCta: true,

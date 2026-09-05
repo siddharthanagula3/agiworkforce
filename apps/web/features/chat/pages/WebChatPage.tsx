@@ -83,6 +83,7 @@ import {
   type ProviderMode,
   type SendPreviewPresentation,
   hasSelfServeUpgradePath,
+  isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import { Menu, Share2, PanelsTopLeft, Bell, X as XIcon, ChevronUp } from '@agiworkforce/icons';
@@ -437,7 +438,7 @@ export function resolveChatAccountDisplay(
     displayName,
     userInitial: accountInitial(displayName),
     tierLabel: getBillingPlanPricing(subscriptionTier).label,
-    showFreeUpgrade: subscriptionTier === 'free',
+    showFreeUpgrade: isFreeBillingPlanTier(subscriptionTier),
     isLoading: false,
   };
 }
@@ -794,7 +795,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // Never temporarily downgrade a signed-in paid user while /api/me is still
   // hydrating. That race used to replace a persisted Auto/paid selection with
   // the Free workhorse, so the model unexpectedly changed after reload.
-  const isWebsiteFreeTrial = billingPolicyReady && subscriptionTier === 'free';
+  const isWebsiteFreeTrial = billingPolicyReady && isFreeBillingPlanTier(subscriptionTier);
   const freeTrialModelId = getBestAutoModeForTier('free');
   const validatedSelectedModelId = resolveSelectableModelId(selectedModelId);
   const activeModelId =
@@ -4586,7 +4587,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
-                <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={currentTier === 'free'} />
+                <SidebarPlanBadge
+                  tierLabel={tierLabel}
+                  isFreeTier={isFreeBillingPlanTier(currentTier)}
+                />
               </div>
               {!isAccountLoading && user?.email && (
                 <p className="truncate text-[12px] text-muted-foreground">{user.email}</p>

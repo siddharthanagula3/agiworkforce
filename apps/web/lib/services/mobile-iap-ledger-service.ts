@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  isFreeBillingPlanTier,
   type MobileIapVerifyResponse,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
@@ -101,7 +102,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
     } else if (
       !subscription ||
       !isEntitledStatus(subscription.status) ||
-      subscription.plan_tier === 'free'
+      isFreeBillingPlanTier(subscription.plan_tier)
     ) {
       throw createError.conflict('Start or restore an active paid plan before buying a top-up.');
     }

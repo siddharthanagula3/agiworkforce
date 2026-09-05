@@ -1,8 +1,9 @@
-
 import { logger } from './logger';
 import {
   getPlanPriceUsd,
   getPlanPriceInr,
+  isBasicPlanTier,
+  isPerSeatBillingPlan,
   type BillingInterval,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
@@ -87,14 +88,14 @@ export function getConfiguredPriceId(
   interval: BillingInterval,
   currency?: string,
 ): string | undefined {
-  if (plan === 'basic' || plan === 'team') {
+  if (isBasicPlanTier(plan) || isPerSeatBillingPlan(plan)) {
     const prices = STRIPE_PRICE_IDS[plan];
     if (interval === 'monthly') {
       return currency?.toLowerCase() === 'inr'
         ? (prices.monthlyInr ?? prices.monthlyUsd)
         : prices.monthlyUsd;
     }
-    if (plan === 'team') return STRIPE_PRICE_IDS.team.yearlyUsd;
+    if (isPerSeatBillingPlan(plan)) return STRIPE_PRICE_IDS.team.yearlyUsd;
     return undefined;
   }
   return STRIPE_PRICE_IDS[plan][interval];

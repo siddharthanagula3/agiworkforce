@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { ManagedUsageSummaryResponse } from '@agiworkforce/types';
+import { isFreeBillingPlanTier, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 import {
   getPlanFlagshipWeeklyUsageBudgetCents,
   getPlanSessionUsageBudgetCents,
@@ -36,7 +36,7 @@ export async function getManagedUsageSummary(
   const periodStart = balance?.period_start ?? subscription?.current_period_start ?? null;
   const periodEnd = balance?.period_end ?? subscription?.current_period_end ?? null;
 
-  const isFreePlan = planTier.toLowerCase() === 'free';
+  const isFreePlan = isFreeBillingPlanTier(planTier.toLowerCase());
   const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const usagePercentage =
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);

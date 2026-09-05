@@ -79,7 +79,7 @@ import {
 import { loadToolApprovalPolicy } from './lib/tool-approval-policy';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import type { StreamChunk } from '@agiworkforce/types';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -291,7 +291,9 @@ async function dispatchChatCompletions(
   // free-trial path. Allow them through the managed-compute gate regardless of the
   // private-beta flag so brand-new users can always chat.
   const isFreeTierRequest =
-    !subscription || !subscription.plan_tier || subscription.plan_tier.toLowerCase() === 'free';
+    !subscription ||
+    !subscription.plan_tier ||
+    isFreeBillingPlanTier(subscription.plan_tier.toLowerCase());
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
