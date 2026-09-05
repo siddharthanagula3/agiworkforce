@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));

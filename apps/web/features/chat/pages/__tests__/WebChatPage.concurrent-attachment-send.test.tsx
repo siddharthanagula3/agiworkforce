@@ -231,7 +231,8 @@ vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
   ArtifactsPanel: () => null,
   ArtifactsToggleButton: () => null,
 }));
-vi.mock('../../components/research/ResearchPanel', () => ({
+vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
+  ...(await importOriginal()),
   ResearchPanel: () => null,
   ResearchToggleButton: () => null,
 }));
