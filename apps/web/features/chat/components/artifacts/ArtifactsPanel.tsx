@@ -12,7 +12,6 @@ import {
   type PublishResult,
 } from '@agiworkforce/artifacts';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
-import { useKeyboardShortcuts } from '../../hooks/use-keyboard-shortcuts';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
@@ -578,8 +577,9 @@ export function ArtifactsToggleButton() {
   const { getConversationArtifacts, panelOpen, togglePanel } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
 
-  useKeyboardShortcuts({ onToggleArtifacts: togglePanel });
-
+  // Shift+Cmd/Ctrl+A is claimed by the single useKeyboardShortcuts call in
+  // WebChatPage, which calls this same store's togglePanel; a second
+  // instance here would double-fire and cancel itself out.
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
   return (

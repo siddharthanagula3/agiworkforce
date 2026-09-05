@@ -210,6 +210,7 @@ const HANDLER_BY_DESCRIPTION: Record<string, string> = {
   'Focus message composer': 'onFocusComposer',
   'Copy last message': 'onCopyLastMessage',
   'Regenerate last message': 'onRegenerateLastMessage',
+  'Toggle artifacts panel': 'onToggleArtifacts',
 };
 
 const LAST_ASSISTANT_CONTENT = 'The answer the viewer would copy.';
