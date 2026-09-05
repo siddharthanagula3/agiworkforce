@@ -35,7 +35,8 @@ vi.mock('@/features/projects', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/hooks/useConversations', () => ({
+vi.mock('@/lib/hooks/useConversations', async (importOriginal) => ({
+  ...(await importOriginal()),
   useProjectConversations: () => ({
     conversations: [],
     isLoading: false,
