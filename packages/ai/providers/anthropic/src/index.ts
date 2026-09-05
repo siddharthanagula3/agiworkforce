@@ -65,18 +65,23 @@ export interface AnthropicAdapterConfig extends ProviderAdapterConfig {
   cacheRetention?: 'short' | 'long' | 'none';
   serviceTier?: 'auto' | 'standard_only';
   betaFeatures?: string[];
+  extraHeaders?: Record<string, string>;
 }
 
 export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): ProviderAdapter {
+  const defaultHeaders = {
+    ...(config.betaFeatures && config.betaFeatures.length > 0
+      ? { 'anthropic-beta': config.betaFeatures.join(',') }
+      : {}),
+    ...config.extraHeaders,
+  };
   const sdk = new Anthropic({
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),
     ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
     ...(config.fetch ? { fetch: config.fetch } : {}),
-    ...(config.betaFeatures && config.betaFeatures.length > 0
+    ...(Object.keys(defaultHeaders).length > 0
       ? {
-          defaultHeaders: {
-            'anthropic-beta': config.betaFeatures.join(','),
-          },
+          defaultHeaders,
         }
       : {}),
   });
