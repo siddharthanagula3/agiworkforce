@@ -7,9 +7,14 @@ const persistenceMocks = vi.hoisted(() => ({
   // A conversation that has never branched: the single-statement write.
   query: vi.fn(async (..._args: unknown[]) => [{ active_leaf_message_id: null }]),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: persistenceMocks.execute, query: persistenceMocks.query }),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const pool = {
+    execute: persistenceMocks.execute,
+    query: persistenceMocks.query,
+    transaction: (run: (tx: unknown) => Promise<unknown>) => run(pool),
+  };
+  return { getNeonDb: () => pool };
+});
 
 const events: string[] = [];
 const finalize = vi.fn(async (_input: unknown) => {
