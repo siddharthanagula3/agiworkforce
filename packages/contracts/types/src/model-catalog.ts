@@ -19,7 +19,12 @@
  */
 
 import modelsCatalogJson from './models.json';
-import { modelRegistry, type RouteCommercialStatus } from '@agiworkforce/model-registry';
+import {
+  modelRegistry,
+  type ModelCapabilityName,
+  type ModelCapabilityValue,
+  type RouteCommercialStatus,
+} from '@agiworkforce/model-registry';
 
 export { getRoutePricing } from '@agiworkforce/model-registry';
 export type { RoutePriceSheet, RouteCommercialStatus } from '@agiworkforce/model-registry';
@@ -43,20 +48,45 @@ import type { SubscriptionTier } from './user';
 import type { Effort } from './design-system/effort';
 export type { Provider };
 
-export interface ModelCapabilities {
-  streaming: boolean;
-  tools: boolean;
-  vision: boolean;
-  json: boolean;
-  thinking: boolean;
-  computerUse: boolean;
-  agentic: boolean;
-  imageGen: boolean;
-  videoGen: boolean;
-  search: boolean;
-  research: boolean;
-  codeExecution: boolean;
-  caching?: boolean;
+export type { ModelCapabilityName, ModelCapabilityValue };
+
+export type NormalizedModelCapabilities = Readonly<
+  Partial<Record<ModelCapabilityName, ModelCapabilityValue>>
+>;
+
+export const COMPAT_CAPABILITY_SOURCES = {
+  streaming: 'streaming',
+  tools: 'functionCalling',
+  vision: 'imageInput',
+  json: 'structuredOutput',
+  thinking: 'reasoning',
+  computerUse: 'computerUse',
+  agentic: 'agentic',
+  imageGen: 'imageOutput',
+  videoGen: 'videoOutput',
+  search: 'webSearch',
+  research: 'deepResearch',
+  codeExecution: 'codeExecution',
+  caching: 'promptCaching',
+} as const satisfies Readonly<Record<string, ModelCapabilityName>>;
+
+export type ModelCapabilities = Record<keyof typeof COMPAT_CAPABILITY_SOURCES, boolean>;
+
+export const INTRINSIC_CAPABILITY_NAMES: readonly ModelCapabilityName[] = modelRegistry
+  .capabilityClasses.intrinsic as readonly ModelCapabilityName[];
+
+export const ROUTE_DEPENDENT_CAPABILITY_NAMES: readonly ModelCapabilityName[] = modelRegistry
+  .capabilityClasses.routeDependent as readonly ModelCapabilityName[];
+
+export function projectModelCapabilities(
+  capabilities: NormalizedModelCapabilities,
+): ModelCapabilities {
+  return Object.fromEntries(
+    Object.entries(COMPAT_CAPABILITY_SOURCES).map(([compatName, capabilityName]) => [
+      compatName,
+      capabilities[capabilityName] === true,
+    ]),
+  ) as ModelCapabilities;
 }
 
 export interface VideoGenerationOutputSize {
