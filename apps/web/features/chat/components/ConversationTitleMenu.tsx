@@ -60,7 +60,7 @@ export function ConversationTitleMenu({
   }, [draft, title, onRename]);
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center">
+    <div className="flex min-w-0 flex-1 items-center justify-start">
       {isRenaming ? (
         <input
           autoFocus
@@ -77,7 +77,7 @@ export function ConversationTitleMenu({
               setIsRenaming(false);
             }
           }}
-          className="w-[240px] max-w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-center text-sm font-medium text-[var(--chat-text-primary)] outline-none focus:ring-2 focus:ring-primary"
+          className="w-[240px] max-w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-start text-sm font-medium text-[var(--chat-text-primary)] outline-none focus:ring-2 focus:ring-primary"
         />
       ) : (
         <DropdownMenu>
@@ -91,7 +91,7 @@ export function ConversationTitleMenu({
               <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="w-52">
+          <DropdownMenuContent align="start" className="w-52">
             <DropdownMenuItem onSelect={() => startRename()}>
               <Pencil className="mr-2 h-4 w-4" />
               Rename
