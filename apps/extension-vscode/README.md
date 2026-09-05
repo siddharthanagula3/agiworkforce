@@ -148,6 +148,16 @@ explanations.
   Cloud, and switching a live session across a provider boundary starts a new
   thread instead of forwarding the earlier transcript.
 
+## Error reporting
+
+Uncaught exceptions and unhandled rejections in the extension host can be
+reported for crash diagnosis, using the same `agiWorkforce.telemetryEnabled`
+setting and endpoint as usage telemetry above. A report is sent only when
+both that setting and VS Code's own telemetry setting allow it. Every report
+is scrubbed before it leaves your machine: message text, file names, and
+URLs are dropped, leaving only the error's type name and the bare function
+names from its stack.
+
 ## Support
 
 - Documentation: <https://agiworkforce.com/docs>
