@@ -815,7 +815,7 @@ function EmptyChatsState({ projectName }: EmptyChatsStateProps) {
         style={{
           fontSize: 14,
           fontWeight: 600,
-          color: 'hsl(var(--foreground))',
+          color: 'var(--agi-ink)',
           margin: '0 0 6px',
         }}
       >
