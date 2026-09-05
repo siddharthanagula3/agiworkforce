@@ -46,7 +46,7 @@ const TRIGGER_CLASS =
   'flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]';
 
 const PANEL_CLASS =
-  'absolute right-0 z-[var(--z-popover,200)] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
+  'absolute right-0 z-[var(--z-popover,350)] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const ITEM_CLASS =
   'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';

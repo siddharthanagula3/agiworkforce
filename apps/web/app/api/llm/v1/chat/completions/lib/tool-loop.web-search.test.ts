@@ -30,10 +30,12 @@ vi.mock('./tool-loop-anthropic', () => ({
 import { runToolLoop, searchResultsEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import { forcedFunctionToolChoice } from '@/lib/required-tool-call';
 import {
   webSearchToolDef,
   WEB_SEARCH_MAX_CALLS_PER_TURN,
   WEB_SEARCH_MAX_RESULTS,
+  WEB_SEARCH_TOOL,
 } from '@/lib/web-search/web-search-tool';
 
 function agentEvents(output: string): AgentEventEnvelope[] {
@@ -192,7 +194,7 @@ describe('tool-loop web_search integration', () => {
         web_search: true,
       } as never;
       processed.resolvedTaskType = 'research';
-      processed.llmRequest.tool_choice = 'required';
+      processed.llmRequest.tool_choice = forcedFunctionToolChoice(WEB_SEARCH_TOOL);
       const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
 
       expect(output).toContain('"x_tool_status"');
@@ -213,7 +215,7 @@ describe('tool-loop web_search integration', () => {
       expect(output).toContain('"position":1');
 
       expect(factoryMocks.streamRequest.mock.calls[0]?.[2]).toMatchObject({
-        tool_choice: 'required',
+        tool_choice: forcedFunctionToolChoice(WEB_SEARCH_TOOL),
       });
       expect(factoryMocks.streamRequest.mock.calls[1]?.[2]).toMatchObject({
         tool_choice: 'auto',
