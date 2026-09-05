@@ -9,6 +9,7 @@ import {
   CLEAR_FILTERS_LABEL,
   DIRECTORY_SEARCH_PLACEHOLDERS,
   DIRECTORY_SORT_LABELS,
+  DIRECTORY_SOURCE_ALL_ID,
   FILTER_MENU_LABEL,
   SORT_MENU_LABEL,
 } from './constants';
@@ -81,13 +82,14 @@ export function DirectoryToolbar({
           <span className="text-sm font-medium text-foreground">{sourcesHeading}</span>
         ) : null}
         {sources.map((source) => {
-          const selected = activeSource === source.id;
+          const isAll = source.id === DIRECTORY_SOURCE_ALL_ID;
+          const selected = isAll ? activeSource === null : activeSource === source.id;
           return (
             <button
               key={source.id}
               type="button"
               aria-pressed={selected}
-              onClick={() => onSourceChange(selected ? null : source.id)}
+              onClick={() => onSourceChange(isAll ? null : selected ? null : source.id)}
               className={cn(
                 DIRECTORY_CHIP,
                 selected

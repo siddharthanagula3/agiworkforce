@@ -102,13 +102,22 @@ describe('toConnectorEntry', () => {
 });
 
 describe('toConnectorSection', () => {
-  it('lists the heading and only the badges present in the snapshot', () => {
+  it('lists an All tab plus only the badges present in the snapshot', () => {
     const section = toConnectorSection(
       [record(), record({ id: 'gmail', badge: 'first-party' })],
       new Set(),
     );
-    expect(section.sourcesHeading).toBe('AGI and partners');
-    expect(section.sources?.map((source) => source.id)).toEqual(['first-party', 'community']);
+    expect(section.sourcesHeading).toBeUndefined();
+    expect(section.sources?.map((source) => source.id)).toEqual([
+      'all',
+      'first-party',
+      'community',
+    ]);
+    expect(section.sources?.map((source) => source.label)).toEqual([
+      'All',
+      'Built by AGI',
+      'Community',
+    ]);
   });
 
   it('hides a filter group with a single value', () => {
@@ -215,9 +224,8 @@ describe('curated first party connectors', () => {
   it('carries a real status label and never invents one', () => {
     expect(toCuratedConnectorEntry(curated(), new Set()).statusLabel).toBeUndefined();
     expect(
-      toCuratedConnectorEntry(curated({ statusLabel: 'Needs setup by AGI' }), new Set())
-        .statusLabel,
-    ).toBe('Needs setup by AGI');
+      toCuratedConnectorEntry(curated({ statusLabel: 'Not connected' }), new Set()).statusLabel,
+    ).toBe('Not connected');
   });
 
   it('leads the section with curated entries and drops a registry duplicate', () => {
@@ -228,7 +236,7 @@ describe('curated first party connectors', () => {
 
   it('adds the AGI chip once a curated connector is present', () => {
     const section = toConnectorSection([record()], new Set(), [curated()]);
-    expect(section.sources?.map((chip) => chip.id)).toEqual(['first-party', 'community']);
+    expect(section.sources?.map((chip) => chip.id)).toEqual(['all', 'first-party', 'community']);
   });
 
   it('folds curated categories and availability into the filters', () => {
@@ -411,7 +419,7 @@ describe('settings connector projection', () => {
     for (const connector of SETTINGS_CONNECTORS) {
       expect(connector.description).not.toMatch(/^Not available by default/);
     }
-    expect(projected('adobe')?.statusLabel).toBe('Needs setup by AGI');
+    expect(projected('adobe')?.statusLabel).toBe('Not connected');
   });
 
   it('carries the vendor name as the publisher', () => {

@@ -1,5 +1,7 @@
 import {
   isUnverifiedCustomConnector,
+  DIRECTORY_SOURCE_ALL_ID,
+  DIRECTORY_SOURCE_ALL_LABEL,
   type ConnectedConnector,
   type DirectoryBadgeKind,
   type DirectoryConnectorDetail,
@@ -23,7 +25,6 @@ import {
   CONNECTOR_DIRECTORY_PATH,
   CONNECTOR_ICON_PATH,
   CONNECTOR_REAUTHORIZATION_COPY,
-  CONNECTOR_SOURCES_HEADING,
   DIRECTORY_PAGE_SIZE,
 } from '../constants';
 
@@ -65,7 +66,7 @@ function originOf(url: string): string | null {
 
 const BADGE_CHIP_ORDER: readonly DirectoryBadge[] = ['first-party', 'registry', 'community'];
 const BADGE_CHIP_LABELS: Record<DirectoryBadge, string> = {
-  'first-party': 'AGI',
+  'first-party': 'Built by AGI',
   registry: 'Verified',
   community: 'Community',
 };
@@ -117,10 +118,12 @@ function connectorSources(
 ): DirectorySourceChip[] {
   const present = new Set<DirectoryBadge>(records.map((record) => record.badge));
   if (hasCurated) present.add(FIRST_PARTY_BADGE);
-  return BADGE_CHIP_ORDER.filter((badge) => present.has(badge)).map((badge) => ({
+  const badgeChips = BADGE_CHIP_ORDER.filter((badge) => present.has(badge)).map((badge) => ({
     id: badge,
     label: BADGE_CHIP_LABELS[badge],
   }));
+  if (badgeChips.length === 0) return badgeChips;
+  return [{ id: DIRECTORY_SOURCE_ALL_ID, label: DIRECTORY_SOURCE_ALL_LABEL }, ...badgeChips];
 }
 
 function connectorFilterGroups(
@@ -204,7 +207,6 @@ export function toConnectorSection(
   return {
     entries: [...curatedEntries, ...registryEntries],
     installable: true,
-    sourcesHeading: CONNECTOR_SOURCES_HEADING,
     sources: connectorSources(records, curatedEntries.length > 0),
     filterGroups: connectorFilterGroups(records, curated),
     sortOptions: ['name'],

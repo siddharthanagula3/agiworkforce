@@ -6,8 +6,6 @@ export const DIRECTORY_SOURCE_LABEL_AGI = 'Made by AGI';
 export const DIRECTORY_SOURCE_LABEL_YOURS = 'Yours';
 export const DIRECTORY_SOURCE_LABEL_PARTNERS = 'Partners';
 
-export const CONNECTOR_SOURCES_HEADING = 'AGI and partners';
-
 export const SKILL_PUBLISHER_AGI = 'Made by AGI';
 export const SKILL_PUBLISHER_YOU = 'Yours';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
