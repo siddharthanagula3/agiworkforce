@@ -114,3 +114,12 @@ Founder: migrations, key value quota, Google key, Stripe live, signing and
 notarization, store and marketplace credentials, NPM_TOKEN, an admin account
 with a workspace, reseller agreements for gateway routes (commercial status),
 the single production deploy.
+
+## Open founder decisions (asked 2026-09-05 evening, awaiting answers)
+
+| Decision                                                                      | Recommended                                                                                   |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Desktop runtime: Tauri app, Electron plus sidecar, or Electron port           | Tauri app becomes the product after a one week parity check                                   |
+| Web connect your own provider account lane                                    | Yes, client held keys forwarded per request, never stored                                     |
+| Production path                                                               | Apply 0159 to 0174 after a branch rehearsal, then continuous deploys behind the reviewer gate |
+| Accounts: Anthropic funding, separate Google key, paid Upstash, gateway terms | All four                                                                                      |
