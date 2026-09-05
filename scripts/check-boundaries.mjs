@@ -86,6 +86,56 @@ const vendorAdapterOwnership = [
   },
 ];
 
+/**
+ * The identity provider's SDKs are reachable from apps/web only through the
+ * identity port. A second importer is a second place a provider swap has to
+ * visit, which is how the coupling reached about fifty files before the port
+ * existed. Entries in the allowlist carry the reason they cannot route through
+ * it, and go stale the moment they can.
+ */
+const IDENTITY_SDK_SCOPE = '@clerk/';
+const IDENTITY_SDK_CONSUMER_ROOT = 'apps/web/';
+const IDENTITY_PORT_PACKAGE = '@agiworkforce/identity';
+const IDENTITY_ADAPTER_ROOT = 'packages/platform/identity/';
+const IDENTITY_SDK_ALLOWLIST_PATH = 'scripts/config/identity-sdk-allowlist.json';
+const MINIMUM_ALLOWLIST_REASON_LENGTH = 10;
+
+const identitySdkImporters = new Map();
+
+function isIdentitySdkSpecifier(specifier) {
+  return specifier === IDENTITY_SDK_SCOPE.slice(0, -1) || specifier.startsWith(IDENTITY_SDK_SCOPE);
+}
+
+function loadIdentitySdkAllowlist() {
+  const abs = path.join(root, IDENTITY_SDK_ALLOWLIST_PATH);
+  if (!fs.existsSync(abs)) return { schemaVersion: 1, entries: [] };
+  return JSON.parse(fs.readFileSync(abs, 'utf8'));
+}
+
+function validateIdentitySdkAllowlist(allowlist) {
+  const seen = new Set();
+  for (const entry of allowlist.entries ?? []) {
+    if (!entry.path || typeof entry.path !== 'string') {
+      errors.push(`${IDENTITY_SDK_ALLOWLIST_PATH}: an entry is missing a "path" string.`);
+      continue;
+    }
+    if (seen.has(entry.path)) {
+      errors.push(`${IDENTITY_SDK_ALLOWLIST_PATH}: duplicate entry for ${entry.path}.`);
+    }
+    seen.add(entry.path);
+    if (
+      !entry.reason ||
+      typeof entry.reason !== 'string' ||
+      entry.reason.trim().length < MINIMUM_ALLOWLIST_REASON_LENGTH
+    ) {
+      errors.push(
+        `${IDENTITY_SDK_ALLOWLIST_PATH}: ${entry.path} needs a "reason" saying why it cannot ` +
+          `reach the provider through ${IDENTITY_PORT_PACKAGE}.`,
+      );
+    }
+  }
+}
+
 const workspacePackages = new Map();
 
 function walk(dir, files = []) {
@@ -303,6 +353,12 @@ for (const scanRoot of scanRoots) {
         }
       }
 
+      if (isIdentitySdkSpecifier(specifier) && rel.startsWith(IDENTITY_SDK_CONSUMER_ROOT)) {
+        const seen = identitySdkImporters.get(rel) ?? new Set();
+        seen.add(specifier);
+        identitySdkImporters.set(rel, seen);
+      }
+
       for (const ownership of vendorAdapterOwnership) {
         if (
           !ownership.packages.some((name) => specifier === name || specifier.startsWith(`${name}/`))
@@ -401,6 +457,33 @@ if (staleManagedComputeAllowlistPaths.length > 0) {
   );
 }
 
+const identitySdkAllowlist = loadIdentitySdkAllowlist();
+validateIdentitySdkAllowlist(identitySdkAllowlist);
+const identitySdkAllowlistByPath = new Map(
+  (identitySdkAllowlist.entries ?? []).map((entry) => [entry.path, entry]),
+);
+
+for (const [rel, specifiers] of identitySdkImporters) {
+  if (identitySdkAllowlistByPath.has(rel)) continue;
+  errors.push(
+    `${rel} imports the identity provider SDK (${[...specifiers].sort().join(', ')}) directly; ` +
+      `reach it through ${IDENTITY_PORT_PACKAGE}, whose adapter under ${IDENTITY_ADAPTER_ROOT} ` +
+      `owns that SDK, or add an entry with a reason to ${IDENTITY_SDK_ALLOWLIST_PATH}.`,
+  );
+}
+
+const staleIdentitySdkAllowlistPaths = (identitySdkAllowlist.entries ?? [])
+  .map((entry) => entry.path)
+  .filter((relPath) => !identitySdkImporters.has(relPath));
+
+if (staleIdentitySdkAllowlistPaths.length > 0) {
+  errors.push(
+    `${IDENTITY_SDK_ALLOWLIST_PATH}: ${staleIdentitySdkAllowlistPaths.length} entr(ies) no longer ` +
+      `import an identity provider SDK and must be removed:\n  ` +
+      staleIdentitySdkAllowlistPaths.join('\n  '),
+  );
+}
+
 if (errors.length > 0) {
   console.error('Boundary check failed:');
   for (const error of errors) {
@@ -411,5 +494,7 @@ if (errors.length > 0) {
 
 console.log(
   `Boundary check passed (${managedComputeOffenders.size} managed-compute route(s) checked ` +
-    `for ${MANAGED_COMPUTE_EVALUATOR_MARKER}, all allowlisted).`,
+    `for ${MANAGED_COMPUTE_EVALUATOR_MARKER}, all allowlisted; ` +
+    `${identitySdkImporters.size} identity SDK importer(s) under ${IDENTITY_SDK_CONSUMER_ROOT}, ` +
+    `all allowlisted).`,
 );

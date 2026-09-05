@@ -31,6 +31,7 @@ function runOnSandbox(files) {
 }
 
 const EMPTY_ALLOWLIST = JSON.stringify({ schemaVersion: 1, entries: [] });
+const EMPTY_IDENTITY_ALLOWLIST = 'scripts/config/identity-sdk-allowlist.json';
 
 test('the real guard passes on the repository as it stands', () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -128,4 +129,102 @@ test('the real allowlist has an entry for every currently-ungated managed-comput
   for (const seeded of seededPaths) {
     assert.ok(allowlistedPaths.has(seeded), `expected ${seeded} in the seeded allowlist`);
   }
+});
+
+test('fails an apps/web file that imports the identity provider SDK directly', () => {
+  const result = runOnSandbox({
+    'apps/web/lib/example.ts': "import { auth } from '@clerk/nextjs/server';\nexport { auth };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: EMPTY_ALLOWLIST,
+  });
+  assert.equal(result.status, 1, 'guard should reject a direct identity SDK import');
+  assert.match(result.stderr, /@clerk\/nextjs\/server/);
+  assert.match(result.stderr, /@agiworkforce\/identity/);
+});
+
+test('passes an apps/web file that reaches identity through the port', () => {
+  const result = runOnSandbox({
+    'apps/web/lib/example.ts':
+      "import { resolveIdentityProvider } from '@agiworkforce/identity';\nexport { resolveIdentityProvider };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: EMPTY_ALLOWLIST,
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
+});
+
+test('passes a direct identity SDK import once it carries an allowlist entry with a reason', () => {
+  const result = runOnSandbox({
+    'apps/web/app/login/page.tsx': "import { SignIn } from '@clerk/nextjs';\nexport { SignIn };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: JSON.stringify({
+      schemaVersion: 1,
+      entries: [
+        {
+          path: 'apps/web/app/login/page.tsx',
+          reason: "renders the provider's hosted sign-in component, which the port does not cover.",
+        },
+      ],
+    }),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
+});
+
+test('fails an identity allowlist entry that carries no reason', () => {
+  const result = runOnSandbox({
+    'apps/web/app/login/page.tsx': "import { SignIn } from '@clerk/nextjs';\nexport { SignIn };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: JSON.stringify({
+      schemaVersion: 1,
+      entries: [{ path: 'apps/web/app/login/page.tsx', reason: 'ui' }],
+    }),
+  });
+  assert.equal(result.status, 1, 'guard should demand a reason');
+  assert.match(result.stderr, /needs a "reason"/);
+});
+
+test('fails a stale identity allowlist entry for a file that no longer imports the SDK', () => {
+  const result = runOnSandbox({
+    'apps/web/app/login/page.tsx':
+      "import { useSession } from '@/lib/identity/client';\nexport { useSession };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: JSON.stringify({
+      schemaVersion: 1,
+      entries: [
+        {
+          path: 'apps/web/app/login/page.tsx',
+          reason: "renders the provider's hosted sign-in component, which the port does not cover.",
+        },
+      ],
+    }),
+  });
+  assert.equal(result.status, 1, 'guard should reject a stale identity allowlist entry');
+  assert.match(result.stderr, /no longer import an identity provider SDK/);
+});
+
+test('ignores an identity SDK import outside apps/web, where the adapter lives', () => {
+  const result = runOnSandbox({
+    'packages/platform/identity/src/adapters/clerk.ts':
+      "import * as clerkServer from '@clerk/nextjs/server';\nexport { clerkServer };\n",
+    'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    [EMPTY_IDENTITY_ALLOWLIST]: EMPTY_ALLOWLIST,
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
+});
+
+test('the real identity allowlist names only the provider ui mounts, the client roots and enterprise sso', () => {
+  const allowlist = JSON.parse(
+    spawnSync('cat', [path.join(REPO_ROOT, 'scripts/config/identity-sdk-allowlist.json')]).stdout,
+  );
+  const allowlistedPaths = new Set(allowlist.entries.map((entry) => entry.path));
+  for (const seeded of [
+    'apps/web/app/layout.tsx',
+    'apps/web/app/login/page.tsx',
+    'apps/web/app/signup/page.tsx',
+    'apps/web/lib/identity/client.ts',
+    'apps/web/lib/identity/token.ts',
+    'apps/web/lib/server/sso/clerk-enterprise-connections.ts',
+  ]) {
+    assert.ok(allowlistedPaths.has(seeded), `expected ${seeded} in the seeded allowlist`);
+  }
+  assert.equal(allowlistedPaths.size, 6, 'the identity allowlist should not grow silently');
 });
