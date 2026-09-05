@@ -3,6 +3,7 @@ import 'server-only';
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import {
@@ -111,7 +112,6 @@ export async function persistAssistantTurn(params: {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;
   }
 
-  const db = getNeonDb();
   const threadScope = {
     conversationId,
     userId,
@@ -132,6 +132,14 @@ export async function persistAssistantTurn(params: {
   ];
 
   try {
+    // This runs after the response, and for a cancelled stream after the request
+    // context is gone, so there is no session left for the RLS pool to bind. The
+    // scope is claimed from the user id the turn itself carries, which the caller
+    // resolved while the request still had one.
+    const db = createClaimedUserScopedDb(getNeonDb(), {
+      userId,
+      organizationId: threadScope.organizationId,
+    });
     const [conversation] = await db.query<{ active_leaf_message_id: string | null }>(
       `select active_leaf_message_id
          from web_conversations

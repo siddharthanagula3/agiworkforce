@@ -75,7 +75,7 @@
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
-      "reason": "pending scoped migration"
+      "reason": "the turn is written under RLS through createClaimedUserScopedDb bound to the user id the turn already carries, because a cancelled stream settles after the request context is gone and there is no session left to bind; getNeonDb here is the schema-owner pool that SET ROLE app_rls needs, not an unscoped write"
     },
     {
       "path": "apps/web/app/api/me/route.ts",

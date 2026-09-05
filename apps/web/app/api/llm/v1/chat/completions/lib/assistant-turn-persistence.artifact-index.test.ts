@@ -5,9 +5,14 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(async (_sql: string, _params?: unknown[]): Promise<unknown[]> => []),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mocks.execute, query: mocks.query }),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const pool = {
+    execute: mocks.execute,
+    query: mocks.query,
+    transaction: (run: (tx: unknown) => Promise<unknown>) => run(pool),
+  };
+  return { getNeonDb: () => pool };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
