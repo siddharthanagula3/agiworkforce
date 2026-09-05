@@ -59,7 +59,8 @@ vi.mock('@shared/stores/model-store', () => ({
   ],
 }));
 
-vi.mock('@shared/config/llm', () => ({
+vi.mock('@shared/config/llm', async (importOriginal) => ({
+  ...(await importOriginal()),
   getAllowedAutoModesForTier: () => ['fixture-economy-auto'],
   getBestAutoModeForTier: () => 'fixture-economy-auto',
   getModelMetadata: () => null,

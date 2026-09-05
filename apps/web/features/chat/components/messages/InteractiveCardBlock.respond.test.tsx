@@ -5,7 +5,8 @@ import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf-token',

@@ -12,7 +12,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
 }));
 
