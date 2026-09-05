@@ -26,11 +26,17 @@ import {
   type RouteCommercialStatus,
 } from '@agiworkforce/model-registry';
 
-export { getRoutePricing, getProviderCacheTokenBillingClass } from '@agiworkforce/model-registry';
+export {
+  getRoutePricing,
+  getProviderCacheTokenBillingClass,
+  getProviderComputePricing,
+} from '@agiworkforce/model-registry';
 export type {
   RoutePriceSheet,
   RouteCommercialStatus,
   CacheTokenBillingClass,
+  ComputePricingUnit,
+  ProviderComputePricing,
 } from '@agiworkforce/model-registry';
 
 export interface RegistryRoute {

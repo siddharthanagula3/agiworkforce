@@ -16,6 +16,7 @@
     "capabilityClasses",
     "governance",
     "providerDefaults",
+    "computePricing",
     "endpointHosts",
     "pricing",
     "limits",
@@ -85,6 +86,12 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/providerDefaults"
+      }
+    },
+    "computePricing": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/providerComputePricing"
       }
     },
     "endpointHosts": {
@@ -639,6 +646,30 @@
           "$ref": "#/definitions/isoDate"
         },
         "cacheTokenBillingNote": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "providerComputePricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One non-LLM compute provider's published unit price, for metering costs that are not per-token (e.g. sandbox seconds). source and verifiedOn are always required, there is no unverified state for a priced entry.",
+      "required": ["unit", "ratePerUnit", "source", "verifiedOn"],
+      "properties": {
+        "unit": {
+          "enum": ["usd_per_vcpu_second"]
+        },
+        "ratePerUnit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "verifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        },
+        "note": {
           "$ref": "#/definitions/nonEmptyString"
         }
       }
