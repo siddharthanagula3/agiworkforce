@@ -4878,6 +4878,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                       messages={displayedMessages}
                       open={workSessionPanelOpen}
                       onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
+                      agiWork={isAgiWorkConversation}
                     />
                   )}
                   <ResearchToggleButton count={researchSourceCount} />
@@ -4907,6 +4908,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   messages={displayedMessages}
                   open={workSessionPanelOpen}
                   onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
+                  agiWork={isAgiWorkConversation}
                 />
               )}
               <ResearchToggleButton count={researchSourceCount} />
@@ -5063,9 +5065,6 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         isLoading={isLoading && !isStreaming}
                         isUserTyping={isUserTyping}
                         onRegenerate={handleRegenerateMessage}
-                        onSwitchToAutoModel={() => {
-                          void handleConversationModelChange('auto');
-                        }}
                         onRetryResearch={handleRetryResearch}
                         onResearchPlanDecision={handleResearchPlanDecision}
                         retryingResearchMessageId={retryingResearchMessageId}

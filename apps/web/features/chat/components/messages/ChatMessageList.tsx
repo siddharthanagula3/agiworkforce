@@ -24,6 +24,7 @@ import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/me
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
+import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
 import type { ResearchPlanDecision } from '../research/ResearchActivity';
 import {
   InlinePaywallCard,
@@ -44,7 +45,6 @@ import {
   CircleAlert,
   RefreshCw,
   ShieldAlert,
-  Sparkles,
   Square,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -164,16 +164,23 @@ export function isWithinIncompleteTurnGracePeriod(
   return nowMs - sentAtMs < INCOMPLETE_TURN_GRACE_MS;
 }
 
-const STREAM_ERROR_PARTIAL_PREFIX = 'Response may be incomplete';
-const STREAM_ERROR_NO_RESPONSE_PREFIX = 'No response was returned';
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
-function streamErrorNoticeMessage(message: ChatMessage): string {
-  const prefix = hasVisibleContent(message.content)
-    ? STREAM_ERROR_PARTIAL_PREFIX
-    : STREAM_ERROR_NO_RESPONSE_PREFIX;
-  return `${prefix}: ${getStreamErrorMessage(message) ?? STREAM_ERROR_CONNECTION_DETAIL}`;
+/**
+ * The detail on its own. The row that carries it already leads with the run's
+ * own status, so repeating "No response was returned" there would say the same
+ * thing twice in one line.
+ */
+function streamErrorReason(message: ChatMessage): string {
+  return getStreamErrorMessage(message) ?? STREAM_ERROR_CONNECTION_DETAIL;
 }
+
+const TURN_NOTICE_LINK_CLASS =
+  'flex min-h-6 min-w-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline';
+const SWITCH_MODEL_ACTION_LABEL = 'Switch model';
+const SWITCH_MODEL_ACTION_ARIA = 'Open the model picker';
+const RETRY_ACTION_LABEL = 'Retry';
+const RETRY_ACTION_ARIA = 'Regenerate this response';
 
 const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_quota_exhausted',
@@ -198,7 +205,6 @@ export interface ChatMessageListProps {
   conversationId?: string | null;
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
-  onSwitchToAutoModel?: () => void;
   onRetryResearch?: (messageId: string) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
   retryingResearchMessageId?: string | null;
@@ -363,11 +369,16 @@ interface MessageGroupRowProps {
   onReadAloud: (messageId: string, content: string) => void;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
+  /** Attached to the last assistant turn only; see MessageBubble.turnFailureReason. */
+  lastTurnFailureReason?: string;
+  lastTurnFailureActions?: React.ReactNode;
 }
 
 interface MessageRowProps {
   message: ChatMessage;
   isLastMessage?: boolean;
+  lastTurnFailureReason?: string;
+  lastTurnFailureActions?: React.ReactNode;
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
@@ -569,6 +580,8 @@ function messageRowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boo
 const MessageRow = memo(function MessageRow({
   message,
   isLastMessage,
+  lastTurnFailureReason,
+  lastTurnFailureActions,
   currentTier,
   onRegenerate,
   onRetryResearch,
@@ -728,6 +741,12 @@ const MessageRow = memo(function MessageRow({
       isReadingAloud={speakingMessageId === message.id}
       isReadAloudSupported={isReadAloudSupported}
       isLatestTurn={displayRole === 'assistant' && Boolean(isLastMessage)}
+      {...(displayRole === 'assistant' && isLastMessage && lastTurnFailureReason
+        ? { turnFailureReason: lastTurnFailureReason }
+        : {})}
+      {...(displayRole === 'assistant' && isLastMessage && lastTurnFailureActions
+        ? { turnFailureActions: lastTurnFailureActions }
+        : {})}
       onRegenerateWithModel={
         onRegenerateWithModel && displayRole === 'assistant' ? onRegenerateWithModel : undefined
       }
@@ -785,6 +804,8 @@ const MessageGroupRow = memo(
     onReadAloud,
     onRegenerateWithModel,
     regenerateModelOptions,
+    lastTurnFailureReason,
+    lastTurnFailureActions,
   }: MessageGroupRowProps) => {
     return (
       <div
@@ -795,6 +816,9 @@ const MessageGroupRow = memo(
             key={message.id}
             message={message}
             isLastMessage={isLastGroup && index === group.messages.length - 1}
+            {...(isLastGroup && index === group.messages.length - 1
+              ? { lastTurnFailureReason, lastTurnFailureActions }
+              : {})}
             currentTier={currentTier}
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
@@ -1003,7 +1027,6 @@ const ChatMessageListComponent = ({
   conversationId = null,
   isLoading,
   onRegenerate,
-  onSwitchToAutoModel,
   onRetryResearch,
   onResearchPlanDecision,
   retryingResearchMessageId = null,
@@ -1531,6 +1554,40 @@ const ChatMessageListComponent = ({
     [onRegenerateImage],
   );
 
+  // One failure, one row. The reason rides on the run's own summary line inside
+  // the turn and these two links sit beside it, so the transcript never shows a
+  // status row and a reason line saying the same thing.
+  const lastTurnFailureReason = useMemo<string | undefined>(() => {
+    if (!showStreamErrorNotice || !lastMessage) return undefined;
+    return streamErrorReason(lastMessage);
+  }, [showStreamErrorNotice, lastMessage]);
+
+  const lastTurnFailureActions = useMemo<React.ReactNode>(() => {
+    if (!showStreamErrorNotice || !lastMessage) return null;
+    return (
+      <>
+        {streamErrorNeedsModelSwitch(lastMessage) && (
+          <button
+            type="button"
+            onClick={() => openModelPicker()}
+            className={TURN_NOTICE_LINK_CLASS}
+            aria-label={SWITCH_MODEL_ACTION_ARIA}
+          >
+            {SWITCH_MODEL_ACTION_LABEL}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onRegenerate?.(lastMessage.id)}
+          className={TURN_NOTICE_LINK_CLASS}
+          aria-label={RETRY_ACTION_ARIA}
+        >
+          {RETRY_ACTION_LABEL}
+        </button>
+      </>
+    );
+  }, [showStreamErrorNotice, lastMessage, onRegenerate]);
+
   const groupProps = useMemo<Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>>(
     () => ({
       currentTier,
@@ -1561,6 +1618,8 @@ const ChatMessageListComponent = ({
       onReadAloud: handleReadAloud,
       onRegenerateWithModel,
       regenerateModelOptions,
+      lastTurnFailureReason,
+      lastTurnFailureActions,
     }),
     [
       branchGroupsByMessageId,
@@ -1593,6 +1652,8 @@ const ChatMessageListComponent = ({
       currentTier,
       onRegenerateWithModel,
       regenerateModelOptions,
+      lastTurnFailureReason,
+      lastTurnFailureActions,
     ],
   );
 
@@ -1621,35 +1682,6 @@ const ChatMessageListComponent = ({
               message="Response stopped."
               action={{
                 label: 'Try again',
-                ariaLabel: 'Regenerate this response',
-                icon: RefreshCw,
-                onClick: () => onRegenerate?.(lastMessage.id),
-              }}
-            />
-          </div>
-        )}
-
-        {showStreamErrorNotice && lastMessage && (
-          <div className="px-4 pt-1 md:px-12 lg:px-20">
-            <TranscriptNotice
-              tone="danger"
-              icon={CircleAlert}
-              message={streamErrorNoticeMessage(lastMessage)}
-              actionSlot={
-                onSwitchToAutoModel && streamErrorNeedsModelSwitch(lastMessage) ? (
-                  <button
-                    type="button"
-                    onClick={onSwitchToAutoModel}
-                    className="flex min-h-6 min-w-6 shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-                    aria-label="Switch to Auto for this conversation"
-                  >
-                    <Sparkles className="h-3 w-3" aria-hidden="true" />
-                    Switch to Auto
-                  </button>
-                ) : undefined
-              }
-              action={{
-                label: 'Retry',
                 ariaLabel: 'Regenerate this response',
                 icon: RefreshCw,
                 onClick: () => onRegenerate?.(lastMessage.id),
@@ -1740,8 +1772,6 @@ const ChatMessageListComponent = ({
       onContinue,
       showStoppedNotice,
       onRegenerate,
-      onSwitchToAutoModel,
-      showStreamErrorNotice,
       showRefusalNotice,
       conversationId,
       showIncompleteTurnNotice,

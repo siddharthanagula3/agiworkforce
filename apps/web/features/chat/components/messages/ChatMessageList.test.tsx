@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ChatMessageList, groupMessages } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
@@ -67,6 +68,8 @@ vi.mock('./MessageBubble', () => ({
     isBranching,
     branchNavigation,
     isLatestTurn,
+    turnFailureReason,
+    turnFailureActions,
   }: {
     message: {
       id: string;
@@ -76,6 +79,8 @@ vi.mock('./MessageBubble', () => ({
       attachments?: Array<{ name: string }>;
     };
     isLatestTurn?: boolean;
+    turnFailureReason?: string;
+    turnFailureActions?: React.ReactNode;
     onRegenerate?: () => void;
     onDelete?: () => void;
     onReadAloud?: (messageId: string, content: string) => void;
@@ -96,6 +101,13 @@ vi.mock('./MessageBubble', () => ({
       data-attachments={message.attachments?.map((attachment) => attachment.name).join(',')}
     >
       <span>{message.isStreaming && !message.content ? 'Thinking...' : message.content}</span>
+      {turnFailureReason && (
+        <div role="alert" data-testid="turn-failure-row">
+          <span>{`Response failed: ${turnFailureReason}`}</span>
+          {turnFailureActions}
+        </div>
+      )}
+      <div data-testid="message-action-row" />
       {onRegenerate && (
         <button onClick={onRegenerate} aria-label="regenerate">
           regenerate
@@ -1167,7 +1179,7 @@ describe('ChatMessageList Continue Generation', () => {
 
 describe('ChatMessageList stream error notice', () => {
   const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
-  const noticeText = () => screen.queryByText(/response may be incomplete/i);
+  const noticeText = () => screen.queryByTestId('turn-failure-row');
 
   function streamErrorThread(streamError: string | undefined, content = 'partial answer') {
     return [
@@ -1181,14 +1193,15 @@ describe('ChatMessageList stream error notice', () => {
     ];
   }
 
-  it('shows the incomplete-response notice + retry when the last assistant message has metadata.streamError', () => {
+  it('shows the failure row + retry when the last assistant message has metadata.streamError', () => {
     render(
       <ChatMessageList
-        messages={streamErrorThread('Anthropic API overloaded')}
+        messages={streamErrorThread('the provider is overloaded')}
         onRegenerate={vi.fn()}
       />,
     );
     expect(noticeText()).toBeInTheDocument();
+    expect(noticeText()!.textContent).toContain('Response failed: the provider is overloaded');
     expect(retryButton()).toBeInTheDocument();
   });
 
@@ -1234,33 +1247,31 @@ describe('ChatMessageList stream error notice', () => {
     expect(retryButton()).not.toBeInTheDocument();
   });
 
-  it('calls the turn failed rather than incomplete when nothing was ever streamed', () => {
-    render(
+  it('states the reason once, with no prefix, whether or not anything streamed', () => {
+    const { rerender } = render(
       <ChatMessageList
         messages={streamErrorThread('The provider rejected this request.', '')}
         onRegenerate={vi.fn()}
       />,
     );
 
-    expect(
-      screen.getByText(/no response was returned: the provider rejected this request\./i),
-    ).toBeInTheDocument();
-    expect(noticeText()).not.toBeInTheDocument();
+    expect(noticeText()!.textContent).toContain(
+      'Response failed: The provider rejected this request.',
+    );
     expect(retryButton()).toBeInTheDocument();
-  });
 
-  it('keeps the incomplete wording when the turn streamed something before it failed', () => {
-    render(
+    rerender(
       <ChatMessageList
         messages={streamErrorThread('The provider rejected this request.', 'half an answer')}
         onRegenerate={vi.fn()}
       />,
     );
 
-    expect(
-      screen.getByText(/response may be incomplete: the provider rejected this request\./i),
-    ).toBeInTheDocument();
+    expect(noticeText()!.textContent).toContain(
+      'Response failed: The provider rejected this request.',
+    );
     expect(screen.queryByText(/no response was returned/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/response may be incomplete/i)).not.toBeInTheDocument();
   });
 
   function streamErrorCodeThread(code: string) {
@@ -1275,32 +1286,59 @@ describe('ChatMessageList stream error notice', () => {
     ];
   }
 
-  const switchToAutoButton = () =>
-    screen.queryByRole('button', { name: /switch to auto for this conversation/i });
+  const switchModelButton = () => screen.queryByRole('button', { name: /open the model picker/i });
 
   it.each(['provider_unreachable', 'provider_error', 'model_not_found'])(
-    'offers Switch to Auto for the %s stream error code',
+    'offers Switch model for the %s stream error code',
     (code) => {
-      render(
-        <ChatMessageList
-          messages={streamErrorCodeThread(code)}
-          onRegenerate={vi.fn()}
-          onSwitchToAutoModel={vi.fn()}
-        />,
-      );
-      expect(switchToAutoButton()).toBeInTheDocument();
+      render(<ChatMessageList messages={streamErrorCodeThread(code)} onRegenerate={vi.fn()} />);
+      expect(switchModelButton()).toBeInTheDocument();
     },
   );
 
-  it('does NOT offer Switch to Auto for a plain client_error stream error code', () => {
+  it('does NOT offer Switch model for a plain client_error stream error code', () => {
     render(
       <ChatMessageList
         messages={streamErrorCodeThread('provider_rejected_request')}
         onRegenerate={vi.fn()}
-        onSwitchToAutoModel={vi.fn()}
       />,
     );
-    expect(switchToAutoButton()).not.toBeInTheDocument();
+    expect(switchModelButton()).not.toBeInTheDocument();
+  });
+
+  it('carries the reason on one row inside the assistant turn, not a banner below it', () => {
+    render(
+      <ChatMessageList messages={streamErrorCodeThread('provider_error')} onRegenerate={vi.fn()} />,
+    );
+
+    const rows = screen.getAllByTestId('turn-failure-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.textContent).toContain('Response failed: boom');
+    expect(rows[0]!.textContent).not.toContain('No response was returned');
+    const actionRow = screen.getAllByTestId('message-action-row').at(-1);
+    expect(actionRow).toBeTruthy();
+    expect(rows[0]!.compareDocumentPosition(actionRow!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('button', { name: /regenerate this response/i })).toBeInTheDocument();
+  });
+
+  it('opens the model picker from the failure row', () => {
+    const trigger = document.createElement('button');
+    trigger.id = 'model-selector';
+    const clicked = vi.fn();
+    trigger.addEventListener('click', clicked);
+    document.body.appendChild(trigger);
+    try {
+      render(
+        <ChatMessageList
+          messages={streamErrorCodeThread('provider_error')}
+          onRegenerate={vi.fn()}
+        />,
+      );
+      fireEvent.click(switchModelButton()!);
+      expect(clicked).toHaveBeenCalledTimes(1);
+    } finally {
+      trigger.remove();
+    }
   });
 
   it('is mutually exclusive with Continue Generation (finishReason takes precedence)', () => {
