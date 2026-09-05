@@ -307,53 +307,6 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
-/**
- * Formats a date as a human-readable divider label.
- * - "Today" for today's date
- * - "Yesterday" for yesterday's date
- * - "Mar 18" for older dates
- *
- * AUDIT-FIX BUG-30: local-time getters and `toLocaleDateString` resolve
- * against whatever timezone/locale the JS runtime is in. On the server that is
- * the DEPLOYMENT's timezone, so "Today"/"Yesterday" were computed for the
- * datacenter rather than the reader. The function itself stays pure (it is
- * exported and unit-testable); the render path below only calls it after mount
- * so it always runs in the viewer's own timezone, and the locale argument is
- * now omitted so the runtime's locale, not a hardcoded en-US, formats the
- * fallback label.
- */
-export function formatDateDivider(date: Date, now: Date = new Date()): string {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-
-  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-  if (startOfDay.getTime() === startOfToday.getTime()) return 'Today';
-  if (startOfDay.getTime() === startOfYesterday.getTime()) return 'Yesterday';
-
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function toDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-const DateDivider = memo(({ label }: { label: string }) => (
-  <div
-    className="flex items-center gap-3 px-4 py-3 md:px-12 lg:px-20"
-    role="separator"
-    aria-label={label}
-  >
-    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
-    <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--chat-text-secondary)' }}>
-      {label}
-    </span>
-    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
-  </div>
-));
-DateDivider.displayName = 'DateDivider';
-
 const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
   const prefersReducedMotion = useReducedMotion();
   return (
@@ -919,7 +872,6 @@ MessageGroupRow.displayName = 'MessageGroupRow';
 interface VirtualizedTranscriptRowData {
   groups: MessageGroup[];
   groupProps: Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>;
-  hasMounted: boolean;
   topSpacerHeight: number;
   footer: React.ReactNode;
 }
@@ -943,16 +895,11 @@ function transcriptRowPropsEqual(
   if (prev.index !== next.index) return false;
   if (!shallowEqualRecord(prev.style, next.style)) return false;
   if (!shallowEqualRecord(prev.ariaAttributes, next.ariaAttributes)) return false;
-  if (prev.hasMounted !== next.hasMounted) return false;
   if (prev.topSpacerHeight !== next.topSpacerHeight) return false;
   if (prev.footer !== next.footer) return false;
   if (prev.groupProps !== next.groupProps) return false;
 
-  const groupIndex = next.index - 1;
-  return (
-    groupContentEqual(prev.groups[groupIndex], next.groups[groupIndex]) &&
-    groupContentEqual(prev.groups[groupIndex - 1], next.groups[groupIndex - 1])
-  );
+  return groupContentEqual(prev.groups[next.index - 1], next.groups[next.index - 1]);
 }
 
 const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
@@ -961,7 +908,6 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
   ariaAttributes,
   groups,
   groupProps,
-  hasMounted,
   topSpacerHeight,
   footer,
 }: RowComponentProps<VirtualizedTranscriptRowData>) {
@@ -987,22 +933,8 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
     );
   }
 
-  const firstMessage = group.messages[0];
-  const firstMessageDate = firstMessage?.createdAt ? new Date(firstMessage.createdAt) : undefined;
-  const groupDateKey = firstMessageDate ? toDateKey(firstMessageDate) : '';
-  const previousGroup = groupIndex > 0 ? groups[groupIndex - 1] : null;
-  const previousFirstMessage = previousGroup?.messages[0];
-  const previousFirstMessageDate = previousFirstMessage?.createdAt
-    ? new Date(previousFirstMessage.createdAt)
-    : undefined;
-  const previousDateKey = previousFirstMessageDate ? toDateKey(previousFirstMessageDate) : '';
-  const showDivider = hasMounted && firstMessageDate && groupDateKey !== previousDateKey;
-
   return (
     <div {...ariaAttributes} style={style}>
-      {showDivider && firstMessageDate && (
-        <DateDivider label={formatDateDivider(firstMessageDate)} />
-      )}
       <MessageGroupRow
         group={group}
         isLastGroup={groupIndex === groups.length - 1}
@@ -1123,9 +1055,6 @@ const ChatMessageListComponent = ({
     scrolledLeafRef.current = activeLeafId;
     setUserScrolledUp(false);
   }, [activeLeafId, conversationId]);
-
-  const [hasMounted, setHasMounted] = useState(false);
-  useEffect(() => setHasMounted(true), []);
 
   const prefersReducedMotion = useReducedMotion();
 
@@ -1831,11 +1760,10 @@ const ChatMessageListComponent = ({
     () => ({
       groups,
       groupProps,
-      hasMounted,
       topSpacerHeight,
       footer: transcriptFooter,
     }),
-    [groups, groupProps, hasMounted, topSpacerHeight, transcriptFooter],
+    [groups, groupProps, topSpacerHeight, transcriptFooter],
   );
 
   if (messages.length === 0 && !isLoading) {
