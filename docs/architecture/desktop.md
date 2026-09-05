@@ -132,6 +132,35 @@ and refuses upload unless Windows reports every shipping executable as Authentic
 
 All 10+ providers route through `@agiworkforce/provider-protocol` via `packages/client/desktop-command-client`. Desktop is the first surface that wires every provider end-to-end. See [docs/surfaces/cli.md](cli.md) for the canonical list (CLI registers all 12 named + Custom).
 
+## Computer-use action routing and platform support (2026-09-05)
+
+One classified action is resolved by `src-tauri/src/automation/action_router/` before the
+observe-plan-act visual loop is reached. The order is fixed in code, never left to model tool
+choice: an HTTP retrieval, then the platform accessibility service, then the page over the devtools
+protocol, then vision as the last resort. Each tier answers from a typed capability check and
+records a typed decline on the `computer_use:action_routed` event, which names the driver that ran
+the action.
+
+| Tier          | Driver                                         | Verbs it accepts                                                                                                                            |
+| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| API           | `http_api`                                     | retrieve an absolute URL                                                                                                                    |
+| Accessibility | `macos_accessibility`, `windows_ui_automation` | invoke a named control, type into a named field, toggle a named control, focus a window by title, scroll a named region, read a named value |
+| DOM           | `chrome_devtools_protocol`                     | navigate, click, type, select an option, read text, scroll into view                                                                        |
+| Visual        | `visual_loop`                                  | everything the tiers above declined                                                                                                         |
+
+Platform support for the accessibility tier is decided, not implicit:
+
+| Platform | Accessibility tier                                                                                                                                                                                                                                                                                                                           |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | Supported through `automation/mac`. `scroll a named region` is declined `platform_unsupported`, the service exposes no scroll pattern                                                                                                                                                                                                        |
+| Windows  | Supported through `automation/uia`, including scrolling                                                                                                                                                                                                                                                                                      |
+| Linux    | **Not supported.** There is no AT-SPI implementation here, and adding one is not a bounded change: it needs a new crate dependency, a session bus client, and a full inspector. The tier declines `platform_unsupported` with the platform named, the decline is recorded on the routing event, and the visual loop takes the action instead |
+
+`automation::accessibility_backend()` is the single place that answers "does this platform have an
+accessibility driver, and what is it called". The Linux `uia` shim in `automation/mod.rs` still
+errors on every call, now with one named constant rather than ten copies of a sentence, so a caller
+that reaches it past the tier gets the same answer the router already gave.
+
 ## Dispatch and scheduled routines (shipped; verified 2026-08-09)
 
 Mobile-to-Desktop Dispatch and on-device scheduled routines both exist in code, which is what the
