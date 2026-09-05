@@ -15,6 +15,7 @@ import type { ErrorCategory } from '@agiworkforce/provider-runtime';
 
 import { logger } from '@/lib/logger';
 import { getSharedRedisClient } from '@/lib/rate-limit';
+import { readRedisWithinBudget, wasRedisReadAbandoned } from '@/lib/server/bounded-redis-read';
 import {
   loadFreePools,
   toFreeEligibility,
@@ -348,7 +349,15 @@ async function readRuntimeState(
     for (const routeId of routeIds) pipeline.hgetall(routeHealthKey(routeId));
     for (const providerId of providerIds) pipeline.hgetall(providerHealthKey(providerId));
 
-    const results = (await pipeline.exec()) as unknown[];
+    const read = await readRedisWithinBudget(pipeline.exec());
+    if (wasRedisReadAbandoned(read)) {
+      logger.error(
+        { routeCount: routeIds.length },
+        '[free-lane] runtime state read outlived its budget; every free pool is unknown and the lane will strand',
+      );
+      return unknownCapacityState(nowMs, freeEligibility);
+    }
+    const results = read as unknown[];
 
     const quotaPools: Record<string, QuotaPool> = {};
     accounts.forEach((account, index) => {
@@ -911,7 +920,15 @@ export async function getRouteHealthSnapshot(
         { byScore: true },
       );
     }
-    const results = (await pipeline.exec()) as unknown[];
+    const read = await readRedisWithinBudget(pipeline.exec());
+    if (wasRedisReadAbandoned(read)) {
+      logger.error(
+        { routeCount: routeIds.length },
+        '[route-health] snapshot read outlived its budget; every route reads healthy',
+      );
+      return healthyRouteHealthSnapshots(routeIds);
+    }
+    const results = read as unknown[];
 
     const snapshots: Record<string, RouteHealthSnapshot> = {};
     routeIds.forEach((routeId, index) => {
@@ -997,7 +1014,14 @@ export async function getServedRouteAffinity(
   const client = getSharedRedisClient();
   if (!client) return null;
   try {
-    const raw = await client.hgetall(routeAffinityKey(conversationId));
+    const raw = await readRedisWithinBudget(client.hgetall(routeAffinityKey(conversationId)));
+    if (wasRedisReadAbandoned(raw)) {
+      logger.error(
+        { conversationId },
+        '[route-affinity] read outlived its budget; the turn has no affinity',
+      );
+      return null;
+    }
     if (!raw || typeof raw !== 'object') return null;
     const record = raw as Record<string, unknown>;
     const routeId = record[AFFINITY_FIELD_ROUTE_ID];

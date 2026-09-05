@@ -1,10 +1,22 @@
 import 'server-only';
 
+import { after } from 'next/server';
+
 import { getSharedRedisClient } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { readRedisWithinBudget, wasRedisReadAbandoned } from '@/lib/server/bounded-redis-read';
 
 const CACHE_KEY_PREFIX = 'req-ctx:v1';
 export const REQUEST_CONTEXT_CACHE_TTL_SECONDS = 5 * 60;
+
+function writeOffRequestPath(write: () => Promise<void>): void {
+  const pending = write();
+  try {
+    after(pending);
+  } catch {
+    void pending;
+  }
+}
 
 interface CachedAccountStatus {
   status: string | null;
@@ -44,8 +56,10 @@ export async function getCachedAccountStatus(userId: string): Promise<string | n
   const redis = resolveRedis();
   if (!redis) return undefined;
   try {
-    const cached = await redis.get<CachedAccountStatus>(accountStatusKey(userId));
-    if (!cached) return undefined;
+    const cached = await readRedisWithinBudget(
+      redis.get<CachedAccountStatus>(accountStatusKey(userId)),
+    );
+    if (wasRedisReadAbandoned(cached) || !cached) return undefined;
     return cached.status;
   } catch (err) {
     logger.debug({ err, userId }, '[request-context-cache] account-status read failed');
@@ -56,15 +70,17 @@ export async function getCachedAccountStatus(userId: string): Promise<string | n
 export async function setCachedAccountStatus(userId: string, status: string | null): Promise<void> {
   const redis = resolveRedis();
   if (!redis) return;
-  try {
-    await redis.set<CachedAccountStatus>(
-      accountStatusKey(userId),
-      { status },
-      { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
-    );
-  } catch (err) {
-    logger.debug({ err, userId }, '[request-context-cache] account-status write failed');
-  }
+  writeOffRequestPath(async () => {
+    try {
+      await redis.set<CachedAccountStatus>(
+        accountStatusKey(userId),
+        { status },
+        { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
+      );
+    } catch (err) {
+      logger.debug({ err, userId }, '[request-context-cache] account-status write failed');
+    }
+  });
 }
 
 export async function invalidateAccountStatusCache(userId: string): Promise<void> {
@@ -83,8 +99,10 @@ export async function getCachedActiveOrganizationId(
   const redis = resolveRedis();
   if (!redis) return undefined;
   try {
-    const cached = await redis.get<CachedActiveOrganization>(activeOrganizationKey(userId));
-    if (!cached) return undefined;
+    const cached = await readRedisWithinBudget(
+      redis.get<CachedActiveOrganization>(activeOrganizationKey(userId)),
+    );
+    if (wasRedisReadAbandoned(cached) || !cached) return undefined;
     return cached.organizationId;
   } catch (err) {
     logger.debug({ err, userId }, '[request-context-cache] active-organization read failed');
@@ -98,15 +116,17 @@ export async function setCachedActiveOrganizationId(
 ): Promise<void> {
   const redis = resolveRedis();
   if (!redis) return;
-  try {
-    await redis.set<CachedActiveOrganization>(
-      activeOrganizationKey(userId),
-      { organizationId },
-      { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
-    );
-  } catch (err) {
-    logger.debug({ err, userId }, '[request-context-cache] active-organization write failed');
-  }
+  writeOffRequestPath(async () => {
+    try {
+      await redis.set<CachedActiveOrganization>(
+        activeOrganizationKey(userId),
+        { organizationId },
+        { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
+      );
+    } catch (err) {
+      logger.debug({ err, userId }, '[request-context-cache] active-organization write failed');
+    }
+  });
 }
 
 export async function invalidateActiveOrganizationCache(userId: string): Promise<void> {

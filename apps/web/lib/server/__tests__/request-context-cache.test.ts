@@ -193,3 +193,44 @@ describe('request-context-cache, active organization', () => {
     await expect(invalidateActiveOrganizationCache('user-1')).resolves.toBeUndefined();
   });
 });
+
+describe('request-context-cache, first-token path cost', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('abandons a read that outlives its budget and reports a miss', async () => {
+    const redis = fakeRedis();
+    let settleRead: ((value: unknown) => void) | undefined;
+    redis.get.mockReturnValue(
+      new Promise((resolve) => {
+        settleRead = resolve;
+      }),
+    );
+    mocks.getSharedRedisClient.mockReturnValue(redis);
+
+    const { getCachedAccountStatus } = await import('../request-context-cache');
+    const { resolveRequestPathRedisReadTimeoutMs } = await import('../bounded-redis-read');
+    const startedAt = Date.now();
+    await expect(getCachedAccountStatus('user-1')).resolves.toBeUndefined();
+    expect(Date.now() - startedAt).toBeLessThan(resolveRequestPathRedisReadTimeoutMs() * 4);
+    settleRead?.({ status: 'active' });
+  });
+
+  it('returns from a write before the round trip completes', async () => {
+    const redis = fakeRedis();
+    let settleWrite: (() => void) | undefined;
+    redis.set.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settleWrite = resolve;
+      }),
+    );
+    mocks.getSharedRedisClient.mockReturnValue(redis);
+
+    const { setCachedActiveOrganizationId } = await import('../request-context-cache');
+    await expect(setCachedActiveOrganizationId('user-1', 'org-1')).resolves.toBeUndefined();
+    expect(redis.set).toHaveBeenCalledTimes(1);
+    settleWrite?.();
+  });
+});
