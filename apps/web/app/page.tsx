@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
-import { LandingPage } from '@/features/marketing/components/landing/LandingPage';
+import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 
-const TITLE = 'AGI: any model, any surface, you pick where it runs';
+const TITLE = 'AGI | One AI Workspace. Six Surfaces. Your Rules.';
 const DESCRIPTION =
-  'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.';
+  'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud. You see the route before anything leaves your device.';
+const SHARE_DESCRIPTION =
+  'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.';
+const OG_IMAGE = { url: '/api/og', width: 1200, height: 630, alt: 'AGI Web composer' } as const;
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -25,19 +28,19 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: TITLE,
-    description: DESCRIPTION,
+    description: SHARE_DESCRIPTION,
     type: 'website',
     url: 'https://agiworkforce.com',
-    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI Web composer' }],
+    images: [OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
-    description: DESCRIPTION,
-    images: ['/api/og'],
+    description: SHARE_DESCRIPTION,
+    images: [OG_IMAGE.url],
   },
 };
 
 export default function Home() {
-  return <LandingPage />;
+  return <MarketingLanding />;
 }

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ROUTES = ['/pricing', '/desktop', '/dev/landing-preview'];
+const ROUTES = ['/', '/pricing', '/desktop', '/dev/landing-preview'];
 const CONSENT_BANNER_SETTLE_MS = 2500;
 
 test.use({ colorScheme: 'dark' });
