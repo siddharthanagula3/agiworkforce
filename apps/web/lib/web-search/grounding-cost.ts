@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { resolveGroundingPricingTier } from '@/lib/web-search/grounding-pricing';
 
 export const GOOGLE_GROUNDING_UNIT_PRICE_ENV = 'AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL';
 const GOOGLE_GROUNDING_TOOL_NAME = 'google_search_grounding';
@@ -10,16 +11,6 @@ const GROUNDING_COST_SOURCE_PREFIX = 'google_grounding';
 const MICROUSD_PER_CENT = 10_000;
 const USD_TO_MICROUSD = 1_000_000;
 const REQUESTS_PER_PRICED_BLOCK = 1_000;
-
-/**
- * Google's published Grounding with Google Search rate for the Gemini 3.x
- * models this app routes, USD per 1,000 grounded requests, beyond the
- * 5,000-request monthly allotment shared across those models. Source:
- * https://ai.google.dev/gemini-api/docs/pricing, fetched 2026-09-05. Requests
- * inside that shared monthly pool are free and never reach this rate; see
- * `reserveGroundingPoolUses` in `grounding-pool.ts`.
- */
-const GOOGLE_SEARCH_GROUNDING_USD_PER_BLOCK = 14.0;
 
 function configuredUnitPriceMicrousd(): number | null {
   const raw = process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
@@ -35,24 +26,28 @@ function configuredUnitPriceMicrousd(): number | null {
   return parsed;
 }
 
-export function googleGroundingMicrousdPerCall(): number {
-  return (
-    configuredUnitPriceMicrousd() ??
-    Math.round(
-      (GOOGLE_SEARCH_GROUNDING_USD_PER_BLOCK / REQUESTS_PER_PRICED_BLOCK) * USD_TO_MICROUSD,
-    )
-  );
+/**
+ * The published per-call rate for grounded requests beyond the free pool,
+ * for the tier `model`'s registry family maps to in `grounding-pricing.json`.
+ * An env override applies uniformly across tiers.
+ */
+export function googleGroundingMicrousdPerCall(model: string): number {
+  const configured = configuredUnitPriceMicrousd();
+  if (configured !== null) return configured;
+  const tier = resolveGroundingPricingTier(model);
+  return Math.round((tier.usdPerThousandBeyondPool / REQUESTS_PER_PRICED_BLOCK) * USD_TO_MICROUSD);
 }
 
-export function googleGroundingCostCents(billableCalls: number): number {
+export function googleGroundingCostCents(billableCalls: number, model: string): number {
   if (!Number.isFinite(billableCalls) || billableCalls <= 0) return 0;
-  return Math.round((billableCalls * googleGroundingMicrousdPerCall()) / MICROUSD_PER_CENT);
+  return Math.round((billableCalls * googleGroundingMicrousdPerCall(model)) / MICROUSD_PER_CENT);
 }
 
 export interface GoogleGroundingCostInput {
   userId: string;
   organizationId?: string | null;
   providerId: string;
+  model: string;
   turnRef: string;
   billableCalls: number;
   delivered: boolean;
@@ -60,19 +55,20 @@ export interface GoogleGroundingCostInput {
 
 /**
  * Records the portion of one turn's grounded Google search responses that
- * landed beyond the shared monthly pool. A within-pool grounded response
- * costs nothing and is never passed here; `billableCalls` is already that
- * difference (`reserveGroundingPoolUses`'s `billableCalls`).
+ * landed beyond the free pool for `model`'s pricing tier. A within-pool
+ * grounded response costs nothing and is never passed here; `billableCalls`
+ * is already that difference (`reserveGroundingPoolUses`'s `billableCalls`).
  */
 export async function recordGoogleGroundingCost(input: GoogleGroundingCostInput): Promise<void> {
   if (!Number.isFinite(input.billableCalls) || input.billableCalls <= 0) return;
 
-  const costCents = googleGroundingCostCents(input.billableCalls);
+  const costCents = googleGroundingCostCents(input.billableCalls, input.model);
   try {
     await recordSettledProviderCost({
       userId: input.userId,
       organizationId: input.organizationId ?? null,
       provider: input.providerId,
+      model: input.model,
       actualCostCents: costCents,
       sourceRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}`,
       taskOutcome: input.delivered ? 'delivered' : 'undelivered',
