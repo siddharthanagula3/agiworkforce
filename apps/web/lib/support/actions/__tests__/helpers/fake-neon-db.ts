@@ -1,3 +1,4 @@
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 
 export interface FakeProposalRow {
   id: string;
@@ -179,14 +180,14 @@ export function createFakeNeonDb(seed?: {
   }
 
   return {
-    adapter: {
+    adapter: createDatabaseAdapterFake({
       query: async <T>(sql: string, params: unknown[] = []): Promise<T[]> =>
         run(sql, params) as T[],
       execute: async (sql: string, params: unknown[] = []): Promise<number> => {
         run(sql, params);
         return 1;
       },
-    },
+    }),
     proposals,
     connectors,
     apiKeys,

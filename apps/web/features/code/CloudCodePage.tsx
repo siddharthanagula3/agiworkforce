@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Menu,
   PanelLeft,
   PanelsTopLeft,
   RefreshCw,
