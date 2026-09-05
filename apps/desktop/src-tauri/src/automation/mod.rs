@@ -31,8 +31,35 @@ use once_cell::sync::Lazy;
 
 use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator};
 
+/// Named so a caller can say which service is missing rather than repeating the
+/// sentence, and so the action router's accessibility tier has one place to ask
+/// whether this platform has a driver at all.
+pub const ACCESSIBILITY_UNSUPPORTED_PLATFORM: &str =
+    "no accessibility automation service is available on this platform";
+pub const ACCESSIBILITY_DRIVER_MACOS: &str = "macos_accessibility";
+pub const ACCESSIBILITY_DRIVER_WINDOWS: &str = "windows_ui_automation";
+
+/// The accessibility driver this build talks to, or `None` where the platform
+/// has none. Linux has no implementation here and is not silently degraded to
+/// one: the tier declines and the visual loop takes the action instead.
+pub fn accessibility_backend() -> Option<&'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(ACCESSIBILITY_DRIVER_MACOS)
+    }
+    #[cfg(windows)]
+    {
+        Some(ACCESSIBILITY_DRIVER_WINDOWS)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        None
+    }
+}
+
 #[cfg(not(any(windows, target_os = "macos")))]
 pub mod uia {
+    use super::ACCESSIBILITY_UNSUPPORTED_PLATFORM;
     pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 
     pub struct UIPatterns {
@@ -50,24 +77,18 @@ pub mod uia {
         }
 
         pub fn invoke(&self, _element_id: &str) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn bounding_rect(
             &self,
             _element_id: &str,
         ) -> anyhow::Result<Option<BoundingRectangle>> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn set_focus(&self, _element_id: &str) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn find_elements(
@@ -75,45 +96,31 @@ pub mod uia {
             _parent_id: Option<String>,
             _query: &ElementQuery,
         ) -> anyhow::Result<Vec<UIElementInfo>> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn toggle(&self, _element_id: &str) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn set_value(&self, _element_id: &str, _value: &str) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn list_windows(&self) -> anyhow::Result<Vec<UIElementInfo>> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn get_value(&self, _element_id: &str) -> anyhow::Result<String> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn focus_window(&self, _window_name: &str) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
 
         pub fn check_patterns(&self, _element_id: &str) -> anyhow::Result<UIPatterns> {
-            Err(anyhow::anyhow!(
-                "UI Automation not available on this platform"
-            ))
+            Err(anyhow::anyhow!(ACCESSIBILITY_UNSUPPORTED_PLATFORM))
         }
     }
 }

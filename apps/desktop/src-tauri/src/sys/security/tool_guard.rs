@@ -1181,6 +1181,46 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
+            "ui_toggle".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec!["target".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "ui_focus_window".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec!["target".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "ui_scroll".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["target".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "ui_read_value".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 120,
+                requires_approval: false,
+                allowed_parameters: vec!["target".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
             "browser_navigate".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 20,
@@ -6490,6 +6530,45 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("not allowed"));
+    }
+
+    #[tokio::test]
+    async fn the_accessibility_verbs_carry_the_tier_their_effect_earns() {
+        let guard = ToolExecutionGuard::new();
+
+        for mutating in ["ui_toggle", "ui_focus_window"] {
+            assert_eq!(
+                guard.get_safety_tier(mutating),
+                ToolSafetyTier::RequiresConfirmation,
+                "{mutating} changes what is on the user's desktop"
+            );
+        }
+
+        assert_eq!(
+            guard.get_safety_tier("ui_scroll"),
+            ToolSafetyTier::RequiresNotification
+        );
+        assert_eq!(guard.get_safety_tier("ui_read_value"), ToolSafetyTier::Safe);
+    }
+
+    #[tokio::test]
+    async fn the_accessibility_verbs_accept_only_a_target() {
+        let guard = ToolExecutionGuard::new();
+
+        for tool in ["ui_toggle", "ui_focus_window", "ui_scroll", "ui_read_value"] {
+            guard
+                .validate_tool_call(tool, &json!({ "target": { "element_id": "ax-42" } }))
+                .await
+                .unwrap_or_else(|error| panic!("{tool} should accept a target: {error:?}"));
+
+            assert!(
+                guard
+                    .validate_tool_call(tool, &json!({ "command": "rm -rf /" }))
+                    .await
+                    .is_err(),
+                "{tool} must refuse a parameter its policy never named"
+            );
+        }
     }
 
     #[tokio::test]

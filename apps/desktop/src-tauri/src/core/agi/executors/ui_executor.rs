@@ -13,12 +13,29 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub const TARGET_PARAMETER: &str = "target";
+pub const ELEMENT_ID_KEY: &str = "element_id";
+pub const WINDOW_KEY: &str = "window";
+
+const MISSING_TARGET: &str = "Missing target parameter";
+const MISSING_ELEMENT_ID: &str = "Missing 'element_id' in target";
+const MISSING_WINDOW: &str = "Missing 'window' in target";
+const TOGGLED_ACTION: &str = "toggled";
+const FOCUSED_ACTION: &str = "focused";
+const SCROLLED_ACTION: &str = "scrolled";
+const READ_ACTION: &str = "read";
+
 /// Executor for UI automation operations.
 ///
 /// Provides tools for:
 /// - `ui_screenshot`: Capture screen and emit screenshot event
 /// - `ui_click`: Click by coordinates, element_id, or text
 /// - `ui_type`: Type text with optional element targeting
+/// - `ui_toggle`: Flip a toggleable element through the accessibility service
+/// - `ui_focus_window`: Bring a window to the front by the token the platform
+///   accessibility service addresses it with
+/// - `ui_scroll`: Scroll a named element into view
+/// - `ui_read_value`: Read an element's value back
 /// - `image_ocr`: Perform OCR on an image
 pub struct UiExecutor {
     automation: Arc<AutomationService>,
@@ -34,7 +51,16 @@ impl UiExecutor {
 #[async_trait]
 impl ToolExecutor for UiExecutor {
     fn tool_names(&self) -> Vec<&'static str> {
-        vec!["ui_screenshot", "ui_click", "ui_type", "image_ocr"]
+        vec![
+            "ui_screenshot",
+            "ui_click",
+            "ui_type",
+            "ui_toggle",
+            "ui_focus_window",
+            "ui_scroll",
+            "ui_read_value",
+            "image_ocr",
+        ]
     }
 
     fn description(&self) -> &'static str {
@@ -52,6 +78,10 @@ impl ToolExecutor for UiExecutor {
             "ui_screenshot" => self.execute_screenshot(parameters, context).await,
             "ui_click" => self.execute_click(parameters, context).await,
             "ui_type" => self.execute_type(parameters, context).await,
+            "ui_toggle" => self.execute_toggle(parameters, context),
+            "ui_focus_window" => self.execute_focus_window(parameters, context),
+            "ui_scroll" => self.execute_scroll(parameters, context),
+            "ui_read_value" => self.execute_read_value(parameters, context),
             "image_ocr" => self.execute_ocr(parameters).await,
             _ => Err(anyhow!("Unknown UI tool: {}", tool_name)),
         }
@@ -354,6 +384,94 @@ impl UiExecutor {
         Ok(json!({ "success": true, "action": "typed", "text": text }))
     }
 
+    fn execute_toggle(
+        &self,
+        parameters: &HashMap<String, Value>,
+        context: &ExecutorContext,
+    ) -> Result<Value> {
+        let element_id = target_element_id(parameters)?;
+
+        context.emit_progress(&format!("Toggling element '{}'...", element_id), Some(0.5));
+
+        self.automation
+            .native
+            .toggle(element_id)
+            .map_err(|e| anyhow!("Failed to toggle element '{}': {}", element_id, e))?;
+
+        Ok(json!({ "success": true, "action": TOGGLED_ACTION, "element_id": element_id }))
+    }
+
+    fn execute_focus_window(
+        &self,
+        parameters: &HashMap<String, Value>,
+        context: &ExecutorContext,
+    ) -> Result<Value> {
+        let window = target_window(parameters)?;
+
+        context.emit_progress(&format!("Focusing window '{}'...", window), Some(0.5));
+
+        self.automation
+            .native
+            .focus_window(window)
+            .map_err(|e| anyhow!("Failed to focus window '{}': {}", window, e))?;
+
+        Ok(json!({ "success": true, "action": FOCUSED_ACTION, "window": window }))
+    }
+
+    fn execute_scroll(
+        &self,
+        parameters: &HashMap<String, Value>,
+        context: &ExecutorContext,
+    ) -> Result<Value> {
+        let element_id = target_element_id(parameters)?;
+
+        context.emit_progress(&format!("Scrolling to '{}'...", element_id), Some(0.5));
+
+        self.scroll_to(element_id)
+            .map_err(|e| anyhow!("Failed to scroll to element '{}': {}", element_id, e))?;
+
+        Ok(json!({ "success": true, "action": SCROLLED_ACTION, "element_id": element_id }))
+    }
+
+    #[cfg(windows)]
+    fn scroll_to(&self, element_id: &str) -> Result<()> {
+        self.automation.native.scroll_to_element(element_id)
+    }
+
+    /// Only the Windows automation service exposes a scroll pattern. The action
+    /// router declines this verb before dispatch on every other platform, so
+    /// reaching here means the tier was bypassed and the honest answer is that
+    /// the service cannot do it.
+    #[cfg(not(windows))]
+    fn scroll_to(&self, _element_id: &str) -> Result<()> {
+        Err(anyhow!(
+            crate::automation::ACCESSIBILITY_UNSUPPORTED_PLATFORM
+        ))
+    }
+
+    fn execute_read_value(
+        &self,
+        parameters: &HashMap<String, Value>,
+        context: &ExecutorContext,
+    ) -> Result<Value> {
+        let element_id = target_element_id(parameters)?;
+
+        context.emit_progress(&format!("Reading element '{}'...", element_id), Some(0.5));
+
+        let value = self
+            .automation
+            .native
+            .get_value(element_id)
+            .map_err(|e| anyhow!("Failed to read element '{}': {}", element_id, e))?;
+
+        Ok(json!({
+            "success": true,
+            "action": READ_ACTION,
+            "element_id": element_id,
+            "value": value
+        }))
+    }
+
     /// Execute image_ocr operation.
     ///
     /// Performs OCR on an image and returns the extracted text.
@@ -384,9 +502,55 @@ impl UiExecutor {
     }
 }
 
+fn target_element_id(parameters: &HashMap<String, Value>) -> Result<&str> {
+    parameters
+        .get(TARGET_PARAMETER)
+        .ok_or_else(|| anyhow!(MISSING_TARGET))?
+        .get(ELEMENT_ID_KEY)
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| anyhow!(MISSING_ELEMENT_ID))
+}
+
+fn target_window(parameters: &HashMap<String, Value>) -> Result<&str> {
+    parameters
+        .get(TARGET_PARAMETER)
+        .ok_or_else(|| anyhow!(MISSING_TARGET))?
+        .get(WINDOW_KEY)
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| anyhow!(MISSING_WINDOW))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parameters(target: Value) -> HashMap<String, Value> {
+        HashMap::from([(TARGET_PARAMETER.to_string(), target)])
+    }
+
+    #[test]
+    fn an_element_target_reads_its_identifier_back() {
+        let params = parameters(json!({ ELEMENT_ID_KEY: "ax-42" }));
+
+        assert_eq!(target_element_id(&params).expect("resolved"), "ax-42");
+        assert!(target_window(&params).is_err());
+    }
+
+    #[test]
+    fn a_window_target_reads_its_token_back() {
+        let params = parameters(json!({ WINDOW_KEY: "Notes" }));
+
+        assert_eq!(target_window(&params).expect("resolved"), "Notes");
+        assert!(target_element_id(&params).is_err());
+    }
+
+    #[test]
+    fn a_missing_target_is_an_error_rather_than_a_default() {
+        let empty: HashMap<String, Value> = HashMap::new();
+
+        assert!(target_element_id(&empty).is_err());
+        assert!(target_window(&empty).is_err());
+    }
 
     #[test]
     fn test_ui_executor_tool_names() {
@@ -407,6 +571,10 @@ mod tests {
         assert!(names.contains(&"ui_screenshot"));
         assert!(names.contains(&"ui_click"));
         assert!(names.contains(&"ui_type"));
+        assert!(names.contains(&"ui_toggle"));
+        assert!(names.contains(&"ui_focus_window"));
+        assert!(names.contains(&"ui_scroll"));
+        assert!(names.contains(&"ui_read_value"));
         assert!(names.contains(&"image_ocr"));
     }
 

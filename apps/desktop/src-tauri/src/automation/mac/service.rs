@@ -6,7 +6,8 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 use accessibility_sys::{
-    kAXChildrenAttribute, kAXDescriptionAttribute, kAXFocusedAttribute, kAXPressAction,
+    kAXChildrenAttribute, kAXDescriptionAttribute, kAXFocusedAttribute, kAXIdentifierAttribute,
+    kAXPressAction,
     kAXRaiseAction, kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute, kAXWindowsAttribute,
     AXIsProcessTrusted, AXUIElementCopyAttributeValue, AXUIElementCopyAttributeValues,
     AXUIElementCopyElementAtPosition, AXUIElementCreateApplication, AXUIElementCreateSystemWide,
@@ -439,6 +440,25 @@ impl MacAutomationService {
                     }
                 } else {
                     return false;
+                }
+            }
+
+            // An identifier filter the matcher ignored would return every
+            // element in the tree, so a caller that meant to address one
+            // control by its accessibility identifier would act on whichever
+            // element the walk reached first.
+            if let Some(ref automation_id) = query.automation_id {
+                let identifier = self
+                    .get_string_attribute(element, kAXIdentifierAttribute)
+                    .ok()
+                    .flatten();
+
+                match identifier {
+                    Some(identifier)
+                        if identifier
+                            .to_lowercase()
+                            .contains(&automation_id.to_lowercase()) => {}
+                    _ => return false,
                 }
             }
 
