@@ -185,7 +185,8 @@ vi.mock('@/lib/llm-providers/factory', () => ({
   },
 }));
 
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
   LLMCostCalculator: {
     estimateCost: vi.fn(() => 5),
     calculateCost: vi.fn(() => 4),
