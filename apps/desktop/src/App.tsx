@@ -23,6 +23,7 @@ import { useUnifiedAuthStore } from './stores/auth';
 import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
+import { onGlobalVoiceHotkey } from './lib/tauri-electron/voice-hotkey';
 import { useQuickQueryDoubleTap } from './hooks/useQuickQueryDoubleTap';
 import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
@@ -1320,6 +1321,11 @@ const DesktopShell = () => {
       }
     };
   }, [handleCaptureRequest, handleVoiceInputRequest, startNewChat]);
+
+  useEffect(
+    () => onGlobalVoiceHotkey(() => void handleVoiceInputRequest()),
+    [handleVoiceInputRequest],
+  );
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 

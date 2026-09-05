@@ -38,6 +38,7 @@ import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
 import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
 import { createTray } from './tray';
+import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy } from './windowPolicy';
 import {
   isTrustedCloudRendererOrigin,
@@ -573,12 +574,14 @@ if (!hasSingleInstanceLock) {
       onNewChat: openNewChat,
       onQuickAsk: () => toggleQuickAsk(mainWindow),
       onScreenshot: () => void captureToChat(mainWindow),
+      onVoice: () => void toggleGlobalDictation(mainWindow),
       onCheckForUpdates: () => void checkForCloudUpdate(),
     };
     createTray(garnishHandlers);
     registerGarnishShortcuts({
       onQuickAsk: garnishHandlers.onQuickAsk,
       onScreenshot: garnishHandlers.onScreenshot,
+      onVoice: garnishHandlers.onVoice,
     });
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();

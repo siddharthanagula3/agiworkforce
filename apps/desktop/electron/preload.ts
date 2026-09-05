@@ -48,6 +48,14 @@ const agiHost: ElectronHostBridge = {
     };
   },
 
+  onVoiceHotkey(callback: () => void): () => void {
+    const listener = () => callback();
+    ipcRenderer.on(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
+    return () => {
+      ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
+    };
+  },
+
   async openExternal(url: string): Promise<void> {
     await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.openExternal, url);
   },
