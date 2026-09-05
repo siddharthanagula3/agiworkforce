@@ -11,11 +11,7 @@ vi.mock('@/lib/server/key-value', () => ({
     redisClient ? createUpstashKeyValueStore(redisClient as unknown as UpstashRedisLike) : null,
 }));
 
-import {
-  createUpstashKeyValueStore,
-  type KeyValueStore,
-  type UpstashRedisLike,
-} from '@agiworkforce/key-value';
+import { createUpstashKeyValueStore, type UpstashRedisLike } from '@agiworkforce/key-value';
 
 import {
   classifyFreeLaneFailure,

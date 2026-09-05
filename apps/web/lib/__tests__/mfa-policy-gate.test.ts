@@ -31,11 +31,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(async () => ({ users: { getUser: mocks.getUser } })),
 }));
 
-import {
-  createUpstashKeyValueStore,
-  type KeyValueStore,
-  type UpstashRedisLike,
-} from '@agiworkforce/key-value';
+import { createUpstashKeyValueStore, type UpstashRedisLike } from '@agiworkforce/key-value';
 
 const { assertMfaPolicy, isMfaRequiredError } = await import('../mfa-policy-gate');
 
