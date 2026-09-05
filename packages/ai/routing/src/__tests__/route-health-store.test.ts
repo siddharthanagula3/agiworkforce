@@ -5,8 +5,13 @@ import {
   createRouteHealthStore,
   DEFAULT_ROUTE_HEALTH_CONFIG,
   isRouteBreakerOpen,
+  isRouteHealthDegraded,
+  resolveCredentialCooldownConfig,
+  resolveModelLockoutConfig,
   resolveRouteHealthConfig,
+  resolveRouteHealthConfigForScope,
   routeBreakerState,
+  routeBreakerStateWithDegradeBand,
   routeHealthEventsKey,
   ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV,
   ROUTE_BREAKER_COOLDOWN_ENV,
@@ -15,6 +20,8 @@ import {
   ROUTE_BREAKER_MIN_SAMPLES_ENV,
   ROUTE_HEALTH_TRIP_WINDOW_ENV,
   ROUTE_HEALTH_WINDOW_ENV,
+  MODEL_LOCKOUT_CONSECUTIVE_FAILURES_ENV,
+  CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURES_ENV,
   type RouteHealthKeyValueBatch,
   type RouteHealthKeyValueStore,
   type RouteHealthStoreFailureEvent,
@@ -23,6 +30,7 @@ import {
 import type { RouteOutcomeClass } from '../runtime-state';
 
 const ROUTE_ID = 'provider-alpha/model-alpha';
+const PROVIDER_ID = 'provider-alpha';
 const CREDENTIAL_ID = 'provider-alpha';
 const NOW = 1_700_000_000_000;
 
@@ -98,9 +106,18 @@ describe('route health key shape', () => {
     expect(routeHealthEventsKey('route', ROUTE_ID)).toBe(`agi-rhealth:events:${ROUTE_ID}`);
   });
 
-  it('gives credentials their own namespace', () => {
+  it('gives the provider breaker its own namespace, distinct from the old shared one', () => {
+    expect(routeHealthEventsKey('provider', PROVIDER_ID)).toBe(
+      `agi-rhealth:provider:${PROVIDER_ID}`,
+    );
+  });
+
+  it('gives the credential cooldown its own namespace, distinct from the provider breaker', () => {
     expect(routeHealthEventsKey('credential', CREDENTIAL_ID)).toBe(
-      `agi-rhealth:credential:${CREDENTIAL_ID}`,
+      `agi-rhealth:credential-cooldown:${CREDENTIAL_ID}`,
+    );
+    expect(routeHealthEventsKey('credential', CREDENTIAL_ID)).not.toBe(
+      routeHealthEventsKey('provider', PROVIDER_ID),
     );
   });
 
@@ -216,6 +233,30 @@ describe('snapshot construction', () => {
   });
 });
 
+describe('degrade band', () => {
+  it('marks a closed breaker degraded once consecutive failures cross the band, without blocking it', () => {
+    const snapshot = buildRouteHealthSnapshot(events(['server_error', 'server_error']), NOW);
+    expect(snapshot.available).toBe(true);
+    expect(routeBreakerStateWithDegradeBand(snapshot, 2)).toBe('degraded');
+    expect(isRouteHealthDegraded(snapshot, 2)).toBe(true);
+  });
+
+  it('never reports degraded once the breaker has actually opened', () => {
+    const snapshot = buildRouteHealthSnapshot(
+      events(['server_error', 'server_error', 'server_error']),
+      NOW,
+    );
+    expect(snapshot.available).toBe(false);
+    expect(routeBreakerStateWithDegradeBand(snapshot, 1)).toBe('open');
+    expect(isRouteHealthDegraded(snapshot, 1)).toBe(false);
+  });
+
+  it('stays closed below the degrade band', () => {
+    const snapshot = buildRouteHealthSnapshot(events(['server_error']), NOW);
+    expect(routeBreakerStateWithDegradeBand(snapshot, 5)).toBe('closed');
+  });
+});
+
 describe('configuration', () => {
   it('defaults every threshold when nothing is set', () => {
     expect(resolveRouteHealthConfig({})).toEqual(DEFAULT_ROUTE_HEALTH_CONFIG);
@@ -253,6 +294,37 @@ describe('configuration', () => {
     );
     expect(config.failureRateThreshold).toBe(DEFAULT_ROUTE_HEALTH_CONFIG.failureRateThreshold);
   });
+
+  it('gives the model lockout scope its own env names, independent of the provider breaker', () => {
+    const config = resolveModelLockoutConfig({
+      [MODEL_LOCKOUT_CONSECUTIVE_FAILURES_ENV]: '9',
+      [ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV]: '1',
+    });
+    expect(config.consecutiveFailureThreshold).toBe(9);
+  });
+
+  it('gives the credential cooldown scope its own, faster-tripping defaults', () => {
+    const config = resolveCredentialCooldownConfig({});
+    expect(config.consecutiveFailureThreshold).toBeLessThan(
+      DEFAULT_ROUTE_HEALTH_CONFIG.consecutiveFailureThreshold,
+    );
+    expect(config.cooldownBaseMs).toBeLessThan(DEFAULT_ROUTE_HEALTH_CONFIG.cooldownBaseMs);
+  });
+
+  it('reads the credential cooldown scope from its own documented env name', () => {
+    const config = resolveCredentialCooldownConfig({
+      [CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURES_ENV]: '4',
+    });
+    expect(config.consecutiveFailureThreshold).toBe(4);
+  });
+
+  it('routes each scope to its own resolver', () => {
+    expect(resolveRouteHealthConfigForScope('provider', {})).toEqual(resolveRouteHealthConfig({}));
+    expect(resolveRouteHealthConfigForScope('route', {})).toEqual(resolveModelLockoutConfig({}));
+    expect(resolveRouteHealthConfigForScope('credential', {})).toEqual(
+      resolveCredentialCooldownConfig({}),
+    );
+  });
 });
 
 describe('store over the key-value port', () => {
@@ -261,29 +333,47 @@ describe('store over the key-value port', () => {
     await health.recordOutcome('route', ROUTE_ID, { class: 'server_error' }, NOW);
     await health.recordOutcome('route', ROUTE_ID, { class: 'server_error' }, NOW + 1);
     await health.recordOutcome('route', ROUTE_ID, { class: 'server_error' }, NOW + 2);
-    await health.recordOutcome('credential', CREDENTIAL_ID, { class: 'success' }, NOW);
+    await health.recordOutcome('provider', PROVIDER_ID, { class: 'success' }, NOW);
 
     const routes = await health.snapshots('route', [ROUTE_ID], NOW + 3);
-    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW + 3);
+    const providers = await health.snapshots('provider', [PROVIDER_ID], NOW + 3);
 
     expect(routes[ROUTE_ID]?.available).toBe(false);
-    expect(credentials[CREDENTIAL_ID]?.available).toBe(true);
+    expect(providers[PROVIDER_ID]?.available).toBe(true);
   });
 
-  it('keeps route and credential memory separate', async () => {
+  it('keeps route and provider memory separate', async () => {
     const { health } = store();
     for (let index = 0; index < 3; index += 1) {
-      await health.recordOutcome(
-        'credential',
-        CREDENTIAL_ID,
-        { class: 'server_error' },
-        NOW + index,
-      );
+      await health.recordOutcome('provider', PROVIDER_ID, { class: 'server_error' }, NOW + index);
     }
-    const routes = await health.snapshots('route', [CREDENTIAL_ID], NOW + 3);
-    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW + 3);
-    expect(routes[CREDENTIAL_ID]?.available).toBe(true);
+    const routes = await health.snapshots('route', [PROVIDER_ID], NOW + 3);
+    const providers = await health.snapshots('provider', [PROVIDER_ID], NOW + 3);
+    expect(routes[PROVIDER_ID]?.available).toBe(true);
+    expect(providers[PROVIDER_ID]?.available).toBe(false);
+  });
+
+  it('keeps the credential cooldown scope separate from both route and provider', async () => {
+    const { health } = store();
+    for (let index = 0; index < 2; index += 1) {
+      await health.recordOutcome('credential', CREDENTIAL_ID, { class: 'rate_limit' }, NOW + index);
+    }
+    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW + 2);
+    const providers = await health.snapshots('provider', [CREDENTIAL_ID], NOW + 2);
     expect(credentials[CREDENTIAL_ID]?.available).toBe(false);
+    expect(providers[CREDENTIAL_ID]?.available).toBe(true);
+  });
+
+  it('applies a per-id config override for the same scope', async () => {
+    const { health } = store({
+      configFor: (scope, id) =>
+        scope === 'provider' && id === PROVIDER_ID
+          ? { ...DEFAULT_ROUTE_HEALTH_CONFIG, consecutiveFailureThreshold: 1 }
+          : undefined,
+    });
+    await health.recordOutcome('provider', PROVIDER_ID, { class: 'server_error' }, NOW);
+    const providers = await health.snapshots('provider', [PROVIDER_ID], NOW + 1);
+    expect(providers[PROVIDER_ID]?.available).toBe(false);
   });
 
   it('drops events that fall out of the observation window', async () => {

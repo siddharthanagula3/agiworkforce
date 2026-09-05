@@ -174,7 +174,15 @@ export type RouteOutcomeClass =
    * against a route: every route on that provider answers to the same key, and
    * an unfunded or rejected key is an account fact rather than a route fact.
    */
-  | 'credential_rejected';
+  | 'credential_rejected'
+  /**
+   * The provider rejected this SPECIFIC model: it does not exist, the tier
+   * cannot reach it, or the request overflowed its context window. Recorded
+   * against the `route` (model lockout) scope, distinct from
+   * `unsupported_capability`, which is a route honestly declining a request
+   * shape it was never asked to serve and must never count against it.
+   */
+  | 'model_rejected';
 
 export interface RouteOutcome {
   class: RouteOutcomeClass;

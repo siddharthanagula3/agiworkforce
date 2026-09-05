@@ -41,9 +41,20 @@ export interface RouteHealthKeyValueStore {
  * ranking reads the `route` scope and has no way to see a shadow event, rather
  * than relying on every future reader remembering to filter one out.
  */
-export type RouteHealthScope = 'route' | 'credential' | 'shadow';
+/**
+ * Three independently governed resilience mechanisms, plus the mirrored
+ * `shadow` keyspace: `route` locks out one model on one route (a model
+ * rejection or a context/tier refusal says nothing about the provider's other
+ * models); `provider` is the whole-provider breaker `route-breaker.ts`
+ * already ran under the name `credential`, unchanged in behaviour and env
+ * names, renamed here so it cannot collide with the scope below it; and
+ * `credential` is the new per-credential cooldown, narrower than `provider`
+ * so a single bad key can cool down without parking every route the same
+ * provider serves.
+ */
+export type RouteHealthScope = 'route' | 'provider' | 'credential' | 'shadow';
 
-export type RouteBreakerState = 'closed' | 'open' | 'half_open';
+export type RouteBreakerState = 'closed' | 'degraded' | 'open' | 'half_open';
 
 export const ROUTE_HEALTH_WINDOW_ENV = 'AGI_ROUTE_HEALTH_WINDOW_MS';
 export const ROUTE_HEALTH_TRIP_WINDOW_ENV = 'AGI_ROUTE_HEALTH_TRIP_WINDOW_MS';
@@ -52,6 +63,23 @@ export const ROUTE_BREAKER_FAILURE_RATE_ENV = 'AGI_ROUTE_BREAKER_FAILURE_RATE';
 export const ROUTE_BREAKER_MIN_SAMPLES_ENV = 'AGI_ROUTE_BREAKER_MIN_SAMPLES';
 export const ROUTE_BREAKER_COOLDOWN_ENV = 'AGI_ROUTE_BREAKER_COOLDOWN_MS';
 export const ROUTE_BREAKER_MAX_COOLDOWN_ENV = 'AGI_ROUTE_BREAKER_MAX_COOLDOWN_MS';
+
+export const MODEL_LOCKOUT_WINDOW_ENV = 'AGI_MODEL_LOCKOUT_WINDOW_MS';
+export const MODEL_LOCKOUT_TRIP_WINDOW_ENV = 'AGI_MODEL_LOCKOUT_TRIP_WINDOW_MS';
+export const MODEL_LOCKOUT_CONSECUTIVE_FAILURES_ENV = 'AGI_MODEL_LOCKOUT_CONSECUTIVE_FAILURES';
+export const MODEL_LOCKOUT_FAILURE_RATE_ENV = 'AGI_MODEL_LOCKOUT_FAILURE_RATE';
+export const MODEL_LOCKOUT_MIN_SAMPLES_ENV = 'AGI_MODEL_LOCKOUT_MIN_SAMPLES';
+export const MODEL_LOCKOUT_COOLDOWN_ENV = 'AGI_MODEL_LOCKOUT_COOLDOWN_MS';
+export const MODEL_LOCKOUT_MAX_COOLDOWN_ENV = 'AGI_MODEL_LOCKOUT_MAX_COOLDOWN_MS';
+
+export const CREDENTIAL_COOLDOWN_WINDOW_ENV = 'AGI_CREDENTIAL_COOLDOWN_WINDOW_MS';
+export const CREDENTIAL_COOLDOWN_TRIP_WINDOW_ENV = 'AGI_CREDENTIAL_COOLDOWN_TRIP_WINDOW_MS';
+export const CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURES_ENV =
+  'AGI_CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURES';
+export const CREDENTIAL_COOLDOWN_FAILURE_RATE_ENV = 'AGI_CREDENTIAL_COOLDOWN_FAILURE_RATE';
+export const CREDENTIAL_COOLDOWN_MIN_SAMPLES_ENV = 'AGI_CREDENTIAL_COOLDOWN_MIN_SAMPLES';
+export const CREDENTIAL_COOLDOWN_BASE_ENV = 'AGI_CREDENTIAL_COOLDOWN_BASE_MS';
+export const CREDENTIAL_COOLDOWN_MAX_ENV = 'AGI_CREDENTIAL_COOLDOWN_MAX_MS';
 
 const MS_PER_SECOND = 1_000;
 const SECONDS_PER_MINUTE = 60;
@@ -69,6 +97,48 @@ const DEFAULT_MIN_SAMPLES_FOR_RATE_TRIP = 5;
 const DEFAULT_COOLDOWN_BASE_MS = COOLDOWN_BASE_MINUTES * MINUTE_MS;
 const DEFAULT_COOLDOWN_MAX_MS = COOLDOWN_MAX_MINUTES * MINUTE_MS;
 
+/**
+ * Model lockout is deliberately identical to today's pre-split route
+ * defaults: this scope carries forward the exact numbers the `route` scope
+ * already ran under the (now provider-only) `AGI_ROUTE_HEALTH_*` names, so
+ * splitting the scopes changes nothing about default behaviour, only which
+ * env var reaches which mechanism.
+ */
+const DEFAULT_MODEL_LOCKOUT_CONFIG: RouteHealthConfig = {
+  observationWindowMs: DEFAULT_OBSERVATION_WINDOW_MS,
+  tripWindowMs: DEFAULT_TRIP_WINDOW_MS,
+  consecutiveFailureThreshold: DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD,
+  failureRateThreshold: DEFAULT_FAILURE_RATE_THRESHOLD,
+  minSamplesForRateTrip: DEFAULT_MIN_SAMPLES_FOR_RATE_TRIP,
+  cooldownBaseMs: DEFAULT_COOLDOWN_BASE_MS,
+  cooldownMaxMs: DEFAULT_COOLDOWN_MAX_MS,
+};
+
+/**
+ * A credential cooldown answers a narrower question than a provider breaker,
+ * one bad key, not the whole account, so it trips faster and resets sooner:
+ * a 10 minute window, 2 consecutive failures, and a 5 second base cooldown
+ * capped at 5 minutes, in the shape of OmniRoute's connection cooldown
+ * (`docs/architecture/RESILIENCE_GUIDE.md` §2, base cooldowns of 3-5s).
+ */
+const CREDENTIAL_COOLDOWN_WINDOW_MINUTES = 10;
+const CREDENTIAL_COOLDOWN_TRIP_WINDOW_MINUTES = 2;
+const CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURE_THRESHOLD = 2;
+const CREDENTIAL_COOLDOWN_FAILURE_RATE_THRESHOLD = 0.5;
+const CREDENTIAL_COOLDOWN_MIN_SAMPLES_FOR_RATE_TRIP = 3;
+const CREDENTIAL_COOLDOWN_BASE_SECONDS = 5;
+const CREDENTIAL_COOLDOWN_MAX_MINUTES = 5;
+
+const DEFAULT_CREDENTIAL_COOLDOWN_CONFIG: RouteHealthConfig = {
+  observationWindowMs: CREDENTIAL_COOLDOWN_WINDOW_MINUTES * MINUTE_MS,
+  tripWindowMs: CREDENTIAL_COOLDOWN_TRIP_WINDOW_MINUTES * MINUTE_MS,
+  consecutiveFailureThreshold: CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURE_THRESHOLD,
+  failureRateThreshold: CREDENTIAL_COOLDOWN_FAILURE_RATE_THRESHOLD,
+  minSamplesForRateTrip: CREDENTIAL_COOLDOWN_MIN_SAMPLES_FOR_RATE_TRIP,
+  cooldownBaseMs: CREDENTIAL_COOLDOWN_BASE_SECONDS * MS_PER_SECOND,
+  cooldownMaxMs: CREDENTIAL_COOLDOWN_MAX_MINUTES * MINUTE_MS,
+};
+
 const COOLDOWN_BACKOFF_MULTIPLIER = 2;
 const EVENT_TTL_BUFFER_SECONDS = 60;
 const EVENTS_RANGE_MIN = 0;
@@ -84,11 +154,13 @@ const NONCE_START_INDEX = 2;
 
 const KEY_SEPARATOR = ':';
 const ROUTE_EVENTS_KEY_PREFIX = 'agi-rhealth:events';
-const CREDENTIAL_EVENTS_KEY_PREFIX = 'agi-rhealth:credential';
+const PROVIDER_EVENTS_KEY_PREFIX = 'agi-rhealth:provider';
+const CREDENTIAL_EVENTS_KEY_PREFIX = 'agi-rhealth:credential-cooldown';
 const SHADOW_EVENTS_KEY_PREFIX = 'agi-rhealth:shadow';
 
 const EVENTS_KEY_PREFIX_BY_SCOPE: Readonly<Record<RouteHealthScope, string>> = {
   route: ROUTE_EVENTS_KEY_PREFIX,
+  provider: PROVIDER_EVENTS_KEY_PREFIX,
   credential: CREDENTIAL_EVENTS_KEY_PREFIX,
   shadow: SHADOW_EVENTS_KEY_PREFIX,
 };
@@ -108,6 +180,7 @@ const OUTCOME_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'stream_corruption',
   'unsupported_capability',
   'credential_rejected',
+  'model_rejected',
 ]);
 
 /**
@@ -121,6 +194,7 @@ const FAILURE_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'timeout',
   'stream_corruption',
   'credential_rejected',
+  'model_rejected',
 ]);
 
 export interface RouteHealthConfig {
@@ -141,6 +215,13 @@ export const DEFAULT_ROUTE_HEALTH_CONFIG: RouteHealthConfig = {
   minSamplesForRateTrip: DEFAULT_MIN_SAMPLES_FOR_RATE_TRIP,
   cooldownBaseMs: DEFAULT_COOLDOWN_BASE_MS,
   cooldownMaxMs: DEFAULT_COOLDOWN_MAX_MS,
+};
+
+const DEFAULT_CONFIG_BY_SCOPE: Readonly<Record<RouteHealthScope, RouteHealthConfig>> = {
+  route: DEFAULT_MODEL_LOCKOUT_CONFIG,
+  provider: DEFAULT_ROUTE_HEALTH_CONFIG,
+  credential: DEFAULT_CREDENTIAL_COOLDOWN_CONFIG,
+  shadow: DEFAULT_MODEL_LOCKOUT_CONFIG,
 };
 
 type EnvironmentSource = Readonly<Record<string, string | undefined>>;
@@ -170,34 +251,44 @@ function processEnvironment(): EnvironmentSource {
   return typeof process === 'undefined' ? {} : (process.env ?? {});
 }
 
+interface ScopedConfigEnvNames {
+  window: string;
+  tripWindow: string;
+  consecutiveFailures: string;
+  failureRate: string;
+  minSamples: string;
+  cooldown: string;
+  maxCooldown: string;
+}
+
 /**
  * Every threshold is operator-tunable, because the right window for a route
  * that serves once a minute is not the right window for one under constant
  * load. An unparseable value keeps the default rather than disabling the
- * breaker, which is the one outcome a typo must not produce.
+ * breaker, which is the one outcome a typo must not produce. Shared by all
+ * three scopes so a provider breaker, a credential cooldown and a model
+ * lockout resolve their env overrides identically, only the env names and
+ * defaults differ per scope.
  */
-export function resolveRouteHealthConfig(
-  environment: EnvironmentSource = processEnvironment(),
+function resolveScopedRouteHealthConfig(
+  envNames: ScopedConfigEnvNames,
+  defaults: RouteHealthConfig,
+  environment: EnvironmentSource,
 ): RouteHealthConfig {
   const observationWindowMs = readPositiveInteger(
     environment,
-    ROUTE_HEALTH_WINDOW_ENV,
-    DEFAULT_OBSERVATION_WINDOW_MS,
+    envNames.window,
+    defaults.observationWindowMs,
     MINIMUM_WINDOW_MS,
   );
   const tripWindowMs = Math.min(
     observationWindowMs,
-    readPositiveInteger(
-      environment,
-      ROUTE_HEALTH_TRIP_WINDOW_ENV,
-      DEFAULT_TRIP_WINDOW_MS,
-      MINIMUM_WINDOW_MS,
-    ),
+    readPositiveInteger(environment, envNames.tripWindow, defaults.tripWindowMs, MINIMUM_WINDOW_MS),
   );
   const cooldownBaseMs = readPositiveInteger(
     environment,
-    ROUTE_BREAKER_COOLDOWN_ENV,
-    DEFAULT_COOLDOWN_BASE_MS,
+    envNames.cooldown,
+    defaults.cooldownBaseMs,
     MINIMUM_WINDOW_MS,
   );
   return {
@@ -205,19 +296,19 @@ export function resolveRouteHealthConfig(
     tripWindowMs,
     consecutiveFailureThreshold: readPositiveInteger(
       environment,
-      ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV,
-      DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD,
+      envNames.consecutiveFailures,
+      defaults.consecutiveFailureThreshold,
       MINIMUM_THRESHOLD,
     ),
     failureRateThreshold: readRate(
       environment,
-      ROUTE_BREAKER_FAILURE_RATE_ENV,
-      DEFAULT_FAILURE_RATE_THRESHOLD,
+      envNames.failureRate,
+      defaults.failureRateThreshold,
     ),
     minSamplesForRateTrip: readPositiveInteger(
       environment,
-      ROUTE_BREAKER_MIN_SAMPLES_ENV,
-      DEFAULT_MIN_SAMPLES_FOR_RATE_TRIP,
+      envNames.minSamples,
+      defaults.minSamplesForRateTrip,
       MINIMUM_THRESHOLD,
     ),
     cooldownBaseMs,
@@ -225,12 +316,86 @@ export function resolveRouteHealthConfig(
       cooldownBaseMs,
       readPositiveInteger(
         environment,
-        ROUTE_BREAKER_MAX_COOLDOWN_ENV,
-        DEFAULT_COOLDOWN_MAX_MS,
+        envNames.maxCooldown,
+        defaults.cooldownMaxMs,
         MINIMUM_WINDOW_MS,
       ),
     ),
   };
+}
+
+const PROVIDER_BREAKER_ENV_NAMES: ScopedConfigEnvNames = {
+  window: ROUTE_HEALTH_WINDOW_ENV,
+  tripWindow: ROUTE_HEALTH_TRIP_WINDOW_ENV,
+  consecutiveFailures: ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV,
+  failureRate: ROUTE_BREAKER_FAILURE_RATE_ENV,
+  minSamples: ROUTE_BREAKER_MIN_SAMPLES_ENV,
+  cooldown: ROUTE_BREAKER_COOLDOWN_ENV,
+  maxCooldown: ROUTE_BREAKER_MAX_COOLDOWN_ENV,
+};
+
+const MODEL_LOCKOUT_ENV_NAMES: ScopedConfigEnvNames = {
+  window: MODEL_LOCKOUT_WINDOW_ENV,
+  tripWindow: MODEL_LOCKOUT_TRIP_WINDOW_ENV,
+  consecutiveFailures: MODEL_LOCKOUT_CONSECUTIVE_FAILURES_ENV,
+  failureRate: MODEL_LOCKOUT_FAILURE_RATE_ENV,
+  minSamples: MODEL_LOCKOUT_MIN_SAMPLES_ENV,
+  cooldown: MODEL_LOCKOUT_COOLDOWN_ENV,
+  maxCooldown: MODEL_LOCKOUT_MAX_COOLDOWN_ENV,
+};
+
+const CREDENTIAL_COOLDOWN_ENV_NAMES: ScopedConfigEnvNames = {
+  window: CREDENTIAL_COOLDOWN_WINDOW_ENV,
+  tripWindow: CREDENTIAL_COOLDOWN_TRIP_WINDOW_ENV,
+  consecutiveFailures: CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURES_ENV,
+  failureRate: CREDENTIAL_COOLDOWN_FAILURE_RATE_ENV,
+  minSamples: CREDENTIAL_COOLDOWN_MIN_SAMPLES_ENV,
+  cooldown: CREDENTIAL_COOLDOWN_BASE_ENV,
+  maxCooldown: CREDENTIAL_COOLDOWN_MAX_ENV,
+};
+
+/**
+ * The provider breaker's config, unchanged in name and default from before
+ * the scopes split: this is "the existing breaker" the other two scopes were
+ * carved out of.
+ */
+export function resolveRouteHealthConfig(
+  environment: EnvironmentSource = processEnvironment(),
+): RouteHealthConfig {
+  return resolveScopedRouteHealthConfig(
+    PROVIDER_BREAKER_ENV_NAMES,
+    DEFAULT_ROUTE_HEALTH_CONFIG,
+    environment,
+  );
+}
+
+export function resolveModelLockoutConfig(
+  environment: EnvironmentSource = processEnvironment(),
+): RouteHealthConfig {
+  return resolveScopedRouteHealthConfig(
+    MODEL_LOCKOUT_ENV_NAMES,
+    DEFAULT_MODEL_LOCKOUT_CONFIG,
+    environment,
+  );
+}
+
+export function resolveCredentialCooldownConfig(
+  environment: EnvironmentSource = processEnvironment(),
+): RouteHealthConfig {
+  return resolveScopedRouteHealthConfig(
+    CREDENTIAL_COOLDOWN_ENV_NAMES,
+    DEFAULT_CREDENTIAL_COOLDOWN_CONFIG,
+    environment,
+  );
+}
+
+export function resolveRouteHealthConfigForScope(
+  scope: RouteHealthScope,
+  environment: EnvironmentSource = processEnvironment(),
+): RouteHealthConfig {
+  if (scope === 'route') return resolveModelLockoutConfig(environment);
+  if (scope === 'credential') return resolveCredentialCooldownConfig(environment);
+  return resolveRouteHealthConfig(environment);
 }
 
 export function routeHealthEventsKey(scope: RouteHealthScope, id: string): string {
@@ -346,6 +511,7 @@ function countByClass(events: readonly RouteOutcomeEvent[]): Record<RouteOutcome
     stream_corruption: 0,
     unsupported_capability: 0,
     credential_rejected: 0,
+    model_rejected: 0,
   };
   for (const event of events) counts[event.class] += 1;
   return counts;
@@ -391,6 +557,32 @@ export function routeBreakerState(snapshot: RouteHealthSnapshot | undefined): Ro
 
 export function isRouteBreakerOpen(snapshot: RouteHealthSnapshot | undefined): boolean {
   return routeBreakerState(snapshot) === 'open';
+}
+
+/**
+ * Layers a DEGRADED band onto an otherwise-closed breaker.
+ *
+ * `degradeAtFailures` comes from a credential-class breaker profile
+ * (`breaker-profiles.ts`) and is always below that profile's own trip
+ * threshold, so this only ever marks a still-serving route for observability;
+ * it can never turn a closed breaker into one that blocks. An already open or
+ * half-open state is returned unchanged, degraded is a reading of CLOSED, not
+ * a fourth thing competing with OPEN.
+ */
+export function routeBreakerStateWithDegradeBand(
+  snapshot: RouteHealthSnapshot | undefined,
+  degradeAtFailures: number,
+): RouteBreakerState {
+  const state = routeBreakerState(snapshot);
+  if (state !== 'closed' || !snapshot) return state;
+  return snapshot.consecutiveFailures >= degradeAtFailures ? 'degraded' : 'closed';
+}
+
+export function isRouteHealthDegraded(
+  snapshot: RouteHealthSnapshot | undefined,
+  degradeAtFailures: number,
+): boolean {
+  return routeBreakerStateWithDegradeBand(snapshot, degradeAtFailures) === 'degraded';
 }
 
 export function buildRouteHealthSnapshot(
@@ -460,7 +652,18 @@ export interface RouteHealthStoreFailureEvent {
 
 export interface RouteHealthStoreOptions {
   store: RouteHealthKeyValueStore | null;
-  config?: RouteHealthConfig;
+  /** Per-scope defaults. A scope missing here falls back to its own built-in default. */
+  configs?: Partial<Record<RouteHealthScope, RouteHealthConfig>>;
+  /**
+   * Per-id override, consulted before `configs`.
+   *
+   * A provider breaker's threshold depends on which credential class governs
+   * that ONE provider (`breaker-profiles.ts`), not on the scope as a whole, so
+   * the store needs a per-id hook rather than a single config per scope.
+   * Returning `undefined` falls through to `configs[scope]` and then the
+   * scope's built-in default.
+   */
+  configFor?: (scope: RouteHealthScope, id: string) => RouteHealthConfig | undefined;
   /** Returns `null` when the read outlived the caller's request-path budget. */
   boundedRead?: <T>(read: Promise<T>) => Promise<T | null>;
   onFailure?: (event: RouteHealthStoreFailureEvent) => void;
@@ -468,7 +671,7 @@ export interface RouteHealthStoreOptions {
 }
 
 export interface RouteHealthStore {
-  readonly config: RouteHealthConfig;
+  readonly configs: Readonly<Record<RouteHealthScope, RouteHealthConfig>>;
   recordOutcome(
     scope: RouteHealthScope,
     id: string,
@@ -498,9 +701,18 @@ function healthySnapshots(ids: readonly string[]): Record<string, RouteHealthSna
  * through `onFailure` so the one log line names the degradation.
  */
 export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteHealthStore {
-  const config = options.config ?? DEFAULT_ROUTE_HEALTH_CONFIG;
+  const configs: Readonly<Record<RouteHealthScope, RouteHealthConfig>> = {
+    route: options.configs?.route ?? DEFAULT_CONFIG_BY_SCOPE.route,
+    provider: options.configs?.provider ?? DEFAULT_CONFIG_BY_SCOPE.provider,
+    credential: options.configs?.credential ?? DEFAULT_CONFIG_BY_SCOPE.credential,
+    shadow: options.configs?.shadow ?? DEFAULT_CONFIG_BY_SCOPE.shadow,
+  };
   const nonce = options.nonce ?? defaultNonce;
-  const eventTtlSeconds =
+
+  const resolveConfig = (scope: RouteHealthScope, id: string): RouteHealthConfig =>
+    options.configFor?.(scope, id) ?? configs[scope];
+
+  const eventTtlSecondsFor = (config: RouteHealthConfig): number =>
     Math.ceil(config.observationWindowMs / MS_PER_SECOND) + EVENT_TTL_BUFFER_SECONDS;
 
   const report = (event: RouteHealthStoreFailureEvent): void => {
@@ -508,7 +720,7 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
   };
 
   return {
-    config,
+    configs,
 
     async recordOutcome(scope, id, outcome, nowMs = Date.now()): Promise<void> {
       const store = options.store;
@@ -516,6 +728,7 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
         report({ failure: 'store_unavailable', scope, ids: [id] });
         return;
       }
+      const config = resolveConfig(scope, id);
       const key = routeHealthEventsKey(scope, id);
       try {
         await store
@@ -525,7 +738,7 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
             member: encodeRouteOutcomeEvent(outcome, nowMs, nonce()),
           })
           .sortedRemoveByScore(key, EVENTS_RANGE_MIN, nowMs - config.observationWindowMs)
-          .expire(key, eventTtlSeconds)
+          .expire(key, eventTtlSecondsFor(config))
           .exec();
       } catch (error) {
         report({ failure: 'write_failed', scope, ids: [id], error });
@@ -543,6 +756,7 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
       try {
         const batch = store.batch();
         for (const id of ids) {
+          const config = resolveConfig(scope, id);
           batch.sortedRangeByScore(
             routeHealthEventsKey(scope, id),
             nowMs - config.observationWindowMs,
@@ -562,7 +776,7 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
           snapshots[id] = buildRouteHealthSnapshot(
             parseRouteOutcomeEvents(results[index]),
             nowMs,
-            config,
+            resolveConfig(scope, id),
           );
         });
         return snapshots;
