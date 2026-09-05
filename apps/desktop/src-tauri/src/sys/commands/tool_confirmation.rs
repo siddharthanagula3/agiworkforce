@@ -3,8 +3,11 @@
 //! This module provides Tauri commands for the tool confirmation dialog system.
 //! It handles user responses to tool confirmation requests and manages pending confirmations.
 
-use crate::sys::security::tool_guard::RiskLevel;
+use crate::sys::security::tool_guard::{RiskLevel, ToolSafetyTier};
 use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard};
+use agiworkforce_protocol::tool_primitive::{
+    ToolApprovalReason, ToolPermission, ToolPermissionDecision, ToolPermissionScope,
+};
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use parking_lot::Mutex;
@@ -111,6 +114,73 @@ pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
 /// for every other tool.
 pub fn may_stand_on_a_prior_approval(tool_name: &str) -> bool {
     is_tool_remember_eligible(tool_name)
+}
+
+/// The desktop confirmation state expressed as the cross-surface tool
+/// primitive (decision D-P0-5, `agiworkforce_protocol::tool_primitive`).
+///
+/// A remembered desktop choice survives restarts, so it is an account-scoped
+/// grant. [`NEVER_REMEMBERABLE`] and MCP tools carry no standing grant at all,
+/// which the contract expresses by collapsing the scope to the single call and
+/// naming the reason, so a reader of the record can tell a tool that was never
+/// eligible from one the user simply had not approved yet.
+pub fn contract_permission(tool_name: &str, tier: ToolSafetyTier) -> ToolPermission {
+    ToolPermission::new(
+        tool_name.to_string(),
+        tier.contract_decision(),
+        ToolPermissionScope::Account,
+        is_tool_remember_eligible(tool_name),
+    )
+}
+
+pub fn contract_approval_reason(tool_name: &str, tier: ToolSafetyTier) -> ToolApprovalReason {
+    if is_tool_remember_eligible(tool_name) {
+        tier.contract_reason()
+    } else {
+        ToolApprovalReason::NeverRememberable
+    }
+}
+
+#[cfg(test)]
+mod contract_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn a_never_rememberable_tool_gets_no_standing_grant() {
+        for tool_name in NEVER_REMEMBERABLE {
+            let permission = contract_permission(tool_name, ToolSafetyTier::Safe);
+            assert!(!permission.rememberable, "{tool_name}");
+            assert_eq!(permission.scope, ToolPermissionScope::SingleCall, "{tool_name}");
+            assert_eq!(
+                contract_approval_reason(tool_name, ToolSafetyTier::Safe),
+                ToolApprovalReason::NeverRememberable,
+                "{tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_mcp_tool_gets_no_standing_grant_either() {
+        let permission = contract_permission("mcp__acme__publish", ToolSafetyTier::Safe);
+        assert!(!permission.rememberable);
+        assert_eq!(permission.scope, ToolPermissionScope::SingleCall);
+    }
+
+    #[test]
+    fn an_eligible_tool_keeps_an_account_scoped_grant_and_its_tier_verdict() {
+        let permission = contract_permission("read_file", ToolSafetyTier::Safe);
+        assert!(permission.rememberable);
+        assert_eq!(permission.scope, ToolPermissionScope::Account);
+        assert_eq!(permission.decision, ToolPermissionDecision::Allow);
+        assert_eq!(
+            contract_permission("read_file", ToolSafetyTier::RequiresConfirmation).decision,
+            ToolPermissionDecision::Ask
+        );
+        assert_eq!(
+            contract_approval_reason("read_file", ToolSafetyTier::RequiresConfirmation),
+            ToolApprovalReason::RiskTier
+        );
+    }
 }
 
 /// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]

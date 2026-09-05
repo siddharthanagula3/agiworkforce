@@ -1,5 +1,7 @@
 use crate::sys::security::egress_policy::{self, EgressDenial};
 use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
+use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
+use agiworkforce_protocol::tool_primitive::{ToolApprovalReason, ToolPermissionDecision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -928,6 +930,115 @@ pub enum RiskLevel {
     Medium,
     High,
     Critical,
+}
+
+/// Desktop's own vocabulary expressed as the cross-surface tool primitive
+/// (decision D-P0-5, `agiworkforce_protocol::tool_primitive`).
+///
+/// `RiskLevel` is a severity, not a statement about what a tool does, so it
+/// maps to the approval verdict and to the streaming risk band, never to
+/// `ToolActionClass`. Desktop tools still have to declare an action class of
+/// their own; nothing here infers one.
+impl RiskLevel {
+    pub fn contract_decision(self) -> ToolPermissionDecision {
+        match self {
+            Self::Low | Self::Medium => ToolPermissionDecision::Allow,
+            Self::High | Self::Critical => ToolPermissionDecision::Ask,
+        }
+    }
+
+    pub fn contract_risk_level(self) -> AgentEventApprovalRiskLevel {
+        match self {
+            Self::Low => AgentEventApprovalRiskLevel::Low,
+            Self::Medium => AgentEventApprovalRiskLevel::Medium,
+            Self::High | Self::Critical => AgentEventApprovalRiskLevel::High,
+        }
+    }
+}
+
+impl ToolSafetyTier {
+    pub fn contract_decision(self) -> ToolPermissionDecision {
+        if self.requires_user_action() {
+            ToolPermissionDecision::Ask
+        } else {
+            ToolPermissionDecision::Allow
+        }
+    }
+
+    pub fn contract_reason(self) -> ToolApprovalReason {
+        match self.contract_decision() {
+            ToolPermissionDecision::Ask => ToolApprovalReason::RiskTier,
+            _ => ToolApprovalReason::AutoApprovalMode,
+        }
+    }
+}
+
+#[cfg(test)]
+mod contract_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn risk_levels_below_high_are_allowed_and_the_rest_ask() {
+        assert_eq!(
+            RiskLevel::Low.contract_decision(),
+            ToolPermissionDecision::Allow
+        );
+        assert_eq!(
+            RiskLevel::Medium.contract_decision(),
+            ToolPermissionDecision::Allow
+        );
+        assert_eq!(
+            RiskLevel::High.contract_decision(),
+            ToolPermissionDecision::Ask
+        );
+        assert_eq!(
+            RiskLevel::Critical.contract_decision(),
+            ToolPermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn critical_saturates_the_three_band_streaming_risk_level() {
+        assert_eq!(
+            RiskLevel::Critical.contract_risk_level(),
+            AgentEventApprovalRiskLevel::High
+        );
+        assert_eq!(
+            RiskLevel::High.contract_risk_level(),
+            AgentEventApprovalRiskLevel::High
+        );
+        assert_eq!(
+            RiskLevel::Low.contract_risk_level(),
+            AgentEventApprovalRiskLevel::Low
+        );
+    }
+
+    #[test]
+    fn a_tier_that_needs_the_user_asks_and_says_why() {
+        for tier in [
+            ToolSafetyTier::RequiresConfirmation,
+            ToolSafetyTier::RequiresExplicitApproval,
+        ] {
+            assert_eq!(tier.contract_decision(), ToolPermissionDecision::Ask);
+            assert_eq!(tier.contract_reason(), ToolApprovalReason::RiskTier);
+        }
+        for tier in [ToolSafetyTier::Safe, ToolSafetyTier::RequiresNotification] {
+            assert_eq!(tier.contract_decision(), ToolPermissionDecision::Allow);
+            assert_eq!(tier.contract_reason(), ToolApprovalReason::AutoApprovalMode);
+        }
+    }
+
+    #[test]
+    fn the_shared_shell_policy_verdict_maps_onto_the_same_contract() {
+        assert_eq!(
+            ToolPermissionDecision::from(agiworkforce_execpolicy::Decision::Prompt),
+            ToolPermissionDecision::Ask
+        );
+        assert_eq!(
+            ToolPermissionDecision::from(agiworkforce_execpolicy::Decision::Forbidden),
+            ToolPermissionDecision::Deny
+        );
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
