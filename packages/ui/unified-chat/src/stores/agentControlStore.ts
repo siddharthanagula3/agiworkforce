@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AgentControlState, AgentMode, Effort } from '@agiworkforce/types';
@@ -137,6 +136,7 @@ export const useAgentControlStore = create<AgentControlStore>()(
     {
       name: 'agi-agent-control',
       version: 1,
+      migrate: (persisted) => persisted,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
       ),
