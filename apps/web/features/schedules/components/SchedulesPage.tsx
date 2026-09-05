@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
 import {
   AlertDialog,
@@ -17,9 +18,14 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
   Skeleton,
 } from '@agiworkforce/ui';
-import { CalendarClock, Loader2, Plus, RotateCcw } from 'lucide-react';
+import { CalendarClock, Loader2, MessageSquarePlus, Plus, RotateCcw } from 'lucide-react';
 import { ScheduleCard, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
@@ -34,7 +40,16 @@ import {
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
 } from '@agiworkforce/cloud-contracts';
-import type { ScheduleDraft, ScheduleFormErrors, ScheduleRun, ScheduleTask } from '../types';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { toUserMessage } from '@/lib/user-error-message';
+import {
+  formatDateTime,
+  scheduleResultText,
+  type ScheduleDraft,
+  type ScheduleFormErrors,
+  type ScheduleRun,
+  type ScheduleTask,
+} from '../types';
 
 /**
  * Kept as prose in the create dialog, where someone is about to rely on an
@@ -103,6 +118,13 @@ interface SchedulesPageProps {
   createIdempotencyKey?: () => string;
   scope?: ScheduleProjectScope | null;
   projects?: ScheduleProjectOption[];
+  /**
+   * Starts a chat about a schedule's latest result. Injected rather than
+   * called from a `useRouter()` here, the same reason `api` and `now` are
+   * props: this component is rendered from both the standalone schedules
+   * route and the project-detail page, and unit-tested with neither.
+   */
+  onOpenChat?: (schedule: ScheduleTask) => void;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -133,6 +155,7 @@ export function SchedulesPage({
   createIdempotencyKey = defaultIdempotencyKey,
   scope = null,
   projects = [],
+  onOpenChat,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -160,6 +183,14 @@ export function SchedulesPage({
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
   const [runningScheduleIds, setRunningScheduleIds] = useState<Set<string>>(new Set());
+
+  const { openSettings } = useSettingsModal();
+  const [resultTarget, setResultTarget] = useState<ScheduleTask | null>(null);
+  const [resultRun, setResultRun] = useState<ScheduleRun | null>(null);
+  const [resultStatus, setResultStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle',
+  );
+  const [resultError, setResultError] = useState<string | null>(null);
 
   const projectNameById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
@@ -494,6 +525,56 @@ export function SchedulesPage({
     }
   };
 
+  const shareSchedule = useCallback(
+    async (schedule: ScheduleTask) => {
+      // No schedule-sharing endpoint exists; this copies the same app link
+      // anyone with access to the account can already reach.
+      const path = scope ? `/chat/projects/${scope.projectId}` : '/chat/schedules';
+      const url = `${window.location.origin}${path}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(`Link to ${schedule.name} copied`);
+      } catch (error) {
+        toast.error(toUserMessage(error, 'Could not copy the link'));
+      }
+    },
+    [scope],
+  );
+
+  const openNotificationSettings = useCallback(() => {
+    openSettings('notifications');
+  }, [openSettings]);
+
+  const openResultPanel = useCallback(
+    async (schedule: ScheduleTask) => {
+      setResultTarget(schedule);
+      setResultRun(null);
+      setResultError(null);
+      setResultStatus('loading');
+      try {
+        const result = await api.listRuns(schedule.id, { limit: 1, offset: 0 });
+        setResultRun(result.runs[0] ?? null);
+        setResultStatus('success');
+      } catch (error) {
+        setResultStatus('error');
+        setResultError(errorMessage(error, 'The latest result could not be loaded.'));
+      }
+    },
+    [api],
+  );
+
+  const openChatAboutSchedule = useCallback(
+    (schedule: ScheduleTask) => {
+      if (onOpenChat) {
+        onOpenChat(schedule);
+        return;
+      }
+      const target = `/chat?starterPrompt=${encodeURIComponent(schedule.prompt ?? schedule.name)}`;
+      if (typeof window !== 'undefined') window.location.assign(target);
+    },
+    [onOpenChat],
+  );
+
   const sortedSchedules = useMemo(
     () =>
       [...schedules].sort((left, right) => {
@@ -780,6 +861,9 @@ export function SchedulesPage({
                   onToggleEnabled={(selected) => void toggleEnabled(selected)}
                   onRunNow={(selected) => void runNow(selected)}
                   onEdit={openEdit}
+                  onShare={(selected) => void shareSchedule(selected)}
+                  onOpenNotificationSettings={openNotificationSettings}
+                  onViewResult={(selected) => void openResultPanel(selected)}
                   onDelete={setDeleteTarget}
                   onToggleHistory={toggleHistory}
                   onRetryHistory={(selected) => void loadHistory(selected)}
@@ -911,6 +995,70 @@ export function SchedulesPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Sheet
+        open={resultTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setResultTarget(null);
+        }}
+      >
+        <SheetContent side="right" className="flex w-full flex-col gap-4 sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>{resultTarget?.name}</SheetTitle>
+            <SheetDescription>Latest result</SheetDescription>
+          </SheetHeader>
+
+          {resultStatus === 'loading' && (
+            <div role="status" className="space-y-3">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          )}
+
+          {resultStatus === 'error' && (
+            <div>
+              <p role="alert" className="text-sm text-danger">
+                {resultError}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => resultTarget && void openResultPanel(resultTarget)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {resultStatus === 'success' &&
+            (resultRun ? (
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(resultRun.startedAt, resultTarget?.timezone)} · {resultRun.status}
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {scheduleResultText(resultRun) ?? resultRun.error ?? 'No output was recorded.'}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">This schedule has not run yet.</p>
+            ))}
+
+          {resultTarget && (
+            <Button
+              type="button"
+              className="mt-auto"
+              onClick={() => openChatAboutSchedule(resultTarget)}
+            >
+              <MessageSquarePlus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Open chat
+            </Button>
+          )}
+        </SheetContent>
+      </Sheet>
     </Root>
   );
 }
