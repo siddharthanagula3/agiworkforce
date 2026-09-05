@@ -68,6 +68,8 @@ export {
   showsThinkingSwitch,
 } from './lib/thinkingPolicy';
 export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
+export { MODEL_ESCALATION_PREFIX, resolveModelEscalation } from './lib/modelEscalation';
+export type { ModelEscalation, ModelEscalationSource } from './lib/modelEscalation';
 export { matchMentionQuery } from './lib/mentionQuery';
 export type { MentionMatch } from './lib/mentionQuery';
 export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';

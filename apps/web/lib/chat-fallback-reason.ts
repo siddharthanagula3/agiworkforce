@@ -1,5 +1,24 @@
 export const FALLBACK_REASON_HEADER = 'X-AGI-Fallback-Reason';
 
+/**
+ * D-2026-09-05-06. Auto left the conversation's model on a failure signal. The
+ * pair is a receipt about Auto's own continuity, distinct from the substitution
+ * notice above, which is about the model the user picked.
+ */
+export const MOVED_FROM_MODEL_HEADER = 'X-AGI-Moved-From-Model';
+export const MOVED_REASON_HEADER = 'X-AGI-Moved-Reason';
+
+export function addModelEscalationHeaders(
+  headers: Record<string, string>,
+  source: { movedFromModel?: string | null; movedReason?: string | null },
+): void {
+  const movedFrom = source.movedFromModel?.trim();
+  if (!movedFrom) return;
+  headers[MOVED_FROM_MODEL_HEADER] = movedFrom.replace(/[^\w.:/-]/g, '_').slice(0, 120);
+  const reason = source.movedReason?.trim();
+  if (reason) headers[MOVED_REASON_HEADER] = reason.replace(/[^\w .,:/-]/g, '_').slice(0, 200);
+}
+
 export const FALLBACK_REASON_CODES = [
   'managed_failover',
   'openrouter_route_failover',
