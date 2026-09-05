@@ -30,7 +30,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mocks.accepted(userId),
 }));
-vi.mock('../../signup/TermsGate', () => ({
+vi.mock('../../signup/TermsGate', async (importOriginal) => ({
+  ...(await importOriginal()),
   TermsGate: ({ children, ...props }: { children: ReactNode }) => {
     mocks.gate(props);
     return <div data-testid="terms-gate">{children}</div>;
