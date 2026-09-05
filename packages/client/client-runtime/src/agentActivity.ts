@@ -156,6 +156,10 @@ export function isGenerationProgressEntry(
   return entry.kind === 'progress' && entry.progressId === GENERATION_PROGRESS_KIND;
 }
 
+export function isLocalPlaceholderActivityEntry(entry: AgentActivityEntry): boolean {
+  return entry.id === LOCAL_START_PROGRESS_ID || entry.id === PREPARING_PROGRESS_ID;
+}
+
 export function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
   return entries.some(isGenerationProgressEntry)
     ? entries.filter((entry) => !isGenerationProgressEntry(entry))
