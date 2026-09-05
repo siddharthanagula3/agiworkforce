@@ -1,6 +1,6 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
+import { useCurrentUser } from '@/lib/identity/client';
 
 /**
  * Whether the signed-in user holds the organisation admin/owner role.
@@ -12,7 +12,7 @@ import { useUser } from '@clerk/nextjs';
  * as an offer, the route's own server-side gate is the boundary.
  */
 export function useIsWorkspaceAdmin(): boolean {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded } = useCurrentUser();
   if (!isLoaded || !user) return false;
   const role = (user.publicMetadata as Record<string, unknown> | null | undefined)?.['role'];
   return role === 'admin' || role === 'owner';

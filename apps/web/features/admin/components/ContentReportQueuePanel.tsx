@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, Flag, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -28,7 +28,7 @@ function formatTimestamp(value: string): string {
 }
 
 export default function ContentReportQueuePanel() {
-  const { getToken } = useAuth();
+  const { getToken } = useSession();
   const [view, setView] = useState<'open' | 'resolved'>('open');
   const [reports, setReports] = useState<AdminContentReport[]>([]);
   const [counts, setCounts] = useState<AdminContentReportCounts | null>(null);

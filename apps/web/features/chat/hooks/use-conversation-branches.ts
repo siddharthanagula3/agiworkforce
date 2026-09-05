@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import {
   ManagedCloudConversationBranchesResponseSchema,
@@ -28,7 +28,7 @@ export interface UseConversationBranchesResult {
 export function useConversationBranches(
   conversationId: string | null,
 ): UseConversationBranchesResult {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useSession();
   const router = useRouter();
   const [groups, setGroups] = useState<ManagedCloudConversationBranchGroup[]>([]);
   const [branchingMessageId, setBranchingMessageId] = useState<string | null>(null);

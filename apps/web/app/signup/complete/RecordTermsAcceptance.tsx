@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
@@ -27,7 +27,7 @@ export function RecordTermsAcceptance({
   redirectTo: string;
   surface?: 'web-signup' | 'web-login';
 }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);

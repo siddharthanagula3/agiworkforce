@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useCurrentUser } from '@/lib/identity/client';
 import {
   Button,
   Card,
@@ -38,7 +38,7 @@ type Step = 1 | 2;
 
 export function OnboardingWizard() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user } = useCurrentUser();
   const [step, setStep] = useState<Step>(1);
   const [preferredName, setPreferredName] = useState('');
   const [workDescription, setWorkDescription] = useState('');

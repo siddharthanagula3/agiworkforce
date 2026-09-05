@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { logger } from '@shared/lib/logger';
 
 import {
@@ -21,7 +21,7 @@ const LOCAL_EDIT_PUSH_DELAY_MS = 2_000;
 const MAX_RETRY_DELAY_MS = 5 * 60_000;
 
 export function useArtifactCloudSync(): void {
-  const { getToken, isLoaded, userId } = useAuth();
+  const { getToken, isLoaded, userId } = useSession();
   const applyCloudArtifactDeltas = useArtifactsStore((state) => state.applyCloudArtifactDeltas);
   const collectArtifactPushBatch = useArtifactsStore((state) => state.collectArtifactPushBatch);
   const applyArtifactPushResult = useArtifactsStore((state) => state.applyArtifactPushResult);

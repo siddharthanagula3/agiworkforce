@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, RefreshCw, ShieldAlert, UserRoundCog } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useConfirm } from '@agiworkforce/ui';
@@ -40,7 +40,7 @@ function severityClass(severity: AdminSecurityEvent['severity']): string {
 }
 
 export default function SecurityOperationsPanel() {
-  const { getToken } = useAuth();
+  const { getToken } = useSession();
   const [dashboard, setDashboard] = useState<AdminSecurityDashboard | null>(null);
   const [events, setEvents] = useState<AdminSecurityEvent[]>([]);
   const [loading, setLoading] = useState(true);

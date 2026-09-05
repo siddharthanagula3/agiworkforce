@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useCurrentUser } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -189,7 +189,7 @@ export function withConnectorReturnPath(startPath: string, returnPath: string): 
 }
 
 export function useConnectors(): ConnectorStatus {
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn } = useCurrentUser();
   const router = useRouter();
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});

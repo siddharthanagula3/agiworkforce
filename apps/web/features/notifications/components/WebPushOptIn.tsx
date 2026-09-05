@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { Bell, X } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import {
@@ -40,7 +40,7 @@ function rememberDismissal(): void {
  * penalise and users deny permanently.
  */
 export function WebPushOptIn() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn } = useSession();
   const [offered, setOffered] = useState(false);
   const [busy, setBusy] = useState(false);
 

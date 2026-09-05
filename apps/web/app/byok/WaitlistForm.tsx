@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { usePathname } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 import { addCsrfHeaders, CsrfTokenError } from '@/lib/client/csrf';
@@ -19,7 +19,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access
   const emailId = useId();
   const errorId = useId();
   const pathname = usePathname();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
   const loginHref = `/login?redirectTo=${encodeURIComponent(pathname || '/waitlist')}`;
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');

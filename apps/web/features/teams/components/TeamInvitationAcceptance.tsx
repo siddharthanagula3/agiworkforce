@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
 import { z } from 'zod';
 import { Header } from '@shared/components/layout/Header';
@@ -31,7 +31,7 @@ function readErrorMessage(value: unknown, fallback: string): string {
 }
 
 export function TeamInvitationAcceptance() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
   const [pendingAction, setPendingAction] = useState<'accept' | 'decline' | null>(null);

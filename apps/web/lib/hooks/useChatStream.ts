@@ -18,7 +18,7 @@ import {
   type KnownInteractiveCardKind,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { toast } from 'sonner';
 import {
   useChatStore,
@@ -2398,7 +2398,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 }
 
 export function useChatStream(): UseChatStreamReturn {
-  const { getToken } = useAuth();
+  const { getToken } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
     Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
@@ -3189,7 +3189,7 @@ export function useChatStream(): UseChatStreamReturn {
 export function useResolveToolApproval(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
 ): UseChatStreamReturn['resolveToolApproval'] {
-  const { getToken } = useAuth();
+  const { getToken } = useSession();
   const abortControllers = sharedAbortControllers;
 
   return useCallback(

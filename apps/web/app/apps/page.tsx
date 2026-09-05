@@ -1,11 +1,11 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 import { SignedOutSurface } from '@shared/components/marketing/SignedOutSurface';
 
 export default function AppsPage() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded } = useSession();
 
   if (!isLoaded) return null;
 
