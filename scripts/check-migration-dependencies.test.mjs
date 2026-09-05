@@ -113,6 +113,26 @@ test('findMigrationDependencyReferences flags a file that names a new table', ()
   assert.deepEqual(refs[0].identifiers, ['widgets']);
 });
 
+test('findMigrationDependencyReferences ignores prose, comments and ui labels naming a table', () => {
+  const sandbox = makeSandbox({
+    'apps/web/lib/prose.ts':
+      "// widgets are counted here\nexport const label = 'Provisioned widgets (Enterprise)';\n",
+    'apps/web/lib/key.ts': 'export const notes = { widgets: "cascades" };\n',
+  });
+  const refs = findMigrationDependencyReferences({
+    migrations: [DRAFT_MIGRATION],
+    filePaths: [
+      path.join(sandbox, 'apps/web/lib/prose.ts'),
+      path.join(sandbox, 'apps/web/lib/key.ts'),
+    ],
+    repoRoot: sandbox,
+  });
+  assert.deepEqual(
+    refs.map((ref) => ref.file),
+    ['apps/web/lib/key.ts'],
+  );
+});
+
 test('findMigrationDependencyReferences flags a column only alongside its owning table', () => {
   const sandbox = makeSandbox({
     'apps/web/lib/both.ts': "export const q = 'select weight from gadgets';\n",
