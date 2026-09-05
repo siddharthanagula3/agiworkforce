@@ -1,5 +1,3 @@
-import type { NextMiddleware, NextRequest } from 'next/server';
-
 export const IDENTITY_PROVIDERS = ['clerk'] as const;
 
 export type IdentityProviderName = (typeof IDENTITY_PROVIDERS)[number];
@@ -39,9 +37,12 @@ export interface IdentityRequestAuth {
   getToken: () => Promise<string | null>;
 }
 
+export type IdentityEmailVerification = 'verified' | 'unverified' | 'unknown';
+
 export interface IdentityUser {
   id: string;
   primaryEmail: string | null;
+  primaryEmailVerification: IdentityEmailVerification;
   emails: readonly string[];
   firstName: string | null;
   lastName: string | null;
@@ -113,9 +114,22 @@ export interface SessionMiddlewareOptions {
   authorizedParties: readonly string[];
 }
 
-export type SessionMiddlewareHandler = (
-  request: NextRequest,
-) => Response | Promise<Response> | undefined | Promise<Response | undefined>;
+export type SessionMiddlewareResult = Response | undefined;
+
+export type SessionMiddlewareHandler<Request> = (
+  request: Request,
+) => SessionMiddlewareResult | Promise<SessionMiddlewareResult>;
+
+/**
+ * The provider's request-lifecycle entry point, shaped so the port never names
+ * the host framework's request type. The host supplies it, which keeps this
+ * package free of a framework dependency that would otherwise resolve to a
+ * second copy of that framework's types.
+ */
+export type IdentitySessionMiddleware<Request> = (
+  request: Request,
+  event: unknown,
+) => SessionMiddlewareResult | Promise<SessionMiddlewareResult>;
 
 /**
  * The request-lifecycle pieces a provider owns before any route runs: which
@@ -123,9 +137,12 @@ export type SessionMiddlewareHandler = (
  * which origins its scripts and network calls need in the page policy, and
  * which cookie proves a browser session exists.
  */
-export interface IdentityMiddlewareSupport {
-  createRouteMatcher(patterns: readonly string[]): (request: NextRequest) => boolean;
-  withSession(handler: SessionMiddlewareHandler, options: SessionMiddlewareOptions): NextMiddleware;
+export interface IdentityMiddlewareSupport<Request = unknown> {
+  createRouteMatcher(patterns: readonly string[]): (request: Request) => boolean;
+  withSession(
+    handler: SessionMiddlewareHandler<Request>,
+    options: SessionMiddlewareOptions,
+  ): IdentitySessionMiddleware<Request>;
   contentSecurityPolicyOrigins(): IdentityCspOrigins;
   signInRoute(): IdentitySignInRoute;
   hasBrowserSessionCookie(cookies: readonly IdentityCookie[]): boolean;
@@ -136,8 +153,10 @@ export interface IdentityMiddlewareSupport {
  * second implementation of this interface plus an entry in the composition
  * root; no route, guard or page changes.
  */
-export interface IdentityProvider {
+export interface IdentityProvider<Request = unknown> {
   readonly name: string;
+  /** Whether this deployment holds the credentials the provider needs to verify a token at all. */
+  canVerifySessionTokens(): boolean;
   authorizedParties(): readonly string[];
   verifySessionToken(
     token: string,
@@ -151,5 +170,5 @@ export interface IdentityProvider {
   getSession(sessionId: string): Promise<IdentitySession | null>;
   revokeSession(sessionId: string): Promise<void>;
   listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]>;
-  readonly middleware: IdentityMiddlewareSupport;
+  readonly middleware: IdentityMiddlewareSupport<Request>;
 }

@@ -1,10 +1,10 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import { UpgradeChooser } from './UpgradeChooser';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export default async function UpgradePage() {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) redirect('/login?redirectTo=%2Fupgrade');
 
   // Centred rather than pinned to the top: the terminal states of this page are

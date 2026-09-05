@@ -6,7 +6,6 @@ import { logger } from '@/lib/logger';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import { assertMfaPolicy } from '@/lib/mfa-policy-gate';
 import { assertIpAllowList } from '@/lib/ip-allow-list-gate';
-import { auth } from '@clerk/nextjs/server';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
@@ -15,7 +14,7 @@ import {
 } from '@/lib/server/developer-token';
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
+import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 
@@ -165,32 +164,22 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
     };
   }
 
-  const secretKey = process.env['CLERK_SECRET_KEY'];
-  if (!secretKey) return null;
+  const identity = getIdentityProvider();
 
-  let authorizedParties: string[];
+  let authorizedParties: readonly string[];
   try {
-    authorizedParties = getClerkAuthorizedParties();
+    authorizedParties = identity.authorizedParties();
   } catch (error) {
     logger.error(
       { error },
-      'Clerk authorized parties are not configured; rejecting bearer token unverified for origin',
+      'Identity authorized parties are not configured; rejecting bearer token unverified for origin',
     );
     return null;
   }
 
-  try {
-    const { verifyToken } = await import('@clerk/backend');
-    const claims = await verifyToken(token, { secretKey, authorizedParties });
-    const sub = claims.sub;
-    if (typeof sub === 'string' && sub.length > 0) {
-      return {
-        userId: sub,
-        email: (claims as Record<string, unknown>)['email'] as string | undefined,
-      };
-    }
-  } catch {
-    // Not a valid Clerk token
+  const claims = await identity.verifySessionToken(token, { authorizedParties });
+  if (claims) {
+    return { userId: claims.subject, email: claims.email ?? undefined };
   }
 
   return null;
@@ -256,7 +245,7 @@ export async function getClerkAuthUser(
     throw createError.unauthorized();
   }
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (userId) {
     await assertAccountActive(userId);
     setTenantScope({ userId });

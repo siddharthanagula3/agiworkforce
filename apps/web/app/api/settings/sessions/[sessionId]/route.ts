@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { clerkClient } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -10,8 +9,10 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from '../session-principal';
+import { getIdentityProvider } from '@/lib/server/identity';
+import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
-const CLERK_SESSION_ID = /^sess_[A-Za-z0-9]+$/;
+const PROVIDER_SESSION_ID = /^sess_[A-Za-z0-9]+$/;
 
 async function handleRevoke(
   request: NextRequest,
@@ -26,23 +27,23 @@ async function handleRevoke(
   if (csrfError) return csrfError as NextResponse;
 
   const { sessionId } = await context.params;
-  if (!CLERK_SESSION_ID.test(sessionId) || sessionId.length > 128) {
+  if (!PROVIDER_SESSION_ID.test(sessionId) || sessionId.length > 128) {
     throw createError.validation('Invalid session ID');
   }
 
-  const client = await clerkClient();
+  const identity = getIdentityProvider();
   let target;
   try {
-    target = await client.sessions.getSession(sessionId);
+    target = await identity.getSession(sessionId);
   } catch {
     throw createError.notFound('Session not found');
   }
-  if (target.userId !== userId) {
+  if (!target || target.userId !== userId) {
     throw createError.notFound('Session not found');
   }
 
-  if (target.status === 'active') {
-    await client.sessions.revokeSession(target.id);
+  if (target.status === SESSION_STATUS_ACTIVE) {
+    await identity.revokeSession(target.id);
   }
 
   const isCurrent = currentSessionId !== null && target.id === currentSessionId;
@@ -55,12 +56,13 @@ async function handleRevoke(
     detail: {
       resourceType: 'session',
       isCurrent,
-      status: target.status === 'active' ? 'revoked' : 'already_inactive',
+      status: target.status === SESSION_STATUS_ACTIVE ? 'revoked' : 'already_inactive',
     },
   });
 
   return NextResponse.json({
-    message: target.status === 'active' ? 'Session revoked' : 'Session was already inactive',
+    message:
+      target.status === SESSION_STATUS_ACTIVE ? 'Session revoked' : 'Session was already inactive',
     isCurrent,
   });
 }

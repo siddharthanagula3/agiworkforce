@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -16,6 +15,7 @@ import {
   isIntakeTableMissing,
   recordBetaApplication,
 } from '@/lib/server/beta-applications';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const optionalText = (max: number) =>
   z
@@ -51,7 +51,7 @@ async function handleApply(request: NextRequest) {
     );
   }
 
-  const { userId } = await auth().catch(() => ({ userId: null }));
+  const { subject: userId } = await getRequestIdentity().catch(() => ({ subject: null }));
   const data = parsed.data;
 
   let alreadyReviewed: boolean;

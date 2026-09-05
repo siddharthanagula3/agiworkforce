@@ -18,10 +18,11 @@ import type {
   SupportAccountPlan,
   SupportAccountUsage,
 } from './types';
+import { getIdentityUser } from '@/lib/server/identity';
 
 export const SUPPORT_API_KEY_CEILING = 20;
 
-const CLERK_LOOKUP_TIMEOUT_MS = 1500;
+const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 const PG_UNDEFINED_TABLE = '42P01';
 
 function isUndefinedTable(error: unknown): boolean {
@@ -118,26 +119,20 @@ async function resolveApiKeyCount(db: DatabaseAdapter, userId: string): Promise<
 
 async function resolveEmail(userId: string): Promise<SupportAccountEmail> {
   try {
-    const { clerkClient } = await import('@clerk/nextjs/server');
-    const client = await clerkClient();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const user = await Promise.race([
-      client.users.getUser(userId).finally(() => {
+      getIdentityUser(userId).finally(() => {
         if (timer) clearTimeout(timer);
       }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error('clerk getUser timeout')),
-          CLERK_LOOKUP_TIMEOUT_MS,
+          () => reject(new Error('identity user lookup timeout')),
+          IDENTITY_LOOKUP_TIMEOUT_MS,
         );
       }),
     ]);
-    const primary = user.primaryEmailAddress;
-    if (!primary) return { present: false, verified: 'unknown' };
-    const status = primary.verification?.status ?? null;
-    if (status === 'verified') return { present: true, verified: 'verified' };
-    if (status === null) return { present: true, verified: 'unknown' };
-    return { present: true, verified: 'unverified' };
+    if (!user?.primaryEmail) return { present: false, verified: 'unknown' };
+    return { present: true, verified: user.primaryEmailVerification };
   } catch (error) {
     logger.warn({ userId, error }, 'Support account context could not resolve email verification');
     return { present: false, verified: 'unknown' };

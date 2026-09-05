@@ -1,11 +1,11 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { getIdentityProvider } from '@/lib/server/identity';
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -44,30 +44,25 @@ export async function POST(request: NextRequest) {
   let verifiedUserId: string | null = null;
 
   if (parsed.token) {
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (!secretKey) {
-      logger.error({}, 'CLERK_SECRET_KEY not configured');
+    const identity = getIdentityProvider();
+    if (!identity.canVerifySessionTokens()) {
+      logger.error({}, 'The identity provider has no verification credentials configured');
       return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
     }
 
-    let authorizedParties: string[];
+    let authorizedParties: readonly string[];
     try {
-      authorizedParties = getClerkAuthorizedParties();
+      authorizedParties = identity.authorizedParties();
     } catch (error) {
-      logger.error({ error }, 'Clerk authorized parties are not configured');
+      logger.error({ error }, 'Identity authorized parties are not configured');
       return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
     }
 
-    try {
-      const { verifyToken } = await import('@clerk/backend');
-      const claims = await verifyToken(parsed.token, { secretKey, authorizedParties });
-      if (!claims.sub) {
-        return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
-      }
-      verifiedUserId = claims.sub;
-    } catch {
+    const claims = await identity.verifySessionToken(parsed.token, { authorizedParties });
+    if (!claims) {
       return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
     }
+    verifiedUserId = claims.subject;
   }
 
   if (parsed.refreshToken && !parsed.token) {

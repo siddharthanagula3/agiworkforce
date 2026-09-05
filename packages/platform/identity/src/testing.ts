@@ -1,5 +1,3 @@
-import type { NextMiddleware, NextRequest } from 'next/server';
-
 import {
   IdentityConfigError,
   type IdentityClaims,
@@ -11,6 +9,7 @@ import {
   type IdentityRequestAuth,
   type IdentitySession,
   type IdentitySessionPage,
+  type IdentitySessionMiddleware,
   type IdentitySignInRoute,
   type IdentityUser,
   type ListUserSessionsOptions,
@@ -53,6 +52,7 @@ export interface FakeIdentityCalls {
 function buildUser(input: FakeIdentityUserInput): IdentityUser {
   return {
     primaryEmail: null,
+    primaryEmailVerification: 'unknown',
     emails: [],
     firstName: null,
     lastName: null,
@@ -82,7 +82,9 @@ const FAKE_AUTHORIZED_PARTY = 'https://app.test';
  * needs, rather than reproducing one vendor SDK's module shape, which is how a
  * mock drifts from the thing it stands for.
  */
-export class FakeIdentityProvider implements IdentityProvider {
+export class FakeIdentityProvider<
+  Request extends { nextUrl: { pathname: string } } = { nextUrl: { pathname: string } },
+> implements IdentityProvider<Request> {
   readonly name = FAKE_PROVIDER_NAME;
 
   readonly calls: FakeIdentityCalls = {
@@ -100,6 +102,10 @@ export class FakeIdentityProvider implements IdentityProvider {
   private readonly tokens = new Map<string, IdentityClaims>();
   private matchedRoutes: readonly string[] = [];
   private parties: readonly string[] = [FAKE_AUTHORIZED_PARTY];
+
+  canVerifySessionTokens(): boolean {
+    return true;
+  }
 
   authorizedParties(): readonly string[] {
     if (this.parties.length === 0) {
@@ -244,15 +250,18 @@ export class FakeIdentityProvider implements IdentityProvider {
     return this.memberships.get(userId) ?? [];
   }
 
-  readonly middleware: IdentityMiddlewareSupport = {
+  readonly middleware: IdentityMiddlewareSupport<Request> = {
     createRouteMatcher:
       (_patterns: readonly string[]) =>
-      (request: NextRequest): boolean =>
+      (request: Request): boolean =>
         this.matchedRoutes.includes(request.nextUrl.pathname),
     withSession:
-      (handler: SessionMiddlewareHandler, _options: SessionMiddlewareOptions): NextMiddleware =>
+      (
+        handler: SessionMiddlewareHandler<Request>,
+        _options: SessionMiddlewareOptions,
+      ): IdentitySessionMiddleware<Request> =>
       (request) =>
-        handler(request as NextRequest),
+        handler(request),
     contentSecurityPolicyOrigins: (): IdentityCspOrigins => ({
       script: [FAKE_SCRIPT_ORIGIN],
       connect: [FAKE_SCRIPT_ORIGIN],
@@ -266,6 +275,8 @@ export class FakeIdentityProvider implements IdentityProvider {
   };
 }
 
-export function createFakeIdentityProvider(): FakeIdentityProvider {
-  return new FakeIdentityProvider();
+export function createFakeIdentityProvider<
+  Request extends { nextUrl: { pathname: string } } = { nextUrl: { pathname: string } },
+>(): FakeIdentityProvider<Request> {
+  return new FakeIdentityProvider<Request>();
 }

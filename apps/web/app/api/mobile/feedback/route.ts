@@ -1,6 +1,4 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -8,6 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const FeedbackSchema = z.object({
   type: z.enum(['bug', 'feature', 'general']),
@@ -28,7 +27,7 @@ async function handleSubmitFeedback(request: NextRequest) {
   }
   const { type, message } = parsed.data;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   const db = getNeonDb();
   try {

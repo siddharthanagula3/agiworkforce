@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -7,6 +6,7 @@ import {
 } from '@agiworkforce/types';
 
 import { UpgradeOrderScreen } from './UpgradeOrderScreen';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export default async function UpgradePlanPage({
   params,
@@ -23,7 +23,7 @@ export default async function UpgradePlanPage({
   if (isPerSeatBillingPlan(plan)) redirect('/pricing');
   if (!(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(plan)) notFound();
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) redirect(`/login?redirectTo=${encodeURIComponent(`/upgrade/${plan}`)}`);
 
   return (

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -18,6 +17,7 @@ import {
   type ConsentSurface,
   type ConsentPurpose,
 } from '@/lib/server/consent-records';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 type PublicWaitlistSource = 'website' | 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
@@ -72,7 +72,7 @@ function parseConsentDecisions(value: unknown): ConsentDecision[] {
 
 async function getOptionalUserId(): Promise<string | null> {
   try {
-    const { userId } = await auth();
+    const { subject: userId } = await getRequestIdentity();
     return userId ?? null;
   } catch {
     return null;

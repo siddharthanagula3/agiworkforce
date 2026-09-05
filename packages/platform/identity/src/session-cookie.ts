@@ -1,5 +1,7 @@
 import type { IdentityCookie } from './types';
 
+export type { IdentityCookie };
+
 export const CLERK_SESSION_COOKIE = '__session';
 export const CLERK_CLIENT_UAT_COOKIE = '__client_uat';
 
