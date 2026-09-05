@@ -14,6 +14,7 @@ import {
 } from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
 import * as telemetry from './core/telemetry';
+import { installGlobalErrorReporting } from './core/errorReporting';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache } from './integrations/tierResolver';
@@ -39,6 +40,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   runBoot('telemetry', () => {
     context.subscriptions.push(telemetry.activate(context));
+  });
+
+  runBoot('error-reporting', () => {
+    context.subscriptions.push(installGlobalErrorReporting());
   });
 
   runBoot('model-metrics', () => {
