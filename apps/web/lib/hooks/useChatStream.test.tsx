@@ -1745,6 +1745,68 @@ describe('useChatStream', () => {
       ).toMatchObject({ status: 'cancelled', stopReason: 'cancelled' });
     });
 
+    it('lands a stopped turn whose first save is rate-limited, with no toast', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const saveBodies: Array<Record<string, unknown>> = [];
+      let saveAttempts = 0;
+      let providerStarted!: () => void;
+      const providerStartedPromise = new Promise<void>((resolve) => {
+        providerStarted = resolve;
+      });
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          if (body['role'] === 'assistant') {
+            saveAttempts += 1;
+            if (saveAttempts === 1) {
+              return new Response(JSON.stringify({ error: 'rate limited' }), { status: 429 });
+            }
+          }
+          saveBodies.push(body);
+          return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+        }
+        if (url.includes('/api/llm/')) {
+          providerStarted();
+          return await new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('The user aborted a request.', 'AbortError')),
+              { once: true },
+            );
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      try {
+        const { result } = renderHook(() => useChatStream());
+        let send!: Promise<boolean>;
+        act(() => {
+          send = result.current.sendMessage('question', { conversationId: PERSISTED_CONV.id });
+        });
+        await providerStartedPromise;
+
+        act(() => result.current.stopGeneration(PERSISTED_CONV.id));
+        await act(async () => {
+          await send;
+        });
+
+        await vi.waitFor(() =>
+          expect(saveBodies.some((body) => body['role'] === 'assistant')).toBe(true),
+        );
+        expect(saveAttempts).toBeGreaterThan(1);
+        expect(errorLog).not.toHaveBeenCalled();
+      } finally {
+        errorLog.mockRestore();
+      }
+    });
+
     it('persists a cancelled assistant row when stopped before the first response byte', async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],
