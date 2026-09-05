@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/types';
 import * as modelCatalogRegistry from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { getOptionalEnv } from '@shared/utils/env';
 
 export function isCacheTokensDisjointFromInput(providerId: string | null | undefined): boolean {
   if (!providerId) return false;
@@ -98,6 +99,61 @@ const FALLBACK_PRICING: ModelPricing = {
   inputCostPer1MTokens: 1.0,
   outputCostPer1MTokens: 4.0,
 };
+
+const UNPRICED_MODEL_POLICY_ENV_VAR = 'AGI_PRICING_UNPRICED_POLICY';
+const UNPRICED_MODEL_POLICY_WARN = 'warn';
+const UNPRICED_MODEL_POLICY_REFUSE = 'refuse';
+type UnpricedModelPolicy = typeof UNPRICED_MODEL_POLICY_WARN | typeof UNPRICED_MODEL_POLICY_REFUSE;
+
+export class UnpricedModelError extends Error {
+  readonly code = 'unpriced_model';
+  readonly provider: string;
+  readonly model: string;
+
+  constructor(provider: string, model: string) {
+    super(
+      `No registry, route or provider-default price is declared for ${provider}/${model}. Set ` +
+        `${UNPRICED_MODEL_POLICY_ENV_VAR}=${UNPRICED_MODEL_POLICY_WARN} to allow emergency ` +
+        'fallback pricing while the catalog is repaired.',
+    );
+    this.name = 'UnpricedModelError';
+    this.provider = provider;
+    this.model = model;
+  }
+}
+
+export function resolveUnpricedModelPolicy(): UnpricedModelPolicy {
+  return getOptionalEnv(UNPRICED_MODEL_POLICY_ENV_VAR) === UNPRICED_MODEL_POLICY_WARN
+    ? UNPRICED_MODEL_POLICY_WARN
+    : UNPRICED_MODEL_POLICY_REFUSE;
+}
+
+let unpricedModelFallbackCount = 0;
+
+export function getUnpricedModelFallbackCount(): number {
+  return unpricedModelFallbackCount;
+}
+
+export function resetUnpricedModelFallbackCount(): void {
+  unpricedModelFallbackCount = 0;
+}
+
+function resolveUnpricedFallback(provider: string, model: string): ModelPricing {
+  if (resolveUnpricedModelPolicy() === UNPRICED_MODEL_POLICY_WARN) {
+    unpricedModelFallbackCount += 1;
+    logger.warn(
+      {
+        provider,
+        model,
+        event: 'llm_cost_calculator_unpriced_model_fallback',
+        fallbackCount: unpricedModelFallbackCount,
+      },
+      'LLM cost calculator: no price declared for this model, applying emergency fallback pricing',
+    );
+    return FALLBACK_PRICING;
+  }
+  throw new UnpricedModelError(provider, model);
+}
 const runtimePricingOverrides: Record<string, ModelPricing> = {};
 const PROVIDER_ALIASES: Record<string, string> = {
   grok: 'xai',
@@ -229,6 +285,7 @@ export class LLMCostCalculator {
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
       return totalCostDollars;
     } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
       return 0;
     }
@@ -255,7 +312,8 @@ export class LLMCostCalculator {
       );
       return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens, routeId))
         .write5m;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
   }
@@ -281,7 +339,8 @@ export class LLMCostCalculator {
       );
       return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens, routeId))
         .read;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
   }
@@ -392,16 +451,17 @@ export class LLMCostCalculator {
         }
       }
 
-      logger.debug({ provider, model }, 'LLM cost calculator: Using ultimate fallback pricing');
-      return FALLBACK_PRICING;
-    } catch {
+      return resolveUnpricedFallback(provider, model);
+    } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       return FALLBACK_PRICING;
     }
   }
 
   /**
-   * Estimate cost before making request (for pre-check)
-   * @throws Never - returns 0 on error for safety
+   * Estimate cost before making request (for pre-check).
+   * @throws UnpricedModelError when the model cannot be priced and
+   *   AGI_PRICING_UNPRICED_POLICY is not set to warn.
    */
   static estimateCost(
     provider: string,
@@ -434,6 +494,7 @@ export class LLMCostCalculator {
         now,
       );
     } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       logger.error({ error, provider, model }, 'LLM cost calculator: Error in estimateCost');
       return 0;
     }
@@ -459,7 +520,8 @@ export class LLMCostCalculator {
         routeId,
       );
       return this.getPricing(provider, model, now, tierInputTokens, routeId).inputCostPer1MTokens;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
   }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   listCanonicalModels,
@@ -9,7 +9,10 @@ import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
 import {
   LLMCostCalculator,
+  UnpricedModelError,
+  getUnpricedModelFallbackCount,
   isCacheTokensDisjointFromInput,
+  resetUnpricedModelFallbackCount,
   setRouteRegistryPricingLookup,
 } from '../llm-cost-calculator';
 
@@ -759,6 +762,118 @@ describe('LLMCostCalculator, live registry wiring', () => {
     expect(pricing.outputCostPer1MTokens).toBe(canonical.outputCost);
     expect(pricing.cachedWrite1hCostPer1MTokens).toBe(canonical.cached_write_1h);
     expect(pricing.cacheTokensDisjointFromInput).toBe(true);
+  });
+});
+
+describe('AGI_PRICING_UNPRICED_POLICY, refuse (default)', () => {
+  const UNPRICED_PROVIDER = 'definitely-not-a-real-provider';
+  const UNPRICED_MODEL = 'definitely-not-a-real-model';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('throws UnpricedModelError from getPricing instead of returning a literal price', () => {
+    expect(() => LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL)).toThrow(
+      UnpricedModelError,
+    );
+  });
+
+  it('throws from calculateCostDollars, calculateCost and calculateCostMicrousd', () => {
+    const usage = { promptTokens: 100, completionTokens: 50, totalTokens: 150 };
+    expect(() =>
+      LLMCostCalculator.calculateCostDollars(UNPRICED_PROVIDER, UNPRICED_MODEL, usage),
+    ).toThrow(UnpricedModelError);
+    expect(() => LLMCostCalculator.calculateCost(UNPRICED_PROVIDER, UNPRICED_MODEL, usage)).toThrow(
+      UnpricedModelError,
+    );
+    expect(() =>
+      LLMCostCalculator.calculateCostMicrousd(UNPRICED_PROVIDER, UNPRICED_MODEL, usage),
+    ).toThrow(UnpricedModelError);
+  });
+
+  it('throws from estimateCost, the pre-flight admission path', () => {
+    expect(() => LLMCostCalculator.estimateCost(UNPRICED_PROVIDER, UNPRICED_MODEL, 100)).toThrow(
+      UnpricedModelError,
+    );
+  });
+
+  it('throws from the per-Mtok rate readers', () => {
+    expect(() => LLMCostCalculator.getInputCostPerMtok(UNPRICED_PROVIDER, UNPRICED_MODEL)).toThrow(
+      UnpricedModelError,
+    );
+    expect(() =>
+      LLMCostCalculator.getCacheReadCostPerMtok(UNPRICED_PROVIDER, UNPRICED_MODEL),
+    ).toThrow(UnpricedModelError);
+    expect(() =>
+      LLMCostCalculator.getCacheWriteCostPerMtok(UNPRICED_PROVIDER, UNPRICED_MODEL),
+    ).toThrow(UnpricedModelError);
+  });
+
+  it('names the provider and model on the thrown error', () => {
+    try {
+      LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL);
+      expect.unreachable('expected getPricing to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnpricedModelError);
+      expect((error as UnpricedModelError).provider).toBe(UNPRICED_PROVIDER);
+      expect((error as UnpricedModelError).model).toBe(UNPRICED_MODEL);
+      expect((error as UnpricedModelError).code).toBe('unpriced_model');
+    }
+  });
+
+  it('never returns the literal fallback dollar figures for an unpriced model', () => {
+    vi.stubEnv('AGI_PRICING_UNPRICED_POLICY', 'warn');
+    const fallback = LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL);
+    vi.unstubAllEnvs();
+    expect(() => LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL)).toThrow();
+    expect(fallback.inputCostPer1MTokens).toBe(1.0);
+    expect(fallback.outputCostPer1MTokens).toBe(4.0);
+  });
+});
+
+describe('AGI_PRICING_UNPRICED_POLICY=warn', () => {
+  const UNPRICED_PROVIDER = 'definitely-not-a-real-provider';
+  const UNPRICED_MODEL = 'definitely-not-a-real-model';
+
+  beforeEach(() => {
+    resetUnpricedModelFallbackCount();
+    vi.stubEnv('AGI_PRICING_UNPRICED_POLICY', 'warn');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('applies the emergency fallback price instead of throwing', () => {
+    const pricing = LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL);
+    expect(pricing.inputCostPer1MTokens).toBe(1.0);
+    expect(pricing.outputCostPer1MTokens).toBe(4.0);
+  });
+
+  it('lets calculateCostDollars proceed and price at the fallback rate', () => {
+    const usage = { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 };
+    const dollars = LLMCostCalculator.calculateCostDollars(
+      UNPRICED_PROVIDER,
+      UNPRICED_MODEL,
+      usage,
+    );
+    expect(dollars).toBe(5.0);
+  });
+
+  it('increments the fallback counter every time an unpriced model is resolved', () => {
+    expect(getUnpricedModelFallbackCount()).toBe(0);
+    LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL);
+    expect(getUnpricedModelFallbackCount()).toBe(1);
+    LLMCostCalculator.getPricing(UNPRICED_PROVIDER, `${UNPRICED_MODEL}-2`);
+    expect(getUnpricedModelFallbackCount()).toBe(2);
+  });
+
+  it('an unrecognized policy value is treated as refuse, not warn', () => {
+    vi.stubEnv('AGI_PRICING_UNPRICED_POLICY', 'yes-please');
+    expect(() => LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL)).toThrow(
+      UnpricedModelError,
+    );
   });
 });
 
