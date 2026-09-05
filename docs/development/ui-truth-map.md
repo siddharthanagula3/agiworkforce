@@ -68,9 +68,14 @@ Landing, /features/\*, /use-cases/\*, /solutions, /pricing, /enterprise,
 /download, /downloads, /docs, /api-docs, /api-reference, /documentation,
 /blog, /changelog, /customers, /partners, /press, /careers, /about, /contact,
 /contact-sales, /faq, /help, /support, /status, /trust, /security, /sla,
-/legal and the policy pages. Status: unverified as a set; the rule is that
-nothing marketed may be broken in the product (audit after the product
-routes).
+/legal and the policy pages. Status: 34 navigation linked routes swept in the
+browser on 2026-09-05 (every route 200, no broken images, no horizontal
+overflow, no console errors except /download's release endpoints locally);
+the shared page system, the six surface frames, the header groups and the
+landing sections were reviewed by the lead in both themes. The rule stands:
+nothing marketed may be broken in the product; the six frames show only
+capabilities that exist (tool approvals, search sources, memory, diffs,
+route receipts).
 
 ## Development routes
 
