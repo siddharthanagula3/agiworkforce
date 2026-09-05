@@ -34,6 +34,9 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: vi.fn(async () => undefined),
+  BLOCK_APPEAL_PATH: '/support',
+  getClientIp: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
 }));
 
 vi.mock('@/lib/server/pseudonymize', () => ({
