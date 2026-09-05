@@ -570,6 +570,9 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
             <div className={styles['errorBanner']} role="alert">
               <AlertTriangle size={17} />
               <span>{error}</span>
+              <button className={styles['ghostButton']} onClick={() => void loadSessions()}>
+                <RefreshCw size={14} /> Retry
+              </button>
               <button className={styles['ghostButton']} onClick={() => setError(null)}>
                 <X size={14} /> Dismiss
               </button>

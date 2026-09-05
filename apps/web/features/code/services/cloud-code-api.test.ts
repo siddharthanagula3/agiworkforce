@@ -214,4 +214,16 @@ describe('cloudCodeApi', () => {
       }),
     ).rejects.toMatchObject({ message: 'Upgrade required.', status: 403, code: 'FORBIDDEN' });
   });
+
+  it('drops the rate limiter own wording so a 429 is machine-shaped for the status ladder', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json(
+        { error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please wait.' } },
+        429,
+      ),
+    );
+    const api = createCloudCodeApi({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await expect(api.list()).rejects.toMatchObject({ message: 'HTTP 429', status: 429 });
+  });
 });

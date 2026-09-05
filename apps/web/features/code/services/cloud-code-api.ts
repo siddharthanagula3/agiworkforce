@@ -199,6 +199,12 @@ async function responseBody(response: Response): Promise<unknown> {
 }
 
 function apiError(body: unknown, status: number): CloudCodeApiError {
+  // A rate limit carries no detail the reader can act on beyond the status
+  // itself, so the server's own wording is dropped here rather than shown
+  // verbatim: a bare "HTTP 429" message is machine-shaped, which routes
+  // toUserMessage through the shared httpStatusMessage ladder instead of the
+  // "own words win" branch, landing on the same copy Library shows for a 429.
+  if (status === 429) return new CloudCodeApiError(`HTTP ${status}`, status);
   const parsed = z
     .object({
       error: z
