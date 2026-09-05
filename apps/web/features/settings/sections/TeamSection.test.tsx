@@ -212,6 +212,50 @@ describe('TeamSection', () => {
     expect(screen.getByRole('option', { name: 'Invited Team · Member' })).toBeVisible();
   });
 
+  it('renders the workspace picker as a label-left row, not a titled card', () => {
+    state.workspaces = [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Invited Team',
+        slug: 'invited-team',
+        role: 'member',
+        joinedAt: '2026-08-11T00:00:00.000Z',
+      },
+    ];
+
+    render(<TeamSection />);
+
+    expect(screen.getByText('Workspace')).toBeVisible();
+    expect(screen.queryByText('Active workspace')).toBeNull();
+    expect(screen.queryByText(/Switching reloads tenant-owned/)).toBeNull();
+  });
+
+  it('shows the plan gate as one muted line instead of a bordered notice', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Demo Team',
+      slug: 'demo-team',
+      plan: 'free',
+      memberCount: 1,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+    state.access = {
+      plan: 'free',
+      canManageTeam: false,
+      maxMembers: null,
+      seatsConsumed: null,
+      seatsAvailable: null,
+      seatSource: 'unknown',
+    };
+
+    render(<TeamSection />);
+
+    const notice = screen.getByText(/This workspace is on the Free plan/i);
+    expect(notice.tagName).toBe('P');
+    expect(notice.closest('[role="alert"]')).toBe(notice);
+  });
+
   it('shows an honest gated empty state to plans without team_admin', () => {
     state.access = {
       plan: 'max_15x',
