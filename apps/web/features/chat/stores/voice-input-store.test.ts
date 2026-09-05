@@ -30,7 +30,7 @@ function stubFetch(transcribe: () => unknown) {
 function transcribeCall(mock: ReturnType<typeof stubFetch>) {
   const call = mock.mock.calls.find(([url]) => url === TRANSCRIBE_ENDPOINT);
   if (!call) throw new Error('the transcription endpoint was never called');
-  return call;
+  return call as unknown as [string, RequestInit | undefined];
 }
 
 class MockMediaRecorder {

@@ -2528,10 +2528,11 @@ export async function processRequest(
   // does not stop every member's chat. Every candidate is ungoverned for the
   // same reason, so only a genuinely governed workspace pays the extra read.
   let workspaceModelPolicy: ModelAccessPolicy | null = null;
-  if (modelAccess.code !== 'ungoverned' && scopedForPolicy.organizationId) {
+  const policyOrganizationId = scopedForPolicy.organizationId;
+  if (modelAccess.code !== 'ungoverned' && policyOrganizationId) {
     try {
       workspaceModelPolicy = await timePhase(CHAT_TURN_PHASE.modelPolicy, () =>
-        readModelPolicy(scopedForPolicy.db, scopedForPolicy.organizationId),
+        readModelPolicy(scopedForPolicy.db, policyOrganizationId),
       );
     } catch (error) {
       logger.error(
@@ -3298,7 +3299,7 @@ export async function processRequest(
 
     const customInstructionsPreamble = await timePhase(
       CHAT_TURN_PHASE.customInstructions,
-      () => customInstructionsPromise,
+      () => customInstructionsPromise ?? Promise.resolve(null),
     );
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,

@@ -959,8 +959,9 @@ describe('ChatComposerNew', () => {
     const leading = plusButton.closest('.chat-composer-leading-end');
     expect(leading).not.toBeNull();
     expect(leading?.contains(screen.getByTestId('composer-work-mode'))).toBe(true);
+    expect(field).not.toBeNull();
     expect(
-      field?.compareDocumentPosition(leading!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      field!.compareDocumentPosition(leading!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
