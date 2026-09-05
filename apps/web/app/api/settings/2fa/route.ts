@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { TWO_FACTOR_SCOPE } from './lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { claimTotpStep } from '@/lib/server/two-factor-replay';
@@ -13,6 +13,8 @@ import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/u
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
 interface TwoFactorRow {
   user_id: string;
@@ -26,8 +28,7 @@ interface TwoFactorRow {
   updated_at: string;
 }
 
-async function getTwoFactorRow(userId: string): Promise<TwoFactorRow | null> {
-  const db = getNeonDb();
+async function getTwoFactorRow(db: ScopedDb, userId: string): Promise<TwoFactorRow | null> {
   const [row] = await db.query<TwoFactorRow>(
     'select * from user_two_factor where user_id = $1 limit 1',
     [userId],
@@ -39,8 +40,8 @@ async function handleGet2FAStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
-  const row = await getTwoFactorRow(userId);
+  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const row = await getTwoFactorRow(db, userId);
 
   if (!row || !row.enabled) {
     return NextResponse.json({ enabled: false, backup_codes_remaining: 0 });
@@ -57,7 +58,7 @@ async function handleDisable2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
+  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -68,7 +69,7 @@ async function handleDisable2FA(request: NextRequest) {
     throw createError.badRequest('code is required to disable 2FA');
   }
 
-  const row = await getTwoFactorRow(userId);
+  const row = await getTwoFactorRow(db, userId);
   if (!row || !row.enabled) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
@@ -76,8 +77,6 @@ async function handleDisable2FA(request: NextRequest) {
   const secret = openTotpSecret(row.totp_secret_enc);
   const step = await verifyTOTPStep(secret, code);
   let backupCodeIndex = -1;
-
-  const db = getNeonDb();
 
   if (step === null) {
     backupCodeIndex = await verifyBackupCode(code, row.backup_codes_hashed ?? []);

@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/user-preferences';
@@ -24,7 +24,7 @@ async function handleValidateTOTP(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
+  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -35,7 +35,6 @@ async function handleValidateTOTP(request: NextRequest) {
     throw createError.badRequest('code is required');
   }
 
-  const db = getNeonDb();
   const [row] = await db.query<TwoFactorRow>(
     'select totp_secret_enc, backup_codes_hashed, enabled, last_totp_step from user_two_factor where user_id = $1 limit 1',
     [userId],

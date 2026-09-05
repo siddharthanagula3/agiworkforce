@@ -15,8 +15,12 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.query(...args) })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: 'user-1',
+    organizationId: null,
+  })),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -35,7 +39,7 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { GET, DELETE } from './route';
 
 const ROW = {
@@ -84,8 +88,9 @@ describe('GET /api/settings/2fa', () => {
 
     await GET(getRequest());
 
-    expect(getClerkAuthUser).toHaveBeenCalledWith(expect.anything(), {
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
       mfaGateExemptForOwner: true,
+      resolveOrganization: false,
     });
   });
 });
@@ -107,8 +112,9 @@ describe('DELETE /api/settings/2fa', () => {
 
     await DELETE(deleteRequest('123456'));
 
-    expect(getClerkAuthUser).toHaveBeenCalledWith(expect.anything(), {
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
       mfaGateExemptForOwner: true,
+      resolveOrganization: false,
     });
   });
 });
