@@ -204,10 +204,13 @@ export async function buildNonStreamResponse(
       Date.now(),
     );
     if (processed.conversationId) {
+      const routePricing = getRoutePricing(routeId);
       void recordServedRouteAffinity({
         conversationId: processed.conversationId,
         routeId,
-        ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+        ttlMs: routeAffinityTtlMs(routePricing?.cacheClass),
+        ...(routePricing?.modelKey ? { modelKey: routePricing.modelKey } : {}),
+        taskType: processed.resolvedTaskType,
       });
     }
   } catch (error) {

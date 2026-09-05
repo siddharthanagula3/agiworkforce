@@ -1900,13 +1900,16 @@ function recordProviderStepSuccess(input: {
       input.nowMs,
     );
     if (!input.processed.conversationId) return;
+    const routePricing = getRoutePricing(routeId);
     void recordServedRouteAffinity({
       conversationId: input.processed.conversationId,
       routeId,
-      ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+      ttlMs: routeAffinityTtlMs(routePricing?.cacheClass),
       ...(lastObservation?.upstreamProvider
         ? { upstreamProvider: lastObservation.upstreamProvider }
         : {}),
+      ...(routePricing?.modelKey ? { modelKey: routePricing.modelKey } : {}),
+      taskType: input.processed.resolvedTaskType,
     });
   } catch (error) {
     logger.warn({ error }, '[tool-loop] route outcome / affinity was not recorded');
