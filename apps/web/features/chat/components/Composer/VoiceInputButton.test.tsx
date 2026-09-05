@@ -1,102 +1,59 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { VoiceInputButton } from './VoiceInputButton';
-import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 
-class MockMediaRecorder {
-  ondataavailable: ((e: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
-  start = vi.fn();
-  stop = vi.fn(() => {
-    this.onstop?.();
-  });
-
-  static isTypeSupported(_type: string): boolean {
-    return true;
-  }
-}
-
-function resetStore() {
-  useVoiceInputStore.setState({
-    mode: 'idle',
-    transcript: '',
-    error: null,
-    language: 'en-US',
-    preferServerTranscription: false,
+function setMediaDevices(value: unknown) {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value,
+    writable: true,
+    configurable: true,
   });
 }
 
-describe('VoiceInputButton (Composer) · error recovery', () => {
-  let getUserMedia: ReturnType<typeof vi.fn>;
-
+describe('VoiceInputButton · dictation trigger', () => {
   beforeEach(() => {
-    resetStore();
-    Object.defineProperty(window, 'SpeechRecognition', {
-      value: undefined,
-      writable: true,
-      configurable: true,
-    });
-    Object.defineProperty(window, 'webkitSpeechRecognition', {
-      value: undefined,
-      writable: true,
-      configurable: true,
-    });
-    Object.defineProperty(window, 'MediaRecorder', {
-      value: MockMediaRecorder,
-      writable: true,
-      configurable: true,
-    });
-    getUserMedia = vi.fn();
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia },
-      writable: true,
-      configurable: true,
-    });
+    setMediaDevices({ getUserMedia: vi.fn() });
   });
 
   afterEach(() => {
-    resetStore();
-    Object.defineProperty(window, 'MediaRecorder', {
-      value: undefined,
-      writable: true,
-      configurable: true,
+    setMediaDevices(undefined);
+  });
+
+  it('opens dictation on click', () => {
+    const onStart = vi.fn();
+    render(<VoiceInputButton onStart={onStart} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice input' }));
+
+    expect(onStart).toHaveBeenCalledOnce();
+  });
+
+  it('reports the dictation bar as pressed while it is open', () => {
+    render(<VoiceInputButton onStart={vi.fn()} active />);
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('does not open dictation while the composer is disabled', () => {
+    const onStart = vi.fn();
+    render(<VoiceInputButton onStart={onStart} disabled />);
+
+    const button = screen.getByRole('button');
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it('explains itself instead of opening when capture is unsupported', () => {
+    setMediaDevices(undefined);
+    const onStart = vi.fn();
+    render(<VoiceInputButton onStart={onStart} />);
+
+    const button = screen.getByRole('button', {
+      name: 'Voice input not supported in this browser',
     });
-  });
-
-  it('recovers from error mode on click instead of staying stuck', async () => {
-    getUserMedia.mockRejectedValueOnce(new DOMException('Permission denied', 'NotAllowedError'));
-    const mockStream = {
-      getTracks: () => [{ stop: vi.fn() }],
-    } as unknown as MediaStream;
-    getUserMedia.mockResolvedValueOnce(mockStream);
-
-    render(<VoiceInputButton onTranscript={vi.fn()} />);
-    const button = screen.getByRole('button');
-
     fireEvent.click(button);
-    await waitFor(() => expect(useVoiceInputStore.getState().mode).toBe('error'));
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(button);
-    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(useVoiceInputStore.getState().mode).toBe('listening'));
-    expect(useVoiceInputStore.getState().error).toBeNull();
-  });
-
-  it('does not retry while listening (click stops instead)', async () => {
-    const mockStream = {
-      getTracks: () => [{ stop: vi.fn() }],
-    } as unknown as MediaStream;
-    getUserMedia.mockResolvedValue(mockStream);
-
-    render(<VoiceInputButton onTranscript={vi.fn()} />);
-    const button = screen.getByRole('button');
-
-    fireEvent.click(button);
-    await waitFor(() => expect(useVoiceInputStore.getState().mode).toBe('listening'));
-
-    fireEvent.click(button);
-    await waitFor(() => expect(useVoiceInputStore.getState().mode).toBe('idle'));
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(onStart).not.toHaveBeenCalled();
+    expect(screen.getByRole('tooltip')).toHaveTextContent('not supported in this browser');
   });
 });

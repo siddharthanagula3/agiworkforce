@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
+
+const STORE_NAME = 'agi-web-voice-input';
+const STORE_VERSION = 1;
+const DEFAULT_LANGUAGE = 'en-US';
+const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
+const CSRF_HEADER = 'x-csrf-token';
+const RECORDER_TIMESLICE_MS = 100;
 
 export type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'error';
 
@@ -11,7 +19,7 @@ export interface VoiceInputState {
   transcript: string;
   error: string | null;
   language: string;
-  preferServerTranscription: boolean;
+  captureStream: MediaStream | null;
 }
 
 interface VoiceInputActions {
@@ -20,7 +28,6 @@ interface VoiceInputActions {
   cancelListening: () => void;
   clearTranscript: () => void;
   setLanguage: (lang: string) => void;
-  setPreferServerTranscription: (prefer: boolean) => void;
   clearError: () => void;
 }
 
@@ -28,34 +35,13 @@ interface RuntimeRefs {
   mediaStream: MediaStream | null;
   mediaRecorder: MediaRecorder | null;
   audioChunks: Blob[];
-  recognition: SpeechRecognitionLike | null;
   stopResolve: (() => void) | null;
 }
-
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionLike extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: Event) => void) | null;
-  onend: (() => void) | null;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 const rt: RuntimeRefs = {
   mediaStream: null,
   mediaRecorder: null,
   audioChunks: [],
-  recognition: null,
   stopResolve: null,
 };
 
@@ -69,14 +55,7 @@ export function _resetRuntimeRefs(): void {
   rt.mediaStream = null;
   rt.mediaRecorder = null;
   rt.audioChunks = [];
-  rt.recognition = null;
   rt.stopResolve = null;
-}
-
-function getSpeechRecognitionCtor(): SpeechRecognitionConstructor | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as Record<string, SpeechRecognitionConstructor | undefined>;
-  return w['SpeechRecognition'] ?? w['webkitSpeechRecognition'] ?? null;
 }
 
 const PREFERRED_MIME_TYPES = [
@@ -85,6 +64,17 @@ const PREFERRED_MIME_TYPES = [
   'audio/mp4',
   'audio/ogg;codecs=opus',
 ];
+
+const MP4_CONTAINER = 'mp4';
+const DEFAULT_RECORDING_MIME = 'audio/webm';
+const DEFAULT_RECORDING_EXTENSION = 'webm';
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
+const HTTP_PAYMENT_REQUIRED = 402;
+const HTTP_PAYLOAD_TOO_LARGE = 413;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR = 500;
 
 class TranscriptionError extends Error {
   constructor(readonly status: number) {
@@ -95,19 +85,19 @@ class TranscriptionError extends Error {
 
 function transcriptionErrorMessage(error: unknown): string {
   if (error instanceof TranscriptionError) {
-    if (error.status === 401 || error.status === 403) {
+    if (error.status === HTTP_UNAUTHORIZED || error.status === HTTP_FORBIDDEN) {
       return 'Sign in again to use voice input. Your recording was not saved.';
     }
-    if (error.status === 402) {
+    if (error.status === HTTP_PAYMENT_REQUIRED) {
       return 'Voice input needs an active plan. Nothing was charged for this recording.';
     }
-    if (error.status === 413) {
+    if (error.status === HTTP_PAYLOAD_TOO_LARGE) {
       return 'That recording was too long to transcribe. Try a shorter one.';
     }
-    if (error.status === 429) {
+    if (error.status === HTTP_TOO_MANY_REQUESTS) {
       return 'Too many recordings just now. Wait a moment, then try again.';
     }
-    if (error.status >= 500) {
+    if (error.status >= HTTP_SERVER_ERROR) {
       return 'Transcription is unavailable right now. Your recording was not saved. Try again shortly.';
     }
     return 'That recording could not be transcribed. Try again, or type instead.';
@@ -124,8 +114,6 @@ function getBestMimeType(): string {
 }
 
 function releaseCapture(): void {
-  rt.recognition?.abort();
-  rt.recognition = null;
   if (rt.mediaRecorder && rt.mediaRecorder.state !== 'inactive') {
     rt.mediaRecorder.stop();
   }
@@ -139,13 +127,14 @@ function releaseCapture(): void {
 
 async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
   const form = new FormData();
-  const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+  const ext = blob.type.includes(MP4_CONTAINER) ? MP4_CONTAINER : DEFAULT_RECORDING_EXTENSION;
   form.append('file', blob, `recording.${ext}`);
   form.append('model', CLOUD_TRANSCRIPTION_MODEL);
   if (language) form.append('language', language);
 
-  const response = await fetch('/api/voice/transcribe', {
+  const response = await fetch(TRANSCRIBE_ENDPOINT, {
     method: 'POST',
+    headers: { [CSRF_HEADER]: await getCsrfToken() },
     body: form,
   });
 
@@ -163,57 +152,16 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       mode: 'idle',
       transcript: '',
       error: null,
-      language: typeof navigator !== 'undefined' ? (navigator.language ?? 'en-US') : 'en-US',
-      preferServerTranscription: false,
+      language:
+        typeof navigator !== 'undefined'
+          ? (navigator.language ?? DEFAULT_LANGUAGE)
+          : DEFAULT_LANGUAGE,
+      captureStream: null,
 
       startListening: async () => {
         if (get().mode !== 'idle') return;
 
         set({ mode: 'listening', error: null, transcript: '' });
-
-        const { language, preferServerTranscription } = get();
-        const SpeechRecognitionCtor = getSpeechRecognitionCtor();
-
-        if (SpeechRecognitionCtor && !preferServerTranscription) {
-          try {
-            const recognition = new SpeechRecognitionCtor();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = language;
-
-            rt.recognition = recognition;
-
-            recognition.onresult = (event: SpeechRecognitionEvent) => {
-              const transcript = event.results[event.resultIndex]?.[0]?.transcript?.trim() ?? '';
-              if (transcript) {
-                set({ transcript });
-              }
-            };
-
-            recognition.onerror = (event) => {
-              const err = (event as unknown as { error?: string }).error ?? 'unknown';
-              if (err !== 'aborted') {
-                set({ error: buildErrorMessage(err), mode: 'idle' });
-              }
-              rt.recognition = null;
-            };
-
-            recognition.onend = () => {
-              if (get().mode === 'listening') {
-                set({ mode: 'idle' });
-              }
-              rt.recognition = null;
-            };
-
-            recognition.start();
-          } catch (err) {
-            set({
-              mode: 'error',
-              error: `Could not start voice recognition: ${String(err)}`,
-            });
-          }
-          return;
-        }
 
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -240,12 +188,13 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
             rt.stopResolve = null;
           };
 
-          recorder.start(100);
+          recorder.start(RECORDER_TIMESLICE_MS);
+          set({ captureStream: stream });
         } catch (err) {
           rt.mediaStream?.getTracks()?.forEach((t) => t.stop());
           rt.mediaStream = null;
           rt.mediaRecorder = null;
-          set({ mode: 'error', error: buildMediaError(err) });
+          set({ mode: 'error', error: buildMediaError(err), captureStream: null });
         }
       },
 
@@ -253,20 +202,12 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         const { mode, language } = get();
         if (mode !== 'listening') return;
 
-        if (rt.recognition) {
-          set({ mode: 'transcribing' });
-          rt.recognition.stop();
-          set({ mode: 'idle' });
-          rt.recognition = null;
-          return;
-        }
-
         if (!rt.mediaRecorder) {
-          set({ mode: 'idle' });
+          set({ mode: 'idle', captureStream: null });
           return;
         }
 
-        set({ mode: 'transcribing' });
+        set({ mode: 'transcribing', captureStream: null });
 
         await new Promise<void>((resolve) => {
           rt.stopResolve = resolve;
@@ -285,7 +226,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           return;
         }
 
-        const mimeType = chunks[0]?.type ?? 'audio/webm';
+        const mimeType = chunks[0]?.type ?? DEFAULT_RECORDING_MIME;
         const blob = new Blob(chunks, { type: mimeType });
 
         try {
@@ -299,42 +240,22 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       cancelListening: () => {
         if (get().mode === 'idle') return;
         releaseCapture();
-        set({ mode: 'idle', transcript: '', error: null });
+        set({ mode: 'idle', transcript: '', error: null, captureStream: null });
       },
 
       clearTranscript: () => set({ transcript: '' }),
       setLanguage: (lang) => set({ language: lang }),
-      setPreferServerTranscription: (prefer) => set({ preferServerTranscription: prefer }),
       clearError: () => set({ error: null, mode: 'idle' }),
     }),
     {
-      name: 'agi-web-voice-input',
-      version: 1,
+      name: STORE_NAME,
+      version: STORE_VERSION,
       partialize: (state) => ({
         language: state.language,
-        preferServerTranscription: state.preferServerTranscription,
       }),
     },
   ),
 );
-
-function buildErrorMessage(errorCode: string): string {
-  switch (errorCode) {
-    case 'not-allowed':
-    case 'service-not-allowed':
-      return 'Microphone permission denied. Please allow access in your browser settings.';
-    case 'no-speech':
-      return 'No speech detected. Please try again.';
-    case 'audio-capture':
-      return 'No microphone found. Please check your audio settings.';
-    case 'network':
-      return 'Network error during voice recognition. Please check your connection.';
-    case 'language-not-supported':
-      return 'Selected language is not supported by your browser.';
-    default:
-      return `Voice recognition error: ${errorCode}`;
-  }
-}
 
 function buildMediaError(err: unknown): string {
   if (err instanceof DOMException) {

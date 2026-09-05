@@ -95,11 +95,28 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 
 const TRANSCRIPT = 'dictated tail';
 vi.mock('./VoiceInputButton', () => ({
-  VoiceInputButton: ({ onTranscript }: { onTranscript: (text: string) => void }) => (
-    <button type="button" onClick={() => onTranscript(TRANSCRIPT)}>
+  VoiceInputButton: ({ onStart }: { onStart: () => void }) => (
+    <button type="button" onClick={onStart}>
       Dictate
     </button>
   ),
+}));
+
+vi.mock('@features/chat/hooks/use-dictation', () => ({
+  useDictation: ({ onInsert }: { onInsert: (text: string) => void }) => ({
+    status: 'idle',
+    isActive: false,
+    error: null,
+    bars: [],
+    level: 0,
+    announcement: '',
+    reducedMotion: false,
+    start: () => onInsert(TRANSCRIPT),
+    stop: () => {},
+    send: () => {},
+    cancel: () => {},
+    retry: () => {},
+  }),
 }));
 
 const PRO_SUBSCRIPTION: SubscriptionPlan = {

@@ -46,6 +46,8 @@ import { ComposerInput } from './ComposerInput';
 import { ComposerFooter, ComposerModelSummary } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
+import { DictationStrip } from './DictationStrip';
+import { useDictation } from '@features/chat/hooks/use-dictation';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
@@ -401,6 +403,7 @@ function slashCommandQuery(value: string): string {
 }
 
 const VOICE_TRANSCRIPT_SEPARATOR = ' ';
+const COMPOSER_CARET_END = 'end';
 const MENTION_INDEX_FIRST = 0;
 const KEY_ARROW_DOWN = 'ArrowDown';
 const KEY_ARROW_UP = 'ArrowUp';
@@ -1321,6 +1324,48 @@ const ChatComposerNewComponent = ({
     }
     textareaRef.current?.focus();
   }, []);
+
+  const focusComposerEnd = useCallback(() => {
+    const editor = composerEditorRef.current;
+    if (editor) {
+      editor.focus(COMPOSER_CARET_END);
+      return;
+    }
+    const node = textareaRef.current;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(node.value.length, node.value.length);
+  }, []);
+
+  const appendDictatedText = useCallback(
+    (text: string) => {
+      const separator = messageRef.current.trim() ? VOICE_TRANSCRIPT_SEPARATOR : '';
+      appendComposerMessage(separator + text);
+    },
+    [appendComposerMessage],
+  );
+
+  const handleDictationInsert = useCallback(
+    (text: string) => {
+      appendDictatedText(text);
+      setTimeout(focusComposerEnd, FOCUS_AFTER_TRANSCRIPT_MS);
+    },
+    [appendDictatedText, focusComposerEnd],
+  );
+
+  const dictationSendRef = useRef(false);
+  const handleDictationSend = useCallback(
+    (text: string) => {
+      dictationSendRef.current = true;
+      appendDictatedText(text);
+    },
+    [appendDictatedText],
+  );
+
+  const dictation = useDictation({
+    onInsert: handleDictationInsert,
+    onSend: handleDictationSend,
+  });
 
   const takeIdleFocus = useCallback(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -2326,6 +2371,13 @@ const ChatComposerNewComponent = ({
     activeToolLabels,
   ]);
 
+  useEffect(() => {
+    if (!dictationSendRef.current) return;
+    dictationSendRef.current = false;
+    if (!message.trim() && attachments.length === 0) return;
+    handleSubmit();
+  }, [message, attachments.length, handleSubmit]);
+
   /**
    * AUDIT-FIX STR-23: the composer input is per-conversation. Park the outgoing
    * conversation's half-typed text under its own id and restore the incoming
@@ -3101,7 +3153,30 @@ const ChatComposerNewComponent = ({
               every `[class*='composer']` into a column below 641px, so any
               flex element named for the composer has to say which way it
               runs. */}
-          <div className="chat-composer-row flex min-w-0 flex-row items-end gap-1 sm:gap-2">
+          <span className="sr-only" role="status" aria-live="polite">
+            {dictation.announcement}
+          </span>
+
+          {dictation.isActive && (
+            <DictationStrip
+              status={dictation.status}
+              bars={dictation.bars}
+              error={dictation.error}
+              reducedMotion={dictation.reducedMotion}
+              emptyState={Boolean(emptyState)}
+              onCancel={dictation.cancel}
+              onStop={dictation.stop}
+              onSend={dictation.send}
+              onRetry={dictation.retry}
+            />
+          )}
+
+          <div
+            className={cn(
+              'chat-composer-row min-w-0 flex-row items-end gap-1 sm:gap-2',
+              dictation.isActive ? 'hidden' : 'flex',
+            )}
+          >
             {/* + Overflow Menu Button */}
             <div className="relative shrink-0 chat-composer-leading-end" ref={overflowRef}>
               <button
@@ -4255,11 +4330,8 @@ const ChatComposerNewComponent = ({
                   enabled during streaming for type-ahead. Disabling the mic
                   meant a queued follow-up could be typed but never dictated. */}
               <VoiceInputButton
-                onTranscript={(text) => {
-                  const separator = messageRef.current.trim() ? VOICE_TRANSCRIPT_SEPARATOR : '';
-                  appendComposerMessage(separator + text);
-                  setTimeout(focusComposer, FOCUS_AFTER_TRANSCRIPT_MS);
-                }}
+                onStart={dictation.start}
+                active={dictation.isActive}
                 disabled={composerDisabled}
               />
             </div>
