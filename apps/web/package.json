@@ -34,6 +34,7 @@
     "@agiworkforce/key-value": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/object-storage": "workspace:*",
+    "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-protocol": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/providers-factory": "workspace:*",
