@@ -180,7 +180,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let summary: CreditSettlementQueueSummary | null = null;
   let creditError: unknown;
   try {
-    summary = await CreditService.processPendingSettlements(SETTLEMENT_DRAIN_BATCH);
+    summary = await CreditService.processPendingSettlements(SETTLEMENT_DRAIN_BATCH, getNeonDb());
   } catch (error) {
     creditError = error;
     logger.error(

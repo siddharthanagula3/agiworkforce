@@ -44,6 +44,7 @@ describe('support actions, nothing runs without a confirmation', () => {
 
   it('proposing a connector revoke changes nothing', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'revoke_connector',
       params: { connectorId: 'slack' },
@@ -65,6 +66,7 @@ describe('support actions, nothing runs without a confirmation', () => {
 
   it('confirming with a token that was never issued executes nothing', async () => {
     const { proposal } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'revoke_connector',
       params: { connectorId: 'slack' },
@@ -74,6 +76,7 @@ describe('support actions, nothing runs without a confirmation', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: proposal.id,
         confirmationToken: 'not-the-token-that-was-issued',
@@ -90,6 +93,7 @@ describe('support actions, nothing runs without a confirmation', () => {
 
   it('executes only after the issued token is presented', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'revoke_connector',
       params: { connectorId: 'slack' },
@@ -98,6 +102,7 @@ describe('support actions, nothing runs without a confirmation', () => {
     });
 
     const { result } = await confirmSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       proposalId: proposal.id,
       confirmationToken,

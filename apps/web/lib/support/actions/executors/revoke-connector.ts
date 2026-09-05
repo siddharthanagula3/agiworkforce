@@ -1,8 +1,7 @@
-
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveSupportAccountContext } from '../../account/context-resolver';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
 
@@ -37,10 +36,14 @@ function refuseCustomConnector(): never {
   );
 }
 
-export async function assertConnectorRevocable(userId: string, connectorId: string): Promise<void> {
+export async function assertConnectorRevocable(
+  db: DatabaseAdapter,
+  userId: string,
+  connectorId: string,
+): Promise<void> {
   if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
 
-  const context = await resolveSupportAccountContext(userId);
+  const context = await resolveSupportAccountContext(db, userId);
   const owned = context.connectors.some(
     (c) => c.connectorId === connectorId && c.source !== 'custom',
   );
@@ -54,13 +57,12 @@ export async function assertConnectorRevocable(userId: string, connectorId: stri
 }
 
 export async function executeRevokeConnector(args: {
+  db: DatabaseAdapter;
   userId: string;
   connectorId: string;
 }): Promise<SupportActionResult> {
-  const { userId, connectorId } = args;
+  const { db, userId, connectorId } = args;
   if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
-
-  const db = getNeonDb();
 
   if (connectorId === 'github') {
     try {

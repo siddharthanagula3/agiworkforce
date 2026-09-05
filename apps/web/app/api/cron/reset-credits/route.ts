@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
             subscription.plan_tier || 'free',
             new Date(subscription.current_period_start),
             new Date(subscription.current_period_end),
-            { stripePriceId: subscription.stripe_price_id },
+            { db, stripePriceId: subscription.stripe_price_id },
           );
           if (accountId) resetCount++;
         } catch (error) {

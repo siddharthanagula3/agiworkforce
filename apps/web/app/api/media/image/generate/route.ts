@@ -778,6 +778,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const { userId } = await getClerkAuthUser(request);
 
+  // Resolved exactly once: the workspace admitted at the start of the turn is
+  // the workspace the row is written to, so a switch mid-request cannot move it.
+  let scopedDbPromise: ReturnType<typeof getUserScopedDb> | undefined;
+  const callerScope = () => (scopedDbPromise ??= getUserScopedDb(request));
+
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
     {
@@ -813,7 +818,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
   if (spendGateResponse) return spendGateResponse;
 
-  const subscription = await SubscriptionService.getSubscription(userId);
+  const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);
 
   if (!subscription) {
     return NextResponse.json(
@@ -1224,7 +1229,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     try {
       const referencesStoredAsset =
         'asset_id' in source_image || (mask_image && 'asset_id' in mask_image);
-      const editRefDb = referencesStoredAsset ? (await getUserScopedDb(request)).db : undefined;
+      const editRefDb = referencesStoredAsset ? (await callerScope()).db : undefined;
       sourceBytes = await resolveImageRefBytes(source_image, userId, editRefDb);
       maskBytes = mask_image
         ? await resolveImageRefBytes(mask_image, userId, editRefDb)
@@ -1316,7 +1321,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       );
     }
     sourceSurface = mediaIdentity.surface;
-    const scoped = await getUserScopedDb(request);
+    const scoped = await callerScope();
     organizationId = scoped.organizationId;
     scopedDb = scoped.db;
     if (scoped.userId !== userId) {

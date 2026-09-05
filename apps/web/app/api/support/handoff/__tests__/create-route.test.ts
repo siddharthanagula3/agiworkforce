@@ -11,6 +11,7 @@ const routeMocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   getManagedUsageSummary: vi.fn(),
   requireHumanCaller: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
@@ -35,6 +36,9 @@ vi.mock('@/lib/services/managed-usage-summary-service', () => ({
 }));
 vi.mock('@/lib/security/bot-challenge', () => ({
   requireHumanCaller: routeMocks.requireHumanCaller,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  getCurrentUserRlsDb: routeMocks.getCurrentUserRlsDb,
 }));
 
 import { createError } from '@/lib/errors';
@@ -79,6 +83,7 @@ beforeEach(() => {
   routeMocks.requireCsrfToken.mockResolvedValue(null);
   routeMocks.withRateLimit.mockResolvedValue(null);
   routeMocks.auth.mockResolvedValue({ userId: null });
+  routeMocks.getCurrentUserRlsDb.mockResolvedValue(null);
   routeMocks.getOrCreateAnonSession.mockResolvedValue({ id: 'anon-xyz' });
   routeMocks.listFreshOnlineAgents.mockResolvedValue([]);
   routeMocks.recordEmailOutcome.mockResolvedValue(undefined);

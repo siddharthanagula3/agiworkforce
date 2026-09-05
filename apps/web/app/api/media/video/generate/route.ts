@@ -691,6 +691,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   const { userId } = await getClerkAuthUser(request);
 
+  // Resolved exactly once: the workspace admitted at the start of the turn is
+  // the workspace the row is written to, so a switch mid-request cannot move it.
+  let scopedDbPromise: ReturnType<typeof getUserScopedDb> | undefined;
+  const callerScope = () => (scopedDbPromise ??= getUserScopedDb(request));
+
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
     {
@@ -726,7 +731,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
   if (spendGateResponse) return spendGateResponse;
 
-  const subscription = await SubscriptionService.getSubscription(userId);
+  const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);
 
   if (!subscription) {
     return NextResponse.json(
@@ -830,7 +835,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       );
     }
     sourceSurface = mediaIdentity.surface;
-    const scoped = await getUserScopedDb(request);
+    const scoped = await callerScope();
     if (scoped.userId !== userId) {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }

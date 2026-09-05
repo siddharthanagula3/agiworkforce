@@ -1,9 +1,8 @@
-
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
@@ -16,8 +15,8 @@ async function handleGet(request: NextRequest) {
   const rateLimited = await withRateLimit(request, 'support-account-context');
   if (rateLimited) return rateLimited;
 
-  const { userId } = await getClerkAuthUser(request);
-  const context = await resolveSupportAccountContext(userId);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
+  const context = await resolveSupportAccountContext(db, userId);
 
   return NextResponse.json({
     context,

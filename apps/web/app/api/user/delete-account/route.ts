@@ -133,9 +133,11 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+
   let subscription: SubscriptionInfo | null;
   try {
-    subscription = await SubscriptionService.getSubscription(userId);
+    subscription = await SubscriptionService.getSubscription(db, userId);
   } catch (err) {
     logger.error({ userId, err }, 'Account deletion halted: subscription lookup failed');
     return NextResponse.json(
@@ -162,8 +164,6 @@ export async function DELETE(request: NextRequest) {
       { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
     );
   }
-
-  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 

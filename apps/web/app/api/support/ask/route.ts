@@ -12,7 +12,9 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { toSupportAgentAccountFacts } from '@/lib/support/account/agent-facts';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { resolveSupportAccountContext } from '@/lib/support/account/context-resolver';
+import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 import { toModelSafeAccountFacts } from '@/lib/support/account/model-safe-facts';
 import { listAvailableSupportActions } from '@/lib/support/actions/service';
 import {
@@ -46,9 +48,9 @@ const ANONYMOUS_SIGNALS: AccountSignals = {
   availableActions: [],
 };
 
-async function resolveAccountSignals(userId: string): Promise<AccountSignals> {
+async function resolveAccountSignals(db: DatabaseAdapter, userId: string): Promise<AccountSignals> {
   try {
-    const context = await resolveSupportAccountContext(userId);
+    const context = await resolveSupportAccountContext(db, userId);
     return {
       planTier: context.plan.effectiveTier,
       accountFacts: toSupportAgentAccountFacts(toModelSafeAccountFacts(context)),
@@ -90,8 +92,9 @@ async function handleAsk(request: NextRequest) {
     throw createError.validation('Invalid support question', parsed.error);
   }
 
-  const signals = identity.userId
-    ? await resolveAccountSignals(identity.userId)
+  const askerScope = identity.userId ? await getCurrentUserRlsDb() : null;
+  const signals = askerScope
+    ? await resolveAccountSignals(askerScope.db, askerScope.userId)
     : ANONYMOUS_SIGNALS;
 
   const answer = await answerSupportQuestion({

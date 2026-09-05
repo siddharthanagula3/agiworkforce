@@ -17,6 +17,7 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import {
@@ -190,7 +191,10 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const subscriptionPromise = SubscriptionService.getSubscription(userId);
+  const subscriptionPromise = SubscriptionService.getSubscription(
+    createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null }),
+    userId,
+  );
   subscriptionPromise.catch(() => undefined);
 
   const csrfError = await timePhase(CHAT_TURN_PHASE.csrfCheck, () => requireCsrfToken(request));

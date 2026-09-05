@@ -50,6 +50,7 @@ describe('support actions, a proposal cannot be swapped for a different effect',
 
   it('confirming a billing-portal proposal never touches API keys', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'open_billing_portal',
       params: {},
@@ -58,6 +59,7 @@ describe('support actions, a proposal cannot be swapped for a different effect',
     });
 
     const { actionId, result } = await confirmSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       proposalId: proposal.id,
       confirmationToken,
@@ -76,6 +78,7 @@ describe('support actions, a proposal cannot be swapped for a different effect',
 
   it('refuses to execute when the stored parameters no longer match their recorded hash', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'regenerate_api_key',
       params: { keyId: KEY_ID },
@@ -89,6 +92,7 @@ describe('support actions, a proposal cannot be swapped for a different effect',
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: proposal.id,
         confirmationToken,

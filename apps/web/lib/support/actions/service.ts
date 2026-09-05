@@ -1,6 +1,6 @@
-
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import {
   hashActionParams,
@@ -32,6 +32,7 @@ import {
 } from './types';
 
 export interface ProposeInput {
+  db: DatabaseAdapter;
   userId: string;
   actionId: string;
   params: unknown;
@@ -46,6 +47,7 @@ export interface ProposeOutput {
 }
 
 export interface ConfirmInput {
+  db: DatabaseAdapter;
   userId: string;
   proposalId: string;
   confirmationToken: string;
@@ -54,16 +56,17 @@ export interface ConfirmInput {
 }
 
 async function assertTargetOwned(
+  db: DatabaseAdapter,
   userId: string,
   actionId: SupportActionId,
   params: Record<string, unknown>,
 ): Promise<void> {
   switch (actionId) {
     case 'revoke_connector':
-      await assertConnectorRevocable(userId, String(params['connectorId']));
+      await assertConnectorRevocable(db, userId, String(params['connectorId']));
       return;
     case 'regenerate_api_key':
-      await assertApiKeyOwned(userId, String(params['keyId']));
+      await assertApiKeyOwned(db, userId, String(params['keyId']));
       return;
     case 'resend_verification_email':
     case 'export_account_data':
@@ -198,7 +201,7 @@ export async function proposeSupportAction(input: ProposeInput): Promise<Propose
   }
 
   try {
-    await assertTargetOwned(userId, actionId, params);
+    await assertTargetOwned(input.db, userId, actionId, params);
   } catch (error) {
     await recordSupportActionAttempt({
       userId,
@@ -341,7 +344,7 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
   }
 
   try {
-    await assertTargetOwned(userId, actionId, params);
+    await assertTargetOwned(input.db, userId, actionId, params);
   } catch (error) {
     await fail(
       error instanceof SupportActionRefusal ? error.code : 'ownership_check_failed',
@@ -352,7 +355,7 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
 
   let result: SupportActionResult;
   try {
-    result = await executeAction(definition, userId, params);
+    result = await executeAction(input.db, definition, userId, params);
   } catch (error) {
     await fail(
       error instanceof SupportActionRefusal ? error.code : 'execution_failed',
@@ -376,15 +379,16 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
 }
 
 async function executeAction(
+  db: DatabaseAdapter,
   definition: SupportActionDefinition,
   userId: string,
   params: Record<string, unknown>,
 ): Promise<SupportActionResult> {
   switch (definition.id) {
     case 'revoke_connector':
-      return executeRevokeConnector({ userId, connectorId: String(params['connectorId']) });
+      return executeRevokeConnector({ db, userId, connectorId: String(params['connectorId']) });
     case 'regenerate_api_key':
-      return executeRegenerateApiKey({ userId, keyId: String(params['keyId']) });
+      return executeRegenerateApiKey({ db, userId, keyId: String(params['keyId']) });
     case 'export_account_data':
     case 'open_billing_portal':
       return executeHandoff(definition);

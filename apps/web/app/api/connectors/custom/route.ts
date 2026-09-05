@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectMcpServer } from '@agiworkforce/mcp';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -92,12 +91,12 @@ async function allocateShortId(db: ScopedDb, userId: string): Promise<string> {
 }
 
 async function handleGet(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const connectors = await getUserCustomConnectorSummaries(userId);
+  const connectors = await getUserCustomConnectorSummaries(db, userId);
 
   return NextResponse.json({ connectors });
 }

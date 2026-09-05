@@ -47,6 +47,7 @@ describe('support actions, cross-account refusal', () => {
 
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: USER_A,
         actionId: 'revoke_connector',
         params: { connectorId: 'slack' },
@@ -74,6 +75,7 @@ describe('support actions, cross-account refusal', () => {
 
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: USER_A,
         actionId: 'regenerate_api_key',
         params: { keyId: '11111111-1111-4111-8111-111111111111' },
@@ -116,6 +118,7 @@ describe('support actions, cross-account refusal', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER_B,
         proposalId: '22222222-2222-4222-8222-222222222222',
         confirmationToken: raw,
@@ -141,6 +144,7 @@ describe('support actions, cross-account refusal', () => {
     mocks.db = createFakeNeonDb({ connectors: [] });
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: USER_A,
         actionId: 'export_account_data',
         params: {},

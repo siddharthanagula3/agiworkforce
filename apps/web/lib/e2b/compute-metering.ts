@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { CreditService } from '@/lib/services/credit-service';
 
 export const E2B_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
@@ -115,21 +117,31 @@ export async function meterSandboxComputeInterval(
   }
 
   try {
-    await CreditService.settleCreditsDurably({
+    // Metering runs from sandbox teardown and from the reclaim sweep, neither of
+    // which carries a request connection, so the scope comes from the interval's
+    // own owner.
+    const db = createClaimedUserScopedDb(getNeonDb(), {
       userId: interval.userId,
-      amountCents: costCents,
-      description: 'Managed sandbox compute',
-      idempotencyKey: `e2b-compute:${interval.sandboxId}:${interval.startedAtMs}`,
-      metadata: {
-        type: 'e2b_sandbox_compute',
-        sandbox_id: interval.sandboxId,
-        ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
-        ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),
-        elapsed_ms: elapsedMs,
-        microusd_per_second: rate,
-        close_reason: interval.reason,
-      },
+      organizationId: null,
     });
+    await CreditService.settleCreditsDurably(
+      {
+        userId: interval.userId,
+        amountCents: costCents,
+        description: 'Managed sandbox compute',
+        idempotencyKey: `e2b-compute:${interval.sandboxId}:${interval.startedAtMs}`,
+        metadata: {
+          type: 'e2b_sandbox_compute',
+          sandbox_id: interval.sandboxId,
+          ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
+          ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),
+          elapsed_ms: elapsedMs,
+          microusd_per_second: rate,
+          close_reason: interval.reason,
+        },
+      },
+      db,
+    );
     logger.info(
       {
         userId: interval.userId,

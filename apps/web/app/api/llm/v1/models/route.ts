@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
@@ -109,9 +109,9 @@ async function handleListModels(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const presentedAuthorization = request.headers.has('authorization');
-  let userId: string | null = null;
+  let scoped: UserScopedDb;
   try {
-    ({ userId } = await getClerkAuthUser(request, { apiKeyScope: 'models:read' }));
+    scoped = await getUserScopedDb(request, { apiKeyScope: 'models:read' });
   } catch (error) {
     if (isMfaRequiredError(error)) {
       return NextResponse.json(
@@ -145,7 +145,7 @@ async function handleListModels(request: NextRequest) {
     return listModelsForRequest(request, 'free');
   }
 
-  const subscription = await SubscriptionService.getSubscription(userId);
+  const subscription = await SubscriptionService.getSubscription(scoped.db, scoped.userId);
   return listModelsForRequest(
     request,
     effectivePlanTier(subscription?.plan_tier, subscription?.status),
