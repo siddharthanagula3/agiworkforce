@@ -30,7 +30,11 @@ import {
   readConnectorConnectRequest,
   type ConnectorConnectRequest,
 } from '../lib/connector-connect-required';
-import { agiWorkPlanSentence, isAgiWorkPlanEntry } from '../lib/agi-work-progress';
+import {
+  agiWorkPlanSentence,
+  isAgiWorkGoalEntry,
+  isAgiWorkPlanEntry,
+} from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
 
 const ACTIVITY_PAGE_SIZE = 40;
@@ -697,12 +701,14 @@ export function AgentActivityTimeline({
   );
   const announcement = buildAgentActivityAnnouncement(activity, summary);
   // The first plan step renders as the plan line above the rows, so the row it
-  // would otherwise occupy is dropped rather than printed twice.
+  // would otherwise occupy is dropped rather than printed twice. The goal
+  // entry's summary is the run's own restatement of the user's prompt, shown
+  // in the collapsed summary and the transcript above; a row here would only
+  // echo it back.
   const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
-  const rowEntries =
-    planLineEntryIndex >= 0
-      ? activity.entries.filter((_, index) => index !== planLineEntryIndex)
-      : activity.entries;
+  const rowEntries = activity.entries.filter(
+    (entry, index) => index !== planLineEntryIndex && !isAgiWorkGoalEntry(entry),
+  );
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
   const hiddenEntryCount = Math.max(0, rowEntries.length - visibleEntryCount);

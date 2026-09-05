@@ -13,6 +13,10 @@ export function isAgiWorkPlanEntry(entry: AgentActivityEntry): boolean {
   return entry.kind === 'progress' && entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX);
 }
 
+export function isAgiWorkGoalEntry(entry: AgentActivityEntry): boolean {
+  return entry.kind === 'progress' && entry.progressId === AGIWORK_GOAL_PROGRESS_ID;
+}
+
 export function agiWorkPlanSentence(entries: readonly AgentActivityEntry[]): string | undefined {
   const first = entries.find(isAgiWorkPlanEntry);
   if (!first || first.kind !== 'progress') return undefined;
