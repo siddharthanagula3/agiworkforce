@@ -9,6 +9,31 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-13 Admission for models no tier list names is derived, not absent
+
+- Question: what a managed plan may run when the registry holds hundreds of models the curated
+  tier lists never mention.
+- Evidence: the catalogue projection built for D-09 returned 18 of 388 chat models on every
+  plan; tierAllowedModels names 18, and the access check answers false for the other 370, so the
+  same registry that grew by 349 entries in a day is invisible to the web picker and refused on
+  send; the unit economics doc shows spend is capped per dollar by the reservation ceilings and
+  the premium share, not per model.
+- Current implementation: an allow list per tier consulted by the picker, request-processor and
+  managed-failover through one function.
+- Options: keep the allow list (a catalogue of 18); invert it into an override list admitting
+  everything unnamed; derive admission for unnamed models from registry facts.
+- Decision: derive. A named model keeps its list verdict; an unnamed chat model is admitted at
+  the lowest plan whose profile ceiling covers its registry-wide price band, and only when its
+  route's commercial status permits managed traffic; BYOK-only and experimental routes are admitted
+  at no plan and appear nowhere on web; routers without a price of their own admit at pro.
+- Why: the ceilings make spend safe by construction, the commercial status field already encodes
+  the contract question, and the rule lives in the one function every enforcement point calls.
+- Tradeoff: a long tail of models a user can pick by hand with no curation of quality; Auto stays
+  the default and the receipt names what served.
+- Reversibility: high; removing the derived branch returns to the allow list.
+- Revisit trigger: cost or support anomalies attributable to hand picked long tail models, or a
+  founder decision on reseller agreements that changes commercial status at scale.
+
 ## D-2026-09-05-12 Explicit tool requests are enforced, ambient toggles stay silent
 
 - Question: what the harness owes the user when the text asks for a tool, and what a persistent
