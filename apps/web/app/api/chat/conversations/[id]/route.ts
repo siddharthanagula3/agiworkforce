@@ -10,7 +10,11 @@ import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
-import { type ChatConversationRow, type ChatMessageRow } from '@/lib/server/neon-chat';
+import {
+  CONVERSATION_WORK_MODE_SELECT,
+  type ChatConversationRow,
+  type ChatMessageRow,
+} from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -37,7 +41,8 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at
+      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+        ${CONVERSATION_WORK_MODE_SELECT}
       from web_conversations
       where id = $1
         and user_id = $2

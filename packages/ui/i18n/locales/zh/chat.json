@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "当前对话",
+    "agiWork": "AGI Work",
     "archive": "归档",
     "archivedCount": "已归档（{{count}}）",
     "budgetUsed": "已使用 {{percent}}% 的令牌预算",

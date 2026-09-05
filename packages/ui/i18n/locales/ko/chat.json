@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "활성 대화",
+    "agiWork": "AGI Work",
     "archive": "보관",
     "archivedCount": "보관됨 ({{count}})",
     "budgetUsed": "토큰 예산의 {{percent}}% 사용됨",

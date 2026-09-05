@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "المحادثة النشطة",
+    "agiWork": "AGI Work",
     "archive": "أرشفة",
     "archivedCount": "مؤرشفة ({{count}})",
     "budgetUsed": "تم استخدام {{percent}}% من ميزانية الرموز",

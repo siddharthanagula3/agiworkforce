@@ -5,7 +5,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
-import { type ChatConversationRow } from '@/lib/server/neon-chat';
+import { CONVERSATION_WORK_MODE_SELECT, type ChatConversationRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import {
@@ -80,7 +80,8 @@ async function handleGetConversations(request: NextRequest) {
         ? Promise.resolve([])
         : db.query<ChatConversationRow>(
             `
-          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at
+          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
+            ${CONVERSATION_WORK_MODE_SELECT}
           from web_conversations
           where ${where.join(' and ')}
           order by pinned desc, updated_at desc

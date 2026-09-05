@@ -20,6 +20,12 @@ export interface SidebarSession {
    * than asserting a conversation is idle when it may not be.
    */
   runState?: 'running';
+  /**
+   * The row is an AGI Work task rather than an ordinary chat. Both leaders mark
+   * this inline in the one shared list (ChatGPT a text badge, Claude a filled
+   * dot) instead of filing tasks somewhere else.
+   */
+  agiWork?: boolean;
 }
 
 export interface SidebarProject {
