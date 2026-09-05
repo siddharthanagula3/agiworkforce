@@ -101,3 +101,18 @@ Home chips:
 - Environment chip ("Default"): a menu "Local" (a Download tag, "Desktop only"), "Cloud >", "Remote Control >". Ours: "Cloud" with our three network tiers as the submenu; "Local" and "Remote control" rows point at the desktop app download until those surfaces exist.
 - Add repository "+" chip: the same repository list with a search field; a second repository adds another chip.
 - Tip banner: a one-line product tip with "Try it" and a close X; ours can reuse the existing announcement source or omit.
+
+## Ours: controls withheld and why (recorded at the rebuild, 2026-09-05)
+
+Controls the leader's Code surface has that this page deliberately does not, because the API cannot back them. Each one would be a dead control, so check the endpoint exists before adding it back.
+
+- Share, rename and delete. The API is list, get, create, run, close, commit, agent turn and approvals. DELETE on a session closes it; there is no separate delete, no rename and no share route for a code session.
+- A file diff. The sandbox git executor is clone, add, commit and push with no status or diff, so the Changes panel runs `git status --porcelain` through the existing command endpoint instead. That writes a terminal entry, which is why the check is an explicit action rather than automatic.
+- A working branch. Commit pushes to the cloned branch; nothing creates a branch, so the panel header shows the clone, not a branch flow.
+- The context-window bar. The agent turn carries `stepsUsed` and no token counts. The usage ring shows only the plan bars, which the managed usage summary does supply.
+- Slash commands, a ghost follow-up suggestion, a stop button, hold-to-record and a microphone device list. These need, in order: a code command set, a suggestion source, a turn-cancel endpoint, a dictation state-machine change, and a device id threaded through the shared voice capture. The send button spins during a turn rather than offering a stop that cannot stop the server-side loop.
+
+Two shapes deviate from the reference on purpose:
+
+- The environment chip is one flat menu, not Local, Cloud and Remote control with the tiers in a submenu. The three cloud tiers are the only rows this surface acts on and the desktop rows are links, so a submenu would bury the working rows.
+- The Mode menu renders the policies `TOOL_APPROVAL_POLICY_OPTIONS` declares, currently two. A third row would mean inventing an approval policy the server does not implement.

@@ -1,38 +1,3 @@
-/**
- * Controls the leader's Code surface has that this page deliberately does not,
- * because the API cannot back them. Each one would be a dead control, so check
- * the endpoint exists before adding it back.
- *
- *  - Share, rename and delete. The API is list, get, create, run, close, commit,
- *    agent turn and approvals. DELETE on a session closes it; there is no
- *    separate delete, no rename and no share route for a code session.
- *  - A file diff. `E2BGitExecutor` is clone, add, commit and push with no status
- *    or diff, so the Changes panel runs `git status --porcelain` through the
- *    existing command endpoint instead. That writes a terminal entry, which is
- *    why the check is an explicit action rather than automatic.
- *  - A working branch. Commit pushes to the cloned branch; nothing creates a
- *    branch, so the panel header shows the clone, not a branch flow.
- *  - The context-window bar. `CloudCodeAgentTurn` carries `stepsUsed` and no
- *    token counts. The usage ring shows only the plan bars, which
- *    `useManagedUsageSummary` does supply.
- *  - Slash commands, a ghost follow-up suggestion, a stop button, hold-to-record
- *    and a microphone device list. These need, in order: a code command set, a
- *    suggestion source, a turn-cancel endpoint, a dictation state-machine
- *    change, and a device id threaded through the shared voice capture. The send
- *    button spins during a turn rather than offering a stop that cannot stop the
- *    server-side loop.
- *
- * Two shapes deviate from the reference on purpose:
- *
- *  - The environment chip is one flat menu, not Local / Cloud / Remote control
- *    with the tiers in a submenu. The three cloud tiers are the only rows this
- *    surface acts on and the desktop rows are links, so a submenu would bury the
- *    working rows.
- *  - The Mode menu renders the policies `TOOL_APPROVAL_POLICY_OPTIONS` declares,
- *    currently two. A third row would mean inventing an approval policy the
- *    server does not implement.
- */
-
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
