@@ -25,6 +25,8 @@ import {
 import { VoicePersonaSelector } from './VoicePersonaSelector';
 import { VOICE_PERSONA_STORAGE_KEY } from './voicePersonaParams';
 import { voiceCheckLocalWhisper } from '../../api/voice';
+import { VOICE_LANGUAGE_CHOICES } from '../../lib/voiceLanguage';
+import { DEFAULT_GLOBAL_VOICE_ACCELERATOR } from '../../lib/globalVoiceShortcut';
 
 const HOTKEY_OPTIONS = [
   { value: 'option', label: 'Option / Alt (hold to dictate)' },
@@ -44,17 +46,6 @@ export const PROVIDER_OPTIONS = [
   { value: 'openai_whisper', label: 'OpenAI Whisper (your API key)' },
   { value: 'managed_cloud', label: 'AGI Cloud (managed)' },
 ] as const;
-
-const LANGUAGE_OPTIONS = [
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'zh', label: 'Chinese' },
-  { value: 'pt', label: 'Portuguese' },
-  { value: 'ru', label: 'Russian' },
-];
 
 const POST_PROCESSING_OPTIONS: Array<{
   value: PostProcessingMode;
@@ -336,7 +327,7 @@ export function VoiceSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {LANGUAGE_OPTIONS.map((opt) => (
+                {VOICE_LANGUAGE_CHOICES.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
@@ -560,7 +551,7 @@ export function VoiceSettings() {
 
           {/* System-wide dictation, honest capability gate. The backend probe
               (capabilities.systemDictationAvailable) stays false until the
-              release gates in docs/plans/desktop-system-dictation.md pass
+              release gates in docs/specs/desktop-global-voice/spec.md pass
               (DESKTOP-SYSTEM-DICTATION-UNWIRED-01), so this control must not
               advertise or enable a global hotkey that cannot record. */}
           <div className="space-y-2 pt-2 border-t border-border">
@@ -569,7 +560,7 @@ export function VoiceSettings() {
                 <Label>System-wide Dictation</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {systemDictationAvailable
-                    ? 'Hold the Fn key system-wide to record and inject text.'
+                    ? `Press ${DEFAULT_GLOBAL_VOICE_ACCELERATOR} anywhere to record and insert text.`
                     : 'Not available in this build. Dictation works inside the AGI window using the hotkey above.'}
                 </p>
               </div>

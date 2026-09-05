@@ -1,6 +1,6 @@
 //! AGI Dictation lifecycle commands and the global hotkey bridge.
 //!
-//! Plan: `docs/plans/desktop-system-dictation.md` (phase 1-2). Flaw:
+//! Plan: `docs/specs/desktop-global-voice/spec.md` (phase 1-2). Flaw:
 //! `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`.
 //!
 //! # Single lifecycle owner
@@ -28,8 +28,8 @@ use tauri::Emitter;
 
 use crate::features::speech::dictation::{
     start_os_hook, system_dictation_available, BeginError, DictationOutcome, DictationPhase,
-    DictationSnapshot, DictationSource, HotkeyEdge, SessionError, DICTATION_COORDINATOR,
-    DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
+    DictationSnapshot, DictationSource, HotkeyChord, HotkeyEdge, SessionError,
+    DICTATION_COORDINATOR, DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
 };
 
 pub const INJECTION_UNAVAILABLE: &str =
@@ -183,7 +183,8 @@ pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
 // Global hotkey hook commands
 // ---------------------------------------------------------------------------
 
-/// Enable the global dictation hotkey hook.
+/// Enable the global dictation hotkey hook on `accelerator`, the same chord
+/// grammar both desktop shells use (`Alt+Shift+V`, `CommandOrControl+Alt+V`).
 ///
 /// The hook has a real start/stop lifecycle (a single OS listener per
 /// process; see `features/speech/dictation/hotkey.rs`) and routes edges into
@@ -191,10 +192,16 @@ pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
 /// coordinator refuses global sessions, so enabling the hook only produces
 /// honest `refused` events, it never records or injects.
 #[tauri::command]
-pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn voice_start_global_ptt(
+    accelerator: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let chord = HotkeyChord::parse(&accelerator)
+        .map_err(|error| format!("Invalid dictation accelerator \"{accelerator}\": {error}"))?;
     let app_for_sink = app.clone();
     let newly_enabled = start_os_hook(
         &GLOBAL_HOTKEY_HOOK,
+        chord,
         Box::new(move |edge| match edge {
             HotkeyEdge::Pressed => match DICTATION_COORDINATOR.begin(DictationSource::Global) {
                 Ok(session_id) => {

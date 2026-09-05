@@ -46,6 +46,8 @@ import { useAppModeStore } from '../../../stores/appModeStore';
 import { useUnifiedAuthStore } from '../../../stores/auth';
 import { useComputerUseStore } from '../../../stores/computerUseStore';
 import { useChatStore as useSharedChatStore } from '@agiworkforce/unified-chat';
+import { useVoiceInputStore } from '../../../stores/settingsStore';
+import { AUTO_DETECT_LANGUAGE } from '../../../lib/voiceLanguage';
 import { useCloudVoiceController } from '../useCloudVoiceController';
 
 const successfulOpaResult = {
@@ -148,6 +150,34 @@ describe('useCloudVoiceController', () => {
       if (command === 'computer_use_execute_opa_task') return successfulOpaResult;
       return undefined;
     });
+  });
+
+  async function transcriptionLanguage(): Promise<string | null> {
+    const { result } = renderHook(() => useCloudVoiceController(true));
+    await waitFor(() => expect(result.current.controller.state).toBe('idle'));
+    await act(async () => result.current.controller.onToggle());
+    await act(async () => result.current.controller.onToggle());
+    const call = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes('/api/voice/transcribe'));
+    const body = call?.[1]?.body as FormData;
+    const language = body.get('language');
+    return typeof language === 'string' ? language : null;
+  }
+
+  it('sends the chosen dictation language, not a fixed one', async () => {
+    act(() => useVoiceInputStore.setState({ voiceLanguage: 'ja' }));
+    await expect(transcriptionLanguage()).resolves.toBe('ja');
+  });
+
+  it('sends the primary subtag when the setting carries a region', async () => {
+    act(() => useVoiceInputStore.setState({ voiceLanguage: 'pt-BR' }));
+    await expect(transcriptionLanguage()).resolves.toBe('pt');
+  });
+
+  it('omits the language so the provider detects it when none is chosen', async () => {
+    act(() => useVoiceInputStore.setState({ voiceLanguage: AUTO_DETECT_LANGUAGE }));
+    await expect(transcriptionLanguage()).resolves.toBeNull();
   });
 
   it('previews a classified action and dispatches it only after approval', async () => {

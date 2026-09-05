@@ -15,6 +15,8 @@ import {
   type ManagedCloudRequestContext,
 } from '../../services/managedCloudRequestContext';
 import { formatOpaCompletionReason, useComputerUseStore } from '../../stores/computerUseStore';
+import { useVoiceInputStore } from '../../stores/settingsStore';
+import { toProviderLanguage } from '../../lib/voiceLanguage';
 import { rewriteCloudVoiceTranscript, type CloudVoiceDecision } from './cloudVoiceService';
 
 type WorkflowState = 'idle' | 'processing' | 'awaiting_action' | 'executing' | 'stopping' | 'error';
@@ -56,6 +58,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   const consentAccepted = useComputerUseStore((state) => state.consentAccepted);
   const cancellingOpaExecutionId = useComputerUseStore((state) => state.cancellingOpaExecutionId);
   const computerUseError = useComputerUseStore((state) => state.error);
+  const voiceLanguage = useVoiceInputStore((state) => state.voiceLanguage);
 
   const releaseBoundarySubscription = useCallback(() => {
     unsubscribeBoundaryRef.current?.();
@@ -88,7 +91,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     stopRecording,
   } = useVoiceTranscription({
     preferWhisperCloud: enabled,
-    language: enabled ? 'en' : undefined,
+    language: enabled ? toProviderLanguage(voiceLanguage) : undefined,
     getCloudRequestContext,
     onError: handleTranscriptionError,
   });

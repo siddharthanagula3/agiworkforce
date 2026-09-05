@@ -1,6 +1,6 @@
 //! Explicit transcription-mode selection for AGI Dictation.
 //!
-//! Plan stage 3 (`docs/plans/desktop-system-dictation.md`) and the boundary
+//! Plan stage 3 (`docs/specs/desktop-global-voice/spec.md`) and the boundary
 //! contract: audio is transcribed ONLY through the mode the user explicitly
 //! selected, Local (on-device Whisper), BYOK (the user's own provider key),
 //! or Managed Cloud. There is no silent fallback between modes:

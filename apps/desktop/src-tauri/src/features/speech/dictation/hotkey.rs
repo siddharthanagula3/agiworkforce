@@ -7,7 +7,7 @@
 //! stop" design leaked a parked OS listener per restart and, once the shared
 //! flag went true again, every leaked listener emitted events (double-fire).
 //!
-//! Design (plan phase 2, `docs/plans/desktop-system-dictation.md`):
+//! Design (plan phase 2, `docs/specs/desktop-global-voice/spec.md`):
 //! - The OS listener thread is spawned AT MOST ONCE per process, guarded by a
 //!   compare-and-swap. Restarting the hook never spawns a second listener.
 //! - `start`/`stop` toggle an emission gate and install/remove the sink under
@@ -22,6 +22,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+
+use super::accelerator::{ChordTracker, HotkeyChord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyEdge {
@@ -123,19 +125,34 @@ impl GlobalHotkeyHook {
 }
 
 /// Production entry point: enable `hook` and make sure the single OS listener
-/// thread exists. The thread watches the `fn` key via `rdev::listen` and
-/// feeds raw edges into [`GlobalHotkeyHook::dispatch`].
-pub fn start_os_hook(hook: &'static GlobalHotkeyHook, sink: HotkeySink) -> Result<bool, String> {
+/// thread exists. The thread watches `chord` via `rdev::listen` and feeds the
+/// chord's own edges into [`GlobalHotkeyHook::dispatch`].
+///
+/// The chord is fixed for the life of the process because the OS listener is
+/// spawned at most once; a later start with a different chord reaches an
+/// already-parked listener, so changing the accelerator takes effect on the
+/// next launch.
+pub fn start_os_hook(
+    hook: &'static GlobalHotkeyHook,
+    chord: HotkeyChord,
+    sink: HotkeySink,
+) -> Result<bool, String> {
     let mut spawn_error: Option<String> = None;
     let newly_enabled = hook.start_with(sink, || {
         let spawned = std::thread::Builder::new()
             .name("agi-dictation-hotkey".into())
             .spawn(move || {
                 tracing::info!("[dictation] global hotkey listener thread started");
-                let result = rdev::listen(move |event| match event.event_type {
-                    rdev::EventType::KeyPress(rdev::Key::Function) => hook.dispatch(true),
-                    rdev::EventType::KeyRelease(rdev::Key::Function) => hook.dispatch(false),
-                    _ => {}
+                let tracker = ChordTracker::new(chord);
+                let result = rdev::listen(move |event| {
+                    let observed = match event.event_type {
+                        rdev::EventType::KeyPress(key) => tracker.observe(key, true),
+                        rdev::EventType::KeyRelease(key) => tracker.observe(key, false),
+                        _ => None,
+                    };
+                    if let Some(down) = observed {
+                        hook.dispatch(down);
+                    }
                 });
                 if let Err(error) = result {
                     tracing::error!("[dictation] rdev::listen error: {:?}", error);
