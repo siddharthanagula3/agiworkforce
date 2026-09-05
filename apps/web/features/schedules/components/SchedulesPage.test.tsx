@@ -414,10 +414,13 @@ describe('SchedulesPage', () => {
 
     await user.click(screen.getByRole('switch', { name: 'Pause Updated brief' }));
     expect(await screen.findByRole('switch', { name: 'Resume Updated brief' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Run Updated brief Now' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'More actions for Updated brief' }));
+    expect(screen.getByRole('menuitem', { name: 'Run now' })).toBeDisabled();
+    await user.keyboard('{Escape}');
 
     await user.click(screen.getByRole('switch', { name: 'Resume Updated brief' }));
-    await user.click(screen.getByRole('button', { name: 'Run Updated brief Now' }));
+    await user.click(screen.getByRole('button', { name: 'More actions for Updated brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Run now' }));
 
     await waitFor(() => expect(runNow).toHaveBeenCalledWith(schedule.id, 'request-key'));
     expect(screen.getByRole('status', { name: 'Schedule action result' })).toHaveTextContent(
@@ -542,7 +545,8 @@ describe('SchedulesPage', () => {
 
     render(<SchedulesPage api={api} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
-    await user.click(screen.getByRole('button', { name: 'Delete Morning brief' }));
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
 
     const confirmation = screen.getByRole('alertdialog', { name: 'Delete Schedule?' });
     await user.click(within(confirmation).getByRole('button', { name: 'Delete Schedule' }));
@@ -600,17 +604,33 @@ describe('SchedulesPage', () => {
       nextExecutionAt: null,
     };
     const api = createApi({ listSchedules: vi.fn(async () => page([unsupported, completed])) });
+    const user = userEvent.setup();
 
     render(<SchedulesPage api={api} />);
     await screen.findByRole('heading', { name: 'Legacy workflow' });
 
+    const legacyCard = screen.getByRole('article', { name: 'Legacy workflow' });
+    const finishedCard = screen.getByRole('article', { name: 'Finished brief' });
+
     expect(screen.getByText('Unsupported action type')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Run Legacy workflow Now' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Edit Legacy workflow' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Run Finished brief Now' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Edit Finished brief' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'View History for Finished brief' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Delete Finished brief' })).toBeEnabled();
+    expect(within(legacyCard).getByRole('button', { name: 'Edit Legacy workflow' })).toBeDisabled();
+    expect(
+      within(finishedCard).getByRole('button', { name: 'Edit Finished brief' }),
+    ).toBeDisabled();
+    expect(
+      within(finishedCard).getByRole('button', { name: 'View History for Finished brief' }),
+    ).toBeEnabled();
+
+    await user.click(
+      within(legacyCard).getByRole('button', { name: 'More actions for Legacy workflow' }),
+    );
+    expect(within(legacyCard).getByRole('menuitem', { name: 'Run now' })).toBeDisabled();
+
+    await user.click(
+      within(finishedCard).getByRole('button', { name: 'More actions for Finished brief' }),
+    );
+    expect(within(finishedCard).getByRole('menuitem', { name: 'Run now' })).toBeDisabled();
+    expect(within(finishedCard).getByRole('menuitem', { name: 'Delete' })).toBeEnabled();
   });
 
   it('shows which project a schedule belongs to and can filter the list by it', async () => {
@@ -667,5 +687,69 @@ describe('SchedulesPage', () => {
 
     await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
     expect(createSchedule.mock.calls[0]?.[0]).toMatchObject({ projectId: 'project-1' });
+  });
+});
+
+describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+
+  it('lists Run now, Share, Pause, Notification settings, Delete in that order', async () => {
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim());
+    expect(items).toEqual(['Run now', 'Share', 'Pause', 'Notification settings', 'Delete']);
+  });
+
+  it('opens the result panel with the latest run and starts a chat about it', async () => {
+    const listRuns = vi.fn(async () => runsPage([successfulRun]));
+    const onOpenChat = vi.fn();
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])), listRuns });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} onOpenChat={onOpenChat} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'View latest result for Morning brief' }));
+
+    expect(await screen.findByText('Three priorities are ready.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open chat' }));
+    expect(onOpenChat).toHaveBeenCalledWith(schedule);
+  });
+
+  it('copies a link and reports success when Share is chosen', async () => {
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+    const user = userEvent.setup();
+    // Defined after setup(): user-event installs its own clipboard stub on
+    // navigator when it starts, which would otherwise shadow this one.
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      writable: true,
+      configurable: true,
+    });
+
+    render(<SchedulesPage api={api} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Share' }));
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        expect.stringContaining('/chat/schedules'),
+      ),
+    );
   });
 });
