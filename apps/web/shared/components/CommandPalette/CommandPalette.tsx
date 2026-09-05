@@ -8,27 +8,31 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
   Bot,
   ChevronRight,
   CreditCard,
   DollarSign,
-  MessageSquare,
   Monitor,
   Moon,
-  PlusCircle,
   Search,
   Settings,
   Sun,
   X,
 } from 'lucide-react';
+import { ListChecks, MessageSquare, SquarePen } from '@agiworkforce/icons';
 import { cn } from '@shared/utils/cn';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
+import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
+import { formatRelativeTime } from '@shared/utils/format';
+import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 
 export interface CommandOption {
   id: string;
@@ -45,7 +49,27 @@ type ActiveSubMenu = 'model' | null;
 
 const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
 const COMMAND_PALETTE_LISTBOX_ID = 'command-palette-listbox';
+const RECENTS_LIMIT = 5;
+const EMPTY_HIDDEN_NAV_IDS: string[] = [];
 const optionElementId = (commandId: string): string => `command-palette-option-${commandId}`;
+
+function recentConversationCommands(
+  conversations: Conversation[],
+  router: ReturnType<typeof useRouter>,
+): CommandOption[] {
+  return [...conversations]
+    .filter((conversation) => !conversation.isArchived)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, RECENTS_LIMIT)
+    .map((conversation) => ({
+      id: `recent-${conversation.id}`,
+      title: conversation.title || 'Untitled chat',
+      subtitle: formatRelativeTime(conversation.updatedAt),
+      group: 'Recents',
+      icon: conversation.workMode === 'agiwork' ? ListChecks : MessageSquare,
+      action: () => router.push(`/chat/${encodeURIComponent(conversation.id)}`),
+    }));
+}
 
 function useCommands(
   onOpenSubMenu: (menu: ActiveSubMenu) => void,
@@ -53,7 +77,11 @@ function useCommands(
   setModelId: (id: string) => void,
 ): { top: CommandOption[]; modelCommands: CommandOption[] } {
   const router = useRouter();
+  const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const conversations = useChatStore((state) => state.conversations);
+  const isWorkspaceAdmin = useIsWorkspaceAdmin();
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_HIDDEN_NAV_IDS;
 
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
   const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
@@ -70,17 +98,65 @@ function useCommands(
     },
   ];
 
-  // No command carries a keybinding hint: KEYBOARD_SHORTCUT_DOCS is the only
-  // registry, and every binding in it is registered by the chat page, which is
-  // the one route where CommandPaletteProvider refuses to open this palette.
-  const top: CommandOption[] = [
+  // Quick actions match the leaders' shape: starting a fresh chat or task is
+  // the first thing either palette offers, ahead of navigation.
+  const quickActions: CommandOption[] = [
     {
       id: 'new-chat',
-      title: 'New Chat',
-      subtitle: 'Start a fresh conversation',
-      group: 'Actions',
-      icon: PlusCircle,
+      title: 'New chat',
+      group: 'Quick actions',
+      icon: SquarePen,
       action: () => router.push('/chat'),
+    },
+    {
+      id: 'new-task',
+      title: 'New task',
+      group: 'Quick actions',
+      icon: ListChecks,
+      action: () => router.push('/agi-work'),
+    },
+  ];
+
+  const recents = recentConversationCommands(conversations, router);
+
+  // The rail (`buildAppNavItems`) is the one place page destinations are
+  // defined; reusing it here means this list can never drift the way the
+  // hand-duplicated copy this replaced eventually did.
+  const pageActions: CommandOption[] = buildAppNavItems({
+    pathname: pathname ?? '/chat',
+    navigate: (href) => router.push(href),
+    isAdmin: isWorkspaceAdmin,
+    hiddenIds: hiddenNavIds,
+  }).map((item) => ({
+    id: `nav-${item.id}`,
+    title: item.label,
+    group: 'Actions',
+    icon: item.icon,
+    action: item.onClick,
+  }));
+
+  const actions: CommandOption[] = [
+    ...pageActions,
+    {
+      id: 'go-settings',
+      title: 'Go to Settings',
+      group: 'Actions',
+      icon: Settings,
+      action: () => router.push('/settings/general'),
+    },
+    {
+      id: 'go-billing',
+      title: 'Go to Billing',
+      group: 'Actions',
+      icon: CreditCard,
+      action: () => router.push('/billing'),
+    },
+    {
+      id: 'go-pricing',
+      title: 'View Pricing',
+      group: 'Actions',
+      icon: DollarSign,
+      action: () => router.push('/pricing'),
     },
     {
       id: 'search-conversations',
@@ -99,38 +175,11 @@ function useCommands(
       hasSubMenu: true,
       action: () => onOpenSubMenu('model'),
     },
-
-    {
-      id: 'go-chat',
-      title: 'Go to Chat',
-      group: 'Navigate',
-      icon: MessageSquare,
-      action: () => router.push('/chat'),
-    },
-    {
-      id: 'go-settings',
-      title: 'Go to Settings',
-      group: 'Navigate',
-      icon: Settings,
-      action: () => router.push('/settings/general'),
-    },
-    {
-      id: 'go-billing',
-      title: 'Go to Billing',
-      group: 'Navigate',
-      icon: CreditCard,
-      action: () => router.push('/billing'),
-    },
-    {
-      id: 'go-pricing',
-      title: 'View Pricing',
-      group: 'Navigate',
-      icon: DollarSign,
-      action: () => router.push('/pricing'),
-    },
-
-    ...preferences,
   ];
+
+  // No command carries a keybinding hint: KEYBOARD_SHORTCUT_DOCS is the only
+  // registry, and its bindings live on the chat page.
+  const top: CommandOption[] = [...quickActions, ...recents, ...actions, ...preferences];
 
   const modelCommands: CommandOption[] = AVAILABLE_MODELS.map((model: AIModel) => ({
     id: `model-${model.id}`,
