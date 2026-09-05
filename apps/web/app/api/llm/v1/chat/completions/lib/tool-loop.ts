@@ -137,6 +137,10 @@ import {
   WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
+import {
+  isRequiredSearchToolChoice,
+  REQUIRED_SEARCH_RETRY_DIRECTIVE,
+} from '@/lib/web-search/required-search';
 import { toManagedSkillFromUserSkill, type ProcessedRequest } from './request-processor';
 import {
   calculateObservedProviderUsageCostDollars,
@@ -1104,6 +1108,13 @@ export interface CollectedProviderLine {
   reasoningDelta?: string;
   serverToolStart?: ServerToolStartSignal;
   serverToolResults?: ServerToolResultSignal[];
+  /**
+   * Not derivable from the two signals above. Gemini reports grounding as
+   * search results with no preceding `server_tool_use` line, so the pairing
+   * bookkeeping that produces `serverToolResults` never fires for it and a
+   * grounded answer would read as an answer from memory.
+   */
+  searchActivity?: boolean;
 }
 
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
@@ -1238,6 +1249,7 @@ export async function collectProviderStream(
           reasoningDelta,
           serverToolStart,
           serverToolResults,
+          searchActivity: serverToolStart !== undefined || Array.isArray(searchResultsContent),
         });
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
@@ -2259,6 +2271,21 @@ export async function* runToolLoop(
   const turnSourceBudget = webSearchCallBudget * WEB_SEARCH_MAX_RESULTS + urlFetchCallBudget;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
+  const searchRequired = processed.searchRequirement?.required === true;
+  const searchOnlyAskedFor = processed.searchEnforcement?.mode === 'nudge';
+  let searchObserved = false;
+  let searchRetryUsed = false;
+  function searchRetryEligible(): boolean {
+    return searchRequired && searchOnlyAskedFor && !searchRetryUsed && !searchObserved;
+  }
+  function providerLineShowsSearch(entry: CollectedProviderLine): boolean {
+    return (
+      entry.searchActivity === true ||
+      entry.serverToolStart !== undefined ||
+      (entry.serverToolResults?.length ?? 0) > 0
+    );
+  }
+
   const conversationId = processed.conversationId;
   const e2bSessionScope =
     conversationId && options.userId
@@ -2402,6 +2429,24 @@ export async function* runToolLoop(
         taskStateEvent('ready_for_review', 'Agent work finished and is ready for review.'),
       );
     }
+    if (searchRequired) {
+      logger.info(
+        {
+          event: 'web_search_adherence',
+          provider: processed.provider,
+          model: servingProcessed.llmRequest.model,
+          requestId: processed.requestId,
+          search_required: true,
+          search_invoked: searchObserved,
+          search_required_source: processed.searchRequirement?.source,
+          search_enforcement: processed.searchEnforcement?.mode,
+          search_tool: processed.searchEnforcement?.attachedTool,
+          search_retry_used: searchRetryUsed,
+          stop_reason: reason,
+        },
+        '[tool-loop] required web search adherence',
+      );
+    }
     yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
   }
@@ -2453,6 +2498,7 @@ export async function* runToolLoop(
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
       if (isWebSearchTool(tc.qualifiedName)) {
+        searchObserved = true;
         webSearchCallsUsed += 1;
         if (webSearchCallsUsed > webSearchCallBudget) {
           return Promise.resolve({
@@ -3095,9 +3141,9 @@ export async function* runToolLoop(
         ...(stepTools && stepTools.length > 0 ? { tools: stepTools } : { tools: undefined }),
         ...(step > 1 &&
         processed.chatRequest?.tool_choice === undefined &&
-        llmRequest.tool_choice === 'required' &&
-        (processed.chatRequest?.code_execution === true ||
-          (processed.chatRequest?.web_search === true && processed.resolvedTaskType === 'research'))
+        ((llmRequest.tool_choice === 'required' &&
+          processed.chatRequest?.code_execution === true) ||
+          isRequiredSearchToolChoice(llmRequest.tool_choice))
           ? { tool_choice: 'auto' as const }
           : {}),
         ...(step > 1 &&
@@ -3169,6 +3215,14 @@ export async function* runToolLoop(
         );
       }
       let providerStep: ToolLoopProviderStepResult;
+      // A turn whose search can only be asked for, never required, is the one
+      // case where the step's own output has to be held back: if the model
+      // answers from memory the answer is discarded and re-asked, and text
+      // already on the wire cannot be taken back. The hold ends at the first
+      // sign of a search, so a step that does search streams from that point.
+      const holdUntilSearchSeen = searchRetryEligible() && !searchObserved;
+      const heldProviderLines: CollectedProviderLine[] = [];
+      let releasedProviderLines = !holdUntilSearchSeen;
       try {
         const liveLines = createLiveLineQueue<CollectedProviderLine>();
         const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
@@ -3179,6 +3233,15 @@ export async function* runToolLoop(
           (error: unknown) => liveLines.close(error),
         );
         for await (const entry of liveLines.drain()) {
+          if (providerLineShowsSearch(entry)) searchObserved = true;
+          if (!releasedProviderLines) {
+            heldProviderLines.push(entry);
+            if (!searchObserved) continue;
+            releasedProviderLines = true;
+            for (const held of heldProviderLines) yield* emitProviderLine(held);
+            heldProviderLines.length = 0;
+            continue;
+          }
           yield* emitProviderLine(entry);
         }
         providerStep = await stepPromise;
@@ -3250,6 +3313,29 @@ export async function* runToolLoop(
       }
 
       const { finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
+
+      if (!releasedProviderLines) {
+        const stillWorking = finishReason === 'tool_calls' && pendingToolCalls.length > 0;
+        if (!stillWorking && searchRetryEligible()) {
+          searchRetryUsed = true;
+          messages.push({ role: 'user', content: REQUIRED_SEARCH_RETRY_DIRECTIVE });
+          logger.info(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              requestId: processed.requestId,
+              searchRequiredSource: processed.searchRequirement?.source,
+            },
+            '[tool-loop] required search was not invoked; discarding the answer and asking once more',
+          );
+          continue;
+        }
+        releasedProviderLines = true;
+        for (const held of heldProviderLines) yield* emitProviderLine(held);
+        heldProviderLines.length = 0;
+      }
+
       if (showWorkPhases) {
         const hasNextActions = finishReason === 'tool_calls' && pendingToolCalls.length > 0;
         yield encoder.encode(
