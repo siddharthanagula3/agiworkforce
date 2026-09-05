@@ -262,6 +262,13 @@ export interface StreamChunkVendorRaw {
 export interface StreamChunkResponseMeta {
   type: 'response-meta';
   id?: string;
+  /**
+   * The model id the provider echoed back, verbatim. A provider silently
+   * serving something other than what was asked for is invisible without it,
+   * which is exactly what the lifecycle probe checks. Omitted when the wire
+   * carries no such field.
+   */
+  model?: string;
   created?: number;
   systemFingerprint?: string;
   serviceTier?: string;

@@ -165,6 +165,7 @@
     "check:trust-boundaries": "node scripts/check-trust-boundaries.mjs",
     "check:provider-contracts": "pnpm --filter @agiworkforce/types test -- provider-contract",
     "check:spec-artifacts": "node scripts/check-spec-artifacts.mjs",
+    "probe:models": "tsx scripts/probe-models.mjs",
     "sync:models": "pnpm --filter @agiworkforce/model-registry generate",
     "sync:models:check": "pnpm --filter @agiworkforce/model-registry check",
     "sync:models:refresh": "pnpm --filter @agiworkforce/model-registry refresh",

@@ -20,6 +20,7 @@ const CURATION_PATH = 'packages/ai/model-registry/catalog/models.curation.json';
 const SYNCED_PATH = 'packages/ai/model-registry/catalog/models.synced.json';
 const RETIRED_MODELS_PATH = 'packages/ai/model-registry/catalog/retired-models.json';
 const MODEL_ROUTES_PATH = 'packages/ai/model-registry/catalog/model-routes.json';
+const PROBES_PATH = 'packages/ai/model-registry/catalog/probes.json';
 const LOCAL_MODEL_CATALOG_PATH = 'packages/platform/local-llm/src/catalog.ts';
 export const SPEECH_ARTIFACT_REGISTRY_PATH =
   'packages/ai/model-registry/catalog/speech-artifacts.json';
@@ -29,6 +30,9 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   SYNCED_PATH,
   RETIRED_MODELS_PATH,
   MODEL_ROUTES_PATH,
+  // Written only by `pnpm probe:models` from the catalog: a probe record is
+  // keyed by the model and route it asked, exactly like the catalog files here.
+  PROBES_PATH,
   LOCAL_MODEL_CATALOG_PATH,
   SPEECH_ARTIFACT_REGISTRY_PATH,
   'packages/ai/model-registry/catalog/harnesses.json',
