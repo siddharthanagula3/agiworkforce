@@ -31,7 +31,10 @@ vi.mock('@shared/components/CookieConsent', () => ({ CookieConsent: 'cookie-cons
 vi.mock('@shared/components/accessibility/SkipLinks', () => ({ SkipLinks: 'skip-links-stub' }));
 vi.mock('@shared/components/seo/JsonLd', () => ({ JsonLd: 'json-ld-stub' }));
 vi.mock('@/shared/components/seo/theme-init-script', () => ({ THEME_INIT_SCRIPT: '/* noop */' }));
-vi.mock('@/lib/seo/site', () => ({ OG_IMAGE: { url: '/og.png', width: 1200, height: 630 } }));
+vi.mock('@/lib/seo/site', async (importOriginal) => ({
+  ...(await importOriginal()),
+  OG_IMAGE: { url: '/og.png', width: 1200, height: 630 },
+}));
 vi.mock('@/lib/seo/structured-data', () => ({
   organizationSchema: () => ({}),
   softwareApplicationSchema: () => ({}),

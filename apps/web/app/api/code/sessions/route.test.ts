@@ -24,7 +24,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
-vi.mock('@/lib/e2b/gate', () => ({ e2bProvisioningReady: mockE2bReady }));
+vi.mock('@/lib/e2b/gate', () => ({
+  e2bProvisioningReady: mockE2bReady,
+  E2B_API_KEY_ENV: 'E2B_API_KEY',
+  e2bExecutionEnabled: vi.fn(),
+}));
 vi.mock('@/lib/managed-compute-gate', () => ({
   isManagedComputePrivateBetaEnabled: mockBetaEnabled,
 }));

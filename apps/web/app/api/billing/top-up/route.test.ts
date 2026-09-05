@@ -39,6 +39,8 @@ vi.mock('@/lib/services/organization-policy-gate', () => ({
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: vi.fn((name: string) =>

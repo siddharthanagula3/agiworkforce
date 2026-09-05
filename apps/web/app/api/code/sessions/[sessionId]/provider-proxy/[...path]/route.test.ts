@@ -43,6 +43,7 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/e2b/session-store', () => ({
   MANAGED_CLOUD_E2B_TENANT_ID: 'managed-cloud',
   getE2BSession: mockGetE2BSession,
+  managedCloudCodeSessionScope: vi.fn(),
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: mockBuildAdapter,

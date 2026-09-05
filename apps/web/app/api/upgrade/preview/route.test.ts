@@ -31,7 +31,8 @@ vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: 'use
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal()),
   requireEnv: vi.fn(() => 'sk_test_dummy'),
 }));
 vi.mock('@/lib/price-tier-mapping', () => ({

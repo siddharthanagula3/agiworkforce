@@ -19,6 +19,9 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 4) },
+  isCacheTokensDisjointFromInput: vi.fn(),
+  normalizeProviderId: vi.fn(),
+  resolveCacheRates: vi.fn(),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
@@ -113,6 +116,7 @@ vi.mock('@/lib/server/media-assets', async () => {
       const row = assetRows.get(id);
       return row?.userId === userId && row.organizationId === null ? row : null;
     },
+    getMediaAssetById: async (id: string) => assetRows.get(id) ?? null,
   };
 });
 

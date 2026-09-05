@@ -39,6 +39,10 @@ vi.mock('@/lib/server/object-storage', () => ({
   getPresignedUploadUrl: mockGetPresignedUploadUrl,
   getPresignedPrivateUploadUrl: mockGetPresignedPrivateUploadUrl,
   deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
 }));
 
 import { POST } from '@/app/api/uploads/presign/route';

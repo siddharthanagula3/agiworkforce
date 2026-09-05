@@ -34,6 +34,7 @@ vi.mock('@/lib/services/skill-catalog-service', () => ({
   findManagedDirectorySkillByName: vi.fn(),
   invalidateManagedSkillCatalogCache: mockInvalidateCache,
   SkillCatalogUnavailableError: class extends Error {},
+  filterSkillsByInstallOverrides: vi.fn(),
 }));
 vi.mock('@/lib/services/skill-install-service', () => ({
   resolveInstalledManagedSkills: mockResolveInstalled,

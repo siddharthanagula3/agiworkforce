@@ -28,6 +28,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 const { GET, POST } = await import('./route');
