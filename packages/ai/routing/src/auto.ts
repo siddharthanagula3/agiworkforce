@@ -208,6 +208,17 @@ export interface AutoRoutingRequest {
   observedRouteHealth?: Readonly<Record<string, ObservedRouteHealth>>;
   enableObservedHealthRanking?: boolean;
   /**
+   * The capabilities THIS request actually carries, such as tools or a
+   * structured-output schema.
+   *
+   * Deliberately not `requiredCapabilities`, which gates admission against the
+   * compiled catalog. This one only tells the ranker which observed capability
+   * losses are relevant to the request in hand, so a route that stopped
+   * honouring tool calls sinks for a request carrying tools and is left exactly
+   * where it was for one that carries none.
+   */
+  capabilitiesInUse?: readonly IntrinsicCapability[];
+  /**
    * The workspace administrator's model policy, applied HERE rather than by the
    * caller afterwards.
    *
@@ -242,6 +253,15 @@ export interface ObservedRouteHealth {
   failureRate?: number;
   /** Observed median time to first token, in ms. */
   latencyP50Ms?: number;
+  /**
+   * Capabilities this route DECLARES but the serving path has evidence it
+   * stopped honouring, from `capability-health.ts`.
+   *
+   * Ranking only. The declared catalog flag remains the sole thing that admits
+   * a route, so a suspect route is still selected when it is the only one; this
+   * list only sinks it below a peer that can still do the job.
+   */
+  unhonouredCapabilities?: readonly IntrinsicCapability[];
 }
 
 export interface AutoFallbackRoute {
@@ -647,6 +667,14 @@ const OBSERVED_FAILURE_RATE_BAND = 0.25;
 const OBSERVED_LATENCY_BAND_MS = 500;
 const OBSERVED_LATENCY_BAND_COUNT = 8;
 const NO_OBSERVED_PENALTY = 0;
+const NO_CAPABILITIES_IN_USE: readonly IntrinsicCapability[] = Object.freeze([]);
+/**
+ * One band above every failure and latency band combined, so a route that
+ * stopped honouring the capability this request needs sorts below every route
+ * that still honours it, however slow or flaky that peer looks.
+ */
+const UNHONOURED_CAPABILITY_PENALTY =
+  (Math.ceil(1 / OBSERVED_FAILURE_RATE_BAND) + 1) * OBSERVED_LATENCY_BAND_COUNT;
 
 function observedBand(value: number | undefined, width: number, maximum: number): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return 0;
@@ -678,11 +706,33 @@ export function observedRouteHealthFromSnapshots(
   return observed;
 }
 
+/**
+ * Independent of the observed-health flag on purpose. The failure and latency
+ * bands reorder healthy routes on measurement noise, which is why they are
+ * gated; this one names a route that demonstrably stopped doing the thing the
+ * request needs. It still costs nothing by default, because a caller that
+ * passes no `capabilitiesInUse` gets zero.
+ */
+export function unhonouredCapabilityPenalty(
+  observed: ObservedRouteHealth | undefined,
+  capabilitiesInUse: readonly IntrinsicCapability[],
+): number {
+  const unhonoured = observed?.unhonouredCapabilities;
+  if (!unhonoured || unhonoured.length === 0 || capabilitiesInUse.length === 0) {
+    return NO_OBSERVED_PENALTY;
+  }
+  return capabilitiesInUse.some((capability) => unhonoured.includes(capability))
+    ? UNHONOURED_CAPABILITY_PENALTY
+    : NO_OBSERVED_PENALTY;
+}
+
 export function observedRoutePenalty(
   observed: ObservedRouteHealth | undefined,
   enabled: boolean,
+  capabilitiesInUse: readonly IntrinsicCapability[] = NO_CAPABILITIES_IN_USE,
 ): number {
-  if (!enabled || !observed) return NO_OBSERVED_PENALTY;
+  const capabilityPenalty = unhonouredCapabilityPenalty(observed, capabilitiesInUse);
+  if (!enabled || !observed) return capabilityPenalty;
   const failureBand = observedBand(
     observed.failureRate,
     OBSERVED_FAILURE_RATE_BAND,
@@ -693,7 +743,7 @@ export function observedRoutePenalty(
     OBSERVED_LATENCY_BAND_MS,
     OBSERVED_LATENCY_BAND_COUNT - 1,
   );
-  return failureBand * OBSERVED_LATENCY_BAND_COUNT + latencyBand;
+  return capabilityPenalty + failureBand * OBSERVED_LATENCY_BAND_COUNT + latencyBand;
 }
 
 const policyReachableSlots = ((): ReadonlySet<string> => {
@@ -977,6 +1027,7 @@ function evaluateEligibility(
       observedPenalty: observedRoutePenalty(
         request.observedRouteHealth?.[routeId],
         request.enableObservedHealthRanking ?? observedHealthRankingEnabled(),
+        request.capabilitiesInUse ?? NO_CAPABILITIES_IN_USE,
       ),
     });
   }
@@ -1460,6 +1511,12 @@ export interface RoutePreviewScoreFactors {
   policyAllowed: boolean;
   budget: 'affordable' | 'unaffordable' | 'unconstrained';
   observedHealthPenalty: number;
+  /**
+   * The part of `observedHealthPenalty` that came from a capability this route
+   * declares and has stopped honouring. Reported separately because it answers
+   * a different question from "is this route slow or flaky".
+   */
+  capabilityPenalty: number;
   continuity: boolean;
   lane: RoutingProfile | null;
 }
@@ -1581,7 +1638,20 @@ export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview 
           : 'unaffordable';
     const observedHealthPenalty =
       eligibility.rankedRoutes[0]?.observedPenalty ?? NO_OBSERVED_PENALTY;
+    const capabilitiesInUse = effectiveRequest.capabilitiesInUse ?? NO_CAPABILITIES_IN_USE;
+    const capabilityPenalty = unhonouredCapabilityPenalty(
+      effectiveRequest.observedRouteHealth?.[routeId],
+      capabilitiesInUse,
+    );
     const reasons = [...eligibility.reasons];
+    if (capabilityPenalty > NO_OBSERVED_PENALTY) {
+      const lost = (effectiveRequest.observedRouteHealth?.[routeId]?.unhonouredCapabilities ?? [])
+        .filter((capability) => capabilitiesInUse.includes(capability))
+        .join(', ');
+      reasons.push(
+        `route ${routeId} declares ${lost} but recently stopped honouring it; ranked below routes that still do`,
+      );
+    }
     if (admitted && budget === 'unaffordable') {
       reasons.push(`model ${modelKey} exceeds the remaining usage budget`);
     }
@@ -1606,6 +1676,7 @@ export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview 
         ),
         budget,
         observedHealthPenalty,
+        capabilityPenalty,
         continuity: modelKey === effectiveRequest.currentModelKey,
         lane,
       },
