@@ -30,6 +30,16 @@ vi.mock('@/lib/server/neon-db', () => ({
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute(...args),
+    },
+    userId: 'user-1',
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/user-connector-tools', () => ({
   getOperatorMappedConnectorIds: vi.fn(() => mocks.operatorIds),
   getUserGithubInstallations: (...args: unknown[]) => mocks.githubInstallations(...args),
@@ -85,6 +95,20 @@ function postRequest(connectorId: string): NextRequest {
     body: JSON.stringify({ connectorId, authType: 'local' }),
   });
 }
+
+import { getUserScopedDb } from '@/lib/server/rls-db';
+
+describe('/api/connectors tenant scope', () => {
+  it('reads the connector list through the rls scoped handle', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+
+    await GET(new NextRequest('http://localhost:3000/api/connectors'));
+
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
+  });
+});
 
 describe('/api/connectors managed-cloud capability boundary', () => {
   beforeEach(() => {

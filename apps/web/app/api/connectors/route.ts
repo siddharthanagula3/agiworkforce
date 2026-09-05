@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
@@ -44,8 +43,12 @@ import {
 
 const GITHUB_CONNECTOR_ID = 'github';
 
+const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
 async function clearConnectorToolPermissions(
-  db: ReturnType<typeof getNeonDb>,
+  db: ScopedDb,
   userId: string,
   connectorId: string,
 ): Promise<void> {
@@ -103,8 +106,7 @@ async function handleGetConnectors(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   let rows: UserConnectorRow[];
   try {
@@ -210,7 +212,7 @@ async function handleGetConnectors(request: NextRequest) {
 }
 
 async function handleCreateConnector(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -308,7 +310,6 @@ async function handleCreateConnector(request: NextRequest) {
     );
   }
 
-  const db = getNeonDb();
   const now = new Date().toISOString();
 
   let data: UserConnectorRow | undefined;
@@ -370,7 +371,7 @@ async function handleCreateConnector(request: NextRequest) {
 }
 
 async function handleDeleteConnector(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError2 = await requireCsrfToken(request);
   if (csrfError2) return csrfError2 as NextResponse;
@@ -389,8 +390,6 @@ async function handleDeleteConnector(request: NextRequest) {
   ) {
     throw createError.validation('Valid connectorId query param is required');
   }
-
-  const db = getNeonDb();
 
   const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
   if (oauthRevoked) {

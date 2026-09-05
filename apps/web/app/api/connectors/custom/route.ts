@@ -12,7 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -70,7 +70,11 @@ interface CustomConnectorRow {
 
 const SHORT_ID_MAX_ATTEMPTS = 5;
 
-async function allocateShortId(db: ReturnType<typeof getNeonDb>, userId: string): Promise<string> {
+const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+async function allocateShortId(db: ScopedDb, userId: string): Promise<string> {
   for (let attempt = 0; attempt < SHORT_ID_MAX_ATTEMPTS; attempt++) {
     const candidate = randomBytes(5).toString('hex');
     try {
@@ -106,7 +110,7 @@ interface CreateBody {
 }
 
 async function handlePost(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -126,7 +130,6 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('name is required (1–200 chars)');
   }
 
-  const db = getNeonDb();
   const subscription = await SubscriptionService.getSubscription(db, userId);
   const planTier = subscription?.plan_tier;
   const connectorLimit = getCustomRemoteMcpLimit(planTier);
@@ -301,7 +304,7 @@ async function handlePost(request: NextRequest) {
 }
 
 async function handleDelete(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -315,7 +318,6 @@ async function handleDelete(request: NextRequest) {
     throw createError.validation('id query param is required');
   }
 
-  const db = getNeonDb();
   let deleted: { id: string; short_id: string }[] = [];
   try {
     deleted = await db.query<{ id: string; short_id: string }>(
