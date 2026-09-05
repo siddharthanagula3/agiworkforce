@@ -65,7 +65,7 @@ describe('workspace model policy covers every model-serving route', () => {
       const text = source(file);
 
       expect(
-        /buildModelPolicyGateResponse|evaluateModelAccessFor(Request|Organization)/.test(text),
+        /buildModelPolicyGateResponse|evaluateModelAccess(For(Request|Organization))?\(/.test(text),
         `${file} never asks the model policy, so a blocked model reaches the provider through it`,
       ).toBe(true);
     });
@@ -77,13 +77,30 @@ describe('workspace model policy covers every model-serving route', () => {
     // picker filtering closes.
     const text = source('app/api/llm/v1/chat/completions/lib/request-processor.ts');
     const resolution = text.indexOf('chatRequest.model = routeDecision.modelKey');
-    const gate = text.indexOf('evaluateModelAccessForOrganization(');
+    const gate = text.indexOf('const modelAccess = evaluateModelAccess(');
 
     expect(resolution).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(-1);
     expect(gate, 'the model check must run after the model is resolved').toBeGreaterThan(
       resolution,
     );
+  });
+
+  it('hands the policy to the router, so a blocked candidate never enters the plan', () => {
+    // The post-resolution gate above catches the head only. Every later hop,
+    // a failover rotation, a cheaper-model downgrade, a route retry, chooses a
+    // DIFFERENT model, and a policy enforced only on the happy path is not a
+    // policy. The resolver refuses a governed candidate during admission.
+    const text = source('app/api/llm/v1/chat/completions/lib/request-processor.ts');
+
+    expect(
+      text,
+      'resolveAutoRoute must receive organizationPolicy as an admission input',
+    ).toContain('organizationPolicy');
+    expect(
+      text.indexOf('readWorkspaceModelPolicy('),
+      'the policy must be read before routing, not after',
+    ).toBeLessThan(text.indexOf('chatRequest.model = routeDecision.modelKey'));
   });
 
   it('passes a catalog model id, never the provider-facing id', () => {
@@ -103,7 +120,11 @@ describe('workspace model policy covers every model-serving route', () => {
     for (const route of MODEL_SERVING_ROUTES) {
       const file = GATE_CALLERS[route] ?? route;
       const text = source(file);
-      const index = ['ModelPolicyGateResponse(', 'evaluateModelAccessForOrganization(']
+      const index = [
+        'ModelPolicyGateResponse(',
+        'evaluateModelAccessForOrganization(',
+        'const modelAccess = evaluateModelAccess(',
+      ]
         .map((needle) => text.indexOf(needle))
         .find((at) => at >= 0);
 

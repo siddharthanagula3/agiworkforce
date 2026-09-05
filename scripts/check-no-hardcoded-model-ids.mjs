@@ -46,6 +46,10 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   // measurements the Rust resolver has no store to read, so its cases are not a
   // cross-language contract and live beside the shared file rather than in it.
   'packages/ai/routing/src/__tests__/fixtures/auto-route-observed-health.json',
+  // Same generator, TypeScript-only half: the model-access evaluator carries a
+  // hand-maintained provider-synonym table, so mirroring it into the crate would
+  // duplicate the data this guard exists to keep in one place.
+  'packages/ai/routing/src/__tests__/fixtures/auto-route-policy.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.rs',
   'crates/agiworkforce-protocol/src/generated/model_registry.json',
