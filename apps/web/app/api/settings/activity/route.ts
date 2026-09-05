@@ -6,13 +6,16 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+const AUDIT_SCOPE = { resolveOrganization: false } as const;
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -37,9 +40,9 @@ async function handleGetActivity(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   let userId: string;
+  let db: ScopedDb;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    ({ db, userId } = await getUserScopedDb(request, AUDIT_SCOPE));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -56,8 +59,6 @@ async function handleGetActivity(request: NextRequest) {
     throw createError.validation('Invalid query parameters', parsed.error.issues);
   }
   const { limit, offset } = parsed.data;
-
-  const db = getNeonDb();
 
   try {
     const rows = await db.query<SecurityAuditLogRow>(
