@@ -1,4 +1,3 @@
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
 import { resolveObjectStorageConfig } from '../config';
 import { resolveObjectStorageRuntime } from '../factory';
@@ -34,22 +33,7 @@ async function exerciseStore(store: ObjectStore): Promise<void> {
   await store.delete(BUCKET, KEY);
 }
 
-function commandSummary(sent: unknown[]): string[] {
-  return sent.map((command) => {
-    if (command instanceof PutObjectCommand) {
-      return `put ${command.input.Bucket}/${command.input.Key} ${command.input.ContentType}`;
-    }
-    if (command instanceof GetObjectCommand) {
-      return `get ${command.input.Bucket}/${command.input.Key}`;
-    }
-    if (command instanceof DeleteObjectCommand) {
-      return `delete ${command.input.Bucket}/${command.input.Key}`;
-    }
-    return 'unknown';
-  });
-}
-
-function runtimeFor(env: Record<string, string>): { store: ObjectStore; sent: unknown[] } {
+function runtimeFor(env: Record<string, string>): { store: ObjectStore; sent: string[] } {
   const endpoint = createFakeS3Endpoint(resolveObjectStorageConfig(env), TIMEOUTS);
   const runtime = resolveObjectStorageRuntime({
     env,
@@ -68,8 +52,8 @@ describe('resolveObjectStorageRuntime', () => {
     await exerciseStore(cloudflare.store);
     await exerciseStore(minio.store);
 
-    expect(commandSummary(minio.sent)).toEqual(commandSummary(cloudflare.sent));
-    expect(commandSummary(cloudflare.sent)).toEqual([
+    expect(minio.sent).toEqual(cloudflare.sent);
+    expect(cloudflare.sent).toEqual([
       `put ${BUCKET}/${KEY} ${CONTENT_TYPE}`,
       `get ${BUCKET}/${KEY}`,
       `delete ${BUCKET}/${KEY}`,

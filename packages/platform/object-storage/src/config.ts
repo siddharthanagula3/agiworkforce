@@ -20,7 +20,7 @@ export const R2_PUBLIC_BASE_URL_ENV = 'CLOUDFLARE_R2_PUBLIC_BASE_URL';
 const OBJECT_STORAGE_PROVIDERS: readonly ObjectStorageProvider[] = ['s3', 'memory', 'none'];
 const DEFAULT_STORAGE_REGION = 'auto';
 const R2_ENDPOINT_HOST_SUFFIX = 'r2.cloudflarestorage.com';
-const R2_ACCOUNT_ID_PATTERN = /^[a-f0-9]{32}$/iu;
+const DNS_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;
 const BUCKET_NAME_PATTERN = /^(?!-)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u;
 const ENDPOINT_PROTOCOLS = new Set(['https:', 'http:']);
 const ENABLED_VALUES = new Set(['1', 'true', 'yes']);
@@ -51,7 +51,7 @@ function processEnvironment(): ObjectStorageEnvironment {
 
 function r2Endpoint(env: ObjectStorageEnvironment): string | undefined {
   const accountId = read(env, R2_ACCOUNT_ID_ENV);
-  if (!accountId || !R2_ACCOUNT_ID_PATTERN.test(accountId)) return undefined;
+  if (!accountId || !DNS_LABEL_PATTERN.test(accountId)) return undefined;
   return `https://${accountId}.${R2_ENDPOINT_HOST_SUFFIX}`;
 }
 
@@ -70,9 +70,9 @@ function readProvider(env: ObjectStorageEnvironment): ObjectStorageProvider | un
  * The single resolution order for every storage setting. A neutral name wins;
  * the Cloudflare-specific name behind it is the fallback so an environment
  * that was provisioned before the port existed keeps working untouched. The
- * endpoint is derived from the account id only when that id has the shape
- * Cloudflare issues, so a hostname smuggled into it never becomes an origin
- * this app trusts.
+ * endpoint is derived from the account id only when that id is a single DNS
+ * label, so a hostname smuggled into it never becomes part of an origin this
+ * app reaches or allows a browser to reach.
  */
 export function resolveObjectStorageConfig(
   env: ObjectStorageEnvironment = processEnvironment(),

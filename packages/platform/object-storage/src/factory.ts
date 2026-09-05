@@ -1,6 +1,10 @@
-import type { S3Client } from '@aws-sdk/client-s3';
 import { createMemoryObjectStore, type MemoryObjectStoreOptions } from './adapters/memory';
-import { createS3Client, createS3ObjectStore, type S3ClientTimeouts } from './adapters/s3';
+import {
+  createS3Client,
+  createS3ObjectStore,
+  type S3ClientTimeouts,
+  type S3ObjectStoreOptions,
+} from './adapters/s3';
 import {
   resolveObjectStorageConfig,
   type ObjectStorageConfig,
@@ -17,7 +21,7 @@ export interface ObjectStorageRuntime {
 export interface ResolveObjectStorageRuntimeOptions {
   env?: ObjectStorageEnvironment;
   timeouts?: S3ClientTimeouts;
-  client?: S3Client;
+  client?: S3ObjectStoreOptions['client'];
   memory?: MemoryObjectStoreOptions;
 }
 
