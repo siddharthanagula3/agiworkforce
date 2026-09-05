@@ -1,3 +1,7 @@
+import {
+  objectStorageUploadOrigins,
+  resolveObjectStorageConfig,
+} from '@agiworkforce/object-storage/config';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -31,17 +35,9 @@ function clerkFapiOrigin(): string {
 function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
   const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
   const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
-  const r2AccountId = process.env['CLOUDFLARE_R2_ACCOUNT_ID']?.trim();
-  const r2BucketName = process.env['CLOUDFLARE_R2_BUCKET_NAME']?.trim();
-  const r2PrivateBucketName = process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME']?.trim();
-  const r2BucketOrigin = (bucketName: string | undefined): string =>
-    r2AccountId &&
-    /^[a-f0-9]{32}$/iu.test(r2AccountId) &&
-    bucketName &&
-    /^(?!-)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u.test(bucketName)
-      ? ` https://${bucketName}.${r2AccountId}.r2.cloudflarestorage.com`
-      : '';
-  const r2UploadOrigins = `${r2BucketOrigin(r2BucketName)}${r2BucketOrigin(r2PrivateBucketName)}`;
+  const storageUploadOrigins = objectStorageUploadOrigins(resolveObjectStorageConfig())
+    .map((origin) => ` ${origin}`)
+    .join('');
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
   const clerkFapi = clerkFapiOrigin();
   return `
@@ -50,7 +46,7 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${r2UploadOrigins}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${storageUploadOrigins}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
