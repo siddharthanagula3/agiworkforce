@@ -50,6 +50,26 @@ export type AttachedSearchToolKind =
 const ANTHROPIC_SERVER_SEARCH_TYPE_PREFIX = `${WEB_SEARCH_TOOL}_`;
 const GOOGLE_BUILTIN_SEARCH_KEY = 'google_search';
 
+function classifySearchTool(tool: unknown): AttachedSearchToolKind | null {
+  if (!tool || typeof tool !== 'object') return null;
+  const record = tool as Record<string, unknown>;
+
+  const fn = record['function'];
+  if (record['type'] === 'function' && fn && typeof fn === 'object') {
+    return (fn as Record<string, unknown>)['name'] === WEB_SEARCH_TOOL ? 'generic-function' : null;
+  }
+
+  const type = record['type'];
+  if (typeof type === 'string' && type.startsWith(ANTHROPIC_SERVER_SEARCH_TYPE_PREFIX)) {
+    return 'anthropic-server';
+  }
+  if (type === WEB_SEARCH_TOOL) return 'openai-hosted';
+  if (record[GOOGLE_BUILTIN_SEARCH_KEY] && typeof record[GOOGLE_BUILTIN_SEARCH_KEY] === 'object') {
+    return 'google-builtin';
+  }
+  return null;
+}
+
 /**
  * Which shape of search tool this request actually carries. The four are not
  * interchangeable: only two of them accept a tool choice, so the caller cannot
@@ -59,28 +79,20 @@ export function classifyAttachedSearchTool(
   tools: readonly unknown[] | undefined,
 ): AttachedSearchToolKind | null {
   for (const tool of tools ?? []) {
-    if (!tool || typeof tool !== 'object') continue;
-    const record = tool as Record<string, unknown>;
-
-    const fn = record['function'];
-    if (record['type'] === 'function' && fn && typeof fn === 'object') {
-      if ((fn as Record<string, unknown>)['name'] === WEB_SEARCH_TOOL) return 'generic-function';
-      continue;
-    }
-
-    const type = record['type'];
-    if (typeof type === 'string' && type.startsWith(ANTHROPIC_SERVER_SEARCH_TYPE_PREFIX)) {
-      return 'anthropic-server';
-    }
-    if (type === WEB_SEARCH_TOOL) return 'openai-hosted';
-    if (
-      record[GOOGLE_BUILTIN_SEARCH_KEY] &&
-      typeof record[GOOGLE_BUILTIN_SEARCH_KEY] === 'object'
-    ) {
-      return 'google-builtin';
-    }
+    const kind = classifySearchTool(tool);
+    if (kind) return kind;
   }
   return null;
+}
+
+/**
+ * The provider-native search kind of one tool, empty for anything else,
+ * `generic-function` included: that shape is our own tool, already governed
+ * by the web-search call budget, not the native per-turn cap.
+ */
+export function nativeSearchToolName(tool: unknown): string {
+  const kind = classifySearchTool(tool);
+  return kind && kind !== 'generic-function' ? kind : '';
 }
 
 /**

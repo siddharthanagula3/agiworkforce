@@ -252,6 +252,14 @@ export function webSearchBudgetExhaustedMessage(limit: number): string {
   );
 }
 
+export function nativeSearchBudgetExhaustedMessage(limit: number): string {
+  return (
+    `Search limit reached: this turn has already grounded its ${limit} allowed ` +
+    'times. No further grounded searches will run. Answer now using the results ' +
+    'you already have, and say plainly which parts you could not confirm.'
+  );
+}
+
 export function webSearchResultsToFetchedSources(
   outcome: WebSearchOutcome,
 ): Array<{ url: string; title: string; snippet?: string }> {
