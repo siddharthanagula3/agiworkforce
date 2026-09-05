@@ -98,6 +98,15 @@ import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execut
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { isCloudCodeExecutionEnabled } from '@/lib/server/code-execution-policy';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
+import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
+import {
+  createToolTurnGovernor,
+  repeatedQueryMessage,
+  resolveTurnToolCallCap,
+  turnToolCapMessage,
+  turnToolCapRowSummary,
+  withdrawnToolMessage,
+} from './tool-turn-governor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import type { E2BExecutor } from '@/lib/e2b/types';
@@ -384,9 +393,19 @@ export type ToolLoopProviderExecutor = (
   input: ToolLoopProviderExecution,
 ) => Promise<ToolLoopProviderStepResult>;
 
+interface E2BExecutorResolution {
+  executor: E2BExecutor | null;
+  cause: E2BUnavailableCause | null;
+}
+
 export interface ToolLoopToolResult {
   content: string;
   isError: boolean;
+  /**
+   * The tool was never runnable for this turn rather than invoked and failing.
+   * The governor withdraws such a tool so the model cannot retry it all turn.
+   */
+  unavailable?: boolean;
   interactiveCard?: InteractiveCard;
   source?: FetchedSource;
   sources?: FetchedSource[];
@@ -1399,7 +1418,7 @@ function callerScopedDb(
 
 async function runMcpTool(
   toolCall: PendingToolCall,
-  e2bExecutor: () => Promise<E2BExecutor | null>,
+  e2bExecutor: () => Promise<E2BExecutorResolution>,
   availableTools: ReadonlySet<string>,
   connectorExecutor?: ConnectorToolExecutor,
   executionContext?: {
@@ -1570,6 +1589,7 @@ async function runMcpTool(
       return {
         content: `Tool ${toolCall.qualifiedName} is not available.`,
         isError: true,
+        unavailable: true,
       };
     }
     // Enforced HERE because the execution tools are declared by the client in
@@ -1587,14 +1607,22 @@ async function runMcpTool(
         content:
           'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.',
         isError: true,
+        unavailable: true,
       };
     }
-    const executor = await e2bExecutor();
-    const result = await routeExecutionTool(executor, toolCall.qualifiedName, toolCall.args);
+    const { executor, cause } = await e2bExecutor();
+    const result = await routeExecutionTool(
+      executor,
+      toolCall.qualifiedName,
+      toolCall.args,
+      undefined,
+      cause,
+    );
     return {
       content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
       isError: !result.ok,
       pngResults: result.pngResults,
+      ...(result.unavailable ? { unavailable: true } : {}),
     };
   }
 
@@ -2321,6 +2349,7 @@ export async function* runToolLoop(
     ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
     : URL_FETCH_MAX_CALLS_PER_TURN;
   const turnSourceBudget = webSearchCallBudget * WEB_SEARCH_MAX_RESULTS + urlFetchCallBudget;
+  const toolGovernor = createToolTurnGovernor(resolveTurnToolCallCap(agiWorkTurn));
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   const searchRequired = processed.searchRequirement?.required === true;
@@ -2345,17 +2374,20 @@ export async function* runToolLoop(
       : undefined;
   let e2bExecutor: E2BExecutor | null = null;
   let e2bExecutorResolved = false;
+  let e2bUnavailableCause: E2BUnavailableCause | null = null;
   let e2bBaseline: SandboxSnapshot | null = null;
   let executionToolRan = false;
   const turnPngResults: string[] = [];
-  async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
+  async function resolveE2BExecutor(): Promise<E2BExecutorResolution> {
     if (!e2bExecutorResolved) {
-      e2bExecutor = await getE2BExecutor(e2bSessionScope);
+      e2bExecutor = await getE2BExecutor(e2bSessionScope, (cause) => {
+        e2bUnavailableCause ??= cause;
+      });
       e2bExecutorResolved = true;
       if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
     }
     executionToolRan = true;
-    return e2bExecutor;
+    return { executor: e2bExecutor, cause: e2bUnavailableCause };
   }
 
   async function harvestGeneratedFilesEvents(): Promise<SseLine[]> {
@@ -2539,6 +2571,7 @@ export async function* runToolLoop(
       tc: PendingToolCall;
       content: string;
       isError: boolean;
+      unavailable?: boolean;
       source?: FetchedSource;
       sources?: FetchedSource[];
       pngResults?: string[];
@@ -2549,12 +2582,35 @@ export async function* runToolLoop(
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
+      const budget = toolGovernor.countCall();
+      if (!budget.withinCap) {
+        toolGovernor.withdraw(tc.qualifiedName, 'turn-cap');
+        return Promise.resolve({
+          content: turnToolCapMessage(toolGovernor.cap),
+          isError: false,
+        });
+      }
+      if (toolGovernor.isWithdrawn(tc.qualifiedName)) {
+        return Promise.resolve({
+          content: withdrawnToolMessage(tc.qualifiedName),
+          isError: false,
+        });
+      }
       if (isWebSearchTool(tc.qualifiedName)) {
         searchObserved = true;
         webSearchCallsUsed += 1;
         if (webSearchCallsUsed > webSearchCallBudget) {
+          toolGovernor.withdraw(tc.qualifiedName, 'budget');
           return Promise.resolve({
             content: webSearchBudgetExhaustedMessage(webSearchCallBudget),
+            isError: false,
+          });
+        }
+        const query = tc.args['query'];
+        if (toolGovernor.noteQuery(tc.qualifiedName, query) === 'repeat') {
+          toolGovernor.withdraw(tc.qualifiedName, 'repeated-query');
+          return Promise.resolve({
+            content: repeatedQueryMessage(typeof query === 'string' ? query : ''),
             isError: false,
           });
         }
@@ -2562,6 +2618,7 @@ export async function* runToolLoop(
       if (isUrlFetchTool(tc.qualifiedName)) {
         urlFetchCallsUsed += 1;
         if (urlFetchCallsUsed > urlFetchCallBudget) {
+          toolGovernor.withdraw(tc.qualifiedName, 'budget');
           return Promise.resolve({
             content: urlFetchBudgetExhaustedMessage(urlFetchCallBudget),
             isError: false,
@@ -2636,6 +2693,12 @@ export async function* runToolLoop(
     for (const tc of mutating) {
       const result = await executeTool(tc);
       results.push({ tc, ...result });
+    }
+
+    // A tool that could not run is not a tool the model should try again: it
+    // leaves the offered set here so the remaining steps go to the answer.
+    for (const r of results) {
+      if (r.unavailable) toolGovernor.withdraw(r.tc.qualifiedName, 'unavailable');
     }
 
     for (const r of results) {
@@ -3206,9 +3269,12 @@ export async function* runToolLoop(
         );
       }
 
-      const stepTools = mapSearchBatchCompleted
+      const offeredTools = mapSearchBatchCompleted
         ? llmRequest.tools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
         : llmRequest.tools;
+      const stepTools = toolGovernor.capReached()
+        ? undefined
+        : toolGovernor.offered(offeredTools, functionToolName);
       const stepRequest = {
         ...llmRequest,
         messages,
@@ -3559,6 +3625,26 @@ export async function* runToolLoop(
       if (autoRunCalls.length > 0) {
         yield* runAndStreamToolCalls(autoRunCalls, { completedSteps: step });
         if (suspendedForInput) return;
+        if (toolGovernor.capReached() && toolGovernor.claimCapAnnouncement()) {
+          logger.warn(
+            {
+              cap: toolGovernor.cap,
+              used: toolGovernor.callsUsed(),
+              step,
+              provider: processed.provider,
+            },
+            '[tool-loop] per-turn tool call cap reached; tools withdrawn for the rest of the turn',
+          );
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'progress-update',
+              progressId: `tool-cap:${turnId}`,
+              summary: turnToolCapRowSummary(toolGovernor.callsUsed()),
+              status: 'completed',
+            }),
+          );
+        }
+
         if (
           mapSearchBatchCompleted &&
           autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
