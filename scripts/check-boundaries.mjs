@@ -41,50 +41,84 @@ const MANAGED_COMPUTE_START_PATTERNS = MANAGED_COMPUTE_START_MARKERS.map(
 /**
  * Vendor SDKs that may only be reached through the port adapter that owns them.
  * A second consumer means a second retry budget, a second credential
- * resolution, and a swap that has to visit every call site.
+ * resolution, and a swap that has to visit every call site. The allowlist
+ * itself lives in VENDOR_ADAPTER_ALLOWLIST_PATH, one entry per vendor SDK.
  */
-const vendorAdapterOwnership = [
-  {
-    packages: ['@upstash/redis', '@upstash/ratelimit'],
-    owner: 'packages/platform/key-value/src/adapters/upstash.ts',
-    port: '@agiworkforce/key-value',
-    alsoAllowed: [],
-  },
-  {
-    packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
-    owner: 'packages/platform/object-storage/src/adapters/s3.ts',
-    port: '@agiworkforce/object-storage',
-    alsoAllowed: ['packages/platform/object-storage/src/__tests__/fake-s3-endpoint.ts'],
-  },
-  {
-    packages: ['@neondatabase/serverless'],
-    owner: 'packages/platform/data-layer/src/adapters/neon.ts',
-    port: '@agiworkforce/data-layer',
-    alsoAllowed: [
-      'packages/platform/data-layer/src/__tests__/adapter-contract.test.ts',
-      'packages/platform/data-layer/src/__tests__/neon-adapter.test.ts',
-      'packages/platform/data-layer/src/__tests__/neon-tls.test.ts',
-      'packages/platform/data-layer/src/__tests__/neon-ws-proxy.test.ts',
-      'services/signaling-server/src/db.ts',
-    ],
-  },
-  /**
-   * The two out-of-band scripts hold their own client on purpose. The RLS probe
-   * is the independent check on the policies the adapter binds, so routing it
-   * through that adapter would make it confirm its own premise rather than test
-   * it, and neither script runs inside a request.
-   */
-  {
-    packages: ['pg'],
-    owner: 'packages/platform/data-layer/src/adapters/postgres.ts',
-    port: '@agiworkforce/data-layer',
-    alsoAllowed: [
-      'packages/platform/data-layer/src/__tests__/adapter-contract.test.ts',
-      'apps/web/scripts/rls-probe.mjs',
-      'apps/web/scripts/route-cache-observability-report.mjs',
-    ],
-  },
-];
+const VENDOR_ADAPTER_ALLOWLIST_PATH = 'scripts/config/vendor-adapter-allowlist.json';
+const VENDOR_ADAPTER_ROOT_KEYS = new Set(['schemaVersion', 'vendors']);
+const VENDOR_ADAPTER_VENDOR_KEYS = new Set(['packages', 'port', 'files']);
+const VENDOR_ADAPTER_FILE_KEYS = new Set(['path', 'owner', 'reason']);
+
+function loadVendorAdapterAllowlist() {
+  const abs = path.join(root, VENDOR_ADAPTER_ALLOWLIST_PATH);
+  if (!fs.existsSync(abs)) return { schemaVersion: 1, vendors: [] };
+  return JSON.parse(fs.readFileSync(abs, 'utf8'));
+}
+
+function validateVendorAdapterAllowlist(allowlist) {
+  for (const key of Object.keys(allowlist)) {
+    if (!VENDOR_ADAPTER_ROOT_KEYS.has(key)) {
+      errors.push(`${VENDOR_ADAPTER_ALLOWLIST_PATH}: unknown top-level key "${key}".`);
+    }
+  }
+
+  for (const vendor of allowlist.vendors ?? []) {
+    for (const key of Object.keys(vendor)) {
+      if (!VENDOR_ADAPTER_VENDOR_KEYS.has(key)) {
+        errors.push(`${VENDOR_ADAPTER_ALLOWLIST_PATH}: unknown key "${key}" on a vendor entry.`);
+      }
+    }
+
+    const label = Array.isArray(vendor.packages) ? vendor.packages.join(', ') : '(unnamed vendor)';
+    if (!vendor.port || typeof vendor.port !== 'string') {
+      errors.push(`${VENDOR_ADAPTER_ALLOWLIST_PATH}: ${label} is missing a "port" string.`);
+    }
+
+    let ownerCount = 0;
+    for (const file of vendor.files ?? []) {
+      for (const key of Object.keys(file)) {
+        if (!VENDOR_ADAPTER_FILE_KEYS.has(key)) {
+          errors.push(
+            `${VENDOR_ADAPTER_ALLOWLIST_PATH}: unknown key "${key}" on a file entry for ${label}.`,
+          );
+        }
+      }
+      if (!file.path || typeof file.path !== 'string') {
+        errors.push(
+          `${VENDOR_ADAPTER_ALLOWLIST_PATH}: ${label} has a file entry missing a "path" string.`,
+        );
+        continue;
+      }
+      if (!fs.existsSync(path.join(root, file.path))) {
+        errors.push(`${VENDOR_ADAPTER_ALLOWLIST_PATH}: ${file.path} does not exist.`);
+      }
+      if (
+        !file.reason ||
+        typeof file.reason !== 'string' ||
+        file.reason.trim().length < MINIMUM_ALLOWLIST_REASON_LENGTH
+      ) {
+        errors.push(
+          `${VENDOR_ADAPTER_ALLOWLIST_PATH}: ${file.path} needs a "reason" for importing ${label} directly.`,
+        );
+      }
+      if (file.owner === true) ownerCount += 1;
+    }
+    if (ownerCount !== 1) {
+      errors.push(
+        `${VENDOR_ADAPTER_ALLOWLIST_PATH}: ${label} must mark exactly one file "owner": true, found ${ownerCount}.`,
+      );
+    }
+  }
+}
+
+function vendorAdapterEntries(allowlist) {
+  return (allowlist.vendors ?? []).map((vendor) => ({
+    packages: Array.isArray(vendor.packages) ? vendor.packages : [],
+    port: vendor.port,
+    owner: (vendor.files ?? []).find((file) => file.owner === true)?.path,
+    allowed: new Set((vendor.files ?? []).map((file) => file.path)),
+  }));
+}
 
 /**
  * The identity provider's SDKs are reachable from apps/web only through the
@@ -99,6 +133,10 @@ const IDENTITY_PORT_PACKAGE = '@agiworkforce/identity';
 const IDENTITY_ADAPTER_ROOT = 'packages/platform/identity/';
 const IDENTITY_SDK_ALLOWLIST_PATH = 'scripts/config/identity-sdk-allowlist.json';
 const MINIMUM_ALLOWLIST_REASON_LENGTH = 10;
+
+const vendorAdapterAllowlist = loadVendorAdapterAllowlist();
+validateVendorAdapterAllowlist(vendorAdapterAllowlist);
+const vendorAdapterOwnership = vendorAdapterEntries(vendorAdapterAllowlist);
 
 const identitySdkImporters = new Map();
 
@@ -365,7 +403,7 @@ for (const scanRoot of scanRoots) {
         ) {
           continue;
         }
-        if (rel === ownership.owner || ownership.alsoAllowed.includes(rel)) continue;
+        if (ownership.allowed.has(rel)) continue;
         errors.push(
           `${rel} imports ${specifier} directly; reach it through ${ownership.port}, whose adapter in ${ownership.owner} owns that SDK.`,
         );

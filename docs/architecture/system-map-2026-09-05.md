@@ -293,16 +293,17 @@ integration that is not added to that array would import its SDK freely from
 anywhere with no guard catching it, which is the single largest boundary risk
 found in this group.
 
-| Allowlist                                                 | Enforces                                                                     |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `scripts/config/identity-sdk-allowlist.json`              | named exceptions to the Clerk-import boundary                                |
-| `scripts/config/managed-compute-evaluator-allowlist.json` | routes exempt from the spend-evaluation-before-use order                     |
-| `scripts/config/migration-dependency-allowlist.json`      | permitted cross-references between numbered migrations                       |
-| `scripts/config/reference-integrity-allowlist.json`       | doc paths exempt from the existence check this document is itself subject to |
-| `scripts/config/rls-boundary-allowlist.json`              | queries exempt from tenant-scoping, each with a stated reason                |
-| `scripts/config/skipped-test-ratchet.json`                | a ceiling on skipped tests that is never allowed to grow                     |
-| `scripts/config/surface-invariants-allowlist.json`        | exemptions from the web surface-invariants guard                             |
-| `scripts/config/surface-reachability-allowlist.json`      | modules exempt from the cross-surface reachability graph                     |
+| Allowlist                                                 | Enforces                                                                                        |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `scripts/config/identity-sdk-allowlist.json`              | named exceptions to the Clerk-import boundary                                                   |
+| `scripts/config/managed-compute-evaluator-allowlist.json` | routes exempt from the spend-evaluation-before-use order                                        |
+| `scripts/config/migration-dependency-allowlist.json`      | permitted cross-references between numbered migrations                                          |
+| `scripts/config/reference-integrity-allowlist.json`       | doc paths exempt from the existence check this document is itself subject to                    |
+| `scripts/config/rls-boundary-allowlist.json`              | queries exempt from tenant-scoping, each with a stated reason                                   |
+| `scripts/config/skipped-test-ratchet.json`                | a ceiling on skipped tests that is never allowed to grow                                        |
+| `scripts/config/surface-invariants-allowlist.json`        | exemptions from the web surface-invariants guard                                                |
+| `scripts/config/surface-reachability-allowlist.json`      | modules exempt from the cross-surface reachability graph                                        |
+| `scripts/config/vendor-adapter-allowlist.json`            | files allowed to import a vendor SDK directly, one entry per vendor SDK, each carrying a reason |
 
 Coupling: the CI and deploy tooling is otherwise plain Node and shell script
 and would port to another CI runner; the one host-specific piece is the

@@ -32,6 +32,11 @@ function runOnSandbox(files) {
 
 const EMPTY_ALLOWLIST = JSON.stringify({ schemaVersion: 1, entries: [] });
 const EMPTY_IDENTITY_ALLOWLIST = 'scripts/config/identity-sdk-allowlist.json';
+const VENDOR_ADAPTER_ALLOWLIST_PATH = 'scripts/config/vendor-adapter-allowlist.json';
+
+function vendorAllowlist(packages, port, files) {
+  return JSON.stringify({ schemaVersion: 1, vendors: [{ packages, port, files }] });
+}
 
 test('the real guard passes on the repository as it stands', () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -226,4 +231,180 @@ test('the real identity allowlist names only the provider ui mount, the auth ada
     assert.ok(allowlistedPaths.has(seeded), `expected ${seeded} in the seeded allowlist`);
   }
   assert.equal(allowlistedPaths.size, 5, 'the identity allowlist should not grow silently');
+});
+
+test('fails a file that imports a vendor SDK directly without an allowlist entry', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts': 'export const ready = true;\n',
+    'packages/example/src/thing.ts': "import { Redis } from '@upstash/redis';\nexport { Redis };\n",
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [
+        {
+          path: 'packages/example/src/adapters/vendor.ts',
+          owner: true,
+          reason: 'owns the fixture adapter for this test.',
+        },
+      ],
+    ),
+  });
+  assert.equal(result.status, 1, 'guard should reject a direct vendor SDK import');
+  assert.match(result.stderr, /@upstash\/redis/);
+  assert.match(result.stderr, /@agiworkforce\/key-value/);
+});
+
+test('passes the owner file importing its vendor SDK directly', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts':
+      "import { Redis } from '@upstash/redis';\nexport { Redis };\n",
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [
+        {
+          path: 'packages/example/src/adapters/vendor.ts',
+          owner: true,
+          reason: 'owns the fixture adapter for this test.',
+        },
+      ],
+    ),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
+});
+
+test('passes a non-owner file that carries an allowlist entry with a reason', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts': 'export const ready = true;\n',
+    'packages/example/src/adapters/vendor.contract.test.ts':
+      "import { Redis } from '@upstash/redis';\nexport { Redis };\n",
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [
+        {
+          path: 'packages/example/src/adapters/vendor.ts',
+          owner: true,
+          reason: 'owns the fixture adapter for this test.',
+        },
+        {
+          path: 'packages/example/src/adapters/vendor.contract.test.ts',
+          owner: false,
+          reason: 'runs the shared contract suite against the real client.',
+        },
+      ],
+    ),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
+});
+
+test('fails a vendor-adapter allowlist entry that carries an unknown key', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts': 'export const ready = true;\n',
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: JSON.stringify({
+      schemaVersion: 1,
+      vendors: [
+        {
+          packages: ['@upstash/redis'],
+          port: '@agiworkforce/key-value',
+          notAField: true,
+          files: [
+            {
+              path: 'packages/example/src/adapters/vendor.ts',
+              owner: true,
+              reason: 'owns the fixture adapter for this test.',
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  assert.equal(result.status, 1, 'guard should reject an unknown vendor key');
+  assert.match(result.stderr, /unknown key "notAField"/);
+});
+
+test('fails a vendor-adapter file entry that carries no reason', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts': 'export const ready = true;\n',
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [{ path: 'packages/example/src/adapters/vendor.ts', owner: true }],
+    ),
+  });
+  assert.equal(result.status, 1, 'guard should demand a reason');
+  assert.match(result.stderr, /needs a "reason"/);
+});
+
+test('fails a vendor-adapter entry that lists a file which does not exist', () => {
+  const result = runOnSandbox({
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [
+        {
+          path: 'packages/example/src/adapters/missing.ts',
+          owner: true,
+          reason: 'owns the fixture adapter for this test.',
+        },
+      ],
+    ),
+  });
+  assert.equal(result.status, 1, 'guard should reject a nonexistent allowlisted file');
+  assert.match(result.stderr, /does not exist/);
+});
+
+test('fails a vendor-adapter entry that marks zero or more than one file as owner', () => {
+  const result = runOnSandbox({
+    'packages/example/src/adapters/vendor.ts': 'export const ready = true;\n',
+    'packages/example/src/adapters/vendor-two.ts': 'export const ready = true;\n',
+    [VENDOR_ADAPTER_ALLOWLIST_PATH]: vendorAllowlist(
+      ['@upstash/redis'],
+      '@agiworkforce/key-value',
+      [
+        {
+          path: 'packages/example/src/adapters/vendor.ts',
+          owner: true,
+          reason: 'owns the fixture adapter for this test.',
+        },
+        {
+          path: 'packages/example/src/adapters/vendor-two.ts',
+          owner: true,
+          reason: 'also claims ownership for this test.',
+        },
+      ],
+    ),
+  });
+  assert.equal(result.status, 1, 'guard should reject more than one owner');
+  assert.match(result.stderr, /exactly one file "owner"/);
+});
+
+test('the real vendor-adapter allowlist enforces the same vendor SDKs as before', () => {
+  const allowlist = JSON.parse(
+    spawnSync('cat', [path.join(REPO_ROOT, VENDOR_ADAPTER_ALLOWLIST_PATH)]).stdout,
+  );
+  const byPort = new Map(allowlist.vendors.map((vendor) => [vendor.port, vendor]));
+  const expected = [
+    { port: '@agiworkforce/key-value', packages: ['@upstash/redis', '@upstash/ratelimit'] },
+    {
+      port: '@agiworkforce/object-storage',
+      packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+    },
+  ];
+  for (const entry of expected) {
+    const vendor = byPort.get(entry.port);
+    assert.ok(vendor, `expected a vendor entry for ${entry.port}`);
+    assert.deepEqual(vendor.packages, entry.packages);
+    assert.equal(
+      vendor.files.filter((file) => file.owner === true).length,
+      1,
+      `expected exactly one owner file for ${entry.port}`,
+    );
+  }
+  const dataLayerVendors = allowlist.vendors.filter(
+    (vendor) => vendor.port === '@agiworkforce/data-layer',
+  );
+  assert.equal(dataLayerVendors.length, 2, 'expected neon and pg as separate data-layer vendors');
+  const dataLayerPackages = dataLayerVendors.flatMap((vendor) => vendor.packages);
+  assert.deepEqual(dataLayerPackages.sort(), ['@neondatabase/serverless', 'pg']);
 });
