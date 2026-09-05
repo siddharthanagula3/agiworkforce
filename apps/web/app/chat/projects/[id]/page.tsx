@@ -22,10 +22,11 @@ import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
+import { SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toUserMessage } from '@/lib/user-error-message';
 
-type Tab = 'chats' | 'sources';
+type Tab = 'chats' | 'sources' | 'scheduled';
 
 const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
   'emerald',
@@ -600,7 +601,7 @@ export default function ProjectDetailPage() {
             role="tablist"
             aria-label="Project tabs"
           >
-            {(['chats', 'sources'] as const).map((t) => (
+            {(['chats', 'sources', 'scheduled'] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -624,7 +625,7 @@ export default function ProjectDetailPage() {
                   transition: 'color 0.15s, border-color 0.15s',
                 }}
               >
-                {t === 'chats' ? 'Chats' : 'Sources'}
+                {t === 'chats' ? 'Chats' : t === 'sources' ? 'Sources' : 'Scheduled'}
               </button>
             ))}
           </div>
@@ -778,8 +779,10 @@ export default function ProjectDetailPage() {
                   )}
                 </>
               )
-            ) : (
+            ) : tab === 'sources' ? (
               <SourcesPanel projectId={project.id} />
+            ) : (
+              <SchedulesPage scope={{ projectId: project.id, projectName: project.name }} />
             )}
           </div>
         </div>
