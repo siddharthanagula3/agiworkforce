@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockRequireCurrentUserId, mockNeonQuery } = vi.hoisted(() => ({
@@ -28,7 +27,16 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+    userId: await mockRequireCurrentUserId(),
+    organizationId: null,
+  })),
+}));
+
 import { POST, DELETE } from '../route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const DEVICE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -54,9 +62,7 @@ describe('POST /api/mobile/push-token', () => {
   });
 
   it('upserts the device row for the current user', async () => {
-    mockNeonQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
     const res = await POST(
       makePostRequest({
@@ -67,7 +73,9 @@ describe('POST /api/mobile/push-token', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(mockRequireCurrentUserId).toHaveBeenCalledWith(expect.any(Request));
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.any(Request), {
+      resolveOrganization: false,
+    });
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['success']).toBe(true);
   });
@@ -100,7 +108,9 @@ describe('DELETE /api/mobile/push-token', () => {
     const res = await DELETE(makeDeleteRequest(DEVICE_ID));
 
     expect(res.status).toBe(200);
-    expect(mockRequireCurrentUserId).toHaveBeenCalledWith(expect.any(Request));
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.any(Request), {
+      resolveOrganization: false,
+    });
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['success']).toBe(true);
 
