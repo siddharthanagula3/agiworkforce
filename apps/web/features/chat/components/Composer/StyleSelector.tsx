@@ -126,23 +126,22 @@ export function StyleSelector() {
 
   return (
     <div className="relative" ref={ref}>
-      {/* An ordinary row of the "+" menu, not a composer-face pill: as a pill
-          it rendered indented, smaller and muted beside Skills and Connectors,
-          and its label was dropped entirely on a narrow composer, leaving a
-          bare icon with no name. */}
       <button
         ref={triggerRef}
         onClick={() => setOpen(!open)}
         className={cn(
-          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-          isActive && 'text-[var(--chat-accent-primary-text)]',
+          'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+          isActive
+            ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)] ring-1 ring-[var(--chat-accent-primary)]/30'
+            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
         )}
         aria-label="Response style"
         aria-expanded={open}
       >
-        <Palette className={cn('h-4 w-4', !isActive && 'text-muted-foreground')} />
-        <span className="flex-1 text-left">Style</span>
-        {isActive && <span className="text-[12px] font-medium">{activeLabel}</span>}
+        <Palette className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">
+          {style === DEFAULT_PRESET_STYLE && length === 'brief' ? 'Style' : activeLabel}
+        </span>
       </button>
 
       {/* Portaled + viewport-clamped: as an `absolute bottom-full` panel this

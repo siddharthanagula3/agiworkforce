@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider, useMenuKeyboard } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
+import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import {
@@ -66,9 +67,12 @@ const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';
 const TRIAL_SLOT_SUFFIX = 'is selected for the free web trial';
 const MODEL_CATALOG_ENDPOINT = '/api/models';
 
-/** Compact model pill (name plus effort), the composer's sole model control. */
-const MODEL_PILL_TRIGGER_CLASS =
-  'flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
+/** Locked slot (upgrade prompt): a bordered pill signals it is not a live picker. */
+const MODEL_LOCKED_TRIGGER_CLASS =
+  'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
+/** Live model trigger: plain text plus a chevron, no border or fill. */
+const MODEL_TRIGGER_CLASS =
+  'flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground';
 
 const PICKER_SEARCH_MIN_ROSTER = 8;
 const PICKER_VIEWPORT_INSET_PX = 16;
@@ -665,6 +669,8 @@ interface ComposerFooterProps {
   onModelChange?: (modelId: string) => Promise<boolean>;
   /** When true, render the selected model as a locked status pill instead of a dropdown. */
   lockModelSelector?: boolean;
+  /** Controls whether the response style selector is visible. */
+  showStyleSelector?: boolean;
   /**
    * Inline mode: render ONLY the model/style selector cluster (no hint, budget,
    * or usage rows) so it can be dropped directly into the composer's control
@@ -718,6 +724,7 @@ export function ComposerFooter({
   onUpgradeRequest,
   onModelChange,
   lockModelSelector = false,
+  showStyleSelector = true,
   inline = false,
   className,
 }: ComposerFooterProps) {
@@ -986,14 +993,22 @@ export function ComposerFooter({
             ChatComposerNew: plain Enter sends, Shift+Enter newline (ChatGPT/Claude
             convention), Cmd/Ctrl+Enter also sends. */}
         <div className="flex min-w-0 items-center gap-2">
-          {/* Model selector: a compact pill (name plus effort), not the wide
-              text-label trigger this replaced. Response style now lives in
-              the "+" menu (ChatComposerNew.tsx), not on the composer face. */}
+          {/* Response style selector · hidden below sm so the model selector keeps a
+              usable width on the narrow (mobile) composer row. Style is a secondary
+              control and, like claude.ai's mobile composer, is dropped at small widths
+              rather than crushing the model picker. */}
+          {showStyleSelector && (
+            <div className="hidden sm:block">
+              <StyleSelector />
+            </div>
+          )}
+
+          {/* Model selector */}
           {showModelSelector && lockModelSelector && (
             <button
               type="button"
               onClick={onUpgradeRequest}
-              className={MODEL_PILL_TRIGGER_CLASS}
+              className={MODEL_LOCKED_TRIGGER_CLASS}
               aria-label={lockedSlotLabel}
             >
               <ProviderLogo providerKey={selectedProviderKey} size={PICKER_TRIGGER_ICON_SIZE} />
@@ -1014,7 +1029,7 @@ export function ComposerFooter({
                   ref={modelTriggerRef}
                   id="model-selector"
                   disabled={modelChangePending}
-                  className={MODEL_PILL_TRIGGER_CLASS}
+                  className={MODEL_TRIGGER_CLASS}
                   aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={PICKER_TRIGGER_ICON_SIZE} />
