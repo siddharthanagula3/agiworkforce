@@ -337,3 +337,31 @@ describe('past-due payment notice', () => {
     expect(screen.queryByText(/did not go through/)).toBeNull();
   });
 });
+
+describe('BillingSection row density', () => {
+  it('shows a skeleton, not visible loading text, while the account loads', () => {
+    mockBillingInitialized = false;
+    mockBillingLoading = true;
+    global.fetch = vi.fn();
+
+    render(<BillingSection />);
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Loading your billing account…');
+    expect(status.className).toContain('sr-only');
+    expect(document.querySelector('.animate-pulse')).not.toBeNull();
+  });
+
+  it('renders the plan, payment and invoices rows without a bordered card', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    const adjustPlan = await screen.findByText('Adjust plan');
+    expect(adjustPlan.closest('section')).toBeNull();
+    const payment = screen.getByText('Payment');
+    expect(payment.closest('section')).toBeNull();
+    const invoices = screen.getByText('Invoices');
+    expect(invoices.closest('section')).toBeNull();
+  });
+});
