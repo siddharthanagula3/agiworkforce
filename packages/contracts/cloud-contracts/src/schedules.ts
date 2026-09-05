@@ -51,6 +51,7 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   isActive: z.boolean(),
   expiresAt: z.string().datetime().nullable(),
   maxExecutions: z.number().int().min(1).max(1_000_000).nullable(),
+  projectId: z.string().trim().min(1).nullable().optional(),
 });
 export type ManagedCloudScheduleMutation = z.infer<typeof ManagedCloudScheduleMutationSchema>;
 
@@ -79,6 +80,7 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   metadata: NullableRecordSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
+  projectId: z.string().nullable().optional(),
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
 
@@ -153,6 +155,7 @@ export interface ManagedCloudSchedulesClientConfig {
 export interface ManagedCloudSchedulesPageInput {
   limit: number;
   offset: number;
+  projectId?: string | null;
   signal?: AbortSignal;
 }
 
@@ -299,8 +302,9 @@ export function createManagedCloudSchedulesClient(
   }
 
   return {
-    async listSchedules({ limit, offset, signal }) {
+    async listSchedules({ limit, offset, projectId, signal }) {
       const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (projectId) query.set('projectId', projectId);
       const result = await request(
         `${MANAGED_CLOUD_SCHEDULES_PATH}?${query.toString()}`,
         'GET',
