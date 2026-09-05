@@ -7,4 +7,5 @@
  * @packageDocumentation
  */
 
+export * from './explicit-search-intent';
 export * from './web-search-support';
