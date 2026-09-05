@@ -72,3 +72,29 @@ describe('project detail page scheduled tab', () => {
     expect(section).toHaveTextContent('Scheduled for Marketing launch (project-1)');
   });
 });
+
+describe('project detail page header', () => {
+  it('keeps the folder glyph and title without a provenance chip cluster', () => {
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByRole('heading', { name: 'Marketing launch' })).toBeInTheDocument();
+    expect(screen.queryByTestId('project-header-imported-from')).toBeNull();
+    expect(screen.queryByTestId('project-header-privacy-chip')).toBeNull();
+    expect(screen.queryByTestId('project-header-provider-chip')).toBeNull();
+    expect(screen.queryByTestId('project-header-surface-chips')).toBeNull();
+  });
+
+  it('marks the selected tab with the warm page primary token, not the retired amber alias', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    const chatsTab = screen.getByTestId('project-detail-tab-chats');
+    expect(chatsTab).toHaveStyle({ borderBottom: '2px solid hsl(var(--primary))' });
+
+    await user.click(screen.getByTestId('project-detail-tab-scheduled'));
+    expect(screen.getByTestId('project-detail-tab-scheduled')).toHaveStyle({
+      borderBottom: '2px solid hsl(var(--primary))',
+    });
+    expect(chatsTab).toHaveStyle({ borderBottom: '2px solid transparent' });
+  });
+});
