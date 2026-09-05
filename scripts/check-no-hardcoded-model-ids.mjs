@@ -11,6 +11,7 @@ import {
   loadFamilyCatalog,
   resolveFamilyRefsDeep,
 } from '../packages/ai/model-registry/scripts/families.mjs';
+import { mergeOpenRouterSyncedCatalog } from '../packages/ai/model-registry/scripts/openrouter-synced-catalog.mjs';
 import { getLocalModelCatalog } from '../packages/platform/local-llm/src/catalog.ts';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -18,6 +19,7 @@ export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const FAMILY_CATALOG_DIR = 'packages/ai/model-registry/catalog';
 const CURATION_PATH = 'packages/ai/model-registry/catalog/models.curation.json';
 const SYNCED_PATH = 'packages/ai/model-registry/catalog/models.synced.json';
+const OPENROUTER_SYNCED_PATH = 'packages/ai/model-registry/catalog/models.openrouter-synced.json';
 const RETIRED_MODELS_PATH = 'packages/ai/model-registry/catalog/retired-models.json';
 const MODEL_ROUTES_PATH = 'packages/ai/model-registry/catalog/model-routes.json';
 const PROBES_PATH = 'packages/ai/model-registry/catalog/probes.json';
@@ -28,6 +30,11 @@ export const SPEECH_ARTIFACT_REGISTRY_PATH =
 export const MODEL_ID_OWNER_PATHS = Object.freeze([
   CURATION_PATH,
   SYNCED_PATH,
+  // Mechanically synced from OpenRouter's own models endpoint by
+  // scripts/sync-openrouter-catalog.mjs; merged additively into curation.models
+  // by mergeOpenRouterSyncedCatalog at read time, so it is a model-id owner the
+  // same way the two files above are.
+  OPENROUTER_SYNCED_PATH,
   RETIRED_MODELS_PATH,
   MODEL_ROUTES_PATH,
   // Written only by `pnpm probe:models` from the catalog: a probe record is
@@ -235,6 +242,7 @@ export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
     providers: resolveFamilyRefsDeep(authoredCuration.providers, familyCatalog),
     tierAllowedModels: resolveFamilyRefsDeep(authoredCuration.tierAllowedModels, familyCatalog),
   };
+  mergeOpenRouterSyncedCatalog(curation, path.join(repoRoot, FAMILY_CATALOG_DIR));
   const synced = readJson(repoRoot, SYNCED_PATH);
   const retired = readJson(repoRoot, RETIRED_MODELS_PATH);
   const modelRoutes = readJson(repoRoot, MODEL_ROUTES_PATH);

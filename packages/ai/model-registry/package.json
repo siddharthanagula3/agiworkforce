@@ -15,11 +15,13 @@
     "check": "node scripts/compile.mjs --check",
     "refresh": "node scripts/compile.mjs --refresh",
     "check:pricing-drift": "node scripts/pricing-drift.mjs",
+    "check:gateways": "node scripts/validate-gateways.mjs",
+    "sync:openrouter": "node scripts/sync-openrouter-catalog.mjs",
     "families": "node scripts/family-slots.mjs evaluate",
     "families:status": "node scripts/family-slots.mjs status",
     "families:promote": "node scripts/family-slots.mjs promote",
     "families:rollback": "node scripts/family-slots.mjs rollback",
-    "test": "node --test tests/*.test.mjs && node scripts/compile.mjs --check",
+    "test": "node --test tests/*.test.mjs && node scripts/compile.mjs --check && node scripts/validate-gateways.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
