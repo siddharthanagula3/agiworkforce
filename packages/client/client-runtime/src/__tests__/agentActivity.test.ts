@@ -3,6 +3,7 @@ import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protoco
 import {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  isLocalPlaceholderActivityEntry,
   startAgentActivityLocally,
 } from '../agentActivity';
 import type { AgentActivityEntry, AgentActivityToolEntry } from '../agentActivity';
@@ -49,6 +50,31 @@ describe('portable agent activity projection', () => {
       expect.objectContaining({ summary: 'Planning the workspace task', status: 'running' }),
     ]);
     expect(JSON.stringify(canonical)).not.toContain('Starting AGI Work');
+  });
+
+  it('does not treat a retry placeholder as a suppressible local placeholder', () => {
+    const retrying = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Retrying',
+      startedAtMs: 900,
+      isRetry: true,
+    });
+    expect(isLocalPlaceholderActivityEntry(retrying.entries[0] as AgentActivityEntry)).toBe(false);
+
+    const canonical = applyAgentActivityEvent(
+      retrying,
+      envelope(0, {
+        type: 'progress-update',
+        progressId: 'planning',
+        summary: 'Planning the workspace task',
+        status: 'running',
+      }),
+    );
+    expect(canonical.entries).toEqual([
+      expect.objectContaining({ summary: 'Planning the workspace task', status: 'running' }),
+    ]);
+    expect(JSON.stringify(canonical)).not.toContain('Retrying');
   });
 
   it('keeps a tool entry a local bridge appended before the first canonical event of the turn arrives', () => {

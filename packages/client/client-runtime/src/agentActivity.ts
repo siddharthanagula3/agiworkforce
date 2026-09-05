@@ -40,6 +40,12 @@ export interface AgentActivityProgressEntry {
   status: 'running' | 'completed' | 'failed' | 'cancelled';
   startedAtMs: number;
   completedAtMs?: number;
+  /**
+   * Marks a silent-retry placeholder. Keep id/progressId equal to the fresh
+   * -start placeholder's so replacement and terminal-label logic still finds
+   * it; this flag is the only thing exempting it from the generic fold.
+   */
+  isRetry?: boolean;
 }
 
 export interface AgentActivityToolEntry {
@@ -141,9 +147,11 @@ export interface StartAgentActivityLocallyOptions {
   turnId: string;
   summary: string;
   startedAtMs: number;
+  isRetry?: boolean;
 }
 
 const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
+const LOCAL_START_PROGRESS_KIND = 'local-starting';
 const GENERATION_PROGRESS_ID_PREFIX = 'progress:generation';
 const GENERATION_PROGRESS_KIND = 'generation';
 const PREPARING_PROGRESS_ID = 'progress:preparing';
@@ -157,7 +165,9 @@ export function isGenerationProgressEntry(
 }
 
 export function isLocalPlaceholderActivityEntry(entry: AgentActivityEntry): boolean {
-  return entry.id === LOCAL_START_PROGRESS_ID || entry.id === PREPARING_PROGRESS_ID;
+  if (entry.id === PREPARING_PROGRESS_ID) return true;
+  if (entry.id !== LOCAL_START_PROGRESS_ID) return false;
+  return !(entry.kind === 'progress' && entry.isRetry);
 }
 
 export function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
@@ -213,10 +223,11 @@ export function startAgentActivityLocally(
       {
         kind: 'progress',
         id: LOCAL_START_PROGRESS_ID,
-        progressId: 'local-starting',
+        progressId: LOCAL_START_PROGRESS_KIND,
         summary: options.summary,
         status: 'running',
         startedAtMs: options.startedAtMs,
+        ...(options.isRetry ? { isRetry: true } : {}),
       },
     ],
   };

@@ -960,6 +960,7 @@ function beginEmptyTurnRetry(
           turnId: assistantMessageId,
           summary: 'Retrying',
           startedAtMs: Date.now(),
+          isRetry: true,
         }),
       },
     },
