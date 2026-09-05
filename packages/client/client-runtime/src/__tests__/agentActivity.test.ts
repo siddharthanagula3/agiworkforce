@@ -640,6 +640,7 @@ describe('unavailable tool notices', () => {
         toolCallId: 'call-unavailable',
         name: 'execute_code',
         category: 'code-execution',
+        summary: 'Running code',
         input: {},
       }),
     );
