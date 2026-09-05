@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { recordSpanEvent } from './otel-span-bridge';
+
 export interface PhaseTimer {
   record(phase: string, durationMs: number): void;
   attributes(): Record<string, number>;
@@ -8,6 +10,7 @@ export interface PhaseTimer {
 const storage = new AsyncLocalStorage<PhaseTimer>();
 
 const PHASE_ATTRIBUTE_PREFIX = 'phase';
+const PHASE_EVENT_DURATION_ATTRIBUTE = 'duration_ms';
 const NO_ELAPSED_MS = 0;
 
 function createPhaseTimer(): PhaseTimer {
@@ -42,6 +45,8 @@ export async function timePhase<R>(phase: string, fn: () => Promise<R>): Promise
   try {
     return await fn();
   } finally {
-    timer.record(phase, Date.now() - startedAt);
+    const durationMs = Date.now() - startedAt;
+    timer.record(phase, durationMs);
+    recordSpanEvent(phase, { [PHASE_EVENT_DURATION_ATTRIBUTE]: durationMs });
   }
 }

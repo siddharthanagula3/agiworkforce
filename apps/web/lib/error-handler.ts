@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
+import {
+  ATTR_HTTP_REQUEST_METHOD,
+  ATTR_HTTP_RESPONSE_STATUS_CODE,
+  ATTR_URL_PATH,
+} from '@opentelemetry/semantic-conventions';
 import { AppError, createError } from './errors';
 import { logger } from './logger';
-import { redactAttributes } from './observability/redact';
+import { redactAttributes, redactValue } from './observability/redact';
 import {
   PayloadCeilingExceededError,
   findPayloadCeilingBreach,
@@ -9,13 +14,20 @@ import {
   type PayloadCeilingBreach,
 } from './payload-ceiling';
 import {
+  SPAN_DOMAIN_ATTRIBUTE,
+  startBridgedSpan,
+  type SpanKind,
+} from './observability/otel-span-bridge';
+import {
   formatTraceparent,
-  newSpanId,
-  newTraceId,
   parseTraceparent,
   runWithTraceContext,
   type TraceContext,
 } from './observability/trace-context';
+
+const HTTP_SERVER_SPAN = 'http.server';
+const HTTP_SERVER_SPAN_KIND: SpanKind = 'server';
+const HTTP_SERVER_SPAN_DOMAIN = 'http';
 
 const GENERIC_MESSAGES: Record<number, string> = {
   400: 'Bad request',
@@ -186,10 +198,11 @@ export function withErrorHandler<T extends unknown[]>(
 ) {
   return async (...args: T): Promise<NextResponse | Response> => {
     const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
+    const serverSpan = startBridgedSpan(HTTP_SERVER_SPAN, HTTP_SERVER_SPAN_KIND, inbound);
     const context: TraceContext = {
-      traceId: inbound?.traceId ?? newTraceId(),
-      spanId: newSpanId(),
-      sampled: inbound?.sampled ?? true,
+      traceId: serverSpan.traceId,
+      spanId: serverSpan.spanId,
+      sampled: serverSpan.sampled,
     };
     const inboundRequestId = readHeader(args[0], 'x-request-id');
     const requestId =
@@ -205,59 +218,72 @@ export function withErrorHandler<T extends unknown[]>(
       meterUndeclaredBody(args[0] as Parameters<typeof meterUndeclaredBody>[0]);
     }
 
-    return runWithTraceContext(context, async () => {
-      const startedAt = Date.now();
-      let response: NextResponse | Response;
-      let status: 'ok' | 'error' = 'ok';
-      let thrown: unknown;
-      try {
-        if (breach) {
+    return runWithTraceContext(context, () =>
+      serverSpan.runWith(async () => {
+        const startedAt = Date.now();
+        let response: NextResponse | Response;
+        let status: 'ok' | 'error' = 'ok';
+        let thrown: unknown;
+        try {
+          if (breach) {
+            status = 'error';
+            response = payloadTooLargeResponse(breach, requestId);
+          } else {
+            response = await handler(...args);
+          }
+        } catch (error) {
+          thrown = error;
           status = 'error';
-          response = payloadTooLargeResponse(breach, requestId);
-        } else {
-          response = await handler(...args);
+          response =
+            error instanceof PayloadCeilingExceededError
+              ? payloadTooLargeResponse(
+                  { declaredBytes: null, ceilingBytes: error.ceilingBytes },
+                  requestId,
+                )
+              : handleError(error, requestId);
         }
-      } catch (error) {
-        thrown = error;
-        status = 'error';
-        response =
-          error instanceof PayloadCeilingExceededError
-            ? payloadTooLargeResponse(
-                { declaredBytes: null, ceilingBytes: error.ceilingBytes },
-                requestId,
-              )
-            : handleError(error, requestId);
-      }
 
-      logger.info(
-        {
-          event: 'span',
-          span_name: 'http.server',
-          span_kind: 'server',
-          span_domain: 'http',
-          trace_id: context.traceId,
-          span_id: context.spanId,
-          parent_span_id: inbound?.spanId,
-          duration_ms: Date.now() - startedAt,
-          status,
-          ...redactAttributes({
-            'http.request.method': method,
-            'url.path': url ? safeUrlPath(url) : undefined,
-            'http.response.status_code': response.status,
-            'error.type': thrown instanceof Error ? thrown.name : undefined,
-          }),
-        },
-        'span http.server',
-      );
+        const attributes = redactAttributes({
+          [ATTR_HTTP_REQUEST_METHOD]: method,
+          [ATTR_URL_PATH]: url ? safeUrlPath(url) : undefined,
+          [ATTR_HTTP_RESPONSE_STATUS_CODE]: response.status,
+          'error.type': thrown instanceof Error ? thrown.name : undefined,
+        });
 
-      try {
-        response.headers.set('x-request-id', requestId);
-        response.headers.set('traceparent', formatTraceparent(context));
-      } catch (err) {
-        void err;
-      }
-      return response;
-    });
+        logger.info(
+          {
+            event: 'span',
+            span_name: HTTP_SERVER_SPAN,
+            span_kind: HTTP_SERVER_SPAN_KIND,
+            [SPAN_DOMAIN_ATTRIBUTE]: HTTP_SERVER_SPAN_DOMAIN,
+            trace_id: context.traceId,
+            span_id: context.spanId,
+            parent_span_id: inbound?.spanId,
+            duration_ms: Date.now() - startedAt,
+            status,
+            ...attributes,
+          },
+          `span ${HTTP_SERVER_SPAN}`,
+        );
+
+        serverSpan.setAttributes({
+          ...attributes,
+          [SPAN_DOMAIN_ATTRIBUTE]: HTTP_SERVER_SPAN_DOMAIN,
+        });
+        if (thrown instanceof Error) {
+          serverSpan.setError(thrown.name, redactValue(thrown.message));
+        }
+        serverSpan.end();
+
+        try {
+          response.headers.set('x-request-id', requestId);
+          response.headers.set('traceparent', formatTraceparent(context));
+        } catch (err) {
+          void err;
+        }
+        return response;
+      }),
+    );
   };
 }
 
