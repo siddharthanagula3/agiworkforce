@@ -160,7 +160,15 @@ import {
   isRequiredSearchToolChoice,
   REQUIRED_SEARCH_RETRY_DIRECTIVE,
 } from '@/lib/web-search/required-search';
-import { toManagedSkillFromUserSkill, type ProcessedRequest } from './request-processor';
+import {
+  isRequiredExecutionToolChoice,
+  resolveCodeExecutionRequirement,
+} from '@/lib/code-execution/required-execution';
+import {
+  extractTextContent,
+  toManagedSkillFromUserSkill,
+  type ProcessedRequest,
+} from './request-processor';
 import {
   calculateObservedProviderUsageCostDollars,
   createObservedProviderUsage,
@@ -528,6 +536,16 @@ function isForcedSkillToolChoice(value: unknown): boolean {
     !Array.isArray(fn) &&
     (fn as Record<string, unknown>)['name'] === SKILL_TOOL_NAME
   );
+}
+
+function lastUserTurnText(
+  messages: ProcessedRequest['chatRequest']['messages'] | undefined,
+): string {
+  for (let index = (messages?.length ?? 0) - 1; index >= 0; index -= 1) {
+    const message = messages?.[index];
+    if (message?.role === 'user') return extractTextContent(message.content);
+  }
+  return '';
 }
 
 type SseLine = string;
@@ -2381,6 +2399,12 @@ export async function* runToolLoop(
   let nativeSearchUses = 0;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
+  const executionRequirement =
+    processed.executionRequirement ??
+    resolveCodeExecutionRequirement({
+      codeExecutionEnabled: processed.chatRequest?.code_execution,
+      userMessage: lastUserTurnText(processed.chatRequest?.messages),
+    });
   const searchRequired = processed.searchRequirement?.required === true;
   const searchOnlyAskedFor = processed.searchEnforcement?.mode === 'nudge';
   let searchObserved = false;
@@ -2414,6 +2438,7 @@ export async function* runToolLoop(
   let e2bUnavailableCause: E2BUnavailableCause | null = null;
   let e2bBaseline: SandboxSnapshot | null = null;
   let executionToolRan = false;
+  let executionToolCalled = false;
   const turnPngResults: string[] = [];
   // Memoised on the PROMISE, not on a flag: a step that asks for three
   // execution tools at once runs them in parallel, and a flag let all three
@@ -2606,6 +2631,24 @@ export async function* runToolLoop(
         '[tool-loop] required web search adherence',
       );
     }
+    if (executionRequirement.required) {
+      logger.info(
+        {
+          event: 'code_execution_adherence',
+          provider: processed.provider,
+          model: servingProcessed.llmRequest.model,
+          requestId: processed.requestId,
+          execution_required: true,
+          execution_invoked: executionToolCalled,
+          execution_ran: executionToolRan,
+          execution_required_source: executionRequirement.source,
+          execution_tool: processed.executionEnforcement?.attachedTool,
+          execution_enforcement: processed.executionEnforcement?.mode,
+          stop_reason: reason,
+        },
+        '[tool-loop] required code execution adherence',
+      );
+    }
     yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
   }
@@ -2622,6 +2665,7 @@ export async function* runToolLoop(
 
     const toolStartedAt = new Map<string, number>();
     for (const tc of calls) {
+      if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
       toolStartedAt.set(tc.id, Date.now());
@@ -3364,8 +3408,7 @@ export async function* runToolLoop(
         ...(stepTools && stepTools.length > 0 ? { tools: stepTools } : { tools: undefined }),
         ...(step > 1 &&
         processed.chatRequest?.tool_choice === undefined &&
-        ((llmRequest.tool_choice === 'required' &&
-          processed.chatRequest?.code_execution === true) ||
+        (isRequiredExecutionToolChoice(llmRequest.tool_choice) ||
           isRequiredSearchToolChoice(llmRequest.tool_choice) ||
           isRequiredPlacesToolChoice(llmRequest.tool_choice))
           ? { tool_choice: 'auto' as const }
