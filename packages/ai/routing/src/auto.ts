@@ -123,8 +123,14 @@ interface AutoPolicy {
     reevaluateOnTaskChange: boolean;
   };
   tasks: Record<RoutingTaskType, AutoTaskPolicy>;
-  slots: Record<string, { modelKey: string }>;
+  slots: Record<string, AutoSlotPolicy>;
   taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
+}
+
+interface AutoSlotPolicy {
+  modelKey: string;
+  shadow?: { modelKey: string; dailyRequestCap: number };
+  canary?: { modelKey: string; trafficFraction: number };
 }
 
 export interface RoutingRegistryView {
@@ -212,6 +218,23 @@ export interface AutoRoutingRequest {
    * open must not lose access to every model.
    */
   organizationPolicy?: ModelAccessPolicy | null;
+  /**
+   * The id this request is identified by, and the only input canary selection
+   * hashes. A stable id means one conversation keeps landing on the same side
+   * of the split instead of flipping between the canary and the promoted model
+   * turn by turn, and it makes the decision reproducible from the record.
+   */
+  requestId?: string | null;
+  enableCanary?: boolean;
+  /**
+   * How many requests each slot has already mirrored today, by slot id.
+   *
+   * Routing stays pure, so the counter lives with the surface that owns the
+   * mirroring. Absent means nothing has been mirrored yet, which is the correct
+   * reading for a fresh process: the cap is a ceiling on spend, and a caller
+   * that cannot count has not spent anything through this router.
+   */
+  shadowRequestsToday?: Readonly<Record<string, number>>;
 }
 
 export interface ObservedRouteHealth {
@@ -248,8 +271,26 @@ export interface SelectedAutoRoute {
     | 'fallback_slot'
     | 'capability_fallback'
     | 'task_family_pareto'
-    | 'health_fallback';
+    | 'health_fallback'
+    | 'canary';
   taskFamilyDecision?: TaskFamilyStageDecision;
+  /**
+   * A candidate to send a COPY of this request to. Never served: the caller
+   * dispatches it, records the outcome under the shadow scope, and throws the
+   * answer away. Present only when the selected slot declares a shadow, the
+   * stage is enabled, and the slot has room under its daily cap.
+   */
+  shadow?: ShadowMirror;
+}
+
+export interface ShadowMirror {
+  slotId: string;
+  modelKey: string;
+  provider: string;
+  providerModelId: string;
+  routeId: string;
+  harnessId: string;
+  dailyRequestCap: number;
 }
 
 export interface UnavailableAutoRoute {
@@ -520,6 +561,78 @@ const OBSERVED_HEALTH_ENABLED_VALUE = '1';
 export function observedHealthRankingEnabled(): boolean {
   if (typeof process === 'undefined') return false;
   return process.env?.[OBSERVED_HEALTH_ENV] === OBSERVED_HEALTH_ENABLED_VALUE;
+}
+
+export const CANARY_ENV = 'AGI_ROUTING_CANARY';
+const CANARY_ENABLED_VALUE = '1';
+
+export function canaryRoutingEnabled(): boolean {
+  if (typeof process === 'undefined') return false;
+  return process.env?.[CANARY_ENV] === CANARY_ENABLED_VALUE;
+}
+
+const FNV_OFFSET_BASIS = 2_166_136_261;
+const FNV_PRIME = 16_777_619;
+const FNV_BUCKETS = 4_294_967_296;
+const NO_SHADOW_REQUESTS = 0;
+
+/**
+ * FNV-1a over the request id, folded into [0,1).
+ *
+ * Deterministic and self-contained on purpose: the same request id must reach
+ * the same side of a canary split on every surface, in every process, and in a
+ * recorded fixture, without any of them sharing state. Cheap arithmetic rather
+ * than a cryptographic digest, because this decides which of two models
+ * answers, not anything an attacker gains from predicting.
+ */
+export function canaryBucket(requestId: string): number {
+  let hash = FNV_OFFSET_BASIS;
+  for (let index = 0; index < requestId.length; index += 1) {
+    hash ^= requestId.charCodeAt(index);
+    hash = Math.imul(hash, FNV_PRIME) >>> 0;
+  }
+  return hash / FNV_BUCKETS;
+}
+
+/**
+ * A request with no id never reaches a canary. Falling back to randomness
+ * would make the decision unreproducible, and falling back to "always canary"
+ * would hand a candidate the traffic of every caller that forgot to pass one.
+ */
+function canarySelectsRequest(
+  slot: AutoSlotPolicy,
+  request: AutoRoutingRequest,
+  enabled: boolean,
+): boolean {
+  if (!enabled || slot.canary === undefined) return false;
+  const requestId = request.requestId;
+  if (typeof requestId !== 'string' || requestId.length === 0) return false;
+  return canaryBucket(requestId) < slot.canary.trafficFraction;
+}
+
+function shadowMirror(
+  slotId: string,
+  slot: AutoSlotPolicy,
+  task: AutoTaskPolicy,
+  request: AutoRoutingRequest,
+  enabled: boolean,
+): ShadowMirror | undefined {
+  const shadow = slot.shadow;
+  if (!enabled || shadow === undefined) return undefined;
+  const mirrored = request.shadowRequestsToday?.[slotId] ?? NO_SHADOW_REQUESTS;
+  if (mirrored >= shadow.dailyRequestCap) return undefined;
+  const eligibility = evaluateEligibility(shadow.modelKey, task, request);
+  const route = eligibility.route;
+  if (!route || !eligibility.routeId) return undefined;
+  return {
+    slotId,
+    modelKey: shadow.modelKey,
+    provider: route.provider,
+    providerModelId: route.providerModelId,
+    routeId: eligibility.routeId,
+    harnessId: route.harnessId,
+    dailyRequestCap: shadow.dailyRequestCap,
+  };
 }
 
 /**
@@ -857,6 +970,7 @@ function selectedDecision(
   reason: SelectedAutoRoute['reason'],
   fallbacks: AutoFallbackRoute[] = [],
   taskFamilyDecision?: TaskFamilyStageDecision,
+  shadow?: ShadowMirror,
 ): SelectedAutoRoute {
   const route = eligibility.route;
   if (!route || !eligibility.routeId) {
@@ -876,6 +990,7 @@ function selectedDecision(
     fallbacks,
     reason,
     ...(taskFamilyDecision ? { taskFamilyDecision } : {}),
+    ...(shadow ? { shadow } : {}),
   };
 }
 
@@ -1171,10 +1286,12 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     eligibility: EligibilityResult;
     reason: SelectedAutoRoute['reason'];
   }[] = [];
+  const canaryEnabled = request.enableCanary ?? canaryRoutingEnabled();
   const selectSlot = (
     modelKey: string,
     eligibility: EligibilityResult,
     reason: SelectedAutoRoute['reason'],
+    slotId?: string,
   ): SelectedAutoRoute => {
     const route = eligibility.route;
     if (!route) throw new Error('selectSlot requires an eligible route');
@@ -1189,6 +1306,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       route.provider,
       eligibility.rankedRoutes,
     );
+    const slot = slotId === undefined ? undefined : policy.slots[slotId];
     return selectedDecision(
       request,
       requestedSelection,
@@ -1199,7 +1317,27 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       reason,
       fallbacks,
       taskFamilyDecision,
+      slotId !== undefined && slot !== undefined
+        ? shadowMirror(slotId, slot, task, request, canaryEnabled)
+        : undefined,
     );
+  };
+
+  /**
+   * A canary answers only when it is genuinely dispatchable. Anything else,
+   * an ineligible candidate, an open breaker, a missing credential, falls
+   * straight through to the slot's promoted model rather than parking the
+   * request: the point of keeping a promoted sibling is that pulling the canary
+   * costs the caller nothing.
+   */
+  const canarySelection = (slotId: string): SelectedAutoRoute | undefined => {
+    const slot = policy.slots[slotId];
+    if (!slot?.canary) return undefined;
+    if (!canarySelectsRequest(slot, request, canaryEnabled)) return undefined;
+    const eligibility = evaluateEligibility(slot.canary.modelKey, task, request);
+    if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) return undefined;
+    if (!isAffordable(slot.canary.modelKey, request)) return undefined;
+    return selectSlot(slot.canary.modelKey, eligibility, 'canary', slotId);
   };
 
   for (const slotId of orderedSlots) {
@@ -1212,6 +1350,8 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       reasons.push(`routing slot ${slotId} is missing`);
       continue;
     }
+    const canary = canarySelection(slotId);
+    if (canary) return canary;
     const eligibility = evaluateEligibility(modelKey, task, request);
     if (eligibility.route) {
       if (slotId !== policy.fallbackSlot && !isAffordable(modelKey, request)) {
@@ -1223,7 +1363,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         parked.push({ modelKey, eligibility, reason });
         continue;
       }
-      return selectSlot(modelKey, eligibility, reason);
+      return selectSlot(modelKey, eligibility, reason, slotId);
     }
     reasons.push(...eligibility.reasons);
   }
@@ -1231,12 +1371,14 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   if (!preferredSlots.includes(policy.fallbackSlot) && allowedSlots.has(policy.fallbackSlot)) {
     const fallbackModelKey = policy.slots[policy.fallbackSlot]?.modelKey;
     if (fallbackModelKey) {
+      const canary = canarySelection(policy.fallbackSlot);
+      if (canary) return canary;
       const eligibility = evaluateEligibility(fallbackModelKey, task, request);
       if (eligibility.route) {
         if (!isDispatchableNow(eligibility.rankedRoutes[0])) {
           parked.push({ modelKey: fallbackModelKey, eligibility, reason: 'fallback_slot' });
         } else {
-          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot');
+          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot', policy.fallbackSlot);
         }
       } else {
         reasons.push(...eligibility.reasons);
@@ -1255,7 +1397,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       const eligibility = evaluateEligibility(modelKey, task, request);
       if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
       if (slotId !== policy.fallbackSlot && !isAffordable(modelKey, request)) continue;
-      return selectSlot(modelKey, eligibility, 'health_fallback');
+      return selectSlot(modelKey, eligibility, 'health_fallback', slotId);
     }
     return selectSlot(parkedPick.modelKey, parkedPick.eligibility, parkedPick.reason);
   }

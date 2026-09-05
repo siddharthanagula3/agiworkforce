@@ -54,6 +54,9 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   // hand-maintained provider-synonym table, so mirroring it into the crate would
   // duplicate the data this guard exists to keep in one place.
   'packages/ai/routing/src/__tests__/fixtures/auto-route-policy.json',
+  // Same generator, TypeScript-only half: canary selection hashes a live request
+  // id the Rust resolver has no counterpart for.
+  'packages/ai/routing/src/__tests__/fixtures/auto-route-canary.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.rs',
   'crates/agiworkforce-protocol/src/generated/model_registry.json',
