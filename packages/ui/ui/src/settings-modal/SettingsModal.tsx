@@ -39,12 +39,7 @@ import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
 import { DirectoryPanel } from '../directory';
 import type { DirectoryAdapter } from '../directory';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '../primitives/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
 import { useConfirm } from '../primitives/ConfirmDialog';
 import {
   parseCustomMcpJsonConfig,
@@ -434,7 +429,6 @@ function skillAuthorLabel(source: string): string {
       return source;
   }
 }
-
 
 function AddCustomConnectorForm({
   adapter,
@@ -1699,6 +1693,7 @@ interface NavScrollEdges {
 
 interface NavScrollEdgesResult extends NavScrollEdges {
   navRef: (node: HTMLElement | null) => void;
+  node: HTMLElement | null;
 }
 
 function useNavScrollEdges(dependency: unknown): NavScrollEdgesResult {
@@ -1734,7 +1729,7 @@ function useNavScrollEdges(dependency: unknown): NavScrollEdgesResult {
     };
   }, [node, dependency]);
 
-  return { ...edges, navRef: setNode };
+  return { ...edges, navRef: setNode, node };
 }
 
 function NavButton({
@@ -1892,7 +1887,19 @@ export function SettingsModal({
   }, [navSearch, activeKeys]);
 
   const navScrollDependency = visibleGroups ?? visibleEntries;
-  const { canScrollUp, canScrollDown, navRef } = useNavScrollEdges(navScrollDependency);
+  const {
+    canScrollUp,
+    canScrollDown,
+    navRef,
+    node: navScrollNode,
+  } = useNavScrollEdges(navScrollDependency);
+
+  useEffect(() => {
+    if (!navScrollNode) return;
+    navScrollNode
+      .querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeSection, navScrollNode]);
 
   function renderSection() {
     if (
@@ -1975,20 +1982,10 @@ export function SettingsModal({
         onInteractOutside={(event) => event.preventDefault()}
         className="flex h-[min(94vh,680px)] w-[min(96vw,860px)] max-w-none flex-col gap-0 overflow-hidden rounded-xl border-border/60 bg-background p-0 shadow-2xl md:flex-row"
       >
-        {/* Left nav */}
         <nav
-          ref={navRef}
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="relative flex max-h-[64%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
+          className="relative flex max-h-[64%] w-full shrink-0 flex-col border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
         >
-          <div
-            aria-hidden="true"
-            data-testid="settings-nav-scroll-fade-top"
-            className={cn(
-              'pointer-events-none sticky left-0 top-0 z-10 -mb-6 h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity',
-              canScrollUp ? 'opacity-100' : 'opacity-0',
-            )}
-          />
           {/* Title */}
           <DialogTitle className="mb-3 px-4 pr-12 text-base font-semibold text-foreground md:pr-4">
             {title ?? t('modal.title', 'Settings')}
@@ -2016,58 +2013,73 @@ export function SettingsModal({
             />
           </div>
 
-          {/* Nav entries */}
-          {visibleGroups ? (
-            <div className="flex flex-col gap-3 px-2">
-              {visibleGroups.map((group, gi) => (
-                <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
-                  {group.label && (
-                    <div className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {group.label}
-                    </div>
-                  )}
-                  {group.items.map((item) => (
-                    <NavButton
-                      key={item.key}
-                      itemKey={item.key}
-                      label={t(`nav.${item.key}`, item.label)}
-                      Icon={item.icon}
-                      isActive={activeSection === item.key}
-                      onClick={onSectionChange}
-                      badge={navBadges?.[item.key]}
-                    />
-                  ))}
-                </div>
-              ))}
-              {visibleGroups.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">
-                  {t('modal.noMatches', 'No matches.')}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-0.5 px-2">
-              {visibleEntries.map((entry) => (
-                <NavButton
-                  key={entry.key}
-                  itemKey={entry.key}
-                  label={t(`nav.${entry.key}`, entry.label)}
-                  Icon={entry.icon}
-                  isActive={activeSection === entry.key}
-                  onClick={onSectionChange}
-                  badge={navBadges?.[entry.key]}
-                />
-              ))}
-            </div>
-          )}
           <div
-            aria-hidden="true"
-            data-testid="settings-nav-scroll-fade-bottom"
-            className={cn(
-              'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity',
-              canScrollDown ? 'opacity-100' : 'opacity-0',
+            ref={navRef}
+            data-testid="settings-nav-scroll-region"
+            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+          >
+            <div
+              aria-hidden="true"
+              data-testid="settings-nav-scroll-fade-top"
+              className={cn(
+                'pointer-events-none sticky left-0 top-0 z-10 -mb-6 h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity',
+                canScrollUp ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+            <div aria-hidden="true" className="h-6 shrink-0" />
+            {visibleGroups ? (
+              <div className="flex flex-col gap-3 px-2">
+                {visibleGroups.map((group, gi) => (
+                  <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
+                    {group.label && (
+                      <div className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {group.label}
+                      </div>
+                    )}
+                    {group.items.map((item) => (
+                      <NavButton
+                        key={item.key}
+                        itemKey={item.key}
+                        label={t(`nav.${item.key}`, item.label)}
+                        Icon={item.icon}
+                        isActive={activeSection === item.key}
+                        onClick={onSectionChange}
+                        badge={navBadges?.[item.key]}
+                      />
+                    ))}
+                  </div>
+                ))}
+                {visibleGroups.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    {t('modal.noMatches', 'No matches.')}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-0.5 px-2">
+                {visibleEntries.map((entry) => (
+                  <NavButton
+                    key={entry.key}
+                    itemKey={entry.key}
+                    label={t(`nav.${entry.key}`, entry.label)}
+                    Icon={entry.icon}
+                    isActive={activeSection === entry.key}
+                    onClick={onSectionChange}
+                    badge={navBadges?.[entry.key]}
+                  />
+                ))}
+              </div>
             )}
-          />
+            <div aria-hidden="true" className="h-6 shrink-0" />
+            <div
+              aria-hidden="true"
+              data-testid="settings-nav-scroll-fade-bottom"
+              className={cn(
+                'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity',
+                canScrollDown ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+          </div>
         </nav>
 
         {/* Right pane */}
