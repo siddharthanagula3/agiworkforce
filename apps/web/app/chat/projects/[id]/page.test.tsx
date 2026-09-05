@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +60,14 @@ vi.mock('@/features/schedules', () => ({
   ),
 }));
 
+const updateProjectRemote = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
+  webManagedCloudProjects: {
+    updateProject: (id: string, input: unknown) => updateProjectRemote(id, input),
+    deleteProject: vi.fn(),
+  },
+}));
+
 import ProjectDetailPage from './page';
 
 describe('project detail page scheduled tab', () => {
@@ -97,5 +105,59 @@ describe('project detail page header', () => {
       borderBottom: '2px solid hsl(var(--primary))',
     });
     expect(chatsTab).toHaveStyle({ borderBottom: '2px solid transparent' });
+  });
+});
+
+describe('project detail page icon and colour picker', () => {
+  it('opens the picker from the title and lists icon and colour options', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    await user.click(screen.getByTestId('project-appearance-trigger'));
+
+    const picker = await screen.findByTestId('project-appearance-picker');
+    expect(within(picker).getByRole('listbox', { name: 'Project icon' })).toBeInTheDocument();
+    expect(within(picker).getByRole('listbox', { name: 'Project colour' })).toBeInTheDocument();
+    expect(within(picker).getAllByRole('option').length).toBeGreaterThan(6);
+  });
+
+  it('persists the chosen icon and closes the picker', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    await user.click(screen.getByTestId('project-appearance-trigger'));
+    const picker = await screen.findByTestId('project-appearance-picker');
+    await user.click(within(picker).getByRole('option', { name: '🚀' }));
+
+    await waitFor(() =>
+      expect(updateProjectRemote).toHaveBeenCalledWith('project-1', { iconEmoji: '🚀' }),
+    );
+    expect(screen.queryByTestId('project-appearance-picker')).toBeNull();
+  });
+
+  it('persists the chosen colour', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    await user.click(screen.getByTestId('project-appearance-trigger'));
+    const picker = await screen.findByTestId('project-appearance-picker');
+    await user.click(within(picker).getByRole('option', { name: 'sky' }));
+
+    await waitFor(() =>
+      expect(updateProjectRemote).toHaveBeenCalledWith('project-1', { accentColor: 'sky' }),
+    );
+  });
+
+  it('closes on Escape and returns focus to the trigger', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    const trigger = screen.getByTestId('project-appearance-trigger');
+    await user.click(trigger);
+    await screen.findByTestId('project-appearance-picker');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('project-appearance-picker')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 });
