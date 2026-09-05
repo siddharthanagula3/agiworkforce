@@ -19,6 +19,7 @@ export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
   isGenerationProgressEntry,
+  isLocalPlaceholderActivityEntry,
   REASONING_PROGRESS_SUMMARY,
   startAgentActivityLocally,
   withoutGenerationProgress,
