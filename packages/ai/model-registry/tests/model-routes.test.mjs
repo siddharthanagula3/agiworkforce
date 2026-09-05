@@ -234,3 +234,23 @@ test('anthropic and every provider proxying it through the Anthropic Messages pr
     );
   }
 });
+
+test('every declared compute-pricing entry carries a known unit, a positive rate, and its own source', () => {
+  const entries = Object.entries(registry.computePricing);
+  assert.ok(entries.length > 0, 'the catalog must declare at least one compute-pricing provider');
+  for (const [providerId, entry] of entries) {
+    assert.equal(
+      entry.unit,
+      'usd_per_vcpu_second',
+      `${providerId} compute pricing unit ${entry.unit} is not a known unit`,
+    );
+    assert.ok(entry.ratePerUnit > 0, `${providerId} compute pricing rate must be positive`);
+    assert.ok(entry.source, `${providerId} compute pricing has no source`);
+    assert.ok(entry.verifiedOn, `${providerId} compute pricing has no verified date`);
+  }
+});
+
+test('e2b sandbox compute pricing is declared in the registry, not a literal in compute-metering.ts', () => {
+  assert.ok(registry.computePricing.e2b, 'e2b must have a compute-pricing entry');
+  assert.equal(registry.computePricing.e2b.ratePerUnit, 0.000014);
+});

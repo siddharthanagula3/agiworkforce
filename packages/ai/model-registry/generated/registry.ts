@@ -116,6 +116,21 @@ const governanceRecords = registry.governance as unknown as Readonly<
 export function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {
   return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';
 }
+
+export type ComputePricingUnit = 'usd_per_vcpu_second';
+
+export interface ProviderComputePricing {
+  unit: ComputePricingUnit;
+  ratePerUnit: number;
+}
+
+const computePricingRecords = registry.computePricing as unknown as Readonly<
+  Record<string, ProviderComputePricing>
+>;
+
+export function getProviderComputePricing(providerId: string): ProviderComputePricing | null {
+  return computePricingRecords[providerId] ?? null;
+}
 export type HarnessProtocol =
   | 'openai_chat'
   | 'openai_responses'
