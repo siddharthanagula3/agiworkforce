@@ -165,6 +165,38 @@ describe('useCloudVoiceController', () => {
     return typeof language === 'string' ? language : null;
   }
 
+  it('starts and stops the same cloud capture the composer runs when the shell hotkey fires', async () => {
+    const presses: (() => void)[] = [];
+    Object.defineProperty(window, 'agiHost', {
+      value: {
+        onVoiceHotkey: (callback: () => void) => {
+          presses.push(callback);
+          return () => {};
+        },
+      },
+      configurable: true,
+    });
+    try {
+      const { result } = renderHook(() => useCloudVoiceController(true));
+      await waitFor(() => expect(result.current.controller.state).toBe('idle'));
+
+      await act(async () => presses.forEach((press) => press()));
+      await waitFor(() => expect(result.current.controller.state).toBe('listening'));
+
+      await act(async () => presses.forEach((press) => press()));
+      await waitFor(() =>
+        expect(
+          vi
+            .mocked(fetch)
+            .mock.calls.some(([url]) => String(url).includes('/api/voice/transcribe')),
+        ).toBe(true),
+      );
+      expect(nativeMock.invoke.mock.calls.some(([c]) => c === 'voice_transcribe_blob')).toBe(false);
+    } finally {
+      Reflect.deleteProperty(window, 'agiHost');
+    }
+  });
+
   it('sends the chosen dictation language, not a fixed one', async () => {
     act(() => useVoiceInputStore.setState({ voiceLanguage: 'ja' }));
     await expect(transcriptionLanguage()).resolves.toBe('ja');
