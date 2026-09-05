@@ -156,7 +156,10 @@ import {
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
-import { dedupeResearchSources, orderSourcesByCitation } from '../../utils/research-sources';
+import {
+  collectMessageResearchSources,
+  orderSourcesByCitation,
+} from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
@@ -369,6 +372,8 @@ interface Message {
     providerMode?: StoreMessageMetadata['providerMode'];
     finishReason?: StoreMessageMetadata['finishReason'];
     streamError?: StoreMessageMetadata['streamError'];
+    /** The run a Task feedback report is filed against. */
+    cloudAgentRun?: StoreMessageMetadata['cloudAgentRun'];
     isDocument?: boolean;
     documentTitle?: string;
     hasWorkStream?: boolean;
@@ -1375,78 +1380,17 @@ const MessageBubbleComponent = function MessageBubble({
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These feed the "Searched the web" step's result count and the compact
   // Sources control at the end of the answer.
-  const { searchSources, searchQuery, citationsByMarker } = useMemo(() => {
-    if (isUser) {
-      return {
-        searchSources: [] as ResearchSource[],
-        searchQuery: undefined,
-        citationsByMarker: [] as ResearchSource[],
-      };
-    }
-
-    const collected: ResearchSource[] = [];
-    let query: string | undefined;
-
-    const sr = message.metadata?.searchResults;
-    if (sr) {
-      query = Array.isArray(sr) ? undefined : sr.query;
-      const results = Array.isArray(sr) ? sr : (sr.results ?? []);
-      results.forEach((r, i) => {
-        if (r.url) {
-          collected.push({
-            url: r.url,
-            title: r.title || '',
-            snippet: r.snippet,
-            favicon: r.favicon,
-            citationIndex: i + 1,
-          });
-        }
-      });
-      // Perplexity plain-URL sources list
-      if (!Array.isArray(sr)) {
-        (sr.sources ?? []).forEach((url) => {
-          if (url && !collected.some((s) => s.url === url)) {
-            collected.push({ url, title: '', citationIndex: collected.length + 1 });
+  const { searchSources, searchQuery, citationsByMarker } = useMemo(
+    () =>
+      isUser
+        ? {
+            searchSources: [] as ResearchSource[],
+            searchQuery: undefined,
+            citationsByMarker: [] as ResearchSource[],
           }
-        });
-      }
-    }
-
-    const annotationCitations = (message.metadata?.citations ?? []).filter(
-      (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-        !!(c.url && c.title),
-    );
-    if (annotationCitations.length > 0 && collected.length === 0) {
-      annotationCitations.forEach((c, i) => {
-        collected.push({
-          url: c.url,
-          title: c.title,
-          snippet: c.cited_text,
-          citationIndex: i + 1,
-        });
-      });
-    }
-
-    // De-dupe by URL and assign stable 1-based citation numbers (claude.ai
-    // parity: a source cited twice keeps one number). Sources missing a usable
-    // URL are dropped here rather than rendered as dead links.
-    const deduped = dedupeResearchSources(collected);
-    const dedupedByUrl = new Map(deduped.map((s) => [s.url, s]));
-
-    const citationsByMarker =
-      annotationCitations.length > 0
-        ? annotationCitations.map((c, i) => ({
-            url: c.url,
-            title: c.title,
-            snippet: c.cited_text,
-            citationIndex: i + 1,
-          }))
-        : collected.map(
-            (source, i) => dedupedByUrl.get(source.url) ?? { ...source, citationIndex: i + 1 },
-          );
-
-    return { searchSources: deduped, searchQuery: query, citationsByMarker };
-  }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
+        : collectMessageResearchSources(message.metadata),
+    [isUser, message.metadata],
+  );
 
   const { cited: citedSources, more: moreSources } = useMemo(
     () => orderSourcesByCitation(cleanedContent, citationsByMarker, searchSources),
