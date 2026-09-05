@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import type { ChatMessage, MessageRouting } from '../lib/types';
 import { getModelPresentationLabel } from '../lib/modelInfo';
+import { resolveModelEscalation } from '../lib/modelEscalation';
 
 export interface ProvenanceFooterProps {
   message: Pick<
     ChatMessage,
-    'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt' | 'routing'
+    'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt' | 'routing' | 'metadata'
   >;
+  /** The model the conversation is pinned to, for the escalation receipt. */
+  conversationModelId?: string | null;
   onPinModel?: (routing: MessageRouting) => void;
 }
 
@@ -24,7 +27,11 @@ function formatRelativeTime(iso: string): string | null {
   return `${days}d ago`;
 }
 
-export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps) {
+export function ProvenanceFooter({
+  message,
+  conversationModelId,
+  onPinModel,
+}: ProvenanceFooterProps) {
   const parts = useMemo(() => {
     const out: string[] = [];
     const modelLabel = getModelPresentationLabel(message.model);
@@ -47,8 +54,18 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
 
   const routing = message.routing;
   const isAuto = routing?.source === 'auto';
+  const metadata = message.metadata as
+    | { movedFromModel?: string; movedReason?: string }
+    | undefined;
+  const escalation = resolveModelEscalation({
+    movedFromModelId: metadata?.movedFromModel ?? null,
+    movedReason: metadata?.movedReason ?? null,
+    servedModelId: message.model ?? null,
+    conversationModelId: conversationModelId ?? null,
+    routingSource: routing?.source ?? null,
+  });
 
-  if (parts.length === 0 && !isAuto) return null;
+  if (parts.length === 0 && !isAuto && !escalation) return null;
 
   return (
     <div
@@ -66,6 +83,7 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
           ))}
         </div>
       )}
+      {escalation && <div data-component="provenance-escalation">{escalation.line}</div>}
       {isAuto && routing && (
         <div
           className="flex flex-wrap items-center gap-x-2 gap-y-0.5"

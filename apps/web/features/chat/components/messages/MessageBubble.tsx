@@ -94,6 +94,7 @@ import {
   getManagedModelPresentationLabel,
   hasCanonicalToolActivity,
   hasStreamError,
+  resolveModelEscalation,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -386,6 +387,9 @@ interface Message {
     model?: string;
     /** `X-AGI-Fallback-Reason` code for a turn served on a substituted model. */
     fallbackReason?: string;
+    /** The model Auto left, and why, when this turn escalated off the pin. */
+    movedFromModel?: string;
+    movedReason?: string;
     /** `X-AGI-Route-Lane` value naming the lane that served this turn. */
     routeLane?: string;
     secretRedactionCount?: number;
@@ -636,6 +640,13 @@ const MessageBubbleComponent = function MessageBubble({
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
+  // D-2026-09-05-06. A receipt, not an alert: Auto moved off this
+  // conversation's model, so the turn says so once and stays put.
+  const modelEscalation = resolveModelEscalation({
+    movedFromModelId: message.metadata?.movedFromModel ?? null,
+    movedReason: message.metadata?.movedReason ?? null,
+    servedModelId: message.model ?? message.metadata?.model ?? null,
+  });
   const fallbackNotice = describeFallbackReason(
     message.metadata?.fallbackReason,
     getModelMetadataById(message.model ?? message.metadata?.model)?.name,
@@ -2294,6 +2305,15 @@ const MessageBubbleComponent = function MessageBubble({
                 ))}
               </CollapsibleContent>
             </Collapsible>
+          )}
+
+          {!isUser && !message.isStreaming && modelEscalation && (
+            <p
+              data-testid="model-escalation-receipt"
+              className="mt-1.5 text-[12px] leading-4 text-[var(--chat-text-muted)]"
+            >
+              {modelEscalation.line}
+            </p>
           )}
 
           {!isUser && !message.isStreaming && !fallbackNoticeDismissed && fallbackNotice && (
