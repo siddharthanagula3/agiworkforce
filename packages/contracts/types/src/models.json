@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-03",
+  "lastUpdated": "2026-09-04",
   "verificationLog": [
+    {
+      "date": "2026-09-04",
+      "verifiedBy": "official-provider-pricing-and-model-pages",
+      "status": "CORRECTION",
+      "notes": "Founder-directed catalog refresh, part one of two: corrections to existing entries, each verified against the provider's own pages on 2026-09-04. Zhipu: glm-5.3 license is the custom GLM-5.3 License (Hugging Face cardData license \"other\", license_name \"glm-5.3\"), not MIT; glm-5.3-flash carries its 50% promotion as promo_expires_at 2026-09-09T16:00:00Z with post_promo_prices 0.15/0.50/0.03; release dates 2026-08-18 and 2026-08-26. Moonshot: kimi-k3 publishes the Kimi K3 License, a 1048576 max output (default 131072), text/image/video input, low/high/max reasoning effort defaulting to max, a responsesEffortPath of reasoning.effort on v1/responses, and a 2026-07-16 release. DeepSeek: both V4 rows are text-only (image input is documented only for the vision experimental row), carry a 384000 max output, move to the dated OpenRouter slugs deepseek-v4-flash-0731 and deepseek-v4-pro-0813, take low/high/max effort defaulting to high, and are repriced to the peak rates 0.44/1.32/0.014 and 1.32/3.96/0.044 in the synced snapshot to match the curation overrides that already held them. OpenAI audio: gpt-4o-mini-tts is not deprecated and is the only model served on /v1/audio/speech; both transcribe rows stream and shut down 2027-02-26; all three were added to the Audio API on 2025-03-20, not December 2025. Qwen: qwen3.7-plus moves to the Singapore/International row the adapter has called since 2026-08-30, 0.40/1.60 through 256K and 1.20/4.80 above it, with the provider defaultPricing and the qwen/qwen-plus snapshot following. Google: the three Veo rows take a 1024-token text input budget and their real release dates; gemini-3.8-flash records its introductory rate expiring 2027-01-01 with post-promotion 1.50/7.50/0.15; gemini-omni-flash-preview shuts down 2026-09-30; the live-translate preview is 131072 in and 65536 out. MiniMax: M3 caps output at 524288, reads cache at 0.06, and gains the above-512K band 0.60/2.40/0.12; no cache-write fee is published. Runway: Gen-4.5 accepts image input, gains a videoGeneration block from the published OpenAPI document (2-10 second integer durations, six image-to-video ratios, no audio parameter, seed 0-4294967295), and records the professional-format per-second surcharges the schema cannot key by format. Perplexity: all four Sonar Chat Completions rows are supported only until 2026-09-27; sonar and sonar-pro accept image input and launched January 2025; the two reasoning rows publish no launch date and no way to disable chain-of-thought, and sonar-reasoning-pro publishes no effort levels. OpenRouter: seedance-2.5 accepts text, image, video and audio, released 2026-08-07, and adds the with-video-input video-token SKU at 0.0000064; openrouter-auto keeps its zero placeholder but records that OpenRouter prices it as -1, meaning the routed model's own rate. Skipped as refuted: the qwen3.5-flash cache-rate and tier edits, the qwen3.7-plus single-cell edits (applied instead as the whole International row the refutation prescribed), the minimax-m3 maxInputTokens inference, the sonar-deep-research effort-level trim, and the gpt-oss-20b cached_input rounding, which the verdict itself recommended against."
+    },
     {
       "date": "2026-09-03",
       "verifiedBy": "official-openai-anthropic-google-xai-openrouter-pricing-pages",
@@ -375,7 +381,7 @@
       "label": "Qwen",
       "sseDelimiter": "\n\n",
       "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.276, "outputPerMillion": 1.101 },
+      "defaultPricing": { "inputPerMillion": 0.4, "outputPerMillion": 1.6 },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "qwen-3.7-plus",
@@ -1215,10 +1221,11 @@
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
       "apiModelId": "deepseek-v4-flash",
-      "openRouterSlug": "deepseek/deepseek-v4-flash",
+      "openRouterSlug": "deepseek/deepseek-v4-flash-0731",
       "name": "DeepSeek V4 Flash",
       "provider": "deepseek",
       "modelType": "code",
+      "inputModalities": ["text"],
       "variantPartner": "deepseek-v4-pro",
       "contextWindow": 1000000,
       "inputCost": 0.44,
@@ -1227,7 +1234,7 @@
       "capabilities": {
         "streaming": true,
         "tools": true,
-        "vision": true,
+        "vision": false,
         "json": true,
         "thinking": true,
         "computerUse": false,
@@ -1244,16 +1251,17 @@
       "quality": "excellent",
       "qualityTier": "fast",
       "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
-      "released": "April 2026",
+      "released": "July 31, 2026",
       "deprecation_date": null,
       "pricingNote": "DeepSeek bills V4 Flash on a peak/off-peak clock, not a flat rate: peak $0.44/1M input on a cache miss, $1.32/1M output, $0.014/1M cache hit, with off-peak exactly half at $0.22/$0.66/$0.007. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.14/$0.28 with cache read $0.0028, which matches no row on DeepSeek's table and is roughly a third of the peak rate. Those figures came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01; the page carries no discount, promotion or expiry language of any kind.",
       "openWeight": true,
       "license": "MIT",
+      "maxOutputTokens": 384000,
       "reasoning": {
         "capable": true,
         "control": "thinking_toggle",
-        "supportedEfforts": ["low", "medium", "high"],
-        "defaultEffort": "medium",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "high",
         "canDisableThinking": true,
         "request": {
           "api": "chat",
@@ -1268,10 +1276,11 @@
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
       "apiModelId": "deepseek-v4-pro",
-      "openRouterSlug": "deepseek/deepseek-v4-pro",
+      "openRouterSlug": "deepseek/deepseek-v4-pro-0813",
       "name": "DeepSeek V4 Pro",
       "provider": "deepseek",
       "modelType": "reasoning",
+      "inputModalities": ["text"],
       "variantPartner": "deepseek-v4-flash",
       "contextWindow": 1000000,
       "inputCost": 1.32,
@@ -1280,7 +1289,7 @@
       "capabilities": {
         "streaming": true,
         "tools": true,
-        "vision": true,
+        "vision": false,
         "json": true,
         "thinking": true,
         "computerUse": false,
@@ -1303,16 +1312,17 @@
         "Multimodal",
         "Cost-Effective"
       ],
-      "released": "April 2026",
+      "released": "August 13, 2026",
       "deprecation_date": null,
       "pricingNote": "DeepSeek bills V4 Pro on a peak/off-peak clock, not a flat rate: peak $1.32/1M input on a cache miss, $3.96/1M output, $0.044/1M cache hit, with off-peak exactly half at $0.66/$1.98/$0.022. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.435/$0.87 with cache read $0.003625 and asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22. DeepSeek's own pricing page carries no discount, promotion or expiry language, and none of those three figures matches any published row; they came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01.",
       "openWeight": true,
       "license": "MIT",
+      "maxOutputTokens": 384000,
       "reasoning": {
         "capable": true,
         "control": "thinking_toggle",
-        "supportedEfforts": ["low", "medium", "high"],
-        "defaultEffort": "medium",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "high",
         "canDisableThinking": true,
         "request": {
           "api": "chat",
@@ -1402,7 +1412,7 @@
       "capabilities": {
         "streaming": true,
         "tools": false,
-        "vision": false,
+        "vision": true,
         "json": true,
         "thinking": false,
         "computerUse": false,
@@ -1419,8 +1429,8 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Web Search", "Quick Research", "Citations"],
-      "released": "January 2026",
-      "deprecation_date": null,
+      "released": "January 2025",
+      "deprecation_date": "2026-09-27",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" },
@@ -1456,16 +1466,13 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Deep Research", "Complex Analysis", "Citations"],
-      "released": "January 2026",
-      "deprecation_date": null,
+      "deprecation_date": "2026-09-27",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": {
         "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
+        "control": "always_on",
+        "canDisableThinking": false,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
@@ -1487,7 +1494,7 @@
       "capabilities": {
         "streaming": true,
         "tools": false,
-        "vision": false,
+        "vision": true,
         "json": true,
         "thinking": false,
         "computerUse": false,
@@ -1504,8 +1511,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Professional Research", "Long Context Search"],
-      "released": "January 2026",
-      "deprecation_date": null,
+      "released": "January 2025",
+      "deprecation_date": "2026-09-27",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" }
@@ -1540,8 +1547,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Deep Research", "Multi-Source Synthesis", "Comprehensive Analysis"],
-      "released": "January 2026",
-      "deprecation_date": null,
+      "deprecation_date": "2026-09-27",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": {
@@ -1549,7 +1555,7 @@
         "control": "effort_levels",
         "supportedEfforts": ["minimal", "low", "medium", "high"],
         "defaultEffort": "medium",
-        "canDisableThinking": true,
+        "canDisableThinking": false,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
@@ -1565,7 +1571,7 @@
       "name": "Runway Gen-4.5",
       "provider": "runway",
       "modelType": "video",
-      "inputModalities": ["text"],
+      "inputModalities": ["text", "image"],
       "inputCost": 0,
       "outputCost": 0,
       "capabilities": {
@@ -1591,7 +1597,20 @@
       "deprecation_date": null,
       "videoPerSecondCost": 0.12,
       "videoPerSecondCostByResolution": { "720p": 0.12 },
-      "pricingNote": "Runway Gen-4.5 text-to-video costs $0.12/second and supports only 1280:720 landscape or 720:1280 portrait output, with integer durations from 2-10 seconds. The model remains non-selectable until AGI verifies provider provisioning with a live 200 probe; default video routing stays on the verified Google Veo route.",
+      "videoGeneration": {
+        "durationSecs": [2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "outputSizes": [
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          { "resolution": "832p", "aspectRatio": "4:3", "width": 1104, "height": 832 },
+          { "resolution": "960p", "aspectRatio": "1:1", "width": 960, "height": 960 },
+          { "resolution": "1104p", "aspectRatio": "3:4", "width": 832, "height": 1104 },
+          { "resolution": "672p", "aspectRatio": "21:9", "width": 1584, "height": 672 }
+        ],
+        "supportsAudio": false,
+        "supportsSeed": true
+      },
+      "pricingNote": "Runway Gen-4.5 bills 12 credits per second of output at $0.01 per credit, so $0.12/second flat for the default mp4 output format regardless of ratio. Text-to-video accepts ratio 1280:720 or 720:1280 only; image-to-video additionally accepts 1104:832, 960:960, 832:1104 and 1584:672, and requires both a prompt image and prompt text. Duration is an integer from 2-10 seconds on both endpoints. Professional output formats add a per-second surcharge the schema cannot key by format: prores and png_sequence add 5 credits per second (+$0.05), and every 10-bit or HDR profile adds 20 credits per second (+$0.20). The 40 credits per second tier above 4 megapixels is unreachable at these ratios. The model remains non-selectable until AGI verifies provider provisioning with a live 200 probe; default video routing stays on the verified Google Veo route. Verified against docs.dev.runwayml.com, retrieved 2026-09-04.",
       "availability": "unavailable",
       "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
       "reasoning": { "capable": false, "control": "none" }
@@ -1602,7 +1621,7 @@
       "name": "ByteDance: Seedance 2.5",
       "provider": "open_router",
       "modelType": "video",
-      "inputModalities": ["text"],
+      "inputModalities": ["text", "image", "video", "audio"],
       "inputCost": 0,
       "outputCost": 0,
       "capabilities": {
@@ -1624,7 +1643,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Text-to-Video Generation", "Long Clips", "Generated Audio"],
-      "released": "August 2026",
+      "released": "August 7, 2026",
       "deprecation_date": null,
       "videoGeneration": {
         "durationSecs": [
@@ -1652,10 +1671,11 @@
           "framesPerSecond": 24,
           "pixelsPerToken": 1024,
           "usdPerToken": 0.0000107,
-          "usdPerTokenWithoutAudio": 0.0000107
+          "usdPerTokenWithoutAudio": 0.0000107,
+          "usdPerTokenWithVideoInput": 0.0000064
         }
       },
-      "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The current with-audio and without-audio video-token SKUs are both $0.0000107/token, so every reservation uses the exact catalog pixel tuple rather than a flat resolution price.",
+      "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The with-audio and without-audio video-token SKUs are both $0.0000107/token; requests that carry a video reference bill at the cheaper $0.0000064/token with-video-input SKU. Every reservation uses the exact catalog pixel tuple rather than a flat resolution price. Verified against openrouter.ai, retrieved 2026-09-04.",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" }
@@ -1723,10 +1743,9 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration", "Accessibility"],
-      "released": "December 2025",
-      "deprecated": true,
+      "released": "March 20, 2025",
       "deprecation_date": null,
-      "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Default snapshot gpt-4o-mini-tts-2025-12-15 (the 2025-03-20 snapshot shut down 2026-07-23). DEPRECATED on developers.openai.com's model catalog listing, but retained because it is the only model OpenAI serves on /v1/audio/speech, gpt-audio-1.5 explicitly does not support that endpoint, no successor is named in the deprecations table, no shutdown date is published, and the text-to-speech guide still calls it \"our newest and most reliable text-to-speech model\". The migration path OpenAI is signalling is audio-native chat (gpt-audio-1.5) and realtime (gpt-realtime-2.1), neither of which is a drop-in for a REST speech call. Verified 2026-07-28.",
+      "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Added to the Audio API on 2025-03-20; the gpt-4o-mini-tts-2025-12-15 snapshot became the default on 2026-01-13. NOT deprecated: it is absent from OpenAI's deprecations page, carries no deprecated badge on the models page, and the text-to-speech guide still names it the recommended text-to-speech model. It is the only model served on /v1/audio/speech. Verified 2026-09-04.",
       "reasoning": { "capable": false, "control": "none" }
     },
     "gemini-3.8-flash": {
@@ -1769,6 +1788,9 @@
       ],
       "released": "September 2026",
       "deprecation_date": null,
+      "promo_expires_at": "2027-01-01T00:00:00Z",
+      "post_promo_prices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 },
+      "pricingNote": "Google lists Gemini 3.8 Flash at an introductory $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31. From 2027-01-01 the published rates are $1.50/$7.50/$0.15, carried in post_promo_prices. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
       "openWeight": false,
       "license": "proprietary",
       "maxOutputTokens": 65536,
@@ -1823,10 +1845,10 @@
         "Open-Weight Alternative",
         "Chinese Language"
       ],
-      "released": "August 2026",
+      "released": "August 18, 2026",
       "deprecation_date": null,
       "openWeight": true,
-      "license": "MIT",
+      "license": "GLM-5.3 License",
       "maxOutputTokens": 128000,
       "reasoning": {
         "capable": true,
@@ -1881,8 +1903,11 @@
         "Tool Use",
         "Long Context"
       ],
-      "released": "August 2026",
+      "released": "August 26, 2026",
       "deprecation_date": null,
+      "promo_expires_at": "2026-09-09T16:00:00Z",
+      "post_promo_prices": { "input": 0.15, "output": 0.5, "cached_input": 0.03 },
+      "pricingNote": "Z.ai lists GLM-5.3-Flash at a 50% promotion: $0.075/1M input, $0.25/1M output, $0.015/1M cached input, against list prices of $0.15/$0.50/$0.03. The promotion ends at 24:00 on 2026-09-09 Singapore time (2026-09-09T16:00:00Z), after which post_promo_prices takes over. Cached input storage is free during the promotion. Verified against docs.z.ai/guides/overview/pricing, retrieved 2026-09-04.",
       "openWeight": true,
       "license": "MIT",
       "maxOutputTokens": 128000,
@@ -1910,10 +1935,10 @@
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "video"],
       "contextWindow": 1000000,
-      "inputCost": 0.276,
-      "outputCost": 1.101,
-      "cached_input": 0.0552,
-      "cached_write": 0.345,
+      "inputCost": 0.4,
+      "outputCost": 1.6,
+      "cached_input": 0.08,
+      "cached_write": 0.5,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1944,13 +1969,13 @@
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 256000,
-          "inputCost": 0.826,
-          "cached_input": 0.1652,
-          "cached_write": 1.0325,
-          "outputCost": 3.301
+          "inputCost": 1.2,
+          "cached_input": 0.24,
+          "cached_write": 1.5,
+          "outputCost": 4.8
         }
       ],
-      "pricingNote": "Chinese-mainland list price per 1M tokens, matching the canonical dashscope.aliyuncs.com adapter endpoint: $0.276 input/$1.101 output through 256K input and $0.826/$3.301 above 256K through 1M. The recorded cache-read price is the automatic implicit-cache rate of 20% of input; explicit five-minute cache hits cost 10% and writes cost 125%. Limited-time discounts are intentionally excluded.",
+      "pricingNote": "Singapore/International list price per 1M tokens, matching the dashscope-intl.aliyuncs.com endpoint the Qwen adapter has defaulted to since 2026-08-30: $0.40 input/$1.60 output through 256K input and $1.20/$4.80 above 256K through 1M. Output is the same for thinking and non-thinking mode. The recorded cache-read price is the automatic implicit-cache rate of 20% of input; explicit five-minute cache hits cost 10% and writes cost 125%. Limited-time discounts are intentionally excluded. Verified against alibabacloud.com/help/en/model-studio/model-pricing, retrieved 2026-09-04.",
       "maxOutputTokens": 64000,
       "reasoning": {
         "capable": true,
@@ -1972,6 +1997,7 @@
       "name": "Kimi K3",
       "provider": "moonshot",
       "modelType": "multimodal",
+      "inputModalities": ["text", "image", "video"],
       "contextWindow": 1048576,
       "inputCost": 3,
       "outputCost": 15,
@@ -2001,16 +2027,21 @@
         "Vision",
         "Open-Weight Deployment"
       ],
-      "released": "July 2026",
+      "released": "July 16, 2026",
       "deprecation_date": null,
       "openWeight": true,
+      "license": "Kimi K3 License",
+      "maxOutputTokens": 1048576,
       "reasoning": {
         "capable": true,
         "control": "always_on",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "max",
         "canDisableThinking": false,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
           "togglePath": null,
           "budgetPath": null
         }
@@ -2081,7 +2112,7 @@
       "name": "Veo 3.1",
       "provider": "google",
       "modelType": "video",
-      "contextWindow": 4000,
+      "contextWindow": 1024,
       "inputCost": 0,
       "outputCost": 750,
       "capabilities": {
@@ -2103,7 +2134,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
-      "released": "January 2026",
+      "released": "October 15, 2025",
       "deprecation_date": null,
       "videoPerSecondCost": 0.4,
       "videoPerSecondCostByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 },
@@ -2153,7 +2184,7 @@
       "name": "Veo 3.1 Fast",
       "provider": "google",
       "modelType": "video",
-      "contextWindow": 4000,
+      "contextWindow": 1024,
       "inputCost": 0,
       "outputCost": 0,
       "capabilities": {
@@ -2175,7 +2206,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
-      "released": "January 2026",
+      "released": "October 15, 2025",
       "deprecation_date": null,
       "videoPerSecondCost": 0.1,
       "videoPerSecondCostByResolution": { "720p": 0.1, "1080p": 0.12, "4k": 0.3 },
@@ -2229,7 +2260,7 @@
       "inputCost": 2.5,
       "outputCost": 10,
       "capabilities": {
-        "streaming": false,
+        "streaming": true,
         "tools": false,
         "vision": false,
         "json": false,
@@ -2247,9 +2278,9 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
-      "released": "December 2025",
-      "deprecation_date": null,
-      "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Was $0.006, whisper-1's per-minute rate left behind when whisper-1 was replaced, which inputCost (dollars per 1M tokens) understated by ~417x. Verified 2026-07-28 against developers.openai.com/api/docs/models.",
+      "released": "March 20, 2025",
+      "deprecation_date": "2027-02-26",
+      "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Added to the Audio API on 2025-03-20. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
       "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-4o-mini-transcribe": {
@@ -2262,7 +2293,7 @@
       "inputCost": 1.25,
       "outputCost": 5,
       "capabilities": {
-        "streaming": false,
+        "streaming": true,
         "tools": false,
         "vision": false,
         "json": false,
@@ -2280,9 +2311,9 @@
       "quality": "excellent",
       "qualityTier": "fast",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
-      "released": "December 2025",
-      "deprecation_date": null,
-      "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Default snapshot gpt-4o-mini-transcribe-2025-12-15. Was $0.006, whisper-1's per-minute rate. Verified 2026-07-28 against developers.openai.com/api/docs/models.",
+      "released": "March 20, 2025",
+      "deprecation_date": "2027-02-26",
+      "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Added to the Audio API on 2025-03-20; default snapshot gpt-4o-mini-transcribe-2025-12-15. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime; the 2025-03-20 snapshot shuts down earlier, on 2027-01-20. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
       "reasoning": { "capable": false, "control": "none" }
     },
     "minimax-m3": {
@@ -2295,6 +2326,7 @@
       "contextWindow": 1000000,
       "inputCost": 0.3,
       "outputCost": 1.2,
+      "cached_input": 0.06,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2316,7 +2348,18 @@
       "bestFor": ["Complex Reasoning", "Open-Weight Deployment"],
       "released": "June 2026",
       "deprecation_date": null,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 524288,
+          "thresholdBoundary": "exclusive",
+          "inputCost": 0.6,
+          "outputCost": 2.4,
+          "cached_input": 0.12
+        }
+      ],
+      "pricingNote": "Standard tier, permanent 50% discount: $0.30/1M input and $1.20/1M output at or below 512K input tokens, rising to $0.60/$2.40 above 512K. Cache reads are $0.06/1M at the base band and $0.12/1M above 512K. M3 is served by passive caching on the OpenAI-compatible route the product calls, and MiniMax publishes no cache-write fee for it. Verified against platform.minimax.io, retrieved 2026-09-04.",
       "openWeight": true,
+      "maxOutputTokens": 524288,
       "tierPolicy": { "minTier": "pro" }
     },
     "veo-3.1-lite": {
@@ -2325,7 +2368,7 @@
       "name": "Veo 3.1 Lite",
       "provider": "google",
       "modelType": "video",
-      "contextWindow": 4000,
+      "contextWindow": 1024,
       "inputCost": 0,
       "outputCost": 0,
       "capabilities": {
@@ -2347,7 +2390,7 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
-      "released": "January 2026",
+      "released": "March 31, 2026",
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
       "videoPerSecondCostByResolution": { "720p": 0.05, "1080p": 0.08 },
@@ -2406,7 +2449,7 @@
       "qualityTier": "best",
       "bestFor": ["Video Generation", "Conversational Video Editing"],
       "released": "June 2026",
-      "deprecation_date": null,
+      "deprecation_date": "2026-09-30",
       "videoPerSecondCost": 0.1,
       "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
       "availability": "preview",
@@ -2418,7 +2461,7 @@
       "name": "Gemini 3.5 Live Translate",
       "provider": "google",
       "modelType": "tts",
-      "contextWindow": 32000,
+      "contextWindow": 131072,
       "inputCost": 3.5,
       "outputCost": 21,
       "capabilities": {
@@ -2443,6 +2486,7 @@
       "released": "June 2026",
       "deprecation_date": null,
       "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
+      "maxOutputTokens": 65536,
       "availability": "preview",
       "reasoning": { "capable": false, "control": "none" }
     },
@@ -2477,6 +2521,7 @@
       "bestFor": ["Automatic Routing", "Mixed Workloads", "Cost Balancing"],
       "released": "November 8, 2023",
       "deprecation_date": null,
+      "pricingNote": "OpenRouter publishes prompt and completion prices of -1 for the Auto Router, meaning the request is billed at the standard rate of whichever model the router selects, with no router fee. The zero rates carried here are a placeholder for that dynamic price, not a free route: meter managed traffic against the model named in the response, never at zero. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": true, "control": "effort" },
