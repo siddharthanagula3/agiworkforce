@@ -1,3 +1,4 @@
+import { DrawOnView } from './motion/DrawOnView';
 import { ProviderMark, hasProviderMark } from '@agiworkforce/ui';
 import { providerLabel } from './landing/landing-content';
 
@@ -72,88 +73,92 @@ export function RouteFlow({
       </h2>
       <p className="agi-fl-section-lede">{lede}</p>
 
-      <div className="agi-rf" role="img" aria-label="Providers route through AGI to six surfaces">
-        <svg viewBox={`0 0 ${W} ${H}`} className="agi-rf-svg" aria-hidden="true">
-          {PROVIDERS.map((provider, i) => (
-            <path
-              key={`in-${provider.id}`}
-              d={inPath(laneY(i, PROVIDERS.length))}
-              className="agi-rf-path"
-            />
-          ))}
-          {SURFACES.map((surface, i) => (
-            <path
-              key={`out-${surface}`}
-              d={outPath(laneY(i, SURFACES.length))}
-              className="agi-rf-path"
-            />
-          ))}
-
-          {PROVIDERS.map((provider, i) => (
-            <circle key={`pin-${provider.id}`} r={PULSE_R} className="agi-rf-dot">
-              <animateMotion
-                dur={`${IN_PULSE_DURATION}s`}
-                begin={`${i * IN_PULSE_STAGGER}s`}
-                repeatCount="indefinite"
-                path={inPath(laneY(i, PROVIDERS.length))}
+      <DrawOnView>
+        <div className="agi-rf" role="img" aria-label="Providers route through AGI to six surfaces">
+          <svg viewBox={`0 0 ${W} ${H}`} className="agi-rf-svg" aria-hidden="true">
+            {PROVIDERS.map((provider, i) => (
+              <path
+                key={`in-${provider.id}`}
+                d={inPath(laneY(i, PROVIDERS.length))}
+                className="agi-rf-path"
+                pathLength={1}
               />
-            </circle>
-          ))}
-          {SURFACES.map((surface, i) => (
-            <circle key={`pout-${surface}`} r={PULSE_R} className="agi-rf-dot agi-rf-dot--out">
-              <animateMotion
-                dur={`${OUT_PULSE_DURATION}s`}
-                begin={`${i * OUT_PULSE_STAGGER + OUT_PULSE_OFFSET}s`}
-                repeatCount="indefinite"
-                path={outPath(laneY(i, SURFACES.length))}
+            ))}
+            {SURFACES.map((surface, i) => (
+              <path
+                key={`out-${surface}`}
+                d={outPath(laneY(i, SURFACES.length))}
+                className="agi-rf-path"
+                pathLength={1}
               />
-            </circle>
-          ))}
+            ))}
 
-          <g className="agi-rf-hub">
-            <circle cx={HUB_X} cy={HUB_Y} r={HUB_HALO_R} className="agi-rf-hub-halo" />
-            <circle cx={HUB_X} cy={HUB_Y} r={HUB_CORE_R} className="agi-rf-hub-core" />
-            {Array.from({ length: SPOKE_COUNT }, (_, i) => {
-              const angle = (i * Math.PI * 2) / SPOKE_COUNT;
-              return (
-                <line
-                  key={i}
-                  x1={HUB_X + Math.sin(angle) * SPOKE_INNER_R}
-                  y1={HUB_Y - Math.cos(angle) * SPOKE_INNER_R}
-                  x2={HUB_X + Math.sin(angle) * SPOKE_OUTER_R}
-                  y2={HUB_Y - Math.cos(angle) * SPOKE_OUTER_R}
-                  className={i === 0 ? 'agi-rf-spoke agi-rf-spoke--accent' : 'agi-rf-spoke'}
+            {PROVIDERS.map((provider, i) => (
+              <circle key={`pin-${provider.id}`} r={PULSE_R} className="agi-rf-dot">
+                <animateMotion
+                  dur={`${IN_PULSE_DURATION}s`}
+                  begin={`${i * IN_PULSE_STAGGER}s`}
+                  repeatCount="indefinite"
+                  path={inPath(laneY(i, PROVIDERS.length))}
                 />
-              );
-            })}
-          </g>
-        </svg>
+              </circle>
+            ))}
+            {SURFACES.map((surface, i) => (
+              <circle key={`pout-${surface}`} r={PULSE_R} className="agi-rf-dot agi-rf-dot--out">
+                <animateMotion
+                  dur={`${OUT_PULSE_DURATION}s`}
+                  begin={`${i * OUT_PULSE_STAGGER + OUT_PULSE_OFFSET}s`}
+                  repeatCount="indefinite"
+                  path={outPath(laneY(i, SURFACES.length))}
+                />
+              </circle>
+            ))}
 
-        <ul className="agi-rf-col agi-rf-col--in" aria-hidden="true">
-          {PROVIDERS.map((provider) => (
-            <li key={provider.id} className="agi-rf-node">
-              {hasProviderMark(provider.id) ? (
-                <ProviderMark providerKey={provider.id} size={MARK_SIZE} />
-              ) : null}
-              {provider.name}
-            </li>
-          ))}
-        </ul>
+            <g className="agi-rf-hub">
+              <circle cx={HUB_X} cy={HUB_Y} r={HUB_HALO_R} className="agi-rf-hub-halo" />
+              <circle cx={HUB_X} cy={HUB_Y} r={HUB_CORE_R} className="agi-rf-hub-core" />
+              {Array.from({ length: SPOKE_COUNT }, (_, i) => {
+                const angle = (i * Math.PI * 2) / SPOKE_COUNT;
+                return (
+                  <line
+                    key={i}
+                    x1={HUB_X + Math.sin(angle) * SPOKE_INNER_R}
+                    y1={HUB_Y - Math.cos(angle) * SPOKE_INNER_R}
+                    x2={HUB_X + Math.sin(angle) * SPOKE_OUTER_R}
+                    y2={HUB_Y - Math.cos(angle) * SPOKE_OUTER_R}
+                    className={i === 0 ? 'agi-rf-spoke agi-rf-spoke--accent' : 'agi-rf-spoke'}
+                  />
+                );
+              })}
+            </g>
+          </svg>
 
-        <ul className="agi-rf-col agi-rf-col--out" aria-hidden="true">
-          {SURFACES.map((surface) => (
-            <li key={surface} className="agi-rf-node agi-rf-node--surface">
-              {surface}
-            </li>
-          ))}
-        </ul>
+          <ul className="agi-rf-col agi-rf-col--in" aria-hidden="true">
+            {PROVIDERS.map((provider) => (
+              <li key={provider.id} className="agi-rf-node">
+                {hasProviderMark(provider.id) ? (
+                  <ProviderMark providerKey={provider.id} size={MARK_SIZE} />
+                ) : null}
+                {provider.name}
+              </li>
+            ))}
+          </ul>
 
-        <ul className="agi-rf-modes" aria-hidden="true">
-          {MODE_LANES.map((lane) => (
-            <li key={lane}>{lane}</li>
-          ))}
-        </ul>
-      </div>
+          <ul className="agi-rf-col agi-rf-col--out" aria-hidden="true">
+            {SURFACES.map((surface) => (
+              <li key={surface} className="agi-rf-node agi-rf-node--surface">
+                {surface}
+              </li>
+            ))}
+          </ul>
+
+          <ul className="agi-rf-modes" aria-hidden="true">
+            {MODE_LANES.map((lane) => (
+              <li key={lane}>{lane}</li>
+            ))}
+          </ul>
+        </div>
+      </DrawOnView>
     </section>
   );
 }
