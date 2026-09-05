@@ -22,6 +22,8 @@ import { isIP } from 'node:net';
 import type { LookupFunction } from 'node:net';
 import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
 
+import { TRACEPARENT_HEADER, outboundTraceparent } from '@/lib/observability/trace-propagation';
+
 const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
 
 const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
@@ -173,6 +175,36 @@ export function getPinnedPublicDispatcher(): Dispatcher {
   return pinnedAgent;
 }
 
+function targetHostname(input: string | URL | Request): string | null {
+  try {
+    if (typeof input === 'string') return new URL(input).hostname;
+    if (input instanceof URL) return input.hostname;
+    return new URL(input.url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A trace id is internal correlation data, so it travels only to the hosts the
+ * egress allowlist already vouches for, never to a user-supplied fetch target.
+ */
+export function withOutboundTraceHeader(
+  input: string | URL | Request,
+  init?: RequestInit,
+): RequestInit | undefined {
+  const hostname = targetHostname(input)?.toLowerCase();
+  if (!hostname || !ALLOWED_HOSTNAMES.has(hostname)) return init;
+  const traceparent = outboundTraceparent();
+  if (!traceparent) return init;
+  const headers = new Headers(
+    init?.headers ?? (input instanceof Request ? input.headers : undefined),
+  );
+  if (headers.has(TRACEPARENT_HEADER)) return init;
+  headers.set(TRACEPARENT_HEADER, traceparent);
+  return { ...init, headers };
+}
+
 export function pinnedPublicFetch(
   input: string | URL | Request,
   init?: RequestInit,
@@ -187,7 +219,7 @@ export function pinnedPublicFetch(
   // undici of the same version. Pairing the Agent with its own fetch keeps the
   // DNS pinning that defends against rebinding rather than dropping it.
   return undiciFetch(input as Parameters<typeof undiciFetch>[0], {
-    ...(init as Parameters<typeof undiciFetch>[1]),
+    ...(withOutboundTraceHeader(input, init) as Parameters<typeof undiciFetch>[1]),
     dispatcher: getPinnedPublicDispatcher(),
   }) as unknown as Promise<Response>;
 }
