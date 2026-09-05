@@ -33,7 +33,10 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/mcp-url-validation', () => ({
   validateHttpsMcpUrl: vi.fn(async () => new URL('https://mcp.example.com/sse')),
 }));
-vi.mock('@/lib/custom-connector-crypto', () => ({ encryptConnectorToken: vi.fn(() => 'enc') }));
+vi.mock('@/lib/custom-connector-crypto', () => ({
+  encryptConnectorToken: vi.fn(() => 'enc'),
+  decryptConnectorToken: vi.fn(),
+}));
 vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: vi.fn(),
   getUserCustomConnectorSummaries: vi.fn(async () => []),

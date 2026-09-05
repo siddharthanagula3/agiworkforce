@@ -24,6 +24,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization: (...a: unknown[]) => mocks.createPending(...a),
+  upsertConnectorOAuthGrant: vi.fn(),
 }));
 
 import { GET } from './route';

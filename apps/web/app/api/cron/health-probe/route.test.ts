@@ -16,7 +16,10 @@ vi.mock('@/lib/server/health-check', () => ({ runHealthChecks: mocks.runHealthCh
 vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
-vi.mock('@/lib/support/handoff/config', () => ({ getHandoffConfig: mocks.getHandoffConfig }));
+vi.mock('@/lib/support/handoff/config', () => ({
+  getHandoffConfig: mocks.getHandoffConfig,
+  isValidEmail: vi.fn(() => true),
+}));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

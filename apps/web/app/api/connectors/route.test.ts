@@ -52,17 +52,27 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
   isConnectorOAuthSupported: (id: string) =>
     mocks.oauthConfiguredIds().has(id) || isSelfServiceConnector(id),
   buildConnectorOAuthStartPath: (id: string) => `/api/connectors/oauth/start?connectorId=${id}`,
+  getConnectorOAuthProvider: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: (...args: unknown[]) => mocks.oauthGrants(...args),
+  ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
+  getConnectorOAuthGrant: vi.fn(),
+  revokeConnectorOAuthGrant: vi.fn(),
+  updateConnectorOAuthGrantTokens: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-access', () => ({
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),
+  resolveConnectorAccessToken: vi.fn(),
 }));
 vi.mock('@/lib/github-app', () => ({
   getGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/agi/installations/new'),
   isGitHubAppConfigured: vi.fn(() => true),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
+  getInstallationAccessToken: vi.fn(),
+  getPrDiff: vi.fn(),
+  postIssueComment: vi.fn(),
+  postPrReview: vi.fn(),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
