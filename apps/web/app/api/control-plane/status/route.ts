@@ -3,11 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -48,6 +47,8 @@ const PROVIDER_PROBES: Array<{ name: string; url: string }> = [
   { name: 'Google', url: 'https://generativelanguage.googleapis.com' },
 ];
 
+const SURFACE_SCOPE = { resolveOrganization: false } as const;
+
 async function probeProvider(name: string, url: string): Promise<ProviderRow> {
   const start = Date.now();
   try {
@@ -70,10 +71,9 @@ export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'health-check');
   if (rateLimitResponse) return rateLimitResponse;
 
-  let userId: string;
+  let scoped: UserScopedDb;
   try {
-    const authResult = await getClerkAuthUser(request);
-    userId = authResult.userId;
+    scoped = await getUserScopedDb(request, SURFACE_SCOPE);
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const db = getNeonDb();
+  const { db, userId } = scoped;
 
   const surfaces: SurfaceRow[] = [
     { id: 'desktop', status: 'unknown', lastSeen: null },

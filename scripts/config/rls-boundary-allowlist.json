@@ -34,10 +34,6 @@
       "reason": "a beta invite belongs to nobody until it is redeemed, and claim_beta_invite locks the invite row, spends a use and writes the redemption the claimant does not own yet; only the subscription read-back is caller-scoped"
     },
     {
-      "path": "apps/web/app/api/control-plane/status/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/copyright-notice/route.ts",
       "reason": "public unauthenticated DMCA-style intake, the reporter has no account to scope by"
     },
