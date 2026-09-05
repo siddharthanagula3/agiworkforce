@@ -151,7 +151,7 @@ async function handleCreate(request: NextRequest) {
       {
         error: {
           message:
-            'Full network access and extra egress hosts are not available yet for this coding agent: its provider credentials would enter the sandbox directly. Choose Trusted hosts or No network without extra hosts, or pick an environment with no coding agent, until the credential proxy covers it.',
+            'Full internet access and extra egress hosts are not available yet for this coding agent: its provider credentials would enter the sandbox directly. Choose Trusted hosts or Isolated without extra hosts, or pick an environment with no coding agent, until the credential proxy covers it.',
           type: 'invalid_request_error',
           code: NETWORK_ACCESS_REQUIRES_PROXY_CODE,
         },
