@@ -1100,12 +1100,13 @@ function errorMessage(error: unknown): string {
 }
 
 async function announceScheduleRun(
+  db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
   status: ScheduleRunStatus,
 ): Promise<void> {
   if (status === 'running') return;
   try {
-    await notifyScheduleCompleted({
+    await notifyScheduleCompleted(db, {
       userId: claim.task.userId,
       taskId: claim.task.id,
       taskName: claim.task.name,
@@ -1183,7 +1184,7 @@ async function runClaimedSchedule(
       result,
       completedAt: now(),
     });
-    await announceScheduleRun(claim, 'success');
+    await announceScheduleRun(db, claim, 'success');
     return run;
   } catch (error) {
     const externallyCancelled = options.signal?.aborted === true;
@@ -1198,7 +1199,7 @@ async function runClaimedSchedule(
       error: errorMessage(error),
       completedAt: now(),
     });
-    await announceScheduleRun(claim, status);
+    await announceScheduleRun(db, claim, status);
     return run;
   } finally {
     removeAbortListener();

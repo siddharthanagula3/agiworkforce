@@ -163,7 +163,7 @@
     },
     {
       "path": "apps/web/lib/connectors/mcp-state-store.ts",
-      "reason": "pending scoped migration"
+      "reason": "mcp_app_payloads and mcp_task_bindings have row-level security disabled and no grants at all for the app_rls role, so a scoped statement is refused outright; every statement already carries user_id and a migration must land before this can be scoped"
     },
     {
       "path": "apps/web/lib/github-app.ts",
@@ -171,7 +171,7 @@
     },
     {
       "path": "apps/web/lib/security-audit.ts",
-      "reason": "pending scoped migration"
+      "reason": "the audit trail records unauthenticated and failed attempts, so there is often no subject to bind, and security_audit_logs has row-level security disabled with zero policies so a scoped write would be policed by nothing"
     },
     {
       "path": "apps/web/lib/server/account-erasure.ts",
@@ -190,10 +190,6 @@
       "reason": "revocation targets the row resolved from the presented token signature and family id, the credential is the subject"
     },
     {
-      "path": "apps/web/lib/server/media-assets.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/server/neon-chat.ts",
       "reason": "pending scoped migration"
     },
@@ -206,12 +202,8 @@
       "reason": "retention sweep over the whole audit log triggered by cron or admin, deletes by age not by subject"
     },
     {
-      "path": "apps/web/lib/services/agent-notification-service.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/services/api-key-service.ts",
-      "reason": "pending scoped migration"
+      "reason": "verifyKey resolves the presented credential by its key_prefix before any session exists, so the key is the subject and there is no caller to bind; every other method takes the caller connection"
     },
     {
       "path": "apps/web/lib/services/free-trial-service.ts",
@@ -219,27 +211,19 @@
     },
     {
       "path": "apps/web/lib/services/org-entitlements.ts",
-      "reason": "pending scoped migration"
+      "reason": "organization entitlement resolves from the OWNER subscription row, which a member scoped connection cannot see, so every administrator who was not the owner resolved to free; both callers establish membership on their own scoped connection first"
     },
     {
       "path": "apps/web/lib/services/org-sharing-service.ts",
-      "reason": "pending scoped migration"
+      "reason": "the admin sharing console lists projects owned by other members, and the org shared read policy on user_projects hides one the admin own per-member override denies them; every other statement runs on the caller connection"
     },
     {
       "path": "apps/web/lib/services/push-notification-service.ts",
       "reason": "invalidateTokens clears exact push tokens the provider reported unregistered, a device credential is not a user, every other export already carries user_id"
     },
     {
-      "path": "apps/web/lib/services/reflect-service.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/services/route-cache-observability-service.ts",
       "reason": "reached only from the platform-admin observability routes, deliberately cross-tenant aggregate reads"
-    },
-    {
-      "path": "apps/web/lib/services/schedule-notification-service.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/lib/services/schedule-service.ts",
@@ -263,7 +247,7 @@
     },
     {
       "path": "apps/web/lib/user-connector-tools.ts",
-      "reason": "pending scoped migration"
+      "reason": "three statements stay on the schema owner: the github_installations read, whose table has row-level security disabled, and the two organization shared connector reads, which join a connector row owned by another member; every caller-owned read runs on a claimed scope"
     }
   ]
 }

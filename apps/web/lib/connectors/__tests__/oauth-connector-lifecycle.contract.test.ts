@@ -250,13 +250,26 @@ vi.mock('@/lib/server/neon-db', () => {
     }
     return [];
   };
+  const adapter = {
+    query: async (sql: string, params?: unknown[]) => run(sql, params),
+    execute: async (sql: string, params?: unknown[]) => {
+      run(sql, params);
+      return 0;
+    },
+    transaction: async (callback: (tx: unknown) => unknown) => callback(adapter),
+  };
+  return { getNeonDb: vi.fn(() => adapter) };
+});
+
+vi.mock('@/lib/server/rls-db', async () => {
+  const { getNeonDb } = await import('@/lib/server/neon-db');
   return {
-    getNeonDb: vi.fn(() => ({
-      query: async (sql: string, params?: unknown[]) => run(sql, params),
-      execute: async (sql: string, params?: unknown[]) => {
-        run(sql, params);
-      },
+    getUserScopedDb: vi.fn(async () => ({
+      db: getNeonDb(),
+      userId: 'user-1',
+      organizationId: null,
     })),
+    getCurrentUserRlsDb: vi.fn(async () => ({ db: getNeonDb(), userId: 'user-1' })),
   };
 });
 

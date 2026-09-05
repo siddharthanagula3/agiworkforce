@@ -66,9 +66,9 @@ interface CloudAgentRunRow extends Record<string, unknown> {
  * `announceScheduleRun` in schedule-service.ts puts around the one other
  * push producer in the app.
  */
-async function announceAgentRunEvent(notice: AgentRunNotice): Promise<void> {
+async function announceAgentRunEvent(db: DatabaseAdapter, notice: AgentRunNotice): Promise<void> {
   try {
-    await notifyAgentRunEvent(notice);
+    await notifyAgentRunEvent(db, notice);
   } catch (error) {
     logger.warn({ error, runId: notice.runId }, 'Cloud agent run notification failed');
   }
@@ -594,7 +594,7 @@ export async function appendCloudAgentEvents(
   // Announced after the commit, never inside it: a rolled-back journal write
   // must not leave a push behind, and a push must not hold a transaction open.
   if (notice) {
-    await announceAgentRunEvent({ userId: input.userId, runId: input.runId, event: notice });
+    await announceAgentRunEvent(db, { userId: input.userId, runId: input.runId, event: notice });
   }
   return run;
 }
@@ -751,7 +751,7 @@ export async function transitionCloudAgentRun(
     currentState: input.state,
   });
   if (notice) {
-    await announceAgentRunEvent({ userId: input.userId, runId: input.runId, event: notice });
+    await announceAgentRunEvent(db, { userId: input.userId, runId: input.runId, event: notice });
   }
   return run;
 }
@@ -1095,7 +1095,7 @@ export async function saveCloudAgentApprovalCheckpoint(
     return requireApprovalCheckpoint(checkpointRows);
   });
 
-  await announceAgentRunEvent({
+  await announceAgentRunEvent(db, {
     userId: input.userId,
     runId: input.runId,
     event: 'approval_required',
@@ -1411,7 +1411,7 @@ export async function saveCloudAgentInputCheckpoint(
     return requireInputCheckpoint(checkpointRows);
   });
 
-  await announceAgentRunEvent({
+  await announceAgentRunEvent(db, {
     userId: input.userId,
     runId: input.runId,
     event: 'input_required',

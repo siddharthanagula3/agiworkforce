@@ -109,9 +109,13 @@ interface PersistedVideoAsset {
   pathname: string;
 }
 
-async function removePersistedVideo(job: VideoGenerationJob, pathname: string): Promise<void> {
+async function removePersistedVideo(
+  db: DatabaseAdapter,
+  job: VideoGenerationJob,
+  pathname: string,
+): Promise<void> {
   await deleteStoredMedia(pathname);
-  await deleteVideoMediaAsset(job.id, job.userId);
+  await deleteVideoMediaAsset(job.id, job.userId, db);
 }
 
 function jitteredDelaySeconds(baseSeconds: number, jobId: string, salt = 0): number {
@@ -151,6 +155,7 @@ async function finishFailed(
 }
 
 async function persistCompletedVideo(
+  db: DatabaseAdapter,
   job: VideoGenerationJob,
   output: { url: string } | { base64: string } | { openRouterContentIndex: number },
 ): Promise<PersistedVideoAsset> {
@@ -181,7 +186,7 @@ async function persistCompletedVideo(
     } catch (error) {
       try {
         await deleteStoredMedia(plannedPathname);
-        await deleteVideoMediaAsset(job.id, job.userId);
+        await deleteVideoMediaAsset(job.id, job.userId, db);
       } catch (cleanupError) {
         logger.error(
           { jobId: job.id, cleanupError },
@@ -200,34 +205,37 @@ async function persistCompletedVideo(
       model: job.model,
     });
     try {
-      const assetId = await upsertVideoMediaAsset({
-        id: job.id,
-        userId: job.userId,
-        organizationId: job.organizationId,
-        mimeType: downloaded.contentType,
-        storageUrl: stored.pathname,
-        storagePathname: stored.pathname,
-        byteSize: stored.byteSize,
-        prompt: job.prompt,
-        provider: job.provider,
-        model: job.model,
-        sourceSurface: job.sourceSurface,
-        metadata: {
-          origin: 'generated',
-          surface: 'file',
-          filename: `agi-video-${job.id}.${downloaded.contentType === 'video/webm' ? 'webm' : downloaded.contentType === 'video/quicktime' ? 'mov' : 'mp4'}`,
-          previewable: true,
-          aiAct: provenance,
-          durationSecs: job.durationSecs,
-          resolution: job.resolution,
-          ...(job.aspectRatio ? { aspectRatio: job.aspectRatio } : {}),
-          ...(job.generateAudio === undefined ? {} : { generateAudio: job.generateAudio }),
+      const assetId = await upsertVideoMediaAsset(
+        {
+          id: job.id,
+          userId: job.userId,
+          organizationId: job.organizationId,
+          mimeType: downloaded.contentType,
+          storageUrl: stored.pathname,
+          storagePathname: stored.pathname,
+          byteSize: stored.byteSize,
+          prompt: job.prompt,
+          provider: job.provider,
+          model: job.model,
+          sourceSurface: job.sourceSurface,
+          metadata: {
+            origin: 'generated',
+            surface: 'file',
+            filename: `agi-video-${job.id}.${downloaded.contentType === 'video/webm' ? 'webm' : downloaded.contentType === 'video/quicktime' ? 'mov' : 'mp4'}`,
+            previewable: true,
+            aiAct: provenance,
+            durationSecs: job.durationSecs,
+            resolution: job.resolution,
+            ...(job.aspectRatio ? { aspectRatio: job.aspectRatio } : {}),
+            ...(job.generateAudio === undefined ? {} : { generateAudio: job.generateAudio }),
+          },
         },
-      });
+        db,
+      );
       return { assetId, pathname: stored.pathname };
     } catch (error) {
       try {
-        await removePersistedVideo(job, stored.pathname);
+        await removePersistedVideo(db, job, stored.pathname);
       } catch (cleanupError) {
         logger.error(
           { jobId: job.id, cleanupError },
@@ -468,7 +476,7 @@ async function reconcileVideoGenerationJobCore(
         retryAfterSeconds: jitteredDelaySeconds(5, claimed.id, 1),
       });
     }
-    persistedAsset = await persistCompletedVideo(claimed, provider.output);
+    persistedAsset = await persistCompletedVideo(db, claimed, provider.output);
     const finalized = await finalizeVideoGenerationJob({
       db,
       jobId: claimed.id,
@@ -485,7 +493,7 @@ async function reconcileVideoGenerationJobCore(
 
     if (persistedAsset) {
       try {
-        await removePersistedVideo(claimed, persistedAsset.pathname);
+        await removePersistedVideo(db, claimed, persistedAsset.pathname);
       } catch (cleanupError) {
         logger.error(
           { jobId: claimed.id, error, cleanupError },

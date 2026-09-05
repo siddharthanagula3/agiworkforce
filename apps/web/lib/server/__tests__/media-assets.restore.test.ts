@@ -4,7 +4,7 @@ const { mockQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
+const callerDb = { query: mockQuery } as never;
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
@@ -19,7 +19,7 @@ describe('restoreMediaAsset (Recently-deleted bin restore)', () => {
 
   it('un-deletes only within the 30-day window, owner-scoped, and returns true on a hit', async () => {
     mockQuery.mockResolvedValue([{ id: 'asset-1' }]);
-    const ok = await restoreMediaAsset('user-owner', 'asset-1');
+    const ok = await restoreMediaAsset('user-owner', 'asset-1', callerDb);
     expect(ok).toBe(true);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('set deleted_at = null');
@@ -32,7 +32,7 @@ describe('restoreMediaAsset (Recently-deleted bin restore)', () => {
 
   it('returns false without leaking a Personal/foreign/purged row into an org workspace', async () => {
     mockQuery.mockResolvedValue([]);
-    expect(await restoreMediaAsset('user-owner', 'asset-1')).toBe(false);
+    expect(await restoreMediaAsset('user-owner', 'asset-1', callerDb)).toBe(false);
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['asset-1', 'user-owner', 'org-1']);
   });
 });

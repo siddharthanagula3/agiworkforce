@@ -8,7 +8,6 @@ import {
   type ManagedCloudReflectRecap,
 } from '@agiworkforce/cloud-contracts';
 import { getDateHourInTimeZone } from '@agiworkforce/types';
-import { getNeonDb } from '@/lib/server/neon-db';
 import {
   classifyConversationText,
   getConversationTopicPresentation,
@@ -245,14 +244,14 @@ export function buildManagedReflectRecap(input: {
 }
 
 export async function loadManagedReflectRecap(input: {
+  db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
   range: ManagedCloudReflectRange;
   timezone: string;
-  db?: DatabaseAdapter;
   now?: Date;
 }): Promise<ManagedReflectLoadResult> {
-  const db = input.db ?? getNeonDb();
+  const { db } = input;
   const now = input.now ?? new Date();
   const [settingsRow] = await db.query<UserSettingsRow>(
     'select settings from public.user_settings where user_id = $1 limit 1',
