@@ -26,11 +26,15 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: mocks.addCsrfHeaders,
 }));
-vi.mock('@shared/stores/web-chat-store', () => ({
-  useChatStore: {
-    getState: () => ({ addConversation: mocks.addConversation }),
-  },
+const storeState = vi.hoisted(() => ({
+  conversations: [] as Array<{ id: string }>,
 }));
+vi.mock('@shared/stores/web-chat-store', () => {
+  const useChatStore = (selector?: (state: unknown) => unknown) =>
+    selector ? selector(storeState) : storeState;
+  useChatStore.getState = () => ({ addConversation: mocks.addConversation });
+  return { useChatStore };
+});
 vi.mock('sonner', () => ({
   toast: {
     success: mocks.success,
@@ -56,6 +60,39 @@ describe('useConversationBranches', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(branchId);
+  });
+
+  it('never asks about a conversation the store does not list', async () => {
+    storeState.conversations = [{ id: 'some-other-conversation' }];
+    try {
+      const { result } = renderHook(() => useConversationBranches(conversationId));
+      await waitFor(() => expect(result.current.groupsByMessageId).toEqual({}));
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      storeState.conversations = [];
+    }
+  });
+
+  it('treats a conversation the server has not persisted as having no branches', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'Conversation not found' } }), {
+        status: 404,
+      }),
+    );
+
+    try {
+      const { result } = renderHook(() => useConversationBranches(conversationId));
+
+      await waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(result.current.groupsByMessageId).toEqual({});
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 
   it('loads message-scoped sibling groups for the active conversation', async () => {
