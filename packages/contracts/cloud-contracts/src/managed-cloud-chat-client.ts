@@ -63,6 +63,7 @@ export interface ManagedCloudChatRequestOptions {
 export interface ManagedCloudSaveMessageOptions extends ManagedCloudChatRequestOptions {
   maxAttempts?: number;
   retryDelayMs?: number;
+  retryRateLimited?: boolean;
 }
 
 export interface ManagedCloudSaveMessageResult {
@@ -363,6 +364,7 @@ export function createManagedCloudChatClient(
       const body = ManagedCloudCreateMessageRequestSchema.parse({ ...input, skipLlm: true });
       const attempts = options.maxAttempts ?? DEFAULT_SAVE_ATTEMPTS;
       const retryDelayMs = options.retryDelayMs ?? DEFAULT_SAVE_RETRY_DELAY_MS;
+      const retryRateLimited = options.retryRateLimited ?? true;
       let lastError: unknown;
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
@@ -393,7 +395,7 @@ export function createManagedCloudChatClient(
             !(error instanceof ManagedCloudChatContractError) &&
             (status === null ||
               status >= SERVER_ERROR_STATUS_FLOOR ||
-              status === RATE_LIMITED_STATUS);
+              (status === RATE_LIMITED_STATUS && retryRateLimited));
           if (!retryable || attempt >= attempts) throw error;
           await delay(retryDelayMs * attempt, options.signal);
         }
