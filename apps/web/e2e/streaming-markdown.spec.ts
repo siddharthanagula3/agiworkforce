@@ -18,6 +18,10 @@ const STREAM_CHUNK_CHARS = 32;
 const SAMPLE_EVERY_CHUNKS = 2;
 const MIN_OBSERVED_GROWTH_STEPS = 4;
 const SCROLL_THRESHOLD_PX = 120;
+const WHEEL_STEP_PX = 600;
+const WHEEL_STEP_LIMIT = 60;
+const WHEEL_FRAME_MS = 80;
+const TRANSCRIPT_TOP_PX = 0;
 const TRANSCRIPT_OVERSCAN_ROWS = 6;
 const PRIOR_TURN_COUNT = TRANSCRIPT_OVERSCAN_ROWS + 3;
 const EXPECTED_MATH_BLOCKS = 1;
@@ -258,11 +262,21 @@ async function readScrollState(
   }, TRANSCRIPT_SCROLLER);
 }
 
-async function scrollTranscriptToTop(page: Page): Promise<void> {
-  await page.evaluate((selector: string) => {
-    const scroller = document.querySelector(selector) as HTMLElement | null;
-    if (scroller) scroller.scrollTop = 0;
-  }, TRANSCRIPT_SCROLLER);
+/**
+ * The reader's own scroll, driven through the wheel rather than by assignment to
+ * `scrollTop`. The transcript ignores a scroll it never saw a wheel, touch or
+ * key for, because following a stream means scrolling itself on every token and
+ * those scroll events must not read as the reader walking away. A scripted
+ * `scrollTop` is indistinguishable from one of its own, so it would measure the
+ * anchor rather than the behaviour a person meets.
+ */
+async function wheelTranscriptToTop(page: Page): Promise<void> {
+  await page.locator(TRANSCRIPT_SCROLLER).hover();
+  for (let step = ZERO; step < WHEEL_STEP_LIMIT; step += 1) {
+    if ((await readScrollState(page))?.scrollTop === TRANSCRIPT_TOP_PX) break;
+    await page.mouse.wheel(ZERO, -WHEEL_STEP_PX);
+    await page.waitForTimeout(WHEEL_FRAME_MS);
+  }
   await page.waitForTimeout(SCROLL_SETTLE_MS);
 }
 
@@ -501,7 +515,7 @@ test.describe('streaming markdown', () => {
     await expect(marker.first()).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
     const streamedBefore = collapse(await assistantProse(page).innerText());
 
-    await scrollTranscriptToTop(page);
+    await wheelTranscriptToTop(page);
     const fab = page.getByRole('button', { name: SCROLL_TO_BOTTOM_LABEL });
     await expect(fab, 'scrolling up did not offer a way back to the live answer').toBeVisible();
     await expect(
