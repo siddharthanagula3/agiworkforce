@@ -7,6 +7,9 @@ import {
   type RoutingTaskType,
 } from '@agiworkforce/types';
 
+import { resolveRequiredSearchEnforcement } from '@/lib/web-search/required-search';
+import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
+
 import * as requestProcessor from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
 
@@ -173,6 +176,42 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.web_fetch).toBeUndefined();
   });
 
+  it('turns web search on when the user asks for a search in the message text', () => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt: "Search the web for today's top headline and cite the link.",
+      taskType: 'simple_chat',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.web_search).toBe(true);
+  });
+
+  it('leaves web search alone for a turn that asks for nothing current', () => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt: 'Rewrite the paragraph above in a plainer voice.',
+      taskType: 'simple_chat',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.web_search).toBeUndefined();
+  });
+
+  it('preserves an explicit web-search opt-out', () => {
+    const chatRequest = request({ web_search: false });
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt: 'Search the web for the latest release notes.',
+      taskType: 'research',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.web_search).toBe(false);
+  });
+
   it('does not implicitly activate streaming-only tools on a non-streaming request', () => {
     const chatRequest = request({ stream: false });
 
@@ -227,16 +266,14 @@ describe('forced tool choice compatibility', () => {
 
   it('never forces a web-search tool call on a model whose provider rejects it', () => {
     expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({
+      resolveRequiredSearchEnforcement({
+        required: true,
         requestedToolChoice: undefined,
-        webSearch: true,
-        researchTask: true,
         stream: true,
-        provider: 'deepseek',
         model: forcedChoiceIncompatibleModel,
-        webSearchToolAttached: true,
+        tools: [webSearchToolDef()],
       }),
-    ).toBeUndefined();
+    ).toEqual({ mode: 'nudge', attachedTool: 'generic-function' });
   });
 
   it('still forces the call for a model that accepts a forced tool choice', () => {
@@ -245,16 +282,14 @@ describe('forced tool choice compatibility', () => {
         model.providerCompatibility?.forcedToolChoice !== false && model.capabilities?.tools,
     );
     expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({
+      resolveRequiredSearchEnforcement({
+        required: true,
         requestedToolChoice: undefined,
-        webSearch: true,
-        researchTask: true,
         stream: true,
-        provider: 'openai',
         model: compatible?.id,
-        webSearchToolAttached: true,
-      }),
-    ).toBe('required');
+        tools: [webSearchToolDef()],
+      }).mode,
+    ).toBe('tool-choice');
   });
 });
 
@@ -311,44 +346,31 @@ describe('managed code tool choice', () => {
 });
 
 describe('managed web-search tool choice', () => {
-  it('requires one initial search for a live research request with an attached search tool', () => {
+  it('forces the search tool when the turn requires a search and one is attached', () => {
     expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({
+      resolveRequiredSearchEnforcement({
+        required: true,
         requestedToolChoice: undefined,
-        webSearch: true,
-        researchTask: true,
         stream: true,
-        provider: 'openai',
-        webSearchToolAttached: true,
-      }),
-    ).toBe('required');
+        model: undefined,
+        tools: [webSearchToolDef()],
+      }).toolChoice,
+    ).toEqual({ type: 'function', function: { name: 'web_search' } });
   });
 
-  it('preserves caller choice and does not force unsupported or unavailable search', () => {
+  it('preserves caller choice and does not force unavailable search', () => {
     const base = {
+      required: true,
       requestedToolChoice: undefined,
-      webSearch: true,
-      researchTask: true,
-      stream: true,
-      webSearchToolAttached: true,
-    } as const;
+      stream: true as boolean | undefined,
+      model: undefined,
+      tools: [webSearchToolDef()],
+    };
 
-    expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({
-        ...base,
-        requestedToolChoice: 'none',
-        provider: 'openai',
-      }),
-    ).toBe('none');
-    expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({ ...base, provider: 'anthropic' }),
-    ).toBeUndefined();
-    expect(
-      requestProcessor.resolveInitialWebSearchToolChoice({
-        ...base,
-        provider: 'openai',
-        webSearchToolAttached: false,
-      }),
-    ).toBeUndefined();
+    expect(resolveRequiredSearchEnforcement({ ...base, requestedToolChoice: 'none' }).mode).toBe(
+      'none',
+    );
+    expect(resolveRequiredSearchEnforcement({ ...base, tools: [] }).mode).toBe('none');
+    expect(resolveRequiredSearchEnforcement({ ...base, stream: false }).mode).toBe('none');
   });
 });
