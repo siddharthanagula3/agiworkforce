@@ -7,26 +7,12 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import {
   DEFAULT_TOOL_APPROVAL_PREFERENCES,
+  TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   type ToolApprovalPolicy,
   type ToolApprovalPreferences,
 } from '@shared/types/toolApprovalPolicy';
 import { toUserMessage } from '@/lib/user-error-message';
-
-const POLICY_OPTIONS: { policy: ToolApprovalPolicy; label: string; description: string }[] = [
-  {
-    policy: 'ask_every_time',
-    label: 'Ask before every action',
-    description:
-      'Every connector, plugin, and tool action waits for your approval, including actions that only read data.',
-  },
-  {
-    policy: 'auto_approve_read_only',
-    label: 'Run read-only actions without asking',
-    description:
-      'Actions that only read data inside AGI run on their own. Anything that writes, deletes, runs code, or can move data outside AGI - including web search and page fetches - still asks first, and a blocked tool stays blocked.',
-  },
-];
 
 export function ToolApprovalDefaultsPanel() {
   const [policy, setPolicy] = useState<ToolApprovalPolicy>(
@@ -109,7 +95,7 @@ export function ToolApprovalDefaultsPanel() {
       </div>
 
       <div role="radiogroup" aria-label="Default approval for tool actions" className="space-y-2">
-        {POLICY_OPTIONS.map((option) => (
+        {TOOL_APPROVAL_POLICY_OPTIONS.map((option) => (
           <label
             key={option.policy}
             className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/40 p-4"
