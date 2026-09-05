@@ -313,7 +313,7 @@ function modelAccessByProvider(): ModelAccessRow[] {
 }
 
 function formatModelAccess(accessibleCount: number, total: number): string {
-  if (accessibleCount === 0) return ', ';
+  if (accessibleCount === 0) return 'None';
   if (accessibleCount === total) return total === 1 ? 'Included' : `All ${total}`;
   return `${accessibleCount} of ${total}`;
 }
@@ -1300,7 +1300,7 @@ export default function PricingPage() {
               {t('compareHeading')}
             </h2>
             <Prose size="lg">{t('compareSubheading')}</Prose>
-            <details className="agi-ds-compare-disclosure">
+            <details className="agi-ds-compare-disclosure" open>
               <summary className="agi-ds-compare-summary">
                 <span>Full capability table</span>
                 <span className="agi-ds-compare-summary-hint">
