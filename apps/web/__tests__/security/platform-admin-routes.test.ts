@@ -26,6 +26,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/security-audit', () => ({
   getClientIp: () => '203.0.113.7',
   logSecurityEvent: (...args: unknown[]) => mocks.logSecurityEvent(...args),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({

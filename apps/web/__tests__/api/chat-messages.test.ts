@@ -38,6 +38,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/services/credit-service', () => ({

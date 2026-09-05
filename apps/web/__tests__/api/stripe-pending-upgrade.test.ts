@@ -17,6 +17,8 @@ vi.mock('@/lib/services/enterprise-billing-service', () => ({
   syncEnterpriseContractFromSubscription: vi.fn(async () => undefined),
   recordEnterpriseInvoiceEvent: vi.fn(async () => undefined),
   endEnterpriseContractIfPresent: vi.fn(async () => undefined),
+  auditUnknownStripePriceIfEnterpriseConfigured: vi.fn(async () => undefined),
+  resolveEnterprisePlanTier: vi.fn(async () => null),
 }));
 
 import { dispatchStripeEvent } from '@/app/api/stripe-webhook/lib/handlers';

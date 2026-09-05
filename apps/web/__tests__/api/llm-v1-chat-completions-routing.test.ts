@@ -34,7 +34,8 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   logCacheAnalytics: vi.fn(),
 }));
 
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal()),
   validateEgressUrl: vi.fn(),
   validateUserImageUrl: vi.fn(),
   EgressPolicyError: class EgressPolicyError extends Error {},

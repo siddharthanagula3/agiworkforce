@@ -35,6 +35,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
 import { POST as postBulkMessages } from '@/app/api/chat/conversations/[id]/messages/bulk/route';

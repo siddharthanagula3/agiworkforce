@@ -18,7 +18,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 vi.mock('@/lib/services/credit-service', () => ({ CreditService: {} }));
-vi.mock('@/lib/price-tier-mapping', () => ({
+vi.mock('@/lib/price-tier-mapping', async (importOriginal) => ({
+  ...(await importOriginal()),
   resolvePlanTier: (_metadata: unknown, priceId: unknown) =>
     priceId === 'price_pro_monthly' ? 'pro' : null,
   isValidPlanTier: (tier: unknown) => tier === 'pro',
