@@ -10,6 +10,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronRight } from '@agiworkforce/icons';
 import { cn } from '../cn';
 
 export interface MenuProps {
@@ -340,7 +341,7 @@ export function MenuItem({
       )}
     >
       {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
-      <span className="flex-1 truncate">{children}</span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing && (
         <span className="ml-auto shrink-0 text-xs text-[hsl(var(--muted-foreground))]">
           {trailing}
@@ -352,4 +353,134 @@ export function MenuItem({
 
 export function MenuSeparator() {
   return <div role="separator" className="my-1 h-px bg-[hsl(var(--border))]" />;
+}
+
+export interface MenuSubmenuProps {
+  label: ReactNode;
+  icon?: ReactNode;
+  children: ReactNode;
+}
+
+const SUBMENU_CLOSE_DELAY_MS = 150;
+
+const SUBMENU_WIDTH_PX = 208;
+const SUBMENU_GAP_PX = 4;
+
+/**
+ * A flyout, not the drill-down the model sub-menu elsewhere in this package
+ * uses: the trigger stays visible and the panel opens beside it, the shape
+ * both leaders use for "Move to project" so the row menu's height stays
+ * fixed instead of growing by one line per project (which was also, it
+ * turned out, why that menu mispositioned itself: `computePosition` sized
+ * against a panel taller than the viewport).
+ *
+ * Portalled to `document.body` with a computed fixed position, the same
+ * escape hatch the top-level `Menu` panel already uses: nesting an
+ * `absolute` flyout inside a *scrolling* (`overflow-y-auto`) ancestor put it
+ * in that ancestor's own containing-block chain, so the flyout's rightward
+ * overflow grew the ancestor's scrollable region and shifted the trigger's
+ * own wrapper sideways to compensate. Escaping the scroll container instead
+ * of positioning within it sidesteps that interaction entirely.
+ */
+export function MenuSubmenu({ label, icon, children }: MenuSubmenuProps) {
+  const [open, setOpen] = useState(false);
+  const [style, setStyle] = useState<CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+  const openNow = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const closeSoon = () => {
+    cancelClose();
+    closeTimerRef.current = setTimeout(() => setOpen(false), SUBMENU_CLOSE_DELAY_MS);
+  };
+  const closeNow = () => {
+    cancelClose();
+    setOpen(false);
+  };
+
+  useIsomorphicLayoutEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const fitsRight = rect.right + SUBMENU_GAP_PX + SUBMENU_WIDTH_PX <= window.innerWidth;
+    const left = fitsRight
+      ? rect.right + SUBMENU_GAP_PX
+      : Math.max(VIEWPORT_MARGIN, rect.left - SUBMENU_GAP_PX - SUBMENU_WIDTH_PX);
+    const top = Math.min(rect.top, window.innerHeight - VIEWPORT_MARGIN);
+    setStyle({ top, left, maxHeight: window.innerHeight - top - VIEWPORT_MARGIN });
+  }, [open]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(
+      () => panelRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(),
+      0,
+    );
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  useEffect(() => () => cancelClose(), []);
+
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      role="menu"
+      aria-label={typeof label === 'string' ? label : undefined}
+      style={style}
+      onMouseEnter={openNow}
+      onMouseLeave={closeSoon}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'Escape') {
+          e.stopPropagation();
+          closeNow();
+          triggerRef.current?.focus();
+        }
+      }}
+      className="fixed z-[9999] w-52 overflow-y-auto overscroll-contain rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--popover))] p-1 text-[hsl(var(--popover-foreground))] shadow-lg"
+    >
+      {children}
+    </div>
+  ) : null;
+
+  return (
+    <div className="relative" onMouseEnter={openNow} onMouseLeave={closeSoon}>
+      <button
+        ref={triggerRef}
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            openNow();
+          }
+        }}
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))] focus-visible:bg-[hsl(var(--accent))] focus-visible:outline-none"
+      >
+        {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
+      </button>
+      {mounted && panel ? createPortal(panel, document.body) : null}
+    </div>
+  );
 }

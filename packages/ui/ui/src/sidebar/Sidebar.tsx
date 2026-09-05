@@ -29,6 +29,7 @@ import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SearchOverlay } from './SearchOverlay';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
+import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type {
   SidebarMode,
   SidebarNavItem,
@@ -997,6 +998,28 @@ const EMPTY_NAV_ITEMS: SidebarNavItem[] = [];
 
 const PROJECT_CHATS_SHOW_LIMIT = 5;
 
+function ProjectRowIcon({ project, isExpanded }: { project: SidebarProject; isExpanded: boolean }) {
+  if (hasKnownProjectIcon(project.iconEmoji)) {
+    const Icon = resolveProjectIcon(project.iconEmoji);
+    return (
+      <span
+        className="flex h-4 w-4 shrink-0 items-center justify-center"
+        style={{ color: resolveProjectAccentHex(project.accentColor) }}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+    );
+  }
+  return isExpanded ? (
+    <FolderOpen
+      className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
+      aria-hidden="true"
+    />
+  ) : (
+    <Folder className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" aria-hidden="true" />
+  );
+}
+
 interface ProjectRowProps {
   project: SidebarProject;
   sessions: SidebarSession[];
@@ -1083,17 +1106,7 @@ function ProjectRow({
           }
           aria-expanded={isExpanded}
         >
-          {isExpanded ? (
-            <FolderOpen
-              className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
-              aria-hidden="true"
-            />
-          ) : (
-            <Folder
-              className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
-              aria-hidden="true"
-            />
-          )}
+          <ProjectRowIcon project={project} isExpanded={isExpanded} />
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>

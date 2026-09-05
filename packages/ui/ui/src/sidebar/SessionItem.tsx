@@ -1,13 +1,11 @@
 'use client';
 
 import { memo, useEffect, useRef, useState, type MouseEvent } from 'react';
-import { toast } from 'sonner';
 import {
   Archive,
   ArchiveRestore,
   CircleDot,
   Folder,
-  Link2,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -19,17 +17,23 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
-import { Menu, MenuItem, MenuSeparator } from './Menu';
+import { Menu, MenuItem, MenuSeparator, MenuSubmenu } from './Menu';
+import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type { SidebarProject, SidebarSession } from './types';
 
-async function copySessionLink(href: string): Promise<void> {
-  const url = typeof window === 'undefined' ? href : `${window.location.origin}${href}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    toast.success('Link copied');
-  } catch {
-    toast.error('Could not copy the link');
+function ProjectFlyoutIcon({ project }: { project: SidebarProject }) {
+  if (!hasKnownProjectIcon(project.iconEmoji)) {
+    return <Folder className="h-4 w-4" />;
   }
+  const Icon = resolveProjectIcon(project.iconEmoji);
+  return (
+    <span
+      className="flex h-4 w-4 items-center justify-center"
+      style={{ color: resolveProjectAccentHex(project.accentColor) }}
+    >
+      <Icon className="h-4 w-4" />
+    </span>
+  );
 }
 
 export interface SessionItemHandlers {
@@ -37,6 +41,8 @@ export interface SessionItemHandlers {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onTogglePin?: (id: string) => void;
+  /** Threaded through from the host; the row menu itself only offers Pin,
+   *  the leaders' single affordance. Not read by this component. */
   onStar?: (id: string) => void;
   onArchive?: (id: string) => void;
   onRestore?: (id: string) => void;
@@ -68,7 +74,6 @@ function SessionItemBase({
   onRename,
   onDelete,
   onTogglePin,
-  onStar,
   onArchive,
   onRestore,
   onShare,
@@ -283,11 +288,11 @@ function SessionItemBase({
           >
             {({ close }) => (
               <>
-                {/* Order: Share, Copy link, Rename, Pin, Star, Mark as
-                    unread, then a separator ahead of Archive and Delete, then
-                    Move to project last, matching the leaders' row menus
-                    (ChatGPT's ordering with Claude's copy-link and
-                    mark-as-unread folded in). */}
+                {/* Order: Share, Rename, then a separator, Pin, Mark as
+                    unread, Archive, Delete, then a separator, Move to
+                    project last as a flyout, matching both leaders' row
+                    menus (Star and Copy link dropped, Claude's mark-as-unread
+                    kept). */}
                 {!simple && onShare && (
                   <MenuItem
                     close={close}
@@ -295,15 +300,6 @@ function SessionItemBase({
                     icon={<Upload className="h-4 w-4" />}
                   >
                     {t('sidebar.share', 'Share')}
-                  </MenuItem>
-                )}
-                {!simple && href && (
-                  <MenuItem
-                    close={close}
-                    onSelect={() => void copySessionLink(href)}
-                    icon={<Link2 className="h-4 w-4" />}
-                  >
-                    {t('sidebar.copyLink', 'Copy link')}
                   </MenuItem>
                 )}
                 {!simple && (
@@ -315,6 +311,7 @@ function SessionItemBase({
                     {t('sidebar.rename', 'Rename')}
                   </MenuItem>
                 )}
+                {!simple && <MenuSeparator />}
                 {!simple && onTogglePin && (
                   <MenuItem
                     close={close}
@@ -324,15 +321,6 @@ function SessionItemBase({
                     }
                   >
                     {session.pinned ? t('sidebar.unpin', 'Unpin') : t('sidebar.pin', 'Pin')}
-                  </MenuItem>
-                )}
-                {!simple && onStar && (
-                  <MenuItem
-                    close={close}
-                    onSelect={() => onStar(session.id)}
-                    icon={<Star className="h-4 w-4" />}
-                  >
-                    {session.starred ? t('sidebar.unstar', 'Unstar') : t('sidebar.star', 'Star')}
                   </MenuItem>
                 )}
                 {!simple && onMarkUnread && (
@@ -346,7 +334,6 @@ function SessionItemBase({
                       : t('sidebar.markUnread', 'Mark as unread')}
                   </MenuItem>
                 )}
-                {!simple && <MenuSeparator />}
                 {!simple &&
                   (session.archived
                     ? onRestore && (
@@ -378,26 +365,22 @@ function SessionItemBase({
                 {!simple && onMoveToProject && projects && projects.length > 0 && (
                   <>
                     <MenuSeparator />
-                    <div className="px-2 py-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      {t('sidebar.moveToProject', 'Move to project')}
-                    </div>
-                    {projects.map((project) => (
-                      <MenuItem
-                        key={project.id}
-                        close={close}
-                        onSelect={() => onMoveToProject(session.id, project.id)}
-                        icon={
-                          project.iconEmoji ? (
-                            <span className="text-sm leading-none">{project.iconEmoji}</span>
-                          ) : (
-                            <Folder className="h-4 w-4" />
-                          )
-                        }
-                        active={session.projectId === project.id}
-                      >
-                        {project.name}
-                      </MenuItem>
-                    ))}
+                    <MenuSubmenu
+                      label={t('sidebar.moveToProject', 'Move to project')}
+                      icon={<Folder className="h-4 w-4" />}
+                    >
+                      {projects.map((project) => (
+                        <MenuItem
+                          key={project.id}
+                          close={close}
+                          onSelect={() => onMoveToProject(session.id, project.id)}
+                          icon={<ProjectFlyoutIcon project={project} />}
+                          active={session.projectId === project.id}
+                        >
+                          {project.name}
+                        </MenuItem>
+                      ))}
+                    </MenuSubmenu>
                   </>
                 )}
               </>

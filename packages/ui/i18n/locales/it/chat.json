@@ -128,11 +128,10 @@
     "unstar": "Rimuovi contrassegno",
     "untitled": "Senza titolo",
     "untitledChat": "Chat senza titolo",
-    "navLabel": "Cronologia chat",
-    "toggleSidebar": "Mostra o nascondi la barra laterale",
-    "copyLink": "Copia link",
     "markUnread": "Segna come non letto",
-    "markRead": "Segna come letto"
+    "markRead": "Segna come letto",
+    "navLabel": "Cronologia chat",
+    "toggleSidebar": "Mostra o nascondi la barra laterale"
   },
   "composer": {
     "addAttachment": "Aggiungi allegato",

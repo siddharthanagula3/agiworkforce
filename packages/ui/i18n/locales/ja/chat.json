@@ -128,11 +128,10 @@
     "unstar": "スターを外す",
     "untitled": "無題",
     "untitledChat": "無題のチャット",
-    "navLabel": "チャット履歴",
-    "toggleSidebar": "サイドバーを切り替え",
-    "copyLink": "リンクをコピー",
     "markUnread": "未読にする",
-    "markRead": "既読にする"
+    "markRead": "既読にする",
+    "navLabel": "チャット履歴",
+    "toggleSidebar": "サイドバーを切り替え"
   },
   "composer": {
     "addAttachment": "添付ファイルを追加",
