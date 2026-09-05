@@ -241,6 +241,39 @@ describe('destructive tokens carry both roles', () => {
   }
 });
 
+describe('voice mode tokens', () => {
+  // The muted microphone in voice mode is a solid --chat-destructive circle
+  // with a mic-slash glyph on it, and a glyph is non-text content: WCAG asks
+  // 3:1 against what it is drawn on, and the circle itself needs 3:1 against
+  // the composer it sits in so the muted state is discernible at all.
+  for (const [theme, block, inputBg] of [
+    ['light', chat.light, colorToken(chat.light, '--chat-input-bg')],
+    ['dark', chat.dark, colorToken(chat.dark, '--chat-input-bg')],
+  ] as const) {
+    it(`${theme}: --chat-destructive-on-fill on --chat-destructive >= 3:1`, () => {
+      expect(
+        contrastRatio(
+          colorToken(block, '--chat-destructive-on-fill'),
+          colorToken(block, '--chat-destructive'),
+        ),
+      ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+    });
+
+    it(`${theme}: --chat-destructive fill on --chat-input-bg >= 3:1`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--chat-destructive'), inputBg),
+      ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+    });
+
+    it(`${theme}: the orb gradient runs from a core to a lighter rim`, () => {
+      const core = colorToken(block, '--chat-voice-orb-core');
+      const rim = colorToken(block, '--chat-voice-orb-rim');
+      expect(core).not.toBe(rim);
+      expect(relativeLuminance(rim)).toBeGreaterThan(relativeLuminance(core));
+    });
+  }
+});
+
 describe('every accent swatch pairs with a legible foreground', () => {
   // The accent is a user-selectable fill. White cleared the light swatches but
   // failed amber (2.97:1) and every dark swatch (2.54-3.20:1), so the paired

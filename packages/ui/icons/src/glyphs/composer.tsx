@@ -43,6 +43,17 @@ export const MicOff = createIcon(
   </>,
 );
 
+export const AudioLines = createIcon(
+  'AudioLines',
+  <>
+    <path d="M4 10v4" />
+    <path d="M8 6v12" />
+    <path d="M12 4v16" />
+    <path d="M16 6v12" />
+    <path d="M20 10v4" />
+  </>,
+);
+
 export const EyeOff = createIcon(
   'EyeOff',
   <>
