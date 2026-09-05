@@ -14,8 +14,11 @@ export type SyntheticContentKind = Extract<AiActSyntheticContentKind, 'image' | 
  * well-informed [...] natural person". The web composer dropped its explicit
  * sentence on 2026-08-14 in reliance on that carve-out. No counsel has signed
  * off on that reading, so it is recorded here as an open legal position rather
- * than as compliance. `AI_ACCURACY_DISCLAIMER` is what deliberately stayed and
- * must not be trimmed with it.
+ * than as compliance. `AI_ACCURACY_DISCLAIMER` stayed under the composer until
+ * 2026-09-05, when the founder removed the line from the product; the constant
+ * remains so tests can assert its absence and so a future onboarding or
+ * settings disclosure can reuse the wording. Counsel has not reviewed either
+ * step.
  */
 export const ARTICLE_50_1_WEB_CARVE_OUT = Object.freeze({
   reliedOn: true,
