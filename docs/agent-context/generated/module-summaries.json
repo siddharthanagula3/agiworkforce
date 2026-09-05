@@ -315,6 +315,12 @@
       "purpose": "On-device model loading and inference for Local mode."
     },
     {
+      "name": "@agiworkforce/object-storage",
+      "path": "packages/platform/object-storage",
+      "kind": "package",
+      "purpose": "ObjectStore port with an S3-compatible adapter and an in-memory adapter"
+    },
+    {
       "name": "@agiworkforce/utils",
       "path": "packages/platform/utils",
       "kind": "package",
