@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { describeCronCadence } from '@/lib/schedules/schedule-time';
 import { cn } from '@shared/utils/cn';
+import { formatRelativeTime } from '@shared/utils/format';
 import type { ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
@@ -183,6 +184,14 @@ export function ScheduleCard({
               )}
               {!supported && <Badge variant="destructive">Unsupported action type</Badge>}
             </div>
+
+            {(schedule.isEnabled ? schedule.nextExecutionAt : true) && (
+              <p className="text-sm text-muted-foreground">
+                {schedule.isEnabled
+                  ? `Next run ${formatRelativeTime(schedule.nextExecutionAt as string)}`
+                  : 'Paused'}
+              </p>
+            )}
 
             {schedule.description && (
               <p className="break-words text-sm text-muted-foreground">{schedule.description}</p>
