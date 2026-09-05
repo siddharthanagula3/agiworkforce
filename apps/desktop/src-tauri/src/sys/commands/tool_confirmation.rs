@@ -144,13 +144,18 @@ pub fn contract_approval_reason(tool_name: &str, tier: ToolSafetyTier) -> ToolAp
 #[cfg(test)]
 mod contract_mapping_tests {
     use super::*;
+    use agiworkforce_protocol::tool_primitive::ToolPermissionDecision;
 
     #[test]
     fn a_never_rememberable_tool_gets_no_standing_grant() {
         for tool_name in NEVER_REMEMBERABLE {
             let permission = contract_permission(tool_name, ToolSafetyTier::Safe);
             assert!(!permission.rememberable, "{tool_name}");
-            assert_eq!(permission.scope, ToolPermissionScope::SingleCall, "{tool_name}");
+            assert_eq!(
+                permission.scope,
+                ToolPermissionScope::SingleCall,
+                "{tool_name}"
+            );
             assert_eq!(
                 contract_approval_reason(tool_name, ToolSafetyTier::Safe),
                 ToolApprovalReason::NeverRememberable,
