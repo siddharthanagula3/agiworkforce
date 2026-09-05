@@ -300,7 +300,7 @@
       "name": "@agiworkforce/data-layer",
       "path": "packages/platform/data-layer",
       "kind": "package",
-      "purpose": "Neon + Clerk data-layer boundary for AGI Workforce"
+      "purpose": "Vendor-neutral database and identity data-layer boundary for AGI Workforce"
     },
     {
       "name": "@agiworkforce/key-value",
