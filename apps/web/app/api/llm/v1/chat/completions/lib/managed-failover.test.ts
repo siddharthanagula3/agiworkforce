@@ -526,4 +526,65 @@ describe('shared breakers consulted before dispatch', () => {
 
     expect(rejected).toEqual([]);
   });
+
+  it('skips a candidate whose credential is cooling down, a scope distinct from the route breaker', () => {
+    const attempt = planWithBreakers({
+      isCredentialCooling: ({ modelKey }) => modelKey === 'candidate-a',
+    }).next(httpError(503));
+
+    expect(attempt?.model).toBe('candidate-b');
+  });
+
+  it('refuses to rotate when every candidate credential is cooling down', () => {
+    const attempt = planWithBreakers({ isCredentialCooling: () => true }).next(httpError(503));
+
+    expect(attempt).toBeNull();
+  });
+
+  it('reports the provider scope for a 5xx/timeout class', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(httpError(503));
+
+    expect(observations).toEqual(['provider']);
+  });
+
+  it('reports the credential scope for a 429', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(httpError(429));
+
+    expect(observations).toEqual(['credential']);
+  });
+
+  it('reports the credential scope for a non-terminal auth rejection', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(httpError(401, 'authentication error (401)'));
+
+    expect(observations).toEqual(['credential']);
+  });
+
+  it('reports the model scope for an invalid-model rejection', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(new Error('model not found: nope'));
+
+    expect(observations).toEqual(['model']);
+  });
+
+  it('never reports a scope for a class that must never rotate', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(
+      Object.assign(new Error('Your credit balance is too low to access the API'), { status: 400 }),
+    );
+
+    expect(observations).toEqual([]);
+  });
 });

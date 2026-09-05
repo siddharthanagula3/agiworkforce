@@ -58,6 +58,7 @@ import {
   CredentialFailoverState,
   MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
 } from '@agiworkforce/provider-runtime';
+import { resilienceScopeForCategory, type ResilienceScope } from '@agiworkforce/routing';
 import { isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
@@ -242,6 +243,23 @@ export function createFailoverPlan(
       retryAfterSeconds?: number;
     }) => void;
     /**
+     * Fires for every attempt failure with the resilience scope
+     * (`resilienceScopeForCategory`) that failure's category belongs to, so the
+     * caller can persist it into the matching route-health-store scope: the
+     * PROVIDER breaker for 408/5xx, the CREDENTIAL cooldown for 429 and
+     * non-terminal auth rejections, the MODEL lockout for invalid-model,
+     * tier-restricted, and context-overflow rejections. A category with no
+     * scope (an abort, a safety refusal, `billing_exhausted`) never fires this,
+     * see `resilienceScopeForCategory`'s doc comment for why.
+     */
+    onResilienceObservation?: (observation: {
+      scope: ResilienceScope;
+      provider: string;
+      model: string;
+      routeId: string | null;
+      category: string;
+    }) => void;
+    /**
      * Credentials the shared breaker already holds open, read once before
      * dispatch. Without it a key that has been dead since the last deploy is
      * rediscovered by every request, one refusal per route on that provider.
@@ -258,6 +276,13 @@ export function createFailoverPlan(
      * discovered by failing on it is a breaker that does nothing.
      */
     isCandidateBreakerOpen?: (candidate: { modelKey: string; provider: string }) => boolean;
+    /**
+     * `true` when the candidate's provider credential is cooling down (the
+     * narrower per-credential scope, distinct from `isCandidateBreakerOpen`'s
+     * whole-provider breaker). A cooling credential skips this candidate the
+     * same way an open breaker does, without opening the provider itself.
+     */
+    isCredentialCooling?: (candidate: { modelKey: string; provider: string }) => boolean;
   },
 ): { next: (error: unknown, context?: FailoverStepContext) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
@@ -302,6 +327,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, model: candidate, provider },
           'Managed failover candidate skipped: route breaker is open',
+        );
+        continue;
+      }
+      if (options.isCredentialCooling?.({ modelKey: candidate, provider })) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: credential is cooling down',
         );
         continue;
       }
@@ -384,6 +416,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
           'Free-lane failover candidate skipped: route breaker is open',
+        );
+        continue;
+      }
+      if (options.isCredentialCooling?.({ modelKey: route.modelKey, provider: route.provider })) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: credential is cooling down',
         );
         continue;
       }
@@ -493,6 +532,16 @@ export function createFailoverPlan(
           ? { retryAfterSeconds: classified.retryAfterSeconds }
           : {}),
       });
+      const resilienceScope = resilienceScopeForCategory(category);
+      if (resilienceScope) {
+        options.onResilienceObservation?.({
+          scope: resilienceScope,
+          provider: latestView.provider,
+          model: latestView.chatRequest.model,
+          routeId: latestRouteId,
+          category,
+        });
+      }
       // Checked FIRST and unconditionally: the credential-rotation path below
       // must not be able to re-open a class we have decided may never rotate.
       // This is the guard that stops an exhausted paid account from quietly

@@ -12,8 +12,15 @@ import {
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
-import { observeFreeLaneAttemptFailure } from '@/lib/services/free-lane/runtime-state-service';
+import {
+  observeFreeLaneAttemptFailure,
+  recordCredentialCooldownOutcome,
+  recordCredentialOutcome,
+  recordRouteOutcome,
+} from '@/lib/services/free-lane/runtime-state-service';
 import { resolveFailoverBreakerView } from './lib/route-breaker';
+import { buildServingRouteId } from './lib/tool-loop-anthropic';
+import type { ResilienceScope } from '@agiworkforce/routing';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
@@ -275,6 +282,42 @@ function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun)
     `/api/llm/v1/chat/completions/runs/${encodeURIComponent(run.id)}`;
 }
 
+const RESILIENCE_OBSERVATION_OUTCOME_BY_SCOPE = {
+  provider: { class: 'server_error' },
+  credential: { class: 'rate_limit' },
+  model: { class: 'model_rejected' },
+} as const;
+
+/**
+ * Persists one managed-failover attempt failure into the resilience scope
+ * `resilienceScopeForCategory` (`@agiworkforce/routing`) sorted it into.
+ * Fire-and-forget like every other route-health write on this request's error
+ * path: a real user's latency must never wait on a statistic.
+ */
+function recordResilienceObservation(observation: {
+  scope: ResilienceScope;
+  provider: string;
+  model: string;
+  routeId: string | null;
+}): void {
+  const outcome = RESILIENCE_OBSERVATION_OUTCOME_BY_SCOPE[observation.scope];
+  const persist =
+    observation.scope === 'provider'
+      ? recordCredentialOutcome(observation.provider, outcome)
+      : observation.scope === 'credential'
+        ? recordCredentialCooldownOutcome(observation.provider, outcome)
+        : recordRouteOutcome(
+            observation.routeId ?? buildServingRouteId(observation.provider, observation.model),
+            outcome,
+          );
+  void persist.catch((error: unknown) => {
+    logger.warn(
+      { error, observation },
+      'Managed failover: resilience observation was not recorded',
+    );
+  });
+}
+
 /**
  * GOV-3: the request-scoped turn body, entered only once a concurrency slot
  * has been admitted by `handleChatCompletions` below. Split out so the slot's
@@ -435,6 +478,7 @@ async function dispatchChatCompletions(
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
         ...breakers,
+        onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const researchGen = runResearchLoop(
@@ -785,6 +829,7 @@ async function dispatchChatCompletions(
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
         ...breakers,
+        onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const toolLoopGen = runToolLoop(processed, {
@@ -896,6 +941,7 @@ async function dispatchChatCompletions(
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
         ...breakers,
+        onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       let attemptProcessed: ProcessedRequest = processed;
@@ -984,6 +1030,7 @@ async function dispatchChatCompletions(
       isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
       modelPolicy: processed.modelPolicy ?? null,
       ...breakers,
+      onResilienceObservation: recordResilienceObservation,
       ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
     });
     let attemptProcessed: ProcessedRequest = processed;
