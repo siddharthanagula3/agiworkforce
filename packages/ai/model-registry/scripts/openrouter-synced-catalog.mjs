@@ -13,10 +13,20 @@ export function readOpenRouterSyncedCatalog(catalogDir) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function collectCuratedWireModelIds(curation) {
+  const identifiers = new Set();
+  for (const model of Object.values(curation.models)) {
+    if (typeof model.apiModelId === 'string') identifiers.add(model.apiModelId);
+  }
+  return identifiers;
+}
+
 export function mergeOpenRouterSyncedCatalog(curation, catalogDir) {
   const synced = readOpenRouterSyncedCatalog(catalogDir);
+  const curatedWireModelIds = collectCuratedWireModelIds(curation);
   for (const [id, entry] of Object.entries(synced.models ?? {})) {
     if (id in curation.models) continue;
+    if (curatedWireModelIds.has(entry.apiModelId)) continue;
     curation.models[id] = entry;
   }
   return curation;
