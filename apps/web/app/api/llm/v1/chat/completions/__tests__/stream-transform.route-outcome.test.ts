@@ -19,6 +19,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   },
   normalizeProviderId: (provider: string | null | undefined) =>
     typeof provider === 'string' ? provider.toLowerCase() : null,
+  isCacheTokensDisjointFromInput: vi.fn(() => false),
+  resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   routeAffinityTtlMs: () => 3_600_000,
   getRouteHealthSnapshot: vi.fn(async () => ({})),
   getServedRouteAffinity: vi.fn(async () => null),
+  getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
