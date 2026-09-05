@@ -42,6 +42,7 @@ export type {
 export interface RegistryRoute {
   modelKey: string;
   provider: string;
+  providerModelId: string;
   harnessId: string;
   trustModes: readonly string[];
   isDefault: boolean;

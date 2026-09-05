@@ -175,15 +175,28 @@ export function validateGatewaysCatalog(catalog) {
   ) {
     return ['gateways.json must declare a "gateways" object'];
   }
-  const hosts = new Map();
+  const endpoints = new Map();
+  const baseUrlEnvs = new Map();
   for (const [gatewayId, gateway] of Object.entries(catalog.gateways)) {
     validateGatewayDefinition(gatewayId, gateway ?? {}, errors);
     if (isNonEmptyString(gateway?.host)) {
-      const owner = hosts.get(gateway.host);
+      const endpoint = `${gateway.host}|${gateway.protocol}`;
+      const owner = endpoints.get(endpoint);
       if (owner && owner !== gatewayId) {
-        fail(errors, `host "${gateway.host}" is declared by both ${owner} and ${gatewayId}`);
+        fail(
+          errors,
+          `host "${gateway.host}" is declared twice for protocol ${gateway.protocol}, by ${owner} and ${gatewayId}`,
+        );
       }
-      hosts.set(gateway.host, gatewayId);
+      endpoints.set(endpoint, gatewayId);
+      const baseUrlOwner = baseUrlEnvs.get(gateway.baseUrlEnv);
+      if (baseUrlOwner && baseUrlOwner !== gatewayId) {
+        fail(
+          errors,
+          `${gatewayId}.baseUrlEnv "${gateway.baseUrlEnv}" is already claimed by ${baseUrlOwner}`,
+        );
+      }
+      baseUrlEnvs.set(gateway.baseUrlEnv, gatewayId);
     }
   }
   return errors;

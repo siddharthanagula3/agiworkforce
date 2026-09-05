@@ -18,8 +18,8 @@ Legend: ✅ implemented · ◐ partial · - unwired · · planned
 | Harness | Provider | API family | Trust modes | Group | applyPatch | codeExecution | computerUse | fileSearch | hostedShell | imageGeneration | mcp | memory | skills | toolDiscovery | webSearch | webSearchInjection | zeroDataRetentionOnRequest |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `anthropic/messages` | anthropic | messages | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ | ✅ | ,  |
-| `cheaperinference-anthropic/messages` | cheaperinference_anthropic | messages | managed_cloud | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
-| `cheaperinference/chat-completions` | cheaperinference | chat_completions | managed_cloud | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `cheaperinference-anthropic/messages` | cheaperinference_anthropic | messages | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `cheaperinference/chat-completions` | cheaperinference | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `deepseek-anthropic/messages` | deepseek_anthropic | messages | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `deepseek/chat-completions` | deepseek | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `google/embeddings` | google | embed_content | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |

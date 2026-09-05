@@ -49,6 +49,7 @@ import type { ModelInfo, Provider, ProviderAdapter } from '@agiworkforce/types';
 export {
   createGatewayAdapter,
   type GatewayDefinition,
+  type GatewayEndpointDefinition,
   type GatewayEnvSource,
   type GatewayGovernanceStub,
   type GatewayModelsSource,

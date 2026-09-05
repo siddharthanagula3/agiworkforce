@@ -4,6 +4,7 @@ import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
+import { gatewayRoutesEnabled, listCredentialedGatewayProviderIds } from './gateway-routing';
 import {
   createProviderAdapter,
   type ProviderAdapterConfigMap,
@@ -105,6 +106,9 @@ export function listAvailableManagedProviderIds(): ReadonlySet<string> {
   const available = new Set<string>();
   for (const [providerId, config] of Object.entries(SERVER_PROVIDER_CONFIG)) {
     if (hasServerProviderKey(providerId)) available.add(config.adapterId);
+  }
+  if (gatewayRoutesEnabled()) {
+    for (const providerId of listCredentialedGatewayProviderIds()) available.add(providerId);
   }
   return available;
 }

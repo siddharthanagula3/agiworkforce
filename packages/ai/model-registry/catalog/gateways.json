@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "notes": "Declarative OpenAI-compatible and Anthropic-compatible gateway endpoints. Each entry names only env var names, never a literal base URL or key. packages/ai/providers/factory's createGatewayAdapter builds a working adapter straight from one of these entries plus a resolved env source, through createOpenAICompatAdapter, createOpenAIAdapter or createAnthropicAdapter, so a new gateway needs no dedicated provider package. Validated by scripts/validate-gateways.mjs. See docs/guides/add-a-gateway.md.",
+  "notes": "Declarative OpenAI-compatible and Anthropic-compatible gateway endpoints. Each entry names only env var names, never a literal base URL or key. A harness in harnesses.json points at one of these by gatewayId instead of carrying a literal baseUrl and apiKeyEnv, and the compiled registry exposes the definition through listGatewayRoutes(), so a route on that harness dispatches through packages/ai/providers/factory's createGatewayAdapter with no dedicated provider package. Validated by scripts/validate-gateways.mjs. See docs/development/add-a-gateway.md.",
   "gateways": {
     "openrouter_via_gateway": {
       "id": "openrouter_via_gateway",
@@ -25,6 +25,52 @@
         "source": "https://openrouter.ai/docs/features/privacy-and-logging",
         "verifiedOn": "2026-09-05",
         "note": "Worked example only: this gateway definition is not wired into live provider selection. The production OpenRouter route stays on its dedicated open_router harness and @agiworkforce/providers-openrouter package (packages/ai/model-registry/catalog/harnesses.json, packages/ai/model-registry/catalog/provider-governance.json). Every field here is real and verified against OpenRouter's own published endpoint and privacy docs, retrieved 2026-09-05, chosen because Part 1 of this change independently verified the same facts."
+      }
+    },
+    "cheaperinference": {
+      "id": "cheaperinference",
+      "displayName": "Cheaper Inference",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_CHEAPERINFERENCE_BASE_URL",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/v1/models",
+        "requiresKey": true
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.cheaperinference.com",
+      "governance": {
+        "dataRetentionClass": "zero_retention",
+        "trainsOnInputs": "never",
+        "source": "https://platform.cheaperinference.com/legal/privacy",
+        "verifiedOn": "2026-09-05",
+        "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids."
+      }
+    },
+    "cheaperinference_anthropic": {
+      "id": "cheaperinference_anthropic",
+      "displayName": "Cheaper Inference (Anthropic Messages dialect)",
+      "protocol": "anthropic_messages",
+      "baseUrlEnv": "AGI_CHEAPERINFERENCE_ANTHROPIC_BASE_URL",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "static"
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.cheaperinference.com",
+      "governance": {
+        "dataRetentionClass": "zero_retention",
+        "trainsOnInputs": "never",
+        "source": "https://platform.cheaperinference.com/legal/privacy",
+        "verifiedOn": "2026-09-05",
+        "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids."
       }
     }
   }
