@@ -66,6 +66,10 @@ vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
 
+vi.mock('../StyleSelector', () => ({
+  StyleSelector: () => <div data-testid="style-selector" />,
+}));
+
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -159,18 +163,16 @@ describe('ComposerFooter · layout', () => {
     expect(screen.getByTestId('budget-tracker-display')).toBeInTheDocument();
   });
 
-  // Response style moved into the composer's "+" menu (ChatComposerNew.tsx);
-  // this component now owns only the model pill, so it never mounts
-  // StyleSelector itself.
-  it('does NOT render StyleSelector (moved into the + menu)', () => {
+  it('renders StyleSelector', () => {
     render(<ComposerFooter />);
-    expect(screen.queryByTestId('style-selector')).not.toBeInTheDocument();
+    expect(screen.getByTestId('style-selector')).toBeInTheDocument();
   });
 
-  it('renders the model pill as a compact 32px control', () => {
+  it('renders model selector and style selector in the same row', () => {
     render(<ComposerFooter />);
+    const styleSelector = screen.getByTestId('style-selector');
     const modelBtn = screen.getByRole('button', { name: /change model/i });
-    expect(modelBtn.className).toContain('h-8');
-    expect(modelBtn.className).toContain('rounded-md');
+    expect(styleSelector).toBeInTheDocument();
+    expect(modelBtn).toBeInTheDocument();
   });
 });

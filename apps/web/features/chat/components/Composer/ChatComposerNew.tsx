@@ -44,7 +44,6 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ComposerFooter, ComposerModelSummary } from './ComposerFooter';
-import { StyleSelector } from './StyleSelector';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -3626,15 +3625,10 @@ const ChatComposerNewComponent = ({
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
 
-                    {/* 7a. Response style. StyleSelector owns its own trigger
-                        row and portaled popover, so it needs no wrapper of its
-                        own; a wrapper is what indented it past its siblings. */}
-                    {!isFreeTrial && <StyleSelector />}
-
                     {/* Divider */}
                     <div className="my-1 border-t border-border/30" />
 
-                    {/* 7b. Standing web-search status. Search is ambient
+                    {/* 7a. Standing web-search status. Search is ambient
                         (model/deployment driven, not a manual toggle), so this
                         is a status row, never a button pretending to control
                         it; the on state also shows as a small marked glyph in
@@ -4088,8 +4082,8 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Model selector. In normal mode the compact ComposerFooter pill
-              sits beside the send button; in image mode the image-model
+            {/* Style and model selectors. In normal mode the full ComposerFooter
+              sits inline beside the send button; in image mode the image-model
               picker takes its place. The textbox above carries the row's
               `flex-1`, so these right-cluster controls need no `ml-auto` of
               their own to reach the right edge.
@@ -4110,6 +4104,7 @@ const ChatComposerNewComponent = ({
                 className="min-w-0 shrink"
                 showModelSelector
                 lockModelSelector={false}
+                showStyleSelector={!isFreeTrial}
                 onUpgradeRequest={onUpgradeRequest}
                 onModelChange={onModelChange}
               />
