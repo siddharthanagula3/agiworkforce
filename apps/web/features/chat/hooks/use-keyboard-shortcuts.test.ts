@@ -73,7 +73,7 @@ describe('useKeyboardShortcuts bindings', () => {
   it.each([
     ['k', { meta: true }, 'onSearch'],
     ['/', { meta: true }, 'onShowShortcuts'],
-    ['n', { meta: true }, 'onNewChat'],
+    ['o', { meta: true, shift: true }, 'onNewChat'],
     ['b', { meta: true }, 'onToggleSidebar'],
     ['Escape', {}, 'onFocusComposer'],
     ['c', { meta: true, shift: true }, 'onCopyLastMessage'],

@@ -1,15 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import { ArtifactsToggleButton } from './ArtifactsPanel';
-import { useArtifactsStore } from '../../stores/artifacts-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
-import { KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
-
-vi.mock('./ArtifactPreview', () => ({
-  ArtifactPreview: () => null,
-}));
-
-const CONVERSATION_ID = 'conv-artifacts-shortcut';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, act } from '@testing-library/react';
+import { _sharedArtifactStore } from '../../stores/artifacts-store';
+import { useKeyboardShortcuts, KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
 
 function pressToggleArtifacts() {
   act(() => {
@@ -26,10 +18,20 @@ function pressToggleArtifacts() {
   });
 }
 
+// Stands in for the single useKeyboardShortcuts call WebChatPage owns. The
+// shortcut used to live inside ArtifactsToggleButton's own hook instance,
+// which meant it stopped firing whenever that button was not on screen; it
+// is now claimed once, at the page, alongside every other documented binding.
+function PageLevelShortcuts() {
+  useKeyboardShortcuts({
+    onToggleArtifacts: () => _sharedArtifactStore.getState().togglePanel(),
+  });
+  return null;
+}
+
 describe('artifacts panel keyboard shortcut', () => {
   beforeEach(() => {
-    useArtifactsStore.getState().reset();
-    useChatStore.setState({ activeConversationId: CONVERSATION_ID });
+    _sharedArtifactStore.getState().setPanelOpen(false);
   });
 
   it('is documented so the shortcuts dialog lists it', () => {
@@ -39,24 +41,31 @@ describe('artifacts panel keyboard shortcut', () => {
     expect(doc?.ctrl || doc?.meta).toBe(true);
   });
 
-  it('opens and closes the panel from the keyboard while the toggle is mounted', () => {
-    render(<ArtifactsToggleButton />);
-    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+  it('opens and closes the panel from the keyboard through the page-level binding', () => {
+    render(<PageLevelShortcuts />);
+    expect(_sharedArtifactStore.getState().panelOpen).toBe(false);
 
     pressToggleArtifacts();
-    expect(useArtifactsStore.getState().panelOpen).toBe(true);
-    expect(screen.getByRole('button', { name: 'Close artifacts panel' })).toBeInTheDocument();
+    expect(_sharedArtifactStore.getState().panelOpen).toBe(true);
 
     pressToggleArtifacts();
-    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+    expect(_sharedArtifactStore.getState().panelOpen).toBe(false);
   });
 
-  it('stops toggling once the toggle unmounts', () => {
-    const view = render(<ArtifactsToggleButton />);
+  it('keeps working when the toggle button itself is not mounted', () => {
+    render(<PageLevelShortcuts />);
+
+    pressToggleArtifacts();
+
+    expect(_sharedArtifactStore.getState().panelOpen).toBe(true);
+  });
+
+  it('stops toggling once the page-level binding unmounts', () => {
+    const view = render(<PageLevelShortcuts />);
     view.unmount();
 
     pressToggleArtifacts();
 
-    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+    expect(_sharedArtifactStore.getState().panelOpen).toBe(false);
   });
 });

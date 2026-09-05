@@ -38,9 +38,13 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     category: 'ui',
   },
   {
-    key: 'N',
+    // Cmd/Ctrl+N is a browser-reserved new-window accelerator; the page never
+    // sees the keydown, so it cannot be bound to anything. Both ChatGPT and
+    // Claude bind new-chat to Shift+Cmd/Ctrl+O for the same reason.
+    key: 'O',
     ctrl: true,
     meta: true,
+    shift: true,
     id: 'new-conversation',
     description: 'New conversation',
     category: 'conversation',
