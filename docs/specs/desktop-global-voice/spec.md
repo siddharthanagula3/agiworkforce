@@ -50,10 +50,15 @@ registration order decides which entry keeps it.
 
 A press toggles: the first starts capture, the second stops it. There is no
 key-up from a registered accelerator, so hold-to-talk is not available on this
-path. Stopping runs the existing capture, transcription, cleanup and
-classification pipeline unchanged, so a dictation transcript lands in the
-composer draft and an action transcript still goes through computer-use
-consent.
+path.
+
+The press drives the composer's own cloud capture, the same one its microphone
+button runs, so stopping goes through the existing transcription, cleanup and
+classification pipeline unchanged: a dictation transcript lands in the composer
+draft and an action transcript still passes the computer-use consent gate. It
+deliberately does not drive the in-app dictation store, whose transcription
+goes through a native command this shell cannot reach, and which therefore
+answers with placeholder text here.
 
 Only the renderer AGI Cloud ships receives the press. With
 `AGI_CLOUD_RENDERER=remote` the shell loads the cloud app top-level with no
