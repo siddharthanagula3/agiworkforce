@@ -48,7 +48,19 @@ const PROVENANCE_VERBS =
   /\b(?:ported|moved|migrated|extracted|replaces?|replaced|formerly|previously|superseded|supersedes|lifted|copied|deleted|removed|retired|renamed|was\s+at|used\s+to|no\s+longer|instead\s+of)\b/i;
 
 const EXCLUDED_FILES = new Set(['CHANGELOG.md']);
-const EXCLUDED_PREFIXES = ['audit/', 'node_modules/'];
+function vendoredSkillPrefixes() {
+  try {
+    const lock = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'skills-lock.json'), 'utf8'));
+    const skills = lock.skills && typeof lock.skills === 'object' ? lock.skills : {};
+    return Object.values(skills)
+      .filter((skill) => skill?.sourceType && skill.sourceType !== 'first-party')
+      .map((skill) => `${skill.path}/`);
+  } catch {
+    return [];
+  }
+}
+
+const EXCLUDED_PREFIXES = ['audit/', 'node_modules/', ...vendoredSkillPrefixes()];
 // The remediation register is a 991 KB machine-generated ledger of historical
 // findings; every path it cites is evidence of where a defect was, not a live
 // reference. Excluding the file rather than all of docs/work keeps the rest of
