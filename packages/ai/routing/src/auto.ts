@@ -11,7 +11,11 @@ import {
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
 import { effectiveModelPricing } from './pricing';
-import { effectiveRouteHealth, type RoutingRuntimeState } from './runtime-state';
+import {
+  effectiveRouteHealth,
+  type RouteHealthSnapshot,
+  type RoutingRuntimeState,
+} from './runtime-state';
 import type { TaskFamily } from './task-family';
 import {
   resolveTaskFamilyOrdering,
@@ -186,6 +190,23 @@ export interface AutoRoutingRequest {
    */
   runtimeState?: RoutingRuntimeState | null;
   availableProviderIds?: ReadonlySet<string>;
+  /**
+   * What the route health store has actually observed, per route id.
+   *
+   * Read only when observed-health ranking is enabled, and only to REORDER
+   * routes the static policy already admitted: a route that lost its required
+   * capability is not a route health can promote, and a route health dislikes
+   * is still a route this model can be served on.
+   */
+  observedRouteHealth?: Readonly<Record<string, ObservedRouteHealth>>;
+  enableObservedHealthRanking?: boolean;
+}
+
+export interface ObservedRouteHealth {
+  /** Share of recent attempts that failed, in [0,1]. */
+  failureRate?: number;
+  /** Observed median time to first token, in ms. */
+  latencyP50Ms?: number;
 }
 
 export interface AutoFallbackRoute {
@@ -245,6 +266,7 @@ interface RankedRoute {
   expectedCents: number;
   healthy: boolean;
   hasCredential: boolean;
+  observedPenalty: number;
 }
 
 interface EligibilityResult {
@@ -480,6 +502,75 @@ const PREFERRED_ROUTE_COST_CEILING_MULTIPLE = 1.25;
 
 const MAX_FALLBACK_ROUTES = 4;
 
+export const OBSERVED_HEALTH_ENV = 'AGI_ROUTING_OBSERVED_HEALTH';
+const OBSERVED_HEALTH_ENABLED_VALUE = '1';
+
+export function observedHealthRankingEnabled(): boolean {
+  if (typeof process === 'undefined') return false;
+  return process.env?.[OBSERVED_HEALTH_ENV] === OBSERVED_HEALTH_ENABLED_VALUE;
+}
+
+/**
+ * Banded rather than continuous, deliberately.
+ *
+ * Ranking on raw rates makes the order flap on sampling noise: two routes at
+ * 0.02 and 0.03 failure are the same route as far as a routing decision goes,
+ * and reordering between them churns prompt caches for nothing. Bands are wide
+ * enough that only a real difference moves a route.
+ */
+const OBSERVED_FAILURE_RATE_BAND = 0.25;
+const OBSERVED_LATENCY_BAND_MS = 500;
+const OBSERVED_LATENCY_BAND_COUNT = 8;
+const NO_OBSERVED_PENALTY = 0;
+
+function observedBand(value: number | undefined, width: number, maximum: number): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(maximum, Math.floor(value / width));
+}
+
+/**
+ * Zero when nothing has been observed, so a route with no history ranks exactly
+ * as it does today. Absence of signal is not evidence of ill health.
+ */
+/**
+ * The store's snapshots as ranking inputs.
+ *
+ * `successRate` already excludes capability refusals, so its complement is the
+ * share of attempts that actually failed. A snapshot with no samples yields no
+ * entry rather than a zero, so "never tried" stays distinct from "never failed".
+ */
+export function observedRouteHealthFromSnapshots(
+  snapshots: Readonly<Record<string, RouteHealthSnapshot>> | undefined,
+): Readonly<Record<string, ObservedRouteHealth>> {
+  const observed: Record<string, ObservedRouteHealth> = {};
+  for (const [routeId, snapshot] of Object.entries(snapshots ?? {})) {
+    if (snapshot.sampleCount <= 0) continue;
+    observed[routeId] = {
+      ...(snapshot.successRate !== undefined ? { failureRate: 1 - snapshot.successRate } : {}),
+      ...(snapshot.ttftP50Ms !== undefined ? { latencyP50Ms: snapshot.ttftP50Ms } : {}),
+    };
+  }
+  return observed;
+}
+
+export function observedRoutePenalty(
+  observed: ObservedRouteHealth | undefined,
+  enabled: boolean,
+): number {
+  if (!enabled || !observed) return NO_OBSERVED_PENALTY;
+  const failureBand = observedBand(
+    observed.failureRate,
+    OBSERVED_FAILURE_RATE_BAND,
+    Math.ceil(1 / OBSERVED_FAILURE_RATE_BAND),
+  );
+  const latencyBand = observedBand(
+    observed.latencyP50Ms,
+    OBSERVED_LATENCY_BAND_MS,
+    OBSERVED_LATENCY_BAND_COUNT - 1,
+  );
+  return failureBand * OBSERVED_LATENCY_BAND_COUNT + latencyBand;
+}
+
 const policyReachableSlots = ((): ReadonlySet<string> => {
   const slots = new Set<string>();
   for (const task of Object.values(registry.policies.auto.tasks)) {
@@ -612,6 +703,9 @@ function rankRoutes(
   const ordered = [...candidates].sort((left, right) => {
     if (left.healthy !== right.healthy) return left.healthy ? -1 : 1;
     if (left.hasCredential !== right.hasCredential) return left.hasCredential ? -1 : 1;
+    if (left.observedPenalty !== right.observedPenalty) {
+      return left.observedPenalty - right.observedPenalty;
+    }
     if (left.expectedCents !== right.expectedCents) return left.expectedCents - right.expectedCents;
     if (left.route.isDefault !== right.route.isDefault) return left.route.isDefault ? -1 : 1;
     return left.routeId < right.routeId ? -1 : left.routeId > right.routeId ? 1 : 0;
@@ -677,6 +771,10 @@ function evaluateEligibility(
       expectedCents: routeExpectedCents(routeId, route, request),
       healthy: routeIsHealthy(routeId, route, request),
       hasCredential: routeHasCredential(route, request),
+      observedPenalty: observedRoutePenalty(
+        request.observedRouteHealth?.[routeId],
+        request.enableObservedHealthRanking ?? observedHealthRankingEnabled(),
+      ),
     });
   }
 
