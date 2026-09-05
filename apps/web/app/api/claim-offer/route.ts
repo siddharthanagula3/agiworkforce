@@ -132,6 +132,7 @@ async function handleClaimOffer(request: NextRequest) {
           updatedSubscription.plan_tier,
           new Date(updatedSubscription.current_period_start),
           new Date(updatedSubscription.current_period_end),
+          { db },
         );
         logger.info(
           {

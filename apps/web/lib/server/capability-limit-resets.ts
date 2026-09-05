@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
 import type { CapabilityLimitResets } from '@/lib/services/capability-handshake-service';
 
@@ -20,12 +21,13 @@ export function toIsoTimestamp(value: string | Date | null | undefined): string 
 }
 
 export async function getCapabilityLimitResets(
+  db: DatabaseAdapter,
   userId: string,
   billingPeriodEnd: string | Date | null | undefined,
 ): Promise<CapabilityLimitResets> {
   const [session, weekly] = await Promise.all([
-    getRollingUsage(userId, ROLLING_SESSION_WINDOW_HOURS, false),
-    getRollingUsage(userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
+    getRollingUsage(db, userId, ROLLING_SESSION_WINDOW_HOURS, false),
+    getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
   ]);
   return {
     billingPeriodEndsAt: toIsoTimestamp(billingPeriodEnd),

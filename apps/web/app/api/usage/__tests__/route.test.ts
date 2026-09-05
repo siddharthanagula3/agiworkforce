@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  mockGetClerkAuthUser,
+  mockGetUserScopedDb,
   mockGetBalance,
   mockGetSubscription,
   mockGetRollingUsage,
   mockGetFreeTrialPublicUsage,
   mockDbQuery,
 } = vi.hoisted(() => ({
-  mockGetClerkAuthUser: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
   mockGetBalance: vi.fn(),
   mockGetSubscription: vi.fn(),
   mockGetRollingUsage: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mockDbQuery }),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mockGetClerkAuthUser,
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: mockGetUserScopedDb,
 }));
 
 vi.mock('@/lib/services/credit-service', () => ({
@@ -63,7 +63,11 @@ function makeRequest() {
 describe('GET /api/usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: mockDbQuery },
+      userId: 'user-1',
+      organizationId: null,
+    });
     mockGetFreeTrialPublicUsage.mockResolvedValue({
       usagePercentage: 0,
       resetAt: null,
@@ -166,7 +170,7 @@ describe('GET /api/usage', () => {
     expect(json.flagship_weekly_usage_percentage).toBe(0);
     expect(json.session_reset_at).toBeNull();
     expect(mockGetRollingUsage).not.toHaveBeenCalled();
-    expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith('user-1');
+    expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(expect.anything(), 'user-1');
     expect(JSON.stringify(json)).not.toMatch(/microusd|daily_cost|daily_reserved/i);
   });
 
@@ -230,20 +234,20 @@ describe('GET /api/usage', () => {
   });
 
   it('returns 401 when unauthenticated', async () => {
-    mockGetClerkAuthUser.mockRejectedValue(new Error('no session'));
+    mockGetUserScopedDb.mockRejectedValue(new Error('no session'));
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
   });
 
   it('preserves a scoped-key denial as 403 and declares the usage-read requirement', async () => {
-    mockGetClerkAuthUser.mockRejectedValue(
+    mockGetUserScopedDb.mockRejectedValue(
       new ApiKeyScopeError('API key does not have the required scope'),
     );
 
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(403);
-    expect(mockGetClerkAuthUser).toHaveBeenCalledWith(expect.any(Request), {
+    expect(mockGetUserScopedDb).toHaveBeenCalledWith(expect.any(Request), {
       apiKeyScope: 'usage:read',
     });
   });

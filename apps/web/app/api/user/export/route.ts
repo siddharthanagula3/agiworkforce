@@ -32,7 +32,8 @@ async function handleExportUserData(request: NextRequest) {
 
   try {
     const { userId, email } = await getClerkAuthUser(request);
-    const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+    const scopedDbFor = (organizationId: string | null): DatabaseAdapter =>
+      createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
 
     logger.info(
       {
@@ -42,7 +43,7 @@ async function handleExportUserData(request: NextRequest) {
       'User requested GDPR data export',
     );
 
-    const exportData = await collectUserData({ id: userId, email }, db);
+    const exportData = await collectUserData({ id: userId, email }, scopedDbFor);
 
     await recordAuditEvent({
       userId,
@@ -307,10 +308,37 @@ async function queryExportRows<T>(params: {
   }
 }
 
+/**
+ * Tenant-scoped tables answer `app_row_is_visible(user_id, organization_id)`,
+ * which matches the session's workspace exactly, so one connection bound to the
+ * personal scope returns only the rows that carry no organization. A member's
+ * workspace conversations, projects, files and memories are the bulk of what
+ * Article 20 asks for, so the export reads each of those sections once per
+ * workspace the user belongs to and concatenates the results.
+ */
+async function queryExportRowsAcrossWorkspaces<T>(params: {
+  scopedDbFor: (organizationId: string | null) => DatabaseAdapter;
+  workspaces: readonly (string | null)[];
+  sql: string;
+  values: unknown[];
+  schema: z.ZodType<T>;
+  section: string;
+  userId: string;
+}): Promise<T[]> {
+  const { scopedDbFor, workspaces, ...query } = params;
+  const collected: T[] = [];
+  for (const organizationId of workspaces) {
+    collected.push(...(await queryExportRows({ db: scopedDbFor(organizationId), ...query })));
+  }
+  return collected;
+}
+
 async function collectUserData(
   user: { id: string; email?: string },
-  db: DatabaseAdapter,
+  scopedDbFor: (organizationId: string | null) => DatabaseAdapter,
 ): Promise<Record<string, unknown>> {
+  const db = scopedDbFor(null);
+  let workspaces: (string | null)[] = [null];
   const exportData: Record<string, unknown> = {
     export_metadata: {
       user_id: user.id,
@@ -391,6 +419,7 @@ async function collectUserData(
     const orgIds = orgMemberRows
       .map((row) => row.organization_id)
       .filter((id): id is string => typeof id === 'string');
+    workspaces = [null, ...orgIds];
     let orgsById: Record<string, z.infer<typeof organizationExportSchema>> = {};
     if (orgIds.length > 0) {
       const orgRows = await queryExportRows({
@@ -489,8 +518,9 @@ async function collectUserData(
   });
   if (syncRows.length > 0) exportData['sync_data'] = syncRows;
 
-  const conversations = await queryExportRows({
-    db,
+  const conversations = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select id, title, model, project_id, pinned, created_at, updated_at, deleted_at
           from web_conversations
           where user_id = $1
@@ -502,8 +532,9 @@ async function collectUserData(
   });
   exportData['conversations'] = conversations;
 
-  const messages = await queryExportRows({
-    db,
+  const messages = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select m.id, m.conversation_id, m.role, m.content, m.model, m.provider, m.created_at
           from web_messages m
           inner join web_conversations c on c.id = m.conversation_id
@@ -516,8 +547,9 @@ async function collectUserData(
   });
   exportData['messages'] = messages;
 
-  const projects = await queryExportRows({
-    db,
+  const projects = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select id, name, description, instructions, color, is_archived,
                  created_at, updated_at, deleted_at
           from user_projects
@@ -530,8 +562,9 @@ async function collectUserData(
   });
   exportData['projects'] = projects;
 
-  const projectKnowledgeFiles = await queryExportRows({
-    db,
+  const projectKnowledgeFiles = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select f.id, f.project_id, f.file_name, f.mime_type, f.byte_count,
                  f.checksum_sha256, f.summary, f.source_surface, f.created_at, f.updated_at
           from project_knowledge_files f
@@ -549,8 +582,9 @@ async function collectUserData(
   // export until 2026-08-21, while account erasure has always deleted them.
   // so the product could destroy this category of personal data on request but
   // could not show it, which is half of a data-subject access right.
-  const mediaAssets = await queryExportRows({
-    db,
+  const mediaAssets = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model,
                  width, height, source_surface, created_at, deleted_at
           from public.media_assets
@@ -563,8 +597,9 @@ async function collectUserData(
   });
   exportData['media_assets'] = mediaAssets;
 
-  const memories = await queryExportRows({
-    db,
+  const memories = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select id, content, category, source, is_deleted, created_at, updated_at
           from user_memories
           where user_id = $1
@@ -576,8 +611,9 @@ async function collectUserData(
   });
   exportData['memories'] = memories;
 
-  const artifacts = await queryExportRows({
-    db,
+  const artifacts = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select id, conversation_id, message_id, title, artifact_type, language, content,
                  current_version, pinned, tags, created_at, updated_at, deleted_at
           from web_artifacts
@@ -590,8 +626,9 @@ async function collectUserData(
   });
   exportData['artifacts'] = artifacts;
 
-  const artifactVersions = await queryExportRows({
-    db,
+  const artifactVersions = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
     sql: `select v.artifact_id, v.version, v.content, v.change_description,
                  v.content_hash, v.created_at
           from web_artifact_versions v
@@ -606,14 +643,14 @@ async function collectUserData(
   exportData['artifact_versions'] = artifactVersions;
 
   try {
-    exportData['billing_invoices'] = await listUserBillingInvoices(user.id);
+    exportData['billing_invoices'] = await listUserBillingInvoices(db, user.id);
   } catch (error) {
     logger.warn({ error, userId: user.id }, 'Billing invoices unavailable for user export');
     exportData['billing_invoices'] = [];
   }
 
   try {
-    exportData['managed_usage'] = await getManagedUsageSummary(user.id);
+    exportData['managed_usage'] = await getManagedUsageSummary(db, user.id);
   } catch (error) {
     logger.warn({ error, userId: user.id }, 'Managed usage summary unavailable for user export');
   }

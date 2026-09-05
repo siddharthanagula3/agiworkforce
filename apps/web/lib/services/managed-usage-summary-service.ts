@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ManagedUsageSummaryResponse } from '@agiworkforce/types';
 import {
   getPlanFlagshipWeeklyUsageBudgetCents,
@@ -19,11 +20,14 @@ import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-export async function getManagedUsageSummary(userId: string): Promise<ManagedUsageSummaryResponse> {
+export async function getManagedUsageSummary(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ManagedUsageSummaryResponse> {
   const [balance, subscription, spendableCredits] = await Promise.all([
-    CreditService.getBalance(userId),
-    SubscriptionService.getSubscription(userId),
-    getSpendableCredits(userId),
+    CreditService.getBalance(db, userId),
+    SubscriptionService.getSubscription(db, userId),
+    getSpendableCredits(db, userId),
   ]);
 
   const planTier = subscription?.plan_tier || 'free';
@@ -33,7 +37,7 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
   const periodEnd = balance?.period_end ?? subscription?.current_period_end ?? null;
 
   const isFreePlan = planTier.toLowerCase() === 'free';
-  const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(userId) : null;
+  const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const usagePercentage =
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
@@ -45,9 +49,9 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
   const [session, weekly, flagshipWeekly] =
     sessionCapCents > 0 || weeklyCapCents > 0
       ? await Promise.all([
-          getRollingUsage(userId, ROLLING_SESSION_WINDOW_HOURS, false),
-          getRollingUsage(userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
-          getRollingUsage(userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
+          getRollingUsage(db, userId, ROLLING_SESSION_WINDOW_HOURS, false),
+          getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
+          getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
         ])
       : [
           { usedCents: 0, oldestAt: null },

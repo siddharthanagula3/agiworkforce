@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
 export interface RollingUsage {
@@ -9,11 +9,11 @@ export interface RollingUsage {
 }
 
 export async function getRollingUsage(
+  db: DatabaseAdapter,
   userId: string,
   windowHours: number,
   flagshipOnly: boolean,
 ): Promise<RollingUsage> {
-  const db = getNeonDb();
   try {
     const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
     const flagshipFilter = flagshipOnly ? `and metadata->>'is_flagship' = 'true'` : '';

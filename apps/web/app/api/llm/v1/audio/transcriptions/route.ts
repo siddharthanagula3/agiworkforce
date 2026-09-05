@@ -430,7 +430,7 @@ async function handleTranscriptions(request: NextRequest) {
       idempotencyHeader === null
         ? `agi.transcription.${randomUUID()}`
         : parseManagedUsageIdempotencyKey(idempotencyHeader);
-    const subscription = await SubscriptionService.getSubscription(userId);
+    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,

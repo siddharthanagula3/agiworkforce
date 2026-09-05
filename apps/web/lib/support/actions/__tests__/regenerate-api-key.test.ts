@@ -56,6 +56,7 @@ describe('support actions, regenerate_api_key', () => {
 
   it('revokes the old key and issues one with the same name and the same scopes', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'regenerate_api_key',
       params: { keyId: KEY_ID },
@@ -67,6 +68,7 @@ describe('support actions, regenerate_api_key', () => {
     expect(proposal.effects.join(' ')).toContain('same name and exactly the same scopes');
 
     const { result } = await confirmSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       proposalId: proposal.id,
       confirmationToken,
@@ -91,6 +93,7 @@ describe('support actions, regenerate_api_key', () => {
   it('never lets a caller choose the scopes of the replacement', async () => {
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         actionId: 'regenerate_api_key',
         params: { keyId: KEY_ID, scopes: ['inference:write', 'models:read'] },

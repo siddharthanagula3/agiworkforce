@@ -14,9 +14,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
-}));
+const callerDb = { query: mocks.query, execute: mocks.execute } as never;
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mocks.getSubscription },
 }));
@@ -83,18 +81,20 @@ describe('resolveSupportAccountContext', () => {
   });
 
   it('refuses to resolve without an authenticated user id', async () => {
-    await expect(resolveSupportAccountContext('')).rejects.toThrow(/authenticated user id/iu);
+    await expect(resolveSupportAccountContext(callerDb, '')).rejects.toThrow(
+      /authenticated user id/iu,
+    );
   });
 
   it('binds every query to the caller', async () => {
-    await resolveSupportAccountContext(USER);
+    await resolveSupportAccountContext(callerDb, USER);
     expect(mocks.query.mock.calls.length).toBeGreaterThan(0);
     for (const [sql, params] of mocks.query.mock.calls as [string, unknown[]][]) {
       expect(sql).toMatch(/user_id = \$1/u);
       expect(params[0]).toBe(USER);
     }
-    expect(mocks.getSubscription).toHaveBeenCalledWith(USER);
-    expect(mocks.getManagedUsageSummary).toHaveBeenCalledWith(USER);
+    expect(mocks.getSubscription).toHaveBeenCalledWith(callerDb, USER);
+    expect(mocks.getManagedUsageSummary).toHaveBeenCalledWith(callerDb, USER);
   });
 
   it('reports the plan honestly, keeping raw and effective tier apart', async () => {
@@ -104,7 +104,7 @@ describe('resolveSupportAccountContext', () => {
       current_period_end: null,
       stripe_subscription_id: 'sub_1',
     });
-    const context = await resolveSupportAccountContext(USER);
+    const context = await resolveSupportAccountContext(callerDb, USER);
     expect(context.plan.tier).toBe('pro');
     expect(context.plan.status).toBe('canceled');
     expect(context.plan.effectiveTier).not.toBe('pro');
@@ -112,7 +112,7 @@ describe('resolveSupportAccountContext', () => {
   });
 
   it('reports only percentages for usage', async () => {
-    const context = await resolveSupportAccountContext(USER);
+    const context = await resolveSupportAccountContext(callerDb, USER);
     expect(context.usage).toEqual({
       usagePercentage: 42,
       sessionUsagePercentage: 10,
@@ -127,12 +127,12 @@ describe('resolveSupportAccountContext', () => {
 
   it('degrades to unknown usage rather than guessing when the summary fails', async () => {
     mocks.getManagedUsageSummary.mockRejectedValue(new Error('ledger down'));
-    const context = await resolveSupportAccountContext(USER);
+    const context = await resolveSupportAccountContext(callerDb, USER);
     expect(context.usage).toBeNull();
   });
 
   it('only reports connectors that would actually work', async () => {
-    const context = await resolveSupportAccountContext(USER);
+    const context = await resolveSupportAccountContext(callerDb, USER);
     expect(context.connectors.map((c) => c.connectorId)).toEqual(['slack']);
   });
 
@@ -154,7 +154,7 @@ describe('resolveSupportAccountContext', () => {
 
   describe('email verification', () => {
     it('reports verified when Clerk says so', async () => {
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       expect(context.email).toEqual({ present: true, verified: 'verified' });
     });
 
@@ -162,25 +162,25 @@ describe('resolveSupportAccountContext', () => {
       mocks.getUser.mockResolvedValue({
         primaryEmailAddress: { verification: { status: 'unverified' } },
       });
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       expect(context.email.verified).toBe('unverified');
     });
 
     it('reports unknown, not unverified, when the lookup fails', async () => {
       mocks.getUser.mockRejectedValue(new Error('clerk getUser timeout'));
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       expect(context.email.verified).toBe('unknown');
     });
 
     it('never puts the address itself in the context', async () => {
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       expect(JSON.stringify(context)).not.toContain('someone@example.com');
     });
   });
 
   describe('citations', () => {
     it('cites a real page for every fact group it returns', async () => {
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       const citations = buildSupportAccountCitations(context);
       expect(citations.length).toBeGreaterThan(0);
 
@@ -193,7 +193,7 @@ describe('resolveSupportAccountContext', () => {
 
     it('does not cite a usage page when usage could not be resolved', async () => {
       mocks.getManagedUsageSummary.mockRejectedValue(new Error('ledger down'));
-      const context = await resolveSupportAccountContext(USER);
+      const context = await resolveSupportAccountContext(callerDb, USER);
       const citations = buildSupportAccountCitations(context);
       expect(citations.map((c) => c.id)).not.toContain('account:usage');
     });

@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
@@ -41,14 +40,12 @@ function normalizeText(value: unknown, maxLength: number): string | null {
 }
 
 async function readSettingsNamespace(
+  db: DatabaseAdapter,
   userId: string,
   namespace: string,
 ): Promise<Record<string, unknown>> {
   try {
-    const rows = await createClaimedUserScopedDb(getNeonDb(), {
-      userId,
-      organizationId: null,
-    }).query<{ settings: Record<string, unknown> | null }>(
+    const rows = await db.query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );
@@ -65,12 +62,12 @@ async function readSettingsNamespace(
   }
 }
 
-async function readIdentityNamespace(userId: string): Promise<Record<string, unknown>> {
+async function readIdentityNamespace(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<Record<string, unknown>> {
   try {
-    const rows = await createClaimedUserScopedDb(getNeonDb(), {
-      userId,
-      organizationId: null,
-    }).query<{ settings: Record<string, unknown> | null }>(
+    const rows = await db.query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );
@@ -87,12 +84,9 @@ async function readIdentityNamespace(userId: string): Promise<Record<string, unk
   }
 }
 
-async function readProfileRow(userId: string): Promise<ProfileRow | null> {
+async function readProfileRow(db: DatabaseAdapter, userId: string): Promise<ProfileRow | null> {
   try {
-    const rows = await createClaimedUserScopedDb(getNeonDb(), {
-      userId,
-      organizationId: null,
-    }).query<ProfileRow>(
+    const rows = await db.query<ProfileRow>(
       `select id, email, display_name, avatar_url, routing_preferences
          from profiles
         where id = $1
@@ -106,10 +100,10 @@ async function readProfileRow(userId: string): Promise<ProfileRow | null> {
   }
 }
 
-export async function readUserIdentity(userId: string): Promise<UserIdentity> {
+export async function readUserIdentity(db: DatabaseAdapter, userId: string): Promise<UserIdentity> {
   const [profile, namespace] = await Promise.all([
-    readProfileRow(userId),
-    readIdentityNamespace(userId),
+    readProfileRow(db, userId),
+    readIdentityNamespace(db, userId),
   ]);
 
   return {
@@ -123,18 +117,16 @@ export async function readUserIdentity(userId: string): Promise<UserIdentity> {
   };
 }
 
-export async function getUserCustomInstructions(userId: string): Promise<string | null> {
-  const namespace = await readIdentityNamespace(userId);
-  return normalizeText(namespace['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH);
-}
-
 export interface OnboardingStatus {
   completed: boolean;
   primaryUseCase: string | null;
 }
 
-export async function getOnboardingStatus(userId: string): Promise<OnboardingStatus> {
-  const namespace = await readIdentityNamespace(userId);
+export async function getOnboardingStatus(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<OnboardingStatus> {
+  const namespace = await readIdentityNamespace(db, userId);
   return {
     completed: Boolean(normalizeText(namespace['onboardingCompletedAt'], 40)),
     primaryUseCase: normalizeText(namespace['primaryUseCase'], MAX_PRIMARY_USE_CASE_LENGTH),
@@ -250,15 +242,18 @@ export function formatCustomInstructionsBlock(instructions: string | null): stri
   });
 }
 
-export async function buildCustomInstructionsPreamble(userId: string): Promise<string | null> {
+export async function buildCustomInstructionsPreamble(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<string | null> {
   // Two namespaces, because two surfaces write them: 'general' is what web
   // settings collects, 'personalization' is what mobile's style controls
   // collect. The mobile namespace synced to the account and was read by
   // NOTHING at inference time, so every slider a mobile user moved was stored
   // and discarded.
   const [namespace, personalization] = await Promise.all([
-    readIdentityNamespace(userId),
-    readSettingsNamespace(userId, PERSONALIZATION_SETTINGS_NAMESPACE),
+    readIdentityNamespace(db, userId),
+    readSettingsNamespace(db, userId, PERSONALIZATION_SETTINGS_NAMESPACE),
   ]);
   return formatPersonalizationBlock({
     preferredName:
@@ -275,13 +270,14 @@ export async function buildCustomInstructionsPreamble(userId: string): Promise<s
 }
 
 export async function backfillDisplayNameFromUpstream(
+  db: DatabaseAdapter,
   userId: string,
   candidateName: string,
 ): Promise<void> {
   const name = normalizeText(candidateName, 120);
   if (!name) return;
   try {
-    await createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null }).query(
+    await db.query(
       `insert into public.profiles (id, display_name, updated_at)
        values ($1, $2, now())
        on conflict (id)

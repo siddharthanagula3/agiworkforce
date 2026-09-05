@@ -7,15 +7,7 @@ vi.mock('@/lib/logger', () => ({
 
 const mockQuery = vi.hoisted(() => vi.fn());
 const mockExecute = vi.hoisted(() => vi.fn(async () => 0));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: mockQuery,
-    execute: mockExecute,
-    transaction: (
-      callback: (tx: { query: typeof mockQuery; execute: typeof mockExecute }) => unknown,
-    ) => callback({ query: mockQuery, execute: mockExecute }),
-  }),
-}));
+const callerDb = { query: mockQuery, execute: mockExecute } as never;
 
 import { buildCustomInstructionsPreamble, formatPersonalizationBlock } from '../user-identity';
 
@@ -31,7 +23,7 @@ describe('the personalization General settings collects reaches the model', () =
   it('tells the model the name the user asked to be called', async () => {
     settings({ preferredName: 'Sid' });
 
-    const preamble = await buildCustomInstructionsPreamble('user-1');
+    const preamble = await buildCustomInstructionsPreamble(callerDb, 'user-1');
 
     expect(preamble).toContain('Sid');
     expect(preamble).toContain('<user_profile>');
@@ -40,13 +32,15 @@ describe('the personalization General settings collects reaches the model', () =
   it('passes on how the user describes their work', async () => {
     settings({ workDescription: 'Product management' });
 
-    expect(await buildCustomInstructionsPreamble('user-1')).toContain('Product management');
+    expect(await buildCustomInstructionsPreamble(callerDb, 'user-1')).toContain(
+      'Product management',
+    );
   });
 
   it('still sends standing instructions, in their own block', async () => {
     settings({ instructions: 'Answer in British English.' });
 
-    const preamble = await buildCustomInstructionsPreamble('user-1');
+    const preamble = await buildCustomInstructionsPreamble(callerDb, 'user-1');
 
     expect(preamble).toContain('<user_instructions>');
     expect(preamble).toContain('Answer in British English.');
@@ -60,7 +54,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: 'Be concise.',
     });
 
-    const preamble = await buildCustomInstructionsPreamble('user-1');
+    const preamble = await buildCustomInstructionsPreamble(callerDb, 'user-1');
 
     expect(preamble).toContain('Sid');
     expect(preamble).toContain('Product management');
@@ -70,7 +64,7 @@ describe('the personalization General settings collects reaches the model', () =
   it('sends nothing when the user has personalized nothing', async () => {
     settings({});
 
-    expect(await buildCustomInstructionsPreamble('user-1')).toBeNull();
+    expect(await buildCustomInstructionsPreamble(callerDb, 'user-1')).toBeNull();
   });
 
   it('treats whitespace-only answers as unset rather than shipping empty tags', () => {
@@ -188,7 +182,7 @@ describe('mobile response-style controls reach the model', () => {
   it('sends the style block alongside the profile', async () => {
     personalization({ preferredName: 'Sid' }, { style: 'formal', emoji: 0 });
 
-    const preamble = await buildCustomInstructionsPreamble('user-1');
+    const preamble = await buildCustomInstructionsPreamble(callerDb, 'user-1');
 
     expect(preamble).toContain('<response_style>');
     expect(preamble).toContain('Use a formal register.');
@@ -199,13 +193,13 @@ describe('mobile response-style controls reach the model', () => {
   it('falls back to the mobile nickname when web has no preferred name', async () => {
     personalization({}, { nickname: 'Sid' });
 
-    expect(await buildCustomInstructionsPreamble('user-1')).toContain('Sid');
+    expect(await buildCustomInstructionsPreamble(callerDb, 'user-1')).toContain('Sid');
   });
 
   it('lets the web value win when both surfaces set one', async () => {
     personalization({ preferredName: 'WebName' }, { nickname: 'MobileName' });
 
-    const preamble = await buildCustomInstructionsPreamble('user-1');
+    const preamble = await buildCustomInstructionsPreamble(callerDb, 'user-1');
 
     expect(preamble).toContain('WebName');
     expect(preamble).not.toContain('MobileName');
@@ -214,6 +208,6 @@ describe('mobile response-style controls reach the model', () => {
   it('still sends nothing when neither namespace has anything', async () => {
     personalization({}, {});
 
-    expect(await buildCustomInstructionsPreamble('user-1')).toBeNull();
+    expect(await buildCustomInstructionsPreamble(callerDb, 'user-1')).toBeNull();
   });
 });

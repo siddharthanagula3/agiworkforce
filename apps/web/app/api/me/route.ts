@@ -73,14 +73,15 @@ async function handleGetMe(request: NextRequest) {
       logger.warn({ userId, error: clerkLookupError }, 'Failed to resolve Clerk profile name');
     }
 
+    const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
     const [subscription, identity] = await Promise.all([
-      SubscriptionService.getSubscription(userId),
-      readUserIdentity(userId),
+      SubscriptionService.getSubscription(db, userId),
+      readUserIdentity(db, userId),
     ]);
     const profile = identity.profile;
 
     if (!identity.displayName && clerkName) {
-      await backfillDisplayNameFromUpstream(userId, clerkName);
+      await backfillDisplayNameFromUpstream(db, userId, clerkName);
     }
 
     const rawRoutingPreferences = profile?.routing_preferences;
@@ -111,7 +112,7 @@ async function handleGetMe(request: NextRequest) {
       tier: effectiveTier,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
-      resets: await getCapabilityLimitResets(userId, subscription?.current_period_end ?? null),
+      resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });
 
     const subscriptionSource = resolveSubscriptionBillingSource(subscription);

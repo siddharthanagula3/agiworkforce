@@ -39,6 +39,7 @@ describe('support actions, unavailable capabilities fail closed', () => {
   it('refuses a direct proposal for it, and writes no proposal row', async () => {
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: 'user_a',
         actionId: 'resend_verification_email',
         params: {},

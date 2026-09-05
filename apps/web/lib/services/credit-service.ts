@@ -1,7 +1,6 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { retryWithBackoff } from '@/lib/retry';
 
@@ -134,64 +133,36 @@ export class CreditService {
     return monthlyCents;
   }
 
-  static async getBalance(
-    dbOrUserId: DatabaseAdapter | string,
-    userId?: string,
-  ): Promise<CreditBalance | null> {
-    let db: DatabaseAdapter;
-    let resolvedUserId: string;
-    if (typeof dbOrUserId === 'string') {
-      db = getNeonDb();
-      resolvedUserId = dbOrUserId;
-    } else {
-      db = dbOrUserId;
-      resolvedUserId = userId!;
-    }
-
+  static async getBalance(db: DatabaseAdapter, userId: string): Promise<CreditBalance | null> {
     try {
-      const rows = await db.query<CreditBalance>('select * from get_credit_balance($1)', [
-        resolvedUserId,
-      ]);
+      const rows = await db.query<CreditBalance>('select * from get_credit_balance($1)', [userId]);
       return rows.length > 0 ? rows[0]! : null;
     } catch (error) {
-      logger.error({ error, userId: resolvedUserId }, 'Error in getBalance');
+      logger.error({ error, userId }, 'Error in getBalance');
       throw error;
     }
   }
 
   static async checkAvailable(
-    dbOrUserId: DatabaseAdapter | string,
-    userIdOrAmount: string | number,
-    amountCents?: number,
+    db: DatabaseAdapter,
+    userId: string,
+    amountCents: number,
   ): Promise<boolean> {
-    let db: DatabaseAdapter;
-    let resolvedUserId: string;
-    let resolvedAmount: number;
-    if (typeof dbOrUserId === 'string') {
-      db = getNeonDb();
-      resolvedUserId = dbOrUserId;
-      resolvedAmount = userIdOrAmount as number;
-    } else {
-      db = dbOrUserId;
-      resolvedUserId = userIdOrAmount as string;
-      resolvedAmount = amountCents!;
-    }
-
     try {
       const [row] = await db.query<{ check_credits_available: boolean }>(
         'select check_credits_available($1, $2) as check_credits_available',
-        [resolvedUserId, resolvedAmount],
+        [userId, amountCents],
       );
       return row?.check_credits_available === true;
     } catch (error) {
       logger.error(
-        { error, userId: resolvedUserId, amountCents: resolvedAmount },
+        { error, userId, amountCents },
         'RPC check_credits_available failed, trying fallback',
       );
       try {
-        const balance = await this.getBalance(db, resolvedUserId);
+        const balance = await this.getBalance(db, userId);
         if (!balance?.account_id) return false;
-        return balance.credits_remaining_cents >= resolvedAmount;
+        return balance.credits_remaining_cents >= amountCents;
       } catch {
         return false;
       }
@@ -199,54 +170,27 @@ export class CreditService {
   }
 
   static async deductCredits(
-    dbOrUserId: DatabaseAdapter | string,
-    userIdOrAmount: string | number,
-    amountCentsOrDescription?: number | string,
-    descriptionOrMetadata?: string | Record<string, unknown>,
-    metadataOrIdempotencyKey?: Record<string, unknown> | string,
+    db: DatabaseAdapter,
+    userId: string,
+    amountCents: number,
+    description?: string,
+    metadata?: Record<string, unknown>,
     idempotencyKey?: string,
   ): Promise<DeductCreditsResult> {
-    let db: DatabaseAdapter;
-    let resolvedUserId: string;
-    let resolvedAmountCents: number;
-    let resolvedDescription: string | undefined;
-    let resolvedMetadata: Record<string, unknown> | undefined;
-    let resolvedIdempotencyKey: string | undefined;
-
-    if (typeof dbOrUserId === 'string') {
-      db = getNeonDb();
-      resolvedUserId = dbOrUserId;
-      resolvedAmountCents = userIdOrAmount as number;
-      resolvedDescription = amountCentsOrDescription as string | undefined;
-      resolvedMetadata = descriptionOrMetadata as Record<string, unknown> | undefined;
-      resolvedIdempotencyKey = metadataOrIdempotencyKey as string | undefined;
-    } else {
-      db = dbOrUserId;
-      resolvedUserId = userIdOrAmount as string;
-      resolvedAmountCents = amountCentsOrDescription as number;
-      resolvedDescription = descriptionOrMetadata as string | undefined;
-      resolvedMetadata = metadataOrIdempotencyKey as Record<string, unknown> | undefined;
-      resolvedIdempotencyKey = idempotencyKey;
-    }
-
     try {
       const rows = await db.query<DeductCreditsResult>(
         'select * from deduct_credits($1, $2, $3, $4, $5)',
         [
-          resolvedUserId,
-          resolvedAmountCents,
-          resolvedDescription || null,
-          JSON.stringify(resolvedMetadata || {}),
-          resolvedIdempotencyKey || null,
+          userId,
+          amountCents,
+          description || null,
+          JSON.stringify(metadata || {}),
+          idempotencyKey || null,
         ],
       );
-      const result = rows.length > 0 ? rows[0]! : { success: false, error: 'No result' };
-      return result;
+      return rows.length > 0 ? rows[0]! : { success: false, error: 'No result' };
     } catch (error) {
-      logger.error(
-        { error, userId: resolvedUserId, amountCents: resolvedAmountCents },
-        'Error in deductCredits',
-      );
+      logger.error({ error, userId, amountCents }, 'Error in deductCredits');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -256,7 +200,7 @@ export class CreditService {
 
   static async settleCreditsDurably(
     operation: CreditSettlementOperation,
-    db: DatabaseAdapter = getNeonDb(),
+    db: DatabaseAdapter,
   ): Promise<CreditSettlementResult> {
     const retryResult = await retryWithBackoff(
       async () => {
@@ -348,8 +292,8 @@ export class CreditService {
   }
 
   static async processPendingSettlements(
-    batchSize = 100,
-    db: DatabaseAdapter = getNeonDb(),
+    batchSize: number,
+    db: DatabaseAdapter,
   ): Promise<CreditSettlementQueueSummary> {
     const boundedBatchSize = Math.max(1, Math.min(Math.trunc(batchSize), 500));
     const rows = await db.query<{
@@ -395,7 +339,7 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     allocationDeltaCents: number,
-    db: DatabaseAdapter = getNeonDb(),
+    db: DatabaseAdapter,
   ): Promise<string> {
     const upgradeAllocationKey = [
       subscriptionId,
@@ -464,7 +408,7 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     creditsAllocatedCents: number,
-    db: DatabaseAdapter = getNeonDb(),
+    db: DatabaseAdapter,
   ): Promise<string> {
     try {
       const [row] = await db.query<{ get_or_create_credit_account: string }>(
@@ -490,7 +434,7 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     creditsAllocatedCents: number,
-    db: DatabaseAdapter = getNeonDb(),
+    db: DatabaseAdapter,
   ): Promise<string> {
     try {
       const [row] = await db.query<{ reset_credits_for_period: string }>(

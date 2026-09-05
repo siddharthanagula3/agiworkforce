@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
+  getUserScopedDb: vi.fn(),
   getClerkAuthUser: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   propose: vi.fn(),
@@ -19,6 +21,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
@@ -48,6 +51,11 @@ const TOKEN = 'a'.repeat(43);
 describe('POST /api/support/actions/propose', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'session_user',
+      organizationId: null,
+    });
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'session_user' });
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
@@ -125,6 +133,11 @@ describe('POST /api/support/actions/propose', () => {
 describe('POST /api/support/actions/confirm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'session_user',
+      organizationId: null,
+    });
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'session_user' });
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
@@ -147,7 +160,7 @@ describe('POST /api/support/actions/confirm', () => {
     expect(response.status).toBe(200);
     const call = mocks.confirm.mock.calls[0]![0] as Record<string, unknown>;
     expect(Object.keys(call).sort()).toEqual(
-      ['confirmationToken', 'proposalId', 'request', 'surface', 'userId'].sort(),
+      ['confirmationToken', 'db', 'proposalId', 'request', 'surface', 'userId'].sort(),
     );
     expect(call['userId']).toBe('session_user');
     expect(call).not.toHaveProperty('actionId');
@@ -201,12 +214,18 @@ describe('POST /api/support/actions/confirm', () => {
 describe('GET /api/support/actions/available', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'session_user',
+      organizationId: null,
+    });
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'session_user' });
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.listAvailable.mockReturnValue({ actions: [], unavailable: [], excluded: [] });
   });
 
   it('requires a session, an anonymous caller is never shown an action list', async () => {
+    mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
     mocks.getClerkAuthUser.mockRejectedValue(createError.unauthorized());
     const response = await AVAILABLE(
       new NextRequest('https://agiworkforce.com/api/support/actions/available'),

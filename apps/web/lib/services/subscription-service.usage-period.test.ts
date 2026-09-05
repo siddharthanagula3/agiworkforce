@@ -8,6 +8,12 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(),
 }));
 
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: vi.fn(),
+}));
+
+const scopedDb = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() } as never;
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -47,6 +53,7 @@ describe('SubscriptionService managed usage periods', () => {
       'pro',
       new Date('2026-01-18T12:00:00.000Z'),
       new Date('2027-01-18T12:00:00.000Z'),
+      { db: scopedDb },
     );
 
     expect(mockGetOrCreateAccount).toHaveBeenCalledWith(
@@ -55,7 +62,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
-      undefined,
+      scopedDb,
     );
   });
 
@@ -66,6 +73,7 @@ describe('SubscriptionService managed usage periods', () => {
       'pro',
       new Date('2026-01-18T12:00:00.000Z'),
       new Date('2027-01-18T12:00:00.000Z'),
+      { db: scopedDb },
     );
 
     expect(mockResetForPeriod).toHaveBeenCalledWith(
@@ -74,7 +82,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
-      undefined,
+      scopedDb,
     );
   });
 
@@ -86,6 +94,7 @@ describe('SubscriptionService managed usage periods', () => {
       'max',
       new Date('2026-01-18T12:00:00.000Z'),
       new Date('2027-01-18T12:00:00.000Z'),
+      scopedDb,
     );
 
     expect(mockCarryUsageIntoUpgradedPeriod).toHaveBeenCalledWith(
@@ -94,7 +103,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       4_000,
-      undefined,
+      scopedDb,
     );
   });
 });

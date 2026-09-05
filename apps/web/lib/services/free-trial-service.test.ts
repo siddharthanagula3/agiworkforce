@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 
 const tx = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn() }));
 const db = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(), transaction: vi.fn() }));
+const scopedRead = { query: tx.query } as never;
 
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 
@@ -81,6 +82,12 @@ function usageRow(input: UsageSnapshot = {}) {
   };
 }
 
+function mockSettledReservation(row: Record<string, unknown> | null) {
+  tx.query.mockImplementation(async (sql: string) =>
+    sql.includes('from public.free_daily_usage_reservations') && row ? [row] : [],
+  );
+}
+
 function mockAvailableQuota(input: UsageSnapshot = {}) {
   tx.query.mockImplementation(async (sql: string) => {
     if (sql.includes('from public.free_daily_usage_reservations') && sql.includes('request_id')) {
@@ -130,7 +137,7 @@ describe('free trial service', () => {
       return [];
     });
 
-    const snapshot = await getFreeTrialPublicUsage('user-1');
+    const snapshot = await getFreeTrialPublicUsage(scopedRead, 'user-1');
 
     expect(snapshot).toEqual({
       usagePercentage: 50,
@@ -142,11 +149,14 @@ describe('free trial service', () => {
       hasUsageRemaining: true,
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/microusd|budget|cost|reserved/i);
-    expect(tx.execute).toHaveBeenCalledWith('set local role app_rls');
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
-      ['user-1', ''],
-    );
+    // The snapshot reads only the connection it was handed, never the
+    // schema-owner pool that bypasses row-level security.
+    expect(db.query).not.toHaveBeenCalled();
+    expect(tx.query).toHaveBeenCalledWith(expect.stringContaining('five_hour_used_microusd'), [
+      'user-1',
+      FREE_TRIAL_INTERNAL_USAGE_POLICY.fiveHourWindowHours,
+      FREE_TRIAL_INTERNAL_USAGE_POLICY.weeklyWindowHours,
+    ]);
   });
 
   it('returns an unused account-month snapshot when no reservation exists', async () => {
@@ -155,7 +165,7 @@ describe('free trial service', () => {
       return [];
     });
 
-    await expect(getFreeTrialPublicUsage('user-1')).resolves.toEqual({
+    await expect(getFreeTrialPublicUsage(scopedRead, 'user-1')).resolves.toEqual({
       usagePercentage: 0,
       resetAt: ACCOUNT_PERIOD_END,
       sessionUsagePercentage: 0,
@@ -360,13 +370,11 @@ describe('free trial service', () => {
   });
 
   it('charges one unit for a completed inexpensive response, not the full five-hour cap', async () => {
-    tx.query.mockResolvedValueOnce([
-      {
-        window_started_at: FIVE_HOUR_OLDEST,
-        reserved_microusd: 25_000,
-        settled_at: null,
-      },
-    ]);
+    mockSettledReservation({
+      window_started_at: FIVE_HOUR_OLDEST,
+      reserved_microusd: 25_000,
+      settled_at: null,
+    });
 
     await settleFreeTrialRequest({
       reservation: {
@@ -396,13 +404,11 @@ describe('free trial service', () => {
   });
 
   it('releases a reservation after a zero-usage failure', async () => {
-    tx.query.mockResolvedValueOnce([
-      {
-        window_started_at: FIVE_HOUR_OLDEST,
-        reserved_microusd: 25_000,
-        settled_at: null,
-      },
-    ]);
+    mockSettledReservation({
+      window_started_at: FIVE_HOUR_OLDEST,
+      reserved_microusd: 25_000,
+      settled_at: null,
+    });
 
     await settleFreeTrialRequest({
       reservation: {
@@ -421,13 +427,11 @@ describe('free trial service', () => {
   });
 
   it('treats repeated settlement as an idempotent no-op', async () => {
-    tx.query.mockResolvedValueOnce([
-      {
-        window_started_at: FIVE_HOUR_OLDEST,
-        reserved_microusd: 5_000,
-        settled_at: '2026-07-22T12:01:00.000Z',
-      },
-    ]);
+    mockSettledReservation({
+      window_started_at: FIVE_HOUR_OLDEST,
+      reserved_microusd: 5_000,
+      settled_at: '2026-07-22T12:01:00.000Z',
+    });
 
     await settleFreeTrialRequest({
       reservation: {
@@ -439,7 +443,10 @@ describe('free trial service', () => {
       outcome: 'completed',
     });
 
-    expect(tx.execute).not.toHaveBeenCalled();
+    expect(tx.execute).not.toHaveBeenCalledWith(
+      expect.stringContaining('free_daily_usage_reservations'),
+      expect.anything(),
+    );
   });
 
   it('logs settlement failures without exposing private policy values', async () => {

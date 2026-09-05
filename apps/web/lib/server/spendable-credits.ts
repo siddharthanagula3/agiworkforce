@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
 export interface SpendableCreditState {
@@ -31,9 +31,12 @@ const SELECT_SPENDABLE_CREDITS = `
   where subscription.user_id = $1
   limit 1`;
 
-export async function getSpendableCredits(userId: string): Promise<SpendableCreditState> {
+export async function getSpendableCredits(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<SpendableCreditState> {
   try {
-    const rows = await getNeonDb().query<SpendableCreditRow>(SELECT_SPENDABLE_CREDITS, [userId]);
+    const rows = await db.query<SpendableCreditRow>(SELECT_SPENDABLE_CREDITS, [userId]);
     const row = rows[0];
     if (row === undefined) return { availableCents: 0, overageEnabled: false };
     const available = Number(row.available_cents ?? 0);

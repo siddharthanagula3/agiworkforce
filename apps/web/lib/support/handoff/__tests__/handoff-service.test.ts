@@ -99,6 +99,7 @@ function baseInput() {
     ],
     citations: [{ title: 'Refund policy', url: 'https://agiworkforce.com/refund-policy' }],
     contactEmail: 'customer@example.com',
+    ownerDb: null,
     ownerUserId: null,
     ownerSessionKey: 'anon-abc',
     verifiedEmail: null,
@@ -185,6 +186,7 @@ describe('escalateToHuman · nobody available (the common case)', () => {
 
     const result = await escalateToHuman({
       ...baseInput(),
+      ownerDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() } as never,
       ownerUserId: 'user_123',
       verifiedEmail: 'verified@example.com',
     });

@@ -28,6 +28,7 @@ describe('paid-plan upgrade usage carry-forward', () => {
       periodStart,
       periodEnd,
       4_000,
+      dbMocks as never,
     );
 
     expect(accountId).toBe('credit-account-1');
@@ -62,6 +63,7 @@ describe('paid-plan upgrade usage carry-forward', () => {
         new Date('2026-07-18T18:00:00.000Z'),
         new Date('2026-08-18T18:00:00.000Z'),
         4_000,
+        dbMocks as never,
       ),
     ).rejects.toThrow('No credit account found for paid-plan upgrade');
   });

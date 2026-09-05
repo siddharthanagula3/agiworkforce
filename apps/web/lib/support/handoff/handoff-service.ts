@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { getHandoffConfig, isValidEmail } from './config';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { buildHandoffAccountContext } from './account-context';
 import { generateReferenceId } from './reference-id';
 import { resolveHumanAvailability, clearAvailabilityCache } from './presence-service';
@@ -35,6 +36,7 @@ import type {
 } from './types';
 
 export interface EscalateInput extends HandoffCreateRequest {
+  ownerDb: DatabaseAdapter | null;
   ownerUserId: string | null;
   ownerSessionKey: string;
   verifiedEmail?: string | null;
@@ -74,7 +76,7 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
   const contactEmail = resolveContactEmail(input);
 
   const { turns, droppedTurns } = normalizeTranscript(input.transcript);
-  const accountContext = await buildHandoffAccountContext(input.ownerUserId);
+  const accountContext = await buildHandoffAccountContext(input.ownerDb, input.ownerUserId);
 
   const availability = await resolveHumanAvailability({ skipCache: true });
 

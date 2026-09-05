@@ -1,9 +1,9 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  getClerkAuthUser: vi.fn(),
+  getUserScopedDb: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
   withRateLimit: vi.fn(),
   resolveContext: vi.fn(),
 }));
@@ -16,7 +16,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/support/account/context-resolver', async () => {
   const actual = await vi.importActual<typeof import('@/lib/support/account/context-resolver')>(
@@ -54,13 +54,17 @@ const CONTEXT = {
 describe('GET /api/support/account/context', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'session_user' });
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'session_user',
+      organizationId: null,
+    });
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.resolveContext.mockResolvedValue(CONTEXT);
   });
 
   it('401s a signed-out caller and resolves nothing', async () => {
-    mocks.getClerkAuthUser.mockRejectedValue(createError.unauthorized());
+    mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
     const response = await GET(get());
     expect(response.status).toBe(401);
     expect(mocks.resolveContext).not.toHaveBeenCalled();
@@ -72,7 +76,7 @@ describe('GET /api/support/account/context', () => {
     );
     expect(response.status).toBe(200);
     expect(mocks.resolveContext).toHaveBeenCalledTimes(1);
-    expect(mocks.resolveContext).toHaveBeenCalledWith('session_user');
+    expect(mocks.resolveContext).toHaveBeenCalledWith(mocks.scopedDb, 'session_user');
   });
 
   it('returns the model-safe projection alongside the full context', async () => {

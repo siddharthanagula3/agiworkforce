@@ -15,6 +15,7 @@ import {
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import type { InteractiveCard } from '@agiworkforce/types';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
@@ -752,9 +753,9 @@ export interface UserCustomConnectorSummary {
 }
 
 export async function getUserCustomConnectorSummaries(
+  db: DatabaseAdapter,
   userId: string,
 ): Promise<UserCustomConnectorSummary[]> {
-  const db = getNeonDb();
   try {
     const rows = await db.query<{
       id: string;

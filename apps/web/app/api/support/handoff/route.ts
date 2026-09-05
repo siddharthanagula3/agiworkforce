@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { escalateToHuman, MissingContactEmailError } from '@/lib/support/handoff/handoff-service';
+import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
 
 const TurnSchema = z.object({
@@ -64,10 +65,12 @@ async function handleCreateHandoff(request: NextRequest) {
   }
 
   const identity = await resolveHandoffIdentity(request, { needEmail: true });
+  const ownerScope = identity.userId ? await getCurrentUserRlsDb() : null;
 
   try {
     const result = await escalateToHuman({
       ...parsed.data,
+      ownerDb: ownerScope?.db ?? null,
       ownerUserId: identity.userId,
       ownerSessionKey: identity.ownerSessionKey,
       verifiedEmail: identity.verifiedEmail,

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
@@ -247,7 +248,10 @@ export function isFreeTrialRequest(params: {
   );
 }
 
-export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrialPublicUsage> {
+export async function getFreeTrialPublicUsage(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<FreeTrialPublicUsage> {
   const {
     fiveHourBudgetMicrousd,
     fiveHourWindowHours,
@@ -255,10 +259,7 @@ export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrial
     weeklyWindowHours,
     monthlyBudgetMicrousd,
   } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
-  const [snapshot] = await createClaimedUserScopedDb(getNeonDb(), {
-    userId,
-    organizationId: null,
-  }).query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
+  const [snapshot] = await db.query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
     userId,
     fiveHourWindowHours,
     weeklyWindowHours,
@@ -397,7 +398,13 @@ export async function settleFreeTrialRequest(params: {
       : 0;
   const minimumCompletedChargeMicrousd =
     params.outcome === 'completed' ? FREE_TRIAL_INTERNAL_USAGE_POLICY.unitMicrousd : 0;
-  const db = getNeonDb();
+  // Settlement is reached from stream teardown and from a durable workflow
+  // step, neither of which carries the request's connection, so the scope is
+  // derived from the reservation's own owner rather than left unbound.
+  const db = createClaimedUserScopedDb(getNeonDb(), {
+    userId: params.reservation.userId,
+    organizationId: null,
+  });
 
   try {
     await db.transaction(async (tx) => {

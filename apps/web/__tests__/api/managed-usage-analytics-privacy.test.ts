@@ -11,8 +11,12 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user_usage_privacy' })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
+    userId: 'user_usage_privacy',
+    organizationId: null,
+  })),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
@@ -84,7 +88,10 @@ describe('legacy managed-usage report routes', () => {
         flagship_weekly_usage_percentage: 10,
         flagship_weekly_reset_at: '2026-07-22T00:00:00.000Z',
       });
-      expect(mockGetManagedUsageSummary).toHaveBeenCalledWith('user_usage_privacy');
+      expect(mockGetManagedUsageSummary).toHaveBeenCalledWith(
+        expect.anything(),
+        'user_usage_privacy',
+      );
       expect(mockQuery).not.toHaveBeenCalled();
     });
   }

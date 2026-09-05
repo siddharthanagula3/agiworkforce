@@ -34,9 +34,10 @@ vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+const mockGetUserScopedDb = vi.fn();
+const scopedDb = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/services/neon-db', () => ({
@@ -132,7 +133,11 @@ describe('GET /api/usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: 'user-123',
+      organizationId: null,
+    });
 
     mockGetBalance.mockResolvedValue(MOCK_BALANCE);
     mockGetSubscription.mockResolvedValue(MOCK_SUBSCRIPTION);
@@ -145,7 +150,7 @@ describe('GET /api/usage', () => {
   });
 
   it('should return 401 when no authorization and no Clerk session', async () => {
-    mockGetClerkAuthUser.mockRejectedValueOnce(
+    mockGetUserScopedDb.mockRejectedValueOnce(
       Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
     );
 
@@ -158,7 +163,7 @@ describe('GET /api/usage', () => {
   });
 
   it('should return 401 when Bearer token is invalid', async () => {
-    mockGetClerkAuthUser.mockRejectedValueOnce(
+    mockGetUserScopedDb.mockRejectedValueOnce(
       Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
     );
 
@@ -171,17 +176,18 @@ describe('GET /api/usage', () => {
   });
 
   it('should authenticate via Clerk session and call services with userId', async () => {
-    mockGetClerkAuthUser.mockResolvedValueOnce({
+    mockGetUserScopedDb.mockResolvedValueOnce({
+      db: scopedDb,
       userId: 'cookie-user-456',
-      email: 'cookie@example.com',
+      organizationId: null,
     });
 
     const request = makeGetRequest();
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(mockGetBalance).toHaveBeenCalledWith('cookie-user-456');
-    expect(mockGetSubscription).toHaveBeenCalledWith('cookie-user-456');
+    expect(mockGetBalance).toHaveBeenCalledWith(scopedDb, 'cookie-user-456');
+    expect(mockGetSubscription).toHaveBeenCalledWith(scopedDb, 'cookie-user-456');
   });
 
   it('should return usage data for an authenticated user', async () => {

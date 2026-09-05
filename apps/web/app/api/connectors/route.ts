@@ -179,7 +179,7 @@ async function handleGetConnectors(request: NextRequest) {
     });
   }
 
-  const customConnectors = await getUserCustomConnectorSummaries(userId);
+  const customConnectors = await getUserCustomConnectorSummaries(db, userId);
   for (const c of customConnectors) {
     connectors.push({
       id: c.id,
