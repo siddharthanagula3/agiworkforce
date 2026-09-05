@@ -1,4 +1,3 @@
-
 interface CsrfTokenResponse {
   token: string;
   expiresIn: number;
@@ -16,6 +15,7 @@ export class CsrfTokenError extends Error {
 
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
+let inFlight: Promise<string> | null = null;
 
 async function fetchCsrfToken(): Promise<string> {
   const response = await fetch('/api/csrf', {
@@ -42,8 +42,12 @@ export async function getCsrfToken(): Promise<string> {
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
   }
+  if (inFlight) return inFlight;
 
-  return fetchCsrfToken();
+  inFlight = fetchCsrfToken().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
 }
 
 /**
@@ -65,4 +69,5 @@ export async function addCsrfHeaders(headers: HeadersInit = {}): Promise<Headers
 export function clearCsrfToken(): void {
   cachedToken = null;
   tokenExpiry = null;
+  inFlight = null;
 }

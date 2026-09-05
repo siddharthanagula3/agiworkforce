@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
@@ -39,6 +39,7 @@ vi.mock('@/lib/services/enterprise-collection-state', () => ({
   readOrganizationCollectionState: mocks.readOrganizationCollectionState,
 }));
 
+import { requireCsrfToken } from '@/lib/csrf';
 import { runAuthGate } from './auth-gate';
 
 function makeRequest() {
@@ -244,5 +245,54 @@ describe('runAuthGate enterprise collection grace', () => {
     const result = await runAuthGate(makeRequest());
 
     expect(result.ok).toBe(true);
+  });
+});
+
+const NO_DELAY_MS = 0;
+
+function flushPendingWork(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, NO_DELAY_MS);
+  });
+}
+
+describe('runAuthGate first-token cost', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'active',
+      plan_tier: 'basic',
+    });
+  });
+
+  it('reads the subscription alongside the csrf and rate-limit gates', async () => {
+    let releaseCsrf: (() => void) | undefined;
+    vi.mocked(requireCsrfToken).mockReturnValue(
+      new Promise<null>((resolve) => {
+        releaseCsrf = () => resolve(null);
+      }) as unknown as ReturnType<typeof requireCsrfToken>,
+    );
+
+    const pending = runAuthGate(makeRequest());
+    await flushPendingWork();
+
+    expect(mocks.getSubscription).toHaveBeenCalledTimes(1);
+
+    releaseCsrf?.();
+    await expect(pending).resolves.toMatchObject({ ok: true });
+  });
+
+  it('rejects an invalid csrf token even though the subscription read already started', async () => {
+    vi.mocked(requireCsrfToken).mockResolvedValue(
+      NextResponse.json({ error: 'csrf' }, { status: 403 }),
+    );
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    expect(mocks.withRateLimit).toHaveBeenCalledTimes(1);
   });
 });
