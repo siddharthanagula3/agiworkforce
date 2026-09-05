@@ -23,7 +23,9 @@ import {
   resolveSubscriptionAccess,
   type EnterpriseCollectionAccessState,
 } from '@/lib/services/subscription-access-policy';
+import { timePhase } from '@/lib/observability/phase-timer';
 import { resolveAuthenticatedSurface } from './request-surface';
+import { CHAT_TURN_PHASE } from './turn-phases';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
@@ -113,7 +115,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     return { ok: false, response: preflightResponse };
   }
 
-  const ipRateLimitResponse = await withRateLimit(request, 'llm-completion-ip');
+  const ipRateLimitResponse = await timePhase(CHAT_TURN_PHASE.rateLimitIp, () =>
+    withRateLimit(request, 'llm-completion-ip'),
+  );
   if (ipRateLimitResponse) return { ok: false, response: ipRateLimitResponse };
 
   const authHeader = request.headers.get('authorization');
@@ -138,9 +142,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   let userId: string;
   let surfaceClass: AuthenticatedSurfaceClass | undefined;
   try {
-    ({ userId, surfaceClass } = await getClerkAuthUser(request, {
-      apiKeyScope: 'inference:write',
-    }));
+    ({ userId, surfaceClass } = await timePhase(CHAT_TURN_PHASE.identityVerify, () =>
+      getClerkAuthUser(request, { apiKeyScope: 'inference:write' }),
+    ));
   } catch (error) {
     if (isMfaRequiredError(error)) {
       return {
@@ -186,13 +190,21 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const csrfError = await requireCsrfToken(request);
+  const subscriptionPromise = SubscriptionService.getSubscription(userId);
+  subscriptionPromise.catch(() => undefined);
+
+  const csrfError = await timePhase(CHAT_TURN_PHASE.csrfCheck, () => requireCsrfToken(request));
   if (csrfError) return { ok: false, response: csrfError };
 
-  const userRateLimitResponse = await withRateLimit(request, 'llm-completion', `user:${userId}`);
+  const userRateLimitResponse = await timePhase(CHAT_TURN_PHASE.rateLimitUser, () =>
+    withRateLimit(request, 'llm-completion', `user:${userId}`),
+  );
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
 
-  const subscription = await SubscriptionService.getSubscription(userId);
+  const subscription = await timePhase(
+    CHAT_TURN_PHASE.subscriptionLookup,
+    () => subscriptionPromise,
+  );
 
   if (!subscription) {
     return enforceManagedCloudSurface(request, {
