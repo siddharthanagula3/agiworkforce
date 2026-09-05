@@ -56,6 +56,7 @@
     "time-focus",
     "tool-display",
     "tool-events",
+    "tool-primitive",
     "url",
     "usage-vocabulary",
     "user",
@@ -98,5 +99,5 @@
     "tool-approval-resume",
     "tool-events"
   ],
-  "generatedProtocolTypeCount": 278
+  "generatedProtocolTypeCount": 299
 }
