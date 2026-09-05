@@ -35,6 +35,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 const mockPersistGeneratedFileBytes = vi.fn();
 vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: (...args: unknown[]) => mockPersistGeneratedFileBytes(...args),
+  MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 
 const mockPersistGeneratedFiles = vi.fn();

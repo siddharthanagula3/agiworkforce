@@ -41,6 +41,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     calculateCost: vi.fn(() => 7),
     calculateCostDollars: vi.fn(() => 0.07),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 // Keep chunksToOpenAiSse REAL; replace only buildToolLoopStream (the network
 // dispatch) with the recorded-events pipeline.

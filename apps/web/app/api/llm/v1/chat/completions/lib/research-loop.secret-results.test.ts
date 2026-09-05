@@ -25,6 +25,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: vi.fn(),
+  buildServingRouteId: vi.fn(),
 }));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
@@ -37,9 +38,14 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     calculateCost: vi.fn(() => 7),
     calculateCostDollars: vi.fn(() => 0.07),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: mocks.recordAuditEvent,
+  BLOCK_APPEAL_PATH: '/support',
+}));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveSecretHandlingPolicy: mocks.resolvePolicy,
   resolveZeroDataRetentionPolicy: async () => ({ required: false, organizationId: null }),
