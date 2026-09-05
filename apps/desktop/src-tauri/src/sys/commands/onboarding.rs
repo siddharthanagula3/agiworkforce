@@ -341,10 +341,6 @@ pub async fn set_user_preference(
     )
     .map_err(|e| format!("Failed to set user preference: {}", e))?;
 
-    if key == "crash_reporting_enabled" {
-        crate::sys::crash_reporter::set_enabled(value == "true");
-    }
-
     Ok(())
 }
 
