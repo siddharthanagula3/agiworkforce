@@ -22,6 +22,7 @@ import {
 } from '@/lib/web-search/required-search';
 import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
 import {
+  PLACES_UNAVAILABLE_SYSTEM_NOTICE,
   REQUIRED_PLACES_SYSTEM_NUDGE,
   resolvePlacesRequirement,
   resolveRequiredPlacesEnforcement,
@@ -3271,10 +3272,12 @@ export async function processRequest(
     model: chatRequest.model,
     tools: resolvedTools,
   });
-  if (placesEnforcement.mode === 'nudge') {
+  if (placesEnforcement.mode === 'nudge' || placesRequirement.unavailable) {
     internalMessages.unshift({
       role: 'system',
-      content: REQUIRED_PLACES_SYSTEM_NUDGE,
+      content: placesRequirement.unavailable
+        ? PLACES_UNAVAILABLE_SYSTEM_NOTICE
+        : REQUIRED_PLACES_SYSTEM_NUDGE,
       multimodal_content: undefined,
       tool_calls: undefined,
       tool_call_id: undefined,

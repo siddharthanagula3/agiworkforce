@@ -22,43 +22,41 @@ describe('resolvePlacesRequirement', () => {
         ...CONFIGURED,
         userMessage: 'best coffee near Union Square San Francisco open now',
       }),
-    ).toEqual({ offered: true, required: true, signal: 'proximity' });
+    ).toEqual({ offered: true, required: true, unavailable: false, signal: 'proximity' });
   });
 
   it('offers but does not require the tool for the ambiguous locality signal', () => {
     expect(
       resolvePlacesRequirement({ ...CONFIGURED, userMessage: 'best coffee in San Francisco' }),
-    ).toEqual({ offered: true, required: false, signal: 'locality' });
+    ).toEqual({ offered: true, required: false, unavailable: false, signal: 'locality' });
   });
 
   it('stays out of a turn with no place wording', () => {
     expect(
       resolvePlacesRequirement({ ...CONFIGURED, userMessage: 'summarise this pull request' }),
-    ).toEqual({ offered: false, required: false, signal: null });
+    ).toEqual({ offered: false, required: false, unavailable: false, signal: null });
   });
 
-  it('stays out when the server has no places provider', () => {
+  it('marks a place question unanswerable when the server has no places provider', () => {
     expect(
       resolvePlacesRequirement({
         ...CONFIGURED,
         backendConfigured: false,
         userMessage: 'pharmacies near me',
-      }).offered,
-    ).toBe(false);
+      }),
+    ).toEqual({ offered: false, required: false, unavailable: true, signal: 'proximity' });
   });
 
-  it('stays out of a non-streaming or tool-less request', () => {
-    expect(
-      resolvePlacesRequirement({ ...CONFIGURED, stream: false, userMessage: 'pharmacies near me' })
-        .offered,
-    ).toBe(false);
-    expect(
-      resolvePlacesRequirement({
-        ...CONFIGURED,
-        toolsCapable: false,
-        userMessage: 'pharmacies near me',
-      }).offered,
-    ).toBe(false);
+  it('stays out of a non-streaming or tool-less request entirely', () => {
+    for (const overrides of [{ stream: false }, { toolsCapable: false }]) {
+      expect(
+        resolvePlacesRequirement({
+          ...CONFIGURED,
+          ...overrides,
+          userMessage: 'pharmacies near me',
+        }),
+      ).toEqual({ offered: false, required: false, unavailable: false, signal: null });
+    }
   });
 });
 
