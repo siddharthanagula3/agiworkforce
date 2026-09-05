@@ -224,7 +224,7 @@ describe('toCanonicalChatRequest', () => {
   });
 
   describe('zero data retention metadata', () => {
-    it('sends openrouter data_collection deny when the workspace requires zero data retention', () => {
+    it('hands the adapter the requirement when the workspace requires zero data retention', () => {
       const processed = {
         ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter'),
         zeroDataRetentionOnly: true,
@@ -232,12 +232,10 @@ describe('toCanonicalChatRequest', () => {
 
       const chatRequest = toCanonicalChatRequest(processed);
 
-      expect(chatRequest.metadata).toMatchObject({
-        openRouterProviderRouting: { dataCollection: 'deny' },
-      });
+      expect(chatRequest.zeroDataRetentionOnly).toBe(true);
     });
 
-    it('does not set the deny flag when the workspace does not require zero data retention', () => {
+    it('leaves the requirement off when the workspace does not require zero data retention', () => {
       const processed = {
         ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter'),
         zeroDataRetentionOnly: false,
@@ -245,10 +243,11 @@ describe('toCanonicalChatRequest', () => {
 
       const chatRequest = toCanonicalChatRequest(processed);
 
+      expect(chatRequest.zeroDataRetentionOnly).toBeUndefined();
       expect(chatRequest.metadata).toBeUndefined();
     });
 
-    it('does not set the deny flag for a non-openrouter provider even when zero data retention is required', () => {
+    it('carries the requirement whatever the provider, so each adapter answers for itself', () => {
       const processed = {
         ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'anthropic'),
         zeroDataRetentionOnly: true,
@@ -256,6 +255,7 @@ describe('toCanonicalChatRequest', () => {
 
       const chatRequest = toCanonicalChatRequest(processed);
 
+      expect(chatRequest.zeroDataRetentionOnly).toBe(true);
       expect(chatRequest.metadata).toBeUndefined();
     });
   });

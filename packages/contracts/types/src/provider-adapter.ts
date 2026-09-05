@@ -167,6 +167,13 @@ export interface ChatRequest {
   stopSequences?: string[];
   thinking?: ThinkingConfig;
   effort?: Effort;
+  /**
+   * The caller's zero-retention requirement, the same signal Auto routing's
+   * admission reads. An adapter whose provider honours it per request must
+   * apply it here; admission only offers such a route to a requirement it has
+   * declared it can meet.
+   */
+  zeroDataRetentionOnly?: boolean;
   metadata?: Record<string, unknown>;
 }
 

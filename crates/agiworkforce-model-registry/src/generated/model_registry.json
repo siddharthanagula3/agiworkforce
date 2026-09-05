@@ -3998,7 +3998,12 @@
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
       "trustModes": ["byok"],
-      "features": {},
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      },
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
@@ -4007,7 +4012,12 @@
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {},
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      },
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
@@ -5795,7 +5805,7 @@
       "residencyRegions": ["us", "eu"],
       "source": "https://openrouter.ai/docs/features/privacy-and-logging",
       "verifiedOn": "2026-09-05",
-      "note": "Zero retention is a per-request or per-account data policy that restricts the upstream pool, not a default, and the docs state the setting has no bearing on OpenRouter's own handling. Regional processing is enterprise-only. Our adapter sends the deny policy only when a caller supplies it, so no route here guarantees zero retention today."
+      "note": "Zero retention is a per-request data policy that restricts the upstream pool, not a default, and the docs state the setting has no bearing on OpenRouter's own handling. The condition on this class is that the adapter honours the requirement per request: a request carrying the zero-retention requirement is sent with the deny data-collection policy, and the harness declares that through the zeroDataRetentionOnRequest feature, which is what admission reads. A request without the requirement sends nothing, so the pool narrows only for the organizations that asked."
     },
     "vercel_gateway": {
       "dataRetentionClass": "unknown",

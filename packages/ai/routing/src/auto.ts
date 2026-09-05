@@ -454,6 +454,9 @@ const MANAGED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
 const BLOCKED_COMMERCIAL_STATUS: RouteCommercialStatus = 'blocked';
 const EXPERIMENTAL_COMMERCIAL_STATUS: RouteCommercialStatus = 'experimental_only';
 const ZERO_RETENTION_DATA_RETENTION: RouteDataRetention = 'zero_retention';
+const CONDITIONAL_DATA_RETENTION: RouteDataRetention = 'conditional';
+const ZERO_DATA_RETENTION_ON_REQUEST_FEATURE = 'zeroDataRetentionOnRequest';
+const IMPLEMENTED_FEATURE = 'implemented';
 const TOKENS_PER_PRICED_MILLION = 1_000_000;
 const CENTS_PER_USD = 100;
 
@@ -561,8 +564,13 @@ function routeAdmissionRejections(
     reasons.push(`harness ${route.harnessId} is not executable on the calling runtime`);
   }
   if (request.zeroDataRetentionOnly) {
+    const honoursPerRequest =
+      route.dataRetention === CONDITIONAL_DATA_RETENTION &&
+      registry.harnesses[route.harnessId]?.features[ZERO_DATA_RETENTION_ON_REQUEST_FEATURE]
+        ?.implementation === IMPLEMENTED_FEATURE;
     const isZeroRetention =
       route.dataRetention === ZERO_RETENTION_DATA_RETENTION ||
+      honoursPerRequest ||
       (request.zeroDataRetentionProviders?.has(route.provider) ?? false);
     if (!isZeroRetention) {
       reasons.push(`route ${routeId} does not guarantee zero data retention`);
