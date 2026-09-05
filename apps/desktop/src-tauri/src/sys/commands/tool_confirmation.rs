@@ -6,7 +6,7 @@
 use crate::sys::security::tool_guard::{RiskLevel, ToolSafetyTier};
 use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard};
 use agiworkforce_protocol::tool_primitive::{
-    ToolApprovalReason, ToolPermission, ToolPermissionDecision, ToolPermissionScope,
+    ToolApprovalReason, ToolPermission, ToolPermissionScope,
 };
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine as _;
