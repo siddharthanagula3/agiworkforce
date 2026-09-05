@@ -322,14 +322,24 @@ pub fn format_model_pricing_report(model: &str) -> String {
 
     let base_label = tiers.first().map_or_else(
         || "Base".to_string(),
-        |tier| format!("Base (input tokens ≤ {})", tier.threshold_tokens),
+        |tier| {
+            format!(
+                "Base (input tokens ≤ {})",
+                tier.first_billable_token().saturating_sub(1)
+            )
+        },
     );
     let mut bands = vec![pricing_band(&base_label, base)];
     for (index, tier) in tiers.iter().enumerate() {
-        let start = tier.threshold_tokens.saturating_add(1);
+        let start = tier.first_billable_token();
         let label = tiers.get(index + 1).map_or_else(
             || format!("Input tokens ≥ {start}"),
-            |next| format!("Input tokens {start}–{}", next.threshold_tokens),
+            |next| {
+                format!(
+                    "Input tokens {start}–{}",
+                    next.first_billable_token().saturating_sub(1)
+                )
+            },
         );
         bands.push(pricing_band(&label, tier.pricing));
     }
@@ -716,34 +726,59 @@ mod tests {
         assert_eq!(o1, o2);
     }
 
+    /// Every banded model in the catalog, not one hand-picked multi-band model:
+    /// the report must open each band at its first billable token, close the
+    /// preceding one a token earlier, and carry a cache row per band.
     #[test]
     fn pricing_report_includes_all_catalog_input_bands_and_cache_rates() {
-        let model = crate::model_catalog::catalog()
+        let banded: Vec<_> = crate::model_catalog::catalog()
             .all()
             .iter()
-            .find(|model| crate::model_catalog::input_token_pricing_tiers(&model.id).len() >= 2)
-            .expect("catalog must contain a multi-band model");
-        let base = crate::model_catalog::token_pricing(&model.id, 0)
-            .expect("catalog model must expose base pricing");
-        let tiers = crate::model_catalog::input_token_pricing_tiers(&model.id);
-        let report = format_model_pricing_report(&model.id);
+            .map(|model| model.id.clone())
+            .filter(|id| !crate::model_catalog::input_token_pricing_tiers(id).is_empty())
+            .collect();
+        assert!(
+            !banded.is_empty(),
+            "catalog must contain a model with request-input pricing bands"
+        );
 
-        assert!(report.contains(&format!("≤ {}", tiers[0].threshold_tokens)));
-        for tier in &tiers {
-            assert!(report.contains(&tier.threshold_tokens.saturating_add(1).to_string()));
-            for rate in [
-                tier.pricing.input_price_per_1m,
-                tier.pricing.output_price_per_1m,
-                tier.pricing.cache_read_price_per_1m,
-                tier.pricing.cache_write_price_per_1m,
-            ] {
-                assert!(report.contains(&format_per_million_rate(rate)));
+        for id in banded {
+            let base = crate::model_catalog::token_pricing(&id, 0)
+                .expect("catalog model must expose base pricing");
+            let tiers = crate::model_catalog::input_token_pricing_tiers(&id);
+            let report = format_model_pricing_report(&id);
+
+            assert!(report.contains(&format!(
+                "≤ {}",
+                tiers[0].first_billable_token().saturating_sub(1)
+            )));
+            for tier in &tiers {
+                assert!(
+                    report.contains(&tier.first_billable_token().to_string()),
+                    "{id}"
+                );
+                for rate in [
+                    tier.pricing.input_price_per_1m,
+                    tier.pricing.output_price_per_1m,
+                    tier.pricing.cache_read_price_per_1m,
+                    tier.pricing.cache_write_price_per_1m,
+                ] {
+                    assert!(report.contains(&format_per_million_rate(rate)), "{id}");
+                }
             }
+            assert!(report.contains(&format_per_million_rate(base.cache_read_price_per_1m)));
+            assert!(report.contains(&format_per_million_rate(base.cache_write_price_per_1m)));
+            assert_eq!(
+                report.matches("Cache read:").count(),
+                tiers.len() + 1,
+                "{id}"
+            );
+            assert_eq!(
+                report.matches("Cache write:").count(),
+                tiers.len() + 1,
+                "{id}"
+            );
         }
-        assert!(report.contains(&format_per_million_rate(base.cache_read_price_per_1m)));
-        assert!(report.contains(&format_per_million_rate(base.cache_write_price_per_1m)));
-        assert_eq!(report.matches("Cache read:").count(), tiers.len() + 1);
-        assert_eq!(report.matches("Cache write:").count(), tiers.len() + 1);
     }
 
     #[test]

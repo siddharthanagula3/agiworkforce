@@ -248,7 +248,18 @@ pub struct TokenPricing {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InputTokenPricingTier {
     pub threshold_tokens: u64,
+    pub threshold_boundary: PricingTierThresholdBoundary,
     pub pricing: TokenPricing,
+}
+
+impl InputTokenPricingTier {
+    /// Lowest request-input token count billed at this band's rates.
+    pub fn first_billable_token(&self) -> u64 {
+        match self.threshold_boundary {
+            PricingTierThresholdBoundary::Inclusive => self.threshold_tokens,
+            PricingTierThresholdBoundary::Exclusive => self.threshold_tokens.saturating_add(1),
+        }
+    }
 }
 
 fn default_model_status() -> String {
@@ -345,10 +356,23 @@ struct SharedModelMetadata {
     long_context: Option<SharedLongContextPricing>,
 }
 
+/// Whether a band's threshold token count is billed at the band's rates or at
+/// the preceding band's, mirroring `PricingTierThresholdBoundary` in
+/// `packages/contracts/types/src/model-catalog.ts`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PricingTierThresholdBoundary {
+    #[default]
+    Exclusive,
+    Inclusive,
+}
+
 #[derive(Debug, Deserialize)]
 struct SharedLongContextPricing {
     #[serde(rename = "thresholdTokens")]
     threshold_tokens: u64,
+    #[serde(default, rename = "thresholdBoundary")]
+    threshold_boundary: PricingTierThresholdBoundary,
     #[serde(rename = "inputCost")]
     input_cost: f64,
     #[serde(rename = "outputCost")]
@@ -359,6 +383,15 @@ struct SharedLongContextPricing {
     cached_write: Option<f64>,
     #[serde(default, rename = "cached_write_1h")]
     _cached_write_1h: Option<f64>,
+}
+
+impl SharedLongContextPricing {
+    fn admits(&self, input_tokens: u64) -> bool {
+        match self.threshold_boundary {
+            PricingTierThresholdBoundary::Inclusive => input_tokens >= self.threshold_tokens,
+            PricingTierThresholdBoundary::Exclusive => input_tokens > self.threshold_tokens,
+        }
+    }
 }
 
 fn select_input_token_pricing_tier<'a>(
@@ -373,7 +406,7 @@ fn select_input_token_pricing_tier<'a>(
     };
     tiers
         .iter()
-        .filter(|tier| input_tokens > tier.threshold_tokens)
+        .filter(|tier| tier.admits(input_tokens))
         .max_by_key(|tier| tier.threshold_tokens)
 }
 
@@ -588,6 +621,11 @@ pub fn resolve_auto_model_with_context(
                 .fallbacks
                 .into_iter()
                 .map(|fallback| fallback.provider_model_id)
+                // Gateway and marketplace routes carry a namespaced upstream id
+                // that only a gateway harness can dispatch. The CLI rotates its
+                // BYOK chain through direct providers, so an id this catalog
+                // cannot resolve would be a fallback that fails on use.
+                .filter(|provider_model_id| find(provider_model_id).is_some())
                 .collect(),
         }),
         AutoRouteDecision::Unavailable(unavailable) => Err(format!(
@@ -1498,6 +1536,7 @@ pub fn input_token_pricing_tiers(model_id: &str) -> Vec<InputTokenPricingTier> {
         .iter()
         .map(|tier| InputTokenPricingTier {
             threshold_tokens: tier.threshold_tokens,
+            threshold_boundary: tier.threshold_boundary,
             pricing: TokenPricing {
                 input_price_per_1m: tier.input_cost,
                 output_price_per_1m: tier.output_cost,
@@ -1731,9 +1770,14 @@ mod tests {
         }
     }
 
-    fn fixture_pricing_tier(threshold_tokens: u64, input_cost: f64) -> SharedLongContextPricing {
+    fn fixture_pricing_tier(
+        threshold_tokens: u64,
+        threshold_boundary: PricingTierThresholdBoundary,
+        input_cost: f64,
+    ) -> SharedLongContextPricing {
         SharedLongContextPricing {
             threshold_tokens,
+            threshold_boundary,
             input_cost,
             output_cost: input_cost * 2.0,
             cached_input: None,
@@ -1745,8 +1789,8 @@ mod tests {
     #[test]
     fn ordered_input_pricing_tiers_select_the_greatest_strict_threshold() {
         let tiers = [
-            fixture_pricing_tier(128_000, 2.0),
-            fixture_pricing_tier(256_000, 4.0),
+            fixture_pricing_tier(128_000, PricingTierThresholdBoundary::Exclusive, 2.0),
+            fixture_pricing_tier(256_000, PricingTierThresholdBoundary::Exclusive, 4.0),
         ];
         let selected = |tokens| {
             select_input_token_pricing_tier(&tiers, None, tokens).map(|tier| tier.input_cost)
@@ -1757,59 +1801,103 @@ mod tests {
         assert_eq!(selected(256_001), Some(4.0));
     }
 
+    /// A band declared `thresholdBoundary: "inclusive"` bills the threshold
+    /// token itself, which is how the canonical `applyInputTokenPricingTiers`
+    /// in `packages/contracts/types/src/model-catalog.ts` reads it.
     #[test]
-    fn bundled_multi_band_pricing_uses_every_strict_boundary() {
-        let catalog = shared_catalog().expect("bundled shared catalog must deserialize");
-        let metadata = catalog
-            .models
-            .values()
-            .find(|metadata| metadata.input_token_pricing_tiers.len() >= 2)
-            .expect("bundled catalog must contain a multi-band model");
-        let model = find(&metadata.id).expect("tiered shared model must exist in CLI catalog");
-        let mut tiers: Vec<&SharedLongContextPricing> =
-            metadata.input_token_pricing_tiers.iter().collect();
-        tiers.sort_by_key(|tier| tier.threshold_tokens);
-        let first = tiers[0];
-        let second = tiers[1];
-        let first_threshold = u32::try_from(first.threshold_tokens)
-            .expect("catalog threshold must fit the CLI token counter");
-        let second_threshold = u32::try_from(second.threshold_tokens)
-            .expect("catalog threshold must fit the CLI token counter");
-        let base = TokenPricing {
-            input_price_per_1m: model.input_price_per_1m,
-            output_price_per_1m: model.output_price_per_1m,
-            cache_read_price_per_1m: model.cache_read_price_per_1m,
-            cache_write_price_per_1m: model.cache_write_price_per_1m,
+    fn inclusive_pricing_tiers_bill_the_threshold_token_itself() {
+        let tiers = [fixture_pricing_tier(
+            200_000,
+            PricingTierThresholdBoundary::Inclusive,
+            4.0,
+        )];
+        let selected = |tokens| {
+            select_input_token_pricing_tier(&tiers, None, tokens).map(|tier| tier.input_cost)
         };
-        let apply = |tier: &SharedLongContextPricing| TokenPricing {
-            input_price_per_1m: tier.input_cost,
-            output_price_per_1m: tier.output_cost,
-            cache_read_price_per_1m: tier.cached_input.unwrap_or(base.cache_read_price_per_1m),
-            cache_write_price_per_1m: tier.cached_write.unwrap_or(base.cache_write_price_per_1m),
-        };
+        assert_eq!(selected(199_999), None);
+        assert_eq!(selected(200_000), Some(4.0));
+        assert_eq!(selected(200_001), Some(4.0));
+    }
 
-        assert_eq!(token_pricing(&metadata.id, first_threshold), Some(base));
+    /// An absent `thresholdBoundary` deserializes to the canonical default, so
+    /// a mirror that drops the key keeps billing the threshold token at base.
+    #[test]
+    fn an_absent_threshold_boundary_defaults_to_exclusive() {
+        let tier: SharedLongContextPricing =
+            serde_json::from_str(r#"{"thresholdTokens":128000,"inputCost":2,"outputCost":4}"#)
+                .expect("a band without a boundary must deserialize");
         assert_eq!(
-            token_pricing(
-                &metadata.id,
-                first_threshold
-                    .checked_add(1)
-                    .expect("first threshold must allow a boundary token"),
-            ),
-            Some(apply(first))
+            tier.threshold_boundary,
+            PricingTierThresholdBoundary::Exclusive
         );
-        assert_eq!(
-            token_pricing(&metadata.id, second_threshold),
-            Some(apply(first))
-        );
-        assert_eq!(
-            token_pricing(
-                &metadata.id,
-                second_threshold
-                    .checked_add(1)
-                    .expect("second threshold must allow a boundary token"),
-            ),
-            Some(apply(second))
+        assert!(!tier.admits(128_000));
+        assert!(tier.admits(128_001));
+    }
+
+    /// Walk every band the shipped catalog declares, not one hand-picked model:
+    /// the token below a band's first billable token keeps the preceding rates
+    /// and the first billable token itself moves to the band's rates.
+    #[test]
+    fn every_bundled_pricing_band_bills_from_its_first_billable_token() {
+        let catalog = shared_catalog().expect("bundled shared catalog must deserialize");
+        let mut banded_models = 0usize;
+        let mut bands = 0usize;
+        for metadata in catalog.models.values() {
+            if metadata.input_token_pricing_tiers.is_empty() {
+                continue;
+            }
+            let Some(model) = find(&metadata.id) else {
+                continue;
+            };
+            let base = TokenPricing {
+                input_price_per_1m: model.input_price_per_1m,
+                output_price_per_1m: model.output_price_per_1m,
+                cache_read_price_per_1m: model.cache_read_price_per_1m,
+                cache_write_price_per_1m: model.cache_write_price_per_1m,
+            };
+            let apply = |tier: &SharedLongContextPricing| TokenPricing {
+                input_price_per_1m: tier.input_cost,
+                output_price_per_1m: tier.output_cost,
+                cache_read_price_per_1m: tier.cached_input.unwrap_or(base.cache_read_price_per_1m),
+                cache_write_price_per_1m: tier
+                    .cached_write
+                    .unwrap_or(base.cache_write_price_per_1m),
+            };
+            let mut tiers: Vec<&SharedLongContextPricing> =
+                metadata.input_token_pricing_tiers.iter().collect();
+            tiers.sort_by_key(|tier| tier.threshold_tokens);
+            for (index, tier) in tiers.iter().enumerate() {
+                let start = match tier.threshold_boundary {
+                    PricingTierThresholdBoundary::Inclusive => tier.threshold_tokens,
+                    PricingTierThresholdBoundary::Exclusive => tier.threshold_tokens + 1,
+                };
+                let start =
+                    u32::try_from(start).expect("catalog threshold must fit the CLI token counter");
+                let below = start
+                    .checked_sub(1)
+                    .expect("a pricing band must leave a token below it");
+                let expected_below = index
+                    .checked_sub(1)
+                    .map_or(base, |previous| apply(tiers[previous]));
+                assert_eq!(
+                    token_pricing(&metadata.id, below),
+                    Some(expected_below),
+                    "{} bills {below} tokens outside the band starting at {start}",
+                    metadata.id
+                );
+                assert_eq!(
+                    token_pricing(&metadata.id, start),
+                    Some(apply(tier)),
+                    "{} bills {start} tokens outside its own band",
+                    metadata.id
+                );
+                bands += 1;
+            }
+            banded_models += 1;
+        }
+        assert!(
+            banded_models > 0 && bands >= banded_models,
+            "the bundled catalog must expose request-input pricing bands, got {bands} across {banded_models} models"
         );
     }
 
@@ -1855,6 +1943,33 @@ mod tests {
         assert_eq!(selected.provider_model_id, expected.provider_model_id);
         assert_eq!(selected.upstream_provider, expected.provider);
         assert!(!selected.provider_model_id.starts_with("auto"));
+    }
+
+    /// The registry ladder spans gateway and marketplace routes whose upstream
+    /// id is namespaced. Those cannot be rotated to by a direct BYOK transport,
+    /// so the CLI adapter must drop them rather than hand out a dead fallback.
+    #[test]
+    fn cli_auto_fallbacks_are_all_dispatchable_catalog_models() {
+        let selected = resolve_auto_model(
+            "auto-economy",
+            RoutingTaskType::SimpleChat,
+            "byok",
+            TrustMode::Byok,
+        )
+        .expect("BYOK economy route should be available");
+
+        let mut seen = HashSet::new();
+        for provider_model_id in &selected.fallback_provider_model_ids {
+            assert!(
+                seen.insert(provider_model_id.clone()),
+                "duplicate fallback {provider_model_id}"
+            );
+            assert_ne!(*provider_model_id, selected.provider_model_id);
+            assert!(
+                find(provider_model_id).is_some(),
+                "fallback {provider_model_id} is not a dispatchable catalog model"
+            );
+        }
     }
 
     #[test]
