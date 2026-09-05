@@ -1,0 +1,35 @@
+export const CHAT_TURN_PHASE = {
+  authGate: 'auth_gate',
+  rateLimitIp: 'rate_limit_ip',
+  identityVerify: 'identity_verify',
+  csrfCheck: 'csrf_check',
+  rateLimitUser: 'rate_limit_user',
+  subscriptionLookup: 'subscription_lookup',
+  turnSlot: 'turn_slot',
+  policyGate: 'policy_gate',
+  spendGate: 'spend_gate',
+  processRequest: 'process_request',
+  // `redactAttributes` blanks any key containing "secret" or "credential", so a
+  // phase named for what it scans for reports its duration as "[redacted]".
+  secretGate: 'redaction_gate',
+  providerStartMark: 'provider_start_mark',
+  toolPermissions: 'tool_permissions',
+  toolCatalog: 'tool_catalog',
+  agentRunStart: 'agent_run_start',
+  durableStart: 'durable_start',
+  durableFirstEvent: 'durable_first_event',
+  providerStream: 'provider_stream',
+  bodyParse: 'body_parse',
+  ownershipAndSafety: 'ownership_and_safety',
+  attachmentsAndMemoryPolicy: 'attachments_and_memory_policy',
+  memoryEnrichment: 'memory_enrichment',
+  routeSelection: 'route_selection',
+  modelPolicy: 'model_policy',
+  skillCatalog: 'skill_catalog',
+  creditCheck: 'credit_check',
+  usageReservation: 'usage_reservation',
+  customInstructions: 'custom_instructions',
+  contextCompaction: 'context_compaction',
+} as const;
+
+export const CHAT_TURN_SPAN = 'chat.turn';
