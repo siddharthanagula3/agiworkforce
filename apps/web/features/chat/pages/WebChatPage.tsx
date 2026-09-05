@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
+import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
@@ -525,22 +527,6 @@ async function saveSystemMessage(params: {
   };
 }
 
-async function readChatMutationError(response: Response, fallback: string): Promise<string> {
-  const errorData = await response.json().catch(() => ({}));
-  if (
-    errorData &&
-    typeof errorData === 'object' &&
-    'error' in errorData &&
-    errorData.error &&
-    typeof errorData.error === 'object' &&
-    'message' in errorData.error &&
-    typeof errorData.error.message === 'string'
-  ) {
-    return errorData.error.message;
-  }
-  return fallback;
-}
-
 /**
  * Answers with the leaf the route settled on, which is the one thing this client
  * cannot work out for itself: it may hold a single page of a long conversation,
@@ -573,26 +559,6 @@ async function deleteConversationMessage(params: {
 
   const body = (await response.json().catch(() => ({}))) as { activeLeafMessageId?: string | null };
   return body.activeLeafMessageId ?? null;
-}
-
-async function putActiveLeafMessageId(params: {
-  conversationId: string;
-  activeLeafMessageId: string | null;
-  authToken: string;
-}): Promise<void> {
-  const headers = await addCsrfHeaders({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${params.authToken}`,
-  });
-  const response = await fetch(managedCloudConversationPath(params.conversationId), {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ activeLeafMessageId: params.activeLeafMessageId }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readChatMutationError(response, 'Failed to select this response'));
-  }
 }
 
 const subscribeToMessageVariantsMode = () => () => {};
