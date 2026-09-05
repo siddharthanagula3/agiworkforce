@@ -75,7 +75,7 @@ user's traffic happens to route to.
 **Free tier runs on a separate lane, not the paid budget system.**
 `apps/web/lib/services/free-lane/stage.ts` resolves an `auto-economy`
 selection against a small set of subsidized or free-pool routes
-(`apps/web/lib/server/free-pools`), ranks live candidates by a runtime
+(`apps/web/lib/server/free-pools.ts`), ranks live candidates by a runtime
 health/availability state, and returns `free_capacity_unavailable` with a
 `Retry-After` header when nothing is currently servable, recovering to
 upgrade or BYOK. Free traffic is priced far below the paid tiers' floor by
