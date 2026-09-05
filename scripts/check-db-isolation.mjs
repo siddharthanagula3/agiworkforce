@@ -1,80 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import { stripComments } from './lib/module-graph.mjs';
+import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
 import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-
-const USER_OWNED_TABLES = new Set([
-  'web_conversations',
-  'web_messages',
-  'web_artifacts',
-  'web_artifact_versions',
-  'user_projects',
-  'project_knowledge_files',
-  'user_memories',
-  'media_assets',
-  'scheduled_tasks',
-  'scheduled_task_runs',
-  'cloud_agent_runs',
-  'cloud_agent_events',
-  'cloud_agent_approval_checkpoints',
-  'cloud_agent_execution_operations',
-  'user_connectors',
-  'user_custom_connectors',
-  'connector_tool_permissions',
-  'api_keys',
-  'managed_usage_requests',
-  'managed_usage_request_extensions',
-  'usage_events',
-  'credit_transactions',
-  'token_credits',
-  'subscriptions',
-  'user_settings',
-  'conversation_tags',
-  'conversation_branches',
-  'conversation_branch_messages',
-  'chat_folders',
-  'message_bookmarks',
-  'message_reactions',
-  'search_history',
-  'notifications',
-  'user_shortcuts',
-  'support_tickets',
-  'support_ticket_replies',
-  'agent_tools',
-  'agent_tool_executions',
-  'desktop_devices',
-  'mobile_devices',
-  'sync_data',
-  'github_installations',
-  'messaging_connections',
-  'email_preferences',
-  'user_two_factor',
-  'account_sessions',
-  'security_audit_logs',
-  'feedback',
-  'referrals',
-  'feature_flags',
-  'waitlist',
-  'beta_redemptions',
-  'cloud_managed_waitlist',
-  'account_lockout_attempts',
-  'website_auto_economy_trial_usage',
-  'shared_conversations',
-  'shared_sessions',
-  'content_reports',
-  'cloud_code_agent_turns',
-  'device_authorization_codes',
-  'device_refresh_tokens',
-  'support_handoff_sessions',
-  'organization_shared_projects',
-  'organization_project_access',
-  'organization_shared_connectors',
-  'mcp_app_payloads',
-  'mcp_task_bindings',
-]);
 
 const SCOPE_TOKENS = [
   'user_id',
@@ -986,7 +917,7 @@ if (undecided.length > 0) {
     `A tenant-scoped table with no decision is isolated by nothing and policed by nothing:\n` +
       `pass 1 skips statements over tables it does not know are user-owned. Pick one, \n` +
       `  1. enable row level security in the migration (database-enforced), or\n` +
-      `  2. add it to USER_OWNED_TABLES in scripts/check-db-isolation.mjs so every statement\n` +
+      `  2. add it to USER_OWNED_TABLES in scripts/lib/db-isolation-tables.mjs so every statement\n` +
       `     over it must carry an owner predicate (app-enforced), or\n` +
       `  3. add it to CROSS_TENANT_TABLES WITH a reason it is deliberately cross-tenant.`,
   );
