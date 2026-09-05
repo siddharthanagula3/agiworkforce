@@ -56,3 +56,5 @@ const WEB_SETTINGS_SECTION_SET: ReadonlySet<string> = new Set<string>([
 export function isWebSettingsSection(value: string): boolean {
   return WEB_SETTINGS_SECTION_SET.has(value);
 }
+
+export const SETTINGS_DEEP_LINK_QUERY_KEY = 'settings';

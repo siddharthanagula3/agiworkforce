@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getGitHubCallbackNotice } from '@/features/connectors/lib/github-callback-notice';
-import { useSettingsModal } from './SettingsModalProvider';
+import { SETTINGS_DEEP_LINK_QUERY_KEY } from '@/features/settings/lib/web-settings-sections';
 
 interface SettingsModalRedirectProps {
   section: string;
@@ -12,7 +12,6 @@ interface SettingsModalRedirectProps {
 }
 
 export function SettingsModalRedirect({ section, returnTo = '/chat' }: SettingsModalRedirectProps) {
-  const { openSettings } = useSettingsModal();
   const router = useRouter();
   const searchParams = useSearchParams();
   const handledGitHubStatus = useRef<string | null>(null);
@@ -38,9 +37,10 @@ export function SettingsModalRedirect({ section, returnTo = '/chat' }: SettingsM
         toast.error('Top-up checkout was canceled. No balance was added.');
       }
     }
-    openSettings(section);
-    router.replace(returnTo);
-  }, [openSettings, router, returnTo, searchParams, section]);
+    const destination = new URLSearchParams();
+    destination.set(SETTINGS_DEEP_LINK_QUERY_KEY, section);
+    router.replace(`${returnTo}?${destination.toString()}`);
+  }, [router, returnTo, searchParams, section]);
 
   return null;
 }

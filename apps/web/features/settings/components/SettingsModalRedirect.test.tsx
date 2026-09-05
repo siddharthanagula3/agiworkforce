@@ -2,7 +2,6 @@ import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  openSettings: vi.fn(),
   replace: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
@@ -21,10 +20,6 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('./SettingsModalProvider', () => ({
-  useSettingsModal: () => ({ openSettings: mocks.openSettings }),
-}));
-
 import { SettingsModalRedirect } from './SettingsModalRedirect';
 
 describe('SettingsModalRedirect', () => {
@@ -33,14 +28,13 @@ describe('SettingsModalRedirect', () => {
     vi.clearAllMocks();
   });
 
-  it('preserves a successful GitHub callback outcome before opening connector settings', async () => {
+  it('preserves a successful GitHub callback outcome before carrying the section to /chat', async () => {
     render(<SettingsModalRedirect section="connectors" />);
 
     await waitFor(() => {
       expect(mocks.success).toHaveBeenCalledWith('GitHub connected.');
     });
-    expect(mocks.openSettings).toHaveBeenCalledWith('connectors');
-    expect(mocks.replace).toHaveBeenCalledWith('/chat');
+    expect(mocks.replace).toHaveBeenCalledWith('/chat?settings=connectors');
   });
 
   it.each([
@@ -61,7 +55,7 @@ describe('SettingsModalRedirect', () => {
     await waitFor(() => {
       expect(mocks.error).toHaveBeenCalledWith(message);
     });
-    expect(mocks.replace).toHaveBeenCalledWith('/chat');
+    expect(mocks.replace).toHaveBeenCalledWith('/chat?settings=connectors');
   });
 
   it('surfaces a confirmed top-up checkout return without claiming ledger settlement', async () => {
@@ -74,7 +68,7 @@ describe('SettingsModalRedirect', () => {
         'Top-up payment received. Your balance updates after payment confirmation.',
       );
     });
-    expect(mocks.openSettings).toHaveBeenCalledWith('billing');
+    expect(mocks.replace).toHaveBeenCalledWith('/chat?settings=billing');
   });
 
   it('reports a canceled top-up checkout as a no-charge outcome', async () => {
@@ -86,6 +80,16 @@ describe('SettingsModalRedirect', () => {
       expect(mocks.error).toHaveBeenCalledWith(
         'Top-up checkout was canceled. No balance was added.',
       );
+    });
+  });
+
+  it('carries an arbitrary section to /chat with no callback query present', async () => {
+    mocks.search = '';
+
+    render(<SettingsModalRedirect section="archived" />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith('/chat?settings=archived');
     });
   });
 });
