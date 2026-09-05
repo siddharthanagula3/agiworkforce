@@ -4,12 +4,14 @@ import { checkBotId } from 'botid/server';
 
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { isPlatformHosted } from '@/lib/server/hosting';
 import { getOptionalEnv } from '@shared/utils/env';
 
 import {
   BOT_CHALLENGE_ENFORCEMENT_ENV_VAR,
   type BotChallengedEndpoint,
 } from './bot-challenge-routes';
+import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './bot-protection';
 
 const ENFORCEMENT_TRUTHY_VALUES = new Set(['1', 'true', 'on', 'yes']);
 
@@ -25,7 +27,15 @@ const PASSING_VERDICT: BotChallengeVerdict = {
   isVerifiedBot: false,
 };
 
+export function isPlatformBotProtectionAvailable(): boolean {
+  return (
+    resolveBotProtectionMode(process.env, isPlatformHosted(process.env)) ===
+    BOT_PROTECTION_MODES.platform
+  );
+}
+
 export function isBotChallengeEnforced(): boolean {
+  if (!isPlatformBotProtectionAvailable()) return false;
   const raw = getOptionalEnv(BOT_CHALLENGE_ENFORCEMENT_ENV_VAR);
   return raw !== undefined && ENFORCEMENT_TRUTHY_VALUES.has(raw.trim().toLowerCase());
 }

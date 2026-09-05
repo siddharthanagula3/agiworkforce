@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { getOptionalEnv } from '@shared/utils/env';
+import { releaseSha } from '@/lib/server/hosting';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 
@@ -9,7 +10,7 @@ export const EXACT_RESPONSE_CACHE_ENABLED_ENV = 'AGI_EXACT_RESPONSE_CACHE_ENABLE
 export const EXACT_RESPONSE_CACHE_MECHANISM = 'agi_exact_response_cache';
 
 const REDIS_KEY_PREFIX = 'agi-xrc';
-const RELEASE_SHA_PATTERN = /^[0-9a-f]{7,40}$/;
+const UNKNOWN_RELEASE_SHA = 'unknown';
 const CACHE_ENTRY_SCHEMA_VERSION = 1;
 
 const DISABLED_ENV_VALUES: ReadonlySet<string> = new Set(['0', 'false', 'off', 'disabled']);
@@ -62,15 +63,7 @@ export interface ExactResponseCacheLookupResult {
 }
 
 function resolveReleaseShaForCacheInvalidation(): string {
-  const candidates = [
-    process.env['AGI_RELEASE_SHA'],
-    process.env['VERCEL_GIT_COMMIT_SHA'],
-    process.env['GITHUB_SHA'],
-  ];
-  const sha = candidates
-    .map((value) => value?.trim().toLowerCase() ?? '')
-    .find((value) => RELEASE_SHA_PATTERN.test(value));
-  return sha ?? 'unknown';
+  return releaseSha() ?? UNKNOWN_RELEASE_SHA;
 }
 
 export function isExactResponseCacheEnabled(): boolean {
