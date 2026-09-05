@@ -52,6 +52,7 @@ behaviour inspected by the lead, not tests.
 | Chat row menu drawn at the viewport corner                           | fix in flight, approved                       |
 | Search notice blamed the tool on a code question                     | fixed 33f517c90                               |
 | Code request answered without running code                           | fixed 81be75123, live recheck pending         |
+| Provider billing exhaustion shown as raw JSON with a dead Retry      | found live 21:46; D-14; fix in flight         |
 | Settings nav first row clipped under the search                      | fixed 5e2136d6f                               |
 | Dev routes under /dev in the production route tree                   | to verify                                     |
 | Operator, founder, local, waitlist, beta pages                       | to verify                                     |
@@ -61,16 +62,16 @@ behaviour inspected by the lead, not tests.
 
 ## Critical flows
 
-| Flow                                    | Verified                   | Failed or open                                                |
-| --------------------------------------- | -------------------------- | ------------------------------------------------------------- |
-| Sign in, sign up, SSO callback          | 2026-09-05 web and desktop |                                                               |
-| New chat with search and a table answer | 2026-09-05                 |                                                               |
-| Code execution on explicit request      |                            | invented result on 2026-09-05; fix committed, recheck pending |
-| Stop and retry a turn                   | 2026-09-05 (spec)          |                                                               |
-| Settings read and write                 | 2026-09-05 (captures)      | propagation of each setting into behaviour untested           |
-| Projects, schedules, library            | 2026-09-05 (captures)      | viewer corrections pending                                    |
-| Desktop tray, chord, preset rebind      | 2026-09-05 live            | waves 2 to 5 pending founder sign in                          |
-| Admin console                           |                            | never exercised with a workspace account                      |
+| Flow                                    | Verified                   | Failed or open                                                                                                                         |
+| --------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign in, sign up, SSO callback          | 2026-09-05 web and desktop |                                                                                                                                        |
+| New chat with search and a table answer | 2026-09-05                 |                                                                                                                                        |
+| Code execution on explicit request      |                            | recheck at 21:46 failed one layer earlier: Auto picked a route whose provider account is unfunded, raw JSON shown (D-14 fix in flight) |
+| Stop and retry a turn                   | 2026-09-05 (spec)          |                                                                                                                                        |
+| Settings read and write                 | 2026-09-05 (captures)      | propagation of each setting into behaviour untested                                                                                    |
+| Projects, schedules, library            | 2026-09-05 (captures)      | viewer corrections pending                                                                                                             |
+| Desktop tray, chord, preset rebind      | 2026-09-05 live            | waves 2 to 5 pending founder sign in                                                                                                   |
+| Admin console                           |                            | never exercised with a workspace account                                                                                               |
 
 ## Fixes completed today (by area)
 
