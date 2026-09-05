@@ -9,6 +9,7 @@ vi.mock('@shared/components/layout/WebAppShell', () => ({
 
 vi.mock('@/features/schedules', () => ({
   SchedulesPage: () => <div>Canonical Schedule Manager</div>,
+  SchedulesPageWithProjects: () => <div>Canonical Schedule Manager</div>,
 }));
 
 import SchedulesRoute, { metadata } from './page';
