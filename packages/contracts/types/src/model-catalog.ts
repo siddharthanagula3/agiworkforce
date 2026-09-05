@@ -662,6 +662,40 @@ export function getAutoRoutingProfiles(): AutoRoutingProfileView[] {
   });
 }
 
+/**
+ * Every routing profile as its own tier, which is not the same list as
+ * `getAutoRoutingProfiles`. That one answers "what may the model picker offer",
+ * and the registry marks only the umbrella default selectable there. A surface
+ * that asks the user to choose a tier directly, voice mode's Intelligence
+ * picker, needs all three, so this reads the per-profile aliases instead.
+ */
+export function getAutoRoutingProfileTiers(): AutoRoutingProfileView[] {
+  const policy = modelRegistry.policies.auto as unknown as {
+    profileOrder: Array<AutoRoutingProfileView['profile']>;
+    defaultAlias: string;
+    aliases: Record<
+      string,
+      { profile: AutoRoutingProfileView['profile']; label: string; description: string }
+    >;
+  };
+
+  return policy.profileOrder.map((profile) => {
+    const entry = Object.entries(policy.aliases).find(
+      ([id, alias]) => alias.profile === profile && id !== policy.defaultAlias,
+    );
+    if (!entry) {
+      throw new Error(`Auto routing profile "${profile}" has no tier alias in the registry`);
+    }
+    const [id, alias] = entry;
+    return {
+      id: id as AutoModeModelId,
+      profile,
+      label: alias.label,
+      description: alias.description,
+    };
+  });
+}
+
 export function getDefaultAutoRoutingProfile(): AutoRoutingProfileView {
   const policy = modelRegistry.policies.auto as unknown as { defaultAlias: string };
   const profile = getAutoRoutingProfiles().find(
