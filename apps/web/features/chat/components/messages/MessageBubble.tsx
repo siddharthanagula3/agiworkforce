@@ -246,6 +246,7 @@ interface Attachment {
 }
 
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
+const TURN_FAILED_LEAD = 'Response failed';
 const USER_MESSAGE_COLLAPSE_HEIGHT_PX = 320;
 
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
@@ -557,6 +558,13 @@ interface MessageBubbleProps {
   /** Keeps an unavailable browser capability out of the action row. */
   isReadAloudSupported?: boolean;
   isLatestTurn?: boolean;
+  /**
+   * Why this turn failed, and what to do about it. Both ride on the run's own
+   * summary row inside the trace rather than on a row of their own, so one
+   * failure reads as one line.
+   */
+  turnFailureReason?: string;
+  turnFailureActions?: React.ReactNode;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
   hasBranches?: boolean;
@@ -611,6 +619,8 @@ const MessageBubbleComponent = function MessageBubble({
   isReadingAloud = false,
   isReadAloudSupported = false,
   isLatestTurn = false,
+  turnFailureReason,
+  turnFailureActions,
   onRegenerateWithModel,
   regenerateModelOptions,
   hasBranches,
@@ -1574,8 +1584,28 @@ const MessageBubbleComponent = function MessageBubble({
               onReject={resolveToolApproval ? handleRejectTool : undefined}
               isApprovalExpired={() => approvalTurnExpired}
               onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}
+              {...(turnFailureReason ? { failureReason: turnFailureReason } : {})}
+              {...(turnFailureActions ? { failureActions: turnFailureActions } : {})}
               {...connectRetryHandler}
             />
+          )}
+
+          {/* A turn that failed before it produced any activity has no run
+              spine to hang the reason on, so it gets the same single row on
+              its own rather than losing the reason entirely. */}
+          {!isUser && !canonicalActivity && turnFailureReason && (
+            <div
+              role="alert"
+              className="mb-3 flex w-full min-w-0 items-center gap-2 py-1.5 text-sm text-muted-foreground"
+            >
+              <CircleAlert className="h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate">
+                {`${TURN_FAILED_LEAD}: ${turnFailureReason}`}
+              </span>
+              {turnFailureActions && (
+                <div className="flex shrink-0 items-center">{turnFailureActions}</div>
+              )}
+            </div>
           )}
 
           {/* Interleaved reasoning + tool flow */}
