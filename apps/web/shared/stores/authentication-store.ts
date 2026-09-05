@@ -250,7 +250,7 @@ async function resolveSession(): Promise<SessionResolution> {
         if (!result) {
           return { user: null, error: 'Empty auth response', settled: false };
         }
-        return { user: result.user, error: result.error, settled: true };
+        return { user: result.user, error: result.error, settled: !result.transient };
       }),
       timeoutPromise,
     ]);
@@ -313,8 +313,12 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) {
             logger.debug('No existing session:', error);
-            if (settled) clearStaleAuthStorage();
-            set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+            if (settled) {
+              clearStaleAuthStorage();
+              set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+            } else {
+              set((state) => ({ ...state, isLoading: false, initialized: true }));
+            }
           } else {
             logger.auth('Restored user session:', user?.email);
             set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
@@ -415,7 +419,18 @@ export const useAuthStore = create<AuthState>()(
         _lastResolveAttemptAt = Date.now();
         const { user, error, settled } = await resolveSession();
         if (error) {
-          set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+          // A failed refetch (a rate limit, a dropped connection) is not proof
+          // the session ended: only replace a previously resolved user with
+          // null when this attempt actually settled one way or the other. The
+          // sidebar account row reads this store, and clearing it on every
+          // transient error was showing "User" over an account that was
+          // signed in seconds earlier.
+          set((state) => ({
+            user: settled ? null : state.user,
+            isAuthenticated: settled ? false : state.isAuthenticated,
+            isLoading: false,
+            initialized: true,
+          }));
         } else {
           set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
         }

@@ -33,6 +33,14 @@ export interface RegisterData {
 export interface AuthResponse {
   user: AuthUser | null;
   error: string | null;
+  /**
+   * True when `error` describes a failure that says nothing about whether the
+   * session is still valid (a rate limit, a server error, a dropped
+   * connection) rather than a definitive "not authenticated" answer. Callers
+   * that cache the last known user should not erase it for a transient
+   * failure.
+   */
+  transient?: boolean;
 }
 
 class AuthService {
@@ -40,7 +48,12 @@ class AuthService {
     try {
       const response = await requestMe();
       if (!response.ok) {
-        return { user: null, error: 'Not authenticated' };
+        if (response.status === 401) return { user: null, error: 'Not authenticated' };
+        return {
+          user: null,
+          error: `Could not confirm the session (HTTP ${response.status}).`,
+          transient: true,
+        };
       }
       const data = parseMeResponse(await response.json());
       const authUser: AuthUser = {
@@ -58,7 +71,7 @@ class AuthService {
       return { user: authUser, error: null };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return { user: null, error: message };
+      return { user: null, error: message, transient: true };
     }
   }
 

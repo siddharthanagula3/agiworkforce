@@ -261,6 +261,36 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers Retry on a failed load and reloads on click', async () => {
+    const user = userEvent.setup();
+    const list = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('HTTP 429'))
+      .mockResolvedValueOnce({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [],
+        runtimes: [],
+      });
+    render(<CloudCodePage api={createApi({ list })} />);
+
+    expect(
+      await screen.findByText('You are going a little fast. Wait a moment and try again.'),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Retry/i }));
+
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(
+      screen.queryByText('You are going a little fast. Wait a moment and try again.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows the exact headless command and the harness budget for a runtime with a registered runner', async () => {
     const user = userEvent.setup();
     const api = createApi({

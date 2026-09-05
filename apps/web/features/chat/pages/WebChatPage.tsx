@@ -387,16 +387,14 @@ export function resolveChatAccountDisplay(
   const rawName = user?.name?.trim() || user?.email?.trim().split('@')[0]?.trim();
   const displayName = rawName ? normalizeDisplayName(rawName) : undefined;
 
-  if (!billingPolicyReady) {
-    if (displayName) {
-      return {
-        displayName,
-        userInitial: accountInitial(displayName),
-        tierLabel: null,
-        showFreeUpgrade: false,
-        isLoading: false,
-      };
-    }
+  // Billing readiness and identity readiness are two different fetches, and a
+  // rate-limited or still-in-flight identity request must not surface as a
+  // resolved account named "User": that reads as a real name, not a stalled
+  // fetch. Every source (the canonical /api/me store, the compatibility
+  // store, Clerk) that could produce a name is empty at once only while none
+  // of them has ever resolved, so this stays the loading placeholder rather
+  // than a settled empty state until one of them does.
+  if (!displayName) {
     return {
       displayName: 'Loading account',
       userInitial: '…',
@@ -406,12 +404,10 @@ export function resolveChatAccountDisplay(
     };
   }
 
-  const settledDisplayName = displayName || 'User';
-
-  if (subscriptionTier == null) {
+  if (!billingPolicyReady || subscriptionTier == null) {
     return {
-      displayName: settledDisplayName,
-      userInitial: accountInitial(settledDisplayName),
+      displayName,
+      userInitial: accountInitial(displayName),
       tierLabel: null,
       showFreeUpgrade: false,
       isLoading: false,
@@ -419,8 +415,8 @@ export function resolveChatAccountDisplay(
   }
 
   return {
-    displayName: settledDisplayName,
-    userInitial: accountInitial(settledDisplayName),
+    displayName,
+    userInitial: accountInitial(displayName),
     tierLabel: getBillingPlanPricing(subscriptionTier).label,
     showFreeUpgrade: subscriptionTier === 'free',
     isLoading: false,
