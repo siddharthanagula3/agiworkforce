@@ -61,7 +61,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
-import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
+import { EXECUTE_CODE_TOOL, e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
 
 function sseStreamFrom(lines: string[]): ReadableStream {
   const encoder = new TextEncoder();
@@ -180,7 +180,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
     const processed = makeProcessed();
     processed.chatRequest.code_execution = true;
-    processed.llmRequest.tool_choice = 'required';
+    processed.llmRequest.tool_choice = { type: 'function', function: { name: EXECUTE_CODE_TOOL } };
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
     expect(runCode).toHaveBeenCalledWith({ language: 'python', code: 'print(1+1)' });
@@ -194,7 +194,10 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     const firstCallRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
       tool_choice?: unknown;
     };
-    expect(firstCallRequest.tool_choice).toBe('required');
+    expect(firstCallRequest.tool_choice).toEqual({
+      type: 'function',
+      function: { name: EXECUTE_CODE_TOOL },
+    });
     expect(secondCallRequest.tool_choice).toBe('auto');
     const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
     expect(toolResultMessage?.content).toBe('2\n');
@@ -594,11 +597,14 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-123' }));
 
     expect(mockGetE2BExecutor).toHaveBeenCalledTimes(1);
-    expect(mockGetE2BExecutor).toHaveBeenCalledWith({
-      tenantId: 'managed-cloud',
-      userId: 'user-123',
-      conversationId: 'conv-123',
-    });
+    expect(mockGetE2BExecutor).toHaveBeenCalledWith(
+      {
+        tenantId: 'managed-cloud',
+        userId: 'user-123',
+        conversationId: 'conv-123',
+      },
+      expect.any(Function),
+    );
     expect(mockPauseE2BSession).toHaveBeenCalledWith({
       tenantId: 'managed-cloud',
       userId: 'user-123',

@@ -8,7 +8,15 @@ import {
 } from '@agiworkforce/types';
 
 import { resolveRequiredSearchEnforcement } from '@/lib/web-search/required-search';
+import { resolveRequiredExecutionEnforcement } from '@/lib/code-execution/required-execution';
+import {
+  EXECUTE_CODE_TOOL,
+  e2bExecutionToolDefs,
+  resolveCodeExecutionTools,
+} from '@/lib/e2b/execution-tools';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
+
+const EXECUTION_PLAN_TIER = 'pro';
 
 import * as requestProcessor from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
@@ -252,16 +260,15 @@ describe('forced tool choice compatibility', () => {
 
   it('never forces a code tool call on a model whose provider rejects it', () => {
     expect(
-      requestProcessor.resolveInitialManagedCodeToolChoice({
+      resolveRequiredExecutionEnforcement({
+        required: true,
         requestedToolChoice: undefined,
-        codeExecution: true,
         stream: true,
-        provider: 'deepseek',
         model: forcedChoiceIncompatibleModel,
-        e2bEnabled: true,
-        toolsCapable: true,
+        tools: e2bExecutionToolDefs(),
+        planTier: EXECUTION_PLAN_TIER,
       }),
-    ).toBeUndefined();
+    ).toEqual({ mode: 'nudge', attachedTool: 'generic-function' });
   });
 
   it('never forces a web-search tool call on a model whose provider rejects it', () => {
@@ -294,54 +301,38 @@ describe('forced tool choice compatibility', () => {
 });
 
 describe('managed code tool choice', () => {
-  it('requires an initial E2B tool call when Run code is enabled', () => {
-    expect(
-      requestProcessor.resolveInitialManagedCodeToolChoice({
-        requestedToolChoice: undefined,
-        codeExecution: true,
-        stream: true,
-        provider: 'openai',
-        e2bEnabled: true,
-        toolsCapable: true,
-      }),
-    ).toBe('required');
+  const enforcement = (over: Partial<Parameters<typeof resolveRequiredExecutionEnforcement>[0]>) =>
+    resolveRequiredExecutionEnforcement({
+      required: true,
+      requestedToolChoice: undefined,
+      stream: true,
+      model: undefined,
+      tools: e2bExecutionToolDefs(),
+      planTier: EXECUTION_PLAN_TIER,
+      ...over,
+    });
+
+  it('names the execution tool when Run code is enabled', () => {
+    expect(enforcement({})).toEqual({
+      mode: 'tool-choice',
+      toolChoice: { type: 'function', function: { name: EXECUTE_CODE_TOOL } },
+      attachedTool: 'generic-function',
+    });
   });
 
   it('preserves an explicit caller tool choice', () => {
-    expect(
-      requestProcessor.resolveInitialManagedCodeToolChoice({
-        requestedToolChoice: 'auto',
-        codeExecution: true,
-        stream: true,
-        provider: 'openai',
-        e2bEnabled: true,
-        toolsCapable: true,
-      }),
-    ).toBe('auto');
+    expect(enforcement({ requestedToolChoice: 'auto' }).mode).toBe('none');
   });
 
-  it('does not force unsupported Anthropic tool choice or disabled E2B execution', () => {
-    const base = {
-      requestedToolChoice: undefined,
-      codeExecution: true,
-      stream: true,
-      toolsCapable: true,
-    } as const;
+  it('asks in the prompt where a server-side tool takes no tool choice', () => {
+    expect(enforcement({ tools: resolveCodeExecutionTools('anthropic') })).toEqual({
+      mode: 'nudge',
+      attachedTool: 'anthropic-server',
+    });
+  });
 
-    expect(
-      requestProcessor.resolveInitialManagedCodeToolChoice({
-        ...base,
-        provider: 'anthropic',
-        e2bEnabled: true,
-      }),
-    ).toBeUndefined();
-    expect(
-      requestProcessor.resolveInitialManagedCodeToolChoice({
-        ...base,
-        provider: 'openai',
-        e2bEnabled: false,
-      }),
-    ).toBeUndefined();
+  it('does nothing when no execution tool was attached', () => {
+    expect(enforcement({ tools: [] }).mode).toBe('none');
   });
 });
 
