@@ -24,8 +24,9 @@ const COMMERCIAL_STATUSES = new Set([
   'experimental_only',
   'blocked',
 ]);
-const DATA_RETENTIONS = new Set(['zero_retention', 'provider_default']);
-const OPEN_ROUTER_PROVIDER_ID = 'open_router';
+const DATA_RETENTIONS = new Set(['zero_retention', 'provider_default', 'conditional', 'unknown']);
+const UNKNOWN_GOVERNANCE_VALUE = 'unknown';
+const ZERO_RETENTION = 'zero_retention';
 
 const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
 const declarations = JSON.parse(fs.readFileSync(MODEL_ROUTES_JSON, 'utf8'));
@@ -149,23 +150,36 @@ test('a declared additional route compiles to a second priced route on the same 
   }
 });
 
-test('every open_router route is classed zero_retention; every other route is provider_default', () => {
-  const openRouterRoutes = Object.values(registry.routes).filter(
-    (route) => route.provider === OPEN_ROUTER_PROVIDER_ID,
-  );
-  assert.ok(
-    openRouterRoutes.length > 0,
-    'the catalog must exercise at least one open_router route',
-  );
-  for (const route of openRouterRoutes) {
-    assert.equal(route.dataRetention, 'zero_retention');
+test('every route takes its data retention from its provider governance record', () => {
+  const routes = Object.entries(registry.routes);
+  assert.ok(routes.length > 0, 'the catalog must exercise at least one route');
+  for (const [routeId, route] of routes) {
+    const entry = registry.governance[route.provider];
+    assert.ok(entry, `${routeId} provider ${route.provider} has no governance record`);
+    assert.equal(
+      route.dataRetention,
+      entry.dataRetentionClass,
+      `${routeId} must carry the retention class its provider declares`,
+    );
   }
+});
 
-  const otherRoutes = Object.values(registry.routes).filter(
-    (route) => route.provider !== OPEN_ROUTER_PROVIDER_ID,
-  );
-  assert.ok(otherRoutes.length > 0);
-  for (const route of otherRoutes) {
-    assert.equal(route.dataRetention, 'provider_default');
+test('a zero-retention claim always cites a source and a day it was read', () => {
+  for (const [providerId, entry] of Object.entries(registry.governance)) {
+    if (entry.dataRetentionClass !== ZERO_RETENTION) continue;
+    assert.ok(entry.source, `${providerId} claims zero retention without a source`);
+    assert.ok(entry.verifiedOn, `${providerId} claims zero retention without a verified date`);
+  }
+});
+
+test('a governance record with nothing verified claims no source', () => {
+  for (const [providerId, entry] of Object.entries(registry.governance)) {
+    const everythingUnknown =
+      entry.dataRetentionClass === UNKNOWN_GOVERNANCE_VALUE &&
+      entry.zeroDataRetentionAvailability === UNKNOWN_GOVERNANCE_VALUE &&
+      entry.trainsOnInputs === UNKNOWN_GOVERNANCE_VALUE &&
+      entry.residencyRegions === null;
+    if (!everythingUnknown) continue;
+    assert.equal(entry.source, undefined, `${providerId} cites a source for nothing verified`);
   }
 });

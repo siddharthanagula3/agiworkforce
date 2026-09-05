@@ -1403,7 +1403,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1424,7 +1424,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1445,7 +1445,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1496,7 +1496,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1517,7 +1517,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1538,7 +1538,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1589,7 +1589,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1610,7 +1610,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1631,7 +1631,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1674,7 +1674,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1696,7 +1696,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1717,7 +1717,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1760,7 +1760,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1781,7 +1781,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1802,7 +1802,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1845,7 +1845,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1866,7 +1866,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1887,7 +1887,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1977,7 +1977,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1998,7 +1998,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2019,7 +2019,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2060,7 +2060,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2081,7 +2081,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2102,7 +2102,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2203,7 +2203,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2223,7 +2223,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2244,7 +2244,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2265,7 +2265,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2286,7 +2286,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2307,7 +2307,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2327,7 +2327,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2348,7 +2348,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2369,7 +2369,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2390,7 +2390,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2411,7 +2411,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2431,7 +2431,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2452,7 +2452,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2473,7 +2473,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2494,7 +2494,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2513,7 +2513,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2534,7 +2534,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2553,7 +2553,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2572,7 +2572,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2591,7 +2591,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2610,7 +2610,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -2631,7 +2631,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "video_tokens",
@@ -2719,7 +2719,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2740,7 +2740,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2783,7 +2783,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2803,7 +2803,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2824,7 +2824,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2845,7 +2845,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2866,7 +2866,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2887,7 +2887,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2909,7 +2909,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2930,7 +2930,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2951,7 +2951,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2972,7 +2972,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2993,7 +2993,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3023,7 +3023,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3044,7 +3044,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3065,7 +3065,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3085,7 +3085,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3106,7 +3106,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3127,7 +3127,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3148,7 +3148,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3169,7 +3169,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3189,7 +3189,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3209,7 +3209,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3238,7 +3238,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3259,7 +3259,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3360,7 +3360,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3389,7 +3389,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3410,7 +3410,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3431,7 +3431,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3549,7 +3549,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3568,7 +3568,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3587,7 +3587,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3606,7 +3606,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3626,7 +3626,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3647,7 +3647,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3668,7 +3668,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3689,7 +3689,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3709,7 +3709,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
-      "dataRetention": "zero_retention",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3730,7 +3730,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3751,7 +3751,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3771,7 +3771,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -3790,7 +3790,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
+      "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -5753,6 +5753,194 @@
       "codeExecution",
       "promptCaching"
     ]
+  },
+  "governance": {
+    "managed_cloud": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "openai": {
+      "dataRetentionClass": "provider_default",
+      "zeroDataRetentionAvailability": "on_request",
+      "trainsOnInputs": "never",
+      "residencyRegions": ["us", "eu", "ae"],
+      "source": "https://developers.openai.com/api/docs/guides/your-data",
+      "verifiedOn": "2026-09-05",
+      "note": "Abuse-monitoring logs are held up to 30 days unless the law requires longer. Zero data retention needs prior approval and drops the request from those logs. Regional processing covers the United States, the European Economic Area with Switzerland, and the United Arab Emirates; the other listed regions are storage only."
+    },
+    "anthropic": {
+      "dataRetentionClass": "provider_default",
+      "zeroDataRetentionAvailability": "on_request",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-personal-data",
+      "verifiedOn": "2026-09-05",
+      "note": "API inputs and outputs are deleted within 30 days of receipt, with exceptions for the Files API, custom agreements, usage-policy enforcement and legal holds. Zero data retention exists as a separate agreement. No residency region list is published."
+    },
+    "google": {
+      "dataRetentionClass": "provider_default",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "https://ai.google.dev/gemini-api/terms",
+      "verifiedOn": "2026-09-05",
+      "note": "On the paid tier Google does not use prompts, cached content, files or responses to improve its products. Prompts and responses are still logged for a limited period to detect abuse. The terms name no zero-retention option and no region list."
+    },
+    "open_router": {
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
+      "trainsOnInputs": "varies_by_route",
+      "residencyRegions": ["us", "eu"],
+      "source": "https://openrouter.ai/docs/features/privacy-and-logging",
+      "verifiedOn": "2026-09-05",
+      "note": "Zero retention is a per-request or per-account data policy that restricts the upstream pool, not a default, and the docs state the setting has no bearing on OpenRouter's own handling. Regional processing is enterprise-only. Our adapter sends the deny policy only when a caller supplies it, so no route here guarantees zero retention today."
+    },
+    "vercel_gateway": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "cheaperinference": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "cheaperinference_anthropic": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "xai": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "deepseek": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "deepseek_anthropic": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "qwen": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "moonshot": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "moonshot_anthropic": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "perplexity": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "zhipu": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "zhipu_anthropic": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "bedrock": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "nvidia_nim": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "groq": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "minimax": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "workers_ai": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "runway": {
+      "dataRetentionClass": "unknown",
+      "zeroDataRetentionAvailability": "unknown",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null
+    },
+    "ollama": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "AGENTS.md#6-trust-boundaries-and-security",
+      "verifiedOn": "2026-09-05",
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+    },
+    "lmstudio": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "AGENTS.md#6-trust-boundaries-and-security",
+      "verifiedOn": "2026-09-05",
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+    },
+    "llamacpp": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "AGENTS.md#6-trust-boundaries-and-security",
+      "verifiedOn": "2026-09-05",
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+    },
+    "vllm": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "AGENTS.md#6-trust-boundaries-and-security",
+      "verifiedOn": "2026-09-05",
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+    }
   },
   "pricing": {
     "gpt-5.6-sol": {

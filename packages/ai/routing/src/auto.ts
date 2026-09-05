@@ -49,7 +49,7 @@ export type RouteCommercialStatus =
   | 'experimental_only'
   | 'blocked';
 
-export type RouteDataRetention = 'zero_retention' | 'provider_default';
+export type RouteDataRetention = 'zero_retention' | 'provider_default' | 'conditional' | 'unknown';
 
 interface RegistryRoutePricing {
   currency: string;
