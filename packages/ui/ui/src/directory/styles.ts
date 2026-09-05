@@ -16,9 +16,6 @@ export const DIRECTORY_MENU_TRIGGER =
 export const DIRECTORY_CREATE_BUTTON =
   'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-export const DIRECTORY_ADD_BUTTON =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
-
 export const ENTRY_ICON_SIZE = 'size-8 shrink-0';
 
 export const LOGO_SURFACE = 'bg-logo-surface text-logo-on-surface';

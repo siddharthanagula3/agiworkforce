@@ -1,6 +1,5 @@
 'use client';
 
-import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -9,7 +8,6 @@ import { useConfirmAction } from '../primitives/ConfirmAction';
 import { AddMarketplaceDialog } from './AddMarketplaceDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
 import {
-  ADD_MARKETPLACE_LABEL,
   CONNECTOR_POPULAR_HEADING,
   INSTALL_CONFIRM_CANCEL_LABEL,
   INSTALL_CONFIRM_TITLE_PREFIX,
@@ -21,7 +19,7 @@ import {
   GENERIC_ERROR_COPY,
 } from './constants';
 import { DirectoryGrid } from './DirectoryGrid';
-import { DIRECTORY_ADD_BUTTON, DIRECTORY_CREATE_BUTTON } from './styles';
+import { DIRECTORY_CREATE_BUTTON } from './styles';
 import { DirectoryToolbar } from './DirectoryToolbar';
 import { selectDirectoryEntries, toggleFilterValue } from './filtering';
 import { PluginDetailView } from './PluginDetailView';
@@ -236,94 +234,85 @@ export function DirectoryPanel({
 
   function renderCatalog() {
     return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="text-base font-semibold text-foreground">
-          {DIRECTORY_SECTION_LABELS[section]}
-        </h2>
-        <div className="flex shrink-0 items-center gap-2">
-          {adapter.createEntry && data.createLabel ? (
-            <button
-              type="button"
-              onClick={() => adapter.createEntry?.(section)}
-              className={DIRECTORY_CREATE_BUTTON}
-            >
-              {data.createLabel}
-            </button>
-          ) : null}
-          {showAddMarketplace ? (
-            <button
-              type="button"
-              onClick={() => setMarketplaceOpen(true)}
-              aria-label={ADD_MARKETPLACE_LABEL}
-              className={DIRECTORY_ADD_BUTTON}
-            >
-              <Plus aria-hidden className="size-4" />
-            </button>
-          ) : null}
-          {headerActions}
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-base font-semibold text-foreground">
+            {DIRECTORY_SECTION_LABELS[section]}
+          </h2>
+          <div className="flex shrink-0 items-center gap-2">
+            {adapter.createEntry && data.createLabel ? (
+              <button
+                type="button"
+                onClick={() => adapter.createEntry?.(section)}
+                className={DIRECTORY_CREATE_BUTTON}
+              >
+                {data.createLabel}
+              </button>
+            ) : null}
+            {headerActions}
+          </div>
         </div>
-      </div>
 
-      <DirectoryToolbar
-        section={section}
-        query={query}
-        onQueryChange={setQuery}
-        sources={data.sources ?? []}
-        sourcesHeading={data.sourcesHeading}
-        activeSource={sourceId}
-        onSourceChange={setSourceId}
-        filterGroups={data.filterGroups ?? []}
-        selection={selection}
-        onToggleFilter={(groupId, value) =>
-          setSelection((prev) => toggleFilterValue(prev, groupId, value))
-        }
-        onClearFilters={() => setSelection({})}
-        sortOptions={data.sortOptions ?? DEFAULT_SORT_OPTIONS}
-        sort={sort}
-        onSortChange={setSort}
-      />
-
-      {data.notice ? (
-        <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-          {data.notice}
-        </p>
-      ) : null}
-
-      {installed.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {DIRECTORY_INSTALLED_HEADINGS[section]}
-          </h3>
-          <DirectoryGrid section={section} entries={installed} {...gridActions} />
-        </section>
-      ) : null}
-
-      {popular.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {CONNECTOR_POPULAR_HEADING}
-          </h3>
-          <DirectoryGrid section={section} entries={popular} {...gridActions} />
-        </section>
-      ) : null}
-
-      <section className="flex flex-col gap-2">
-        {installed.length > 0 || popular.length > 0 ? (
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {DIRECTORY_CATALOG_HEADINGS[section]}
-          </h3>
-        ) : null}
-        <DirectoryGrid
+        <DirectoryToolbar
           section={section}
-          entries={rest}
-          loading={data.loading}
-          error={data.error ?? null}
-          onRetry={data.retry}
-          {...gridActions}
+          query={query}
+          onQueryChange={setQuery}
+          sources={data.sources ?? []}
+          sourcesHeading={data.sourcesHeading}
+          activeSource={sourceId}
+          onSourceChange={setSourceId}
+          filterGroups={data.filterGroups ?? []}
+          selection={selection}
+          onToggleFilter={(groupId, value) =>
+            setSelection((prev) => toggleFilterValue(prev, groupId, value))
+          }
+          onClearFilters={() => setSelection({})}
+          sortOptions={data.sortOptions ?? DEFAULT_SORT_OPTIONS}
+          sort={sort}
+          onSortChange={setSort}
+          onAddMarketplace={showAddMarketplace ? () => setMarketplaceOpen(true) : undefined}
         />
-      </section>
-    </div>
+
+        {data.notice ? (
+          <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {data.notice}
+          </p>
+        ) : null}
+
+        {installed.length > 0 ? (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {DIRECTORY_INSTALLED_HEADINGS[section]}
+            </h3>
+            <DirectoryGrid section={section} entries={installed} {...gridActions} />
+          </section>
+        ) : null}
+
+        {popular.length > 0 ? (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {CONNECTOR_POPULAR_HEADING}
+            </h3>
+            <DirectoryGrid section={section} entries={popular} {...gridActions} />
+          </section>
+        ) : null}
+
+        <section className="flex flex-col gap-2">
+          {installed.length > 0 || popular.length > 0 ? (
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {DIRECTORY_CATALOG_HEADINGS[section]}
+            </h3>
+          ) : null}
+          <DirectoryGrid
+            section={section}
+            entries={rest}
+            loading={data.loading}
+            error={data.error ?? null}
+            onRetry={data.retry}
+            {...gridActions}
+          />
+        </section>
+      </div>
     );
   }
 
