@@ -22,6 +22,8 @@ const dbMocks = vi.hoisted(() => ({
   ),
 }));
 
+const SCOPED_USER_ID = 'user_123';
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -50,6 +52,18 @@ vi.mock('@/lib/server/neon-db', () => ({
     transaction: dbMocks.transaction,
   }),
 }));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: dbMocks.query,
+      execute: dbMocks.execute,
+      transaction: dbMocks.transaction,
+    },
+    userId: SCOPED_USER_ID,
+    organizationId: null,
+  })),
+}));
 vi.mock('stripe', () => ({
   default: class StripeMock {
     subscriptions = {
@@ -63,6 +77,7 @@ vi.mock('stripe', () => ({
 }));
 
 import { POST } from './route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 function makeRequest(billingInterval: 'monthly' | 'yearly' = 'monthly') {
   return new NextRequest('https://agiworkforce.com/api/upgrade/preview', {
@@ -242,7 +257,7 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).not.toHaveProperty('proration_date');
   });
 
-  it('reads the profile row through the claimed user scope when the subscription has no stored customer', async () => {
+  it('reads the profile row through the rls scoped handle when the subscription has no stored customer', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
         return [
@@ -260,15 +275,12 @@ describe('POST /api/upgrade/preview', () => {
 
     await POST(makeRequest());
 
-    expect(dbMocks.transaction).toHaveBeenCalled();
-    expect(dbMocks.execute).toHaveBeenCalledWith('set local role app_rls');
-    expect(dbMocks.query).toHaveBeenCalledWith(
-      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
-      ['user_123', ''],
-    );
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
     expect(dbMocks.query).toHaveBeenCalledWith(
       'select stripe_customer_id from profiles where id = $1 limit 1',
-      ['user_123'],
+      [SCOPED_USER_ID],
     );
   });
 

@@ -21,6 +21,8 @@ const dbMocks = vi.hoisted(() => ({
   ),
 }));
 
+const SCOPED_USER_ID = 'user_123';
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -40,6 +42,18 @@ vi.mock('@/lib/server/neon-db', () => ({
     execute: dbMocks.execute,
     transaction: dbMocks.transaction,
   }),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: dbMocks.query,
+      execute: dbMocks.execute,
+      transaction: dbMocks.transaction,
+    },
+    userId: SCOPED_USER_ID,
+    organizationId: null,
+  })),
 }));
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: (_metadata: unknown, priceId: string | null | undefined) =>
