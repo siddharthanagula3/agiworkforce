@@ -38,15 +38,15 @@ async function handleBatchGetTags(request: NextRequest) {
   let rows: { conversation_id: string; tag: string }[];
   try {
     rows = await db.query<{ conversation_id: string; tag: string }>(
-      `select ct.conversation_id, ct.tag
+      `select ct.conversation_id::text as conversation_id, ct.tag
          from conversation_tags ct
          join public.web_conversations c
-           on c.id::text = ct.conversation_id
+           on c.id = ct.conversation_id
           and c.user_id = $1
           and c.organization_id is not distinct from $3::uuid
           and c.deleted_at is null
         where ct.user_id = $1
-          and ct.conversation_id = any($2::text[])`,
+          and ct.conversation_id::text = any($2::text[])`,
       [userId, conversationIds, organizationId],
     );
   } catch (err) {
