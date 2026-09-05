@@ -9,6 +9,34 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-14 Billing exhaustion degrades gracefully for Auto, honestly for a pinned model
+
+- Question: what the product does when the platform's own account at a provider is out of money.
+- Evidence: the lead's live run at 21:46 UTC on 2026-09-05 resolved a coding request to a
+  frontier route whose provider answered 400 "credit balance is too low"; failover classified it
+  billing_exhausted, which is in the never-rotate set so an unfunded account does not spend
+  elsewhere in silence; the transcript showed "Failed: 400" followed by raw provider JSON and a
+  Retry that could not succeed; the unit economics doc shows spend is capped per dollar by the
+  reservation ceilings regardless of provider.
+- Current implementation: never rotate on billing_exhausted; the failure row prints the error
+  text as received.
+- Options: keep never-rotate for every request; rotate for every request; rotate only when the
+  user did not pin a model, and say so.
+- Decision: the third. An Auto request rotates once to the next admitted route and the receipt
+  names what served; a pinned model fails with plain copy naming the model as unavailable for a
+  platform-side reason, with switch and retry links; every observation is recorded in the
+  credential scope as unfunded so the operator console can alert; the resolver avoids an unfunded
+  provider for new Auto requests through observed health, never through admission; no failure row
+  anywhere renders raw provider text.
+- Why: the user's goal is the product; the spend concern that motivated never-rotate is already
+  held by the per dollar ceilings, and the operator concern is met by making the state visible
+  rather than by failing users.
+- Tradeoff: a burst of Auto traffic can move to a dearer provider until an operator funds the
+  first; the ceilings bound the cost of that hour.
+- Reversibility: high; a one line set membership change restores never-rotate.
+- Revisit trigger: an unfunded state lasting longer than a day, or a cost spike attributable to
+  the rotation.
+
 ## D-2026-09-05-13 Admission for models no tier list names is derived, not absent
 
 - Question: what a managed plan may run when the registry holds hundreds of models the curated
