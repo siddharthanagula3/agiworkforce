@@ -357,6 +357,9 @@ function buildAssistantErrorContent(message: string): string {
 
 const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 
+const STOPPED_FINISH_REASON = 'stopped';
+const RATE_LIMITED_SAVE_STATUS = 429;
+
 type AuthTokenProvider = () => Promise<string>;
 
 type SaveRetryOptions = ManagedCloudSaveMessageOptions;
@@ -406,8 +409,8 @@ async function saveMessageToDb(
     return { id: saved.id };
   } catch (error) {
     if (error instanceof ManagedCloudChatHttpError) {
-      if (error.status === 429) {
-        console.warn('[useChatStream] Message persistence rate-limited (429); turn not saved');
+      if (error.status === RATE_LIMITED_SAVE_STATUS) {
+        console.warn('[useChatStream] Message persistence rate-limited; every retry was refused');
       }
       throw new Error(`Failed to save message to DB: ${error.status}`);
     }
@@ -415,14 +418,13 @@ async function saveMessageToDb(
   }
 }
 
+/**
+ * A save that failed after its retries is not something the user can fix, and
+ * a toast about it lands over the transcript it is complaining about. Neither
+ * leader shows one. The failure is logged so it is still diagnosable.
+ */
 function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): void {
   console.error(`[useChatStream] Failed to save ${kind} message:`, error);
-  toast.error(
-    kind === 'assistant'
-      ? "Couldn't save this response, it may not appear after you reload."
-      : "Couldn't save your message, it may not appear after you reload.",
-    { duration: 6000 },
-  );
 }
 
 export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
@@ -1565,7 +1567,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.cloudApproval ||
         metadata.thinkingContent ||
         (metadata.thinkingSegments?.length ?? 0) > 0 ||
-        metadata.streamError),
+        metadata.streamError ||
+        metadata.finishReason === STOPPED_FINISH_REASON),
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
     saveMessageToDb(
@@ -2351,12 +2354,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       // new content meant a continuation stopped early kept no stopped marker,
       // so the message announced "Response complete" over partial text and lost
       // its Continue action, leaving only Regenerate.
-      finishReason = 'stopped';
+      finishReason = STOPPED_FINISH_REASON;
       patchMessageMeta({ finishReason });
       publishCloudRunReference({ state: 'cancelled' });
-      if (fullAssistantContent || currentAgentActivity) {
-        persistAssistant(fullAssistantContent);
-      }
+      persistAssistant(fullAssistantContent);
     }
 
     if (researchActive && isAbort) {

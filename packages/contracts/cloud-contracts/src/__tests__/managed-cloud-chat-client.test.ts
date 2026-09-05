@@ -140,7 +140,7 @@ describe('createManagedCloudChatClient', () => {
     expect(calls[1]?.[1].headers).toEqual({ Authorization: 'Bearer token' });
   });
 
-  it('does not retry a rate-limited message write', async () => {
+  it('retries a rate-limited message write until its attempts are spent', async () => {
     const fetchImpl = vi.fn(async () => response({ error: 'rate limited' }, 429));
     const client = createManagedCloudChatClient({ fetchImpl });
 
@@ -154,7 +154,7 @@ describe('createManagedCloudChatClient', () => {
         },
       ),
     ).rejects.toThrow('rate limited');
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it('carries an explicit organization or Personal scope on reads and mutations', async () => {
