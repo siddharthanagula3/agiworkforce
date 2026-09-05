@@ -26,6 +26,8 @@ describe('Layout Store', () => {
 
   it('exposes no member without a production consumer', () => {
     expect(Object.keys(useUIStore.getState()).sort()).toEqual([
+      'agiWorkAutonomyNoticeDismissed',
+      'dismissAgiWorkAutonomyNotice',
       'reset',
       'setSidebarCollapsed',
       'sidebarCollapsed',
@@ -55,10 +57,15 @@ describe('Layout Store, persisted v1 blobs', () => {
 
     expect(rehydrated.getState().sidebarCollapsed).toBe(true);
     expect(Object.keys(rehydrated.getState()).sort()).toEqual([
+      'agiWorkAutonomyNoticeDismissed',
+      'dismissAgiWorkAutonomyNotice',
       'reset',
       'setSidebarCollapsed',
       'sidebarCollapsed',
     ]);
+    // The autonomy disclosure is owed once per session, so a persisted blob
+    // must never come back with it already dismissed.
+    expect(rehydrated.getState().agiWorkAutonomyNoticeDismissed).toBe(false);
     localStorage.removeItem('agi-ui-store');
   });
 });
