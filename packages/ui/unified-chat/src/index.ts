@@ -169,6 +169,51 @@ export type {
   ComposerVoiceController,
   ComposerVoiceState,
 } from './components/ChatInput';
+export { VoiceOrb, VoiceOrbCanvas } from './components/VoiceOrb';
+export type { VoiceOrbProps, VoiceOrbCanvasProps } from './components/VoiceOrb';
+export {
+  advanceBargeIn,
+  advanceSpeechWindow,
+  BARGE_IN_LEVEL_THRESHOLD,
+  BARGE_IN_SAMPLE_COUNT,
+  INITIAL_SPEECH_WINDOW,
+  INITIAL_VOICE_SESSION_STATE,
+  isVoiceSessionActive,
+  MIN_UTTERANCE_MS,
+  ORB_CANVAS_SIZE,
+  ORB_FOCUS_SCALE,
+  ORB_GROW_IN_MS,
+  ORB_SEED_SIZE,
+  ORB_SPHERE_SIZE,
+  ORB_STATE,
+  ORB_STATE_LABEL,
+  orbStateForStatus,
+  orbStateLabel,
+  PLAYBACK_START_TIMEOUT_MS,
+  SILENCE_LEVEL_THRESHOLD,
+  SILENCE_WINDOW_MS,
+  SPEECH_LEVEL_THRESHOLD,
+  UTTERANCE_CANCEL_WINDOW_MS,
+  voiceSessionReducer,
+  VOICE_SESSION_EVENT,
+  VOICE_SESSION_STATUS,
+} from './voice/voice-session-machine';
+export type {
+  BargeInResult,
+  OrbState,
+  SpeechWindowResult,
+  SpeechWindowState,
+  VoiceSessionEvent,
+  VoiceSessionState,
+  VoiceSessionStatus,
+} from './voice/voice-session-machine';
+export {
+  composerVoiceStateFromTranscription,
+  composerVoiceStateLabel,
+  isComposerVoiceStateBusy,
+  orbStateForComposerVoiceState,
+} from './voice/composer-voice-visual';
+export type { ComposerVoiceTranscriptionFlags } from './voice/composer-voice-visual';
 export { AgentControl } from './components/AgentControl';
 export type { AgentControlProps } from './components/AgentControl';
 export { ModelSelector } from './components/ModelSelector';
