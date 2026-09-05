@@ -77,6 +77,10 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
 const mockGrantSummaries = vi.fn();
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: (...a: unknown[]) => mockGrantSummaries(...a),
+  ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
+  getConnectorOAuthGrant: vi.fn(),
+  revokeConnectorOAuthGrant: vi.fn(),
+  updateConnectorOAuthGrantTokens: vi.fn(),
 }));
 
 import {

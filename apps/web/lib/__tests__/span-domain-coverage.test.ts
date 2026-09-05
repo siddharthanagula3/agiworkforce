@@ -17,6 +17,8 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: vi.fn(() => 'test-provider'),
+  buildServerProviderAdapter: vi.fn(),
+  toGenericUpstreamError: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-code-agent-service', () => ({
   executePersistedAgentTurn: vi.fn(),
