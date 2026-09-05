@@ -11,6 +11,18 @@ export {
   type MenuItemProps,
 } from './Menu';
 export { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
+export {
+  PROJECT_ICON_REGISTRY,
+  DEFAULT_PROJECT_ICON_ID,
+  resolveProjectIcon,
+  hasKnownProjectIcon,
+  PROJECT_ACCENT_REGISTRY,
+  DEFAULT_PROJECT_ACCENT_ID,
+  resolveProjectAccentHex,
+  nearestProjectAccentId,
+  type ProjectIconEntry,
+  type ProjectAccentEntry,
+} from './project-icons';
 export type {
   SidebarSession,
   SidebarProject,

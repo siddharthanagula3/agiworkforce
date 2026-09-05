@@ -1,10 +1,18 @@
 'use client';
 
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  useMenuKeyboard,
+  PROJECT_ICON_REGISTRY,
+  PROJECT_ACCENT_REGISTRY,
+  resolveProjectIcon,
+  resolveProjectAccentHex,
+  hasKnownProjectIcon,
+  nearestProjectAccentId,
+} from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
+import { MoreHorizontal, Settings2, Pin, PinOff, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProjectHeader, useChatProjectStore as useProjectStore } from '@agiworkforce/unified-chat';
 import {
@@ -37,30 +45,6 @@ const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
   'violet',
   'zinc',
 ]);
-
-const PROJECT_ICON_OPTIONS: readonly string[] = [
-  '📁',
-  '💻',
-  '📝',
-  '🔬',
-  '📚',
-  '🎨',
-  '💼',
-  '🏠',
-  '🚀',
-  '⭐️',
-  '🛠️',
-  '🌱',
-];
-
-const PROJECT_ACCENT_HEX: Record<ProjectAccentColor, string> = {
-  emerald: '#10b981',
-  sky: '#0ea5e9',
-  amber: '#f59e0b',
-  rose: '#f43f5e',
-  violet: '#8b5cf6',
-  zinc: '#71717a',
-};
 
 function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
   if (!value) return null;
@@ -142,7 +126,6 @@ export default function ProjectDetailPage() {
   const handleUpdateAppearance = useCallback(
     async (patch: { iconEmoji?: string; accentColor?: ProjectAccentColor }) => {
       if (!project) return;
-      setAppearancePickerOpen(false);
       updateProject(project.id, patch);
       try {
         await webManagedCloudProjects.updateProject(project.id, patch);
@@ -574,7 +557,7 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* ---------------------------------------------------------------- */}
-          {/* Hero: FolderOpen icon + project name                             */}
+          {/* Hero: project icon + name                                        */}
           {/* ---------------------------------------------------------------- */}
           <div
             style={{
@@ -603,28 +586,27 @@ export default function ProjectDetailPage() {
                   height: 56,
                   borderRadius: 16,
                   border: 'none',
-                  background: project.accentColor
-                    ? `${PROJECT_ACCENT_HEX[project.accentColor]}22`
-                    : 'var(--agi-bg-3)',
+                  background: `${resolveProjectAccentHex(project.accentColor)}22`,
                   cursor: 'pointer',
                 }}
               >
-                {project.iconEmoji ? (
-                  <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">
-                    {project.iconEmoji}
-                  </span>
-                ) : (
-                  <FolderOpen
-                    style={{
-                      width: 28,
-                      height: 28,
-                      color: project.accentColor
-                        ? PROJECT_ACCENT_HEX[project.accentColor]
-                        : 'var(--agi-amber)',
-                    }}
-                    aria-hidden="true"
-                  />
-                )}
+                {(() => {
+                  const TriggerIcon = resolveProjectIcon(
+                    hasKnownProjectIcon(project.iconEmoji) ? project.iconEmoji : null,
+                  );
+                  return (
+                    <span
+                      style={{
+                        display: 'flex',
+                        width: 28,
+                        height: 28,
+                        color: resolveProjectAccentHex(project.accentColor),
+                      }}
+                    >
+                      <TriggerIcon className="h-[28px] w-[28px]" aria-hidden="true" />
+                    </span>
+                  );
+                })()}
               </button>
 
               {appearancePickerOpen && (
@@ -637,7 +619,7 @@ export default function ProjectDetailPage() {
                     top: 'calc(100% + 8px)',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    width: 240,
+                    width: 272,
                     padding: 12,
                     borderRadius: 12,
                     border: '1px solid var(--agi-rule-strong)',
@@ -650,53 +632,8 @@ export default function ProjectDetailPage() {
                   <p
                     style={{
                       margin: '0 0 6px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: 'var(--agi-ink-2)',
-                    }}
-                  >
-                    Icon
-                  </p>
-                  <div
-                    role="listbox"
-                    aria-label="Project icon"
-                    style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}
-                  >
-                    {PROJECT_ICON_OPTIONS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        role="option"
-                        aria-selected={project.iconEmoji === emoji}
-                        onClick={() => void handleUpdateAppearance({ iconEmoji: emoji })}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 30,
-                          height: 30,
-                          fontSize: 16,
-                          border: 'none',
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          background:
-                            project.iconEmoji === emoji ? 'var(--agi-bg-3)' : 'transparent',
-                        }}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p
-                    style={{
-                      margin: '0 0 6px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
+                      fontSize: 12,
+                      fontWeight: 600,
                       color: 'var(--agi-ink-2)',
                     }}
                   >
@@ -705,29 +642,158 @@ export default function ProjectDetailPage() {
                   <div
                     role="listbox"
                     aria-label="Project colour"
-                    style={{ display: 'flex', gap: 6 }}
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}
                   >
-                    {(Object.keys(PROJECT_ACCENT_HEX) as ProjectAccentColor[]).map((color) => (
+                    {PROJECT_ACCENT_REGISTRY.map((accent) => (
                       <button
-                        key={color}
+                        key={accent.id}
                         type="button"
                         role="option"
-                        aria-selected={project.accentColor === color}
-                        aria-label={color}
-                        onClick={() => void handleUpdateAppearance({ accentColor: color })}
+                        aria-selected={project.accentColor === accent.id}
+                        aria-label={accent.label}
+                        title={accent.label}
+                        onClick={() =>
+                          void handleUpdateAppearance({
+                            accentColor: accent.id as ProjectAccentColor,
+                          })
+                        }
                         style={{
-                          width: 24,
-                          height: 24,
+                          width: 26,
+                          height: 26,
                           borderRadius: '50%',
                           cursor: 'pointer',
-                          background: PROJECT_ACCENT_HEX[color],
+                          background: accent.hex,
                           border:
-                            project.accentColor === color
+                            project.accentColor === accent.id
                               ? '2px solid var(--agi-ink)'
                               : '2px solid transparent',
+                          padding: 0,
                         }}
                       />
                     ))}
+                    <label
+                      title="Custom colour"
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        border: '2px dashed var(--agi-rule-strong)',
+                        background:
+                          'conic-gradient(from 0deg, #f43f5e, #f59e0b, #10b981, #0ea5e9, #8b5cf6, #f43f5e)',
+                      }}
+                    >
+                      <input
+                        type="color"
+                        aria-label="Custom colour"
+                        onChange={(e) =>
+                          void handleUpdateAppearance({
+                            accentColor: nearestProjectAccentId(
+                              e.target.value,
+                            ) as ProjectAccentColor,
+                          })
+                        }
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <p
+                    style={{
+                      margin: '0 0 6px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--agi-ink-2)',
+                    }}
+                  >
+                    Icon
+                  </p>
+                  <div
+                    role="listbox"
+                    aria-label="Project icon"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(6, 1fr)',
+                      gap: 4,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {PROJECT_ICON_REGISTRY.map((entry) => {
+                      const isSelected = (project.iconEmoji ?? 'folder') === entry.id;
+                      const Icon = entry.Icon;
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          aria-label={entry.label}
+                          title={entry.label}
+                          onClick={() => void handleUpdateAppearance({ iconEmoji: entry.id })}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 32,
+                            height: 32,
+                            border: 'none',
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--agi-bg-3)' : 'transparent',
+                            color: isSelected
+                              ? resolveProjectAccentHex(project.accentColor)
+                              : 'var(--agi-ink-2)',
+                          }}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: '1px solid var(--agi-rule-strong)',
+                      marginTop: 4,
+                      paddingTop: 6,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      data-testid="project-appearance-close"
+                      onClick={() => {
+                        setAppearancePickerOpen(false);
+                        appearanceTriggerRef.current?.focus();
+                      }}
+                      style={{
+                        display: 'flex',
+                        width: '100%',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 4px',
+                        border: 'none',
+                        borderRadius: 8,
+                        background: 'transparent',
+                        color: 'var(--agi-ink-2)',
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <X style={{ width: 14, height: 14 }} aria-hidden="true" />
+                      Close
+                    </button>
                   </div>
                 </div>
               )}

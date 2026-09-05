@@ -289,6 +289,16 @@ export {
   type SidebarTemporalGroup,
   type SidebarNavItem,
   type SidebarIconComponent,
+  PROJECT_ICON_REGISTRY,
+  DEFAULT_PROJECT_ICON_ID,
+  resolveProjectIcon,
+  hasKnownProjectIcon,
+  PROJECT_ACCENT_REGISTRY,
+  DEFAULT_PROJECT_ACCENT_ID,
+  resolveProjectAccentHex,
+  nearestProjectAccentId,
+  type ProjectIconEntry,
+  type ProjectAccentEntry,
 } from './sidebar';
 export {
   SETTINGS_NAV,
