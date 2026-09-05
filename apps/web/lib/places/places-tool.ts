@@ -174,6 +174,7 @@ export async function executePlacesSearch(
       ...(context.timeZone ? { timeZone: context.timeZone } : {}),
       providerId: outcome.providerId,
       attribution: outcome.attribution,
+      ...(outcome.termsUrl ? { termsUrl: outcome.termsUrl } : {}),
       places: outcome.places,
     },
   };
