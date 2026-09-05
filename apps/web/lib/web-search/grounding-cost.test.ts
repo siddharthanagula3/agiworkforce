@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
@@ -14,6 +15,8 @@ import {
   recordGoogleGroundingCost,
 } from './grounding-cost';
 
+const GOOGLE_MODEL = requireProviderDefaultModel('google');
+
 /** 14,000 microUSD per call, rounded once over the whole batch rather than per call. */
 const PUBLISHED_CENTS_PER_CALL = 1;
 const PUBLISHED_CENTS_PER_FIVE_CALLS = 7;
@@ -28,23 +31,27 @@ describe('googleGroundingCostCents', () => {
 
   it('prices a call from the published rate when nothing is configured', () => {
     delete process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
-    expect(googleGroundingCostCents(1)).toBe(PUBLISHED_CENTS_PER_CALL);
-    expect(googleGroundingCostCents(5)).toBe(PUBLISHED_CENTS_PER_FIVE_CALLS);
+    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_CALL);
+    expect(googleGroundingCostCents(5, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_FIVE_CALLS);
   });
 
   it('honours a configured unit price', () => {
     process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] = '20000';
-    expect(googleGroundingCostCents(1)).toBe(2);
+    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(2);
   });
 
   it('falls back to the published rate on an unusable override', () => {
     process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] = 'not-a-number';
-    expect(googleGroundingCostCents(1)).toBe(PUBLISHED_CENTS_PER_CALL);
+    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_CALL);
   });
 
   it('prices nothing for calls that never landed beyond the pool', () => {
-    expect(googleGroundingCostCents(0)).toBe(0);
-    expect(googleGroundingCostCents(-1)).toBe(0);
+    expect(googleGroundingCostCents(0, GOOGLE_MODEL)).toBe(0);
+    expect(googleGroundingCostCents(-1, GOOGLE_MODEL)).toBe(0);
+  });
+
+  it('prices an unrecognized model from the older, lower-volume tier', () => {
+    expect(googleGroundingCostCents(1, 'not-a-registered-model')).toBe(4);
   });
 });
 
@@ -59,6 +66,7 @@ describe('recordGoogleGroundingCost', () => {
       userId: 'user_1',
       organizationId: 'org_1',
       providerId: 'google',
+      model: GOOGLE_MODEL,
       turnRef: 'turn-1',
       billableCalls: 1,
       delivered: true,
@@ -67,6 +75,7 @@ describe('recordGoogleGroundingCost', () => {
     expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
     const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event['provider']).toBe('google');
+    expect(event['model']).toBe(GOOGLE_MODEL);
     expect(event['sourceRef']).toBe('google_grounding:turn-1');
     expect(event['taskOutcome']).toBe('delivered');
     expect(event['actualCostCents']).toBe(PUBLISHED_CENTS_PER_CALL);
@@ -80,6 +89,7 @@ describe('recordGoogleGroundingCost', () => {
     await recordGoogleGroundingCost({
       userId: 'user_1',
       providerId: 'google',
+      model: GOOGLE_MODEL,
       turnRef: 'turn-2',
       billableCalls: 2,
       delivered: false,
@@ -94,6 +104,7 @@ describe('recordGoogleGroundingCost', () => {
     await recordGoogleGroundingCost({
       userId: 'user_1',
       providerId: 'google',
+      model: GOOGLE_MODEL,
       turnRef: 'turn-3',
       billableCalls: 0,
       delivered: true,
@@ -109,6 +120,7 @@ describe('recordGoogleGroundingCost', () => {
       recordGoogleGroundingCost({
         userId: 'user_1',
         providerId: 'google',
+        model: GOOGLE_MODEL,
         turnRef: 'turn-4',
         billableCalls: 1,
         delivered: true,
