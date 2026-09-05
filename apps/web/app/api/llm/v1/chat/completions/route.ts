@@ -47,14 +47,25 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
 import {
+  claimDurableStreamWithinBudget,
   claimLiveDurableStream,
+  isDurableFirstEventBudgetCoolingDown,
   isDurableTransportCoolingDown,
+  resolveDurableFirstEventBudgetMs,
+  DURABLE_FIRST_EVENT_BUDGET_EVENT,
 } from '@/lib/workflows/durable-stream-liveness';
 
 class DurableStreamStalledError extends Error {
-  constructor() {
-    super('Durable workflow stream produced no first event before the liveness timeout');
+  readonly budgetExceeded: boolean;
+
+  constructor(budgetExceeded: boolean) {
+    super(
+      budgetExceeded
+        ? 'Durable workflow stream produced no first event within the chat first-byte budget'
+        : 'Durable workflow stream produced no first event before the liveness timeout',
+    );
     this.name = 'DurableStreamStalledError';
+    this.budgetExceeded = budgetExceeded;
   }
 }
 import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
@@ -583,14 +594,11 @@ async function dispatchChatCompletions(
     const mcpTools = [...operatorTools, ...connectorTools];
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
-    if (loopInputs.shouldRun || processed.chatRequest.work_mode === 'agiwork') {
+    const isAgiWorkTurn = processed.chatRequest.work_mode === 'agiwork';
+
+    if (loopInputs.shouldRun || isAgiWorkTurn) {
       const startedRun = await timePhase(CHAT_TURN_PHASE.agentRunStart, () =>
-        beginCloudAgentRun(
-          request,
-          userId,
-          processed,
-          processed.chatRequest.work_mode === 'agiwork' ? 'agiwork' : 'chat',
-        ),
+        beginCloudAgentRun(request, userId, processed, isAgiWorkTurn ? 'agiwork' : 'chat'),
       );
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
@@ -672,7 +680,13 @@ async function dispatchChatCompletions(
       // path cannot double-execute
       // (`startCloudAgentWorkflowExecution` cancels the run it started if the
       // durable attach fails).
-      if (areDurableInitialTurnsEnabled() && !isDurableTransportCoolingDown()) {
+      const durableBudgetApplies = !isAgiWorkTurn;
+      const durableFirstEventBudgetMs = resolveDurableFirstEventBudgetMs();
+      if (
+        areDurableInitialTurnsEnabled() &&
+        !isDurableTransportCoolingDown() &&
+        !(durableBudgetApplies && isDurableFirstEventBudgetCoolingDown())
+      ) {
         try {
           const workflow = await timePhase(CHAT_TURN_PHASE.durableStart, () =>
             startCloudAgentWorkflowExecution({
@@ -687,11 +701,21 @@ async function dispatchChatCompletions(
             }),
           );
           const live = await timePhase(CHAT_TURN_PHASE.durableFirstEvent, () =>
-            claimLiveDurableStream(workflow.readable),
+            durableBudgetApplies
+              ? claimDurableStreamWithinBudget(workflow.readable, durableFirstEventBudgetMs)
+              : claimLiveDurableStream(workflow.readable),
           );
           if (!live) {
-            await workflow.cancel().catch(() => undefined);
-            throw new DurableStreamStalledError();
+            // Correctness: the inline turn below must not start until this
+            // cancel is issued, or the same turn runs twice and settles twice.
+            if (durableBudgetApplies) {
+              await timePhase(CHAT_TURN_PHASE.durableBudgetFallback, () =>
+                workflow.cancel().catch(() => undefined),
+              );
+            } else {
+              await workflow.cancel().catch(() => undefined);
+            }
+            throw new DurableStreamStalledError(durableBudgetApplies);
           }
           const durableHeaders = baseAgentHeaders();
           durableHeaders['X-AGI-Tool-Loop'] = 'durable';
@@ -705,9 +729,19 @@ async function dispatchChatCompletions(
           // A turn with no reservation at all is an ordinary, expected miss, not
           // an incident, so it is not logged at error.
           const unreserved = error instanceof CloudAgentWorkflowBillingUnavailableError;
+          const overBudget = error instanceof DurableStreamStalledError && error.budgetExceeded;
           const details = { error, userId, requestId: processed.requestId, runId: run.id };
           if (unreserved) {
             logger.debug(details, 'Agent turn carries no reservation; running request-scoped');
+          } else if (overBudget) {
+            logger.warn(
+              {
+                ...details,
+                event: DURABLE_FIRST_EVENT_BUDGET_EVENT,
+                budgetMs: durableFirstEventBudgetMs,
+              },
+              'Durable transport missed the chat first-byte budget; serving this turn request-scoped',
+            );
           } else {
             logger.error(
               details,

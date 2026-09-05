@@ -193,7 +193,12 @@ export async function runCloudAgentTurn(
   try {
     const workflow = await startCloudAgentWorkflowExecution(input);
     const live = await claimLiveDurableStream(workflow.readable);
-    if (!live) return degrade('workflow_stream_stalled');
+    if (!live) {
+      // Correctness: the inline turn must not start until this cancel is issued,
+      // or the same turn runs twice and settles twice.
+      await workflow.cancel().catch(() => undefined);
+      return degrade('workflow_stream_stalled');
+    }
     return {
       transport: 'durable',
       workflowRunId: workflow.workflowRunId,

@@ -1,17 +1,60 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/logger', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
+import { logger } from '@/lib/logger';
 import {
+  claimDurableStreamWithinBudget,
   claimLiveDurableStream,
+  isDurableFirstEventBudgetCoolingDown,
   isDurableTransportCoolingDown,
   recordDurableTransportClaim,
   recordDurableTransportStall,
+  resolveDurableFirstEventBudgetMs,
+  DURABLE_FIRST_EVENT_BUDGET_ENV,
   DURABLE_STALL_COOLDOWN_MS,
   DURABLE_STREAM_OPEN_FRAME,
 } from '../durable-stream-liveness';
+
+const DEFAULT_BUDGET_MS = 2_000;
+const TINY_BUDGET_MS = 20;
+const OUTLIVES_BUDGET_MS = 200;
+const CONFIGURED_BUDGET_MS = 750;
 
 const enc = new TextEncoder();
 
 function neverEmits(): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({ start() {} });
+}
+
+function emitsAfter(
+  delayMs: number,
+  frame: string,
+): {
+  stream: ReadableStream<Uint8Array>;
+  cancelled: () => boolean;
+  delivered: () => boolean;
+} {
+  let cancelled = false;
+  let delivered = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        delivered = true;
+        controller.enqueue(enc.encode(frame));
+        controller.close();
+      }, delayMs);
+    },
+    cancel() {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    },
+  });
+  return { stream, cancelled: () => cancelled, delivered: () => delivered };
 }
 
 function emits(...frames: string[]): ReadableStream<Uint8Array> {
@@ -95,5 +138,86 @@ describe('durable stream liveness', () => {
     recordDurableTransportStall(now);
     expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).toBe(true);
     expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).toBe(false);
+  });
+});
+
+describe('durable first-event budget', () => {
+  beforeEach(() => {
+    recordDurableTransportClaim();
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('defaults the budget to two seconds', () => {
+    expect(resolveDurableFirstEventBudgetMs()).toBe(DEFAULT_BUDGET_MS);
+  });
+
+  it('takes a configured budget from the environment', () => {
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(CONFIGURED_BUDGET_MS));
+    expect(resolveDurableFirstEventBudgetMs()).toBe(CONFIGURED_BUDGET_MS);
+  });
+
+  it('reports an unusable budget rather than silently mis-timing the turn', () => {
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, 'soon');
+    expect(resolveDurableFirstEventBudgetMs()).toBe(DEFAULT_BUDGET_MS);
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
+
+  it('abandons the durable stream once the budget is spent', async () => {
+    const durable = emitsAfter(OUTLIVES_BUDGET_MS, 'data: late\n\n');
+    await expect(
+      claimDurableStreamWithinBudget(durable.stream, TINY_BUDGET_MS),
+    ).resolves.toBeNull();
+    expect(durable.cancelled()).toBe(true);
+  });
+
+  it('ignores a durable event that arrives after the budget switched the turn', async () => {
+    const durable = emitsAfter(OUTLIVES_BUDGET_MS, 'data: late\n\n');
+    const claimed = await claimDurableStreamWithinBudget(durable.stream, TINY_BUDGET_MS);
+    expect(claimed).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, OUTLIVES_BUDGET_MS * 2));
+    expect(durable.delivered()).toBe(false);
+  });
+
+  it('claims the durable stream when the first event beats the budget', async () => {
+    const live = await claimDurableStreamWithinBudget(emits('data: one\n\n'), DEFAULT_BUDGET_MS);
+    expect(live).not.toBeNull();
+    await expect(drain(live!)).resolves.toBe('data: one\n\n');
+  });
+
+  it('leaves the stall breaker closed so an agi work run keeps the durable path', async () => {
+    await claimDurableStreamWithinBudget(neverEmits(), TINY_BUDGET_MS);
+    expect(isDurableTransportCoolingDown()).toBe(false);
+    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+  });
+
+  it('spends the budget once, then bypasses the durable attempt for the cooldown', async () => {
+    await claimDurableStreamWithinBudget(neverEmits(), TINY_BUDGET_MS);
+    const now = Date.now();
+    expect(isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).toBe(true);
+    expect(isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).toBe(false);
+  });
+
+  it('opens the budget breaker when a stall is recorded', () => {
+    recordDurableTransportStall();
+    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+  });
+
+  it('opens the budget breaker when a claim outlives the budget', async () => {
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(TINY_BUDGET_MS));
+    const durable = emitsAfter(OUTLIVES_BUDGET_MS, 'data: slow\n\n');
+    const live = await claimLiveDurableStream(durable.stream, OUTLIVES_BUDGET_MS * 5);
+    expect(live).not.toBeNull();
+    expect(isDurableTransportCoolingDown()).toBe(false);
+    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+  });
+
+  it('closes both breakers when a claim lands inside the budget', async () => {
+    recordDurableTransportStall();
+    await claimDurableStreamWithinBudget(emits('data: one\n\n'), DEFAULT_BUDGET_MS);
+    expect(isDurableTransportCoolingDown()).toBe(false);
+    expect(isDurableFirstEventBudgetCoolingDown()).toBe(false);
   });
 });
