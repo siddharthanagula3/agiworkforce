@@ -126,12 +126,12 @@ describe('CommandPalette', () => {
 
     it('has the correct placeholder', () => {
       renderPalette();
-      expect(screen.getByPlaceholderText('Type a command or search…')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Search chats and actions')).toBeInTheDocument();
     });
 
     it('filters commands based on query', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
 
       fireEvent.change(input, { target: { value: 'settings' } });
 
@@ -141,30 +141,28 @@ describe('CommandPalette', () => {
 
     it('shows "No commands found." when query has no match', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
 
       fireEvent.change(input, { target: { value: 'zzzzzzz_impossible' } });
 
       expect(screen.getByText('No commands found.')).toBeInTheDocument();
     });
 
-    it('shows clear button when query is non-empty', () => {
+    it('shows a Close button in the field, not an ESC chip', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search…');
-
-      fireEvent.change(input, { target: { value: 'chat' } });
-      expect(screen.getByLabelText('Clear search')).toBeInTheDocument();
+      expect(screen.getByLabelText('Close')).toBeInTheDocument();
+      expect(screen.queryByText('ESC')).not.toBeInTheDocument();
     });
 
-    it('clicking clear button resets the query', () => {
-      renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search…') as HTMLInputElement;
+    it('clicking Close closes the palette regardless of query', () => {
+      const onOpenChange = vi.fn();
+      renderPalette(true, onOpenChange);
+      const input = screen.getByPlaceholderText('Search chats and actions') as HTMLInputElement;
 
       fireEvent.change(input, { target: { value: 'chat' } });
-      expect(input.value).toBe('chat');
+      fireEvent.click(screen.getByLabelText('Close'));
 
-      fireEvent.click(screen.getByLabelText('Clear search'));
-      expect(input.value).toBe('');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
 
@@ -278,7 +276,7 @@ describe('CommandPalette', () => {
 
     it('pressing Escape in sub-menu returns to main menu', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
 
       fireEvent.click(screen.getByText('Switch AI Model'));
 
@@ -312,7 +310,7 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
       fireEvent.keyDown(input, { key: 'Escape' });
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -322,7 +320,7 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
       fireEvent.change(input, { target: { value: 'New Chat' } });
 
       fireEvent.keyDown(input, { key: 'Enter' });
@@ -335,7 +333,7 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      const input = screen.getByPlaceholderText('Type a command or search…');
+      const input = screen.getByPlaceholderText('Search chats and actions');
       fireEvent.change(input, { target: { value: 'Go to' } });
 
       fireEvent.keyDown(input, { key: 'ArrowDown' });
@@ -346,15 +344,19 @@ describe('CommandPalette', () => {
   });
 
   describe('footer', () => {
-    it('shows result count', () => {
+    it('renders no footer hint row or result count, matching the leaders', () => {
       renderPalette();
-      const footer = screen.getByText(/results/);
-      expect(footer).toBeInTheDocument();
+      expect(screen.queryByText(/results$/)).not.toBeInTheDocument();
+      expect(screen.queryByText('navigate')).not.toBeInTheDocument();
+      expect(screen.queryByText('select')).not.toBeInTheDocument();
     });
+  });
 
-    it('shows ESC shortcut in footer', () => {
+  describe('section labels', () => {
+    it('renders group labels in sentence case, not tracked uppercase', () => {
       renderPalette();
-      expect(screen.getByText('close')).toBeInTheDocument();
+      const label = screen.getByText('Quick actions');
+      expect(label.className).not.toMatch(/uppercase|tracking-/);
     });
   });
 });
