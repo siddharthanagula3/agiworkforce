@@ -14,6 +14,8 @@ vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(async (e: Record<string, unknown>) => {
     securityEvents.push(e);
   }),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 const service = vi.hoisted(() => ({
@@ -100,7 +102,9 @@ describe('goodwill credit grants', () => {
 
   it('rejects a zero, negative, or fractional amount', async () => {
     for (const amountCents of [0, -500, 10.5]) {
-      const res = await POST(post({ action: 'grant-credits', userId: 'u1', amountCents, reason: 'x' }));
+      const res = await POST(
+        post({ action: 'grant-credits', userId: 'u1', amountCents, reason: 'x' }),
+      );
       expect(res.status).toBeGreaterThanOrEqual(400);
     }
     expect(service.grantBonusCredits).not.toHaveBeenCalled();

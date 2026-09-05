@@ -46,6 +46,13 @@ vi.mock('@/lib/server/object-storage', () => ({
   copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,
   deletePrivateObject: mockDeletePrivateObject,
   StoredObjectTooLargeError,
+  deleteObject: vi.fn(),
+  getObject: vi.fn(),
+  getObjectStream: vi.fn(),
+  getPrivateObject: vi.fn(),
+  getPrivateObjectStream: vi.fn(),
+  isObjectStorageConfigured: vi.fn(() => true),
+  putPrivateObject: vi.fn(),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,

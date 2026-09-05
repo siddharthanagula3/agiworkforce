@@ -27,6 +27,14 @@ vi.mock('@/lib/support/handoff/store', () => ({
   insertHandoffSession: routeMocks.insertHandoffSession,
   listFreshOnlineAgents: routeMocks.listFreshOnlineAgents,
   recordEmailOutcome: routeMocks.recordEmailOutcome,
+  cancelSessionForOwner: vi.fn(),
+  claimExpiredWaitingBatch: vi.fn(),
+  claimExpiredWaitingSession: vi.fn(),
+  claimSessionForAgent: vi.fn(),
+  closeIdleConnectedSessions: vi.fn(),
+  getSessionForOwner: vi.fn(),
+  listWaitingQueue: vi.fn(),
+  purgeOldHandoffSessions: vi.fn(),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: routeMocks.getSubscription },

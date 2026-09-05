@@ -36,6 +36,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+  resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
 import { DELETE, GET, POST } from '@/app/api/search/route';
