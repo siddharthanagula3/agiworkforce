@@ -44,8 +44,16 @@ export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px]
  * moved into the SAME row and needed the textbox's rendered height, not just
  * its own box, to match the row's other controls.
  */
+/**
+ * The placeholder is pinned to one line. The input's height is fixed at rest,
+ * so a placeholder long enough to wrap does not grow the box, it renders a
+ * second line that the box clips; an ellipsis says the same thing honestly at
+ * any composer width.
+ */
+const INPUT_PLACEHOLDER_CLASS =
+  'placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-muted-foreground';
 const INPUT_SHARED_CLASS =
-  'relative z-10 block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50';
+  'relative z-10 block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
 /** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
 const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
 const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
@@ -55,7 +63,8 @@ const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
  * responsive, so these arbitrary variants apply the same mobile step to the
  * contenteditable that the textarea gets from its own utilities.
  */
-const EDITOR_SHARED_CLASS = 'relative z-10 [&_.ProseMirror]:max-h-[240px]';
+const EDITOR_SHARED_CLASS =
+  'relative z-10 [&_.ProseMirror]:max-h-[240px] [&_.composer-editor\\_\\_placeholder]:max-w-full [&_.composer-editor\\_\\_placeholder]:overflow-hidden [&_.composer-editor\\_\\_placeholder]:text-ellipsis [&_.composer-editor\\_\\_placeholder]:whitespace-nowrap';
 const EDITOR_ROW_CLASS =
   '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[36px] sm:[&_.ProseMirror]:py-1.5';
 const EDITOR_EMPTY_ROW_CLASS =
@@ -131,6 +140,7 @@ function ComposerTextarea({
       disabled={disabled}
       className={cn(
         INPUT_SHARED_CLASS,
+        INPUT_PLACEHOLDER_CLASS,
         emptyState ? COMPOSER_INPUT_EMPTY_ROW_CLASS : COMPOSER_INPUT_ROW_CLASS,
         emptyState ? INPUT_EMPTY_TEXT_SIZE_CLASS : INPUT_TEXT_SIZE_CLASS,
       )}

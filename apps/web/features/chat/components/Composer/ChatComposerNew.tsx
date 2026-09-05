@@ -162,6 +162,11 @@ interface QueuedFollowUp {
   toolsLabel: string | null;
 }
 
+const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
+  chat: 'Chat',
+  agiwork: 'AGI Work',
+};
+
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   chat: 'Chat: quick questions and conversation',
   agiwork: 'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
@@ -176,10 +181,14 @@ const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
  * changed nothing the user could read inside the input. claude.ai's equivalent
  * Chat/Cowork axis re-writes its prompt on toggle; this is that missing signal.
  * `chat` is null so the caller-supplied `placeholder` prop still wins there.
+ *
+ * Length is a constraint, not a preference: the input is one line at rest and
+ * the AGI Work chip takes width off it, so copy that does not fit is copy the
+ * reader never sees the end of.
  */
 const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
   chat: null,
-  agiwork: 'Describe a multi-step task and what it should deliver',
+  agiwork: 'Describe a task and what it should deliver',
 };
 
 const COMPOSER_FOOTER_KEYS = {
@@ -204,6 +213,7 @@ const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
 
 const COMPOSER_FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
 const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
+const COMPOSER_WORK_MODE_CHIP_TESTID = 'composer-work-mode-chip';
 // One shared empty array for "this conversation has no disabled connectors",
 // so the store selector returns a stable reference and cannot loop under
 // useSyncExternalStore (mirrors EMPTY_MESSAGES in the chat store).
@@ -1742,6 +1752,9 @@ const ChatComposerNewComponent = ({
     projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode,
   );
 
+  const workModeSelectable = Boolean(emptyState && projectPicker && !imageMode && canUseAgiWork);
+  const workModeChipVisible = workModeSelectable && workMode === 'agiwork';
+
   const filteredMentionProjects = useMemo(
     () =>
       projectScopeSelectable && projectPicker
@@ -3081,19 +3094,31 @@ const ChatComposerNewComponent = ({
         <div
           className={cn(
             'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2',
-            // Home carries its own second row (mode toggle) inside the same
-            // card, so its vertical padding stays tighter than the (already
-            // token-driven) base to hold the whole card under the 100px
-            // parity target at 1543.
+            // Home's textbox is a step taller than an ongoing chat's, so its
+            // vertical padding is tighter by the same step: both cards rest at
+            // the same one-row height.
             emptyState && 'px-3 py-1.5 sm:px-5 sm:py-1.5',
           )}
         >
-          {/* Rest-state row: one non-wrapping line (plus, textbox, right
-              cluster). items-end keeps the plus/model/mic/send controls
-              pinned to the textbox's last line as it autosizes taller. */}
-          <div className="flex min-w-0 flex-nowrap items-end gap-1 sm:gap-2">
+          {/* Rest-state row: one line (plus, textbox, right cluster) while the
+              composer is wide enough. items-end keeps the plus/model/mic/send
+              controls pinned to the textbox's last line as it autosizes
+              taller; below the container's narrow width the textbox takes a
+              row of its own and the controls drop under it.
+
+              `flex-row` is load-bearing, not decoration: globals.css turns
+              every `[class*='composer']` into a column below 641px, so any
+              flex element named for the composer has to say which way it
+              runs. */}
+          <div className="chat-composer-row flex min-w-0 flex-row items-end gap-1 sm:gap-2">
             {/* + Overflow Menu Button */}
-            <div className={cn('relative shrink-0')} ref={overflowRef}>
+            <div
+              className={cn(
+                'relative shrink-0',
+                !workModeChipVisible && 'chat-composer-leading-end',
+              )}
+              ref={overflowRef}
+            >
               <button
                 ref={overflowTriggerRef}
                 onClick={() => {
@@ -3148,14 +3173,14 @@ const ChatComposerNewComponent = ({
               >
                 {
                   <>
-                    {/* 0. Work mode (Chat | AGI Work), shown in the menu ONLY
-                        below sm, where the home composer's second-row segmented
-                        toggle is hidden to free row width for the model
-                        selector. Keeps work-mode fully switchable on the narrow
-                        (mobile) composer instead of dropping the control. Home
-                        only: an existing chat's mode was set at creation. */}
-                    {emptyState && projectPicker && !imageMode && canUseAgiWork && (
-                      <div className="chat-composer-mode-in-menu sm:hidden">
+                    {/* 0. Work mode (Chat | AGI Work). This menu group is the
+                        control's only home at every width: on the composer face
+                        it cost the empty state a whole second row, and the
+                        active mode is already visible there as a removable
+                        chip. Home only: an existing chat's mode was set at
+                        creation. */}
+                    {workModeSelectable && (
+                      <div className="chat-composer-mode-in-menu">
                         <div className="flex items-center gap-3 rounded-lg px-3 py-2">
                           <span className="flex-1 text-left text-sm">Mode</span>
                           <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
@@ -3176,7 +3201,7 @@ const ChatComposerNewComponent = ({
                                     'cursor-not-allowed opacity-50',
                                 )}
                               >
-                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                                {WORK_MODE_LABELS[mode]}
                               </button>
                             ))}
                           </div>
@@ -3615,14 +3640,10 @@ const ChatComposerNewComponent = ({
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
 
-                    {/* 7a. Response style, relocated off the composer face
-                        into the "+" menu; StyleSelector owns its own
-                        trigger and portaled popover, so it mounts unchanged. */}
-                    {!isFreeTrial && (
-                      <div className="px-3 py-1">
-                        <StyleSelector />
-                      </div>
-                    )}
+                    {/* 7a. Response style. StyleSelector owns its own trigger
+                        row and portaled popover, so it needs no wrapper of its
+                        own; a wrapper is what indented it past its siblings. */}
+                    {!isFreeTrial && <StyleSelector />}
 
                     {/* Divider */}
                     <div className="my-1 border-t border-border/30" />
@@ -3756,12 +3777,36 @@ const ChatComposerNewComponent = ({
               </AnchoredComposerMenu>
             </div>
 
+            {/* Active work mode, as a removable chip in the leading slot. The
+                mode itself is chosen in the "+" menu; this is the standing
+                reminder that the next send is an AGI Work run, and clicking it
+                returns the composer to plain chat. */}
+            {workModeChipVisible && (
+              <button
+                type="button"
+                data-testid={COMPOSER_WORK_MODE_CHIP_TESTID}
+                onClick={() => handleWorkModeChange('chat')}
+                disabled={isTurnActive || composerDisabled}
+                title={WORK_MODE_TITLES.agiwork}
+                aria-label={`Turn off ${WORK_MODE_LABELS.agiwork}`}
+                className={cn(
+                  'chat-composer-leading-end flex h-8 shrink-0 flex-row items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2.5 text-[12px] font-medium text-[var(--chat-accent-primary-text)] transition-colors',
+                  isTurnActive || composerDisabled
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'hover:bg-[var(--chat-accent-primary)]/20',
+                )}
+              >
+                <span>{WORK_MODE_LABELS.agiwork}</span>
+                <X className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+              </button>
+            )}
+
             {/* Textbox, grows to a cap then scrolls internally; the card
                 itself never changes width while it grows. */}
             <div
               ref={composerRowRef}
               className={cn(
-                'relative min-w-0 flex-1 min-h-[36px]',
+                'chat-composer-field relative min-w-0 flex-1 min-h-[36px]',
                 emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[36px]',
               )}
             >
@@ -4293,34 +4338,6 @@ const ChatComposerNewComponent = ({
                 </>
               )}
             </p>
-          )}
-
-          {/* Second row, home composer only: Chat | AGI Work mode toggle.
-              An existing chat's mode was set at creation, so the composer for
-              an ongoing conversation stays a single row (mobile still reaches
-              this through the "+" menu's Mode row). */}
-          {emptyState && projectPicker && !imageMode && canUseAgiWork && (
-            <div className="chat-composer-mode-inline hidden shrink-0 items-center self-start rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
-              {(['chat', 'agiwork'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => handleWorkModeChange(mode)}
-                  disabled={isTurnActive || composerDisabled}
-                  aria-pressed={workMode === mode}
-                  title={WORK_MODE_TITLES[mode]}
-                  className={cn(
-                    'flex h-7 items-center rounded-full px-3 transition-colors',
-                    workMode === mode
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                    (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
-                </button>
-              ))}
-            </div>
           )}
         </div>
 
