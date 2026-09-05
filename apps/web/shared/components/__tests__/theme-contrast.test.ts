@@ -333,6 +333,21 @@ describe('WCAG 2.1 AA contrast ratios · dark mode', () => {
   });
 });
 
+describe('a selected settings toggle chip uses a neutral fill, not the brand accent', () => {
+  for (const [theme, block] of [
+    ['light', web.light],
+    ['dark', web.dark],
+  ] as const) {
+    it(`${theme}: --accent-foreground on --accent >= 4.5:1`, () => {
+      const ratio = contrastRatio(
+        colorToken(block, '--accent'),
+        colorToken(block, '--accent-foreground'),
+      );
+      expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+  }
+});
+
 describe('WCAG 2.1 AA contrast ratios - the shared dark chat palette', () => {
   const bg = colorToken(cool, '--chat-bg');
   const sidebar = colorToken(cool, '--chat-sidebar-bg');
