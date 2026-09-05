@@ -353,9 +353,7 @@ fn split_value(
             let (value, target) = split_literal(remainder, &VALUE_SEPARATORS);
             (operation, value, target)
         }
-        IntentOperation::Invoke if has_web_url => {
-            (IntentOperation::Navigate, None, String::new())
-        }
+        IntentOperation::Invoke if has_web_url => (IntentOperation::Navigate, None, String::new()),
         IntentOperation::Invoke => match split_literal_at(remainder, &OPTION_SEPARATORS) {
             Some((value, target)) => (IntentOperation::SelectOption, Some(value), target),
             None => (operation, None, remainder.to_string()),
@@ -414,7 +412,9 @@ fn quoted_prefix(remainder: &str) -> Option<(String, &str)> {
 }
 
 fn trimmed_value(raw: &str) -> Option<String> {
-    let value = raw.trim().trim_matches(|c| TRAILING_PUNCTUATION.contains(&c));
+    let value = raw
+        .trim()
+        .trim_matches(|c| TRAILING_PUNCTUATION.contains(&c));
 
     if value.is_empty() {
         None
@@ -568,10 +568,8 @@ mod tests {
 
     #[test]
     fn a_quoted_literal_survives_the_prepositions_inside_it() {
-        let intent = ActionIntent::parse(
-            "type \"meet me in the lobby\" into the Message box",
-            None,
-        );
+        let intent =
+            ActionIntent::parse("type \"meet me in the lobby\" into the Message box", None);
 
         assert_eq!(intent.value.as_deref(), Some("meet me in the lobby"));
         assert_eq!(intent.target_phrase.as_deref(), Some("Message"));
