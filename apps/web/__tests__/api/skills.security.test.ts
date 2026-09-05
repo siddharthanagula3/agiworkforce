@@ -32,7 +32,12 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: vi.fn().mockResolvedValue(new Set(['research-pack'])),
-  listEnabledPluginIdsForUser: vi.fn().mockResolvedValue(new Set(['research-pack'])),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi
+    .fn()
+    .mockResolvedValue({ db: { query: vi.fn() }, userId: 'user_test', organizationId: null }),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
@@ -58,10 +63,14 @@ describe('skills API security contract', () => {
     vi.clearAllMocks();
     const { getClerkAuthUser } = await import('@/lib/api-auth');
     vi.mocked(getClerkAuthUser).mockResolvedValue({ userId: 'user_test' } as never);
-    const { listEnabledPluginIds, listEnabledPluginIdsForUser } =
-      await import('@/lib/services/plugin-installation-service');
+    const { listEnabledPluginIds } = await import('@/lib/services/plugin-installation-service');
     vi.mocked(listEnabledPluginIds).mockResolvedValue(new Set(['research-pack']));
-    vi.mocked(listEnabledPluginIdsForUser).mockResolvedValue(new Set(['research-pack']));
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValue({
+      db: { query: vi.fn() },
+      userId: 'user_test',
+      organizationId: null,
+    } as never);
     tempSkillsRoot = await mkdtemp(join(tmpdir(), 'agi-skills-api-'));
     const skillDir = join(tempSkillsRoot, 'design-review');
     await mkdir(skillDir, { recursive: true });
@@ -185,8 +194,8 @@ describe('skills API security contract', () => {
   });
 
   it('requires auth before downloading a bundled skill', async () => {
-    const { getClerkAuthUser } = await import('@/lib/api-auth');
-    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(new Error('Unauthorized'));
 
     await expect(
       downloadSkill(request('/api/skills/code-review/download'), {

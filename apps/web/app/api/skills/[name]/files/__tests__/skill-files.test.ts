@@ -6,15 +6,16 @@ import { tmpdir } from 'node:os';
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
-  getClerkAuthUser: vi.fn(),
-  listEnabledPluginIdsForUser: vi.fn(),
+  getUserScopedDb: vi.fn(),
+  listEnabledPluginIds: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
-  listEnabledPluginIdsForUser: mocks.listEnabledPluginIdsForUser,
+  listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));
 
 import { GET as listFiles } from '../route';
@@ -34,8 +35,12 @@ describe('/api/skills/[name]/files', () => {
 
   beforeEach(async () => {
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
-    mocks.listEnabledPluginIdsForUser.mockResolvedValue(new Set<string>());
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.listEnabledPluginIds.mockResolvedValue(new Set<string>());
     root = await mkdtemp(join(tmpdir(), 'agi-skill-files-route-'));
     await mkdir(join(root, 'design-review', 'references'), { recursive: true });
     await writeFile(
@@ -94,7 +99,7 @@ describe('/api/skills/[name]/files', () => {
   });
 
   it('requires auth before listing the file tree', async () => {
-    mocks.getClerkAuthUser.mockRejectedValueOnce(new Error('Unauthorized'));
+    mocks.getUserScopedDb.mockRejectedValueOnce(new Error('Unauthorized'));
     const res = await listFiles(treeRequest(), {
       params: Promise.resolve({ name: 'design-review' }),
     });

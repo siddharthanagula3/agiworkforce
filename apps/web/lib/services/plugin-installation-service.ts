@@ -8,7 +8,6 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 
 import { getPluginRegistryEntry } from './plugin-registry-service';
-import { getNeonDb } from '@/lib/server/neon-db';
 
 interface PluginInstallationRow {
   plugin_id: string;
@@ -129,10 +128,6 @@ export async function listEnabledPluginIds(
     [userId],
   );
   return new Set(rows.map((row) => row.plugin_id));
-}
-
-export function listEnabledPluginIdsForUser(userId: string): Promise<Set<string>> {
-  return listEnabledPluginIds(getNeonDb(), userId);
 }
 
 /**

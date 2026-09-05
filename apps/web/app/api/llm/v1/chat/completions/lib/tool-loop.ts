@@ -61,7 +61,9 @@ import type {
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import { SECRET_HANDLING_MODE_DEFAULT, isAutoModeModelId } from '@agiworkforce/types';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
@@ -175,7 +177,7 @@ import {
   executeManagedSkillToolForPlugins,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
-import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
 import { functionToolName } from './tool-loop-routing';
 import {
@@ -1379,6 +1381,16 @@ function skillLoadRequestedName(args: Record<string, unknown>): string | null {
     : null;
 }
 
+function callerScopedDb(
+  executionContext: { organizationId: string | null } | undefined,
+  userId: string,
+): DatabaseAdapter {
+  return createClaimedUserScopedDb(getNeonDb(), {
+    userId,
+    organizationId: executionContext?.organizationId ?? null,
+  });
+}
+
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
@@ -1407,7 +1419,7 @@ async function runMcpTool(
       : undefined;
     const result = userId
       ? await executeManagedSkillToolForPlugins(
-          await listEnabledPluginIdsForUser(userId),
+          await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId),
           toolCall.args,
           { availableTools, installOverrides },
         )
@@ -1558,7 +1570,13 @@ async function runMcpTool(
     // the request body, a client-side check alone would be a preference the
     // caller could decline to honour. The model is told plainly so it explains
     // rather than retrying the same call.
-    if (executionContext?.userId && !(await isCloudCodeExecutionEnabled(executionContext.userId))) {
+    if (
+      executionContext?.userId &&
+      !(await isCloudCodeExecutionEnabled(
+        callerScopedDb(executionContext, executionContext.userId),
+        executionContext.userId,
+      ))
+    ) {
       return {
         content:
           'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.',

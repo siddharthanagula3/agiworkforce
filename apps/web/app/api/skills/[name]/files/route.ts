@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   getManagedSkillDirectoryForPlugins,
   listManagedSkillFiles,
 } from '@/lib/services/skill-catalog-service';
-import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 
 export const runtime = 'nodejs';
 
@@ -28,10 +28,10 @@ async function handleListFiles(
 ) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const name = requireSkillName((await context.params).name);
 
-  const enabledPluginIds = await listEnabledPluginIdsForUser(userId);
+  const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
   const skill = directory.find((candidate) => candidate.name === name);
   if (!skill) {

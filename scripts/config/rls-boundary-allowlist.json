@@ -182,20 +182,12 @@
       "reason": "erases pre-account rows by email hash for subjects who never created an account, there is no Clerk user to bind RLS to"
     },
     {
-      "path": "apps/web/lib/server/code-execution-policy.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/server/content-report-triage.ts",
       "reason": "moderation triage queue reached only from the admin content-reports route, reading every reporter is the purpose"
     },
     {
       "path": "apps/web/lib/server/developer-token.ts",
       "reason": "revocation targets the row resolved from the presented token signature and family id, the credential is the subject"
-    },
-    {
-      "path": "apps/web/lib/server/device-signin-policy.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/lib/server/media-assets.ts",
@@ -251,10 +243,6 @@
     },
     {
       "path": "apps/web/lib/services/org-sharing-service.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/lib/services/plugin-installation-service.ts",
       "reason": "pending scoped migration"
     },
     {

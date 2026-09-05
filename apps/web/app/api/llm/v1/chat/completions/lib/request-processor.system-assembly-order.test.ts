@@ -65,7 +65,7 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
 vi.mock('@/lib/services/plugin-installation-service', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/services/plugin-installation-service')>();
-  return { ...actual, listEnabledPluginIdsForUser: mocks.enabledPluginIds };
+  return { ...actual, listEnabledPluginIds: mocks.enabledPluginIds };
 });
 
 vi.mock('@/lib/connectors/mcp-context-service', async (importOriginal) => {

@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   getManagedSkillDirectoryForPlugins,
   readManagedSkillFile,
 } from '@/lib/services/skill-catalog-service';
-import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 
 export const runtime = 'nodejs';
 
@@ -29,14 +29,14 @@ async function handleReadFile(
 ) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const { name: rawName, path: segments } = await context.params;
   const name = requireSkillName(rawName);
   if (!Array.isArray(segments) || segments.length === 0) {
     throw createError.validation('A file path is required');
   }
 
-  const enabledPluginIds = await listEnabledPluginIdsForUser(userId);
+  const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
   const skill = directory.find((candidate) => candidate.name === name);
   if (!skill) {
