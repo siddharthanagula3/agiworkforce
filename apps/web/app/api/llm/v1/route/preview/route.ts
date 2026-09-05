@@ -40,11 +40,6 @@ function jsonError(message: string, status: number, code: string): NextResponse 
   );
 }
 
-/**
- * Fails OPEN, the same posture `readWorkspaceModelPolicy` takes in the
- * completions path: a policy read failure previews the request as ungoverned
- * rather than turning a database fault into a preview the caller cannot get.
- */
 async function readWorkspacePolicyForPreview(
   db: Parameters<typeof readModelPolicy>[0],
   organizationId: string | null,
@@ -62,15 +57,6 @@ async function readWorkspacePolicyForPreview(
   }
 }
 
-/**
- * A pure, explainable dry run of the Managed Web Cloud auto-routing decision.
- *
- * Builds the exact `AutoRoutingRequest` the completions path would dispatch
- * with for this selection, task type, plan tier, workspace policy and
- * conversation continuity state, then hands it to `previewAutoRoute`, which
- * never performs I/O and never contacts a provider. `liveRequestExecuted` is
- * always `false`.
- */
 async function handleRoutePreview(request: NextRequest): Promise<Response> {
   const authResult = await runAuthGate(request);
   if (!authResult.ok) return authResult.response;
