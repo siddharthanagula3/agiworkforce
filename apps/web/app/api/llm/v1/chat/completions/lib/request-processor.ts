@@ -103,6 +103,7 @@ import {
 } from '@agiworkforce/routing';
 import type {
   AutoRouteDecision,
+  AutoRoutingRequest,
   RoutingAttachment,
   RoutingRuntimeState,
   RoutingTaskType,
@@ -1443,7 +1444,16 @@ const AUTO_ROUTE_UNAVAILABLE_MESSAGE =
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 
-export function resolveWebCloudModelRoute(
+/**
+ * The `AutoRoutingRequest` a Managed Web Cloud chat turn builds for a given
+ * selection, task, tier, route-health/continuity state and workspace policy.
+ *
+ * Extracted from `resolveWebCloudModelRoute` so a caller that wants an
+ * EXPLANATION of the decision (`previewAutoRoute`, over `/route/preview`) can
+ * build the identical input the completions path dispatches with, rather than
+ * a second, hand-assembled request that could quietly drift from it.
+ */
+export function buildWebCloudAutoRoutingRequest(
   model: string,
   subscriptionTier: string | undefined,
   taskType: RoutingTaskType,
@@ -1483,8 +1493,8 @@ export function resolveWebCloudModelRoute(
    * workspace may not run instead of the caller filtering the plan afterwards.
    */
   organizationPolicy?: ModelAccessPolicy | null,
-) {
-  return resolveAutoRoute({
+): AutoRoutingRequest {
+  return {
     selection: model,
     taskType,
     subscriptionTier,
@@ -1518,7 +1528,45 @@ export function resolveWebCloudModelRoute(
       ? { zeroDataRetentionProviders }
       : {}),
     ...(organizationPolicy ? { organizationPolicy } : {}),
-  });
+  };
+}
+
+export function resolveWebCloudModelRoute(
+  model: string,
+  subscriptionTier: string | undefined,
+  taskType: RoutingTaskType,
+  usage?: {
+    budgetRemainingCents?: number;
+    estimatedInputTokens?: number;
+    estimatedOutputTokens?: number;
+    taskFamily?: TaskFamily | null;
+  },
+  preferSlots?: readonly string[],
+  routeHealth?: {
+    runtimeState?: RoutingRuntimeState | null;
+    preferredRouteId?: string | null;
+    currentModelKey?: string | null;
+    previousTaskType?: RoutingTaskType | null;
+  },
+  availableProviderIds?: ReadonlySet<string>,
+  zeroDataRetentionOnly?: boolean,
+  zeroDataRetentionProviders?: ReadonlySet<string>,
+  organizationPolicy?: ModelAccessPolicy | null,
+) {
+  return resolveAutoRoute(
+    buildWebCloudAutoRoutingRequest(
+      model,
+      subscriptionTier,
+      taskType,
+      usage,
+      preferSlots,
+      routeHealth,
+      availableProviderIds,
+      zeroDataRetentionOnly,
+      zeroDataRetentionProviders,
+      organizationPolicy,
+    ),
+  );
 }
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
