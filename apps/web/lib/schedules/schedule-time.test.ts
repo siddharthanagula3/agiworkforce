@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCronExpression,
+  describeCronCadence,
   getNextExecutionAt,
   parseCronExpression,
   validateTimeZone,
@@ -115,5 +116,58 @@ describe('schedule time calculation', () => {
         new Date('2026-07-15T12:00:00.000Z'),
       ),
     ).toThrow(/future/i);
+  });
+});
+
+describe('describeCronCadence', () => {
+  it('describes a daily cron in words', () => {
+    expect(describeCronCadence('0 9 * * *')).toBe('Daily at 9:00 AM');
+  });
+
+  it('describes every day of the week spelled out as daily', () => {
+    expect(describeCronCadence('0 9 * * 0,1,2,3,4,5,6')).toBe('Daily at 9:00 AM');
+  });
+
+  it('describes a single weekly day, matching the leader phrasing', () => {
+    expect(describeCronCadence('0 9 * * 1')).toBe('Weekly on Monday at 9:00 AM');
+  });
+
+  it('describes multiple weekly days from the product form preset', () => {
+    expect(
+      describeCronCadence(
+        buildCronExpression({ recurrence: 'weekly', timeOfDay: '08:05', daysOfWeek: [5, 1] }),
+      ),
+    ).toBe('Weekly on Monday and Friday at 8:05 AM');
+  });
+
+  it('describes three or more weekly days with a serial comma', () => {
+    expect(
+      describeCronCadence(
+        buildCronExpression({
+          recurrence: 'weekly',
+          timeOfDay: '07:30',
+          daysOfWeek: [1, 2, 3, 4, 5],
+        }),
+      ),
+    ).toBe('Weekly on Monday, Tuesday, Wednesday, Thursday, and Friday at 7:30 AM');
+  });
+
+  it('describes a monthly day of month', () => {
+    expect(describeCronCadence('0 9 15 * *')).toBe('Monthly on day 15 at 9:00 AM');
+  });
+
+  it('formats midnight and noon correctly', () => {
+    expect(describeCronCadence('0 0 * * *')).toBe('Daily at 12:00 AM');
+    expect(describeCronCadence('0 12 * * *')).toBe('Daily at 12:00 PM');
+  });
+
+  it('falls back to the raw expression for shapes it does not describe', () => {
+    expect(describeCronCadence('*/15 9 * * *')).toBe('*/15 9 * * *');
+    expect(describeCronCadence('0 9,17 * * *')).toBe('0 9,17 * * *');
+    expect(describeCronCadence('0 9 * 6 *')).toBe('0 9 * 6 *');
+  });
+
+  it('falls back to the raw text for an invalid cron expression', () => {
+    expect(describeCronCadence('not a cron')).toBe('not a cron');
   });
 });
