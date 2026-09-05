@@ -15,9 +15,17 @@ const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _no
   }
   return snapshots;
 });
+const ROUTE_ID_SEPARATOR = '/';
+const mockGetCredentialCooldownSnapshot = vi.fn(
+  async (_credentialIds: readonly string[], _nowMs: number) =>
+    ({}) as Record<string, RouteHealthSnapshot>,
+);
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getRouteHealthSnapshot: (routeIds: readonly string[], nowMs: number) =>
     mockGetRouteHealthSnapshot(routeIds, nowMs),
+  getCredentialCooldownSnapshot: (credentialIds: readonly string[], nowMs: number) =>
+    mockGetCredentialCooldownSnapshot(credentialIds, nowMs),
+  providerOfRouteId: (routeId: string) => routeId.split(ROUTE_ID_SEPARATOR)[0],
   getServedRouteAffinity: vi.fn(async () => null),
   getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
@@ -161,5 +169,43 @@ describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
     const [routeIds] = mockGetRouteHealthSnapshot.mock.calls[0]!;
     expect((routeIds as readonly string[]).length).toBeGreaterThan(10);
     expect(routeIds).toContain(OTHER_MODEL_ROUTE_ID);
+  });
+
+  it('reads the credential scope once per candidate provider, not once per route', async () => {
+    mockGetCredentialCooldownSnapshot.mockClear();
+    await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+
+    const [credentialIds] = mockGetCredentialCooldownSnapshot.mock.calls[0]!;
+    const providers = credentialIds as readonly string[];
+    expect(providers.length).toBe(new Set(providers).size);
+    expect(providers).toContain(SAME_MODEL_REGISTRY_ROUTE_ID.split(ROUTE_ID_SEPARATOR)[0]);
+  });
+
+  it('reports every route on an unfunded credential, so the resolver can park them', async () => {
+    const unfundedProvider = SAME_MODEL_REGISTRY_ROUTE_ID.split(ROUTE_ID_SEPARATOR)[0]!;
+    mockGetCredentialCooldownSnapshot.mockResolvedValueOnce({
+      [unfundedProvider]: {
+        available: true,
+        halfOpen: false,
+        consecutiveFailures: 1,
+        sampleCount: 1,
+        unfunded: true,
+      },
+    });
+
+    const resolved = await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+
+    // `available: true` on purpose: the cooldown has elapsed, so the breaker
+    // would let this route through. Being out of money is the separate fact.
+    expect(resolved.unfundedRouteIds.has(SAME_MODEL_REGISTRY_ROUTE_ID)).toBe(true);
+    expect(resolved.unfundedRouteIds.has(SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID)).toBe(
+      SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID.startsWith(unfundedProvider + ROUTE_ID_SEPARATOR),
+    );
+  });
+
+  it('reports nothing unfunded when no credential says so', async () => {
+    const resolved = await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+
+    expect(resolved.unfundedRouteIds.size).toBe(0);
   });
 });
