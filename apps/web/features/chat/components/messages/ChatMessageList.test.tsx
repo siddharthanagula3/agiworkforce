@@ -1296,6 +1296,48 @@ describe('ChatMessageList stream error notice', () => {
     },
   );
 
+  it('offers Switch model for an unfunded platform account, which another model can serve', () => {
+    render(
+      <ChatMessageList
+        messages={streamErrorCodeThread('provider_billing_exhausted')}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(switchModelButton()).toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+  });
+
+  it('renders taxonomy copy instead of a provider payload, whatever the producer sent', () => {
+    // The row observed on 2026-09-05. The server paths all map their failures
+    // now, so reaching this fallback means a producer forgot; the transcript
+    // still must not become a place a provider's JSON is displayed.
+    const rawBody =
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low"}}';
+    render(
+      <ChatMessageList
+        messages={[
+          makeMessage({ id: 'u1', role: 'user', content: 'run some python' }),
+          makeMessage({
+            id: 'a1',
+            role: 'assistant',
+            content: '',
+            metadata: {
+              streamError: { code: 'provider_billing_exhausted', message: rawBody },
+            },
+          }),
+        ]}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    const row = screen.getAllByTestId('turn-failure-row')[0]!;
+    expect(row.textContent).not.toContain('{');
+    expect(row.textContent).not.toContain('invalid_request_error');
+    expect(row.textContent).toContain('unavailable right now for a reason on our side');
+    expect(switchModelButton()).toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+  });
+
   it('does NOT offer Switch model for a plain client_error stream error code', () => {
     render(
       <ChatMessageList

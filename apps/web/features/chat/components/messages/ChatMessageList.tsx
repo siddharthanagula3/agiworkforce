@@ -167,12 +167,46 @@ export function isWithinIncompleteTurnGracePeriod(
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
 /**
+ * Substrings no sentence written for a reader contains, and every serialized
+ * error body does. This is the last line of defence rather than the fix: every
+ * server path that reports a failure maps it to the reason taxonomy first, and
+ * this catches a producer that forgets, because a provider's raw payload in the
+ * transcript is worse than a less specific sentence.
+ */
+const RAW_PAYLOAD_MARKERS = ['{', '}', '":'];
+
+const STREAM_ERROR_REASON_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>> = {
+  rateLimit: 'this model is receiving too many requests right now.',
+  providerOutage: 'this model is unavailable right now for a reason on our side.',
+  timeout: 'the model took too long to respond.',
+  modelRestriction: 'the selected model could not complete this request.',
+  emptyResponse: 'no response was returned.',
+};
+
+function isPlainReason(reason: string): boolean {
+  return !RAW_PAYLOAD_MARKERS.some((marker) => reason.includes(marker));
+}
+
+function streamErrorCode(message: ChatMessage): string | undefined {
+  const streamError = (message.metadata as { streamError?: unknown } | undefined)?.streamError;
+  const code =
+    streamError && typeof streamError === 'object'
+      ? (streamError as { code?: unknown }).code
+      : undefined;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
  * The detail on its own. The row that carries it already leads with the run's
  * own status, so repeating "No response was returned" there would say the same
  * thing twice in one line.
  */
 function streamErrorReason(message: ChatMessage): string {
-  return getStreamErrorMessage(message) ?? STREAM_ERROR_CONNECTION_DETAIL;
+  const reported = getStreamErrorMessage(message);
+  if (reported && isPlainReason(reported)) return reported;
+  const code = streamErrorCode(message);
+  const cause = code ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] : undefined;
+  return cause ? STREAM_ERROR_REASON_BY_CAUSE[cause] : STREAM_ERROR_CONNECTION_DETAIL;
 }
 
 const TURN_NOTICE_LINK_CLASS =
@@ -187,16 +221,13 @@ const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_overloaded',
   'provider_unreachable',
   'provider_error',
+  'provider_billing_exhausted',
   'model_not_found',
 ]);
 
 function streamErrorNeedsModelSwitch(message: ChatMessage): boolean {
-  const streamError = (message.metadata as { streamError?: unknown } | undefined)?.streamError;
-  const code =
-    streamError && typeof streamError === 'object'
-      ? (streamError as { code?: unknown }).code
-      : undefined;
-  return typeof code === 'string' && MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES.has(code);
+  const code = streamErrorCode(message);
+  return code !== undefined && MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES.has(code);
 }
 
 export interface ChatMessageListProps {
