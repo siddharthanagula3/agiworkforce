@@ -275,6 +275,13 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 }));
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
+import {
+  recordDurableTransportClaim,
+  DURABLE_FIRST_EVENT_BUDGET_ENV,
+  DURABLE_FIRST_EVENT_BUDGET_EVENT,
+} from '@/lib/workflows/durable-stream-liveness';
+import { logger } from '@/lib/logger';
+import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from '@/app/api/llm/v1/chat/completions/lib/turn-phases';
 
 function makeRequest(model: string, conversationId?: string, stream = false): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
@@ -473,7 +480,45 @@ describe('Managed Web AGI Work dispatch', () => {
     };
   }
 
-  afterEach(() => vi.unstubAllEnvs());
+  const DURABLE_BUDGET_MS = 20;
+  const OUTLIVES_DURABLE_BUDGET_MS = 250;
+
+  function slowDurableWorkflowStream() {
+    const cancel = vi.fn(async () => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return {
+      cancel,
+      workflow: {
+        workflowRunId: 'wrun_durable_slow',
+        cancel,
+        readable: new ReadableStream<Uint8Array>({
+          start(controller) {
+            timer = setTimeout(() => {
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.close();
+            }, OUTLIVES_DURABLE_BUDGET_MS);
+          },
+          cancel() {
+            if (timer) clearTimeout(timer);
+          },
+        }),
+      },
+    };
+  }
+
+  function chatTurnSpanAttributes(): Record<string, unknown> {
+    const emitted = vi
+      .mocked(logger.info)
+      .mock.calls.map(([record]) => record as Record<string, unknown>)
+      .find((record) => record['span_name'] === CHAT_TURN_SPAN);
+    if (!emitted) throw new Error(`no ${CHAT_TURN_SPAN} span was emitted`);
+    return emitted;
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    recordDurableTransportClaim();
+  });
 
   it('runs a paid agentic turn on the durable transport so it survives the client', async () => {
     arrangePaidAgenticTurn();
@@ -612,6 +657,60 @@ describe('Managed Web AGI Work dispatch', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('serves a plain chat turn inline once the durable first byte misses its budget', async () => {
+    arrangeFreeTrialToolTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(DURABLE_BUDGET_MS));
+    const slow = slowDurableWorkflowStream();
+    workflowRouteMocks.start.mockResolvedValue(slow.workflow);
+
+    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+    // Exactly one durable attempt, exactly one cancel: the turn is served once.
+    expect(workflowRouteMocks.start).toHaveBeenCalledTimes(1);
+    expect(slow.cancel).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: DURABLE_FIRST_EVENT_BUDGET_EVENT }),
+      expect.any(String),
+    );
+    expect(chatTurnSpanAttributes()).toMatchObject({
+      [`phase.${CHAT_TURN_PHASE.durableBudgetFallback}_ms`]: expect.any(Number),
+    });
+  });
+
+  it('keeps an agi work run on the durable transport past the plain chat budget', async () => {
+    arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(DURABLE_BUDGET_MS));
+    const slow = slowDurableWorkflowStream();
+    workflowRouteMocks.start.mockResolvedValue(slow.workflow);
+
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_durable_slow');
+    expect(slow.cancel).not.toHaveBeenCalled();
+  });
+
+  it('skips the durable attempt for the next plain chat turn while the budget breaker is open', async () => {
+    arrangeFreeTrialToolTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
+    vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(DURABLE_BUDGET_MS));
+    workflowRouteMocks.start.mockResolvedValue(slowDurableWorkflowStream().workflow);
+
+    await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    workflowRouteMocks.start.mockClear();
+    const second = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+
+    expect(second.status).toBe(200);
+    expect(second.headers.get('X-AGI-Tool-Loop')).toBe('active');
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
   });
 
