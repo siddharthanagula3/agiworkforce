@@ -23,9 +23,18 @@ go at the top. Model names are omitted by rule; families and slots only.
 - Options: keep the allow list (a catalogue of 18); invert it into an override list admitting
   everything unnamed; derive admission for unnamed models from registry facts.
 - Decision: derive. A named model keeps its list verdict; an unnamed chat model is admitted at
-  the lowest plan whose profile ceiling covers its registry-wide price band, and only when its
-  route's commercial status permits managed traffic; BYOK-only and experimental routes are admitted
-  at no plan and appear nowhere on web; routers without a price of their own admit at pro.
+  the lowest plan whose named models' blended price range already covers it (derived from the
+  list at runtime, no threshold literal), and only when its route's commercial status permits
+  managed traffic; BYOK-only and experimental routes are admitted at no plan and appear nowhere
+  on web; routers without a price of their own admit at pro. Display price bands are quartiles over
+  the servable population, not the whole registry.
+- Amendment (same day): measured on the registry, 356 of the 370 unnamed chat models are BYOK-only
+  routes from the gateway sync and 14 are managed-eligible, so the web catalogue lands at 32, not
+  hundreds; a band mapping calibrated against the 18 named models disagreed on 8 and always gated
+  higher than the product's own pricing, which is why the named-ceiling rule replaced it. D-09's
+  measure is restated as managed-eligible growth: adding managed-eligible models changes the
+  catalogue and nothing on the face; BYOK-only entries belong to the desktop, CLI and extension
+  key lanes.
 - Why: the ceilings make spend safe by construction, the commercial status field already encodes
   the contract question, and the rule lives in the one function every enforcement point calls.
 - Tradeoff: a long tail of models a user can pick by hand with no curation of quality; Auto stays
