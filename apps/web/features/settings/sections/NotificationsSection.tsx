@@ -5,7 +5,8 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
-import { WebPushToggle } from '@/features/notifications';
+import { Switch } from '@agiworkforce/ui';
+import { useWebPushToggle } from '@/features/notifications';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'notifications';
@@ -42,8 +43,8 @@ const EVENTS: ReadonlyArray<EventSpec> = [
 ];
 
 const AGENT_RUN_HEADING = 'Agent run updates';
-const AGENT_RUN_SUBHEADING =
-  'An agent run finishes, fails, or needs your approval, including while the tab is closed. This switch registers the browser you are using right now, so it is not saved to your account: turn it on again on each browser you want notified.';
+const AGENT_RUN_SCOPE_NOTE =
+  'Applies only to this browser, so turn it on again wherever else you want notified.';
 
 const OFF_VALUE = 'off';
 const CHANNEL_SEPARATOR = '+';
@@ -101,6 +102,7 @@ export function NotificationsSection() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasChanged, setHasChanged] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +134,7 @@ export function NotificationsSection() {
       }
       setSaving(true);
       setSaveError(null);
+      setHasChanged(true);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
           setSaveError(toUserMessage(error, 'Failed to save notifications'));
@@ -155,15 +158,17 @@ export function NotificationsSection() {
         >
           Notifications
         </h1>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }} role="status">
-          {loading
-            ? 'Loading account settings...'
-            : saving
-              ? 'Saving...'
-              : saveError
-                ? `Save failed: ${saveError}`
-                : 'Saved'}
-        </p>
+        {loading || saving || saveError || hasChanged ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }} role="status">
+            {loading
+              ? 'Loading account settings...'
+              : saving
+                ? 'Saving...'
+                : saveError
+                  ? `Save failed: ${saveError}`
+                  : 'Saved'}
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -213,25 +218,38 @@ export function NotificationsSection() {
           );
         })}
 
-        <section
-          aria-label={AGENT_RUN_HEADING}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
-          }}
-        >
-          <div style={{ minWidth: 0, maxWidth: 480 }}>
-            <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              {AGENT_RUN_SUBHEADING}
-            </div>
-          </div>
-          <WebPushToggle />
-        </section>
+        <AgentRunRow />
       </div>
     </div>
+  );
+}
+
+function AgentRunRow() {
+  const { checked, disabled, blocked, description, onCheckedChange } = useWebPushToggle();
+
+  return (
+    <section
+      aria-label={AGENT_RUN_HEADING}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        padding: '14px 0',
+      }}
+    >
+      <div style={{ minWidth: 0, maxWidth: 480 }}>
+        <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+          {blocked ? description : AGENT_RUN_SCOPE_NOTE}
+        </div>
+      </div>
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        aria-label={AGENT_RUN_HEADING}
+      />
+    </section>
   );
 }

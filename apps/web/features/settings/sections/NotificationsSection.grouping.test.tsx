@@ -14,7 +14,13 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 }));
 
 vi.mock('@/features/notifications', () => ({
-  WebPushToggle: () => <button type="button" role="switch" aria-label="Agent run updates" />,
+  useWebPushToggle: () => ({
+    checked: false,
+    disabled: false,
+    description: 'Get told when a run finishes, fails, or needs your approval.',
+    blocked: false,
+    onCheckedChange: vi.fn(),
+  }),
 }));
 
 beforeEach(() => {
@@ -31,7 +37,7 @@ beforeEach(() => {
 describe('NotificationsSection grouping', () => {
   it('lists each event once as a row with a channel select', async () => {
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     expect(screen.getAllByText('Scheduled task finished')).toHaveLength(1);
 
@@ -50,7 +56,7 @@ describe('NotificationsSection grouping', () => {
 
   it('reflects the loaded state as the select value', async () => {
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
     expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toHaveValue('off');
@@ -58,7 +64,7 @@ describe('NotificationsSection grouping', () => {
 
   it('saves both channel keys when both are selected in one change', async () => {
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), {
       target: { value: 'emailScheduleDone+mobilePushScheduleDone' },

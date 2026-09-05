@@ -1,5 +1,5 @@
 export { WebPushOptIn } from './components/WebPushOptIn';
-export { WebPushToggle } from './components/WebPushToggle';
+export { WebPushToggle, useWebPushToggle } from './components/WebPushToggle';
 export {
   disableWebPush,
   enableWebPush,
