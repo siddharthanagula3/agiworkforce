@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   classifyManagedQuotaErrorCode,
   getNextUpgradeTier,
+  isContractPricedPlan,
   isSelfServePaidPlanTier,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -59,7 +60,7 @@ export function resolveManagedQuotaRecovery(input: {
   if (block.clearedByCredits && input.billedByStripe && isSelfServePaidPlanTier(planTier)) {
     return { action: 'top_up', href: TOP_UP_HREF };
   }
-  if (planTier === 'enterprise') {
+  if (isContractPricedPlan(planTier)) {
     return { action: 'contact_support', href: BLOCK_APPEAL_PATH };
   }
   if (block.showUpgradeCta && getNextUpgradeTier(input.planTier) !== null) {

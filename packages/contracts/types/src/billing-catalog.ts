@@ -159,6 +159,38 @@ export function isBillingPlanTier(value: string | null | undefined): value is Bi
   return value in BILLING_PLAN_PRICING;
 }
 
+export function isFreeBillingPlanTier(value: string | null | undefined): value is 'free' {
+  return value === 'free';
+}
+
+export function isBasicPlanTier(value: string | null | undefined): value is 'basic' {
+  return value === 'basic';
+}
+
+export function isProPlanTier(value: string | null | undefined): value is 'pro' {
+  return value === 'pro';
+}
+
+export function isMaxPlanTier(value: string | null | undefined): value is 'max' {
+  return value === 'max';
+}
+
+export function isMax15xPlanTier(value: string | null | undefined): value is 'max_15x' {
+  return value === 'max_15x';
+}
+
+export function isLocalOnlyPlanTier(value: string | null | undefined): value is 'local-only' {
+  return value === 'local-only';
+}
+
+export function isByokPlanTier(value: string | null | undefined): value is 'byok' {
+  return value === 'byok';
+}
+
+export function isFreeOfChargePlanTier(value: string | null | undefined): boolean {
+  return isLocalOnlyPlanTier(value) || isByokPlanTier(value) || isFreeBillingPlanTier(value);
+}
+
 export type BillingPlanCapability =
   | 'managed_chat'
   | 'chat_tools'

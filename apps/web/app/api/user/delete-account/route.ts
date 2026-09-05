@@ -18,6 +18,7 @@ import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
 import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
+import { isFreeBillingPlanTier } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +39,7 @@ function isPaidSubscription(
 ): subscription is SubscriptionInfo {
   if (!subscription) return false;
   const planTier = (subscription.plan_tier || 'free').trim().toLowerCase();
-  if (planTier === 'free') return false;
+  if (isFreeBillingPlanTier(planTier)) return false;
   return hasLiveBillingRelationship(subscription.status);
 }
 

@@ -19,6 +19,12 @@ import {
 } from '@features/billing/services/stripe-payments';
 import { billingOwnerPlanChangeMessage } from '@features/billing/lib/subscription-owner-presentation';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  isBasicPlanTier,
+  isProPlanTier,
+  isMaxPlanTier,
+  isMax15xPlanTier,
+} from '@agiworkforce/types';
 
 export type { UpgradeTarget };
 
@@ -87,21 +93,21 @@ export function useUpgradePlanFlow({
       }
       const toastId = toast.loading('Redirecting to checkout...');
       try {
-        if (plan === 'basic') {
+        if (isBasicPlanTier(plan)) {
           await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
-        } else if (plan === 'pro') {
+        } else if (isProPlanTier(plan)) {
           await upgradeToProPlan({
             userId: user.id,
             userEmail: user.email || '',
             billingPeriod,
           });
-        } else if (plan === 'max') {
+        } else if (isMaxPlanTier(plan)) {
           await upgradeToMaxPlan({
             userId: user.id,
             userEmail: user.email || '',
             billingPeriod: 'monthly',
           });
-        } else if (plan === 'max_15x') {
+        } else if (isMax15xPlanTier(plan)) {
           await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
         }
         // On success the service redirects to Stripe; the dismiss below only

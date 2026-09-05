@@ -9,7 +9,7 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
-import type { ManagedUsageBalanceResponse } from '@agiworkforce/types';
+import { isFreeBillingPlanTier, type ManagedUsageBalanceResponse } from '@agiworkforce/types';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 
 async function handleGetBalance(request: NextRequest) {
@@ -74,7 +74,7 @@ async function handleGetBalance(request: NextRequest) {
   const allocated = balance?.credits_allocated_cents ?? 0;
   const used = balance?.credits_used_cents ?? 0;
   const remaining = balance?.credits_remaining_cents ?? 0;
-  const isFreePlan = subscription.plan_tier.toLowerCase() === 'free';
+  const isFreePlan = isFreeBillingPlanTier(subscription.plan_tier.toLowerCase());
   const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const resetAt = freeUsage?.resetAt ?? nextMonthReset?.toISOString() ?? null;
   const resetDate = resetAt ? new Date(resetAt) : null;

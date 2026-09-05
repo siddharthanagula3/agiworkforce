@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ToolInputResumeRequestSchema } from '@agiworkforce/cloud-contracts';
+import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
   handleCorsPreflightRequest,
@@ -114,7 +115,9 @@ async function handleToolInputResume(request: NextRequest) {
   const { userId, subscription } = authResult;
 
   const isFreeTierRequest =
-    !subscription || !subscription.plan_tier || subscription.plan_tier.toLowerCase() === 'free';
+    !subscription ||
+    !subscription.plan_tier ||
+    isFreeBillingPlanTier(subscription.plan_tier.toLowerCase());
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
     {

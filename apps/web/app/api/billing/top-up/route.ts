@@ -7,6 +7,7 @@ import {
   MIN_TOP_UP_AMOUNT_USD,
   topUpLedgerCentsForUsd,
   topUpUnitsForUsd,
+  isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
@@ -121,7 +122,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
 
   if (
     !billing ||
-    billing.plan_tier === 'free' ||
+    isFreeBillingPlanTier(billing.plan_tier) ||
     !['active', 'trialing'].includes(billing.status) ||
     !isStripeCustomerId(billing.stripe_customer_id) ||
     !isStripeSubscriptionId(billing.stripe_subscription_id)

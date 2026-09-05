@@ -23,6 +23,14 @@ import {
   isSelfServePaidPlanTier,
   isPlanSelectableOnSurface,
   PLAN_SURFACE_VISIBILITY,
+  isFreeBillingPlanTier,
+  isBasicPlanTier,
+  isProPlanTier,
+  isMaxPlanTier,
+  isMax15xPlanTier,
+  isLocalOnlyPlanTier,
+  isByokPlanTier,
+  isFreeOfChargePlanTier,
   type BillingPlanTier,
 } from '../billing-catalog';
 
@@ -271,6 +279,47 @@ describe('billing catalog', () => {
         expect(getPlanMaxScheduledTasks(tier)).toBe(0);
         expect(getPlanMaxConcurrentTurns(tier)).toBeNull();
       }
+    });
+  });
+
+  describe('single-tier identity predicates', () => {
+    const PREDICATE_BY_TIER: Readonly<
+      Record<
+        Exclude<BillingPlanTier, 'team' | 'enterprise'>,
+        (value: string | null | undefined) => boolean
+      >
+    > = {
+      'local-only': isLocalOnlyPlanTier,
+      byok: isByokPlanTier,
+      free: isFreeBillingPlanTier,
+      basic: isBasicPlanTier,
+      pro: isProPlanTier,
+      max: isMaxPlanTier,
+      max_15x: isMax15xPlanTier,
+    };
+
+    it('matches only its own tier and rejects every other one, null and undefined', () => {
+      const allTiers = Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[];
+      for (const [tier, predicate] of Object.entries(PREDICATE_BY_TIER)) {
+        expect(predicate(tier)).toBe(true);
+        for (const other of allTiers) {
+          if (other === tier) continue;
+          expect(predicate(other)).toBe(false);
+        }
+        expect(predicate(null)).toBe(false);
+        expect(predicate(undefined)).toBe(false);
+      }
+    });
+
+    it('reports the three tiers with no possible managed spend as free of charge', () => {
+      expect(isFreeOfChargePlanTier('local-only')).toBe(true);
+      expect(isFreeOfChargePlanTier('byok')).toBe(true);
+      expect(isFreeOfChargePlanTier('free')).toBe(true);
+      for (const tier of ['basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const) {
+        expect(isFreeOfChargePlanTier(tier)).toBe(false);
+      }
+      expect(isFreeOfChargePlanTier(null)).toBe(false);
+      expect(isFreeOfChargePlanTier(undefined)).toBe(false);
     });
   });
 });
