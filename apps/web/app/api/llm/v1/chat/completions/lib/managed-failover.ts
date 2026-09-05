@@ -38,6 +38,13 @@ import 'server-only';
  * new provider needs, or the Perplexity fallback if none), so it may rotate
  * across providers like any other availability failure.
  *
+ * A request carrying any provider-native search tool, exempt or not, still
+ * gets at most `MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST` candidates on
+ * the provider it started with before a same-provider candidate is skipped in
+ * favour of a different one: a rate-limited grounding project otherwise
+ * served the whole candidate ladder on the same key, turning one 429 into a
+ * run of them.
+ *
  * Billing: rotation happens INSIDE one managed-usage lifecycle, the single
  * reservation taken by the request processor spans all attempts, and
  * settlement happens once, priced by the model that actually served (the
@@ -46,7 +53,11 @@ import 'server-only';
  * `managedUsage` through unchanged).
  */
 
-import { classifyError, CredentialFailoverState } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  CredentialFailoverState,
+  MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
+} from '@agiworkforce/provider-runtime';
 import { isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
@@ -252,6 +263,10 @@ export function createFailoverPlan(
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
+  const isGroundedRequest = (processed.llmRequest.tools ?? []).some(
+    (tool) => nativeSearchToolName(tool) !== '',
+  );
+  let sameProviderAttempts = 0;
   const credentialFailover = new CredentialFailoverState({
     ...(options.openCredentialProviders
       ? { openCredentialIds: options.openCredentialProviders }
@@ -297,6 +312,17 @@ export function createFailoverPlan(
         );
         continue;
       }
+      if (
+        isGroundedRequest &&
+        provider === processed.provider &&
+        sameProviderAttempts >= MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST
+      ) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: grounded request already spent its same-provider retry',
+        );
+        continue;
+      }
       if (!options.isProviderDispatchable(provider)) {
         logger.warn(
           { requestId: processed.requestId, model: candidate, provider },
@@ -313,6 +339,7 @@ export function createFailoverPlan(
       }
       const attemptView = buildFailoverAttemptView(latestView, candidate, provider);
       latestView = attemptView;
+      if (provider === processed.provider) sameProviderAttempts += 1;
       return {
         model: candidate,
         provider,

@@ -41,6 +41,7 @@ export {
   MAX_OVERLOAD_RETRIES,
   BASE_DELAY_MS,
   MAX_BACKOFF_MS,
+  MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
   type RetryContext,
   type RetryOptions,
   type RetryEvent,

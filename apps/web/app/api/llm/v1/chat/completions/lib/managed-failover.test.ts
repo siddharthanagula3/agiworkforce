@@ -277,6 +277,19 @@ describe('rotation eligibility (gateway parity)', () => {
     expect(attempt?.provider).toBe('openai');
   });
 
+  it('spends at most one same-provider retry on a grounded request before giving up on that provider', () => {
+    mockResolveProviderFromModel.mockImplementation(() => 'google');
+    const processed = makeProcessed({ provider: 'google' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [{ google_search: {} }];
+
+    const plan = makePlan(processed);
+    const first = plan.next(httpError(429, 'rate limit exceeded'));
+    expect(first?.model).toBe('candidate-a');
+    expect(first?.provider).toBe('google');
+
+    expect(plan.next(httpError(429, 'rate limit exceeded'))).toBeNull();
+  });
+
   it('still pins to the same provider when native search rides alongside a function tool', () => {
     const processed = makeProcessed({ provider: 'google' });
     (processed.llmRequest as { tools?: unknown[] }).tools = [

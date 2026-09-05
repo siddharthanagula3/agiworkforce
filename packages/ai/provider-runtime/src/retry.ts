@@ -12,6 +12,15 @@ export const MAX_OVERLOAD_RETRIES = 3;
 export const BASE_DELAY_MS = 500;
 export const MAX_BACKOFF_MS = 32_000;
 
+/**
+ * How many same-provider candidates managed failover may try for a request
+ * that carries a provider-native search tool before it must move to a
+ * different provider. A rate-limited grounding project served the whole
+ * candidate ladder on the same key otherwise, which is what turned one 429
+ * into a run of them.
+ */
+export const MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST = 1;
+
 export interface RetryContext {
   model: string;
   maxTokensOverride?: number;
