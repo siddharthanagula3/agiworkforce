@@ -59,7 +59,14 @@ export interface ResponsesNativeTool {
 
 export type ResponsesTool = ResponsesFunctionTool | ResponsesNativeTool;
 
-export type ResponsesToolChoice = 'auto' | 'none' | 'required' | { type: 'function'; name: string };
+export type ResponsesHostedToolChoice = { type: string };
+
+export type ResponsesToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; name: string }
+  | ResponsesHostedToolChoice;
 
 export interface ResponsesReasoningConfig {
   effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
