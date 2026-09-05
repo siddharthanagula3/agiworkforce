@@ -967,3 +967,48 @@ describe('AgentActivityTimeline failure row', () => {
     expect(screen.getAllByText('Writing response').length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('AgentActivityTimeline unavailable notices', () => {
+  const NOTICE = 'Code execution was not available: no sandbox was available right now.';
+
+  function unavailableTool(id: string) {
+    return {
+      kind: 'tool' as const,
+      id: `tool:${id}`,
+      toolCallId: id,
+      name: 'execute_code',
+      category: 'code-execution' as const,
+      summary: NOTICE,
+      status: 'failed' as const,
+      unavailable: true,
+      startedAtMs: 1_000,
+      completedAtMs: 1_100,
+    };
+  }
+
+  it('renders one notice however many calls the step refused', () => {
+    const run = activity({
+      status: 'completed',
+      completedAtMs: 4_000,
+      entries: [unavailableTool('a'), unavailableTool('b'), unavailableTool('c')],
+    });
+
+    render(<AgentActivityTimeline activity={run} defaultExpanded />);
+
+    expect(screen.getAllByText(NOTICE)).toHaveLength(1);
+  });
+
+  it('keeps distinct notices apart', () => {
+    const other = { ...unavailableTool('d'), summary: 'write_file was not available.' };
+    const run = activity({
+      status: 'completed',
+      completedAtMs: 4_000,
+      entries: [unavailableTool('a'), other],
+    });
+
+    render(<AgentActivityTimeline activity={run} defaultExpanded />);
+
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(screen.getByText('write_file was not available.')).toBeTruthy();
+  });
+});
