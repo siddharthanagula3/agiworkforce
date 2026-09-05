@@ -77,10 +77,6 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   isModelAllowedForTier: (modelId: string) => modelId !== 'fixture-locked-model',
 }));
 
-vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
-  BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
-}));
-
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
   const { createContext, useContext, cloneElement } = await import('react');

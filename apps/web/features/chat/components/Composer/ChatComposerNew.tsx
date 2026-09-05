@@ -3944,33 +3944,8 @@ const ChatComposerNewComponent = ({
                 )}
               </div>
 
-              {/* Standing web-search indicator, a small marked glyph, not a
-                control: search is ambient (model/deployment driven), so this
-                is text/status, never a button pretending to toggle it. Full
-                reachability lives in the "+" menu's status row below. */}
-              {billingPolicyReady && (
-                <span
-                  data-testid="web-search-indicator"
-                  data-active={webSearchEnabled ? 'true' : 'false'}
-                  title={
-                    webSearchEnabled
-                      ? 'This model can search the web when the question needs current information.'
-                      : 'This model has no web-search path, so this turn answers from its training data.'
-                  }
-                  className={cn(
-                    'inline-flex h-2 w-2 shrink-0 items-center justify-center self-center rounded-full',
-                    webSearchEnabled ? 'bg-[var(--chat-accent-primary)]' : 'bg-transparent',
-                  )}
-                >
-                  <span className="sr-only">
-                    {webSearchEnabled ? 'Web search on' : 'Web search off'}
-                  </span>
-                </span>
-              )}
-
-              {/* Per-chat Memory-off marker, same treatment as the web-search
-                glyph: visible without opening the menu, silent when memory is
-                on (the common case). */}
+              {/* Per-chat Memory-off marker: visible without opening the menu,
+                silent when memory is on (the common case). */}
               {memoryCapabilityEnabled && !memoryEnabledForChat && (
                 <span
                   data-testid="memory-indicator"

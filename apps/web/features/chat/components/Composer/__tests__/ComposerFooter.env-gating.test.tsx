@@ -101,10 +101,6 @@ vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
 }));
 
-vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
-  BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
-}));
-
 vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));

@@ -391,7 +391,7 @@ describe('public marketing copy regressions', () => {
     expect(composer, 'web search must still be derived from the resolved model').toContain(
       'setComposerToggles({ webSearchEnabled: modelSupportsSearch })',
     );
-    expect(composer, 'the composer must show whether search is on for this turn').toContain(
+    expect(composer, 'the composer face carries no standing search glyph').not.toContain(
       'data-testid="web-search-indicator"',
     );
 
