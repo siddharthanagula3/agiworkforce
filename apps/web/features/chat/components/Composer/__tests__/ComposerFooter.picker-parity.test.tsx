@@ -144,6 +144,40 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
   };
 });
 
+vi.mock('@features/chat/lib/use-model-catalogue', () => ({
+  useModelCatalogue: () => ({
+    status: 'ready',
+    entries: MODELS.map((model) => ({
+      id: model['id'],
+      displayName: model['name'],
+      provider: model['providerKey'],
+      family: null,
+      isRouter: false,
+      releasedOn: null,
+      stage: null,
+      openWeight: false,
+      contextTokens: null,
+      maxOutputTokens: null,
+      inputPerMillion: 0,
+      outputPerMillion: 0,
+      priceBand: null,
+      capabilities: {},
+      admitted: model['id'] !== registryFixtures.locked.id,
+      minimumPlanLabel:
+        model['id'] === registryFixtures.locked.id ? registryFixtures.locked.planLabel : null,
+      availability: model['availability'] ?? 'live',
+      requiresEnvironment: null,
+    })),
+    providers: [{ key: 'openai', admittedCount: 1, totalCount: 1 }],
+    count: MODELS.length,
+    planLabel: 'Max 15x',
+  }),
+}));
+
+vi.mock('@features/chat/lib/use-model-favourites', () => ({
+  useModelFavourites: () => ({ favouriteModelIds: [], toggleFavourite: vi.fn() }),
+}));
+
 vi.mock('zustand/middleware', async () => {
   const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };
@@ -234,20 +268,19 @@ describe('ComposerFooter · picker rows', () => {
     expect(within(row).queryByText('Tools')).not.toBeInTheDocument();
   });
 
-  it('keeps the All models row as a fixed-height expander with the locked roster behind it', () => {
+  it('opens the catalogue from All models and names the plan on a locked row there', () => {
     const dialog = mountAndOpen();
     const more = allModelsRow(dialog);
     expect(more).toHaveAttribute('data-picker-row');
     expect(more.className).toContain('h-12');
-    expect(more).toHaveAttribute('aria-expanded', 'false');
     expect(more).toHaveTextContent(String(BASE_MODELS.length));
     expect(
-      within(dialog).queryByRole('button', { name: new RegExp(lockedFixture.name) }),
+      within(dialog).queryByRole('option', { name: new RegExp(lockedFixture.name) }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(more);
-    expect(more).toHaveAttribute('aria-expanded', 'true');
-    const locked = within(dialog).getByRole('button', { name: new RegExp(lockedFixture.name) });
+    expect(within(dialog).getByRole('textbox', { name: 'Search models' })).toBeInTheDocument();
+    const locked = within(dialog).getByRole('option', { name: new RegExp(lockedFixture.name) });
     expect(locked).toHaveTextContent(`${lockedFixture.planLabel} and above`);
     expect(locked.className).toContain('h-12');
   });
@@ -352,19 +385,12 @@ describe('ComposerFooter · picker keyboard', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Change model' }));
   });
 
-  it('skips disabled rows when walking with the arrow keys', () => {
+  it('keeps a coming soon row non-selectable in the catalogue', () => {
     useRoster([BASE_MODELS[0]!, BASE_MODELS[1]!, COMING_SOON_MODEL, BASE_MODELS[2]!]);
     const dialog = mountAndOpen();
     fireEvent.click(allModelsRow(dialog));
-    const comingSoon = within(dialog).getByRole('button', { name: /Coming Soon Fixture/ });
+    const comingSoon = within(dialog).getByRole('option', { name: /Coming Soon Fixture/ });
     expect(comingSoon).toBeDisabled();
-
-    const more = allModelsRow(dialog);
-    more.focus();
-    fireEvent.keyDown(more, { key: 'ArrowDown' });
-    expect(document.activeElement).not.toBe(comingSoon);
-    expect(document.activeElement).toBe(
-      within(dialog).getByRole('button', { name: new RegExp(lockedFixture.name) }),
-    );
+    expect(comingSoon).toHaveTextContent('Coming soon');
   });
 });

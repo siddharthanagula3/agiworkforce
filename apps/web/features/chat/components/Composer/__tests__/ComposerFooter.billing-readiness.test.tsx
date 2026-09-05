@@ -21,6 +21,44 @@ const billingState: BillingState = {
   dailyLimit_cents: 0,
 };
 
+const CATALOGUE_ENTRIES = vi.hoisted(() => [
+  {
+    id: 'fixture-premium-model',
+    displayName: 'Premium Model',
+    provider: 'openai',
+    family: null,
+    isRouter: false,
+    releasedOn: null,
+    stage: null,
+    openWeight: false,
+    contextTokens: null,
+    maxOutputTokens: null,
+    inputPerMillion: 0,
+    outputPerMillion: 0,
+    priceBand: null,
+    capabilities: {},
+    admitted: false,
+    minimumPlanLabel: 'Pro',
+    availability: 'live',
+    requiresEnvironment: null,
+  },
+]);
+const CATALOGUE_PROVIDERS = vi.hoisted(() => [{ key: 'openai', admittedCount: 0, totalCount: 1 }]);
+
+vi.mock('@features/chat/lib/use-model-catalogue', () => ({
+  useModelCatalogue: () => ({
+    status: 'ready',
+    entries: CATALOGUE_ENTRIES,
+    providers: CATALOGUE_PROVIDERS,
+    count: CATALOGUE_ENTRIES.length,
+    planLabel: 'Free',
+  }),
+}));
+
+vi.mock('@features/chat/lib/use-model-favourites', () => ({
+  useModelFavourites: () => ({ favouriteModelIds: [], toggleFavourite: vi.fn() }),
+}));
+
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: BillingState) => unknown) => selector(billingState),
 }));
@@ -125,11 +163,19 @@ vi.mock('@shared/components/agi/AgiMark', () => ({
 
 import { ComposerFooter } from '../ComposerFooter';
 
+/**
+ * The short list only ever offers models the plan admits, so an upgrade claim
+ * against a paying subscriber is now structurally impossible there. This reads
+ * whichever surface currently carries the claim: a short list row while the
+ * plan is unresolved, or the catalogue row once the disclosure is open.
+ */
 function premiumRowLabel(): string {
+  const shortListRow = screen.queryByRole('button', { name: /Premium Model/i });
+  if (shortListRow) return shortListRow.getAttribute('aria-label') ?? '';
   const allModels = screen.queryByRole('button', { name: /All models/i });
   if (allModels) fireEvent.click(allModels);
-  const row = screen.getByRole('button', { name: /Premium Model/i });
-  return row.getAttribute('aria-label') ?? '';
+  const row = screen.queryByRole('option', { name: /Premium Model/i });
+  return row?.getAttribute('aria-label') ?? '';
 }
 
 describe('ComposerFooter · plan claims wait for billing readiness', () => {

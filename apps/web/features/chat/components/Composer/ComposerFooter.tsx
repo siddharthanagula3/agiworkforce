@@ -35,9 +35,7 @@ import { assessModelSwitchCache } from '@agiworkforce/routing';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   EFFORT_LABEL,
-  PROVIDER_DISPLAY,
   type Effort,
-  type ProviderId,
   getPickerModelTier,
   evaluateModelEnvironment,
   isFreeBillingPlanTier,
@@ -55,14 +53,16 @@ import {
 } from '@shared/config/llm';
 import type { ModelReasoning } from '@agiworkforce/types';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
-import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
-import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import {
   resolveFreeLaneUiBuildEnabled,
   resolveFreeLaneUiEnabled,
 } from '@features/chat/lib/free-lane-ui-gate';
 import { MODEL_SELECTOR_TRIGGER_ID } from '@features/chat/lib/model-picker-trigger';
+import { ProviderLogo } from './ProviderLogo';
+import { ModelCatalogue } from './ModelCatalogue';
+import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
+import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
 import {
   buildModelPickerShortList,
   resolvePlanLockLabel,
@@ -103,6 +103,7 @@ const PICKER_BADGE_CLASS =
 const PICKER_ICON_SIZE = 16;
 const PICKER_TRIGGER_ICON_SIZE = 12;
 const PICKER_PANEL_WIDTH_CLASS = 'w-80';
+const PICKER_CATALOGUE_WIDTH_CLASS = 'w-[40rem]';
 const PICKER_SECTION_LABEL_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 
 const CAPABILITY_GLYPHS: Readonly<
@@ -127,7 +128,6 @@ const PICKER_COMPOSER_CARD_GAP_PX = 8;
 const MANAGED_CLOUD_PROVIDER_KEY = 'managed_cloud';
 const COMING_SOON_LOCK_LABEL = 'Coming soon';
 const ENVIRONMENT_LOCK_LABEL = 'Beta';
-const EMPTY_FAVOURITES: readonly string[] = Object.freeze([]);
 const autoContinuityGuidance = (displayName: string) => `Stays on ${displayName} for this chat`;
 const lockedRowLabel = (planLabel: string) => `${planLabel} and above`;
 
@@ -165,30 +165,6 @@ function useFreeLaneUiEnabled(): boolean {
     resolveFreeLaneUiEnabled,
     resolveFreeLaneUiBuildEnabled,
   );
-}
-
-/**
- * Map a model-store providerKey (from models.json) to a ProviderId
- * as defined in PROVIDER_DISPLAY. Most keys are 1:1; managed_cloud
- * maps to agi-cloud.
- */
-function toProviderId(providerKey: string): ProviderId | null {
-  if (providerKey === 'managed_cloud') return 'agi-cloud';
-  if (providerKey in PROVIDER_DISPLAY) return providerKey as ProviderId;
-  return null;
-}
-
-/** Returns the /providers/<id>.svg URL or null when provider is unknown. */
-function providerLogoUrl(providerKey: string): string | null {
-  const id = toProviderId(providerKey);
-  if (!id) return null;
-  return `/providers/${id}.svg`;
-}
-
-/** Returns the brand hex color for a provider key. */
-function providerBrandHex(providerKey: string): string {
-  const id = toProviderId(providerKey);
-  return id ? (PROVIDER_DISPLAY[id].brandColor ?? '#71717A') : '#71717A';
 }
 
 // ---------------------------------------------------------------------------
@@ -408,60 +384,6 @@ function PriceBand({ band }: { band: ModelPickerPriceBand }) {
  * Uses modelLock() for all lock decisions so tier gating and env gating are
  * always applied together, no partial-update leak.
  */
-
-/** Provider logo: AGI mark for Auto modes → official vector mark → local SVG → brand dot. */
-function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?: number }) {
-  // No resolved provider (e.g. a model without a provider) → render no logo
-  // rather than crashing on providerKey.toLowerCase().
-  if (!providerKey) return null;
-  // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
-  if (providerKey === 'managed_cloud') {
-    return (
-      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary-text)]">
-        <AgiMark size={size} mono />
-      </span>
-    );
-  }
-
-  // Prefer the official, theme-adaptive mark (OpenAI/Claude/Gemini/DeepSeek/etc.).
-  const markKey = toProviderId(providerKey) ?? providerKey;
-  if (hasProviderMark(markKey)) {
-    return (
-      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-text-secondary)]">
-        <ProviderMark providerKey={markKey} size={size} />
-      </span>
-    );
-  }
-
-  const logoUrl = providerLogoUrl(providerKey);
-  const hex = providerBrandHex(providerKey);
-
-  if (logoUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt=""
-        aria-hidden="true"
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
-        className="shrink-0 rounded-sm object-contain"
-        onError={(e) => {
-          // Fallback: hide image; parent still has brand-color dot as sibling
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
-      />
-    );
-  }
-
-  return (
-    <span
-      className="shrink-0 rounded-full"
-      style={{ width: size, height: size, background: hex, display: 'inline-block' }}
-      aria-hidden="true"
-    />
-  );
-}
 
 function AutoRow({
   auto,
@@ -692,7 +614,7 @@ export function ComposerFooter({
   const effortPanelId = useId();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [moreExpanded, setMoreExpanded] = useState(false);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [effortExpanded, setEffortExpanded] = useState(false);
   const [providerAvailability, setProviderAvailability] = useState<
     Record<string, ProviderAvailability>
@@ -733,11 +655,12 @@ export function ComposerFooter({
   const closeModelPopover = useCallback(() => {
     setOpen(false);
     setSearchQuery('');
-    setMoreExpanded(false);
+    setCatalogueOpen(false);
     setEffortExpanded(false);
   }, []);
 
   const handlePickerTypeAhead = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.currentTarget.dataset['catalogueOpen'] === 'true') return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Backspace') {
       event.stopPropagation();
@@ -866,6 +789,9 @@ export function ComposerFooter({
     ? FREE_LANE_SLOT_TEXT
     : `${lockedDisplayModel.name} ${TRIAL_SLOT_SUFFIX}`;
 
+  const catalogue = useModelCatalogue(open);
+  const { favouriteModelIds, toggleFavourite } = useModelFavourites();
+
   const lockOverrides = useMemo(() => {
     const overrides = new Map<string, ModelPickerLock>();
     for (const model of AVAILABLE_MODELS) {
@@ -893,8 +819,9 @@ export function ComposerFooter({
           guidance: model.description,
         })),
         planTier: knownTier,
-        favouriteModelIds: EMPTY_FAVOURITES,
+        favouriteModelIds,
         conversationModelId,
+        selectedModelId,
         admitsModel: (modelId) => {
           const candidate = AVAILABLE_MODELS.find((model) => model.id === modelId);
           return candidate ? !modelLock(candidate, knownTier).locked : false;
@@ -903,7 +830,7 @@ export function ComposerFooter({
         autoGuidance: AUTO_GUIDANCE,
         autoContinuityGuidance,
       }),
-    [conversationModelId, lockOverrides, knownTier],
+    [conversationModelId, favouriteModelIds, lockOverrides, knownTier, selectedModelId],
   );
 
   const searchMatches = useMemo(() => {
@@ -917,14 +844,6 @@ export function ComposerFooter({
     );
   }, [searchQuery]);
 
-  const allModels = useMemo(
-    () => AVAILABLE_MODELS.filter((model) => model.providerKey !== MANAGED_CLOUD_PROVIDER_KEY),
-    [],
-  );
-  const recommendedIds = new Set(shortList.recommended.map((row) => row.id));
-  const selectedOutsideShortList =
-    !recommendedIds.has(selectedModelId) && selectedModelId !== shortList.auto?.id;
-  const showAllModels = moreExpanded || selectedOutsideShortList;
   const triggerReceipt =
     selectedModelId === shortList.auto?.id
       ? (shortList.auto.continuity ?? shortList.auto.guidance)
@@ -1115,7 +1034,8 @@ export function ComposerFooter({
                 alignOffset={0}
                 collisionPadding={PICKER_VIEWPORT_INSET_PX}
                 style={{ '--picker-flip-offset': `${composerClearancePx}px` } as CSSProperties}
-                className={`flex max-h-[min(34rem,var(--radix-popover-content-available-height))] ${PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
+                data-catalogue-open={catalogueOpen ? 'true' : 'false'}
+                className={`flex max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
                 aria-label={PICKER_TITLE}
                 onKeyDownCapture={handlePickerTypeAhead}
                 onCloseAutoFocus={(event) => {
@@ -1124,200 +1044,234 @@ export function ComposerFooter({
                 }}
               >
                 <TooltipProvider>
-                  <div className="min-h-0 flex-1 overflow-y-auto p-1">
-                    {searchMatches ? (
-                      <>
-                        <p className={PICKER_SECTION_LABEL_CLASS} role="status">
-                          {`${PICKER_QUERY_LABEL} ${searchQuery}`}
-                        </p>
-                        {searchMatches.length > 0 ? (
-                          searchMatches.map(renderModelRow)
-                        ) : (
-                          <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                            No models match
+                  {catalogueOpen ? (
+                    <ModelCatalogue
+                      entries={catalogue.entries}
+                      providers={catalogue.providers}
+                      favouriteModelIds={favouriteModelIds}
+                      selectedModelId={selectedModelId}
+                      query={searchQuery}
+                      onQueryChange={setSearchQuery}
+                      onSelect={(modelId) => {
+                        const target = AVAILABLE_MODELS.find((model) => model.id === modelId);
+                        if (target) handleSelectModel(target);
+                        else void commitModel(modelId);
+                      }}
+                      onToggleFavourite={toggleFavourite}
+                      onUpgradeRequest={onUpgradeRequest}
+                      isEnvironmentLocked={(requiresEnvironment) => {
+                        const result = evaluateModelEnvironment(
+                          requiresEnvironment as ModelEnvironment,
+                          environmentAvailability(requiresEnvironment as ModelEnvironment),
+                        );
+                        return result.selectable
+                          ? { locked: false }
+                          : { locked: true, ...(result.reason ? { reason: result.reason } : {}) };
+                      }}
+                      onBack={() => {
+                        setCatalogueOpen(false);
+                        setSearchQuery('');
+                      }}
+                    />
+                  ) : (
+                    <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                      {searchMatches ? (
+                        <>
+                          <p className={PICKER_SECTION_LABEL_CLASS} role="status">
+                            {`${PICKER_QUERY_LABEL} ${searchQuery}`}
                           </p>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {shortList.auto && (
-                          <AutoRow
-                            auto={shortList.auto}
-                            isSelected={shortList.auto.id === selectedModelId}
-                            onSelect={
-                              modelChangePending
-                                ? undefined
-                                : () => {
-                                    const autoModel = AVAILABLE_MODELS.find(
-                                      (model) => model.id === shortList.auto?.id,
-                                    );
-                                    if (autoModel) handleSelectModel(autoModel);
-                                  }
-                            }
-                          />
-                        )}
+                          {searchMatches.length > 0 ? (
+                            searchMatches.map(renderModelRow)
+                          ) : (
+                            <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                              No models match
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {shortList.auto && (
+                            <AutoRow
+                              auto={shortList.auto}
+                              isSelected={shortList.auto.id === selectedModelId}
+                              onSelect={
+                                modelChangePending
+                                  ? undefined
+                                  : () => {
+                                      const autoModel = AVAILABLE_MODELS.find(
+                                        (model) => model.id === shortList.auto?.id,
+                                      );
+                                      if (autoModel) handleSelectModel(autoModel);
+                                    }
+                              }
+                            />
+                          )}
 
-                        {shortList.recommended.length > 0 && (
-                          <>
-                            <p className={PICKER_SECTION_LABEL_CLASS}>Recommended</p>
-                            {shortList.recommended.map((row) => {
+                          {shortList.current &&
+                            (() => {
                               const model = AVAILABLE_MODELS.find(
-                                (candidate) => candidate.id === row.id,
+                                (candidate) => candidate.id === shortList.current?.id,
                               );
                               return model ? renderModelRow(model) : null;
-                            })}
-                          </>
-                        )}
+                            })()}
 
-                        {shortList.favourites.length > 0 && (
-                          <>
-                            <p className={PICKER_SECTION_LABEL_CLASS}>Favourites</p>
-                            {shortList.favourites.map((row) => {
-                              const model = AVAILABLE_MODELS.find(
-                                (candidate) => candidate.id === row.id,
-                              );
-                              return model ? renderModelRow(model) : null;
-                            })}
-                          </>
-                        )}
+                          {shortList.recommended.length > 0 && (
+                            <>
+                              <p className={PICKER_SECTION_LABEL_CLASS}>Recommended</p>
+                              {shortList.recommended.map((row) => {
+                                const model = AVAILABLE_MODELS.find(
+                                  (candidate) => candidate.id === row.id,
+                                );
+                                return model ? renderModelRow(model) : null;
+                              })}
+                            </>
+                          )}
 
-                        {!searchMatches && (showThinkingSwitch || effortSliderVisible) && (
-                          <div className="mt-1 border-t border-[var(--chat-border)] pt-1">
-                            {showThinkingSwitch && (
-                              <div className={PICKER_ROW_CLASS}>
-                                <span className="min-w-0 flex-1">
-                                  <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                    Extended thinking
-                                  </span>
-                                  <span className={PICKER_ROW_GUIDANCE_CLASS}>
-                                    Thinks for more complex tasks
-                                  </span>
-                                </span>
-                                <Switch
-                                  {...{ [PICKER_ROW_ATTR]: '' }}
-                                  checked={thinkingEnabled}
-                                  onCheckedChange={handleThinkingEnabledChange}
-                                  aria-label="Toggle extended thinking"
-                                  className="h-5 w-9"
-                                />
-                              </div>
-                            )}
+                          {shortList.favourites.length > 0 && (
+                            <>
+                              <p className={PICKER_SECTION_LABEL_CLASS}>Favourites</p>
+                              {shortList.favourites.map((row) => {
+                                const model = AVAILABLE_MODELS.find(
+                                  (candidate) => candidate.id === row.id,
+                                );
+                                return model ? renderModelRow(model) : null;
+                              })}
+                            </>
+                          )}
 
-                            {effortSliderVisible && (
-                              <>
-                                <button
-                                  type="button"
-                                  {...{ [PICKER_ROW_ATTR]: '' }}
-                                  className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-                                  onClick={() => setEffortExpanded((v) => !v)}
-                                  aria-expanded={effortExpanded}
-                                  aria-controls={effortPanelId}
-                                >
+                          {!searchMatches && (showThinkingSwitch || effortSliderVisible) && (
+                            <div className="mt-1 border-t border-[var(--chat-border)] pt-1">
+                              {showThinkingSwitch && (
+                                <div className={PICKER_ROW_CLASS}>
                                   <span className="min-w-0 flex-1">
                                     <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                      Effort
+                                      Extended thinking
                                     </span>
                                     <span className={PICKER_ROW_GUIDANCE_CLASS}>
-                                      {isAlwaysOn
-                                        ? 'Always on for this model'
-                                        : 'Choose how much reasoning to use'}
+                                      Thinks for more complex tasks
                                     </span>
                                   </span>
-                                  <span className="shrink-0 text-xs text-muted-foreground">
-                                    {selectedEffortLabel}
-                                  </span>
-                                  <ChevronRight
-                                    className={[
-                                      'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                                      effortExpanded ? 'rotate-90' : '',
-                                    ].join(' ')}
-                                    aria-hidden="true"
+                                  <Switch
+                                    {...{ [PICKER_ROW_ATTR]: '' }}
+                                    checked={thinkingEnabled}
+                                    onCheckedChange={handleThinkingEnabledChange}
+                                    aria-label="Toggle extended thinking"
+                                    className="h-5 w-9"
                                   />
-                                </button>
-                                {effortExpanded && (
-                                  <div
-                                    id={effortPanelId}
-                                    ref={effortPanelRef}
-                                    role="group"
-                                    aria-label="Reasoning effort level"
-                                    className="px-3 pb-3 pt-1"
+                                </div>
+                              )}
+
+                              {effortSliderVisible && (
+                                <>
+                                  <button
+                                    type="button"
+                                    {...{ [PICKER_ROW_ATTR]: '' }}
+                                    className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+                                    onClick={() => setEffortExpanded((v) => !v)}
+                                    aria-expanded={effortExpanded}
+                                    aria-controls={effortPanelId}
                                   >
-                                    <div className="rounded-full border border-[var(--chat-border)] bg-muted/35 px-3 py-3">
-                                      <Slider
-                                        min={0}
-                                        max={effortChips.length - 1}
-                                        step={1}
-                                        value={[effortSliderIndex]}
-                                        onValueChange={(value) => {
-                                          const chip = effortChips[value[0] ?? -1];
-                                          if (chip) handleEffortChip(chip);
-                                        }}
-                                        thumbAriaLabel="Reasoning effort"
-                                        valueLabel={selectedEffortLabel}
-                                        className="px-0.5"
-                                      />
+                                    <span className="min-w-0 flex-1">
+                                      <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
+                                        Effort
+                                      </span>
+                                      <span className={PICKER_ROW_GUIDANCE_CLASS}>
+                                        {isAlwaysOn
+                                          ? 'Always on for this model'
+                                          : 'Choose how much reasoning to use'}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                      {selectedEffortLabel}
+                                    </span>
+                                    <ChevronRight
+                                      className={[
+                                        'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+                                        effortExpanded ? 'rotate-90' : '',
+                                      ].join(' ')}
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                  {effortExpanded && (
+                                    <div
+                                      id={effortPanelId}
+                                      ref={effortPanelRef}
+                                      role="group"
+                                      aria-label="Reasoning effort level"
+                                      className="px-3 pb-3 pt-1"
+                                    >
+                                      <div className="rounded-full border border-[var(--chat-border)] bg-muted/35 px-3 py-3">
+                                        <Slider
+                                          min={0}
+                                          max={effortChips.length - 1}
+                                          step={1}
+                                          value={[effortSliderIndex]}
+                                          onValueChange={(value) => {
+                                            const chip = effortChips[value[0] ?? -1];
+                                            if (chip) handleEffortChip(chip);
+                                          }}
+                                          thumbAriaLabel="Reasoning effort"
+                                          valueLabel={selectedEffortLabel}
+                                          className="px-0.5"
+                                        />
+                                      </div>
+                                      {gatedEffortChips.length > 0 && (
+                                        <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                                          <span>
+                                            {gatedEffortChips
+                                              .map((chip) => EFFORT_LABEL[chip])
+                                              .join(', ')}{' '}
+                                            {gatedEffortChips.length > 1
+                                              ? 'effort levels are'
+                                              : 'effort is'}{' '}
+                                            not included in your plan.
+                                          </span>
+                                          {onUpgradeRequest && (
+                                            <button
+                                              type="button"
+                                              {...{ [PICKER_ROW_ATTR]: '' }}
+                                              onClick={onUpgradeRequest}
+                                              className="font-medium text-primary underline-offset-2 hover:underline"
+                                            >
+                                              Upgrade
+                                            </button>
+                                          )}
+                                        </p>
+                                      )}
                                     </div>
-                                    {gatedEffortChips.length > 0 && (
-                                      <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                                        <span>
-                                          {gatedEffortChips
-                                            .map((chip) => EFFORT_LABEL[chip])
-                                            .join(', ')}{' '}
-                                          {gatedEffortChips.length > 1
-                                            ? 'effort levels are'
-                                            : 'effort is'}{' '}
-                                          not included in your plan.
-                                        </span>
-                                        {onUpgradeRequest && (
-                                          <button
-                                            type="button"
-                                            {...{ [PICKER_ROW_ATTR]: '' }}
-                                            onClick={onUpgradeRequest}
-                                            className="font-medium text-primary underline-offset-2 hover:underline"
-                                          >
-                                            Upgrade
-                                          </button>
-                                        )}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                        <div className="my-1 border-t border-[var(--chat-border)]" />
-                        <button
-                          type="button"
-                          {...{ [PICKER_ROW_ATTR]: '' }}
-                          className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-                          onClick={() => setMoreExpanded((v) => !v)}
-                          aria-expanded={showAllModels}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                              All models
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+                          <div className="my-1 border-t border-[var(--chat-border)]" />
+                          <button
+                            type="button"
+                            {...{ [PICKER_ROW_ATTR]: '' }}
+                            className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+                            onClick={() => setCatalogueOpen(true)}
+                            aria-expanded={false}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
+                                All models
+                              </span>
                             </span>
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {shortList.totalCount}
-                          </span>
-                          <ChevronRight
-                            className={[
-                              'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                              showAllModels ? 'rotate-90' : '',
-                            ].join(' ')}
-                            aria-hidden="true"
-                          />
-                        </button>
-                        {showAllModels &&
-                          allModels
-                            .filter((model) => !recommendedIds.has(model.id))
-                            .map(renderModelRow)}
-                      </>
-                    )}
-                  </div>
-                  {!shortList.plan.admitsEveryModel && (
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {catalogue.status === 'ready'
+                                ? catalogue.count
+                                : shortList.totalCount}
+                            </span>
+                            <ChevronRight
+                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {!catalogueOpen && !shortList.plan.admitsEveryModel && (
                     <div className="shrink-0 border-t border-[var(--chat-border)] p-1">
                       <a
                         {...{ [PICKER_ROW_ATTR]: '' }}
