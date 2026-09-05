@@ -62,7 +62,6 @@ pub async fn settings_update_privacy(
     .map_err(|e| format!("Failed to save privacy preferences: {}", e))?;
 
     crate::sys::telemetry::process_consent().set(preferences.telemetry_enabled);
-    crate::sys::crash_reporter::set_enabled(preferences.crash_reporting_enabled);
 
     tracing::info!(
         "[Privacy] Updated privacy preferences: telemetry={}, crash_reporting={}, ai_sharing={}, analytics={}, usage_data={}",
