@@ -1,3 +1,4 @@
+import type { PlacePriceLevel } from './places-search';
 import type { ChatExecutionMode } from './suite-contracts';
 
 export const INTERACTIVE_CARD_SCHEMA_VERSION = 1;
@@ -16,6 +17,7 @@ export const KNOWN_INTERACTIVE_CARD_KINDS = [
   'itinerary.v1',
   'map-search.v1',
   'mcp-app.v1',
+  'places.v1',
 ] as const;
 export type KnownInteractiveCardKind = (typeof KNOWN_INTERACTIVE_CARD_KINDS)[number];
 
@@ -23,6 +25,17 @@ export type InteractiveCardKindWire = string;
 
 export function isKnownInteractiveCardKind(kind: string): kind is KnownInteractiveCardKind {
   return (KNOWN_INTERACTIVE_CARD_KINDS as readonly string[]).includes(kind);
+}
+
+/**
+ * Kinds the model produces before it writes a word, so the transcript reads in
+ * the order the turn happened. Everything else renders after the prose that
+ * motivated it.
+ */
+export const LEADING_INTERACTIVE_CARD_KINDS: readonly KnownInteractiveCardKind[] = ['places.v1'];
+
+export function interactiveCardRendersBeforeProse(kind: string): boolean {
+  return (LEADING_INTERACTIVE_CARD_KINDS as readonly string[]).includes(kind);
 }
 
 export interface InteractiveCardFallback {
@@ -225,6 +238,51 @@ export interface McpAppCardBody {
   resourceUri: string;
 }
 
+export const PLACES_CARD_MAX_PLACES = 10;
+export const PLACES_CARD_MAX_PHOTOS_PER_PLACE = 4;
+export const PLACES_CARD_PHOTO_REFERENCE_MAX_LENGTH = 512;
+export const PLACES_CARD_NAME_MAX_LENGTH = 160;
+export const PLACES_CARD_ADDRESS_MAX_LENGTH = 300;
+export const PLACES_CARD_CATEGORY_MAX_LENGTH = 80;
+export const PLACES_CARD_ATTRIBUTION_MAX_LENGTH = 160;
+export const PLACES_CARD_PLACE_ID_MAX_LENGTH = 256;
+export const PLACES_CARD_LOCAL_TIME_MAX_LENGTH = 120;
+export const PLACES_CARD_MIN_RATING = 0;
+export const PLACES_CARD_MAX_RATING = 5;
+
+export interface PlacesCardPhoto {
+  reference: string;
+  attribution?: string;
+}
+
+export interface PlacesCardPlace {
+  placeId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  rating?: number;
+  reviewCount?: number;
+  category?: string;
+  priceLevel?: PlacePriceLevel;
+  openNow?: boolean;
+  directionsUrl?: string;
+  websiteUrl?: string;
+  photos?: PlacesCardPhoto[];
+}
+
+export interface PlacesCardBody {
+  query: string;
+  near?: string;
+  openNowRequested: boolean;
+  /** The instant the search ran, in the reader's own zone, so an open-now claim
+   * carries the time it was true for instead of implying "now". */
+  localTime?: string;
+  attribution: string;
+  termsUrl?: string;
+  places: PlacesCardPlace[];
+}
+
 export interface ItineraryToolInputStop {
   startTimeLabel: string;
   note: string;
@@ -271,6 +329,11 @@ export type KnownInteractiveCard =
       recognized: true;
       kind: 'mcp-app.v1';
       body: McpAppCardBody;
+    })
+  | (InteractiveCardCommon & {
+      recognized: true;
+      kind: 'places.v1';
+      body: PlacesCardBody;
     });
 
 export interface UnrecognizedInteractiveCard extends InteractiveCardCommon {
