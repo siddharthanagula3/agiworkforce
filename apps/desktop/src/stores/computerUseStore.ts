@@ -96,6 +96,7 @@ export interface TierAssessment {
 export interface ActionRoutingRecord {
   sessionId: string;
   selected: ExecutorTier;
+  driver: string;
   tool: string | null;
   declined: TierAssessment[];
 }
@@ -753,7 +754,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
 
 interface RoutingDecisionPayload {
   selected: ExecutorTier;
-  call: { tool: string } | null;
+  driver: string;
+  call: { tool: string; driver: string } | null;
   declined: TierAssessment[];
 }
 
@@ -793,6 +795,7 @@ export function subscribeToComputerUseEvents(): () => void {
           lastRouting: {
             sessionId,
             selected: decision.selected,
+            driver: decision.driver,
             tool: decision.call?.tool ?? null,
             declined: decision.declined,
           },

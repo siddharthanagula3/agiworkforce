@@ -89,7 +89,8 @@ pub fn tool_to_capability(tool_name: &str) -> Option<&'static str> {
         | "browser_get_attribute" => Some("browserAutomation"),
 
         // Computer use (mouse, keyboard, desktop)
-        "ui_click" | "ui_type" => Some("computerUse"),
+        "ui_click" | "ui_type" | "ui_toggle" | "ui_focus_window" | "ui_scroll"
+        | "ui_read_value" => Some("computerUse"),
 
         // Screenshot & OCR
         "ui_screenshot" => Some("screenshotOcr"),
@@ -161,6 +162,10 @@ mod tests {
             Some("browserAutomation")
         );
         assert_eq!(tool_to_capability("ui_click"), Some("computerUse"));
+        assert_eq!(tool_to_capability("ui_toggle"), Some("computerUse"));
+        assert_eq!(tool_to_capability("ui_focus_window"), Some("computerUse"));
+        assert_eq!(tool_to_capability("ui_scroll"), Some("computerUse"));
+        assert_eq!(tool_to_capability("ui_read_value"), Some("computerUse"));
         assert_eq!(
             tool_to_capability("terminal_execute"),
             Some("terminalAccess")
