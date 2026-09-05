@@ -66,6 +66,7 @@ vi.mock('./MessageBubble', () => ({
     onBranch,
     isBranching,
     branchNavigation,
+    isLatestTurn,
   }: {
     message: {
       id: string;
@@ -74,6 +75,7 @@ vi.mock('./MessageBubble', () => ({
       isStreaming?: boolean;
       attachments?: Array<{ name: string }>;
     };
+    isLatestTurn?: boolean;
     onRegenerate?: () => void;
     onDelete?: () => void;
     onReadAloud?: (messageId: string, content: string) => void;
@@ -90,6 +92,7 @@ vi.mock('./MessageBubble', () => ({
     <div
       data-testid={`bubble-${message.id}`}
       data-role={message.role}
+      data-latest-turn={isLatestTurn ? 'true' : undefined}
       data-attachments={message.attachments?.map((attachment) => attachment.name).join(',')}
     >
       <span>{message.isStreaming && !message.content ? 'Thinking...' : message.content}</span>
@@ -229,7 +232,83 @@ describe('ChatMessageList rendering', () => {
     expect(screen.getByText('Hi there')).toBeInTheDocument();
   });
 
-  it('aligns follow-up suggestions to the composer content column', () => {
+  it('aligns follow-up suggestions to the composer content column when enabled', () => {
+    const messagesWithSuggestions = [
+      messages[0]!,
+      makeMessage({
+        id: 'm2',
+        role: 'assistant',
+        content: 'Here is a concrete plan with the next steps you can follow.',
+      }),
+    ];
+
+    render(
+      <ChatMessageList
+        messages={messagesWithSuggestions}
+        onSendMessage={vi.fn()}
+        enableFollowUpSuggestions
+      />,
+    );
+
+    expect(screen.getByTestId('follow-up-suggestions-shell')).toHaveClass(
+      'mx-auto',
+      'w-full',
+      'max-w-3xl',
+      'px-4',
+    );
+  });
+
+  it('marks only the last assistant message as the latest turn', () => {
+    const transcript = [
+      makeMessage({ id: 'u1', role: 'user', content: 'First question' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: 'First answer' }),
+      makeMessage({ id: 'u2', role: 'user', content: 'Second question' }),
+      makeMessage({ id: 'a2', role: 'assistant', content: 'Second answer' }),
+    ];
+
+    render(<ChatMessageList messages={transcript} />);
+
+    expect(screen.getByTestId('bubble-a1').hasAttribute('data-latest-turn')).toBe(false);
+    expect(screen.getByTestId('bubble-u2').hasAttribute('data-latest-turn')).toBe(false);
+    expect(screen.getByTestId('bubble-a2').getAttribute('data-latest-turn')).toBe('true');
+  });
+
+  it('drops the latest-turn flag from a reply once a newer turn arrives', () => {
+    const firstTurn = [
+      makeMessage({ id: 'u1', role: 'user', content: 'First question' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: 'First answer' }),
+    ];
+
+    const { rerender } = render(<ChatMessageList messages={firstTurn} />);
+    expect(screen.getByTestId('bubble-a1').getAttribute('data-latest-turn')).toBe('true');
+
+    rerender(
+      <ChatMessageList
+        messages={[
+          ...firstTurn,
+          makeMessage({ id: 'u2', role: 'user', content: 'Second question' }),
+          makeMessage({ id: 'a2', role: 'assistant', content: 'Second answer' }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('bubble-a1').hasAttribute('data-latest-turn')).toBe(false);
+    expect(screen.getByTestId('bubble-a2').getAttribute('data-latest-turn')).toBe('true');
+  });
+
+  it('never marks a trailing user message as the latest turn', () => {
+    const transcript = [
+      makeMessage({ id: 'a1', role: 'assistant', content: 'Answer' }),
+      makeMessage({ id: 'u2', role: 'user', content: 'Question' }),
+    ];
+
+    render(<ChatMessageList messages={transcript} />);
+
+    expect(screen.getByTestId('bubble-a1').hasAttribute('data-latest-turn')).toBe(false);
+    expect(screen.getByTestId('bubble-u2').hasAttribute('data-latest-turn')).toBe(false);
+  });
+
+  it('does not show follow-up suggestion chips by default', () => {
     const messagesWithSuggestions = [
       messages[0]!,
       makeMessage({
@@ -241,12 +320,7 @@ describe('ChatMessageList rendering', () => {
 
     render(<ChatMessageList messages={messagesWithSuggestions} onSendMessage={vi.fn()} />);
 
-    expect(screen.getByTestId('follow-up-suggestions-shell')).toHaveClass(
-      'mx-auto',
-      'w-full',
-      'max-w-3xl',
-      'px-4',
-    );
+    expect(screen.queryByTestId('follow-up-suggestions-shell')).toBeNull();
   });
 
   it('forwards persisted attachments to the transcript bubble after reload', () => {

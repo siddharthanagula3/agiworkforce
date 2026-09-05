@@ -1006,7 +1006,7 @@
   /* Message row container · vertical rhythm only. ChatGPT/Claude-style flat feed:
      no per-row striping or separators, the asymmetry lives in the user bubble. */
   .message-row {
-    @apply relative py-3;
+    @apply relative py-1.5;
   }
 
   /* Both roles share a transparent row background (flat conversation feed) */
@@ -1033,25 +1033,13 @@
     @apply flex-1 min-w-0;
   }
 
-  /*
-   * Message text - 15 px / 1.6 lh matching desktop .message-text.
-   * 'text-[15px]' is an arbitrary-value Tailwind v4 class.
-   */
   .message-text {
-    @apply text-[15px] leading-relaxed text-gray-800 dark:text-gray-200;
+    @apply text-base text-gray-800 dark:text-gray-200;
+    line-height: 1.625;
   }
 
-  .message-text p {
-    @apply my-3 first:mt-0 last:mb-0;
-  }
-
-  .message-text ul,
-  .message-text ol {
-    @apply my-3 pl-6;
-  }
-
-  .message-text li {
-    @apply my-1.5;
+  .message-text.user-bubble {
+    @apply leading-6;
   }
 
   /* Inline code - desktop .message-text code:not(pre code) */
@@ -1065,7 +1053,7 @@
   .user-bubble {
     @apply w-fit px-4 py-2.5;
     max-width: 100%;
-    border-radius: var(--chat-radius-2xl);
+    border-radius: var(--chat-user-bubble-radius);
     background-color: var(--chat-user-bubble-bg);
     color: var(--chat-text-primary);
   }
@@ -1305,7 +1293,82 @@
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
   }
-} /* Animation utilities */
+}
+
+/* Transcript prose rhythm. Unlayered on purpose: the shared markdown renderer
+   sets its spacing with utility classes, and a layered rule loses to those
+   whatever its specificity. */
+.message-text > * {
+  @apply mt-3 mb-0;
+}
+
+.message-text > :first-child {
+  @apply mt-0;
+}
+
+.message-text p {
+  @apply mt-3 mb-0 leading-[inherit];
+}
+
+.message-text li > p:first-child,
+.message-text blockquote > p:first-child {
+  @apply mt-0;
+}
+
+.message-text h1,
+.message-text h2 {
+  @apply text-xl font-semibold mt-6 mb-2;
+}
+
+.message-text h1 + *,
+.message-text h2 + * {
+  @apply mt-2;
+}
+
+.message-text ul,
+.message-text ol {
+  @apply pl-7;
+}
+
+.message-text li + li {
+  @apply mt-1;
+}
+
+.message-text[data-streaming='true'] > span:last-child {
+  @apply hidden;
+}
+
+.message-text[data-streaming='true'] > :not(span, ul, ol):last-child::after,
+.message-text[data-streaming='true'] > :not(ul, ol):has(+ span:last-child)::after,
+.message-text[data-streaming='true'] > :is(ul, ol):last-child > li:last-child::after,
+.message-text[data-streaming='true'] > :is(ul, ol):has(+ span:last-child) > li:last-child::after {
+  content: '';
+  display: inline-block;
+  width: 0.125em;
+  height: 1em;
+  margin-left: 0.25em;
+  vertical-align: -0.125em;
+  border-radius: var(--chat-radius-sm);
+  background-color: currentColor;
+  animation: transcript-caret 1s steps(2, start) infinite;
+}
+
+@keyframes transcript-caret {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-text[data-streaming='true'] > :not(span, ul, ol):last-child::after,
+  .message-text[data-streaming='true'] > :not(ul, ol):has(+ span:last-child)::after,
+  .message-text[data-streaming='true'] > :is(ul, ol):last-child > li:last-child::after,
+  .message-text[data-streaming='true'] > :is(ul, ol):has(+ span:last-child) > li:last-child::after {
+    animation: none;
+  }
+}
+
+/* Animation utilities */
 @layer utilities {
   .animate-fade-in-up {
     animation: fade-in-up 0.4s ease-out;

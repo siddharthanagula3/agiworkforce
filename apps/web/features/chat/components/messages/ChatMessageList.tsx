@@ -23,7 +23,7 @@ import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-
 import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
 import type { ResearchPlanDecision } from '../research/ResearchActivity';
 import {
   InlinePaywallCard,
@@ -245,6 +245,9 @@ export interface ChatMessageListProps {
     recoveryAction: PaywallRecoveryAction,
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
+  enableFollowUpSuggestions?: boolean;
+  onRegenerateWithModel?: (messageId: string, modelId: string) => void;
+  regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
 }
 
 export interface MessageBranchGroup {
@@ -399,10 +402,13 @@ interface MessageGroupRowProps {
   speakingMessageId: string | null;
   isReadAloudSupported: boolean;
   onReadAloud: (messageId: string, content: string) => void;
+  onRegenerateWithModel?: (messageId: string, modelId: string) => void;
+  regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
 }
 
 interface MessageRowProps {
   message: ChatMessage;
+  isLastMessage?: boolean;
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
@@ -436,6 +442,8 @@ interface MessageRowProps {
   speakingMessageId: string | null;
   isReadAloudSupported: boolean;
   onReadAloud: (messageId: string, content: string) => void;
+  onRegenerateWithModel?: (messageId: string, modelId: string) => void;
+  regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
 }
 
 type RenderedMessageMetadata = MessageMetadata &
@@ -601,6 +609,7 @@ function messageRowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boo
 
 const MessageRow = memo(function MessageRow({
   message,
+  isLastMessage,
   currentTier,
   onRegenerate,
   onRetryResearch,
@@ -627,6 +636,8 @@ const MessageRow = memo(function MessageRow({
   speakingMessageId,
   isReadAloudSupported,
   onReadAloud,
+  onRegenerateWithModel,
+  regenerateModelOptions,
 }: MessageRowProps) {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
@@ -757,6 +768,11 @@ const MessageRow = memo(function MessageRow({
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
       isReadingAloud={speakingMessageId === message.id}
       isReadAloudSupported={isReadAloudSupported}
+      isLatestTurn={displayRole === 'assistant' && Boolean(isLastMessage)}
+      onRegenerateWithModel={
+        onRegenerateWithModel && displayRole === 'assistant' ? onRegenerateWithModel : undefined
+      }
+      regenerateModelOptions={regenerateModelOptions}
     />
   );
 }, messageRowPropsEqual);
@@ -781,7 +797,7 @@ function groupContentEqual(
 const MessageGroupRow = memo(
   ({
     group,
-    isLastGroup: _isLastGroup,
+    isLastGroup,
     currentTier,
     onRegenerate,
     onRetryResearch,
@@ -808,15 +824,18 @@ const MessageGroupRow = memo(
     speakingMessageId,
     isReadAloudSupported,
     onReadAloud,
+    onRegenerateWithModel,
+    regenerateModelOptions,
   }: MessageGroupRowProps) => {
     return (
       <div
         className={cn('message-group', group.role === 'user' ? 'user-group' : 'assistant-group')}
       >
-        {group.messages.map((message) => (
+        {group.messages.map((message, index) => (
           <MessageRow
             key={message.id}
             message={message}
+            isLastMessage={isLastGroup && index === group.messages.length - 1}
             currentTier={currentTier}
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
@@ -843,6 +862,8 @@ const MessageGroupRow = memo(
             speakingMessageId={speakingMessageId}
             isReadAloudSupported={isReadAloudSupported}
             onReadAloud={onReadAloud}
+            onRegenerateWithModel={onRegenerateWithModel}
+            regenerateModelOptions={regenerateModelOptions}
           />
         ))}
       </div>
@@ -881,7 +902,9 @@ const MessageGroupRow = memo(
       prev.onRetryVideo === next.onRetryVideo &&
       prev.speakingMessageId === next.speakingMessageId &&
       prev.isReadAloudSupported === next.isReadAloudSupported &&
-      prev.onReadAloud === next.onReadAloud
+      prev.onReadAloud === next.onReadAloud &&
+      prev.onRegenerateWithModel === next.onRegenerateWithModel &&
+      prev.regenerateModelOptions === next.regenerateModelOptions
     );
   },
 );
@@ -984,6 +1007,8 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
 }, transcriptRowPropsEqual);
 VirtualizedTranscriptRow.displayName = 'VirtualizedTranscriptRow';
 
+const FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false;
+
 const SCROLL_THRESHOLD_PX = 120;
 const ANCHOR_SETTLE_TIMEOUT_MS = 1000;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
@@ -1068,6 +1093,9 @@ const ChatMessageListComponent = ({
   className,
   onPaywallUpgrade,
   onPaywallDismiss,
+  enableFollowUpSuggestions = FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT,
+  onRegenerateWithModel,
+  regenerateModelOptions,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
   const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
@@ -1247,6 +1275,7 @@ const ChatMessageListComponent = ({
   );
 
   const showFollowUps =
+    enableFollowUpSuggestions &&
     onSendMessage &&
     !isLoading &&
     lastMessage?.role === 'assistant' &&
@@ -1589,6 +1618,8 @@ const ChatMessageListComponent = ({
       speakingMessageId: isSpeaking ? speakingMessageId : null,
       isReadAloudSupported,
       onReadAloud: handleReadAloud,
+      onRegenerateWithModel,
+      regenerateModelOptions,
     }),
     [
       branchGroupsByMessageId,
@@ -1619,6 +1650,8 @@ const ChatMessageListComponent = ({
       isConversationStreaming,
       speakingMessageId,
       currentTier,
+      onRegenerateWithModel,
+      regenerateModelOptions,
     ],
   );
 
@@ -1900,6 +1933,9 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.activeLeafId === next.activeLeafId &&
     prev.variantAnchorMessageId === next.variantAnchorMessageId &&
     prev.isConversationStreaming === next.isConversationStreaming &&
+    prev.enableFollowUpSuggestions === next.enableFollowUpSuggestions &&
+    prev.onRegenerateWithModel === next.onRegenerateWithModel &&
+    prev.regenerateModelOptions === next.regenerateModelOptions &&
     prev.messages.every((prevMessage, index) => {
       const nextMessage = next.messages[index];
       if (!nextMessage) return false;
