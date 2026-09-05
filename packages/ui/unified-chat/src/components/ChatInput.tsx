@@ -21,7 +21,6 @@ import {
   History,
   Image as ImageIcon,
   ListChecks,
-  Loader2,
   Mic,
   Plus,
   X,
@@ -42,6 +41,10 @@ import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
 import { SkillMentionPicker, type MentionSkill } from './SkillMentionPicker';
 import { matchMentionQuery } from '../lib/mentionQuery';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { VoiceOrbCanvas } from './VoiceOrb';
+import { orbStateForComposerVoiceState } from '../voice/composer-voice-visual';
+import type { ComposerVoiceState, ComposerVoiceController } from '../voice/composer-voice-contract';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { selectMediaMode, supportedMediaKinds, useMediaModeStore } from '../stores/mediaModeStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
@@ -79,22 +82,7 @@ export interface ChatInputProjectPicker {
   onCreateProject?: () => void;
 }
 
-export type ComposerVoiceState =
-  | 'idle'
-  | 'listening'
-  | 'transcribing'
-  | 'processing'
-  | 'awaiting_action'
-  | 'executing'
-  | 'stopping'
-  | 'error'
-  | 'unsupported';
-
-export interface ComposerVoiceController {
-  state: ComposerVoiceState;
-  onToggle: () => void | Promise<void>;
-  idleLabel?: string;
-}
+export type { ComposerVoiceState, ComposerVoiceController } from '../voice/composer-voice-contract';
 
 export interface ChatInputSlashCommandHost {
   togglePlanMode: () => void;
@@ -434,7 +422,7 @@ export function ChatInput({
       focusComposer();
     },
   });
-  const voiceState = voiceInputController?.state ?? browserVoiceState;
+  const voiceState: ComposerVoiceState = voiceInputController?.state ?? browserVoiceState;
   const startVoice = voiceInputController?.onToggle ?? startBrowserVoice;
   const voiceIsBusy = [
     'transcribing',
@@ -444,6 +432,9 @@ export function ChatInput({
     'stopping',
   ].includes(voiceState);
   const voiceIsDisabled = voiceIsBusy || voiceState === 'unsupported';
+  const voiceOrbState = orbStateForComposerVoiceState(voiceState);
+  const showVoiceOrb = voiceState === 'listening' || voiceIsBusy;
+  const voiceReducedMotion = useReducedMotion();
   const voiceLabel =
     voiceState === 'listening'
       ? t('composer.voiceStopRecording', 'Stop recording')
@@ -1335,14 +1326,21 @@ export function ChatInput({
                       'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                       voiceState === 'listening'
-                        ? 'text-[var(--chat-accent-primary-text)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
+                        ? 'text-[var(--chat-accent-primary-text)] hover:bg-[var(--chat-accent-primary)]/10'
                         : voiceIsBusy
                           ? 'cursor-wait text-[var(--chat-text-muted)]'
                           : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                     )}
                   >
-                    {voiceIsBusy ? (
-                      <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+                    {showVoiceOrb ? (
+                      <VoiceOrbCanvas
+                        orbState={voiceOrbState}
+                        focus={false}
+                        growIn={false}
+                        reducedMotion={voiceReducedMotion}
+                        canvasSize={20}
+                        sphereSize={12}
+                      />
                     ) : (
                       <Mic size={16} strokeWidth={1.75} />
                     )}
