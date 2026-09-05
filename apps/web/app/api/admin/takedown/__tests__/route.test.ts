@@ -21,6 +21,8 @@ const { mockLogSecurityEvent } = vi.hoisted(() => ({
 vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: (...args: unknown[]) => mockLogSecurityEvent(...(args as [])),
   getClientIp: () => '203.0.113.9',
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 const { authUser, assertAccountActive } = vi.hoisted(() => ({
