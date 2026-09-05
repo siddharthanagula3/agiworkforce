@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/route.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/bulk/route.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/restore/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/bulk/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/cron/enforce-billing-collection/route.ts",
+      "migration": 163,
+      "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/cron/purge-deleted-organizations/route.ts",
+      "migration": 162,
+      "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
+      "migration": 164,
+      "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/memory/[id]/route.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/memory/import/route.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/memory/route.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/memory/sync/route.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/search/route.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/settings/2fa/validate/route.ts",
+      "migration": 154,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/settings/organization/deletion/cancel/route.ts",
+      "migration": 162,
+      "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/settings/organization/route.ts",
+      "migration": 162,
+      "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/web-push/route.ts",
+      "migration": 151,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/memory/import-store.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 151,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 157,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 159,
+      "reason": "plugin marketplace sources are founder-gated; the deploy runbook applies migration 0159 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 162,
+      "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 166,
+      "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 168,
+      "reason": "scheduled task project scope is founder-gated; the deploy runbook applies migration 0168 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/neon-chat.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/neon-chat.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 163,
+      "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 166,
+      "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/two-factor-replay.ts",
+      "migration": 154,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-agent-run-service.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 155,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 165,
+      "reason": "cloud code session extra hosts are founder-gated; the deploy runbook applies migration 0165 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 166,
+      "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/conversation-branch-service.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-billing-service.ts",
+      "migration": 163,
+      "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-collection-state.ts",
+      "migration": 163,
+      "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-usage-metering.ts",
+      "migration": 163,
+      "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/managed-memory-context-service.ts",
+      "migration": 47,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/managed-memory-context-service.ts",
+      "migration": 164,
+      "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-service.ts",
+      "migration": 164,
+      "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-installation-service.ts",
+      "migration": 160,
+      "reason": "plugin installation settings are founder-gated; the deploy runbook applies migration 0160 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-marketplace-installation-service.ts",
+      "migration": 159,
+      "reason": "plugin marketplace sources are founder-gated; the deploy runbook applies migration 0159 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-marketplace-service.ts",
+      "migration": 159,
+      "reason": "plugin marketplace sources are founder-gated; the deploy runbook applies migration 0159 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/project-context-service.ts",
+      "migration": 59,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/route-cache-observability-service.ts",
+      "migration": 166,
+      "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-service.ts",
+      "migration": 168,
+      "reason": "scheduled task project scope is founder-gated; the deploy runbook applies migration 0168 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/user-skill-service.ts",
+      "migration": 157,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/web-push-service.ts",
+      "migration": 151,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/shared/stores/web-chat-store.ts",
+      "migration": 156,
+      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    }
+  ]
+}
