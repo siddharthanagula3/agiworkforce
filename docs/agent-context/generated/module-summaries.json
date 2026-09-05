@@ -303,6 +303,12 @@
       "purpose": "Neon + Clerk data-layer boundary for AGI Workforce"
     },
     {
+      "name": "@agiworkforce/key-value",
+      "path": "packages/platform/key-value",
+      "kind": "package",
+      "purpose": "KeyValue and RateLimit ports with Upstash, local Redis and in-memory adapters"
+    },
+    {
       "name": "@agiworkforce/local-llm",
       "path": "packages/platform/local-llm",
       "kind": "package",
