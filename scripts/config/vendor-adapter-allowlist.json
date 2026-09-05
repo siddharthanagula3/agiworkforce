@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "vendors": [
+    {
+      "packages": ["@upstash/redis", "@upstash/ratelimit"],
+      "port": "@agiworkforce/key-value",
+      "files": [
+        {
+          "path": "packages/platform/key-value/src/adapters/upstash.ts",
+          "owner": true,
+          "reason": "owns the Upstash adapter behind the key-value port."
+        }
+      ]
+    },
+    {
+      "packages": ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
+      "port": "@agiworkforce/object-storage",
+      "files": [
+        {
+          "path": "packages/platform/object-storage/src/adapters/s3.ts",
+          "owner": true,
+          "reason": "owns the S3 adapter behind the object-storage port."
+        },
+        {
+          "path": "packages/platform/object-storage/src/__tests__/fake-s3-endpoint.ts",
+          "owner": false,
+          "reason": "stands in for the real S3 endpoint in adapter tests and needs the SDK's request types to shape the fake responses."
+        }
+      ]
+    },
+    {
+      "packages": ["@neondatabase/serverless"],
+      "port": "@agiworkforce/data-layer",
+      "files": [
+        {
+          "path": "packages/platform/data-layer/src/adapters/neon.ts",
+          "owner": true,
+          "reason": "owns the Neon adapter behind the data-layer port."
+        },
+        {
+          "path": "packages/platform/data-layer/src/__tests__/adapter-contract.test.ts",
+          "owner": false,
+          "reason": "runs the shared adapter contract suite against the port's own Neon adapter to verify it."
+        },
+        {
+          "path": "packages/platform/data-layer/src/__tests__/neon-adapter.test.ts",
+          "owner": false,
+          "reason": "exercises Neon-specific adapter behavior directly against the driver."
+        },
+        {
+          "path": "packages/platform/data-layer/src/__tests__/neon-tls.test.ts",
+          "owner": false,
+          "reason": "verifies the driver's own TLS transport, which only the driver client can exercise."
+        },
+        {
+          "path": "packages/platform/data-layer/src/__tests__/neon-ws-proxy.test.ts",
+          "owner": false,
+          "reason": "verifies the driver's websocket proxy transport, which only the driver client can exercise."
+        },
+        {
+          "path": "services/signaling-server/src/db.ts",
+          "owner": false,
+          "reason": "a separate service outside apps/web that needs its own Neon client rather than the web app's port instance."
+        }
+      ]
+    },
+    {
+      "packages": ["pg"],
+      "port": "@agiworkforce/data-layer",
+      "files": [
+        {
+          "path": "packages/platform/data-layer/src/adapters/postgres.ts",
+          "owner": true,
+          "reason": "owns the Postgres adapter behind the data-layer port."
+        },
+        {
+          "path": "packages/platform/data-layer/src/__tests__/adapter-contract.test.ts",
+          "owner": false,
+          "reason": "runs the shared adapter contract suite against the port's own Postgres adapter to verify it."
+        },
+        {
+          "path": "apps/web/scripts/rls-probe.mjs",
+          "owner": false,
+          "reason": "the independent check on the row-level-security policies the adapter binds; routing it through the adapter would make it confirm its own premise rather than test it, and it never runs inside a request."
+        },
+        {
+          "path": "apps/web/scripts/route-cache-observability-report.mjs",
+          "owner": false,
+          "reason": "an out-of-band report script that runs outside a request and holds its own client rather than the port instance."
+        }
+      ]
+    }
+  ]
+}
