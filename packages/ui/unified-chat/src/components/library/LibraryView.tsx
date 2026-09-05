@@ -8,20 +8,28 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import {
   ChevronDown,
+  ChevronRight,
+  Download,
   Folder,
   LayoutGrid,
   List,
+  Mic,
   MoreHorizontal,
   Play,
   Plus,
   RotateCcw,
   Search,
+  Send,
   SlidersHorizontal,
   Trash2,
   Upload,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { SEARCH_INPUT_DEBOUNCE_MS, formatBytes } from '@agiworkforce/utils';
 import {
@@ -188,6 +196,9 @@ export interface LibraryTransport {
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
   startChat?: () => void;
+  /** Starts a chat seeded with `message`, opened from the file viewer's "Ask
+   *  about this file" composer for `item`. */
+  askAboutFile?: (item: LibraryItem, message: string) => void;
   /** Folders the host lists alongside files. Hosts without one omit it and no
    *  folder row is rendered, rather than an empty section that implies none. */
   listFolders?: () => Promise<LibraryFolder[]>;
@@ -256,12 +267,14 @@ export interface LibraryViewProps {
   initialQuery?: string;
   /** Preselected surface tab, so `/chat/library?surface=artifact` opens on Artifacts. */
   initialSurface?: SurfaceFilter;
+  overlayContainerId?: string;
 }
 
 export function LibraryView({
   transport,
   initialQuery = '',
   initialSurface = 'all',
+  overlayContainerId,
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
@@ -285,6 +298,7 @@ export function LibraryView({
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [openArtifactIds, setOpenArtifactIds] = useState<ReadonlySet<string>>(() => new Set());
   const [artifactSources, setArtifactSources] = useState<Record<string, ArtifactSource>>({});
+  const [viewerItem, setViewerItem] = useState<LibraryItem | null>(null);
   const requestSeq = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -538,9 +552,9 @@ export function LibraryView({
         }
         return;
       }
-      if (item.previewable) transport.openPreview(item.uri);
+      if (item.previewable) setViewerItem(item);
     },
-    [unavailableIds, openArtifactIds, artifactSources, loadArtifactSource, transport],
+    [unavailableIds, openArtifactIds, artifactSources, loadArtifactSource],
   );
 
   const uploadFiles = transport.uploadFiles;
@@ -612,6 +626,16 @@ export function LibraryView({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5" data-testid="library-view">
       {confirmDialog}
+      {viewerItem ? (
+        <FileViewerOverlay
+          item={viewerItem}
+          onClose={() => setViewerItem(null)}
+          onDownload={handleDownload}
+          inlinePreviewUri={transport.inlinePreviewUri}
+          askAboutFile={transport.askAboutFile}
+          containerId={overlayContainerId}
+        />
+      ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium text-[var(--chat-text-primary)]">
           Library
@@ -772,6 +796,207 @@ export function LibraryView({
       ) : null}
     </div>
   );
+}
+
+const VIEWER_ZOOM_MIN = 25;
+const VIEWER_ZOOM_MAX = 400;
+const VIEWER_ZOOM_STEP = 25;
+const VIEWER_ZOOM_DEFAULT = 100;
+
+interface FileViewerOverlayProps {
+  item: LibraryItem;
+  onClose: () => void;
+  onDownload: (item: LibraryItem) => Promise<void>;
+  inlinePreviewUri?: (uri: string) => string;
+  askAboutFile?: (item: LibraryItem, message: string) => void;
+  containerId?: string;
+}
+
+function FileViewerOverlay({
+  item,
+  onClose,
+  onDownload,
+  inlinePreviewUri,
+  askAboutFile,
+  containerId,
+}: FileViewerOverlayProps) {
+  const [zoom, setZoom] = useState(VIEWER_ZOOM_DEFAULT);
+  const [question, setQuestion] = useState('');
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+  const previewUri = isImageItem(item) ? inlinePreviewUri?.(item.uri) : undefined;
+
+  useEffect(() => {
+    setContainer(containerId ? document.getElementById(containerId) : null);
+  }, [containerId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const submitQuestion = () => {
+    const trimmed = question.trim();
+    if (!trimmed || !askAboutFile) return;
+    askAboutFile(item, trimmed);
+    setQuestion('');
+  };
+
+  const panel = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${item.file_name} viewer`}
+      data-testid="library-file-viewer"
+      className={
+        container
+          ? 'pointer-events-auto absolute inset-0 z-[var(--z-modal)] flex flex-col bg-black/70 backdrop-blur-sm'
+          : 'pointer-events-auto fixed inset-0 z-[var(--z-modal)] flex flex-col bg-black/70 backdrop-blur-sm'
+      }
+    >
+      <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex min-w-0 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-base)]/90 px-2.5 py-1 text-sm text-[var(--chat-text-secondary)] backdrop-blur-sm"
+        >
+          <span className="shrink-0">Library</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="truncate font-medium text-[var(--chat-text-primary)]">
+            {item.file_name}
+          </span>
+        </nav>
+        <div className="flex shrink-0 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-base)]/90 p-1 backdrop-blur-sm">
+          {previewUri ? (
+            <div
+              role="group"
+              aria-label="Zoom"
+              className="flex items-center gap-1 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-1 py-1"
+            >
+              <button
+                type="button"
+                aria-label="Zoom out"
+                disabled={zoom <= VIEWER_ZOOM_MIN}
+                onClick={() =>
+                  setZoom((current) => Math.max(VIEWER_ZOOM_MIN, current - VIEWER_ZOOM_STEP))
+                }
+                className={MENU_TRIGGER_CLASS}
+              >
+                <ZoomOut className="h-4 w-4" aria-hidden />
+              </button>
+              <span className="w-10 text-center text-xs tabular-nums text-[var(--chat-text-secondary)]">
+                {zoom}%
+              </span>
+              <button
+                type="button"
+                aria-label="Zoom in"
+                disabled={zoom >= VIEWER_ZOOM_MAX}
+                onClick={() =>
+                  setZoom((current) => Math.min(VIEWER_ZOOM_MAX, current + VIEWER_ZOOM_STEP))
+                }
+                className={MENU_TRIGGER_CLASS}
+              >
+                <ZoomIn className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            aria-label={`Download ${item.file_name}`}
+            onClick={() => void onDownload(item)}
+            className={MENU_TRIGGER_CLASS}
+          >
+            <Download className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Close file viewer"
+            onClick={onClose}
+            className={MENU_TRIGGER_CLASS}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6 pb-28">
+        {previewUri ? (
+          <img
+            src={previewUri}
+            alt={item.file_name}
+            style={{ transform: `scale(${zoom / 100})` }}
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-[var(--chat-radius-lg)] bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
+            <FileKindIcon
+              kind={iconKindFor(item.file_name, item.mime_type)}
+              className="h-12 w-12 text-[var(--chat-text-muted)]"
+            />
+            <p>Preview isn&rsquo;t available for this file inline.</p>
+            <Button size="sm" onClick={() => void onDownload(item)}>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Download to view
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {askAboutFile ? (
+        <form
+          className="absolute inset-x-0 bottom-6 mx-auto flex h-12 w-full max-w-[600px] shrink-0 items-center gap-1 rounded-[28px] border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 shadow-lg backdrop-blur-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitQuestion();
+          }}
+        >
+          <button
+            type="button"
+            disabled
+            aria-hidden
+            tabIndex={-1}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-muted)] opacity-50"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+          </button>
+          <input
+            type="text"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="Ask about this file"
+            aria-label="Ask about this file"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] outline-none"
+          />
+          <span
+            aria-hidden
+            className="hidden shrink-0 items-center rounded-full px-2 py-1 text-xs font-medium text-[var(--chat-text-muted)] opacity-50 sm:flex"
+          >
+            Auto
+          </span>
+          <button
+            type="button"
+            disabled
+            aria-hidden
+            tabIndex={-1}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-muted)] opacity-50"
+          >
+            <Mic className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="submit"
+            aria-label="Ask"
+            disabled={!question.trim()}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] transition-opacity disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" aria-hidden />
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+
+  return createPortal(panel, container ?? document.body);
 }
 
 interface RowActions {

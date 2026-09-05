@@ -77,6 +77,8 @@ import { toUserMessage } from '@/lib/user-error-message';
 // memoization below, which is what the exhaustive-deps warning was pointing at.
 const EMPTY_NAV_IDS: string[] = [];
 
+export const CONTENT_OVERLAY_ROOT_ID = 'webappshell-content-overlay-root';
+
 interface WebAppShellProps {
   children: React.ReactNode;
   /** Rendered inside the narrow-viewport header, after the wordmark. */
@@ -485,7 +487,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
       )}
 
       <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        className="relative flex min-h-0 min-w-0 flex-1 flex-col"
         aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
         inert={isNarrowViewport && mobileNavOpen ? true : undefined}
       >
@@ -511,6 +513,8 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
 
         {/* Content area, scrolls inside the shell (the outer wrapper is fixed). */}
         <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
+
+        <div id={CONTENT_OVERLAY_ROOT_ID} className="pointer-events-none absolute inset-0" />
       </div>
 
       {isNarrowViewport && (

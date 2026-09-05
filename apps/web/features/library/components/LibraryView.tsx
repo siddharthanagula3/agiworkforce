@@ -12,6 +12,7 @@ import {
 import { getCsrfToken } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 import { uploadChatAttachments } from '@features/chat/services/chat-attachment-upload';
+import { CONTENT_OVERLAY_ROOT_ID } from '@shared/components/layout/WebAppShell';
 
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
@@ -105,6 +106,15 @@ export function LibraryView() {
       openPreview: (uri) => {
         window.open(uri, '_blank', 'noopener,noreferrer');
       },
+      // There is no handoff that carries an existing asset into a brand-new
+      // (non-project) chat, only the project-scoped one WebChatPage reads.
+      // This starts a real chat with the file named in the first message
+      // rather than a dead composer, but it is text, not a true attachment.
+      askAboutFile: (item, message) => {
+        router.push(
+          `/chat?starterPrompt=${encodeURIComponent(`About ${item.file_name}: ${message}`)}`,
+        );
+      },
       // 'excel' is deliberately absent: the export service builds PDF and DOCX
       // and there is no xlsx writer on web, so offering it would be a control
       // that fails after the user picks it.
@@ -114,8 +124,14 @@ export function LibraryView() {
           title: title || 'Artifact',
         }),
     }),
-    [isLoaded, isSignedIn, openFolder, createFolder],
+    [isLoaded, isSignedIn, openFolder, createFolder, router],
   );
 
-  return <SharedLibraryView transport={transport} initialSurface={initialSurface} />;
+  return (
+    <SharedLibraryView
+      transport={transport}
+      initialSurface={initialSurface}
+      overlayContainerId={CONTENT_OVERLAY_ROOT_ID}
+    />
+  );
 }
