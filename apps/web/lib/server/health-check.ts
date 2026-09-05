@@ -2,7 +2,7 @@ import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 import {
@@ -16,9 +16,9 @@ const DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:database-last-su
 
 async function shouldSkipDatabaseProbe(): Promise<boolean> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return false;
-    const lastSuccessAt = await redis.get<number>(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY);
+    const store = getKeyValueStore();
+    if (!store) return false;
+    const lastSuccessAt = await store.get<number>(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY);
     if (!lastSuccessAt) return false;
     return Date.now() - lastSuccessAt < DATABASE_PROBE_MIN_INTERVAL_SECONDS * 1_000;
   } catch (error) {
@@ -29,10 +29,10 @@ async function shouldSkipDatabaseProbe(): Promise<boolean> {
 
 async function recordDatabaseProbeSuccess(): Promise<void> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return;
-    await redis.set(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY, Date.now(), {
-      ex: DATABASE_PROBE_MIN_INTERVAL_SECONDS,
+    const store = getKeyValueStore();
+    if (!store) return;
+    await store.set(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY, Date.now(), {
+      ttlSeconds: DATABASE_PROBE_MIN_INTERVAL_SECONDS,
     });
   } catch (error) {
     logger.error({ error }, 'Health probe database throttle record failed');

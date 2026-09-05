@@ -52,9 +52,12 @@ class FakeRedis {
 }
 
 let redisClient: FakeRedis | null = null;
-vi.mock('@/lib/rate-limit', () => ({
-  getSharedRedisClient: () => redisClient,
+vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueStore: () =>
+    redisClient ? createUpstashKeyValueStore(redisClient as unknown as UpstashRedisLike) : null,
 }));
+
+import { createUpstashKeyValueStore, type UpstashRedisLike } from '@agiworkforce/key-value';
 
 import {
   scheduleConversationTitleGeneration,

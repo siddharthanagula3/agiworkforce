@@ -1,7 +1,7 @@
 import 'server-only';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
-import { getSharedRedisClient } from './rate-limit';
+import { getKeyValueStore } from './server/key-value';
 
 /**
  * Counts writes to `security_audit_logs` since the last anomaly check, so the
@@ -14,10 +14,10 @@ const SECURITY_EVENT_ACTIVITY_TTL_SECONDS = 3_600;
 
 async function markSecurityEventActivity(): Promise<void> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return;
-    await redis.incr(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
-    await redis.expire(SECURITY_EVENT_ACTIVITY_REDIS_KEY, SECURITY_EVENT_ACTIVITY_TTL_SECONDS);
+    const store = getKeyValueStore();
+    if (!store) return;
+    await store.increment(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    await store.expire(SECURITY_EVENT_ACTIVITY_REDIS_KEY, SECURITY_EVENT_ACTIVITY_TTL_SECONDS);
   } catch (error) {
     logger.error({ error }, 'Security event activity marker update failed');
   }
@@ -31,11 +31,11 @@ async function markSecurityEventActivity(): Promise<void> {
  */
 export async function consumePendingSecurityAnomalyCheck(): Promise<boolean | null> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return null;
-    const pending = await redis.get<number>(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    const store = getKeyValueStore();
+    if (!store) return null;
+    const pending = await store.get<number>(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
     if (!pending) return false;
-    await redis.del(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    await store.delete(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
     return true;
   } catch (error) {
     logger.error({ error }, 'Security event activity marker check failed');

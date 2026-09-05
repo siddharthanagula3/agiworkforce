@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { getOptionalEnv } from '@shared/utils/env';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 
 export const EXACT_RESPONSE_CACHE_ENABLED_ENV = 'AGI_EXACT_RESPONSE_CACHE_ENABLED';
@@ -116,11 +116,11 @@ export async function lookupExactResponseCache(
   if (options.bypass) return { outcome: 'bypassed' };
   if (!isExactResponseCacheEnabled()) return { outcome: 'bypassed' };
 
-  const client = getSharedRedisClient();
-  if (!client) return { outcome: 'miss' };
+  const store = getKeyValueStore();
+  if (!store) return { outcome: 'miss' };
 
   try {
-    const stored = await client.get<unknown>(cacheKey(fields));
+    const stored = await store.get<unknown>(cacheKey(fields));
     if (!isStoredCacheRecord(stored)) return { outcome: 'miss' };
     return { outcome: 'hit', entry: { content: stored.content, usage: stored.usage } };
   } catch (error) {
@@ -139,13 +139,13 @@ export async function storeExactResponseCache(
 ): Promise<void> {
   if (options.bypass || !isExactResponseCacheEnabled()) return;
 
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
 
   const record: StoredCacheRecord = { schemaVersion: CACHE_ENTRY_SCHEMA_VERSION, ...entry };
   try {
-    await client.set(cacheKey(fields), record, {
-      ex: CACHE_TTL_SECONDS_BY_CALL_TYPE[fields.callType],
+    await store.set(cacheKey(fields), record, {
+      ttlSeconds: CACHE_TTL_SECONDS_BY_CALL_TYPE[fields.callType],
     });
   } catch (error) {
     logger.warn(

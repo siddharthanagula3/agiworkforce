@@ -41,6 +41,12 @@ process.env['AGI_DATABASE_URL'] =
   'postgresql://test:test@127.0.0.1:1/agi_test_must_not_connect?sslmode=require';
 process.env['DATABASE_URL'] = process.env['AGI_DATABASE_URL'];
 
+// The same reach as the database above: the key-value composition root reads
+// the credentials the process carries, and a developer with the app's env
+// loaded would point every unmocked store call at the shared Upstash database.
+// A test that wants a store injects one.
+process.env['AGI_KV_PROVIDER'] = 'none';
+
 vi.mock('next/headers', () => ({
   cookies: vi.fn(() => ({
     get: vi.fn(() => ({ value: 'test-cookie' })),

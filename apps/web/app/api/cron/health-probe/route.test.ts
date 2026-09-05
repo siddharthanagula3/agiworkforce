@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   runHealthChecks: vi.fn(),
   sendSupportEmail: vi.fn(),
   getHandoffConfig: vi.fn(),
-  getSharedRedisClient: vi.fn(),
+  getKeyValueStore: vi.fn(),
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
@@ -17,7 +17,7 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
 vi.mock('@/lib/support/handoff/config', () => ({ getHandoffConfig: mocks.getHandoffConfig }));
-vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mocks.getSharedRedisClient }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -49,7 +49,7 @@ beforeEach(() => {
   mocks.runHealthChecks.mockResolvedValue(health('healthy'));
   mocks.sendSupportEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg_1' });
   mocks.getHandoffConfig.mockReturnValue({ fallbackEmail: 'support@agiworkforce.com' });
-  mocks.getSharedRedisClient.mockReturnValue(null);
+  mocks.getKeyValueStore.mockReturnValue(null);
 });
 
 describe('health probe schedule', () => {
@@ -203,11 +203,21 @@ describe('GET /api/cron/health-probe', () => {
   });
 });
 
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
+
+function asKeyValueStore(client: unknown): KeyValueStore {
+  return createUpstashKeyValueStore(client as UpstashRedisLike);
+}
+
 function fakeStreakRedis() {
   const store = new Map<string, number>();
   return {
-    incr: vi.fn(async (key: string) => {
-      const next = (store.get(key) ?? 0) + 1;
+    incrby: vi.fn(async (key: string, amount: number) => {
+      const next = (store.get(key) ?? 0) + amount;
       store.set(key, next);
       return next;
     }),
@@ -222,7 +232,7 @@ function fakeStreakRedis() {
 describe('health probe consecutive-failure debounce', () => {
   it('holds the page on the first miss and pages on the second consecutive miss', async () => {
     const redis = fakeStreakRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
 
     const first = await GET(req());
@@ -246,7 +256,7 @@ describe('health probe consecutive-failure debounce', () => {
 
   it('resets the streak once the platform recovers, so the next miss holds again', async () => {
     const redis = fakeStreakRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
     await GET(req());
 
@@ -261,7 +271,7 @@ describe('health probe consecutive-failure debounce', () => {
   });
 
   it('fails open and pages on the first miss when redis is unavailable', async () => {
-    mocks.getSharedRedisClient.mockReturnValue(null);
+    mocks.getKeyValueStore.mockReturnValue(null);
     mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
 
     const response = await GET(req());
@@ -272,8 +282,8 @@ describe('health probe consecutive-failure debounce', () => {
 
   it('fails open and pages immediately when the streak tracker throws', async () => {
     const redis = fakeStreakRedis();
-    redis.incr.mockRejectedValue(new Error('redis unavailable'));
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    redis.incrby.mockRejectedValue(new Error('redis unavailable'));
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
 
     const response = await GET(req());

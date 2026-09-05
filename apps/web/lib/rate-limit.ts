@@ -1,13 +1,11 @@
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { readUpstashCredentials } from '@agiworkforce/key-value';
 import { NextRequest, NextResponse } from 'next/server';
 import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from './logger';
+import { getKeyValueRateLimiter, getKeyValueStore } from './server/key-value';
 import { BLOCK_APPEAL_PATH, logRateLimitExceeded } from './security-audit';
 
-const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
-const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
-const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
+const hasRedisEnv = readUpstashCredentials() !== null;
 const vercelEnv = process.env['VERCEL_ENV'];
 const isNextBuildPhase = process.env['NEXT_PHASE'] === 'phase-production-build';
 const isProductionRuntime =
@@ -23,33 +21,6 @@ if (isProductionRuntime && !hasRedisEnv) {
       'limiting is ineffective across function instances. Set them on the ' +
       'agiworkforce project (Production + Preview) and redeploy.',
   );
-}
-
-/**
- * One retry, not the client's default of five.
- *
- * `checkRateLimit` races every limiter call against an 800 ms budget and then
- * decides fail-open/fail-closed. The SDK default retries five times over about
- * 4.3 seconds, so during a Redis outage every call outlived the race and burned
- * four more requests against a dead endpoint after the decision was already
- * made.
- */
-const REDIS_RETRIES = 1;
-
-const redis = hasRedisEnv
-  ? new Redis({ url: redisRestUrl!, token: redisRestToken!, retry: { retries: REDIS_RETRIES } })
-  : null;
-
-/**
- * The one Upstash connection this process owns.
- *
- * Exported so other Redis-backed accounting (free-lane quota pools, route
- * health) rides the same client rather than constructing a second one: the
- * retry budget above and the credential resolution below it are the properties
- * that must not be re-derived per consumer.
- */
-export function getSharedRedisClient(): Redis | null {
-  return redis;
 }
 
 export const REDIS_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
@@ -608,7 +579,7 @@ const IN_MEMORY_MAX_ENTRIES = 10000;
 const IN_MEMORY_CLEANUP_INTERVAL_MS = 60000;
 let lastCleanupTime = Date.now();
 
-if (process.env.NODE_ENV === 'production' && !redis) {
+if (process.env.NODE_ENV === 'production' && !getKeyValueRateLimiter()) {
   logger.error(
     {},
     'SECURITY WARNING: Redis not configured in production environment. ' +
@@ -724,44 +695,17 @@ export function resolveTierRateLimit(key: RateLimitKey, planTier?: string | null
   return Math.max(base * concurrency, concurrency) * rateLimitScale;
 }
 
-const rateLimiterCache = new Map<string, Ratelimit>();
+const RATE_LIMIT_KEY_PREFIX = 'agi-rl';
 
-function getRateLimiter(key: RateLimitKey, limit: number): Ratelimit {
-  const cacheKey = `${key}:${limit}`;
-  const cached = rateLimiterCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
+/**
+ * The budget the caller's fail-open or fail-closed decision is raced against.
+ * A limiter that has not answered by then is treated as unavailable rather than
+ * held open while the request stalls.
+ */
+const SHARED_LIMITER_TIMEOUT_MS = 800;
 
-  const config = rateLimitConfigs[key];
-
-  if (!redis) {
-    throw new Error('Redis not configured for rate limiting');
-  }
-
-  const rateLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(limit, config.window),
-    // Off deliberately. Nothing in this repo reads the analytics tables, and
-    // ingest is a second Redis command per check that ZINCRBYs one member per
-    // distinct identifier per hour bucket with no EXPIRE and no trim anywhere
-    // in the path, the `retention` option is read-side only. That is unbounded
-    // storage growth keyed on cumulative distinct users (crawler IPs included
-    // for the IP-bucketed keys), and when the database reaches its size ceiling
-    // the writes fail, `checkRateLimit` throws, and the fail-closed keys 429
-    // every user on their first request of the day.
-    analytics: false,
-    prefix: `agi-rl:${key}`,
-  });
-
-  rateLimiterCache.set(cacheKey, rateLimiter);
-
-  logger.info(
-    { key, limit, cacheSize: rateLimiterCache.size },
-    'Created and cached new rate limiter instance',
-  );
-
-  return rateLimiter;
+function rateLimitNamespace(key: RateLimitKey): string {
+  return `${RATE_LIMIT_KEY_PREFIX}:${key}`;
 }
 
 const CLIENT_IP_SOURCE_ENV = 'AGI_RATE_LIMIT_CLIENT_IP_SOURCE';
@@ -870,8 +814,9 @@ export async function checkRateLimit(
   const config = rateLimitConfigs[key];
   const effectiveLimit = resolveTierRateLimit(key, planTier);
   const id = await resolveRateLimitIdentifier(request, identifier);
+  const rateLimiter = getKeyValueRateLimiter();
 
-  if (!redis) {
+  if (!rateLimiter) {
     const policy = resolveRedisOutagePolicy();
 
     if (process.env.NODE_ENV === 'production') {
@@ -922,19 +867,18 @@ export async function checkRateLimit(
     };
   }
 
-  const rateLimiter = getRateLimiter(key, effectiveLimit);
-
   try {
-    const UPSTASH_TIMEOUT_MS = 800;
     let limitTimer: ReturnType<typeof setTimeout> | undefined;
-    const { success, limit, remaining, reset } = await Promise.race([
-      rateLimiter.limit(id).finally(() => {
-        if (limitTimer) clearTimeout(limitTimer);
-      }),
+    const { success, limit, remaining, resetAtMs } = await Promise.race([
+      rateLimiter
+        .limit(rateLimitNamespace(key), id, { limit: effectiveLimit, window: config.window })
+        .finally(() => {
+          if (limitTimer) clearTimeout(limitTimer);
+        }),
       new Promise<never>((_, reject) => {
         limitTimer = setTimeout(
-          () => reject(new Error('rate-limit upstash timeout')),
-          UPSTASH_TIMEOUT_MS,
+          () => reject(new Error('rate-limit shared limiter timeout')),
+          SHARED_LIMITER_TIMEOUT_MS,
         );
       }),
     ]);
@@ -942,18 +886,18 @@ export async function checkRateLimit(
     const headers: Record<string, string> = {
       'X-RateLimit-Limit': limit.toString(),
       'X-RateLimit-Remaining': remaining.toString(),
-      'X-RateLimit-Reset': new Date(reset).toISOString(),
+      'X-RateLimit-Reset': new Date(resetAtMs).toISOString(),
     };
 
     if (!success) {
-      headers['Retry-After'] = Math.ceil((reset - Date.now()) / 1000).toString();
+      headers['Retry-After'] = Math.ceil((resetAtMs - Date.now()) / 1000).toString();
     }
 
     return {
       success,
       limit,
       remaining,
-      reset,
+      reset: resetAtMs,
       headers,
       identifier: id,
     };
@@ -1067,6 +1011,9 @@ export async function withRateLimit(
  */
 const MANAGED_TURN_SLOT_TTL_SECONDS = 360;
 
+const MANAGED_TURN_SLOT_OLDEST_SCORE = 0;
+const MILLISECONDS_PER_SECOND = 1_000;
+
 export interface ManagedTurnSlot {
   release(): Promise<void>;
 }
@@ -1122,23 +1069,27 @@ export async function acquireManagedTurnSlot(input: {
   if (limit <= 0) {
     return { admitted: false, limit, active: 0, slot: null, denial: 'plan-excluded' };
   }
-  if (!redis) {
+  const store = getKeyValueStore();
+  if (!store) {
     return unavailableTurnSlot(input.userId, limit, 'redis-not-configured');
   }
 
-  const client = redis;
   const key = managedTurnSlotKey(input.userId);
   const now = Date.now();
 
   try {
-    await client.zremrangebyscore(key, 0, now - MANAGED_TURN_SLOT_TTL_SECONDS * 1000);
-    const active = await client.zcard(key);
+    await store.sortedRemoveByScore(
+      key,
+      MANAGED_TURN_SLOT_OLDEST_SCORE,
+      now - MANAGED_TURN_SLOT_TTL_SECONDS * MILLISECONDS_PER_SECOND,
+    );
+    const active = await store.sortedSize(key);
     if (active >= limit) {
       return { admitted: false, limit, active, slot: null, denial: 'ceiling-reached' };
     }
 
-    await client.zadd(key, { score: now, member: input.turnId });
-    await client.expire(key, MANAGED_TURN_SLOT_TTL_SECONDS);
+    await store.sortedAdd(key, { score: now, member: input.turnId });
+    await store.expire(key, MANAGED_TURN_SLOT_TTL_SECONDS);
 
     let released = false;
     return {
@@ -1150,7 +1101,7 @@ export async function acquireManagedTurnSlot(input: {
           if (released) return;
           released = true;
           try {
-            await client.zrem(key, input.turnId);
+            await store.sortedRemove(key, input.turnId);
           } catch (error) {
             logger.warn(
               { error, userId: input.userId },

@@ -5,7 +5,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { AppError, ErrorCode, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { resolveMfaPolicy } from '@/lib/services/organization-policy-gate';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 
@@ -35,12 +35,12 @@ export function isMfaRequiredError(error: unknown): error is MfaRequiredError {
 }
 
 export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
-  const redis = getSharedRedisClient();
+  const store = getKeyValueStore();
   const cacheKey = `${MFA_ENROLLMENT_CACHE_PREFIX}${userId}`;
 
-  if (redis) {
+  if (store) {
     try {
-      const cached = await redis.get<CachedMfaEnrollment>(cacheKey);
+      const cached = await store.get<CachedMfaEnrollment>(cacheKey);
       if (cached === MFA_ENROLLMENT_CACHE_ENROLLED) return true;
       if (cached === MFA_ENROLLMENT_CACHE_UNENROLLED) return false;
     } catch (error) {
@@ -58,10 +58,10 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
     return false;
   }
 
-  if (redis) {
-    await redis
+  if (store) {
+    await store
       .set(cacheKey, enrolled ? MFA_ENROLLMENT_CACHE_ENROLLED : MFA_ENROLLMENT_CACHE_UNENROLLED, {
-        ex: MFA_ENROLLMENT_CACHE_TTL_SECONDS,
+        ttlSeconds: MFA_ENROLLMENT_CACHE_TTL_SECONDS,
       })
       .catch((error) => {
         logger.warn({ error, userId }, '[mfa-policy] enrollment cache write failed');
