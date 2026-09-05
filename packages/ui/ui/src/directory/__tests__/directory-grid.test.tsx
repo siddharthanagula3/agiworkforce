@@ -123,9 +123,10 @@ describe('DirectoryGrid', () => {
     expect(screen.getByText('No skills match this search.')).toBeTruthy();
   });
 
-  it('renders a spinner while the first page loads', () => {
+  it('renders skeleton rows, not a spinner, while the first page loads', () => {
     renderGrid({ entries: [], loading: true });
-    expect(screen.getByRole('status')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Loading directory');
+    expect(document.querySelector('.animate-pulse')).not.toBeNull();
   });
 
   it('renders an error with a retry control', () => {
