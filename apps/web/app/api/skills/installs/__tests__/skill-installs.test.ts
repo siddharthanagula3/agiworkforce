@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   getClerkAuthUser: vi.fn(),
   listEnabledPluginIds: vi.fn(),
-  listEnabledPluginIdsForUser: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -18,7 +17,6 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mocks.listEnabledPluginIds,
-  listEnabledPluginIdsForUser: mocks.listEnabledPluginIdsForUser,
 }));
 
 interface FakeDb {
@@ -79,7 +77,6 @@ describe('/api/skills/installs', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
     mocks.listEnabledPluginIds.mockResolvedValue(new Set(['research-pack']));
-    mocks.listEnabledPluginIdsForUser.mockResolvedValue(new Set(['research-pack']));
     root = await mkdtemp(join(tmpdir(), 'agi-skill-installs-'));
     await mkdir(join(root, 'design-review'), { recursive: true });
     await writeFile(
