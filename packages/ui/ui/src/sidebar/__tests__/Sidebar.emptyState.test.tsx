@@ -35,6 +35,13 @@ describe('Sidebar empty state', () => {
     expect(screen.queryByText('No conversations yet')).toBeNull();
   });
 
+  it('names the temporal group without a trailing conversation count', () => {
+    renderSidebar();
+
+    const group = screen.getByRole('button', { expanded: true });
+    expect(group.textContent).toBe('Today');
+  });
+
   it('still reports an account with nothing in it as empty', () => {
     render(
       <Sidebar
