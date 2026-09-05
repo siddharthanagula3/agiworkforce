@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn(async () => null),

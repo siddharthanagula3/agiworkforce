@@ -40,6 +40,11 @@ vi.mock('@/lib/cost-tracker', () => ({
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
+  FREE_TRIAL_MODEL: 'fixture-free-trial-model',
+  isFreePlanTier: () => false,
+  isFreeTrialRequest: () => false,
+  beginFreeTrialRequest: vi.fn(),
+  applyFreeTrialProviderBudget: vi.fn(),
 }));
 
 const mockRecordRouteOutcome = vi.fn(async (..._args: unknown[]) => undefined);
@@ -49,6 +54,8 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   recordRouteOutcome: (...args: unknown[]) => mockRecordRouteOutcome(...args),
   recordServedRouteAffinity: (...args: unknown[]) => mockRecordServedRouteAffinity(...args),
   routeAffinityTtlMs: () => 3_600_000,
+  getRouteHealthSnapshot: vi.fn(async () => ({})),
+  getServedRouteAffinity: vi.fn(async () => null),
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {

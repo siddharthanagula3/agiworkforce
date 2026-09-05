@@ -29,6 +29,11 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
     canManageTeam: true,
     maxMembers: null,
   })),
+  getTeamAdminAccess: vi.fn(async () => ({
+    plan: 'team',
+    canManageTeam: true,
+    maxMembers: null,
+  })),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({

@@ -27,6 +27,8 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   recordRouteOutcome: (...args: unknown[]) => mockRecordRouteOutcome(...args),
   recordServedRouteAffinity: (...args: unknown[]) => mockRecordServedRouteAffinity(...args),
   routeAffinityTtlMs: () => 3_600_000,
+  getRouteHealthSnapshot: vi.fn(async () => ({})),
+  getServedRouteAffinity: vi.fn(async () => null),
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {

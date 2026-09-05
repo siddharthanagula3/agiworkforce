@@ -52,6 +52,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 
 vi.mock('../../services/conversation-data-service', () => ({
   applyBulkConversationAction: vi.fn(async () => ({ ok: true })),
+  fetchConversationHistoryStats: vi.fn(async () => ({ conversationCount: 0, messageCount: 0 })),
 }));
 
 import { PrivacySection } from '../PrivacySection';

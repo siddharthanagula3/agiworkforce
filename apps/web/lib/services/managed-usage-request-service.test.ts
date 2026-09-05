@@ -15,6 +15,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCost(...args),
+  getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
 }));
 
 import {

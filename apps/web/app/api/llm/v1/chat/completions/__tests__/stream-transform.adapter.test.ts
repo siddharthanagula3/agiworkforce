@@ -26,6 +26,11 @@ vi.mock('@/lib/cost-tracker', () => ({
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
+  FREE_TRIAL_MODEL: 'fixture-free-trial-model',
+  isFreePlanTier: () => false,
+  isFreeTrialRequest: () => false,
+  beginFreeTrialRequest: vi.fn(),
+  applyFreeTrialProviderBudget: vi.fn(),
 }));
 
 import { buildAdapterStreamResponse } from '../lib/stream-transform';

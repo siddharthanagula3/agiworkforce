@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
+  getCsrfToken: async () => 'fixture-csrf-token',
 }));
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: toastError } }));

@@ -81,6 +81,7 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
 
 vi.mock('../../components/Composer/ChatComposerNew', () => ({
   ChatComposerNew: () => null,
+  SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
 }));
 vi.mock('../../components/messages/ChatMessageList', () => ({
   ChatMessageList: () => <div data-testid="message-list" />,

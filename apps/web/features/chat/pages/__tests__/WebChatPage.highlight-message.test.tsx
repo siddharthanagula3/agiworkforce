@@ -85,6 +85,7 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
 
 vi.mock('../../components/Composer/ChatComposerNew', () => ({
   ChatComposerNew: () => null,
+  SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
 }));
 vi.mock('../../components/messages/ChatMessageList', async () => {
   const { useChatStore } = await import('@shared/stores/web-chat-store');

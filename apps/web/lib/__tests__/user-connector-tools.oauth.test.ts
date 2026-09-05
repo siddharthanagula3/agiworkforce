@@ -32,6 +32,7 @@ vi.mock('@/lib/egress-policy', () => {
   return {
     assertResolvedPublicHostname: (...a: unknown[]) => mockAssertResolvedPublicHostname(...a),
     EgressPolicyError: MockEgressError,
+    pinnedPublicFetch: (...a: Parameters<typeof fetch>) => fetch(...a),
   };
 });
 

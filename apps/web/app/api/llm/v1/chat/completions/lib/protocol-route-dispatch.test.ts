@@ -39,6 +39,8 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildProtocolRouteAdapter: (providerId: string, options?: unknown) =>
     buildProtocolRouteAdapter(providerId, options),
   buildServerProviderAdapter: () => protocolAdapter,
+  listAvailableManagedProviderIds: () => new Set<string>(),
+  resolveProviderFromModel: (model: string) => model,
 }));
 
 function protocolRouteFixture(overrides: Partial<ProtocolRoute>): ProtocolRoute {

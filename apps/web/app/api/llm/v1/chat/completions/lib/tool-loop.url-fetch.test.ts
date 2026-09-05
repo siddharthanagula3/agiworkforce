@@ -23,6 +23,7 @@ vi.mock('node:dns/promises', () => ({
 const factoryMocks = vi.hoisted(() => ({ streamRequest: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: factoryMocks.streamRequest,
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
 
 import { runToolLoop, fetchSourcesEvent } from './tool-loop';
