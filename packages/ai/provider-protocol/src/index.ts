@@ -16,6 +16,8 @@
  * @packageDocumentation
  */
 
+export { streamChunkToAgentEvent, agentEventToStreamChunk } from './agent-event-envelope';
+
 export {
   resolveOpenAIResponsesPayloadPolicy,
   applyOpenAIResponsesPayloadPolicy,

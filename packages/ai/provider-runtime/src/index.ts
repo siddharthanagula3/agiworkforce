@@ -65,13 +65,6 @@ export {
   type ValidateBaseUrlResult,
 } from './base-url';
 
-export {
-  LatchedHeaderStore,
-  defaultLatchedHeaderStore,
-  applyLatchedHeaders,
-  type LatchedHeaders,
-} from './headers';
-
 export { CredentialFailoverState } from './failover';
 
 export {
