@@ -25,6 +25,7 @@ import {
 } from '@agiworkforce/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import type {
+  CloudAgentWorkMode,
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
@@ -468,6 +469,12 @@ export interface Conversation {
   projectId?: string | null;
   messageCount?: number;
   isTemporary?: boolean;
+  /**
+   * The mode this conversation was started in, derived server-side from its
+   * earliest agent run. Absent until that run exists, so the live composer
+   * override in `workModeByConversation` is the other half of the answer.
+   */
+  workMode?: CloudAgentWorkMode;
   /** Pinned to top of sidebar. Persisted in web_conversations.pinned. */
   isPinned?: boolean;
   /** Starred by the user. Client-side only (no DB column in v1). */
@@ -1955,6 +1962,27 @@ export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectSelectedModelTier = (state: ChatState) => state.selectedModelTier;
 export const selectError = (state: ChatState) => state.error;
 export const selectSidebarCollapsed = (state: ChatState) => state.sidebarCollapsed;
+export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
+
+/**
+ * Whether a conversation is an AGI Work task, from either half of the answer:
+ * the server's derived mode (durable, survives a new device) or the persisted
+ * composer override (present from the first keystroke, before any run exists).
+ * Returns a boolean so a subscriber re-renders only when the verdict changes.
+ */
+export const selectIsAgiWorkConversation =
+  (conversationId: string | null | undefined) =>
+  (state: ChatState): boolean => {
+    if (!conversationId) return false;
+    if (state.workModeByConversation[conversationKey(conversationId)] === AGI_WORK_MODE) {
+      return true;
+    }
+    return state.conversations.some(
+      (conversation) =>
+        conversation.id === conversationId && conversation.workMode === AGI_WORK_MODE,
+    );
+  };
+
 /** Subscribable form of `getDraftContent`, with the same key resolution. */
 export const selectDraftContent =
   (conversationId?: string | null) =>

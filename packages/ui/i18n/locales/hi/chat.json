@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "सक्रिय बातचीत",
+    "agiWork": "AGI Work",
     "archive": "संग्रहित करें",
     "archivedCount": "संग्रहित ({{count}})",
     "budgetUsed": "टोकन बजट का {{percent}}% उपयोग हुआ",

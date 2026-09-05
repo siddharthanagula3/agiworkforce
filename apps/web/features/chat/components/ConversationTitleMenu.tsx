@@ -21,9 +21,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
+import { AGI_WORK_TITLE_SUFFIX } from '../lib/agi-work';
 
 export interface ConversationTitleMenuProps {
   title: string;
+  agiWork?: boolean;
   projects: ReadonlyArray<{ id: string; name: string }>;
   onRename: (title: string) => void;
   onMoveToProject?: (projectId: string) => void;
@@ -36,6 +38,7 @@ export interface ConversationTitleMenuProps {
 
 export function ConversationTitleMenu({
   title,
+  agiWork = false,
   projects,
   onRename,
   onMoveToProject,
@@ -88,6 +91,11 @@ export function ConversationTitleMenu({
               className="flex min-w-0 items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-black/[0.04] hover:text-[var(--chat-text-primary)] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <span className="truncate">{title}</span>
+              {agiWork && (
+                <span className="shrink-0 whitespace-pre text-[var(--chat-text-muted)]">
+                  {AGI_WORK_TITLE_SUFFIX}
+                </span>
+              )}
               <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>

@@ -4,6 +4,7 @@ import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   INTERACTIVE_CARDS_METADATA_KEY,
 } from '@agiworkforce/types';
+import { CloudAgentWorkModeSchema, type CloudAgentWorkMode } from './cloud-agent-runs';
 
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
@@ -67,6 +68,10 @@ export const ManagedCloudConversationWireSchema = z.object({
   archived: z.boolean(),
   is_temporary: z.boolean(),
   active_leaf_message_id: z.string().uuid().nullable().optional(),
+  // Derived from the conversation's FIRST agent run, not stored on the
+  // conversation row: the mode a task was started in is what the badge names,
+  // and a later turn switched to Chat must not erase it.
+  work_mode: CloudAgentWorkModeSchema.nullable().optional(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
@@ -298,6 +303,7 @@ export interface ManagedCloudConversation {
   archived: boolean;
   isTemporary: boolean;
   activeLeafMessageId?: string | null;
+  workMode?: CloudAgentWorkMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -332,6 +338,7 @@ export function normalizeManagedCloudConversation(
     ...(wire.active_leaf_message_id !== undefined
       ? { activeLeafMessageId: wire.active_leaf_message_id }
       : {}),
+    ...(wire.work_mode ? { workMode: wire.work_mode } : {}),
     createdAt: wire.created_at,
     updatedAt: wire.updated_at,
   };
