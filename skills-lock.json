@@ -23,49 +23,49 @@
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:36374d0ef696c0d01f7c986af048f1e848fd5f032b57f1e1df04041169b27582"
+      "computedHash": "sha256-tree-v1:600f290451e61c99a5cf13a7101780ff19e4b677f1d747fb1e85239013029952"
     },
     "antislop-code": {
       "path": ".agents/skills/antislop-code",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-code)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:9dc4a81720b5b98b6c106e93d9a0a2f7cfcabd9933e1d82aa5f9e86b8785ad29"
+      "computedHash": "sha256-tree-v1:b486aec0abed1a06f41c8a277830bcd2065a3de1d7fe9b23a80600628c46479d"
     },
     "antislop-copywriting": {
       "path": ".agents/skills/antislop-copywriting",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-copywriting)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:4f39ffc267b3a3dbf7967a4c23b623430aea0d78a50b93516712062991702d38"
+      "computedHash": "sha256-tree-v1:cf07ba7fd9b297d84d9d9f078782a6e9562d87063940d1c2b105a56e8315e34c"
     },
     "antislop-human": {
       "path": ".agents/skills/antislop-human",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-human)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:cc4e0e9dec5d9bc76dbea6f422fa66c38f44b1551994c24fc3f49e82500aa76c"
+      "computedHash": "sha256-tree-v1:099d00d59c0f1cb08b29b84d41e672553955c442f9ba5d55cde1830fdddb18cb"
     },
     "antislop-layoutmobile": {
       "path": ".agents/skills/antislop-layoutmobile",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-layoutmobile)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:5ae9a00d29b7201344c35ab2f38c085f3f5d117250397a7e214bbd6d9d1a9a1e"
+      "computedHash": "sha256-tree-v1:55af6ac23d0483d1df6ad82f4752575fac782b51bbca75a62deb1bf007831fa5"
     },
     "antislop-ui": {
       "path": ".agents/skills/antislop-ui",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-ui)",
       "sourceType": "github",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
-      "computedHash": "sha256-tree-v1:e54b2c201b708a7166d93fc314a3e0bb784eac2d4e44e021be085ecf2ebfbe60"
+      "computedHash": "sha256-tree-v1:6921d36d950279fdb632be504f7b56b1cca8bd88f39e7108ca21c1f6e48369a0"
     },
     "apple-design": {
       "path": ".agents/skills/apple-design",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/apple-design)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:30e7f5da25f00bb44cf8792ca1079ca525df65dbd0654b093faed99154caa82e"
+      "computedHash": "sha256-tree-v1:ece86dc2cb8a48faa6ff3206103b5981eb8118c2d1d3375786c2baae9caeb2be"
     },
     "code-review": {
       "path": ".agents/skills/code-review",
@@ -86,7 +86,7 @@
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/taste-skill)",
       "sourceType": "github",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
-      "computedHash": "sha256-tree-v1:6c220709ad32cfe4c470bbe0517894713df979eff3d032c6738a7445f52b35a8"
+      "computedHash": "sha256-tree-v1:70bf53cb0d61fbbe54e33b34ef1ce6ae1ebe3b188a6bcf6dd180e47ea4a10289"
     },
     "document-creation": {
       "path": ".agents/skills/document-creation",
@@ -100,28 +100,28 @@
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/emil-design-eng)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:d1ada4eab5eb9e08b012d8ff14d2227f2ad4b47b6c852cba916ad0c13248c286"
+      "computedHash": "sha256-tree-v1:1c6440bc64540bb46df5bfbe8015be9f434109083dd4838c1b01201ba214cda7"
     },
     "extract-design-system": {
       "path": ".agents/skills/extract-design-system",
       "source": "https://github.com/arvindrk/extract-design-system @ 1873741ba8dea755e35e6e15134f7918cd58e036 (skills/extract-design-system)",
       "sourceType": "github",
       "declaredVersion": "1873741ba8dea755e35e6e15134f7918cd58e036",
-      "computedHash": "sha256-tree-v1:a872f4da2d531edf4817390af1366c4f3b63382bab0db349257b14a9f5749596"
+      "computedHash": "sha256-tree-v1:3962b7ba47a8fa0e6ae5959aa7a9a3b4ba12af85138230bcb8f13b0d895611f0"
     },
     "find-animation-opportunities": {
       "path": ".agents/skills/find-animation-opportunities",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/find-animation-opportunities)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:6d4c6f0e7c4d35459294fa7d5340e9a514713c5a62b7db34f1175eab98d26c0a"
+      "computedHash": "sha256-tree-v1:69536cb282f3873212ba4b059a96a115b5a1eceffa59df051d3ad4536f87065d"
     },
     "frontend-design": {
       "path": ".agents/skills/frontend-design",
       "source": "https://github.com/anthropics/skills @ 41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f (skills/frontend-design)",
       "sourceType": "github",
       "declaredVersion": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
-      "computedHash": "sha256-tree-v1:4f46f3620751cdfa22ad81e8d3062d09be163ec705017d374a0770d4675f4d22"
+      "computedHash": "sha256-tree-v1:5a931374138a207129516499368882dac346f9feff778bae1a86ec9a59f80dee"
     },
     "frontend-design-review": {
       "path": ".agents/skills/frontend-design-review",
@@ -135,7 +135,7 @@
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/improve-animations)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:1dfbd6ca404e25912f1cb1d94ab6b169a5b1e658955cc4080ba334c00138e8cf"
+      "computedHash": "sha256-tree-v1:f96d6bf5f3177a2adf01b0dd87f7942f2563a7c063817eaf14c9d0d2adb25d01"
     },
     "literature-review": {
       "path": ".agents/skills/literature-review",
@@ -156,14 +156,14 @@
       "source": "https://github.com/microsoft/skills @ 02e0b2f852b39ea00c43283f999b83fc12079273 (.github/skills/frontend-design-review)",
       "sourceType": "github",
       "declaredVersion": "02e0b2f852b39ea00c43283f999b83fc12079273",
-      "computedHash": "sha256-tree-v1:a80f4cf4cf68196a0db5079bb110e0cf8ff03730c8e7c811f9e6f5b6d327d807"
+      "computedHash": "sha256-tree-v1:22b5d712f6fef95a92672a94604c5552bcef9a3a41ac92214af14a983445a446"
     },
     "pick-ui-library": {
       "path": ".agents/skills/pick-ui-library",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/pick-ui-library)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:96ba6b24e662cbe1e49607e525c5038866268f4908903c564a9ba8e5862b05d2"
+      "computedHash": "sha256-tree-v1:27cebe322d30aaf7fb4da75fe9af2bd5a01750ccdcf0a77aa2a7c16f62c07ba1"
     },
     "presentation-creation": {
       "path": ".agents/skills/presentation-creation",
@@ -177,7 +177,7 @@
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/redesign-skill)",
       "sourceType": "github",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
-      "computedHash": "sha256-tree-v1:395ae9a83d58fcba06fb3fb4d230e7c0e841e802e0f8a8a70f9dcfbbdc4a5eee"
+      "computedHash": "sha256-tree-v1:474529ab3dedcde2626c2b61a4d4bfe9d5c10003a28f9b3a5711ed76c23317a0"
     },
     "research-and-citations": {
       "path": ".agents/skills/research-and-citations",
@@ -191,7 +191,7 @@
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/review-animations)",
       "sourceType": "github",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:3f67918ea8ccbe116a2de8f3fb6c744632b30e7368faec2ea3388729215e9344"
+      "computedHash": "sha256-tree-v1:108544cf22d1a9398c2004fae3bb0cd2465294993e36fd99a61ddb16d4228539"
     },
     "skill-creator": {
       "path": ".agents/skills/skill-creator",
@@ -212,21 +212,21 @@
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/composition-patterns)",
       "sourceType": "github",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:e8f49ff5e2929a6cbb1a04d517ee4069dc84359dc392ff402bbe5d0e1a82cd9d"
+      "computedHash": "sha256-tree-v1:88f75d49036dd1828306f253d94872cc87ea693460a150f18f848000f31d1dda"
     },
     "vercel-react-best-practices": {
       "path": ".agents/skills/vercel-react-best-practices",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/react-best-practices)",
       "sourceType": "github",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:e799bbae3aad221f4bf33a6026cb447cbd793eca4d6f98875e5d130e92749ac0"
+      "computedHash": "sha256-tree-v1:dbc8b5af55a7d8f7f7733368114ee5dab255bd6926c611451f688edc6e40a082"
     },
     "web-design-guidelines": {
       "path": ".agents/skills/web-design-guidelines",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/web-design-guidelines)",
       "sourceType": "github",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:323743cdf2845074c5ed3a5274df5abf5489d8bfe69d16eb3fdd08a5ccf7cf5c"
+      "computedHash": "sha256-tree-v1:4a1eed673f25210d4e809be2846b1aecbda721fb1c9633602538d5f3fbb5f08e"
     }
   }
 }
