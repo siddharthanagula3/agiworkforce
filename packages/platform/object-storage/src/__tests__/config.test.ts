@@ -71,7 +71,14 @@ describe('resolveObjectStorageConfig', () => {
     expect(config.privateBucket).toBe('agiworkforce-media-private');
   });
 
-  it('derives no endpoint from an account id that is not the shape cloudflare issues', () => {
+  it('derives an endpoint from an account id that is a single dns label', () => {
+    expect(
+      resolveObjectStorageConfig({ ...R2_ENVIRONMENT, CLOUDFLARE_R2_ACCOUNT_ID: 'account' })
+        .endpoint,
+    ).toBe('https://account.r2.cloudflarestorage.com');
+  });
+
+  it('derives no endpoint from an account id carrying a hostname', () => {
     const config = resolveObjectStorageConfig({
       ...R2_ENVIRONMENT,
       CLOUDFLARE_R2_ACCOUNT_ID: 'evil.example.com',
