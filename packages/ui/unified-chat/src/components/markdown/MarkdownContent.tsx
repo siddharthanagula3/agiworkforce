@@ -27,7 +27,13 @@ import { Copy, Check, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import './codeBlock.css';
 
-const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
+export const CodeBlock = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => {
   const [copied, setCopied] = useState(false);
   const isStreamTail = useIsStreamTail();
   const match = /language-(\w+)/.exec(className || '');
@@ -73,13 +79,13 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          className="h-7 gap-1.5 px-2 text-xs text-[var(--chat-code-lang-label)] hover:text-[var(--chat-code-copy-hover-fg)] hover:bg-[var(--chat-code-copy-hover-bg)]"
+          className="h-8 gap-1.5 px-2.5 text-xs text-[var(--chat-code-lang-label)] hover:text-[var(--chat-code-copy-hover-fg)] hover:bg-[var(--chat-code-copy-hover-bg)]"
           aria-label={copyFailed ? 'Copying code failed' : copied ? 'Code copied' : 'Copy code'}
         >
           {copied ? (
-            <Check className="h-3 w-3" aria-hidden="true" />
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
           ) : (
-            <Copy className="h-3 w-3" aria-hidden="true" />
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
           )}
           {copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy'}
         </Button>
