@@ -459,6 +459,41 @@ describe('appendWebSearchTool', () => {
     expect(appendWebSearchTool('google', undefined, caps)).toEqual([{ google_search: {} }]);
   });
 
+  it('keeps grounding when the pool is unspecified or available', () => {
+    expect(appendWebSearchTool('google', undefined, caps)).toEqual([{ google_search: {} }]);
+    expect(
+      appendWebSearchTool('google', undefined, caps, { googleGroundingPoolAvailable: true }),
+    ).toEqual([{ google_search: {} }]);
+  });
+
+  it('routes to the Perplexity fallback once the grounding pool is spent and a key is configured', () => {
+    const original = process.env['PERPLEXITY_API_KEY'];
+    process.env['PERPLEXITY_API_KEY'] = 'test-key';
+    try {
+      const tools = appendWebSearchTool('google', undefined, caps, {
+        googleGroundingPoolAvailable: false,
+      });
+      expect(tools).toHaveLength(1);
+      expect((tools?.[0] as { type?: string })?.type).toBe('function');
+      expect((tools?.[0] as { function?: { name?: string } })?.function?.name).toBe('web_search');
+    } finally {
+      if (original === undefined) delete process.env['PERPLEXITY_API_KEY'];
+      else process.env['PERPLEXITY_API_KEY'] = original;
+    }
+  });
+
+  it('keeps grounding when the pool is spent but no fallback backend is configured', () => {
+    const original = process.env['PERPLEXITY_API_KEY'];
+    delete process.env['PERPLEXITY_API_KEY'];
+    try {
+      expect(
+        appendWebSearchTool('google', undefined, caps, { googleGroundingPoolAvailable: false }),
+      ).toEqual([{ google_search: {} }]);
+    } finally {
+      if (original !== undefined) process.env['PERPLEXITY_API_KEY'] = original;
+    }
+  });
+
   it('injects the stable OpenAI Responses web_search tool', () => {
     expect(appendWebSearchTool('openai', undefined, caps)).toEqual([{ type: 'web_search' }]);
   });
