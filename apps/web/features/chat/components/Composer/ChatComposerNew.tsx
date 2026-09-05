@@ -14,14 +14,11 @@ import {
   Plus,
   X,
   Clock,
-  Paperclip,
   Sparkles,
   ChevronRight,
   ChevronDown,
   Check,
-  Camera,
   EyeOff,
-  ImagePlus,
   Image as ImageIcon,
   Video,
   FileText,
@@ -33,11 +30,8 @@ import {
   LibraryBig,
   Monitor,
   Brain,
-  Globe,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
-import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
@@ -54,6 +48,7 @@ import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
+import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
@@ -94,7 +89,6 @@ import {
   BUILT_IN_SLASH_COMMANDS,
   decideComposerPaste,
   matchMentionQuery,
-  SendPreview,
   useCapability,
 } from '@agiworkforce/unified-chat';
 import type {
@@ -207,7 +201,6 @@ const WORK_BAR_ITEM_CLASS =
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 
-const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 // One shared empty array for "this conversation has no disabled connectors",
 // so the store selector returns a stable reference and cannot loop under
 // useSyncExternalStore (mirrors EMPTY_MESSAGES in the chat store).
@@ -483,127 +476,6 @@ type SlashCommandOutcome =
       /** Extended thinking lives in its own store, so it is reported separately. */
       enableThinking?: boolean;
     };
-
-/**
- * Plugins' own mark: a block grid plus a connection point, distinct from the
- * generic `Globe` glyph `Web search` uses. Shared by the + menu's Plugins row
- * and the AGI Work bar's Plugins entry so neither falls back to a mismatched
- * icon when the account has no connected connectors to show instead.
- */
-function PluginsGlyph({ className }: { className: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      aria-hidden="true"
-    >
-      <rect x="2" y="2" width="5" height="5" rx="1" />
-      <rect x="9" y="2" width="5" height="5" rx="1" />
-      <rect x="2" y="9" width="5" height="5" rx="1" />
-      <path d="M11.5 9v6M9 11.5h6" />
-    </svg>
-  );
-}
-
-/** Toggle row used in the + menu for connected send options. */
-function MenuToggleRow({
-  icon: Icon,
-  label,
-  checked,
-  onToggle,
-  disabled,
-  title,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-  /** Shown in a tooltip when the row is disabled (e.g. no search path). */
-  title?: string;
-}) {
-  const row = (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      title={title}
-      aria-pressed={checked}
-      className={cn(
-        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-        disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
-      )}
-    >
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <span className="flex-1 text-left">{label}</span>
-      {checked && <Check className="h-3.5 w-3.5 text-foreground" />}
-    </button>
-  );
-
-  if (!disabled || !title) return row;
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span tabIndex={0} className="block">
-            {row}
-          </span>
-        </TooltipTrigger>
-        <TooltipPortal>
-          <TooltipContent side="right">{title}</TooltipContent>
-        </TooltipPortal>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-/**
- * One connector row inside the Connectors submenu. `role="menuitemcheckbox"`
- * is the correct ARIA role for a toggleable item in a menu (as opposed to
- * `MenuToggleRow`'s plain `aria-pressed` button, used for composer-wide
- * capability toggles rather than a list of named items).
- *
- * Deliberately a plain focusable button, not a `useMenuKeyboard` panel: this
- * submenu renders inside `AnchoredComposerMenu`, which already runs its own
- * document-capture-phase Arrow/Home/End/Escape handling over every focusable
- * element in the popover. A second capture-phase listener here would not
- * replace that one -- both run on every keypress -- and would fight it for
- * which "next item" wins.
- */
-function ConnectorCheckboxRow({
-  label,
-  checked,
-  onToggle,
-}: {
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitemcheckbox"
-      aria-checked={checked}
-      onClick={onToggle}
-      className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-sm transition-colors hover:bg-muted/60"
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-          checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
-        )}
-      >
-        {checked && <Check className="h-3 w-3" />}
-      </span>
-      <span className="flex-1 truncate text-left">{label}</span>
-    </button>
-  );
-}
 
 /**
  * Sending the first message of a brand-new chat flips `isEmptyChat` in
@@ -1701,6 +1573,96 @@ const ChatComposerNewComponent = ({
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
   }, []);
+
+  const handleCreateImageFromMenu = useCallback(() => {
+    closeMenu();
+    if (!billingPolicyReady) {
+      if (billingPolicyError) {
+        setLocalNotice("Couldn't verify your plan. Retrying…");
+        void refreshBillingPolicy();
+      } else {
+        setLocalNotice('Checking your plan…');
+      }
+      return;
+    }
+    if (mediaAvailabilityStatus !== 'ready') {
+      setLocalNotice(
+        mediaAvailabilityStatus === 'error'
+          ? (mediaAvailabilityError ?? 'Could not check image model availability.')
+          : 'Checking image model availability…',
+      );
+      if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+      return;
+    }
+    if (availableImageModels.length === 0) {
+      setLocalNotice('This deployment is not ready for image generation.');
+      return;
+    }
+    if (!canUseImageGeneration) {
+      onUpgradeRequest?.();
+      return;
+    }
+    setImageMode(true);
+    setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+  }, [
+    closeMenu,
+    billingPolicyReady,
+    billingPolicyError,
+    refreshBillingPolicy,
+    mediaAvailabilityStatus,
+    mediaAvailabilityError,
+    retryMediaAvailability,
+    availableImageModels,
+    canUseImageGeneration,
+    onUpgradeRequest,
+    setImageMode,
+    focusComposer,
+  ]);
+
+  const handleCreateVideoFromMenu = useCallback(() => {
+    closeMenu();
+    if (!billingPolicyReady) {
+      if (billingPolicyError) {
+        setLocalNotice("Couldn't verify your plan. Retrying…");
+        void refreshBillingPolicy();
+      } else {
+        setLocalNotice('Checking your plan…');
+      }
+      return;
+    }
+    if (mediaAvailabilityStatus !== 'ready') {
+      setLocalNotice(
+        mediaAvailabilityStatus === 'error'
+          ? (mediaAvailabilityError ?? 'Could not check video model availability.')
+          : 'Checking video model availability…',
+      );
+      if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+      return;
+    }
+    if (availableVideoModels.length === 0) {
+      setLocalNotice('This deployment is not ready for video generation.');
+      return;
+    }
+    if (!canUseVideoGeneration) {
+      onUpgradeRequest?.();
+      return;
+    }
+    setVideoMode(true);
+    setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+  }, [
+    closeMenu,
+    billingPolicyReady,
+    billingPolicyError,
+    refreshBillingPolicy,
+    mediaAvailabilityStatus,
+    mediaAvailabilityError,
+    retryMediaAvailability,
+    availableVideoModels,
+    canUseVideoGeneration,
+    onUpgradeRequest,
+    setVideoMode,
+    focusComposer,
+  ]);
 
   const activePickerProject = projectPicker
     ? (projectPicker.projects.find((p) => p.id === projectPicker.activeProjectId) ?? null)
@@ -3326,593 +3288,115 @@ const ChatComposerNewComponent = ({
                 overflow-hidden column, and at ordinary laptop viewport heights
                 the clip removed its FIRST row, "Add photos & files", leaving
                 the product with no reachable way to attach a file. */}
-                  <AnchoredComposerMenu
+                  <ComposerPlusMenu
                     anchorRef={overflowTriggerRef}
-                    open={showOverflowMenu}
-                    label="More composer options"
-                    onRequestClose={() => setShowOverflowMenu(false)}
-                    align="start"
                     contentRef={overflowMenuRef}
-                    className="w-64 p-1.5"
-                  >
-                    {
-                      <>
-                        {/* 1. Add photos and files.
-
-                        AUDIT-FIX MEDIA-VIDEO-01: this row was available
-                        unconditionally in image/video mode, where the send path
-                        cannot carry an attachment and `clearComposerState()`
-                        destroyed it. Disabled with the reason on the row rather
-                        than hidden, so the affordance does not vanish without
-                        explanation the moment a media mode is entered. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            fileInputRef.current?.click();
-                            closeMenu();
-                          }}
-                          disabled={mediaModeActive}
-                          title={
-                            mediaModeActive
-                              ? `${mediaModeNoun} generation works from your prompt only. Leave ${mediaModeNoun.toLowerCase()} mode to attach files.`
-                              : undefined
-                          }
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                            mediaModeActive ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
-                          )}
-                        >
-                          <Paperclip className="h-4 w-4 text-muted-foreground" />
-                          <span className="flex-1 text-left">Add photos &amp; files</span>
-                          {mediaModeActive && (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              Not used here
-                            </span>
-                          )}
-                        </button>
-
-                        {hostCanGenerateImage && (
-                          <>
-                            {/* 2. Create image.
-
-                        AUDIT-FIX CMP-11: this row had NO tier check in the
-                        composer while /api/media/image/generate rejects
-                        non-Pro with 403, the user composed a whole prompt and
-                        failed after a round trip, with `onUpgradeRequest`
-                        available and never called. Deep Research one row below
-                        was already gated correctly; this now matches it. */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenu();
-                                if (!billingPolicyReady) {
-                                  if (billingPolicyError) {
-                                    setLocalNotice("Couldn't verify your plan. Retrying…");
-                                    void refreshBillingPolicy();
-                                  } else {
-                                    setLocalNotice('Checking your plan…');
-                                  }
-                                  return;
-                                }
-                                if (mediaAvailabilityStatus !== 'ready') {
-                                  setLocalNotice(
-                                    mediaAvailabilityStatus === 'error'
-                                      ? (mediaAvailabilityError ??
-                                          'Could not check image model availability.')
-                                      : 'Checking image model availability…',
-                                  );
-                                  if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                                  return;
-                                }
-                                if (availableImageModels.length === 0) {
-                                  setLocalNotice(
-                                    'This deployment is not ready for image generation.',
-                                  );
-                                  return;
-                                }
-                                if (!canUseImageGeneration) {
-                                  onUpgradeRequest?.();
-                                  return;
-                                }
-                                setImageMode(true);
-                                setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
-                              }}
-                              title={
-                                !billingPolicyReady
-                                  ? billingPolicyError
-                                    ? 'Your plan could not be verified. Click to retry.'
-                                    : 'Checking your plan.'
-                                  : mediaAvailabilityStatus === 'loading'
-                                    ? 'Checking configured image providers.'
-                                    : mediaAvailabilityStatus === 'error'
-                                      ? 'Image provider availability could not be checked. Click to retry.'
-                                      : availableImageModels.length === 0
-                                        ? 'This deployment is not ready for image generation.'
-                                        : !canUseImageGeneration
-                                          ? 'Image generation is available on Pro and above.'
-                                          : undefined
-                              }
-                              className={cn(
-                                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                                imageMode && 'text-primary',
-                              )}
-                            >
-                              <ImagePlus
-                                className={cn(
-                                  'h-4 w-4',
-                                  imageMode ? 'text-primary' : 'text-muted-foreground',
-                                )}
-                              />
-                              <span className="flex-1 text-left">Create image</span>
-                              {!billingPolicyReady ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {billingPolicyError ? 'Retry' : 'Checking'}
-                                </span>
-                              ) : mediaAvailabilityStatus !== 'ready' ||
-                                availableImageModels.length === 0 ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {mediaAvailabilityStatus === 'loading'
-                                    ? 'Checking'
-                                    : 'Unavailable'}
-                                </span>
-                              ) : !canUseImageGeneration ? (
-                                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
-                                  Upgrade
-                                </span>
-                              ) : null}
-                            </button>
-                          </>
-                        )}
-
-                        {hostCanGenerateVideo && (
-                          <>
-                            {/* 2b. Create video.
-
-                        /api/media/video/generate has been implemented and
-                        entitled (billing-catalog: max_15x + enterprise) all
-                        along, and MessageBubble already renders the in-flight
-                        shimmer and the finished player, but nothing in the
-                        product ever started one, so every state below the
-                        composer was unreachable. Same component, same gating
-                        idiom, same upgrade affordance as "Create image" one row
-                        above; only the capability key differs. */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenu();
-                                if (!billingPolicyReady) {
-                                  if (billingPolicyError) {
-                                    setLocalNotice("Couldn't verify your plan. Retrying…");
-                                    void refreshBillingPolicy();
-                                  } else {
-                                    setLocalNotice('Checking your plan…');
-                                  }
-                                  return;
-                                }
-                                if (mediaAvailabilityStatus !== 'ready') {
-                                  setLocalNotice(
-                                    mediaAvailabilityStatus === 'error'
-                                      ? (mediaAvailabilityError ??
-                                          'Could not check video model availability.')
-                                      : 'Checking video model availability…',
-                                  );
-                                  if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                                  return;
-                                }
-                                if (availableVideoModels.length === 0) {
-                                  setLocalNotice(
-                                    'This deployment is not ready for video generation.',
-                                  );
-                                  return;
-                                }
-                                if (!canUseVideoGeneration) {
-                                  onUpgradeRequest?.();
-                                  return;
-                                }
-                                setVideoMode(true);
-                                setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
-                              }}
-                              title={
-                                !billingPolicyReady
-                                  ? billingPolicyError
-                                    ? 'Your plan could not be verified. Click to retry.'
-                                    : 'Checking your plan.'
-                                  : mediaAvailabilityStatus === 'loading'
-                                    ? 'Checking configured video providers.'
-                                    : mediaAvailabilityStatus === 'error'
-                                      ? 'Video provider availability could not be checked. Click to retry.'
-                                      : availableVideoModels.length === 0
-                                        ? 'This deployment is not ready for video generation.'
-                                        : !canUseVideoGeneration
-                                          ? 'Video generation is available on Max 15x and Enterprise.'
-                                          : undefined
-                              }
-                              className={cn(
-                                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                                videoMode && 'text-primary',
-                              )}
-                            >
-                              <Video
-                                className={cn(
-                                  'h-4 w-4',
-                                  videoMode ? 'text-primary' : 'text-muted-foreground',
-                                )}
-                              />
-                              <span className="flex-1 text-left">Create video</span>
-                              {!billingPolicyReady ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {billingPolicyError ? 'Retry' : 'Checking'}
-                                </span>
-                              ) : mediaAvailabilityStatus !== 'ready' ||
-                                availableVideoModels.length === 0 ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {mediaAvailabilityStatus === 'loading'
-                                    ? 'Checking'
-                                    : 'Unavailable'}
-                                </span>
-                              ) : !canUseVideoGeneration ? (
-                                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
-                                  Upgrade
-                                </span>
-                              ) : null}
-                            </button>
-                          </>
-                        )}
-
-                        {/* 3. Take a screenshot, desktop-only capability. Render-gated
-                        so it is ABSENT (not merely disabled) on web/mobile.
-
-                        AUDIT-FIX CMP-10: this rendered an icon and a label with
-                        NO onClick, it did nothing and did not even close the
-                        menu. The shared AttachmentMenu already implements the
-                        real behaviour (capture → attach as a File); this is now
-                        the same contract, driven by the same capability flag. */}
-                        {canTakeScreenshotCap && (
-                          <button
-                            type="button"
-                            disabled={isCapturingScreenshot}
-                            onClick={() => {
-                              void handleTakeScreenshot();
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                              isCapturingScreenshot && 'cursor-not-allowed opacity-50',
-                            )}
-                          >
-                            <Camera className="h-4 w-4" />
-                            <span className="flex-1 text-left">
-                              {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
-                            </span>
-                          </button>
-                        )}
-
-                        {/* 4. Select working folder, desktop-only capability (local
-                        File System Access). Render-gated: ABSENT on web/mobile.
-                        The browser-API `canPickFolder` check is NOT the platform
-                        gate; it only disables when the desktop browser lacks the
-                        API. When the unified "Project or folder" picker is
-                        present, folder selection lives there ("Choose a
-                        different folder"), this legacy row only renders on
-                        surfaces without the picker so the control never
-                        appears twice. */}
-                        {!projectPicker && canUseWorkingDirectory && (
-                          <button
-                            type="button"
-                            disabled={!canPickFolder}
-                            title={
-                              canPickFolder
-                                ? folderName
-                                  ? `Working folder: ${folderName}`
-                                  : undefined
-                                : 'Folder access is not supported in this browser'
-                            }
-                            onClick={() => {
-                              pickFolder();
-                              closeMenu();
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                              !canPickFolder && 'cursor-not-allowed opacity-50',
-                              canPickFolder && folderName
-                                ? 'text-amber-300 hover:bg-muted/60'
-                                : 'hover:bg-muted/60',
-                            )}
-                          >
-                            {folderName ? (
-                              <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
-                            ) : (
-                              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            )}
-                            <span className="flex-1 text-left">
-                              {folderName ? folderName : 'Add working folder'}
-                            </span>
-                            {folderName && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  clearFolder();
-                                }}
-                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                                aria-label="Clear working folder"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            )}
-                            {!canPickFolder && (
-                              <span className="text-[12px] text-muted-foreground">
-                                Not supported
-                              </span>
-                            )}
-                          </button>
-                        )}
-
-                        {/* Divider */}
-                        <div className="my-1 border-t border-border/30" />
-
-                        {/* 5. Skills -- entry point that opens the settings modal at
-                        the Skills pane (founder directive 2026-07-10: the plus-menu
-                        holds ENTRIES, not inline lists, the lists live in the
-                        settings modal). Per-message skill selection stays available
-                        via the @mention dropdown in the textarea. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            closeMenu();
-                            openSettings('skills');
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            selectedSkillName && 'text-primary',
-                          )}
-                        >
-                          <Sparkles
-                            className={cn(
-                              'h-4 w-4',
-                              selectedSkillName ? 'text-primary' : 'text-muted-foreground',
-                            )}
-                          />
-                          <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-
-                        {/* 6. Connectors -- expands into a submenu of the CONNECTED
-                        connectors, each with an enable/disable checkbox for
-                        THIS conversation (AUDIT-FIX WEB-CONNECTORS-PER-CONVO-01:
-                        the row used to only deep-link to Settings because
-                        per-conversation enablement had no runtime backing; the
-                        chat store and the completion request now carry it). The
-                        deep link to Settings stays, as the last row, for
-                        connect/disconnect and per-tool permissions. */}
-                        <button
-                          type="button"
-                          onClick={() => setConnectorsSubmenuOpen((open) => !open)}
-                          aria-expanded={connectorsSubmenuOpen}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                        >
-                          {/* Simple connector icon */}
-                          <svg
-                            className="h-4 w-4 text-muted-foreground"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            aria-hidden="true"
-                          >
-                            <circle cx="3.5" cy="8" r="2" />
-                            <circle cx="12.5" cy="8" r="2" />
-                            <path d="M5.5 8h5" />
-                          </svg>
-                          <span className="flex-1 text-left">Connectors</span>
-                          <ChevronRight
-                            className={cn(
-                              'h-3.5 w-3.5 text-muted-foreground transition-transform',
-                              connectorsSubmenuOpen && 'rotate-90',
-                            )}
-                          />
-                        </button>
-                        {connectorsSubmenuOpen && (
-                          <div role="menu" aria-label="Connectors" className="space-y-0.5 pb-1">
-                            {connectedConnectorOptions.length === 0 ? (
-                              <p className="px-3 py-2 pl-8 text-[12px] text-muted-foreground">
-                                No connectors connected yet.
-                              </p>
-                            ) : (
-                              connectedConnectorOptions.map((connector) => (
-                                <ConnectorCheckboxRow
-                                  key={connector.id}
-                                  label={connector.label}
-                                  checked={!disabledConnectorIds.includes(connector.id)}
-                                  onToggle={() =>
-                                    setConnectorEnabled(
-                                      connector.id,
-                                      disabledConnectorIds.includes(connector.id),
-                                    )
-                                  }
-                                />
-                              ))
-                            )}
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                closeMenu();
-                                openSettings('connectors');
-                              }}
-                              className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
-                            >
-                              Manage in Settings
-                            </button>
-                          </div>
-                        )}
-
-                        {/* 7. Plugins -- entry point that opens the settings modal at
-                        the Plugins pane. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            closeMenu();
-                            openSettings('plugins');
-                          }}
-                          // Was the ONLY row in this menu carrying
-                          // `text-muted-foreground`, so a fully-wired entry
-                          // rendered greyed-out beside Skills and Connectors and
-                          // read as disabled. Matches its siblings now.
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                        >
-                          <PluginsGlyph className="h-4 w-4" />
-                          <span className="flex-1 text-left">Plugins</span>
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-
-                        {/* Divider */}
-                        <div className="my-1 border-t border-border/30" />
-
-                        {/* 7a. Standing web-search status. Search is ambient
-                        (model/deployment driven, not a manual toggle), so this
-                        is a status row, never a button pretending to control
-                        it; the on state also shows as a small marked glyph in
-                        the right cluster. */}
-                        {billingPolicyReady && (
-                          <div
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground"
-                            title={
-                              webSearchEnabled
-                                ? 'This model can search the web when the question needs current information.'
-                                : 'This model has no web-search path, so this turn answers from its training data.'
-                            }
-                          >
-                            <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            <span className="flex-1 text-left">Web search</span>
-                            <span className="text-[12px] font-medium">
-                              {webSearchEnabled ? 'On' : 'Off'}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* 7a. AGI Work scope intake. The attached bar took the
-                        strip its collapsed pill used to sit in, so this is now
-                        the only way to open the panel. */}
-                        {canUseAgiWork && workMode === 'agiwork' && !mediaModeActive && (
-                          <MenuToggleRow
-                            icon={ListChecks}
-                            label={tAgiWork('agiWork.compose.scopeAdd')}
-                            checked={agiWorkFieldsOpen}
-                            onToggle={() => {
-                              setAgiWorkFieldsOpen((open) => !open);
-                              closeMenu();
-                            }}
-                            disabled={isTurnActive || composerDisabled}
-                          />
-                        )}
-
-                        {/* 8. Deep Research toggle */}
-                        <MenuToggleRow
-                          icon={Telescope}
-                          label="Deep Research"
-                          checked={researchEnabled}
-                          onToggle={() => {
-                            handleResearchToggle();
-                            closeMenu();
-                          }}
-                          disabled={disabled || isFreeTrial || !researchAvailableForModel}
-                          title={
-                            isFreeTrial
-                              ? 'Upgrade to use Deep Research'
-                              : !researchAvailableForModel
-                                ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
-                                : undefined
-                          }
-                        />
-
-                        {/* 8a. Code execution toggle */}
-                        <MenuToggleRow
-                          icon={Terminal}
-                          label="Run code"
-                          checked={codeExecutionEnabled}
-                          onToggle={() => {
-                            handleCodeExecutionToggle();
-                            closeMenu();
-                          }}
-                          disabled={disabled || !modelSupportsCodeExecution}
-                          title={
-                            !modelSupportsCodeExecution
-                              ? "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
-                              : undefined
-                          }
-                        />
-
-                        {/* 8b. Managed Office creation, server-owned DOCX/PPTX bytes,
-                        persisted through the same generated-file pipeline as sandbox output. */}
-                        <MenuToggleRow
-                          icon={FileText}
-                          label="Create Office files"
-                          checked={officeCreationEnabled}
-                          onToggle={() => {
-                            handleOfficeCreationToggle();
-                            closeMenu();
-                          }}
-                          disabled={disabled || !modelSupportsOfficeCreation}
-                          title={
-                            !modelSupportsOfficeCreation
-                              ? "Office file creation isn't available for this model."
-                              : undefined
-                          }
-                        />
-
-                        {/* 8b-1. Per-chat Memory toggle. On by default, mirroring the
-                        settings-level Memory switch which sets the account-wide
-                        default this overrides for one conversation only. */}
-                        <MenuToggleRow
-                          icon={Brain}
-                          label="Memory"
-                          checked={memoryCapabilityEnabled && memoryEnabledForChat}
-                          onToggle={() => {
-                            handleMemoryToggle();
-                            closeMenu();
-                          }}
-                          disabled={disabled || !memoryCapabilityEnabled}
-                          title={
-                            !memoryCapabilityEnabled
-                              ? 'Turn on Memory in Settings > Capabilities to use it here.'
-                              : undefined
-                          }
-                        />
-
-                        {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
-                        render-gated on the host actually providing a persistence
-                        path, an unbacked privacy switch is worse than none. */}
-                        {activeConversationId && onSetTemporaryChat && (
-                          <MenuToggleRow
-                            icon={EyeOff}
-                            label={
-                              isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'
-                            }
-                            checked={isIncognito}
-                            onToggle={() => {
-                              void handleIncognitoToggle();
-                              closeMenu();
-                            }}
-                            disabled={!canToggleIncognito}
-                          />
-                        )}
-
-                        {/* 9. Send route (managed cloud state); moved out of the
-                        footer entirely (target: one quiet disclaimer+model
-                        line), so this is now its sole, every-width home. It
-                        is last so the menu's initial focus still lands on an
-                        action, and it is the card variant because the compact
-                        one opens an `absolute bottom-full` popover that this
-                        panel's own `overflow-y-auto` would clip. */}
-                        {sendPreviewPresentation && (
-                          <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
-                            <div className="my-1 border-t border-border/40" />
-                            <SendPreview presentation={sendPreviewPresentation} variant="card" />
-                          </div>
-                        )}
-                      </>
+                    open={showOverflowMenu}
+                    onRequestClose={() => setShowOverflowMenu(false)}
+                    closeMenu={closeMenu}
+                    onAddFiles={() => {
+                      fileInputRef.current?.click();
+                      closeMenu();
+                    }}
+                    mediaModeActive={mediaModeActive}
+                    mediaModeNoun={mediaModeNoun}
+                    billingPolicyReady={billingPolicyReady}
+                    billingPolicyError={Boolean(billingPolicyError)}
+                    mediaAvailabilityStatus={mediaAvailabilityStatus}
+                    hostCanGenerateImage={hostCanGenerateImage}
+                    imageModelsAvailable={availableImageModels.length > 0}
+                    canUseImageGeneration={canUseImageGeneration}
+                    imageMode={imageMode}
+                    onCreateImage={handleCreateImageFromMenu}
+                    hostCanGenerateVideo={hostCanGenerateVideo}
+                    videoModelsAvailable={availableVideoModels.length > 0}
+                    canUseVideoGeneration={canUseVideoGeneration}
+                    videoMode={videoMode}
+                    onCreateVideo={handleCreateVideoFromMenu}
+                    canTakeScreenshot={canTakeScreenshotCap}
+                    isCapturingScreenshot={isCapturingScreenshot}
+                    onTakeScreenshot={() => {
+                      void handleTakeScreenshot();
+                    }}
+                    showWorkingFolderRow={!projectPicker && canUseWorkingDirectory}
+                    canPickFolder={canPickFolder}
+                    folderName={folderName}
+                    onPickFolder={() => {
+                      pickFolder();
+                      closeMenu();
+                    }}
+                    onClearFolder={clearFolder}
+                    selectedSkillName={selectedSkillName}
+                    onOpenSettings={openSettings}
+                    connectorsSubmenuOpen={connectorsSubmenuOpen}
+                    onToggleConnectorsSubmenu={() => setConnectorsSubmenuOpen((open) => !open)}
+                    connectors={connectedConnectorOptions}
+                    disabledConnectorIds={disabledConnectorIds}
+                    onSetConnectorEnabled={setConnectorEnabled}
+                    webSearchEnabled={webSearchEnabled}
+                    showScopeRow={workScopeBarVisible && !mediaModeActive}
+                    scopeOpen={agiWorkFieldsOpen}
+                    scopeDisabled={isTurnActive || composerDisabled}
+                    onToggleScope={() => {
+                      setAgiWorkFieldsOpen((open) => !open);
+                      closeMenu();
+                    }}
+                    researchEnabled={researchEnabled}
+                    researchDisabled={disabled || isFreeTrial || !researchAvailableForModel}
+                    researchTitle={
+                      isFreeTrial
+                        ? 'Upgrade to use Deep Research'
+                        : !researchAvailableForModel
+                          ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
+                          : undefined
                     }
-                  </AnchoredComposerMenu>
+                    onToggleResearch={() => {
+                      handleResearchToggle();
+                      closeMenu();
+                    }}
+                    codeExecutionEnabled={codeExecutionEnabled}
+                    codeExecutionDisabled={disabled || !modelSupportsCodeExecution}
+                    codeExecutionTitle={
+                      !modelSupportsCodeExecution
+                        ? "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+                        : undefined
+                    }
+                    onToggleCodeExecution={() => {
+                      handleCodeExecutionToggle();
+                      closeMenu();
+                    }}
+                    officeCreationEnabled={officeCreationEnabled}
+                    officeCreationDisabled={disabled || !modelSupportsOfficeCreation}
+                    officeCreationTitle={
+                      !modelSupportsOfficeCreation
+                        ? "Office file creation isn't available for this model."
+                        : undefined
+                    }
+                    onToggleOfficeCreation={() => {
+                      handleOfficeCreationToggle();
+                      closeMenu();
+                    }}
+                    memoryEnabled={memoryCapabilityEnabled && memoryEnabledForChat}
+                    memoryDisabled={disabled || !memoryCapabilityEnabled}
+                    memoryTitle={
+                      !memoryCapabilityEnabled
+                        ? 'Turn on Memory in Settings > Capabilities to use it here.'
+                        : undefined
+                    }
+                    onToggleMemory={() => {
+                      handleMemoryToggle();
+                      closeMenu();
+                    }}
+                    showTemporaryChat={Boolean(activeConversationId && onSetTemporaryChat)}
+                    temporaryChatSaving={isSavingIncognito}
+                    isIncognito={isIncognito}
+                    canToggleIncognito={canToggleIncognito}
+                    onToggleIncognito={() => {
+                      void handleIncognitoToggle();
+                      closeMenu();
+                    }}
+                    sendPreviewPresentation={sendPreviewPresentation}
+                  />
                 </div>
 
                 {/* Chat | AGI Work sits on the face at every width and in an
