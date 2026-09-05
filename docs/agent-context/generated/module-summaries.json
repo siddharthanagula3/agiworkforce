@@ -327,6 +327,12 @@
       "purpose": "ObjectStore port with an S3-compatible adapter and an in-memory adapter"
     },
     {
+      "name": "@agiworkforce/observability",
+      "path": "packages/platform/observability",
+      "kind": "package",
+      "purpose": "ErrorReportingAdapter port, a scrub step, and a Sentry envelope adapter shared by browser-adjacent surfaces"
+    },
+    {
       "name": "@agiworkforce/utils",
       "path": "packages/platform/utils",
       "kind": "package",
