@@ -15,6 +15,7 @@ import {
   buildFamilyView,
   collectFamilyRefs,
   loadFamilyCatalog,
+  matchFamilyMember,
   resolveFamilyRefsDeep,
   validateFamilyCatalog,
 } from './families.mjs';
@@ -94,6 +95,7 @@ const CANONICAL_ORDER = [
   'provider',
   'modelType',
   'inputModalities',
+  'outputModalities',
   'variantPartner',
   'contextWindow',
   'inputCost',
@@ -127,6 +129,7 @@ const CANONICAL_ORDER = [
   'videoPerSecondCost',
   'videoPerSecondCostByResolution',
   'videoGeneration',
+  'embeddingDimensions',
   'pricingNote',
   'openWeight',
   'license',
@@ -314,6 +317,7 @@ function buildCatalog(curation, synced, familyCatalog) {
     const up = synced.models[id] ?? {};
     const curatedEmit = omit(cur, OVERRIDE_KEYS);
     const merged = { ...curatedEmit, ...resolveSyncedFields(cur, up) };
+    merged.capabilities = projectCompatCapabilities(normalizeCapabilities(merged));
     assert.ok(
       ['fast', 'balanced', 'best'].includes(merged.qualityTier),
       `${id} has invalid qualityTier ${String(merged.qualityTier)}; expected fast, balanced, or best`,
@@ -574,44 +578,234 @@ function resolveHarnessId(model) {
   return `${model.provider}/chat-completions`;
 }
 
-function normalizeLifecycle(model) {
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const PROSE_DATE_PATTERN = /^(?<month>[A-Z][a-z]+)\s+(?<day>\d{1,2}),\s*(?<year>\d{4})$/u;
+const CALENDAR_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const ISO_MONTH_OFFSET = 1;
+const ISO_DATE_PAD_WIDTH = 2;
+const ISO_DATE_PAD_CHARACTER = '0';
+const UNKNOWN_DATE = null;
+
+function padCalendarPart(value) {
+  return String(value).padStart(ISO_DATE_PAD_WIDTH, ISO_DATE_PAD_CHARACTER);
+}
+
+function isoDayFromProse(value) {
+  if (typeof value !== 'string') return UNKNOWN_DATE;
+  const trimmed = value.trim();
+  if (ISO_DATE_PATTERN.test(trimmed)) return trimmed;
+  const parsed = PROSE_DATE_PATTERN.exec(trimmed);
+  if (!parsed?.groups) return UNKNOWN_DATE;
+  const monthIndex = CALENDAR_MONTHS.indexOf(parsed.groups.month);
+  if (monthIndex < 0) return UNKNOWN_DATE;
+  const day = Number(parsed.groups.day);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return UNKNOWN_DATE;
+  return `${parsed.groups.year}-${padCalendarPart(monthIndex + ISO_MONTH_OFFSET)}-${padCalendarPart(day)}`;
+}
+
+function assertIsoDateOrUnknown(label, value) {
+  assert.ok(
+    value === UNKNOWN_DATE || ISO_DATE_PATTERN.test(value),
+    `${label} must be an ISO calendar day or null, received ${String(value)}`,
+  );
+  return value;
+}
+
+const UNKNOWN_FAMILY = null;
+
+function resolveModelKeyForTarget(catalog, target) {
+  if (catalog.models[target]) return target;
+  return Object.keys(catalog.models).find((key) => catalog.models[key].apiModelId === target);
+}
+
+function buildModelAliasIndex(catalog) {
+  const aliases = {};
+  const record = (modelKey, alias) => {
+    if (typeof alias !== 'string' || alias.length === 0 || alias === modelKey) return;
+    (aliases[modelKey] ??= new Set()).add(alias);
+  };
+  for (const [modelKey, model] of Object.entries(catalog.models)) {
+    record(modelKey, model.apiModelId);
+    record(modelKey, model.openRouterSlug);
+  }
+  for (const provider of Object.values(catalog.providers ?? {})) {
+    for (const [alias, target] of Object.entries(provider.canonicalization ?? {})) {
+      const modelKey = resolveModelKeyForTarget(catalog, target);
+      if (modelKey) record(modelKey, alias);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(aliases).map(([modelKey, values]) => [modelKey, [...values].sort()]),
+  );
+}
+
+function buildModelFamilyIndex(catalog, familyCatalog) {
+  const families = {};
+  for (const [familyId, family] of Object.entries(familyCatalog.families)) {
+    for (const [modelKey, model] of Object.entries(catalog.models)) {
+      if (!matchFamilyMember(family, model, modelKey, familyCatalog.policy)) continue;
+      assert.ok(
+        families[modelKey] === undefined || families[modelKey] === family.canonicalFamily,
+        `${modelKey} matches more than one family slot (${families[modelKey]} and ${familyId})`,
+      );
+      families[modelKey] = family.canonicalFamily;
+    }
+  }
+  return families;
+}
+
+function normalizeLifecycle(modelKey, model) {
   const unavailable = model.availability && model.availability !== 'live';
   const deprecated = model.deprecated === true || model.status === 'deprecated';
-  return defined({
-    status: deprecated ? 'deprecated' : (model.status ?? 'active'),
-    availability: unavailable ? model.availability : 'live',
-    unavailableReason: model.unavailableReason,
-    released: model.released,
-    deprecationDate: model.deprecation_date,
-    deprecated,
-  });
+  const deprecatedOn = assertIsoDateOrUnknown(
+    `${modelKey} lifecycle.deprecatedOn`,
+    typeof model.deprecation_date === 'string' ? model.deprecation_date.trim() : UNKNOWN_DATE,
+  );
+  return {
+    ...defined({
+      status: deprecated ? 'deprecated' : (model.status ?? 'active'),
+      availability: unavailable ? model.availability : 'live',
+      unavailableReason: model.unavailableReason,
+      released: model.released,
+      deprecationDate: model.deprecation_date,
+      deprecated,
+    }),
+    releasedOn: assertIsoDateOrUnknown(
+      `${modelKey} lifecycle.releasedOn`,
+      isoDayFromProse(model.released),
+    ),
+    deprecatedOn,
+  };
+}
+
+const INTRINSIC_CAPABILITY_NAMES = [
+  'textInput',
+  'imageInput',
+  'audioInput',
+  'videoInput',
+  'textOutput',
+  'imageOutput',
+  'audioOutput',
+  'videoOutput',
+  'streaming',
+  'structuredOutput',
+  'functionCalling',
+  'reasoning',
+  'imageEditing',
+  'realtime',
+  'reranking',
+  'toolSchemaSupport',
+];
+
+const ROUTE_DEPENDENT_CAPABILITY_NAMES = [
+  'computerUse',
+  'agentic',
+  'webSearch',
+  'deepResearch',
+  'codeExecution',
+  'promptCaching',
+];
+
+const CAPABILITY_CLASSES = {
+  intrinsic: INTRINSIC_CAPABILITY_NAMES,
+  routeDependent: ROUTE_DEPENDENT_CAPABILITY_NAMES,
+};
+
+const CAPABILITY_NAMES = [...INTRINSIC_CAPABILITY_NAMES, ...ROUTE_DEPENDENT_CAPABILITY_NAMES];
+
+const COMPAT_CAPABILITY_SOURCES = {
+  streaming: 'streaming',
+  tools: 'functionCalling',
+  vision: 'imageInput',
+  json: 'structuredOutput',
+  thinking: 'reasoning',
+  computerUse: 'computerUse',
+  agentic: 'agentic',
+  imageGen: 'imageOutput',
+  videoGen: 'videoOutput',
+  search: 'webSearch',
+  research: 'deepResearch',
+  codeExecution: 'codeExecution',
+  caching: 'promptCaching',
+};
+
+const TEXTLESS_OUTPUT_MODEL_TYPES = ['embedding', 'image', 'video', 'tts'];
+const TRANSCRIPTION_MODEL_TYPE = 'stt';
+const IMAGE_MODEL_TYPE = 'image';
+const VIDEO_MODEL_TYPE = 'video';
+const SPEECH_MODEL_TYPE = 'tts';
+const UNKNOWN_CAPABILITY = null;
+
+function modalitySet(value) {
+  return Array.isArray(value) ? new Set(value) : null;
+}
+
+function declaredCapability(caps, name) {
+  return typeof caps[name] === 'boolean' ? caps[name] : UNKNOWN_CAPABILITY;
 }
 
 function normalizeCapabilities(model) {
   const caps = model.capabilities ?? {};
-  const explicitInputModalities = Array.isArray(model.inputModalities)
-    ? new Set(model.inputModalities)
-    : null;
+  const inputModalities = modalitySet(model.inputModalities);
+  const outputModalities = modalitySet(model.outputModalities);
   return {
-    textInput: explicitInputModalities
-      ? explicitInputModalities.has('text')
-      : model.modelType !== 'stt',
-    imageInput: explicitInputModalities
-      ? explicitInputModalities.has('image')
-      : caps.vision === true,
-    audioInput: explicitInputModalities
-      ? explicitInputModalities.has('audio')
-      : model.modelType === 'stt',
-    videoInput: explicitInputModalities ? explicitInputModalities.has('video') : false,
-    textOutput: !['embedding', 'image', 'video', 'tts'].includes(model.modelType),
-    imageOutput: model.modelType === 'image',
-    audioOutput: model.modelType === 'tts',
-    videoOutput: model.modelType === 'video',
+    textInput: inputModalities
+      ? inputModalities.has('text')
+      : model.modelType !== TRANSCRIPTION_MODEL_TYPE,
+    imageInput: inputModalities ? inputModalities.has('image') : caps.vision === true,
+    audioInput: inputModalities
+      ? inputModalities.has('audio')
+      : model.modelType === TRANSCRIPTION_MODEL_TYPE,
+    videoInput: inputModalities ? inputModalities.has('video') : false,
+    textOutput: outputModalities
+      ? outputModalities.has('text')
+      : !TEXTLESS_OUTPUT_MODEL_TYPES.includes(model.modelType),
+    imageOutput: outputModalities
+      ? outputModalities.has('image')
+      : model.modelType === IMAGE_MODEL_TYPE,
+    audioOutput: outputModalities
+      ? outputModalities.has('audio')
+      : model.modelType === SPEECH_MODEL_TYPE,
+    videoOutput: outputModalities
+      ? outputModalities.has('video')
+      : model.modelType === VIDEO_MODEL_TYPE,
     streaming: caps.streaming === true,
     structuredOutput: caps.json === true,
     functionCalling: caps.tools === true,
     reasoning: caps.thinking === true,
+    imageEditing: declaredCapability(caps, 'imageEditing'),
+    realtime: declaredCapability(caps, 'realtime'),
+    reranking: declaredCapability(caps, 'reranking'),
+    toolSchemaSupport: declaredCapability(caps, 'toolSchemaSupport'),
+    computerUse: caps.computerUse === true,
+    agentic: caps.agentic === true,
+    webSearch: caps.search === true,
+    deepResearch: caps.research === true,
+    codeExecution: caps.codeExecution === true,
+    promptCaching: caps.caching === true,
   };
+}
+
+function projectCompatCapabilities(normalized) {
+  return Object.fromEntries(
+    Object.entries(COMPAT_CAPABILITY_SOURCES).map(([compatName, capabilityName]) => [
+      compatName,
+      normalized[capabilityName] === true,
+    ]),
+  );
 }
 
 function positiveIntegerOrUndefined(value) {
@@ -1187,6 +1381,8 @@ function buildNormalizedRegistry(
   const limits = {};
   const capabilities = {};
   const benchmarks = {};
+  const aliasIndex = buildModelAliasIndex(catalog);
+  const familyIndex = buildModelFamilyIndex(catalog, familyCatalog);
 
   for (const [modelKey, model] of Object.entries(catalog.models)) {
     if (AUTO_POLICY_MODEL_IDS.has(modelKey)) {
@@ -1200,7 +1396,7 @@ function buildNormalizedRegistry(
       `${modelKey} must not declare both inputTokenPricingTiers and legacy longContext`,
     );
 
-    const lifecycle = normalizeLifecycle(model);
+    const lifecycle = normalizeLifecycle(modelKey, model);
     const videoGeneration = normalizeVideoGeneration(modelKey, model.videoGeneration);
     if (
       model.modelType === 'image' &&
@@ -1214,18 +1410,22 @@ function buildNormalizedRegistry(
       );
     }
     models[modelKey] = {
-      identity: defined({
-        key: modelKey,
-        displayName: model.name,
-        provider: model.provider,
-        providerModelId: model.apiModelId ?? model.id ?? modelKey,
-        openRouterSlug: model.openRouterSlug,
-        kind: model.modelType,
-        familyPartner: model.variantPartner,
-        openWeight: model.openWeight,
-        license: model.license,
-        commercialRestrictions: model.commercialRestrictions,
-      }),
+      identity: {
+        ...defined({
+          key: modelKey,
+          displayName: model.name,
+          provider: model.provider,
+          providerModelId: model.apiModelId ?? model.id ?? modelKey,
+          openRouterSlug: model.openRouterSlug,
+          kind: model.modelType,
+          familyPartner: model.variantPartner,
+          openWeight: model.openWeight,
+          license: model.license,
+          commercialRestrictions: model.commercialRestrictions,
+        }),
+        aliases: aliasIndex[modelKey] ?? [],
+        family: familyIndex[modelKey] ?? UNKNOWN_FAMILY,
+      },
       lifecycle,
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
     };
@@ -1274,6 +1474,7 @@ function buildNormalizedRegistry(
       maxInputTokens: positiveIntegerOrUndefined(model.maxInputTokens),
       maxOutputTokens: positiveIntegerOrUndefined(model.maxOutputTokens),
       knowledgeCutoff: model.knowledgeCutoff,
+      embeddingDimensions: positiveIntegerOrUndefined(model.embeddingDimensions),
       videoGeneration: videoGeneration
         ? {
             durationSecs: videoGeneration.durationSecs,
@@ -1284,6 +1485,11 @@ function buildNormalizedRegistry(
         : undefined,
     });
     capabilities[modelKey] = normalizeCapabilities(model);
+    assert.deepEqual(
+      Object.keys(capabilities[modelKey]).sort(),
+      [...CAPABILITY_NAMES].sort(),
+      `${modelKey} must carry the whole capability vocabulary`,
+    );
     benchmarks[modelKey] = model.benchmarks ?? {};
   }
 
@@ -1317,6 +1523,7 @@ function buildNormalizedRegistry(
     harnesses: normalizeHarnesses(harnessCatalog),
     runtimeProfiles,
     capabilities,
+    capabilityClasses: CAPABILITY_CLASSES,
     pricing,
     limits,
     benchmarks,
@@ -1329,7 +1536,7 @@ function buildNormalizedRegistry(
   };
 }
 
-const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\n\nexport type RouteCacheClass =\n  | 'provider_implicit_prompt_cache'\n  | 'provider_explicit_prompt_cache'\n  | 'gateway_prompt_cache'\n  | 'gateway_response_cache'\n  | 'no_provider_cache';\n\nexport type RouteCommercialStatus =\n  | 'agi_direct'\n  | 'customer_byok'\n  | 'authorized_marketplace'\n  | 'free_commercial'\n  | 'experimental_only'\n  | 'blocked';\n\nexport type RouteDataRetention = 'zero_retention' | 'provider_default';\n\ninterface RoutePricingRecord {\n  currency: string;\n  unit: string;\n  inputPerMillion?: number;\n  outputPerMillion?: number;\n  cacheReadPerMillion?: number;\n  cacheWritePerMillion?: number;\n  cacheWrite1hPerMillion?: number;\n}\n\ninterface RouteRecord {\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  trustModes: readonly string[];\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  pricing: RoutePricingRecord;\n}\n\nexport interface RoutePriceSheet {\n  routeId: string;\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  currency: string;\n  unit: string;\n  inputPerMillion: number | null;\n  outputPerMillion: number | null;\n  cacheReadPerMillion: number | null;\n  cacheWritePerMillion: number | null;\n  cacheWrite1hPerMillion: number | null;\n}\n\nconst routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;\n\nfunction toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {\n  const { pricing } = route;\n  return {\n    routeId,\n    modelKey: route.modelKey,\n    provider: route.provider,\n    providerModelId: route.providerModelId,\n    harnessId: route.harnessId,\n    isDefault: route.isDefault,\n    cacheClass: route.cacheClass,\n    commercialStatus: route.commercialStatus,\n    dataRetention: route.dataRetention,\n    currency: pricing.currency,\n    unit: pricing.unit,\n    inputPerMillion: pricing.inputPerMillion ?? null,\n    outputPerMillion: pricing.outputPerMillion ?? null,\n    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,\n    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,\n    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,\n  };\n}\n\nexport function getRoutePricing(routeId: string): RoutePriceSheet | null {\n  const route = routeRecords[routeId];\n  return route ? toPriceSheet(routeId, route) : null;\n}\n\nexport function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {\n  return Object.entries(routeRecords)\n    .filter(([, route]) => route.modelKey === modelKey)\n    .map(([routeId, route]) => toPriceSheet(routeId, route));\n}\nexport type HarnessProtocol =\n  | 'openai_chat'\n  | 'openai_responses'\n  | 'anthropic_messages'\n  | 'gemini_native'\n  | 'provider_native';\n\nexport type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';\n\ninterface HarnessRecord {\n  provider: string;\n  apiFamily: string;\n  adapter: string;\n  trustModes: readonly string[];\n  protocol: HarnessProtocol;\n  hostPolicy: HarnessHostPolicy;\n  baseUrl?: string;\n  apiKeyEnv?: string;\n}\n\nexport interface ProtocolHarness {\n  harnessId: string;\n  provider: string;\n  apiFamily: string;\n  protocol: Exclude<HarnessProtocol, 'provider_native'>;\n  baseUrl: string;\n  apiKeyEnv: string;\n  hostPolicy: HarnessHostPolicy;\n  trustModes: readonly string[];\n}\n\nexport interface ProtocolRoute extends ProtocolHarness {\n  routeId: string;\n  modelKey: string;\n  providerModelId: string;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n}\n\nconst PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;\nconst REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;\n\nconst harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;\n\nfunction toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {\n  const { protocol, baseUrl, apiKeyEnv } = harness;\n  if (protocol === PROVIDER_NATIVE_PROTOCOL || !baseUrl || !apiKeyEnv) return null;\n  return {\n    harnessId,\n    provider: harness.provider,\n    apiFamily: harness.apiFamily,\n    protocol,\n    baseUrl,\n    apiKeyEnv,\n    hostPolicy: harness.hostPolicy,\n    trustModes: harness.trustModes,\n  };\n}\n\nexport function getProtocolHarness(harnessId: string): ProtocolHarness | null {\n  const harness = harnessRecords[harnessId];\n  return harness ? toProtocolHarness(harnessId, harness) : null;\n}\n\nexport function listProtocolRoutes(): ProtocolRoute[] {\n  return Object.entries(routeRecords).flatMap(([routeId, route]) => {\n    const harness = getProtocolHarness(route.harnessId);\n    if (!harness) return [];\n    return [\n      {\n        ...harness,\n        routeId,\n        modelKey: route.modelKey,\n        provider: route.provider,\n        providerModelId: route.providerModelId,\n        cacheClass: route.cacheClass,\n        commercialStatus: route.commercialStatus,\n        trustModes: route.trustModes,\n      },\n    ];\n  });\n}\n\nexport const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [\n  ...new Set(\n    Object.values(harnessRecords)\n      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)\n      .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),\n  ),\n];\n\nexport default registry;\n`;
+const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\n\nexport type RouteCacheClass =\n  | 'provider_implicit_prompt_cache'\n  | 'provider_explicit_prompt_cache'\n  | 'gateway_prompt_cache'\n  | 'gateway_response_cache'\n  | 'no_provider_cache';\n\nexport type RouteCommercialStatus =\n  | 'agi_direct'\n  | 'customer_byok'\n  | 'authorized_marketplace'\n  | 'free_commercial'\n  | 'experimental_only'\n  | 'blocked';\n\nexport type RouteDataRetention = 'zero_retention' | 'provider_default';\n\ninterface RoutePricingRecord {\n  currency: string;\n  unit: string;\n  inputPerMillion?: number;\n  outputPerMillion?: number;\n  cacheReadPerMillion?: number;\n  cacheWritePerMillion?: number;\n  cacheWrite1hPerMillion?: number;\n}\n\ninterface RouteRecord {\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  trustModes: readonly string[];\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  pricing: RoutePricingRecord;\n}\n\nexport interface RoutePriceSheet {\n  routeId: string;\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  currency: string;\n  unit: string;\n  inputPerMillion: number | null;\n  outputPerMillion: number | null;\n  cacheReadPerMillion: number | null;\n  cacheWritePerMillion: number | null;\n  cacheWrite1hPerMillion: number | null;\n}\n\nconst routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;\n\nfunction toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {\n  const { pricing } = route;\n  return {\n    routeId,\n    modelKey: route.modelKey,\n    provider: route.provider,\n    providerModelId: route.providerModelId,\n    harnessId: route.harnessId,\n    isDefault: route.isDefault,\n    cacheClass: route.cacheClass,\n    commercialStatus: route.commercialStatus,\n    dataRetention: route.dataRetention,\n    currency: pricing.currency,\n    unit: pricing.unit,\n    inputPerMillion: pricing.inputPerMillion ?? null,\n    outputPerMillion: pricing.outputPerMillion ?? null,\n    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,\n    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,\n    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,\n  };\n}\n\nexport function getRoutePricing(routeId: string): RoutePriceSheet | null {\n  const route = routeRecords[routeId];\n  return route ? toPriceSheet(routeId, route) : null;\n}\n\nexport function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {\n  return Object.entries(routeRecords)\n    .filter(([, route]) => route.modelKey === modelKey)\n    .map(([routeId, route]) => toPriceSheet(routeId, route));\n}\nexport type HarnessProtocol =\n  | 'openai_chat'\n  | 'openai_responses'\n  | 'anthropic_messages'\n  | 'gemini_native'\n  | 'provider_native';\n\nexport type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';\n\ninterface HarnessRecord {\n  provider: string;\n  apiFamily: string;\n  adapter: string;\n  trustModes: readonly string[];\n  protocol: HarnessProtocol;\n  hostPolicy: HarnessHostPolicy;\n  baseUrl?: string;\n  apiKeyEnv?: string;\n}\n\nexport interface ProtocolHarness {\n  harnessId: string;\n  provider: string;\n  apiFamily: string;\n  protocol: Exclude<HarnessProtocol, 'provider_native'>;\n  baseUrl: string;\n  apiKeyEnv: string;\n  hostPolicy: HarnessHostPolicy;\n  trustModes: readonly string[];\n}\n\nexport interface ProtocolRoute extends ProtocolHarness {\n  routeId: string;\n  modelKey: string;\n  providerModelId: string;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n}\n\nconst PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;\nconst REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;\n\nconst harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;\n\nfunction toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {\n  const { protocol, baseUrl, apiKeyEnv } = harness;\n  if (protocol === PROVIDER_NATIVE_PROTOCOL || !baseUrl || !apiKeyEnv) return null;\n  return {\n    harnessId,\n    provider: harness.provider,\n    apiFamily: harness.apiFamily,\n    protocol,\n    baseUrl,\n    apiKeyEnv,\n    hostPolicy: harness.hostPolicy,\n    trustModes: harness.trustModes,\n  };\n}\n\nexport function getProtocolHarness(harnessId: string): ProtocolHarness | null {\n  const harness = harnessRecords[harnessId];\n  return harness ? toProtocolHarness(harnessId, harness) : null;\n}\n\nexport function listProtocolRoutes(): ProtocolRoute[] {\n  return Object.entries(routeRecords).flatMap(([routeId, route]) => {\n    const harness = getProtocolHarness(route.harnessId);\n    if (!harness) return [];\n    return [\n      {\n        ...harness,\n        routeId,\n        modelKey: route.modelKey,\n        provider: route.provider,\n        providerModelId: route.providerModelId,\n        cacheClass: route.cacheClass,\n        commercialStatus: route.commercialStatus,\n        trustModes: route.trustModes,\n      },\n    ];\n  });\n}\n\nexport const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [\n  ...new Set(\n    Object.values(harnessRecords)\n      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)\n      .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),\n  ),\n];\n\nexport const INTRINSIC_CAPABILITY_NAMES = ${JSON.stringify(INTRINSIC_CAPABILITY_NAMES)} as const;\n\nexport const ROUTE_DEPENDENT_CAPABILITY_NAMES = ${JSON.stringify(ROUTE_DEPENDENT_CAPABILITY_NAMES)} as const;\n\nexport type IntrinsicCapabilityName = (typeof INTRINSIC_CAPABILITY_NAMES)[number];\n\nexport type RouteDependentCapabilityName = (typeof ROUTE_DEPENDENT_CAPABILITY_NAMES)[number];\n\nexport type ModelCapabilityName = IntrinsicCapabilityName | RouteDependentCapabilityName;\n\nexport type ModelCapabilityValue = boolean | null;\n\nexport type NormalizedModelCapabilities = Readonly<Record<ModelCapabilityName, ModelCapabilityValue>>;\n\n\nexport default registry;\n`;
 const RUST_REGISTRY_MODULE_SOURCE = `// This file is generated by @agiworkforce/model-registry.\npub const MODEL_REGISTRY_JSON: &str = include_str!("model_registry.json");\n`;
 
 function yamlSingleQuoted(value) {

@@ -95,7 +95,13 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.equal(registry.limits[key].contextTokens, compatibilityModel.contextWindow);
   assert.equal(registry.limits[key].maxOutputTokens, compatibilityModel.maxOutputTokens);
   assert.equal(registry.capabilities[key].imageInput, true);
-  assert.equal('webSearch' in registry.capabilities[key], false);
+  assert.equal(registry.capabilityClasses.intrinsic.includes('webSearch'), false);
+  assert.equal(registry.capabilityClasses.routeDependent.includes('webSearch'), true);
+  assert.deepEqual(
+    Object.keys(registry.capabilities[key]).sort(),
+    [...registry.capabilityClasses.intrinsic, ...registry.capabilityClasses.routeDependent].sort(),
+    'every model must carry the whole capability vocabulary',
+  );
 
   const imageModelKey = registry.policies.auto.slots.image_generation.modelKey;
   const videoModelKey = registry.policies.auto.slots.video_generation.modelKey;

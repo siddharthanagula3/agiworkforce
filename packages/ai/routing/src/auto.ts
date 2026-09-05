@@ -1,4 +1,10 @@
-import { modelRegistry } from '@agiworkforce/model-registry';
+import {
+  modelRegistry,
+  type IntrinsicCapabilityName,
+  type ModelCapabilityName as RegistryCapabilityName,
+  type ModelCapabilityValue,
+  type RouteDependentCapabilityName,
+} from '@agiworkforce/model-registry';
 import {
   evaluateCapabilityAdmission,
   type CapabilityRequirement,
@@ -17,19 +23,11 @@ import type { RoutingTaskType } from './types';
 
 export type RoutingTrustMode = 'local' | 'on_device' | 'byok' | 'managed_cloud';
 export type RoutingProfile = 'economy' | 'balanced' | 'premium';
-export type IntrinsicCapability =
-  | 'textInput'
-  | 'imageInput'
-  | 'audioInput'
-  | 'videoInput'
-  | 'textOutput'
-  | 'imageOutput'
-  | 'audioOutput'
-  | 'videoOutput'
-  | 'streaming'
-  | 'structuredOutput'
-  | 'functionCalling'
-  | 'reasoning';
+export type IntrinsicCapability = IntrinsicCapabilityName;
+
+export type RouteDependentCapability = RouteDependentCapabilityName;
+
+export type ModelCapabilityName = RegistryCapabilityName;
 
 interface RegistryModel {
   identity: { key: string; provider: string; providerModelId: string };
@@ -93,7 +91,7 @@ interface RegistryRuntimeProfile {
   allowedHarnessIds: string[];
 }
 
-type RegistryCapabilities = Record<IntrinsicCapability, boolean>;
+type RegistryCapabilities = Record<ModelCapabilityName, ModelCapabilityValue>;
 
 interface AutoTaskPolicy {
   requiredCapabilities: IntrinsicCapability[];
