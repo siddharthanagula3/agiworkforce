@@ -593,12 +593,13 @@
     "providerGovernance": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One provider's published data-governance terms. Every field is required; unknown is an explicit unknown, never a guess. source and verifiedOn are required as soon as any field carries a verified answer.",
+      "description": "One provider's published data-governance terms. Every field is required; unknown is an explicit unknown, never a guess. source and verifiedOn are required as soon as any field carries a verified answer. cacheTokenBillingClass carries its own source/verifiedOn/note because it is typically read from a different page than retention, on a different date.",
       "required": [
         "dataRetentionClass",
         "zeroDataRetentionAvailability",
         "trainsOnInputs",
-        "residencyRegions"
+        "residencyRegions",
+        "cacheTokenBillingClass"
       ],
       "properties": {
         "dataRetentionClass": {
@@ -625,6 +626,19 @@
           "$ref": "#/definitions/isoDate"
         },
         "note": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "cacheTokenBillingClass": {
+          "description": "Whether this provider's usage object reports prompt-cache tokens as additional to its base input/prompt token count, or already included within it. Drives whether cache tokens count toward volume pricing tiers and toward the cache-write fallback multiplier.",
+          "enum": ["additional_to_input", "included_in_input", "unknown"]
+        },
+        "cacheTokenBillingSource": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "cacheTokenBillingVerifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        },
+        "cacheTokenBillingNote": {
           "$ref": "#/definitions/nonEmptyString"
         }
       }

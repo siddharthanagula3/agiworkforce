@@ -102,6 +102,20 @@ export function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {
     .filter(([, route]) => route.modelKey === modelKey)
     .map(([routeId, route]) => toPriceSheet(routeId, route));
 }
+
+export type CacheTokenBillingClass = 'additional_to_input' | 'included_in_input' | 'unknown';
+
+interface ProviderGovernanceRecord {
+  cacheTokenBillingClass?: CacheTokenBillingClass;
+}
+
+const governanceRecords = registry.governance as unknown as Readonly<
+  Record<string, ProviderGovernanceRecord>
+>;
+
+export function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {
+  return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';
+}
 export type HarnessProtocol =
   | 'openai_chat'
   | 'openai_responses'
