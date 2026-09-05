@@ -47,6 +47,34 @@ const vendorAdapterOwnership = [
     port: '@agiworkforce/object-storage',
     alsoAllowed: ['packages/platform/object-storage/src/__tests__/fake-s3-endpoint.ts'],
   },
+  {
+    packages: ['@neondatabase/serverless'],
+    owner: 'packages/platform/data-layer/src/adapters/neon.ts',
+    port: '@agiworkforce/data-layer',
+    alsoAllowed: [
+      'packages/platform/data-layer/src/__tests__/adapter-contract.test.ts',
+      'packages/platform/data-layer/src/__tests__/neon-adapter.test.ts',
+      'packages/platform/data-layer/src/__tests__/neon-tls.test.ts',
+      'packages/platform/data-layer/src/__tests__/neon-ws-proxy.test.ts',
+      'services/signaling-server/src/db.ts',
+    ],
+  },
+  /**
+   * The two out-of-band scripts hold their own client on purpose. The RLS probe
+   * is the independent check on the policies the adapter binds, so routing it
+   * through that adapter would make it confirm its own premise rather than test
+   * it, and neither script runs inside a request.
+   */
+  {
+    packages: ['pg'],
+    owner: 'packages/platform/data-layer/src/adapters/postgres.ts',
+    port: '@agiworkforce/data-layer',
+    alsoAllowed: [
+      'packages/platform/data-layer/src/__tests__/adapter-contract.test.ts',
+      'apps/web/scripts/rls-probe.mjs',
+      'apps/web/scripts/route-cache-observability-report.mjs',
+    ],
+  },
 ];
 
 const workspacePackages = new Map();

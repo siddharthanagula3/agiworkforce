@@ -76,6 +76,7 @@ export const WEBHOOK_POOL_TUNING: DatabasePoolTuning = {
 };
 
 const POOLED_ENDPOINT_MARKER = '-pooler.';
+const NEON_PROVIDER = 'neon';
 
 /**
  * Warns once per instance when production is pointed at Neon's direct endpoint.
@@ -84,9 +85,15 @@ const POOLED_ENDPOINT_MARKER = '-pooler.';
  * ceiling is far above anything this app opens. The direct endpoint's ceiling
  * is the compute size's `max_connections`, shared by every warm instance at
  * once, and nothing else in the deployment states which one is configured.
+ *
+ * The `-pooler` marker is a Neon hostname convention, so this says nothing
+ * about any other Postgres host and stays quiet for them rather than warning
+ * on every deployment that is not Neon.
  */
 export function assertPooledDatabaseEndpoint(): void {
   if (process.env.NODE_ENV !== 'production') return;
+  const provider = process.env['AGI_DATABASE_PROVIDER'] ?? NEON_PROVIDER;
+  if (provider !== NEON_PROVIDER) return;
   const connectionString = process.env['AGI_DATABASE_URL'] ?? process.env['DATABASE_URL'];
   if (!connectionString || connectionString.includes(POOLED_ENDPOINT_MARKER)) return;
   logger.warn(
