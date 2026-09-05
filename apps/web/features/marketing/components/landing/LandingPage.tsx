@@ -226,7 +226,7 @@ export function LandingPage() {
                 <MotionReveal delay={REVEAL_STEP_S}>
                   <div className="agi-home-window agi-home-terminal-window">
                     <WindowBar url={HARNESS_TERMINAL_URL} />
-                    <pre className="agi-home-terminal" aria-label={CLI_LABEL}>
+                    <pre className="agi-home-terminal" aria-label={CLI_LABEL} tabIndex={0}>
                       {CLI_TRANSCRIPT.map((line) => (
                         <span
                           className="agi-home-terminal-line"
