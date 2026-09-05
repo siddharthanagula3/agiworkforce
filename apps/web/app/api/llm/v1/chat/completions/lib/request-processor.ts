@@ -13,6 +13,7 @@ import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/ex
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
+import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   resolveRequiredSearchEnforcement,
@@ -1224,7 +1225,7 @@ export function appendWebSearchTool(
   providerLower: string,
   tools: unknown[] | undefined,
   caps: { search?: boolean } | undefined,
-  options: { researchMode?: boolean } = {},
+  options: { researchMode?: boolean; googleGroundingPoolAvailable?: boolean } = {},
 ): unknown[] | undefined {
   if (!(caps?.search ?? true)) return tools;
   if (providerLower === 'anthropic') {
@@ -1239,6 +1240,9 @@ export function appendWebSearchTool(
     ];
   }
   if (providerLower === 'google') {
+    if (options.googleGroundingPoolAvailable === false && webSearchBackendConfigured()) {
+      return [...(tools ?? []), webSearchToolDef()];
+    }
     return [...(tools ?? []), { google_search: {} }];
   }
   if (providerLower === 'openai') {
@@ -3308,8 +3312,11 @@ export async function processRequest(
 
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
+    const googleGroundingPoolAvailable =
+      providerLower === 'google' ? (await peekGroundingPool(providerLower)).withinPool : true;
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps, {
       researchMode,
+      googleGroundingPoolAvailable,
     });
 
     if (
