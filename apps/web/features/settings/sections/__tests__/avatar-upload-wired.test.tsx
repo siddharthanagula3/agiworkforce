@@ -30,7 +30,8 @@ vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, user: { fullName: 'Demo User', firstName: 'Demo' } }),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
   refreshProfileConsumers: mocks.refreshProfileConsumers,
   saveDisplayName: vi.fn(),
@@ -81,7 +82,9 @@ vi.mock('@/lib/hooks/useTTS', () => ({
   }),
 }));
 
-vi.mock('@/features/settings/components/LanguageSelector', () => ({ LanguageSelector: () => null }));
+vi.mock('@/features/settings/components/LanguageSelector', () => ({
+  LanguageSelector: () => null,
+}));
 vi.mock('@/features/settings/components/CustomCommandsSettings', () => ({
   CustomCommandsSettings: () => null,
 }));
@@ -118,7 +121,10 @@ describe('avatar upload is reachable from General settings', () => {
   it('rejects an oversized image before it reaches the network', async () => {
     render(<GeneralSection />);
 
-    await userEvent.upload(screen.getByLabelText('Profile photo'), png('big.png', MAX_AVATAR_BYTES + 1));
+    await userEvent.upload(
+      screen.getByLabelText('Profile photo'),
+      png('big.png', MAX_AVATAR_BYTES + 1),
+    );
 
     expect(await screen.findByRole('alert')).toBeVisible();
     expect(mocks.uploadAvatar).not.toHaveBeenCalled();

@@ -27,7 +27,10 @@ vi.mock('@agiworkforce/ui', () => ({
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
 }));
 
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: async () => 'test-token' }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getCsrfToken: async () => 'test-token',
+}));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
