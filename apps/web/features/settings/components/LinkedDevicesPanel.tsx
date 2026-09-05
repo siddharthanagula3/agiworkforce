@@ -44,6 +44,19 @@ function describe(device: LinkedDevice): string {
   return device.name?.trim() || platform || fallback;
 }
 
+function describeState(device: LinkedDevice): string {
+  const signedIn =
+    device.hasLiveCredential === null
+      ? 'Signed in unknown'
+      : device.hasLiveCredential
+        ? 'Signed in'
+        : 'Signed out';
+  const parts = [signedIn];
+  if (device.lastSeenAt) parts.push(`Last seen ${formatDateTime(device.lastSeenAt)}`);
+  if (device.registeredAt) parts.push(`Linked ${formatDateTime(device.registeredAt)}`);
+  return parts.join(' · ');
+}
+
 function readApiError(data: unknown, fallback: string): string {
   if (data === null || typeof data !== 'object' || !('error' in data)) return fallback;
   const error = (data as { error?: unknown }).error;
@@ -62,8 +75,6 @@ function readApiError(data: unknown, fallback: string): string {
   if (!raw.trim()) return fallback;
   return toUserMessage(new Error(raw), fallback);
 }
-
-const cell = { padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' } as const;
 
 export function LinkedDevicesPanel() {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -118,32 +129,24 @@ export function LinkedDevicesPanel() {
   return (
     <>
       {confirmDialog}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
+      <div>
+        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
           Linked devices
-        </div>
+        </p>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-3)' }}>
+          {credentialStateKnown
+            ? "Unlinking revokes the device's stored credential and removes it from this list. The app signs out the next time it reaches the server."
+            : 'Sign-in state cannot be read on this deployment, so unlinking removes the device from this list without revoking its stored credential.'}
+        </p>
 
         {loading ? (
-          <div role="status" style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
-            Loading linked devices…
+          <div aria-hidden="true" className="flex flex-col gap-2">
+            {[0, 1].map((row) => (
+              <div key={row} className="h-10 w-full animate-pulse rounded bg-foreground/[0.07]" />
+            ))}
           </div>
         ) : loadError ? (
-          <div style={{ padding: 20 }}>
+          <div>
             <p
               role="alert"
               style={{
@@ -176,122 +179,76 @@ export function LinkedDevicesPanel() {
             </button>
           </div>
         ) : devices.length === 0 ? (
-          <p style={{ padding: 20, margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
             No desktop or mobile app is linked to this account.
           </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <caption className="sr-only">
-                Desktop and mobile apps linked to your account, and whether each still holds a
-                credential
-              </caption>
-              <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 12 }}>
-                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                    Device
-                  </th>
-                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                    Signed in
-                  </th>
-                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                    Last seen
-                  </th>
-                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                    Linked
-                  </th>
-                  <th
-                    scope="col"
-                    style={{ padding: '10px 16px', fontWeight: 500, textAlign: 'right' }}
-                  >
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((device) => (
-                  <tr key={device.id} style={{ borderTop: '1px solid var(--settings-border)' }}>
-                    <td style={{ ...cell, color: 'var(--text-1)' }}>
-                      {describe(device)}
-                      {device.version ? (
-                        <span style={{ color: 'var(--text-3)' }}> · {device.version}</span>
-                      ) : null}
-                    </td>
-                    <td style={cell}>
-                      {device.hasLiveCredential === null
-                        ? 'Unknown'
-                        : device.hasLiveCredential
-                          ? 'Yes'
-                          : 'No'}
-                    </td>
-                    <td style={cell}>{formatDateTime(device.lastSeenAt)}</td>
-                    <td style={cell}>{formatDateTime(device.registeredAt)}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          confirm({
-                            title: `Unlink ${describe(device)}?`,
-                            description:
-                              'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
-                            confirmLabel: 'Unlink device',
-                            onConfirm: () => handleUnlink(device),
-                          })
-                        }
-                        disabled={unlinkingId !== null}
-                        aria-label={`Unlink ${describe(device)}`}
-                        style={{
-                          padding: '6px 10px',
-                          fontSize: 12,
-                          fontWeight: 500,
-                          color: 'var(--settings-destructive-text)',
-                          background: 'transparent',
-                          border: '1px solid var(--settings-border)',
-                          borderRadius: 'var(--radius-md)',
-                          cursor: unlinkingId !== null ? 'default' : 'pointer',
-                          opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          devices.map((device, index) => (
+            <div
+              key={device.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                padding: '14px 0',
+                borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, color: 'var(--text-1)' }}>
+                  {describe(device)}
+                  {device.version ? (
+                    <span style={{ color: 'var(--text-3)' }}> · {device.version}</span>
+                  ) : null}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                  {describeState(device)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  confirm({
+                    title: `Unlink ${describe(device)}?`,
+                    description:
+                      'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
+                    confirmLabel: 'Unlink device',
+                    onConfirm: () => handleUnlink(device),
+                  })
+                }
+                disabled={unlinkingId !== null}
+                aria-label={`Unlink ${describe(device)}`}
+                style={{
+                  flexShrink: 0,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: 'var(--settings-destructive-text)',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: unlinkingId !== null ? 'default' : 'pointer',
+                  opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
+              </button>
+            </div>
+          ))
         )}
 
         {actionError ? (
           <p
             role="alert"
-            style={{
-              padding: '0 20px 12px',
-              margin: 0,
-              fontSize: 12,
-              color: 'var(--settings-destructive-text)',
-            }}
+            style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive-text)' }}
           >
             {actionError}
           </p>
         ) : null}
-
-        <p style={{ padding: '12px 20px 16px', margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
-          {credentialStateKnown ? (
-            <>
-              Unlinking revokes the device&rsquo;s stored credential and removes it from this list.
-              The app signs out the next time it reaches the server.
-            </>
-          ) : (
-            <>
-              Sign-in state cannot be read on this deployment, so unlinking removes the device from
-              this list without revoking its stored credential. Use &ldquo;Log out of all
-              devices&rdquo; below to end every session.
-            </>
-          )}
-        </p>
-      </section>
+      </div>
     </>
   );
 }
