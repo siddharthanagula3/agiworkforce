@@ -18,6 +18,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 const persistence = vi.hoisted(() => ({ persist: vi.fn() }));
 vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: persistence.persist,
+  MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 
 import { runToolLoop } from './tool-loop';
