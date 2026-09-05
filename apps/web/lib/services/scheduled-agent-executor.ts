@@ -28,6 +28,10 @@ import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/to
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  formatProjectSystemPrompt,
+  loadProjectContext,
+} from '@/lib/services/project-context-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
@@ -419,7 +423,11 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const toolLoopRunnable =
     classifyToolLoopInputs(plan.mcpTools, plan.tools).shouldRun &&
     Boolean(ADAPTER_PROVIDERS[route.provider]);
+  const projectContext = task.projectId
+    ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
+    : null;
   const systemPrompt = [
+    projectContext ? formatProjectSystemPrompt(projectContext) : null,
     buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
     SCHEDULED_TASK_DIRECTIVE,
   ]
