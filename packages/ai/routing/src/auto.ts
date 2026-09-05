@@ -1485,6 +1485,27 @@ export interface AutoRoutePreview {
   excluded: readonly RoutePreviewExcluded[];
 }
 
+export function resolveTierMaximumProfile(tier: string | null | undefined): RoutingProfile {
+  const policy = registry.policies.auto;
+  const normalized = normalizeTier(tier);
+  return policy.tierMaximumProfiles[normalized] ?? policy.profileOrder[0]!;
+}
+
+export function listProfileModelOrder(profile: RoutingProfile): readonly string[] {
+  const policy = registry.policies.auto;
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const task of Object.values(policy.tasks)) {
+    for (const slot of task.preferredSlots[profile] ?? []) {
+      const modelKey = policy.slots[slot]?.modelKey;
+      if (!modelKey || seen.has(modelKey)) continue;
+      seen.add(modelKey);
+      ordered.push(modelKey);
+    }
+  }
+  return Object.freeze(ordered);
+}
+
 const PREVIEW_PRIMARY_TASK_FIT = 1;
 const PREVIEW_NEUTRAL_TASK_FIT = 0;
 
