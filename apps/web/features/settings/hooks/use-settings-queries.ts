@@ -7,7 +7,7 @@
 
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useClerk } from '@clerk/nextjs';
+import { useSignOut } from '@/lib/identity/client';
 import {
   useQuery,
   useMutation,
@@ -597,7 +597,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   signOutAfterDeletion: () => Promise<void>;
 } {
   const logout = useAuthStore((s) => s.logout);
-  const { signOut: clerkSignOut } = useClerk();
+  const identitySignOut = useSignOut();
   const router = useRouter();
 
   const mutation = useMutation<DeleteAccountResult, Error, void>({
@@ -628,18 +628,18 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   const signOutAfterDeletion = useCallback(async (): Promise<void> => {
     try {
       await logout();
-      await clerkSignOut({ redirectUrl: '/' });
+      await identitySignOut({ redirectUrl: '/' });
     } catch (err) {
       // The account is already deleted server-side by the time this runs
       // (it only fires after the mutation above succeeded), if
-      // logout()/clerkSignOut() fail here (e.g. a network blip), fall back
+      // logout()/identitySignOut() fail here (e.g. a network blip), fall back
       // to a hard navigation instead of leaving the user stuck on a dead
       // settings screen with no feedback and no way to reach '/'.
       console.warn('[useDeleteAccount] Post-deletion sign-out failed, forcing navigation:', err);
     } finally {
       router.replace('/');
     }
-  }, [logout, clerkSignOut, router]);
+  }, [logout, identitySignOut, router]);
 
   return { ...mutation, signOutAfterDeletion };
 }

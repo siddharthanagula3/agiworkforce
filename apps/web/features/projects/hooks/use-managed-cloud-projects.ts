@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import {
   hydrateManagedCloudProjectStore,
   resetManagedCloudProjectStore,
@@ -21,7 +21,7 @@ export interface ManagedCloudProjectsSession {
 }
 
 export function useManagedCloudProjects(): ManagedCloudProjectsSession {
-  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useSession();
   const projects = useProjectStore((state) => state.projects);
   const session = useManagedCloudProjectSessionStore();
 

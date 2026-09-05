@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { hasTelemetryConsent, setTelemetryConsentCache } from '@/lib/sentry-shared';
@@ -31,7 +31,7 @@ const NAMESPACE = 'privacy';
  * and printed those failures to the console of every anonymous visitor.
  */
 export function TelemetryConsentSync() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;

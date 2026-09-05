@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useClerk } from '@clerk/nextjs';
+import { useSignOut } from '@/lib/identity/client';
 import { LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import {
   AlertDialog,
@@ -85,7 +85,7 @@ export function AccountSection() {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const { signOut: clerkSignOut } = useClerk();
+  const identitySignOut = useSignOut();
   const router = useRouter();
 
   const userId = user?.id ?? null;
@@ -150,7 +150,7 @@ export function AccountSection() {
       if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
       sessionsRevoked = true;
       await logout();
-      await clerkSignOut({ redirectUrl: '/login' });
+      await identitySignOut({ redirectUrl: '/login' });
     } catch (err) {
       if (sessionsRevoked) {
         router.replace('/login');
@@ -159,7 +159,7 @@ export function AccountSection() {
       setLogoutError(toUserMessage(err, 'Sign out failed.'));
       setLoggingOut(false);
     }
-  }, [logout, clerkSignOut, router]);
+  }, [logout, identitySignOut, router]);
 
   const handleRevokeSession = useCallback(
     async (session: AccountSession) => {
@@ -178,7 +178,7 @@ export function AccountSection() {
 
         if (session.isCurrent) {
           await logout();
-          await clerkSignOut({ sessionId: session.id, redirectUrl: '/login' });
+          await identitySignOut({ sessionId: session.id, redirectUrl: '/login' });
           return;
         }
 
@@ -193,7 +193,7 @@ export function AccountSection() {
         setRevokingSessionId(null);
       }
     },
-    [clerkSignOut, logout, router],
+    [identitySignOut, logout, router],
   );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────
