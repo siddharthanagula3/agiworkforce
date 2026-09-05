@@ -2262,6 +2262,7 @@ export function loadFamilySnapshot() {
     synced.source,
     readJson(PROVIDER_HOSTS_JSON),
     readJson(PROVIDER_DEFAULTS_JSON),
+    readJson(PROVIDER_COMPUTE_PRICING_JSON),
   );
   return {
     familyCatalog,
