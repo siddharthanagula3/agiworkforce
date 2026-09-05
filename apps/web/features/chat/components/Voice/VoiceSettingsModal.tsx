@@ -16,7 +16,7 @@ import {
   DialogTitle,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
-import { getAutoRoutingProfiles } from '@agiworkforce/types';
+import { getAutoRoutingProfileTiers } from '@agiworkforce/types';
 
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { cn } from '@shared/lib/utils';
@@ -170,7 +170,7 @@ export function VoiceSettingsModal({
 
   const intelligenceOptions = useMemo<PickerOption[]>(
     () =>
-      getAutoRoutingProfiles().map((profile) => ({
+      getAutoRoutingProfileTiers().map((profile) => ({
         id: profile.profile,
         label: profile.label,
         hint: profile.description,
