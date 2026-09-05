@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SHORTCUTS,
+  acceleratorIdentity,
   centeredUpperPosition,
+  duplicateShortcutKeys,
   isUsableAccelerator,
   normalizeShortcuts,
   parseSettingsFile,
@@ -22,13 +24,40 @@ describe('parseSettingsFile', () => {
 
   it('keeps valid overrides and defaults the rest', () => {
     expect(parseSettingsFile('{"quickAskShortcut":"Alt+Space"}')).toEqual({
+      ...DEFAULT_SHORTCUTS,
       quickAskShortcut: 'Alt+Space',
-      screenshotShortcut: DEFAULT_SHORTCUTS.screenshotShortcut,
     });
   });
 
   it('drops unknown keys', () => {
     expect(parseSettingsFile('{"somethingElse":true}')).toEqual(DEFAULT_SHORTCUTS);
+  });
+});
+
+describe('duplicateShortcutKeys', () => {
+  it('finds no duplicate among the shipped defaults', () => {
+    expect(duplicateShortcutKeys(DEFAULT_SHORTCUTS)).toEqual([]);
+  });
+
+  it('leaves the earlier key holding a chord two keys claim', () => {
+    expect(
+      duplicateShortcutKeys({
+        ...DEFAULT_SHORTCUTS,
+        voiceShortcut: DEFAULT_SHORTCUTS.screenshotShortcut,
+      }),
+    ).toEqual(['voiceShortcut']);
+  });
+});
+
+describe('acceleratorIdentity', () => {
+  it('collapses modifier spelling, order and case to one chord', () => {
+    expect(acceleratorIdentity('Alt+CmdOrCtrl+v')).toBe(
+      acceleratorIdentity('CommandOrControl+Alt+V'),
+    );
+  });
+
+  it('keeps chords with different keys apart', () => {
+    expect(acceleratorIdentity('Alt+Shift+V')).not.toBe(acceleratorIdentity('Alt+Shift+D'));
   });
 });
 

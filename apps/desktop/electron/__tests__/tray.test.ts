@@ -46,10 +46,14 @@ vi.mock('../settingsStore', () => ({
 
 const registerGarnishShortcuts = vi.fn();
 const unregisterGarnishShortcuts = vi.fn();
+let statuses: { key: keyof GarnishShortcuts; accelerator: string; status: string }[] = [];
 
 vi.mock('../shortcuts', () => ({
   registerGarnishShortcuts: (handlers: unknown) => registerGarnishShortcuts(handlers),
   unregisterGarnishShortcuts: () => unregisterGarnishShortcuts(),
+  shortcutRegistrations: () => statuses,
+  shortcutStatusDetail: (status: string) =>
+    status === 'taken' ? 'is already in use by another app' : null,
 }));
 
 const { createTray, destroyTray } = await import('../tray');
@@ -60,6 +64,7 @@ function makeHandlers() {
     onNewChat: vi.fn(),
     onQuickAsk: vi.fn(),
     onScreenshot: vi.fn(),
+    onVoice: vi.fn(),
     onCheckForUpdates: vi.fn(),
   };
 }
@@ -86,6 +91,7 @@ describe('tray shortcut customization', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     stored = { ...DEFAULT_SHORTCUTS };
+    statuses = [];
     contextMenus.length = 0;
     saveSettings.mockClear();
     registerGarnishShortcuts.mockClear();
@@ -115,6 +121,7 @@ describe('tray shortcut customization', () => {
     expect(registerGarnishShortcuts).toHaveBeenCalledWith({
       onQuickAsk: handlers.onQuickAsk,
       onScreenshot: handlers.onScreenshot,
+      onVoice: handlers.onVoice,
     });
 
     expect(contextMenus).toHaveLength(2);
@@ -153,6 +160,50 @@ describe('tray shortcut customization', () => {
       describeAccelerator('CommandOrControl+Shift+9', process.platform),
     );
     expect(custom.checked).toBe(true);
+  });
+});
+
+describe('tray dictation shortcut', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    stored = { ...DEFAULT_SHORTCUTS };
+    statuses = [];
+    contextMenus.length = 0;
+    destroyTray();
+  });
+
+  it('offers the dictation chord and re-registers when it changes', () => {
+    const handlers = makeHandlers();
+    createTray(handlers);
+
+    const target = 'CommandOrControl+Alt+D';
+    itemLabelled(
+      submenuOf(latestMenu(), 'Shortcuts'),
+      describeAccelerator(target, process.platform),
+    ).click?.(
+      {} as Electron.MenuItem,
+      undefined as unknown as Electron.BrowserWindow,
+      {} as Electron.KeyboardEvent,
+    );
+
+    expect(saveSettings).toHaveBeenCalledWith({ voiceShortcut: target });
+    expect(itemLabelled(latestMenu(), 'Dictation').accelerator).toBe(target);
+  });
+
+  it('names the reason a chord could not be claimed in its heading', () => {
+    statuses = [
+      {
+        key: 'voiceShortcut',
+        accelerator: DEFAULT_SHORTCUTS.voiceShortcut,
+        status: 'taken',
+      },
+    ];
+    createTray(makeHandlers());
+
+    const headings = submenuOf(latestMenu(), 'Shortcuts')
+      .map((entry) => entry.label)
+      .filter((label): label is string => typeof label === 'string');
+    expect(headings).toContain('Dictation (is already in use by another app)');
   });
 });
 

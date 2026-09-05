@@ -74,25 +74,42 @@ function reposition(win: BrowserWindow): void {
   win.setBounds({ x, y, width: PANEL_WIDTH, height: PANEL_HEIGHT });
 }
 
-export function toggleQuickAsk(mainWindow: BrowserWindow | null): void {
+/**
+ * Bring the Quick Ask surface up without the toggle's hide branch, and report
+ * which window now holds it. Bundled builds have no panel: the renderer they
+ * ship is the main window, so that is the surface Quick Ask raises there.
+ */
+export function surfaceQuickAsk(mainWindow: BrowserWindow | null): BrowserWindow | null {
   if (RENDERER_MODE === 'bundled') {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
-    return;
+    return mainWindow;
   }
 
   const win = ensurePanel();
-  if (win.isVisible() && !win.isMinimized()) {
-    win.hide();
-    return;
-  }
   reposition(win);
   win.show();
   win.focus();
   win.webContents.focus();
   void focusPageComposer(win);
+  return win;
+}
+
+export function toggleQuickAsk(mainWindow: BrowserWindow | null): void {
+  if (RENDERER_MODE !== 'bundled') {
+    const win = ensurePanel();
+    if (win.isVisible() && !win.isMinimized()) {
+      win.hide();
+      return;
+    }
+  }
+  surfaceQuickAsk(mainWindow);
+}
+
+export function quickAskPanel(): BrowserWindow | null {
+  return panel && !panel.isDestroyed() ? panel : null;
 }
 
 export function hideQuickAsk(): void {

@@ -1,11 +1,18 @@
+import {
+  DEFAULT_GLOBAL_VOICE_ACCELERATOR,
+  GLOBAL_VOICE_ACCELERATOR_CHOICES,
+} from '../src/lib/globalVoiceShortcut';
+
 export interface GarnishShortcuts {
   quickAskShortcut: string;
   screenshotShortcut: string;
+  voiceShortcut: string;
 }
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
   quickAskShortcut: 'Alt+Shift+Space',
   screenshotShortcut: 'CommandOrControl+Shift+2',
+  voiceShortcut: DEFAULT_GLOBAL_VOICE_ACCELERATOR,
 };
 
 export function isUsableAccelerator(value: unknown): value is string {
@@ -15,17 +22,31 @@ export function isUsableAccelerator(value: unknown): value is string {
 export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
   const source =
     raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const quickAsk = source['quickAskShortcut'];
-  const screenshot = source['screenshotShortcut'];
   return {
-    quickAskShortcut: isUsableAccelerator(quickAsk) ? quickAsk : DEFAULT_SHORTCUTS.quickAskShortcut,
-    screenshotShortcut: isUsableAccelerator(screenshot)
-      ? screenshot
-      : DEFAULT_SHORTCUTS.screenshotShortcut,
+    quickAskShortcut: readAccelerator(source, 'quickAskShortcut'),
+    screenshotShortcut: readAccelerator(source, 'screenshotShortcut'),
+    voiceShortcut: readAccelerator(source, 'voiceShortcut'),
   };
 }
 
 export type ShortcutKey = keyof GarnishShortcuts;
+
+export const SHORTCUT_KEYS: readonly ShortcutKey[] = [
+  'quickAskShortcut',
+  'screenshotShortcut',
+  'voiceShortcut',
+];
+
+export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
+  quickAskShortcut: 'Quick Ask',
+  screenshotShortcut: 'Screenshot to Chat',
+  voiceShortcut: 'Dictation',
+};
+
+function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): string {
+  const raw = source[key];
+  return isUsableAccelerator(raw) ? raw : DEFAULT_SHORTCUTS[key];
+}
 
 export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
   quickAskShortcut: [
@@ -38,7 +59,56 @@ export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
     'CommandOrControl+Shift+4',
     'CommandOrControl+Alt+S',
   ],
+  voiceShortcut: GLOBAL_VOICE_ACCELERATOR_CHOICES,
 };
+
+const MODIFIER_ALIASES: Record<string, string> = {
+  cmdorctrl: 'commandorcontrol',
+  command: 'commandorcontrol',
+  cmd: 'commandorcontrol',
+  control: 'control',
+  ctrl: 'control',
+  option: 'alt',
+  alt: 'alt',
+  shift: 'shift',
+  super: 'meta',
+  meta: 'meta',
+};
+
+/**
+ * Two accelerators collide when they ask the OS for the same chord, which the
+ * raw strings do not reveal: `Cmd+Alt+V` and `Alt+Command+v` are one chord
+ * written two ways, and the second registration silently loses.
+ */
+export function acceleratorIdentity(accelerator: string): string {
+  const parts = accelerator
+    .split('+')
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part !== '');
+  const modifiers = new Set<string>();
+  const keys: string[] = [];
+  for (const part of parts) {
+    const modifier = MODIFIER_ALIASES[part];
+    if (modifier) modifiers.add(modifier);
+    else keys.push(part);
+  }
+  return [...[...modifiers].sort(), ...keys].join('+');
+}
+
+/**
+ * Keys whose accelerator repeats an earlier key's chord. Registration order is
+ * the tiebreak, so the first key in `SHORTCUT_KEYS` keeps the chord.
+ */
+export function duplicateShortcutKeys(shortcuts: GarnishShortcuts): ShortcutKey[] {
+  const claimed = new Map<string, ShortcutKey>();
+  const duplicates: ShortcutKey[] = [];
+  for (const key of SHORTCUT_KEYS) {
+    const identity = acceleratorIdentity(shortcuts[key]);
+    if (claimed.has(identity)) duplicates.push(key);
+    else claimed.set(identity, key);
+  }
+  return duplicates;
+}
 
 export function shortcutChoices(key: ShortcutKey, current: string): string[] {
   const presets = SHORTCUT_CHOICES[key];
