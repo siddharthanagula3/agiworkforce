@@ -18,16 +18,6 @@ import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/mo
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@agiworkforce/ui';
 import { assessModelSwitchCache } from '@agiworkforce/routing';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
@@ -62,6 +52,7 @@ import {
   resolveFreeLaneUiBuildEnabled,
   resolveFreeLaneUiEnabled,
 } from '@features/chat/lib/free-lane-ui-gate';
+import { MODEL_SELECTOR_TRIGGER_ID } from '@features/chat/lib/model-picker-trigger';
 
 const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';
 const TRIAL_SLOT_SUFFIX = 'is selected for the free web trial';
@@ -73,6 +64,11 @@ const MODEL_LOCKED_TRIGGER_CLASS =
 /** Live model trigger: plain text plus a chevron, no border or fill. */
 const MODEL_TRIGGER_CLASS =
   'flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground';
+
+const CACHE_RESET_NOTE_TEXT = 'Starts a new prompt cache';
+const CACHE_RESET_NOTE_MS = 3000;
+const CACHE_RESET_NOTE_CLASS =
+  'pointer-events-none absolute right-0 top-full z-10 mt-1 whitespace-nowrap text-xs leading-4 text-muted-foreground';
 
 const PICKER_SEARCH_MIN_ROSTER = 8;
 const PICKER_VIEWPORT_INSET_PX = 16;
@@ -751,25 +747,29 @@ export function ComposerFooter({
 
   const selectedModel = getSelectedModel();
 
-  // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
-  // prior context at full input price (caching is per-model). Warn before committing such a
-  // switch. Logic lives in the shared @agiworkforce/routing policy (reused by all surfaces).
+  // Prompt-cache accounting: switching the model mid-conversation resets the cache and re-bills
+  // prior context at full input price (caching is per-model). The switch itself is never blocked;
+  // the note is the disclosure. Logic lives in the shared @agiworkforce/routing policy.
   //
   // Count only COMPLETED assistant turns in an ACTIVE conversation:
   //   - `activeConversationId` gate: an empty/new chat holds no cached prefix.
   //   - `!m.isStreaming` gate: the assistant message added at the START of the
-  //     very first turn is an empty streaming placeholder. Counting it made the
-  //     "Switch model mid-conversation?" dialog fire on a brand-new chat that has
-  //     no real prior context yet (coordinator audit, Claude/DeepSeek/Moonshot,
-  //     the caching-capable providers). A completed turn (isStreaming=false) is
-  //     real cached context and still warns.
+  //     very first turn is an empty streaming placeholder, not cached context.
   const assistantTurnCount = useChatStore((s) =>
     s.activeConversationId
       ? s.messages.filter((m) => m.role === 'assistant' && !m.isStreaming).length
       : 0,
   );
-  const [pendingSwitch, setPendingSwitch] = useState<{ id: string; message: string } | null>(null);
+  const [cacheResetNoteVisible, setCacheResetNoteVisible] = useState(false);
+  const cacheResetNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modelChangePending, setModelChangePending] = useState(false);
+
+  useEffect(
+    () => () => {
+      if (cacheResetNoteTimer.current) clearTimeout(cacheResetNoteTimer.current);
+    },
+    [],
+  );
 
   const commitModel = useCallback(
     async (id: string) => {
@@ -811,10 +811,13 @@ export function ComposerFooter({
         priorModelLabel: selectedModel?.name,
         nextModelLabel: model.name,
       });
-      if (assessment.warn) {
-        setPendingSwitch({ id: model.id, message: assessment.message });
-        closeModelPopover();
-        return;
+      if (assessment.resetsCache) {
+        if (cacheResetNoteTimer.current) clearTimeout(cacheResetNoteTimer.current);
+        setCacheResetNoteVisible(true);
+        cacheResetNoteTimer.current = setTimeout(
+          () => setCacheResetNoteVisible(false),
+          CACHE_RESET_NOTE_MS,
+        );
       }
       void commitModel(model.id);
     },
@@ -943,7 +946,7 @@ export function ComposerFooter({
             keyboard hint (founder directive, matches claude.ai). Send behavior in
             ChatComposerNew: plain Enter sends, Shift+Enter newline (ChatGPT/Claude
             convention), Cmd/Ctrl+Enter also sends. */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="relative flex min-w-0 items-center gap-2">
           {/* Response style selector, dropped below sm so the model trigger,
               mic and send keep the control row to a single line on a phone.
               claude.ai's mobile composer drops it for the same reason. */}
@@ -977,7 +980,7 @@ export function ComposerFooter({
               <PopoverTrigger asChild>
                 <button
                   ref={modelTriggerRef}
-                  id="model-selector"
+                  id={MODEL_SELECTOR_TRIGGER_ID}
                   disabled={modelChangePending}
                   className={MODEL_TRIGGER_CLASS}
                   aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
@@ -1227,34 +1230,14 @@ export function ComposerFooter({
               </PopoverContent>
             </Popover>
           )}
+
+          {cacheResetNoteVisible && (
+            <span role="status" className={CACHE_RESET_NOTE_CLASS}>
+              {CACHE_RESET_NOTE_TEXT}
+            </span>
+          )}
         </div>
       </div>
-      <AlertDialog
-        open={pendingSwitch !== null}
-        onOpenChange={(o) => {
-          if (!o) setPendingSwitch(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Switch model mid-conversation?</AlertDialogTitle>
-            <AlertDialogDescription>{pendingSwitch?.message}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingSwitch(null)}>
-              Keep current model
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (pendingSwitch) void commitModel(pendingSwitch.id);
-                setPendingSwitch(null);
-              }}
-            >
-              Switch anyway
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

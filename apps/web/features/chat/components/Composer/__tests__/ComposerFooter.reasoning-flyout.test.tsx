@@ -183,7 +183,9 @@ vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, messages: [] }),
 }));
-vi.mock('@agiworkforce/routing', () => ({ assessModelSwitchCache: () => ({ warn: false }) }));
+vi.mock('@agiworkforce/routing', () => ({
+  assessModelSwitchCache: () => ({ warn: false, resetsCache: false }),
+}));
 
 vi.mock('@agiworkforce/ui', () => ({
   useMenuKeyboard: () => undefined,
