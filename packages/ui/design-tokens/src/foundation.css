@@ -294,3 +294,15 @@
     --elevation-4: 0 8px 16px rgb(0 0 0 / 0.45), 0 24px 64px -12px rgb(0 0 0 / 0.8);
   }
 }
+
+@keyframes agi-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agi-fl-hero-brand-mark {
+    animation: none;
+  }
+}
