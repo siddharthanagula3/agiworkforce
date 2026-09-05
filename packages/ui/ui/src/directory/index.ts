@@ -20,7 +20,13 @@ export {
   toggleFilterValue,
   type DirectoryTreeNode,
 } from './filtering';
-export { DIRECTORY_SECTION_LABELS, INSTALL_COUNT_FLOOR, MARKETPLACE_UNAVAILABLE_COPY } from './constants';
+export {
+  DIRECTORY_SECTION_LABELS,
+  DIRECTORY_SOURCE_ALL_ID,
+  DIRECTORY_SOURCE_ALL_LABEL,
+  INSTALL_COUNT_FLOOR,
+  MARKETPLACE_UNAVAILABLE_COPY,
+} from './constants';
 export type {
   DirectoryAdapter,
   DirectoryBadgeKind,

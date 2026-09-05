@@ -354,7 +354,7 @@ const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_
 // rows (GET /api/connectors) and, for GitHub, real GitHub App installations.
 // ---------------------------------------------------------------------------
 
-const CONNECTOR_NEEDS_AGI_SETUP_LABEL = 'Needs setup by AGI';
+const CONNECTOR_NOT_CONNECTED_LABEL = 'Not connected';
 
 const CAPABILITY_SENTENCE_END = '.';
 
@@ -376,7 +376,7 @@ export const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c
   iconBg: c.iconBg,
   iconText: c.iconText,
   canConnect: false,
-  statusLabel: CONNECTOR_NEEDS_AGI_SETUP_LABEL,
+  statusLabel: CONNECTOR_NOT_CONNECTED_LABEL,
 }));
 
 // ---------------------------------------------------------------------------
