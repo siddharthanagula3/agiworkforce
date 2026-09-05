@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(async (_event: unknown) => undefined),
 }));
 
-vi.mock('./tool-loop-anthropic', () => ({ buildToolLoopStream: mocks.streamRequest }));
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: mocks.streamRequest,
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
@@ -15,6 +18,7 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveSecretHandlingPolicy: mocks.resolvePolicy,
+  resolveZeroDataRetentionPolicy: async () => ({ required: false, organizationId: null }),
 }));
 
 import { runToolLoop, applyToolResultSecretPolicy, type ConnectorToolExecutor } from './tool-loop';

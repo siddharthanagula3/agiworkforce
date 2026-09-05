@@ -65,6 +65,19 @@ vi.mock('@/lib/server/media-storage', async () => {
     deleteStoredMedia: async (pathname: string) => {
       objectStore.delete(pathname);
     },
+    streamStoredMedia: async (pathname: string, range?: { start: number; end: number }) => {
+      const entry = objectStore.get(pathname);
+      if (!entry) return null;
+      const start = range?.start ?? 0;
+      const end = range?.end ?? entry.data.byteLength - 1;
+      const slice = entry.data.subarray(start, end + 1);
+      return {
+        body: new Blob([slice]).stream() as ReadableStream<Uint8Array>,
+        contentType: entry.contentType,
+        contentLength: slice.byteLength,
+        contentRange: range ? `bytes ${start}-${end}/${entry.data.byteLength}` : undefined,
+      };
+    },
   };
 });
 

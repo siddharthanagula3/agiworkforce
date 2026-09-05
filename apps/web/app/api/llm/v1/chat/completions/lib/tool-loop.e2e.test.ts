@@ -22,6 +22,7 @@ const PAID_OPENAI_MODEL = requireCatalogModelId(
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
 
 const mockGetE2BExecutor = vi.fn();

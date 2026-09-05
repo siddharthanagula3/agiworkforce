@@ -31,6 +31,24 @@ const lifecycle = vi.hoisted(() => ({
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   finalizeManagedUsageRequest: lifecycle.finalize,
   markManagedUsageClientDelivered: lifecycle.delivered,
+  MANAGED_CHAT_CONTRACT_VERSION: 'fixture-contract-version',
+  ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
+    constructor(
+      message: string,
+      public status: number,
+      public code: string,
+    ) {
+      super(message);
+      this.name = 'ManagedUsageRequestError';
+    }
+  },
+  createManagedUsageErrorBody: vi.fn(),
+  fingerprintManagedUsageRequest: vi.fn(() => 'fixture-fingerprint'),
+  parseManagedUsageIdempotencyKey: vi.fn(
+    (header: string | null) => header ?? 'fixture-idempotency-key',
+  ),
+  reserveManagedUsageRequest: vi.fn(),
+  resolveManagedQuotaRecovery: vi.fn(() => null),
 }));
 
 import { buildStreamResponse } from '../lib/stream-transform';

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -23,9 +22,15 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
+  toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
+  FREE_TRIAL_MODEL: 'fixture-free-trial-model',
+  isFreePlanTier: () => false,
+  isFreeTrialRequest: () => false,
+  beginFreeTrialRequest: vi.fn(),
+  applyFreeTrialProviderBudget: vi.fn(),
 }));
 
 import { buildStreamResponse } from '../lib/stream-transform';

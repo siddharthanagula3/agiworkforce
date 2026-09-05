@@ -53,10 +53,33 @@ vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal
 
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   markManagedUsageClientDelivered: (input: unknown) => delivered(input),
+  MANAGED_CHAT_CONTRACT_VERSION: 'fixture-contract-version',
+  ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
+    constructor(
+      message: string,
+      public status: number,
+      public code: string,
+    ) {
+      super(message);
+      this.name = 'ManagedUsageRequestError';
+    }
+  },
+  createManagedUsageErrorBody: vi.fn(),
+  fingerprintManagedUsageRequest: vi.fn(() => 'fixture-fingerprint'),
+  parseManagedUsageIdempotencyKey: vi.fn(
+    (header: string | null) => header ?? 'fixture-idempotency-key',
+  ),
+  reserveManagedUsageRequest: vi.fn(),
+  resolveManagedQuotaRecovery: vi.fn(() => null),
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: (input: unknown) => settleFreeTrialRequest(input),
+  FREE_TRIAL_MODEL: 'fixture-free-trial-model',
+  isFreePlanTier: () => false,
+  isFreeTrialRequest: () => false,
+  beginFreeTrialRequest: vi.fn(),
+  applyFreeTrialProviderBudget: vi.fn(),
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({

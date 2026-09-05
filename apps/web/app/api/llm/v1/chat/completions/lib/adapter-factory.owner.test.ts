@@ -34,6 +34,8 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
     options === undefined
       ? buildServerProviderAdapter(providerId)
       : buildServerProviderAdapter(providerId, options),
+  listAvailableManagedProviderIds: () => new Set<string>(),
+  resolveProviderFromModel: (model: string) => model,
 }));
 
 import {

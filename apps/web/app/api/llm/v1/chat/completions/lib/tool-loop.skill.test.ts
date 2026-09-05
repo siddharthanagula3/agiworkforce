@@ -11,7 +11,10 @@ import {
 } from '@agiworkforce/skills';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
-vi.mock('./tool-loop-anthropic', () => ({ buildToolLoopStream: provider.stream }));
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: provider.stream,
+  buildServingRouteId: (...args: unknown[]) => args.join(':'),
+}));
 
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
