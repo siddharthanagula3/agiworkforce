@@ -230,35 +230,41 @@ export function TeamSection() {
 
   const workspacePicker =
     workspaces.length > 0 ? (
-      <SectionCard
-        title="Active workspace"
-        description="Switching reloads tenant-owned chats, projects, tools, and settings together."
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          padding: '14px 0',
+          borderBottom: '1px solid var(--settings-border)',
+          flexWrap: 'wrap',
+        }}
       >
-        <div style={{ padding: 20, maxWidth: 520 }}>
-          <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
-            Workspace
-            <select
-              aria-label="Active workspace"
-              value={overview.activeOrganizationId ?? 'personal'}
-              disabled={switchWorkspace.isPending}
-              onChange={(event) => {
-                switchWorkspace.mutate(
-                  event.target.value === 'personal' ? null : event.target.value,
-                );
-              }}
-              style={controlStyle}
-            >
-              <option value="personal">Personal</option>
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name} · {titleCase(workspace.role)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label htmlFor="team-active-workspace" style={{ fontSize: 14, color: 'var(--text-1)' }}>
+          Workspace
+        </label>
+        <div>
+          <select
+            id="team-active-workspace"
+            aria-label="Active workspace"
+            value={overview.activeOrganizationId ?? 'personal'}
+            disabled={switchWorkspace.isPending}
+            onChange={(event) => {
+              switchWorkspace.mutate(event.target.value === 'personal' ? null : event.target.value);
+            }}
+            style={{ ...controlStyle, width: 'auto' }}
+          >
+            <option value="personal">Personal</option>
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name} · {titleCase(workspace.role)}
+              </option>
+            ))}
+          </select>
           <InlineError error={switchWorkspace.error} />
         </div>
-      </SectionCard>
+      </div>
     ) : null;
 
   function handleCreate(event: FormEvent) {
@@ -468,20 +474,13 @@ export function TeamSection() {
       {workspacePicker}
 
       {!access.canManageTeam ? (
-        <div
+        <p
           role="alert"
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-2)',
-            fontSize: 13,
-            lineHeight: 1.5,
-            padding: '12px 14px',
-          }}
+          style={{ color: 'var(--text-3)', fontSize: 12, margin: 0, padding: '2px 0' }}
         >
           This workspace is on the {titleCase(access.plan)} plan. Workspace administration needs a
           Team or Enterprise workspace plan.
-        </div>
+        </p>
       ) : null}
 
       <SectionCard title="Workspace details" description={`Plan: ${titleCase(access.plan)}`}>
