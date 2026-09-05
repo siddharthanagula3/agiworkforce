@@ -11,6 +11,13 @@
   "roots": [".agents/skills"],
   "referenceTrees": ["packages/tools/skills/reference-bundles"],
   "skills": {
+    "agiworkforce-design": {
+      "path": ".agents/skills/agiworkforce-design",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:c0b622c56ac6d94baa0db3f673e11a81e5b3e71cfb1f4a00bf9c06c1b4fbbb43"
+    },
     "code-review": {
       "path": ".agents/skills/code-review",
       "source": "AGI Workforce repository",
