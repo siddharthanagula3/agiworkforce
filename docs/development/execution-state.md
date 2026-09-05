@@ -28,18 +28,22 @@ behaviour inspected by the lead, not tests.
 | Model selector catalogue and derived admission (D-13)    | engineering | in flight                          |
 | Dead UI sweep of the product routes (truth map below)    | lead        | started 2026-09-05                 |
 | Admin console reachable with a workspace bearing account | founder     | QA account has no workspace        |
+| Public pages at the landing's standard (founder gate)    | lead        | systemic restyle landed 2026-09-05 |
 
 ## UI surfaces audited (rendered, by the lead)
 
-| Surface                     | Date       | Result                                                                                                         |
-| --------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
-| Web sign in and sign up     | 2026-09-05 | rebuilt to the measured reference, approved                                                                    |
-| Desktop sign in card        | 2026-09-05 | rebuilt, approved                                                                                              |
-| Web chat run (search, code) | 2026-09-05 | trace, dock, failure row, queued row corrected; code execution invented a result (fixed, live recheck pending) |
-| Settings modal, 16 sections | 2026-09-05 | density and copy corrected; nav clipping found by measurement and fixed                                        |
-| Command palette, menus      | 2026-09-05 | palette reshaped; chat row menu anchoring defect fixed; project picker rebuilt                                 |
-| Library viewer              | 2026-09-05 | zoom defect fixed; two corrections pending recapture                                                           |
-| Model selector short list   | 2026-09-05 | approved after seven corrections; catalogue in flight                                                          |
+| Surface                      | Date       | Result                                                                                                         |
+| ---------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| Web sign in and sign up      | 2026-09-05 | rebuilt to the measured reference, approved                                                                    |
+| Desktop sign in card         | 2026-09-05 | rebuilt, approved                                                                                              |
+| Web chat run (search, code)  | 2026-09-05 | trace, dock, failure row, queued row corrected; code execution invented a result (fixed, live recheck pending) |
+| Settings modal, 16 sections  | 2026-09-05 | density and copy corrected; nav clipping found by measurement and fixed                                        |
+| Command palette, menus       | 2026-09-05 | palette reshaped; chat row menu anchoring defect fixed; project picker rebuilt                                 |
+| Library viewer               | 2026-09-05 | zoom defect fixed; two corrections pending recapture                                                           |
+| Model selector short list    | 2026-09-05 | approved after seven corrections; catalogue in flight                                                          |
+| Public pages (34 nav routes) | 2026-09-05 | swept in the browser: 200 on every route, no broken images, no overflow; shared system restyled to the landing |
+| Landing surface frames       | 2026-09-05 | six frames rebuilt as working sessions with route receipts, approved in isolation and in the marquee           |
+| Header and landing sections  | 2026-09-05 | grouped navigation, announcement, proof row, latest and start sections approved in both themes                 |
 
 ## Dead or disconnected UI
 
@@ -59,6 +63,10 @@ behaviour inspected by the lead, not tests.
 | Three built admin APIs (observability, takedown, privacy) with no UI | fixed 45ff0dffd b6f44a736 34b1f2107: operator console tabs with governed flows |
 | COGS ledger written but never displayed                              | fixed b6f44a736: costs tab with attributed cost per account                    |
 | Admin console readiness ledger self attested for 3 of 5 rows         | fixed a119900bd: rows removed, live policy state remains                       |
+| Pricing models table printed a comma for plans with no models        | fixed 752d93fdb: the cell reads None; capability table opens by default        |
+| Public pages carried italic accent phrases and unstyled link lists   | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide  |
+| Landing frames were empty greetings                                  | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts  |
+| /download calls four release endpoints that 404 locally              | open: verify against production release assets before judging                  |
 
 ## Critical flows
 
@@ -87,7 +95,9 @@ resilience 84eaf9dc3 b9e077d80 642b32800 e7c829ba6; adherence 81be75123
 717b1f58f 70fe7c0b2 5e2136d6f; navigation 73cea7bbf b9d24d48f 6a49ffc35
 32c0e291c; route preview d742a1b7b 5f244a834; telemetry 7ff4257e3 347e60191
 855b39141; selector 5d4984b06 a984e8777; docs and decisions f5e81c0d9
-35ceaa689 fb6e29bac f44c0438e 8f4866e18 8cce76a69.
+35ceaa689 fb6e29bac f44c0438e 8f4866e18 8cce76a69; marketing 552427af5 4ccc39928
+69c545157 752d93fdb (reference study: x.ai home, product, api, company, pricing,
+business pages captured under scratchpad ref).
 
 ## CI and security
 
