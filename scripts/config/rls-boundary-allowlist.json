@@ -131,7 +131,7 @@
     },
     {
       "path": "apps/web/lib/connectors/mcp-state-store.ts",
-      "reason": "mcp_app_payloads and mcp_task_bindings have row-level security disabled and no grants at all for the app_rls role, so a scoped statement is refused outright; every statement already carries user_id and a migration must land before this can be scoped"
+      "reason": "mcp_app_payloads and mcp_task_bindings had row-level security disabled and no grants at all for the app_rls role, so a scoped statement was refused outright; the grants, row-level security and policies now exist as draft migration 0173 (NOT YET APPLIED in production) and this file can move to getUserScopedDb once it is applied"
     },
     {
       "path": "apps/web/lib/github-app.ts",
@@ -139,7 +139,7 @@
     },
     {
       "path": "apps/web/lib/security-audit.ts",
-      "reason": "the audit trail records unauthenticated and failed attempts, so there is often no subject to bind, and security_audit_logs has row-level security disabled with zero policies so a scoped write would be policed by nothing"
+      "reason": "the audit trail records unauthenticated and failed attempts, so there is often no subject to bind; security_audit_logs's row-level security policy now exists as draft migration 0170 (NOT YET APPLIED in production), and the subject-bearing writes here can be scoped once it is applied, but the null-subject case still needs the owner connection"
     },
     {
       "path": "apps/web/lib/server/account-erasure.ts",
@@ -211,7 +211,7 @@
     },
     {
       "path": "apps/web/lib/user-connector-tools.ts",
-      "reason": "three statements stay on the schema owner: the github_installations read, whose table has row-level security disabled, and the two organization shared connector reads, which join a connector row owned by another member; every caller-owned read runs on a claimed scope"
+      "reason": "three statements stay on the schema owner: the github_installations read, whose table's row-level security policy now exists as draft migration 0171 (NOT YET APPLIED in production) and can be scoped once it is applied, and the two organization shared connector reads, which join a connector row owned by another member; every caller-owned read runs on a claimed scope"
     }
   ]
 }
