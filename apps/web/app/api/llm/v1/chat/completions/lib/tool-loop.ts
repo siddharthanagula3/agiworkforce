@@ -184,6 +184,12 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import {
+  executePlacesSearch,
+  formatPlacesResultForModel,
+  isPlacesSearchTool,
+} from '@/lib/places/places-tool';
+import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
@@ -465,6 +471,7 @@ export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
   return isUrlFetchTool(toolName) ||
     isMapSearchTool(toolName) ||
+    isPlacesSearchTool(toolName) ||
     isClarifyTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -519,6 +526,7 @@ function canonicalToolCategory(
   if (isUrlFetchTool(toolName)) return 'web-fetch';
   if (isManagedOfficeFileTool(toolName)) return 'artifact';
   if (isMapSearchTool(toolName)) return 'web-search';
+  if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isClarifyTool(toolName)) return 'other';
   if (toolName === 'execute_code') return 'code-execution';
   if (
@@ -1380,6 +1388,7 @@ async function runMcpTool(
     organizationId: string | null;
     model: string;
     webSearchMaxResults?: number;
+    clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
     inputResponses?: Record<string, unknown>;
@@ -1465,6 +1474,20 @@ async function runMcpTool(
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
       : { content: outcome.content, isError: true };
+  }
+
+  if (isPlacesSearchTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = await executePlacesSearch(toolCall.args, {
+      toolCallId: toolCall.id,
+      userId: executionContext?.userId,
+      organizationId: executionContext?.organizationId ?? null,
+      timeZone: executionContext?.clientTimeZone,
+      signal: executionContext?.signal,
+    });
+    return { content: formatPlacesResultForModel(outcome), isError: !outcome.ok };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
@@ -1707,6 +1730,7 @@ export function isToolOffered(
     isUrlFetchTool(qualifiedName) ||
     isWebSearchTool(qualifiedName) ||
     isMapSearchTool(qualifiedName) ||
+    isPlacesSearchTool(qualifiedName) ||
     isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
@@ -2523,6 +2547,9 @@ export async function* runToolLoop(
           model: responseModel,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
           loadSkillInstallOverrides,
+          ...(processed.chatRequest?.client_timezone
+            ? { clientTimeZone: processed.chatRequest.client_timezone }
+            : {}),
           ...(options.signal ? { signal: options.signal } : {}),
           ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
           ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
@@ -3143,7 +3170,8 @@ export async function* runToolLoop(
         processed.chatRequest?.tool_choice === undefined &&
         ((llmRequest.tool_choice === 'required' &&
           processed.chatRequest?.code_execution === true) ||
-          isRequiredSearchToolChoice(llmRequest.tool_choice))
+          isRequiredSearchToolChoice(llmRequest.tool_choice) ||
+          isRequiredPlacesToolChoice(llmRequest.tool_choice))
           ? { tool_choice: 'auto' as const }
           : {}),
         ...(step > 1 &&

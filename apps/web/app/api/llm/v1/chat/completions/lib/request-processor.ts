@@ -20,6 +20,14 @@ import {
   type RequiredSearchEnforcement,
   type WebSearchRequirement,
 } from '@/lib/web-search/required-search';
+import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
+import {
+  REQUIRED_PLACES_SYSTEM_NUDGE,
+  resolvePlacesRequirement,
+  resolveRequiredPlacesEnforcement,
+  type PlacesRequirement,
+  type RequiredPlacesEnforcement,
+} from '@/lib/places/required-places';
 import { hasExplicitWebSearchIntent, webSearchNeedsGenericTool } from '@agiworkforce/search';
 import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import {
@@ -621,12 +629,25 @@ export function applyClarifyCardCapability(
 
 export function applyMapSearchCardCapability(
   request: ChatCompletionRequest,
-  params: { surface: CloudChatSurface; toolsCapable: boolean; userMessage: string },
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    /**
+     * A place question and a map request overlap in wording ("near Union
+     * Square" reads as both) but not in what they need: one wants rated,
+     * open-now place data, the other wants a picture of a location. When the
+     * places tool takes the turn, the map card stands down rather than forcing
+     * a second tool choice and ending the turn on a card with no answer.
+     */
+    placesSearchOffered: boolean;
+  },
 ): void {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
+    params.placesSearchOffered ||
     !hasMapSearchIntent(params.userMessage) ||
     !request.x_interactive_cards?.supported.includes('map-search.v1')
   ) {
@@ -745,6 +766,13 @@ export type ProcessedRequest = {
    */
   searchRequirement?: WebSearchRequirement;
   searchEnforcement?: RequiredSearchEnforcement;
+  /**
+   * Whether this turn is a place question, and how the places tool was
+   * arranged. The tool loop reads it to release the forced choice after the
+   * places step so the model still writes the answer.
+   */
+  placesRequirement?: PlacesRequirement;
+  placesEnforcement?: RequiredPlacesEnforcement;
   classifierConfidence: number;
   resolvedSlot: RoutingSlot | null;
   quotaFeature: QuotaFeature;
@@ -2771,10 +2799,18 @@ export async function processRequest(
     applyManagedOfficeFileCreation(chatRequest);
   }
 
+  const placesRequirement = resolvePlacesRequirement({
+    userMessage: lastUserText,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    stream: chatRequest.stream,
+    backendConfigured: placesBackendConfigured(),
+  });
+
   applyMapSearchCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
+    placesSearchOffered: placesRequirement.offered,
   });
 
   const lastUserContent = lastUserMsg?.content;
@@ -3226,6 +3262,25 @@ export async function processRequest(
     }
   }
 
+  if (placesRequirement.offered) {
+    resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
+  }
+  const placesEnforcement = resolveRequiredPlacesEnforcement({
+    required: placesRequirement.required,
+    requestedToolChoice: chatRequest.tool_choice,
+    model: chatRequest.model,
+    tools: resolvedTools,
+  });
+  if (placesEnforcement.mode === 'nudge') {
+    internalMessages.unshift({
+      role: 'system',
+      content: REQUIRED_PLACES_SYSTEM_NUDGE,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  }
+
   const searchRequirement = resolveWebSearchRequirement({
     webSearchEnabled: chatRequest.web_search,
     agiWorkRun: chatRequest.work_mode === 'agiwork',
@@ -3361,7 +3416,11 @@ export async function processRequest(
     max_tokens: maxTokens,
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
-    tool_choice: managedCodeToolChoice ?? searchEnforcement.toolChoice ?? chatRequest.tool_choice,
+    tool_choice:
+      managedCodeToolChoice ??
+      placesEnforcement.toolChoice ??
+      searchEnforcement.toolChoice ??
+      chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
@@ -3445,6 +3504,8 @@ export async function processRequest(
     resolvedTaskType,
     searchRequirement,
     searchEnforcement,
+    placesRequirement,
+    placesEnforcement,
     classifierConfidence: classifierResult.confidence,
     resolvedSlot,
     quotaFeature,

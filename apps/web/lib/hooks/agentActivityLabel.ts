@@ -1,4 +1,4 @@
-import type { AgentEventToolCategory } from '@agiworkforce/types';
+import { PLACES_SEARCH_TOOL_NAME, type AgentEventToolCategory } from '@agiworkforce/types';
 
 export type AgentActivityLabelSignal =
   | { kind: 'idle'; modelName?: string }
@@ -11,12 +11,14 @@ const THINKING_LABEL = 'Thinking';
 const PLANNING_LABEL = 'Planning';
 const RUNNING_CODE_LABEL = 'Running code';
 const LOOKING_UP_PLACE_LABEL = 'Looking up a place';
+const SEARCHING_FOR_PLACES_LABEL = 'Searching for places';
 const READING_FILE_FALLBACK_LABEL = 'Reading a file';
 const READING_PAGE_FALLBACK_LABEL = 'Reading a web page';
 const SEARCHING_WEB_FALLBACK_LABEL = 'Searching the web';
 
 const WEB_SEARCH_TOOL_NAMES = new Set(['web_search', 'gemini_grounding']);
 const MAP_SEARCH_TOOL_NAMES = new Set(['search_maps']);
+const PLACES_SEARCH_TOOL_NAMES = new Set([PLACES_SEARCH_TOOL_NAME]);
 const CODE_EXECUTION_TOOL_NAMES = new Set(['code_execution']);
 
 const TOOL_ARGUMENT_KEYS = [
@@ -36,6 +38,7 @@ function deriveToolLabel(
   category: AgentEventToolCategory,
   argument?: string,
 ): string {
+  if (PLACES_SEARCH_TOOL_NAMES.has(name)) return SEARCHING_FOR_PLACES_LABEL;
   if (MAP_SEARCH_TOOL_NAMES.has(name)) return LOOKING_UP_PLACE_LABEL;
   if (WEB_SEARCH_TOOL_NAMES.has(name) || category === 'web-search') {
     return argument ? `Searching the web for ${argument}` : SEARCHING_WEB_FALLBACK_LABEL;
