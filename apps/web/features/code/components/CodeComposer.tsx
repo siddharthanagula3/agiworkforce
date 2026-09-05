@@ -11,7 +11,6 @@ import {
   Mic,
   Plug,
   Plus,
-  Square,
   X,
 } from '@agiworkforce/icons';
 import { Cloud, Lightbulb, Monitor } from 'lucide-react';
@@ -28,9 +27,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Popover,
   PopoverContent,

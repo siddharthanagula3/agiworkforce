@@ -25,6 +25,14 @@ import {
   isMediaAssetStoreReady,
   type InsertMediaAssetParams,
 } from './media-assets';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
+
+const callerDb = createDatabaseAdapterFake({
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
+    (await dbMocks.query(sql, params)) as T[],
+  transaction: async <T>(run: (tx: never) => Promise<T>): Promise<T> =>
+    (await dbMocks.transaction(run)) as T,
+});
 
 function image(pathname: string): InsertMediaAssetParams {
   return {
@@ -54,7 +62,7 @@ describe('insertMediaAssetsAtomically', () => {
       .mockResolvedValueOnce([{ id: 'asset-2' }]);
 
     await expect(
-      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], dbMocks),
+      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], callerDb),
     ).resolves.toEqual(['asset-1', 'asset-2']);
     expect(dbMocks.transaction).toHaveBeenCalledTimes(1);
     expect(dbMocks.query).toHaveBeenCalledTimes(2);
@@ -68,7 +76,10 @@ describe('insertMediaAssetsAtomically', () => {
     dbMocks.query.mockResolvedValueOnce([{ id: 'asset-1' }]);
 
     await expect(
-      insertMediaAssetsAtomically([{ ...image('media/first.png'), organizationId: null }], dbMocks),
+      insertMediaAssetsAtomically(
+        [{ ...image('media/first.png'), organizationId: null }],
+        callerDb,
+      ),
     ).resolves.toEqual(['asset-1']);
 
     expect(dbMocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
@@ -81,7 +92,7 @@ describe('insertMediaAssetsAtomically', () => {
       .mockRejectedValueOnce(new Error('second insert failed'));
 
     await expect(
-      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], dbMocks),
+      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], callerDb),
     ).rejects.toThrow('second insert failed');
     expect(dbMocks.transaction).toHaveBeenCalledTimes(1);
   });

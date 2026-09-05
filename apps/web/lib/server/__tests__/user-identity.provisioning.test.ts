@@ -1,14 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-const query = vi.fn(async (): Promise<Record<string, unknown>[]> => []);
-const execute = vi.fn(async () => 0);
-const callerDb = { query, execute } as unknown as DatabaseAdapter;
+const query = vi.fn(
+  async (_sql: string, _params?: unknown[]): Promise<Record<string, unknown>[]> => [],
+);
+const execute = vi.fn(async (_sql: string, _params?: unknown[]) => 0);
+const callerDb = createDatabaseAdapterFake({
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
+    (await query(sql, params)) as T[],
+  execute,
+});
 
 import {
   backfillDisplayNameFromUpstream,
