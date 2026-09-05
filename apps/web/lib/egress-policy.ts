@@ -27,6 +27,7 @@ const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai'
 const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
   'api.stripe.com',
   'api.upstash.io',
+  'places.googleapis.com',
   // Neon: wildcard for project-specific subdomains
 ];
 

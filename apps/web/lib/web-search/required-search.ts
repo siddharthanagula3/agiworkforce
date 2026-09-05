@@ -1,5 +1,10 @@
-import { getModelMetadataById } from '@agiworkforce/types';
 import { detectExplicitWebSearchIntent } from '@agiworkforce/search';
+
+import {
+  forcedFunctionToolChoice,
+  isForcedToolChoiceFor,
+  modelAcceptsForcedToolChoice,
+} from '@/lib/required-tool-call';
 
 import { WEB_SEARCH_TOOL } from './web-search-tool';
 
@@ -112,11 +117,6 @@ export type RequiredSearchEnforcement = {
 
 const NO_ENFORCEMENT: RequiredSearchEnforcement = { mode: 'none', attachedTool: null };
 
-function modelAcceptsForcedToolChoice(model: string | undefined): boolean {
-  if (!model) return true;
-  return getModelMetadataById(model)?.providerCompatibility?.forcedToolChoice !== false;
-}
-
 /**
  * How to make the first model step search: a tool choice where the provider
  * honours one, a system line where it does not.
@@ -144,7 +144,7 @@ export function resolveRequiredSearchEnforcement(input: {
   ) {
     return {
       mode: 'tool-choice',
-      toolChoice: { type: 'function', function: { name: WEB_SEARCH_TOOL } },
+      toolChoice: forcedFunctionToolChoice(WEB_SEARCH_TOOL),
       attachedTool,
     };
   }
@@ -158,10 +158,5 @@ export function resolveRequiredSearchEnforcement(input: {
  * stands for the whole turn.
  */
 export function isRequiredSearchToolChoice(choice: unknown): boolean {
-  if (!choice || typeof choice !== 'object') return false;
-  const record = choice as Record<string, unknown>;
-  if (record['type'] !== 'function') return false;
-  const fn = record['function'];
-  if (!fn || typeof fn !== 'object') return false;
-  return (fn as Record<string, unknown>)['name'] === WEB_SEARCH_TOOL;
+  return isForcedToolChoiceFor(choice, WEB_SEARCH_TOOL);
 }
