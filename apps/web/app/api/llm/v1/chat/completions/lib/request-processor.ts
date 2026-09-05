@@ -107,6 +107,7 @@ import {
   detectIndicScript,
   emptyRuntimeState,
   estimateTokens,
+  isCredentialUnfunded,
   observedRouteHealthFromSnapshots,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
@@ -122,8 +123,10 @@ import type {
 } from '@agiworkforce/routing';
 import { modelRegistry, getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
+  getCredentialCooldownSnapshot,
   getRouteHealthSnapshot,
   getServedRouteAffinity,
+  providerOfRouteId,
   type ServedRouteAffinity,
 } from '@/lib/services/free-lane/runtime-state-service';
 import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/mode';
@@ -1409,15 +1412,33 @@ async function readWorkspaceModelPolicy(
   }
 }
 
+export interface RouteHealthResolution {
+  runtimeState: RoutingRuntimeState;
+  /**
+   * Candidate routes whose provider credential is out of funds, read from the
+   * credential scope rather than the route scope because every route on a
+   * provider answers to the same key.
+   */
+  unfundedRouteIds: ReadonlySet<string>;
+}
+
 export async function resolveRouteHealthRuntimeState(
   selection: string,
   nowMs: number,
-): Promise<RoutingRuntimeState> {
-  const routeHealthSnapshots = await getRouteHealthSnapshot(
-    candidateRouteIdsForSelection(selection),
-    nowMs,
-  );
-  return { ...emptyRuntimeState(nowMs), routeHealthSnapshots };
+): Promise<RouteHealthResolution> {
+  const routeIds = candidateRouteIdsForSelection(selection);
+  const [routeHealthSnapshots, credentialSnapshots] = await Promise.all([
+    getRouteHealthSnapshot(routeIds, nowMs),
+    getCredentialCooldownSnapshot([...new Set(routeIds.map(providerOfRouteId))], nowMs),
+  ]);
+  return {
+    runtimeState: { ...emptyRuntimeState(nowMs), routeHealthSnapshots },
+    unfundedRouteIds: new Set(
+      routeIds.filter((routeId) =>
+        isCredentialUnfunded(credentialSnapshots[providerOfRouteId(routeId)]),
+      ),
+    ),
+  };
 }
 
 const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
@@ -1454,6 +1475,7 @@ export function buildWebCloudAutoRoutingRequest(
    */
   routeHealth?: {
     runtimeState?: RoutingRuntimeState | null;
+    unfundedRouteIds?: ReadonlySet<string>;
     preferredRouteId?: string | null;
     currentModelKey?: string | null;
     previousTaskType?: RoutingTaskType | null;
@@ -1491,6 +1513,7 @@ export function buildWebCloudAutoRoutingRequest(
           runtimeState: routeHealth.runtimeState,
           observedRouteHealth: observedRouteHealthFromSnapshots(
             routeHealth.runtimeState.routeHealthSnapshots,
+            routeHealth.unfundedRouteIds,
           ),
         }
       : {}),
@@ -2514,7 +2537,7 @@ export async function processRequest(
     routeUsage,
     undefined,
     {
-      runtimeState: baseRouteHealthState,
+      ...baseRouteHealthState,
       ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
       ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
       ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
@@ -2545,12 +2568,7 @@ export async function processRequest(
         resolvedTaskType,
         routeUsage,
         freeLane.preferSlots,
-        {
-          runtimeState: await resolveRouteHealthRuntimeState(
-            FREE_LANE_SELECTION,
-            routeResolutionNowMs,
-          ),
-        },
+        await resolveRouteHealthRuntimeState(FREE_LANE_SELECTION, routeResolutionNowMs),
         availableProviderIds,
         zeroDataRetentionOnly,
         zeroDataRetentionProviders,

@@ -13,6 +13,8 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: vi.fn(async () => ({})),
+  providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   recordRouteOutcome: vi.fn(async () => undefined),
   recordServedRouteAffinity: vi.fn(async () => undefined),
   routeAffinityTtlMs: () => 3_600_000,

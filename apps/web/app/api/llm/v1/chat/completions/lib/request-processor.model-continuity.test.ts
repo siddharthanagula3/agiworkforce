@@ -19,6 +19,8 @@ const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _no
   return snapshots;
 });
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: vi.fn(async () => ({})),
+  providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   getRouteHealthSnapshot: (routeIds: readonly string[], nowMs: number) =>
     mockGetRouteHealthSnapshot(routeIds, nowMs),
   getServedRouteAffinity: vi.fn(async () => null),
