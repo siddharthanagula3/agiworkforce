@@ -6,7 +6,8 @@
     "The hashing algorithm is specified in packages/tools/skills/src/integrity.ts and reimplemented identically in apps/cli/src/skills.rs and scripts/verify-skills-lock.mjs.",
     "v1 of this file recorded computedHash values for ai-seo, programmatic-seo, remotion-best-practices, and seo-geo with no algorithm field. Those hashes are NOT reproducible: re-hashing the exact bundle bytes from d694f17b2 under agiskill-sha256-v1 yields different digests, and no generator for the v1 values exists anywhere in the repo. They were never verified against anything.",
     "Those four bundles were themselves deleted from .agents/skills in 5b14585dd, so their entries were also stale. They are dropped here rather than carried forward as unverifiable claims; git history retains the original values.",
-    "The current bundles are original AGI Workforce instruction-only packages. Adding any skill under `roots` fails CI until it is locked with declared provenance."
+    "The current bundles are original AGI Workforce instruction-only packages. Adding any skill under `roots` fails CI until it is locked with declared provenance.",
+    "`audience` decides who may see a skill. `product` reaches the in-product Skills catalog served by apps/web/lib/services/skill-catalog-service.ts; `developer` is repository tooling for coding agents and never reaches an end user. Vendored bundles and skills describing work on this repository are developer. A skill with no audience is treated as developer at runtime and fails verification here."
   ],
   "roots": [".agents/skills"],
   "referenceTrees": ["packages/tools/skills/reference-bundles"],
@@ -15,6 +16,7 @@
       "path": ".agents/skills/agiworkforce-design",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:cdb8f95bc502e3d3bc36a800082e5806b37cbd9cc636e7525536abe8523ebc0f"
     },
@@ -22,6 +24,7 @@
       "path": ".agents/skills/antislop",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:600f290451e61c99a5cf13a7101780ff19e4b677f1d747fb1e85239013029952"
     },
@@ -29,6 +32,7 @@
       "path": ".agents/skills/antislop-code",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-code)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:b486aec0abed1a06f41c8a277830bcd2065a3de1d7fe9b23a80600628c46479d"
     },
@@ -36,6 +40,7 @@
       "path": ".agents/skills/antislop-copywriting",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-copywriting)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:cf07ba7fd9b297d84d9d9f078782a6e9562d87063940d1c2b105a56e8315e34c"
     },
@@ -43,6 +48,7 @@
       "path": ".agents/skills/antislop-human",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-human)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:099d00d59c0f1cb08b29b84d41e672553955c442f9ba5d55cde1830fdddb18cb"
     },
@@ -50,6 +56,7 @@
       "path": ".agents/skills/antislop-layoutmobile",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-layoutmobile)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:55af6ac23d0483d1df6ad82f4752575fac782b51bbca75a62deb1bf007831fa5"
     },
@@ -57,6 +64,7 @@
       "path": ".agents/skills/antislop-ui",
       "source": "https://github.com/miqdadbadjuber/anti-slop @ dd43e13ff9b4c92222461df30270514278d5b70b (skills/antislop-ui)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:6921d36d950279fdb632be504f7b56b1cca8bd88f39e7108ca21c1f6e48369a0"
     },
@@ -64,6 +72,7 @@
       "path": ".agents/skills/apple-design",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/apple-design)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:ece86dc2cb8a48faa6ff3206103b5981eb8118c2d1d3375786c2baae9caeb2be"
     },
@@ -71,6 +80,7 @@
       "path": ".agents/skills/code-review",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:8826b9bfb55108c8be4b5a0610e2193548dc4ac4fb4ba4d20a2f3094727f8632"
     },
@@ -78,6 +88,7 @@
       "path": ".agents/skills/data-analysis",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:c2001d48e29675009103092e17801daa63ffc615c6eaef9f6c8257fcd764e9f3"
     },
@@ -85,6 +96,7 @@
       "path": ".agents/skills/design-taste-frontend",
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/taste-skill)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
       "computedHash": "sha256-tree-v1:70bf53cb0d61fbbe54e33b34ef1ce6ae1ebe3b188a6bcf6dd180e47ea4a10289"
     },
@@ -92,6 +104,7 @@
       "path": ".agents/skills/document-creation",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:81e3542b5e4a43d081456d03edebbce0010167480f3a95c53390cfc12f36d955"
     },
@@ -99,6 +112,7 @@
       "path": ".agents/skills/emil-design-eng",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/emil-design-eng)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:1c6440bc64540bb46df5bfbe8015be9f434109083dd4838c1b01201ba214cda7"
     },
@@ -106,6 +120,7 @@
       "path": ".agents/skills/extract-design-system",
       "source": "https://github.com/arvindrk/extract-design-system @ 1873741ba8dea755e35e6e15134f7918cd58e036 (skills/extract-design-system)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "1873741ba8dea755e35e6e15134f7918cd58e036",
       "computedHash": "sha256-tree-v1:3962b7ba47a8fa0e6ae5959aa7a9a3b4ba12af85138230bcb8f13b0d895611f0"
     },
@@ -113,6 +128,7 @@
       "path": ".agents/skills/find-animation-opportunities",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/find-animation-opportunities)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:69536cb282f3873212ba4b059a96a115b5a1eceffa59df051d3ad4536f87065d"
     },
@@ -120,6 +136,7 @@
       "path": ".agents/skills/frontend-design",
       "source": "https://github.com/anthropics/skills @ 41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f (skills/frontend-design)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
       "computedHash": "sha256-tree-v1:5a931374138a207129516499368882dac346f9feff778bae1a86ec9a59f80dee"
     },
@@ -127,6 +144,7 @@
       "path": ".agents/skills/frontend-design-review",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:00eb031c8a266fdacdb9c41f983df8cc450ab62dc093edc935211c454e2ffe9e"
     },
@@ -134,6 +152,7 @@
       "path": ".agents/skills/improve-animations",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/improve-animations)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:f96d6bf5f3177a2adf01b0dd87f7942f2563a7c063817eaf14c9d0d2adb25d01"
     },
@@ -141,6 +160,7 @@
       "path": ".agents/skills/literature-review",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:1c14aa6fcbc26babdaee02a2aae846e5c8116896a5d1e355d5e28a8a8cfdfb37"
     },
@@ -148,6 +168,7 @@
       "path": ".agents/skills/model-orchestration",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:05b4dd7ea6c0b4341ce0f114c12b2eb99afe81cd55700c2daa558b08dc5705db"
     },
@@ -155,6 +176,7 @@
       "path": ".agents/skills/ms-frontend-design-review",
       "source": "https://github.com/microsoft/skills @ 02e0b2f852b39ea00c43283f999b83fc12079273 (.github/skills/frontend-design-review)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "02e0b2f852b39ea00c43283f999b83fc12079273",
       "computedHash": "sha256-tree-v1:22b5d712f6fef95a92672a94604c5552bcef9a3a41ac92214af14a983445a446"
     },
@@ -162,6 +184,7 @@
       "path": ".agents/skills/pick-ui-library",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/pick-ui-library)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:27cebe322d30aaf7fb4da75fe9af2bd5a01750ccdcf0a77aa2a7c16f62c07ba1"
     },
@@ -169,6 +192,7 @@
       "path": ".agents/skills/presentation-creation",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:f078799049723b0c48326bd17251691932d2add8e164b487f5c75bbf325c9637"
     },
@@ -176,6 +200,7 @@
       "path": ".agents/skills/redesign-existing-projects",
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/redesign-skill)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
       "computedHash": "sha256-tree-v1:474529ab3dedcde2626c2b61a4d4bfe9d5c10003a28f9b3a5711ed76c23317a0"
     },
@@ -183,6 +208,7 @@
       "path": ".agents/skills/research-and-citations",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:eca343e67d70aefd2215b03435d8644090072f197d01626de058383494e4a243"
     },
@@ -190,6 +216,7 @@
       "path": ".agents/skills/review-animations",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/review-animations)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:108544cf22d1a9398c2004fae3bb0cd2465294993e36fd99a61ddb16d4228539"
     },
@@ -197,6 +224,7 @@
       "path": ".agents/skills/skill-creator",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:3e808a8f26f6cda032bdaf26b09241b468c1c4ef525cf251f253d94a1a2e8fa2"
     },
@@ -204,6 +232,7 @@
       "path": ".agents/skills/systematic-debugging",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
+      "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:7058bc70a85ac1e7aa7ad8b92f967e2a40aeb57d5ae0b4f7d9c301237d77d225"
     },
@@ -211,6 +240,7 @@
       "path": ".agents/skills/vercel-composition-patterns",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/composition-patterns)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:88f75d49036dd1828306f253d94872cc87ea693460a150f18f848000f31d1dda"
     },
@@ -218,6 +248,7 @@
       "path": ".agents/skills/vercel-react-best-practices",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/react-best-practices)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:dbc8b5af55a7d8f7f7733368114ee5dab255bd6926c611451f688edc6e40a082"
     },
@@ -225,6 +256,7 @@
       "path": ".agents/skills/web-design-guidelines",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/web-design-guidelines)",
       "sourceType": "github",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:4a1eed673f25210d4e809be2846b1aecbda721fb1c9633602538d5f3fbb5f08e"
     }
