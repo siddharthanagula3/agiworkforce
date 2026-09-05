@@ -166,4 +166,14 @@ describe('WebChatPage account identity', () => {
       isLoading: true,
     });
   });
+
+  it('keeps showing the loading state, not the word "User", when identity is still missing after billing settles', () => {
+    expect(resolveChatAccountDisplay(null, 'free', true)).toEqual({
+      displayName: 'Loading account',
+      userInitial: '…',
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: true,
+    });
+  });
 });

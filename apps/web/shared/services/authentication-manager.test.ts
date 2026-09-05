@@ -61,6 +61,7 @@ describe('AuthService', () => {
     it('should return error when not authenticated', async () => {
       mockFetch.mockResolvedValue({
         ok: false,
+        status: 401,
         clone() {
           return this;
         },
@@ -70,6 +71,23 @@ describe('AuthService', () => {
 
       expect(result.user).toBeNull();
       expect(result.error).toBe('Not authenticated');
+      expect(result.transient).toBeUndefined();
+    });
+
+    it('marks a rate limit as transient rather than not authenticated', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        clone() {
+          return this;
+        },
+      });
+
+      const result = await authService.getCurrentUser();
+
+      expect(result.user).toBeNull();
+      expect(result.error).not.toBe('Not authenticated');
+      expect(result.transient).toBe(true);
     });
 
     it('should handle fetch errors', async () => {
@@ -79,6 +97,7 @@ describe('AuthService', () => {
 
       expect(result.user).toBeNull();
       expect(result.error).toBe('Network error');
+      expect(result.transient).toBe(true);
     });
 
     it('should return an error when the payload violates the /api/me contract', async () => {
