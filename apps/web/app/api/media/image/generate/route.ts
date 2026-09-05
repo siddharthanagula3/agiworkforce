@@ -367,6 +367,9 @@ async function resolveImageRefBytes(
     return Uint8Array.from(Buffer.from(base64, 'base64'));
   }
 
+  // Only an asset_id ref reaches the database, so the caller opens a scoped
+  // connection only for that branch and inline bytes cost none.
+  if (!db) throw new Error('Source image could not be read');
   const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id, db);
   if (
     !asset ||

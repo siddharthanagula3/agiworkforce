@@ -327,7 +327,7 @@ export async function insertMediaAssetsAtomically(
 
 export async function listMediaAssets(
   userId: string,
-  opts?: { kind?: MediaKind; limit?: number },
+  opts: { kind?: MediaKind; limit?: number } | undefined,
   db: DatabaseAdapter,
 ): Promise<MediaAsset[]> {
   const limit = Math.min(Math.max(opts?.limit ?? 60, 1), 200);

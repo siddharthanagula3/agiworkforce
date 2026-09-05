@@ -533,6 +533,7 @@ export class SubscriptionService {
         planTier,
         new Date(currentPeriodStart),
         new Date(currentPeriodEnd),
+        { db },
       );
 
       return {
