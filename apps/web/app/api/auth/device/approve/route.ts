@@ -12,6 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
@@ -122,7 +123,11 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
   // Enforced on APPROVAL, not on code issuance: starting the flow is
   // unauthenticated, so there is no account to consult until a human approves.
   // No approval means no token, which is the whole grant.
-  if (!(await isDeviceCodeSignInEnabled(authUser.userId))) {
+  const approverDb = createClaimedUserScopedDb(getNeonDb(), {
+    userId: authUser.userId,
+    organizationId: null,
+  });
+  if (!(await isDeviceCodeSignInEnabled(approverDb, authUser.userId))) {
     logger.info({ userId: authUser.userId }, 'Device approval refused: device sign-in is off');
     return NextResponse.json(
       {

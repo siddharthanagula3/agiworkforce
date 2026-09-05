@@ -8,8 +8,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mockQuery = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
+const scopedDb = { query: mockQuery } as unknown as DatabaseAdapter;
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isCloudCodeExecutionEnabled } from '../code-execution-policy';
 
 beforeEach(() => vi.clearAllMocks());
@@ -20,32 +21,32 @@ beforeEach(() => vi.clearAllMocks());
 describe('cloud code execution policy', () => {
   it('is on for an account that never touched the setting', async () => {
     mockQuery.mockResolvedValue([{ settings: {} }]);
-    await expect(isCloudCodeExecutionEnabled('u1')).resolves.toBe(true);
+    await expect(isCloudCodeExecutionEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('is on when there is no settings row at all', async () => {
     mockQuery.mockResolvedValue([]);
-    await expect(isCloudCodeExecutionEnabled('u1')).resolves.toBe(true);
+    await expect(isCloudCodeExecutionEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('is off only when explicitly false', async () => {
     mockQuery.mockResolvedValue([{ settings: { capabilities: { cloudCodeExecution: false } } }]);
-    await expect(isCloudCodeExecutionEnabled('u1')).resolves.toBe(false);
+    await expect(isCloudCodeExecutionEnabled(scopedDb, 'u1')).resolves.toBe(false);
   });
 
   it('ignores a non-boolean rather than treating it as off', async () => {
     mockQuery.mockResolvedValue([{ settings: { capabilities: { cloudCodeExecution: 'no' } } }]);
-    await expect(isCloudCodeExecutionEnabled('u1')).resolves.toBe(true);
+    await expect(isCloudCodeExecutionEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('fails open when the read throws', async () => {
     mockQuery.mockRejectedValue(new Error('connection lost'));
-    await expect(isCloudCodeExecutionEnabled('u1')).resolves.toBe(true);
+    await expect(isCloudCodeExecutionEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('scopes the read to the caller', async () => {
     mockQuery.mockResolvedValue([{ settings: {} }]);
-    await isCloudCodeExecutionEnabled('u1');
+    await isCloudCodeExecutionEnabled(scopedDb, 'u1');
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['u1']);
   });
 });
@@ -58,7 +59,8 @@ describe('the tool loop enforces it server-side', () => {
 
   it('checks the policy on the execution-tool path', () => {
     const branch = source.slice(source.indexOf('isExecutionTool(toolCall.qualifiedName)'));
-    expect(branch).toContain('isCloudCodeExecutionEnabled(executionContext.userId)');
+    expect(branch).toContain('isCloudCodeExecutionEnabled(');
+    expect(branch).toContain('callerScopedDb(executionContext, executionContext.userId)');
   });
 
   it('refuses before reaching for a sandbox', () => {
