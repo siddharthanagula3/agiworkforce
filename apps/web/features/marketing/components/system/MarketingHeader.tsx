@@ -5,7 +5,8 @@ import { Button } from './Button';
 import { MarketingMobileNav } from './MarketingMobileNav';
 import { ThemeToggle } from './ThemeToggle';
 import { Container } from './Container';
-import { CHAT_ROOT_HREF, HEADER_LINKS, WEB_ENTRY_HREF } from './nav';
+import { NavGroup } from './NavGroup';
+import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
 
 const MARK_SIZE = 18;
 
@@ -44,14 +45,18 @@ export function MarketingHeader({
         <div className="agi-ds-header-row">
           {wordmark}
           <nav className="agi-ds-nav" aria-label="Primary">
-            {HEADER_LINKS.map((link) => (
-              <Link href={link.href} className="agi-ds-navlink" key={link.href}>
-                {link.label}
-              </Link>
+            {NAV_GROUPS.map((group) => (
+              <NavGroup group={group} key={group.label} />
             ))}
+            <Link href="/pricing" className="agi-ds-navlink">
+              Pricing
+            </Link>
           </nav>
           <div className="agi-ds-header-end">
             <ThemeToggle />
+            <Link href={CONTACT_SALES_HREF} className="agi-ds-navlink agi-ds-navlink--quiet">
+              Contact sales
+            </Link>
             {signedIn ? (
               <Button href={CHAT_ROOT_HREF}>Open AGI</Button>
             ) : (

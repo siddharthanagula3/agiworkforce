@@ -15,16 +15,25 @@ import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/Show
 import {
   CapabilityGrid,
   DevBand,
-  FinalCta,
   FlagshipHero,
+  LatestBlock,
+  ProofRow,
+  StartCards,
   SurfaceIndex,
   SurfaceTicker,
   TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
+import { RELEASES } from '@/lib/changelog-entries';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
+const LATEST_ENTRY_COUNT = 3;
+const LATEST_ENTRIES = RELEASES.slice(0, LATEST_ENTRY_COUNT).map((release) => ({
+  date: release.date,
+  headline: release.headline,
+  summary: release.body[0] ?? '',
+}));
 
 export function MarketingLanding() {
   return (
@@ -44,9 +53,24 @@ export function MarketingLanding() {
           ]}
           lede="One assistant across six surfaces, and you choose where each request actually runs."
           visual={<MobileHeroVisual />}
+          announcement={{
+            tag: 'New',
+            label: `Model catalogue: ${MARKETING.models.display} models across ${MARKETING.providers.count} providers, one selector`,
+            href: '/providers',
+          }}
         />
 
         <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
+
+        <ProofRow
+          label="Product facts"
+          facts={[
+            { value: MARKETING.models.display, label: 'models in the catalogue' },
+            { value: `${MARKETING.providers.count}`, label: 'provider integrations' },
+            { value: MARKETING.surfaces.display, label: 'surfaces, one account' },
+            { value: '3', label: 'routes: Local, BYOK, Cloud' },
+          ]}
+        />
 
         <RouteFlow
           eyebrow="Routing"
@@ -299,14 +323,39 @@ export function MarketingLanding() {
           </div>
         </section>
 
-        <FinalCta
-          eyebrow="Start now"
+        <LatestBlock
+          eyebrow="Latest"
+          title="What shipped."
+          entries={LATEST_ENTRIES}
+          more={{ href: '/changelog', label: 'Full changelog' }}
+        />
+
+        <StartCards
+          eyebrow="Get started"
           title="Start where you work."
-          body="AGI Web runs in the browser today. The CLI is released for Local and BYOK work; Desktop Linux assets are published, with installer availability verified live before download."
-          ctas={[
-            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Check Desktop availability' },
-            { href: '/cli', label: 'Install the CLI' },
+          cards={[
+            {
+              title: 'Start on your own',
+              body: 'AGI Web is free to try in the browser. Local and BYOK need no account at all.',
+              points: [
+                'Every admitted model behind one selector, with Auto as the default',
+                'Projects, memory, artifacts and web search on the first day',
+                'A served-by receipt under every reply',
+                'Desktop, CLI and the extensions on the same account',
+              ],
+              cta: { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
+            },
+            {
+              title: 'Bring your organisation',
+              body: 'Seats, roles and a workspace console that decides where work is allowed to run.',
+              points: [
+                'SSO and directory provisioning, contract scoped',
+                'Audit export you can read line by line',
+                'Retention windows and data-rights handling',
+                'Local and BYOK keep data on your hardware or your provider contract',
+              ],
+              cta: { href: '/contact-sales', label: 'Contact sales' },
+            },
           ]}
         />
 

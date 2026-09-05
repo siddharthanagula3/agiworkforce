@@ -33,6 +33,12 @@ function ctaKind(index: number): 'primary' | 'secondary' | 'ghost' {
   return 'ghost';
 }
 
+export interface FlagshipAnnouncement {
+  tag: string;
+  label: string;
+  href: string;
+}
+
 export function FlagshipHero({
   eyebrow,
   brand,
@@ -40,6 +46,7 @@ export function FlagshipHero({
   ctas,
   ctas2,
   visual,
+  announcement,
 }: {
   eyebrow: string;
   brand: string;
@@ -47,12 +54,22 @@ export function FlagshipHero({
   ctas: FlagshipCta[];
   ctas2?: FlagshipCta[];
   visual: ReactNode;
+  announcement?: FlagshipAnnouncement;
 }) {
   return (
     <section className="agi-fl-hero" aria-labelledby="agi-fl-hero-title">
       <div className="agi-fl-hero-backdrop" aria-hidden="true" />
       <div className="agi-fl-hero-split">
         <div className="agi-fl-hero-copy">
+          {announcement ? (
+            <Link href={announcement.href} className="agi-fl-announce">
+              <span className="agi-fl-announce-tag">{announcement.tag}</span>
+              <span className="agi-fl-announce-label">{announcement.label}</span>
+              <span className="agi-fl-announce-arrow" aria-hidden="true">
+                →
+              </span>
+            </Link>
+          ) : null}
           <div className="agi-fl-hero-brand-wrap">
             <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel="AGI logo" />
             <div className="agi-fl-hero-brand-text">
@@ -347,6 +364,111 @@ export function FinalCta({
       <div className="agi-fl-cta-row agi-fl-final-ctas">
         {ctas.map((cta, i) => (
           <CtaButton key={cta.label} cta={cta} kind={ctaKind(i)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export interface ProofFact {
+  value: string;
+  label: string;
+}
+
+export function ProofRow({ facts, label }: { facts: ProofFact[]; label: string }) {
+  return (
+    <section className="agi-fl-proof" aria-label={label}>
+      <dl className="agi-fl-proof-grid">
+        {facts.map((fact) => (
+          <div className="agi-fl-proof-item" key={fact.label}>
+            <dd className="agi-fl-proof-value">{fact.value}</dd>
+            <dt className="agi-fl-proof-label">{fact.label}</dt>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+export interface LatestEntry {
+  date: string;
+  headline: string;
+  summary: string;
+}
+
+export function LatestBlock({
+  eyebrow,
+  title,
+  entries,
+  more,
+}: {
+  eyebrow: string;
+  title: string;
+  entries: LatestEntry[];
+  more: FlagshipCta;
+}) {
+  return (
+    <section className="agi-fl-section agi-fl-latest" aria-labelledby="agi-fl-latest-title">
+      <div className="agi-fl-latest-head">
+        <div>
+          <p className="agi-fl-eyebrow">{eyebrow}</p>
+          <h2 id="agi-fl-latest-title" className="agi-fl-h2">
+            {title}
+          </h2>
+        </div>
+        <Link href={more.href} className="agi-fl-latest-more">
+          {more.label} →
+        </Link>
+      </div>
+      <div className="agi-fl-latest-grid">
+        {entries.map((entry) => (
+          <Link href={more.href} className="agi-fl-latest-card" key={entry.date + entry.headline}>
+            <span className="agi-fl-latest-date">{entry.date}</span>
+            <span className="agi-fl-latest-headline">{entry.headline}</span>
+            <span className="agi-fl-latest-summary">{entry.summary}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export interface StartCard {
+  title: string;
+  body: string;
+  points: string[];
+  cta: FlagshipCta;
+}
+
+export function StartCards({
+  eyebrow,
+  title,
+  cards,
+}: {
+  eyebrow: string;
+  title: string;
+  cards: StartCard[];
+}) {
+  return (
+    <section className="agi-fl-section agi-fl-start" aria-labelledby="agi-fl-start-title">
+      <p className="agi-fl-eyebrow">{eyebrow}</p>
+      <h2 id="agi-fl-start-title" className="agi-fl-h2">
+        {title}
+      </h2>
+      <div className="agi-fl-start-grid">
+        {cards.map((card, index) => (
+          <article className="agi-fl-start-card" key={card.title}>
+            <h3 className="agi-fl-start-card-title">{card.title}</h3>
+            <p className="agi-fl-start-card-body">{card.body}</p>
+            <ul className="agi-fl-start-points">
+              {card.points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="agi-fl-cta-row">
+              <CtaButton cta={card.cta} kind={index === 0 ? 'primary' : 'secondary'} />
+            </div>
+          </article>
         ))}
       </div>
     </section>
