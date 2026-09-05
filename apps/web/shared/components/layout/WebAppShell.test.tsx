@@ -32,6 +32,8 @@ const shellState = vi.hoisted(() => ({
     unauthenticated: false,
   },
   conversationsLoading: false,
+  conversationsListError: null as string | null,
+  fetchConversations: vi.fn(),
 }));
 
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
@@ -94,13 +96,21 @@ vi.mock('@agiworkforce/ui', async () => {
     Sidebar: (props: {
       collapsed?: boolean;
       isLoading?: boolean;
+      error?: string | null;
+      onRetryLoad?: () => void;
       footerSlot?: React.ReactNode;
     }) => (
       <div
         data-testid="app-sidebar"
         data-collapsed={String(props.collapsed ?? false)}
         data-loading={String(props.isLoading ?? false)}
+        data-list-error={props.error ?? ''}
       >
+        {props.onRetryLoad && (
+          <button type="button" onClick={props.onRetryLoad}>
+            Retry
+          </button>
+        )}
         {props.footerSlot}
       </div>
     ),
@@ -207,6 +217,8 @@ vi.mock('@/lib/hooks/useConversations', () => ({
     deleteConversation: vi.fn(),
     updateConversation: vi.fn(),
     isLoading: shellState.conversationsLoading,
+    listError: shellState.conversationsListError,
+    fetchConversations: shellState.fetchConversations,
   }),
 }));
 
@@ -275,6 +287,8 @@ beforeEach(() => {
   shellState.billing.error = null;
   shellState.billing.unauthenticated = false;
   shellState.conversationsLoading = false;
+  shellState.conversationsListError = null;
+  shellState.fetchConversations = vi.fn();
   settingsModalState.openSettings = vi.fn();
   menuEscape.keepOpenForMenuEscape.mockReset();
   menuEscape.handler = null;
@@ -295,6 +309,8 @@ beforeEach(() => {
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
 });
+
+const LIST_FAILURE = 'Too many requests. Please wait before trying again.';
 
 describe('WebAppShell responsive navigation', () => {
   it('renders honest loading chrome while account and conversations hydrate', () => {
@@ -317,6 +333,48 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.getByRole('status', { name: 'Loading account' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Account menu for User' })).toBeNull();
     expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-loading', 'true');
+  });
+
+  /**
+   * A 429 on the conversation list painted "No conversations yet · Start a new
+   * chat" on every shell route: the shell read the hook's list failure and
+   * dropped it on the floor, so the rail told an account with 50 chats that it
+   * had none. What the rail then draws is Sidebar's own test.
+   */
+  it('hands the sidebar the conversation-list failure instead of dropping it', () => {
+    shellState.conversationsListError = LIST_FAILURE;
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', LIST_FAILURE);
+  });
+
+  it('claims no list failure when the fetch succeeded', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', '');
+  });
+
+  it('gives the sidebar a retry that re-runs the list fetch', () => {
+    shellState.conversationsListError = LIST_FAILURE;
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(shellState.fetchConversations).toHaveBeenCalledTimes(1);
   });
 
   it('desktop: renders the persistent sidebar and no mobile navigation trigger', () => {
