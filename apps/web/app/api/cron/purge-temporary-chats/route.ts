@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
-import { getNeonChatDb } from '@/lib/server/neon-chat';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   }
 
   const startedAtMs = Date.now();
-  const db = getNeonChatDb();
+  const db = getNeonDb();
 
   let purged = 0;
   let remaining = false;

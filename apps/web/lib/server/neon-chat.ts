@@ -3,8 +3,6 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
-import { getNeonDb } from '@/lib/server/neon-db';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   INTERACTIVE_CARDS_METADATA_KEY,
@@ -58,10 +56,6 @@ export const CONVERSATION_WORK_MODE_SELECT = `(
        order by r.created_at asc
        limit 1
     ) as work_mode`;
-
-export function getNeonChatDb(): DatabaseAdapter {
-  return getNeonDb();
-}
 
 export async function requireCurrentUserId(request?: NextRequest): Promise<string> {
   if (request) {
