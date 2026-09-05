@@ -2,8 +2,18 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { modelRegistry } from '@agiworkforce/model-registry';
-import { previewAutoRoute, type RoutingTaskType } from '@agiworkforce/routing';
+import {
+  modelRegistry,
+  INTRINSIC_CAPABILITY_NAMES,
+  type IntrinsicCapabilityName,
+} from '@agiworkforce/model-registry';
+import {
+  previewAutoRoute,
+  type AutoRoutePreview,
+  type AutoRoutingRequest,
+  type ObservedRouteHealth,
+  type RoutingTaskType,
+} from '@agiworkforce/routing';
 import {
   handleCorsPreflightRequest,
   getSecurityHeaders,
@@ -18,15 +28,22 @@ import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-poli
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 import { getServedRouteAffinity } from '@/lib/services/free-lane/runtime-state-service';
+import { getUnhonouredCapabilities } from '@/lib/services/free-lane/capability-health-service';
 import { runAuthGate } from '../../chat/completions/lib/auth-gate';
 import { buildWebCloudAutoRoutingRequest } from '../../chat/completions/lib/request-processor';
 
 const DEFAULT_SELECTION = modelRegistry.policies.auto.defaultAlias;
 
+const INTRINSIC_CAPABILITY_VALUES = INTRINSIC_CAPABILITY_NAMES as readonly [
+  IntrinsicCapabilityName,
+  ...IntrinsicCapabilityName[],
+];
+
 const RoutePreviewRequestSchema = z.object({
   selection: z.string().trim().min(1).max(200).optional(),
   taskType: z.string().trim().min(1).max(64),
   conversationId: z.string().trim().min(1).max(200).optional(),
+  capabilitiesInUse: z.array(z.enum(INTRINSIC_CAPABILITY_VALUES)).max(16).optional(),
 });
 
 function isKnownTaskType(value: string): value is RoutingTaskType {
@@ -57,6 +74,47 @@ async function readWorkspacePolicyForPreview(
   }
 }
 
+/**
+ * The first pass names the candidate routes; the capability store is then read
+ * for exactly those, and only a route with observed loss makes a second pass
+ * worth running. A store that cannot answer leaves the preview exactly as the
+ * declared catalog computed it.
+ */
+async function previewWithObservedCapabilities(
+  routingRequest: AutoRoutingRequest,
+  capabilitiesInUse: readonly IntrinsicCapabilityName[],
+  userId: string,
+): Promise<AutoRoutePreview> {
+  const preview = previewAutoRoute(routingRequest);
+  if (capabilitiesInUse.length === 0) return preview;
+
+  const routeIds = preview.candidates.map((candidate) => candidate.routeId).filter(Boolean);
+  if (routeIds.length === 0) return preview;
+
+  let unhonoured: Readonly<Record<string, readonly IntrinsicCapabilityName[]>> = {};
+  try {
+    unhonoured = await getUnhonouredCapabilities(routeIds, capabilitiesInUse);
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[route-preview] capability health read failed; previewing on declared capabilities only',
+    );
+    return preview;
+  }
+  if (Object.keys(unhonoured).length === 0) return preview;
+
+  const observedRouteHealth: Record<string, ObservedRouteHealth> = {
+    ...routingRequest.observedRouteHealth,
+  };
+  for (const [routeId, capabilities] of Object.entries(unhonoured)) {
+    observedRouteHealth[routeId] = {
+      ...observedRouteHealth[routeId],
+      unhonouredCapabilities: capabilities,
+    };
+  }
+  return previewAutoRoute({ ...routingRequest, observedRouteHealth, capabilitiesInUse });
+}
+
 async function handleRoutePreview(request: NextRequest): Promise<Response> {
   const authResult = await runAuthGate(request);
   if (!authResult.ok) return authResult.response;
@@ -72,7 +130,7 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
   if (!parsed.success) {
     return jsonError('Invalid route preview request.', 400, 'invalid_request_body');
   }
-  const { selection, taskType, conversationId } = parsed.data;
+  const { selection, taskType, conversationId, capabilitiesInUse } = parsed.data;
   if (!isKnownTaskType(taskType)) {
     return jsonError(`Unknown routing task type: ${taskType}`, 400, 'unknown_task_type');
   }
@@ -101,7 +159,11 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
     workspacePolicy,
   );
 
-  const preview = previewAutoRoute(routingRequest);
+  const preview = await previewWithObservedCapabilities(
+    routingRequest,
+    capabilitiesInUse ?? [],
+    userId,
+  );
 
   return NextResponse.json(
     {
