@@ -41,17 +41,6 @@ export interface RouteHealthKeyValueStore {
  * ranking reads the `route` scope and has no way to see a shadow event, rather
  * than relying on every future reader remembering to filter one out.
  */
-/**
- * Three independently governed resilience mechanisms, plus the mirrored
- * `shadow` keyspace: `route` locks out one model on one route (a model
- * rejection or a context/tier refusal says nothing about the provider's other
- * models); `provider` is the whole-provider breaker `route-breaker.ts`
- * already ran under the name `credential`, unchanged in behaviour and env
- * names, renamed here so it cannot collide with the scope below it; and
- * `credential` is the new per-credential cooldown, narrower than `provider`
- * so a single bad key can cool down without parking every route the same
- * provider serves.
- */
 export type RouteHealthScope = 'route' | 'provider' | 'credential' | 'shadow';
 
 export type RouteBreakerState = 'closed' | 'degraded' | 'open' | 'half_open';
@@ -97,13 +86,6 @@ const DEFAULT_MIN_SAMPLES_FOR_RATE_TRIP = 5;
 const DEFAULT_COOLDOWN_BASE_MS = COOLDOWN_BASE_MINUTES * MINUTE_MS;
 const DEFAULT_COOLDOWN_MAX_MS = COOLDOWN_MAX_MINUTES * MINUTE_MS;
 
-/**
- * Model lockout is deliberately identical to today's pre-split route
- * defaults: this scope carries forward the exact numbers the `route` scope
- * already ran under the (now provider-only) `AGI_ROUTE_HEALTH_*` names, so
- * splitting the scopes changes nothing about default behaviour, only which
- * env var reaches which mechanism.
- */
 const DEFAULT_MODEL_LOCKOUT_CONFIG: RouteHealthConfig = {
   observationWindowMs: DEFAULT_OBSERVATION_WINDOW_MS,
   tripWindowMs: DEFAULT_TRIP_WINDOW_MS,
@@ -114,13 +96,6 @@ const DEFAULT_MODEL_LOCKOUT_CONFIG: RouteHealthConfig = {
   cooldownMaxMs: DEFAULT_COOLDOWN_MAX_MS,
 };
 
-/**
- * A credential cooldown answers a narrower question than a provider breaker,
- * one bad key, not the whole account, so it trips faster and resets sooner:
- * a 10 minute window, 2 consecutive failures, and a 5 second base cooldown
- * capped at 5 minutes, in the shape of OmniRoute's connection cooldown
- * (`docs/architecture/RESILIENCE_GUIDE.md` §2, base cooldowns of 3-5s).
- */
 const CREDENTIAL_COOLDOWN_WINDOW_MINUTES = 10;
 const CREDENTIAL_COOLDOWN_TRIP_WINDOW_MINUTES = 2;
 const CREDENTIAL_COOLDOWN_CONSECUTIVE_FAILURE_THRESHOLD = 2;
@@ -265,10 +240,7 @@ interface ScopedConfigEnvNames {
  * Every threshold is operator-tunable, because the right window for a route
  * that serves once a minute is not the right window for one under constant
  * load. An unparseable value keeps the default rather than disabling the
- * breaker, which is the one outcome a typo must not produce. Shared by all
- * three scopes so a provider breaker, a credential cooldown and a model
- * lockout resolve their env overrides identically, only the env names and
- * defaults differ per scope.
+ * breaker, which is the one outcome a typo must not produce.
  */
 function resolveScopedRouteHealthConfig(
   envNames: ScopedConfigEnvNames,
@@ -354,11 +326,6 @@ const CREDENTIAL_COOLDOWN_ENV_NAMES: ScopedConfigEnvNames = {
   maxCooldown: CREDENTIAL_COOLDOWN_MAX_ENV,
 };
 
-/**
- * The provider breaker's config, unchanged in name and default from before
- * the scopes split: this is "the existing breaker" the other two scopes were
- * carved out of.
- */
 export function resolveRouteHealthConfig(
   environment: EnvironmentSource = processEnvironment(),
 ): RouteHealthConfig {
@@ -559,16 +526,6 @@ export function isRouteBreakerOpen(snapshot: RouteHealthSnapshot | undefined): b
   return routeBreakerState(snapshot) === 'open';
 }
 
-/**
- * Layers a DEGRADED band onto an otherwise-closed breaker.
- *
- * `degradeAtFailures` comes from a credential-class breaker profile
- * (`breaker-profiles.ts`) and is always below that profile's own trip
- * threshold, so this only ever marks a still-serving route for observability;
- * it can never turn a closed breaker into one that blocks. An already open or
- * half-open state is returned unchanged, degraded is a reading of CLOSED, not
- * a fourth thing competing with OPEN.
- */
 export function routeBreakerStateWithDegradeBand(
   snapshot: RouteHealthSnapshot | undefined,
   degradeAtFailures: number,
