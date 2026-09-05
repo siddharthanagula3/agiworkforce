@@ -642,15 +642,25 @@ export function AgentActivityTimeline({
     if (reservedTurnRef.current !== activity.turnId) {
       reservedTurnRef.current = activity.turnId;
       setReservedRowsHeight(0);
-      return;
     }
+  }, [activity.turnId]);
+  useEffect(() => {
     if (!isActive || !isOpen) {
       setReservedRowsHeight((current) => (current === 0 ? current : 0));
       return;
     }
-    const measured = rowsRef.current?.offsetHeight ?? 0;
-    setReservedRowsHeight((current) => (measured > current ? measured : current));
-  });
+    const node = rowsRef.current;
+    if (!node) return;
+    const raiseFloor = () => {
+      const measured = node.offsetHeight;
+      setReservedRowsHeight((current) => (measured > current ? measured : current));
+    };
+    raiseFloor();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(raiseFloor);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activity.turnId, isActive, isOpen]);
 
   const handleToggle = () => {
     if (isOpen) {
