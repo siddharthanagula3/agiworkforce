@@ -10,7 +10,12 @@ import {
   type OpenAIWireToolChoice,
   type OpenAIWireToolDefinition,
 } from '@agiworkforce/provider-protocol';
-import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
+import {
+  getGatewayHarness,
+  getModelMetadataById,
+  getRegistryRoute,
+  normalizeModelId,
+} from '@agiworkforce/types';
 import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
@@ -51,7 +56,16 @@ function splitTools(tools: unknown[] | undefined): {
   return { functionTools, rawVendorTools };
 }
 
+function gatewayUpstreamModelId(modelId: string, provider: string | undefined): string | undefined {
+  if (!provider) return undefined;
+  const route = getRegistryRoute(`${provider}/${modelId}`);
+  if (!route || !getGatewayHarness(route.harnessId)) return undefined;
+  return route.providerModelId;
+}
+
 function wireModelId(modelId: string, provider: string | undefined): string {
+  const gatewayUpstream = gatewayUpstreamModelId(modelId, provider);
+  if (gatewayUpstream) return gatewayUpstream;
   const apiModelId = toProviderApiModelId(modelId);
   if (provider !== 'openrouter' && provider !== 'open_router') return apiModelId;
   return openRouterSlugFor(apiModelId) ?? openRouterFailoverSlugFor(apiModelId) ?? apiModelId;

@@ -43,7 +43,8 @@ import {
   makeUpstreamErrorMapper,
 } from './adapter-errors';
 import { buildProtocolRouteAdapter } from '@/lib/services/provider-adapter-service';
-import { listProtocolRoutes } from '@agiworkforce/types';
+import { buildGatewayRouteAdapter, gatewayRoutesEnabled } from '@/lib/services/gateway-routing';
+import { listGatewayRoutes, listProtocolRoutes } from '@agiworkforce/types';
 import type {
   ChatRequest,
   HarnessProtocol,
@@ -99,6 +100,23 @@ function protocolRouteProviders(): Record<string, AdapterProviderEntry> {
           provider,
           wire.anthropicCache ? { anthropicCache: computeAnthropicCacheConfig(processed) } : {},
         ),
+      buildChatRequest: wire.buildChatRequest,
+      mapError: makeUpstreamErrorMapper(provider),
+      wireMode: wire.wireMode,
+    };
+  }
+  return entries;
+}
+
+function gatewayRouteProviders(): Record<string, AdapterProviderEntry> {
+  if (!gatewayRoutesEnabled()) return {};
+  const entries: Record<string, AdapterProviderEntry> = {};
+  for (const route of listGatewayRoutes()) {
+    if (entries[route.provider]) continue;
+    const wire = PROTOCOL_WIRE[route.protocol];
+    const { provider } = route;
+    entries[provider] = {
+      buildAdapter: () => buildGatewayRouteAdapter(provider),
       buildChatRequest: wire.buildChatRequest,
       mapError: makeUpstreamErrorMapper(provider),
       wireMode: wire.wireMode,
@@ -202,6 +220,7 @@ const BESPOKE_ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
 
 export const ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
   ...protocolRouteProviders(),
+  ...gatewayRouteProviders(),
   ...BESPOKE_ADAPTER_PROVIDERS,
 };
 
