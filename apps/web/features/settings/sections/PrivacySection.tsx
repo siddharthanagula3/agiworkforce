@@ -47,7 +47,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'shareTelemetry',
     label: 'Share crash and usage telemetry',
     description:
-      'Send anonymized error reports and usage counts (no message content) so we can fix bugs faster. Stripped before send via the Sentry beforeSend hook.',
+      'Send anonymized error reports and usage counts so we can fix bugs faster. Message content is never included.',
     defaultValue: false,
   },
 ];
@@ -152,6 +152,7 @@ export function PrivacySection() {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
+  const [hasChanged, setHasChanged] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -190,6 +191,7 @@ export function PrivacySection() {
       const next = { ...prev, [key]: !prev[key] };
       setSavingPreferences(true);
       setPreferenceError(null);
+      setHasChanged(true);
       // Mirror immediately, matching the optimistic setState above (this
       // component doesn't roll UI state back on save failure, it only shows
       // an error banner, so the cache must track what the switch displays,
@@ -317,15 +319,17 @@ export function PrivacySection() {
         >
           Privacy
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
-          {loadingPreferences
-            ? 'Loading account settings...'
-            : savingPreferences
-              ? 'Saving...'
-              : preferenceError
-                ? `Save failed: ${preferenceError}`
-                : 'Saved'}
-        </p>
+        {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+            {loadingPreferences
+              ? 'Loading account settings...'
+              : savingPreferences
+                ? 'Saving...'
+                : preferenceError
+                  ? `Save failed: ${preferenceError}`
+                  : 'Saved'}
+          </p>
+        ) : null}
       </div>
 
       {/* Privacy Policy, and the two expandable rows explaining data handling */}
