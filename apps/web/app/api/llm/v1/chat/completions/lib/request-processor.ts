@@ -91,6 +91,7 @@ import {
 import type { ModelCapabilities, RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
   applyConversationContext,
+  assessModelSwitchCache,
   classifyTaskFamily,
   classifyTaskLocally,
   detectIndicScript,
@@ -1458,15 +1459,21 @@ export function resolveWebCloudModelRoute(
    */
   preferSlots?: readonly string[],
   /**
-   * Live route health, and the route (if any) already warm for this
-   * conversation. Both reorder only: `resolveAutoRoute` still requires the
+   * Live route health, the route (if any) already warm for this
+   * conversation's cache, and the model the conversation is pinned to.
+   * `preferredRouteId` is reorder-only: `resolveAutoRoute` still requires the
    * preferred route to already be admissible for the resolved model, so an
    * exact-model selection can never be steered onto a different model by a
-   * stale preference.
+   * stale preference. `currentModelKey`/`previousTaskType` reach
+   * `resolveAutoRoute`'s own session-stickiness gate instead, and only apply
+   * when `model` is an Auto alias, an explicit selection returns before that
+   * gate is ever reached.
    */
   routeHealth?: {
     runtimeState?: RoutingRuntimeState | null;
     preferredRouteId?: string | null;
+    currentModelKey?: string | null;
+    previousTaskType?: RoutingTaskType | null;
   },
   availableProviderIds?: ReadonlySet<string>,
   zeroDataRetentionOnly?: boolean,
@@ -1503,6 +1510,8 @@ export function resolveWebCloudModelRoute(
         }
       : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
+    ...(routeHealth?.currentModelKey ? { currentModelKey: routeHealth.currentModelKey } : {}),
+    ...(routeHealth?.previousTaskType ? { previousTaskType: routeHealth.previousTaskType } : {}),
     ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
     ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),
     ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
@@ -2484,6 +2493,8 @@ export async function processRequest(
     {
       runtimeState: baseRouteHealthState,
       ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
+      ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
+      ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
     },
     availableProviderIds,
     zeroDataRetentionOnly,
@@ -2573,6 +2584,31 @@ export async function processRequest(
         { status: 422 },
       ),
     };
+  }
+
+  if (isAutoModeModelId(requestedModel) && routeAffinity?.modelKey) {
+    const switchedModel = routeAffinity.modelKey !== routeDecision.modelKey;
+    logger.info(
+      {
+        userId,
+        requestId,
+        conversationId: chatRequest.conversation_id,
+        routeReason: routeDecision.reason,
+        priorModelKey: routeAffinity.modelKey,
+        resolvedModelKey: routeDecision.modelKey,
+        switchedModel,
+        ...(switchedModel
+          ? {
+              cacheAssessment: assessModelSwitchCache({
+                priorModelId: routeAffinity.modelKey,
+                nextModelId: routeDecision.modelKey,
+                priorTurnCount: routingHistory.length,
+              }),
+            }
+          : {}),
+      },
+      'Auto route decision for a continuing conversation',
+    );
   }
 
   if (routeDecision.harnessId.endsWith('/media')) {
