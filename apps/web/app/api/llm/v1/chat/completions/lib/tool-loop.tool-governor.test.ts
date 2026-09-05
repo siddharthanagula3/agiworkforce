@@ -136,6 +136,12 @@ function searchResponse(): Response {
   );
 }
 
+function requestAt(callIndex: number): { tools?: unknown[]; tool_choice?: unknown } | undefined {
+  return factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as
+    | { tools?: unknown[]; tool_choice?: unknown }
+    | undefined;
+}
+
 function offeredToolNames(callIndex: number): string[] {
   const request = factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as
     | { tools?: unknown[] }
@@ -209,5 +215,31 @@ describe('tool loop · unavailable tool withdrawal', () => {
     );
 
     expect(output).toContain('code execution is not configured on this deployment');
+  });
+
+  it('withdraws every execution tool, not only the one that was called', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x4'))
+      .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
+
+    await collect(runToolLoop(makeProcessed(e2bExecutionToolDefs()), { approvalMode: 'auto' }));
+
+    const offeredFirst = offeredToolNames(0);
+    expect(offeredFirst.length).toBeGreaterThan(1);
+    expect(offeredToolNames(1)).toHaveLength(0);
+  });
+
+  it('sends no tool choice on a step that offers no tools', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x3'))
+      .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
+
+    const processed = makeProcessed(e2bExecutionToolDefs());
+    processed.llmRequest.tool_choice = 'required';
+
+    await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(offeredToolNames(1)).toHaveLength(0);
+    expect(requestAt(1)?.tool_choice).toBeUndefined();
   });
 });
