@@ -13,7 +13,14 @@ import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/ex
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
-import { webSearchNeedsGenericTool } from '@agiworkforce/search';
+import {
+  REQUIRED_SEARCH_SYSTEM_NUDGE,
+  resolveRequiredSearchEnforcement,
+  resolveWebSearchRequirement,
+  type RequiredSearchEnforcement,
+  type WebSearchRequirement,
+} from '@/lib/web-search/required-search';
+import { hasExplicitWebSearchIntent, webSearchNeedsGenericTool } from '@agiworkforce/search';
 import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import {
   supportsOpenAIReasoningEffort,
@@ -420,7 +427,10 @@ export function applyImplicitManagedToolIntent(
   request: ChatCompletionRequest,
   context: ImplicitManagedToolIntentContext,
 ): void {
-  if (request.web_search === undefined && context.taskType === 'research') {
+  if (
+    request.web_search === undefined &&
+    (context.taskType === 'research' || hasExplicitWebSearchIntent(context.prompt))
+  ) {
     request.web_search = true;
   }
 
@@ -728,6 +738,13 @@ export type ProcessedRequest = {
   routePlanId?: string;
   retries?: number;
   resolvedTaskType: RoutingTaskType;
+  /**
+   * Whether this turn must produce a search, and how that was arranged. The
+   * tool loop reads it to release the forced choice after the search step and
+   * to decide whether a turn that answered from memory earns one retry.
+   */
+  searchRequirement?: WebSearchRequirement;
+  searchEnforcement?: RequiredSearchEnforcement;
   classifierConfidence: number;
   resolvedSlot: RoutingSlot | null;
   quotaFeature: QuotaFeature;
@@ -830,29 +847,6 @@ export function resolveInitialManagedCodeToolChoice(input: {
     input.provider.toLowerCase() !== 'anthropic' &&
     modelAcceptsForcedToolChoice(input.model) &&
     providerRoutesToE2B(input.provider)
-  ) {
-    return 'required';
-  }
-  return undefined;
-}
-
-export function resolveInitialWebSearchToolChoice(input: {
-  requestedToolChoice: ChatCompletionRequest['tool_choice'];
-  webSearch: boolean | undefined;
-  researchTask: boolean;
-  stream: boolean | undefined;
-  provider: string;
-  model?: string;
-  webSearchToolAttached: boolean;
-}): ChatCompletionRequest['tool_choice'] {
-  if (input.requestedToolChoice !== undefined) return input.requestedToolChoice;
-  if (
-    input.webSearch === true &&
-    input.researchTask &&
-    input.stream === true &&
-    input.webSearchToolAttached &&
-    input.provider.toLowerCase() !== 'anthropic' &&
-    modelAcceptsForcedToolChoice(input.model)
   ) {
     return 'required';
   }
@@ -3231,6 +3225,29 @@ export async function processRequest(
     }
   }
 
+  const searchRequirement = resolveWebSearchRequirement({
+    webSearchEnabled: chatRequest.web_search,
+    agiWorkRun: chatRequest.work_mode === 'agiwork',
+    researchTask: resolvedTaskType === 'research',
+    userMessage: lastUserText,
+  });
+  const searchEnforcement = resolveRequiredSearchEnforcement({
+    required: searchRequirement.required,
+    requestedToolChoice: chatRequest.tool_choice,
+    stream: chatRequest.stream,
+    model: chatRequest.model,
+    tools: resolvedTools,
+  });
+  if (searchEnforcement.mode === 'nudge') {
+    internalMessages.unshift({
+      role: 'system',
+      content: REQUIRED_SEARCH_SYSTEM_NUDGE,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  }
+
   if (chatRequest.web_fetch) {
     resolvedTools = resolveWebFetchTools({
       providerLower,
@@ -3343,17 +3360,7 @@ export async function processRequest(
     max_tokens: maxTokens,
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
-    tool_choice:
-      managedCodeToolChoice ??
-      resolveInitialWebSearchToolChoice({
-        requestedToolChoice: chatRequest.tool_choice,
-        webSearch: chatRequest.web_search,
-        researchTask: resolvedTaskType === 'research',
-        stream: chatRequest.stream,
-        provider: providerLower,
-        model: chatRequest.model,
-        webSearchToolAttached: extractToolNames(resolvedTools).includes('web_search'),
-      }),
+    tool_choice: managedCodeToolChoice ?? searchEnforcement.toolChoice ?? chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
@@ -3435,6 +3442,8 @@ export async function processRequest(
     subscriptionTier: subscription.plan_tier,
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,
+    searchRequirement,
+    searchEnforcement,
     classifierConfidence: classifierResult.confidence,
     resolvedSlot,
     quotaFeature,
