@@ -1,5 +1,6 @@
 import {
   getRegistryRoute,
+  isModelLive,
   listCanonicalModels,
   requireProviderDefaultModel,
   type ModelMetadata,
@@ -55,7 +56,7 @@ function providerApiModelId(model: ModelMetadata): string {
 }
 
 function isChatModel(model: ModelMetadata): boolean {
-  return !NON_CHAT_MODEL_TYPES.has(model.modelType);
+  return isModelLive(model) && !NON_CHAT_MODEL_TYPES.has(model.modelType);
 }
 
 function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): ModelMetadata {
