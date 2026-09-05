@@ -8,10 +8,9 @@ export default function LibraryPage() {
     <WebAppShell>
       <main
         data-design="agi"
+        className="min-h-full px-4 py-8 sm:px-8 sm:py-12"
         style={{
-          minHeight: '100%',
           background: 'hsl(var(--background))',
-          padding: '48px 32px',
           color: 'hsl(var(--foreground))',
         }}
       >

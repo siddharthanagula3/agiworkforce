@@ -1,13 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 
-const { mockUseAuth, exportDocument } = vi.hoisted(() => ({
+const { mockUseAuth, exportDocument, uploadChatAttachments, push } = vi.hoisted(() => ({
   mockUseAuth: vi.fn(() => ({ isSignedIn: true })),
   exportDocument: vi.fn(async () => {}),
+  uploadChatAttachments: vi.fn(async () => []),
+  push: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: mockUseAuth,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Mocked at the module boundary LibraryView actually imports through
@@ -15,6 +22,10 @@ vi.mock('@clerk/nextjs', () => ({
 // export service used elsewhere in chat, this proves LibraryView calls it,
 // not a second exporter, without exercising jsPDF/docx internals here).
 vi.mock('@features/chat/services/document-export-service', () => ({ exportDocument }));
+
+// The same boundary for uploads: the Library's New menu must reach the one
+// upload path that catalogs an asset, not a second uploader of its own.
+vi.mock('@features/chat/services/chat-attachment-upload', () => ({ uploadChatAttachments }));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';
 
@@ -45,18 +56,46 @@ function pageResponse(items: unknown[], hasMore = false, nextOffset: number | nu
   } as Response;
 }
 
+function projectsResponse(projects: unknown[]) {
+  return { ok: true, json: async () => ({ projects }) } as Response;
+}
+
+const PROJECT = {
+  id: 'proj_abc123',
+  name: 'Runway model',
+  updatedAt: '2026-08-02T00:00:00.000Z',
+  conversationCount: 3,
+};
+
 const fetchMock = vi.fn();
+
+function routeFetch(items: unknown[], projects: unknown[] = []) {
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('/api/projects')) return projectsResponse(projects);
+    return pageResponse(items);
+  });
+}
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
-  fetchMock.mockResolvedValue(pageResponse([makeItem()]));
+  routeFetch([makeItem()]);
   mockUseAuth.mockReturnValue({ isSignedIn: true });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   fetchMock.mockReset();
+  push.mockReset();
+  uploadChatAttachments.mockClear();
+  window.localStorage.clear();
 });
+
+function libraryCalls() {
+  return fetchMock.mock.calls
+    .map((call) => String(call[0]))
+    .filter((url) => url.includes('/api/library'));
+}
 
 describe('LibraryView', () => {
   it('never fetches while signed out', async () => {
@@ -66,81 +105,135 @@ describe('LibraryView', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('renders the fetched page as shared GeneratedFileCards', async () => {
+  it('renders the fetched page as a grid of library tiles', async () => {
     render(<LibraryView />);
     await waitFor(() => expect(screen.getByTestId('library-grid')).toBeInTheDocument());
-    expect(screen.getAllByTestId('generated-file-card')).toHaveLength(1);
+    expect(screen.getAllByTestId('library-tile')).toHaveLength(1);
     expect(screen.getByText('report.pdf')).toBeInTheDocument();
-    const url = String(fetchMock.mock.calls[0]?.[0]);
+    const url = libraryCalls()[0] ?? '';
     expect(url).toContain('/api/library?');
-    expect(url).not.toContain('origin=');
+    expect(url).toContain('sort=modified');
     expect(url).not.toContain('kind=');
   });
 
-  it('re-fetches with origin/kind params when filter chips are clicked', async () => {
+  it('drops provenance chips and the readiness badge from the tile face', async () => {
     render(<LibraryView />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await screen.findByText('report.pdf');
+    for (const noise of [/managed/i, /ready/i, /gateway/i]) {
+      expect(screen.queryByText(noise)).toBeNull();
+    }
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Generated' }));
-    await waitFor(() =>
-      expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('origin=generated'),
-    );
+  it('re-fetches with the tab kinds and the chosen sort', async () => {
+    render(<LibraryView />);
+    await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Images' }));
-    await waitFor(() => expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('kind=image'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Images' }));
+    await waitFor(() => expect(libraryCalls().at(-1)).toContain('kind=image%2Cvideo'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Modified' }));
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Name' }));
+    await waitFor(() => expect(libraryCalls().at(-1)).toContain('sort=name'));
   });
 
   it('sends the debounced search query as q', async () => {
     render(<LibraryView />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText('Search library files'), {
+    await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText('Search the library by name'), {
       target: { value: 'quarterly' },
     });
-    await waitFor(() => expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('q=quarterly'));
+    await waitFor(() => expect(libraryCalls().at(-1)).toContain('q=quarterly'));
   });
 
-  it('shows the honest default empty state', async () => {
-    fetchMock.mockResolvedValue(pageResponse([]));
+  it('switches to the list view with name, modified and size columns', async () => {
+    render(<LibraryView />);
+    await screen.findByTestId('library-grid');
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+
+    expect(screen.getByTestId('library-list')).toBeInTheDocument();
+    for (const column of ['Name', 'Modified', 'Size']) {
+      expect(screen.getByRole('columnheader', { name: column })).toBeInTheDocument();
+    }
+  });
+
+  it('lists the account projects as folders and opens the project page', async () => {
+    routeFetch([makeItem()], [PROJECT]);
+    render(<LibraryView />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Runway model' }));
+    expect(push).toHaveBeenCalledWith('/chat/projects/proj_abc123');
+  });
+
+  it('uploads through the cataloging attachment service and reloads the page', async () => {
+    render(<LibraryView />);
+    await screen.findByText('report.pdf');
+    const before = libraryCalls().length;
+
+    fireEvent.click(screen.getByRole('button', { name: /New/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Upload file' }));
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['x'], 'notes.txt', { type: 'text/plain' });
+    Object.defineProperty(input, 'files', { value: [file] });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(uploadChatAttachments).toHaveBeenCalledWith([file]));
+    await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(before));
+  });
+
+  it('keeps Delete behind the row menu and a confirm', async () => {
+    render(<LibraryView />);
+    await screen.findByText('report.pdf');
+
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+    expect(screen.getByText(/restorable for 30 days/i)).toBeInTheDocument();
+    const deleteCalls = fetchMock.mock.calls.filter((call) => call[1]?.method === 'DELETE');
+    expect(deleteCalls).toHaveLength(0);
+  });
+
+  it('shows the honest empty state with an upload action', async () => {
+    routeFetch([]);
     render(<LibraryView />);
     await waitFor(() => expect(screen.getByTestId('library-empty-state')).toBeInTheDocument());
-    expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-  });
-
-  it('tells the truth on the Uploaded filter: uploads are not cataloged yet', async () => {
-    fetchMock.mockResolvedValue(pageResponse([]));
-    render(<LibraryView />);
-    fireEvent.click(screen.getByRole('button', { name: 'Uploaded' }));
-    await waitFor(() =>
-      expect(screen.getByText(/aren’t cataloged in the Library yet/)).toBeInTheDocument(),
-    );
+    expect(screen.getByText('Your library is empty')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Upload a file/ })).toBeInTheDocument();
   });
 
   it('surfaces load failures with a Retry that re-fetches', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 } as Response);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      return { ok: false, status: 500 } as Response;
+    });
     render(<LibraryView />);
     await waitFor(() => expect(screen.getByTestId('library-error')).toBeInTheDocument());
 
-    fetchMock.mockResolvedValueOnce(pageResponse([makeItem()]));
+    routeFetch([makeItem()]);
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
     await waitFor(() => expect(screen.getByTestId('library-grid')).toBeInTheDocument());
     expect(screen.queryByTestId('library-error')).not.toBeInTheDocument();
   });
 
   it('appends the next page via Show more', async () => {
-    fetchMock.mockResolvedValueOnce(pageResponse([makeItem()], true, 24));
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url.includes('offset=24')) {
+        return pageResponse([
+          makeItem({ id: '33333333-3333-4333-8333-333333333333', file_name: 'data.csv' }),
+        ]);
+      }
+      return pageResponse([makeItem()], true, 24);
+    });
     render(<LibraryView />);
     await waitFor(() => expect(screen.getByTestId('library-show-more')).toBeInTheDocument());
 
-    fetchMock.mockResolvedValueOnce(
-      pageResponse(
-        [makeItem({ id: '33333333-3333-4333-8333-333333333333', file_name: 'data.csv' })],
-        false,
-        null,
-      ),
-    );
     fireEvent.click(screen.getByTestId('library-show-more'));
-    await waitFor(() => expect(screen.getAllByTestId('generated-file-card')).toHaveLength(2));
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('offset=24');
+    await waitFor(() => expect(screen.getAllByTestId('library-tile')).toHaveLength(2));
+    expect(libraryCalls().at(-1)).toContain('offset=24');
     expect(screen.queryByTestId('library-show-more')).not.toBeInTheDocument();
   });
 });
@@ -157,7 +250,7 @@ describe('iconKindFor', () => {
 
 describe('generatedFileFromLibraryItem', () => {
   it('folds unknown source surfaces to web and preserves the authed uri', () => {
-    const file = generatedFileFromLibraryItem(makeItem({ source_surface: 'toaster' }) as any);
+    const file = generatedFileFromLibraryItem(makeItem({ source_surface: 'toaster' }) as never);
     expect(file.sourceSurface).toBe('web');
     expect(file.uri).toBe('/api/files/22222222-2222-4222-8222-222222222222');
     expect(file.fileName).toBe('report.pdf');
@@ -167,8 +260,8 @@ describe('generatedFileFromLibraryItem', () => {
 // The shared LibraryView reads native export off the transport. A dropped
 // field or a swapped-out exporter would silently remove Export as PDF/Word
 // from the Library while every other component test keeps passing, so this
-// drives the real click path (Preview -> export menu -> Export as PDF/Word)
-// through the real exportDocument service rather than asserting on source text.
+// drives the real click path through the real exportDocument service rather
+// than asserting on source text.
 describe('native artifact export', () => {
   const markdownItem = makeItem({
     id: '44444444-4444-4444-8444-444444444444',
@@ -182,6 +275,7 @@ describe('native artifact export', () => {
   function stubLibraryAndAsset(content: string) {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
       if (url === markdownItem.uri) {
         return { ok: true, status: 200, text: async () => content } as Response;
       }
@@ -197,8 +291,7 @@ describe('native artifact export', () => {
     stubLibraryAndAsset('# Quarterly summary\n\nRevenue is up.');
     render(<LibraryView />);
 
-    await screen.findByText('quarterly-summary.md');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-summary.md' }));
     await screen.findByTestId('artifact-renderer');
 
     fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
@@ -217,8 +310,7 @@ describe('native artifact export', () => {
     stubLibraryAndAsset('# Notes');
     render(<LibraryView />);
 
-    await screen.findByText('quarterly-summary.md');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-summary.md' }));
     await screen.findByTestId('artifact-renderer');
 
     fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
@@ -234,8 +326,7 @@ describe('native artifact export', () => {
     stubLibraryAndAsset('# Notes');
     render(<LibraryView />);
 
-    await screen.findByText('quarterly-summary.md');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-summary.md' }));
     await screen.findByTestId('artifact-renderer');
 
     fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
