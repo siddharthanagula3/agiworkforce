@@ -19,6 +19,7 @@ interface SseChatMockConfig {
 interface SseChatMockBridge {
   requestCount: () => number;
   push: (text: string) => boolean;
+  pushDelta: (delta: Record<string, unknown>) => boolean;
   finish: () => boolean;
 }
 
@@ -26,6 +27,8 @@ export interface SseChatMock {
   requestCount(): Promise<number>;
   waitForRequest(afterCount?: number): Promise<number>;
   push(text: string): Promise<void>;
+  /** Any delta the client reads, not only assistant content. */
+  pushDelta(delta: Record<string, unknown>): Promise<void>;
   finish(): Promise<void>;
 }
 
@@ -95,6 +98,12 @@ export async function installSseChatMock(page: Page): Promise<SseChatMock> {
         controller.enqueue(frame(JSON.stringify({ choices: [{ delta: { content: text } }] })));
         return true;
       },
+      pushDelta: (delta) => {
+        const controller = openControllers[openControllers.length - 1];
+        if (!controller) return false;
+        controller.enqueue(frame(JSON.stringify({ choices: [{ delta, index: 0 }] })));
+        return true;
+      },
       finish: () => {
         const controller = openControllers.pop();
         if (!controller) return false;
@@ -138,6 +147,19 @@ export async function installSseChatMock(page: Page): Promise<SseChatMock> {
     }
   };
 
+  const pushDelta = async (delta: Record<string, unknown>) => {
+    const delivered = await page.evaluate(
+      (input: { key: string; delta: Record<string, unknown> }) => {
+        const bridge = (window as unknown as BridgeScope)[input.key];
+        return Boolean(bridge && bridge.pushDelta(input.delta));
+      },
+      { key: MOCK_BRIDGE_KEY, delta },
+    );
+    if (!delivered) {
+      throw new Error('installSseChatMock: no open completion stream to push into');
+    }
+  };
+
   const finish = async () => {
     const delivered = await page.evaluate((key: string) => {
       const bridge = (window as unknown as BridgeScope)[key];
@@ -148,5 +170,5 @@ export async function installSseChatMock(page: Page): Promise<SseChatMock> {
     }
   };
 
-  return { requestCount: readRequestCount, waitForRequest, push, finish };
+  return { requestCount: readRequestCount, waitForRequest, push, pushDelta, finish };
 }
