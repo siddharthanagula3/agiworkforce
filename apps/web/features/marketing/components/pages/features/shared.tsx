@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Eyebrow, Prose, Stack } from '../../system';
+import { Eyebrow, Prose } from '../../system';
 
 export interface LinkCardItem {
   meta: string;
@@ -47,13 +47,17 @@ export function LinkGrid({ items }: { items: readonly LinkCardItem[] }) {
 
         if (spanLastItem && index === lastIndex) {
           return (
-            <div className="agi-ds-stack" style={{ gridColumn: '1 / -1' }} key={item.title}>
+            <div className="agi-ds-card" style={{ gridColumn: '1 / -1' }} key={item.title}>
               {card}
             </div>
           );
         }
 
-        return <Stack key={item.title}>{card}</Stack>;
+        return (
+          <div className="agi-ds-card" key={item.title}>
+            {card}
+          </div>
+        );
       })}
     </div>
   );
