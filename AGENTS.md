@@ -216,19 +216,19 @@ Rules worth never violating belong in a guard, not in prose.
 Run what your change touches, then say what you ran. Never report success
 without it.
 
-| Task              | Command                                                                                        |
-| ----------------- | ---------------------------------------------------------------------------------------------- |
-| Lint              | `pnpm lint` (Chrome extension: `pnpm lint:extension`)                                          |
-| Typecheck         | `pnpm typecheck:all`, `pnpm typecheck` covers only desktop                                     |
-| Test everything   | `pnpm test`                                                                                    |
-| Test what changed | `pnpm test:affected`                                                                           |
-| One package       | `pnpm --filter @agiworkforce/web test`                                                         |
-| Priority tiers    | `pnpm test:l1`, `pnpm test:security`                                                           |
-| Build             | `pnpm build` (excludes desktop); `pnpm build:desktop`                                          |
-| Rust tests        | `cargo test -p agiworkforce-desktop --lib`, `-p agiworkforce-cli`                              |
-| Rust lint         | `cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code` |
-| Migrations        | `pnpm db:migrate -- status`, `pnpm db:migrate -- apply --target <env>`                         |
-| Guard chain       | `pnpm check:llm-operability`                                                                   |
+| Task              | Command                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint              | `pnpm lint` (Chrome extension: `pnpm lint:extension`)                                                                                        |
+| Typecheck         | `pnpm typecheck:all`, `pnpm typecheck` covers only desktop                                                                                   |
+| Test everything   | `pnpm test`                                                                                                                                  |
+| Test what changed | `pnpm test:affected`                                                                                                                         |
+| One package       | `pnpm --filter @agiworkforce/web test`                                                                                                       |
+| Priority tiers    | `pnpm test:l1`, `pnpm test:security`                                                                                                         |
+| Build             | `pnpm build` (excludes desktop); `pnpm build:desktop`                                                                                        |
+| Rust tests        | `cargo test -p agiworkforce-desktop --lib`, `-p agiworkforce-cli`                                                                            |
+| Rust lint         | `cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code`                                               |
+| Migrations        | `pnpm db:migrate -- status`, `pnpm db:migrate -- apply --target <env>`                                                                       |
+| Guard chain       | `pnpm check:llm-operability` (includes `check:mock-exports`, which fails a `vi.mock()` factory that omits a real export its subject imports) |
 
 `docs/agent-context/commands.json` is the machine-readable inventory per
 surface, read it instead of guessing a workspace filter.
