@@ -33,7 +33,6 @@ vi.mock('../DragDropOverlay', () => ({ DragDropOverlay: () => null }));
 vi.mock('../SlashCommandMenu', () => ({ SlashCommandMenu: () => null }));
 vi.mock('../ComposerFooter', () => ({
   ComposerFooter: () => <div />,
-  ComposerModelSummary: () => <span />,
 }));
 vi.mock('../SendButton', () => ({
   SendButton: () => <button type="button">Send</button>,
@@ -51,20 +50,17 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 }));
 
 describe('composer accuracy caveat', () => {
-  it('renders unconditionally in the composer every chat entry point mounts', () => {
+  it('no longer paints the line under the card (removed by the founder on 2026-09-05)', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    const caveat = screen.getByTestId('ai-accuracy-disclaimer');
-    expect(caveat).toHaveTextContent(AI_ACCURACY_DISCLAIMER);
-    expect(caveat.textContent?.toLowerCase()).toContain('can make mistakes');
+    expect(screen.queryByTestId('ai-accuracy-disclaimer')).not.toBeInTheDocument();
+    expect(screen.queryByText(AI_ACCURACY_DISCLAIMER)).not.toBeInTheDocument();
   });
 
-  // Privacy is already reachable from Settings (PrivacySection.tsx), so the
-  // one-line footer (disclaimer left, resolved model right) no longer
-  // duplicates the link here.
-  it('does not duplicate a Privacy link in the footer (reachable from Settings)', () => {
-    render(<ChatComposerNew onSend={vi.fn()} />);
+  it('leaves nothing in its place, footer entries included', () => {
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
 
+    expect(container.querySelector('[data-testid^="composer-footer-entry-"]')).toBeNull();
     expect(screen.queryByRole('link', { name: /privacy/i })).not.toBeInTheDocument();
   });
 });

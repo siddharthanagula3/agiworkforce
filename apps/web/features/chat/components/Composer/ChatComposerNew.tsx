@@ -30,6 +30,8 @@ import {
   FolderOpen,
   Telescope,
   ListChecks,
+  LibraryBig,
+  Monitor,
   Brain,
   Globe,
 } from '@agiworkforce/icons';
@@ -43,7 +45,8 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
-import { ComposerFooter, ComposerModelSummary } from './ComposerFooter';
+import { ComposerFooter } from './ComposerFooter';
+import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
@@ -109,7 +112,6 @@ import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/co
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
-import { AI_ACCURACY_DISCLAIMER } from '@/lib/compliance/ai-act';
 import {
   getImageAspectOptionsForModel,
   IMAGE_MODEL_DEFAULT,
@@ -189,27 +191,21 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
   agiwork: 'Describe a multi-step task and what it should deliver',
 };
 
-const COMPOSER_FOOTER_KEYS = {
-  accuracy: 'accuracy',
-  model: 'model',
+const WORK_BAR_LABELS = {
+  project: 'Project',
+  files: 'Files',
+  plugins: 'Plugins',
+  desktop: 'Open desktop app',
 } as const;
 
-/**
- * The footer is one quiet line: the disclaimer left, the resolved model and
- * effort right (Claude's convention). Measured at 390px on 2026-08-31 the
- * older, denser footer ran to three rows: 136px of composer against
- * ChatGPT's 87px. The model summary is desk-only there; the picker directly
- * above already names the model. Web search, memory, the send route,
- * Privacy and Feedback all moved out: web search and memory are small marked
- * glyphs in the right cluster plus a status row in the "+" menu, the send
- * route lives in the "+" menu's SendPreview card at every width, Privacy is
- * reachable from Settings, and Feedback has an entry in the transcript.
- */
-const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
-  COMPOSER_FOOTER_KEYS.model,
-]);
+const WORK_BAR_CONNECTOR_MARKS = 3;
+const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
+const DESKTOP_APP_HREF = '/download';
+const WORK_BAR_ITEM_CLASS =
+  'flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
+const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
+const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 
-const COMPOSER_FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
 const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 // One shared empty array for "this conversation has no disabled connectors",
 // so the store selector returns a stable reference and cannot loop under
@@ -890,13 +886,20 @@ const ChatComposerNewComponent = ({
   const connectedConnectorOptions = useMemo(
     () =>
       Array.from(connectedConnectorIds)
-        .map((id) => ({
-          id,
-          label:
+        .map((id) => {
+          const known = CONNECTORS.find((connector) => connector.id === id);
+          const label =
             connectorSources[id] === 'custom'
               ? (connectorCustomNames[id] ?? id)
-              : (CONNECTORS.find((connector) => connector.id === id)?.name ?? id),
-        }))
+              : (known?.name ?? id);
+          return {
+            id,
+            label,
+            name: label,
+            iconBg: known?.iconBg ?? CONNECTOR_MARK_FALLBACK_BG,
+            iconText: label.slice(0, 1).toUpperCase(),
+          };
+        })
         .sort((a, b) => a.label.localeCompare(b.label)),
     [connectedConnectorIds, connectorSources, connectorCustomNames],
   );
@@ -1683,6 +1686,7 @@ const ChatComposerNewComponent = ({
   const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
   const pickerPlaceholder = canUseAgiWork ? 'Project or folder' : 'Project';
   const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? pickerPlaceholder;
+  const workScopeBarVisible = canUseAgiWork && workMode === 'agiwork';
   const filteredPickerProjects = projectPicker
     ? projectPicker.projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
@@ -3185,661 +3189,6 @@ const ChatComposerNewComponent = ({
               dictation.isActive ? 'hidden' : 'flex',
             )}
           >
-            {/* + Overflow Menu Button */}
-            <div className="relative shrink-0 chat-composer-leading-end" ref={overflowRef}>
-              <button
-                ref={overflowTriggerRef}
-                onClick={() => {
-                  const next = !showOverflowMenu;
-                  setShowOverflowMenu(next);
-                }}
-                disabled={composerDisabled}
-                className={cn(
-                  'relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors',
-                  hasOverflowActive
-                    ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  composerDisabled && 'cursor-not-allowed opacity-50',
-                )}
-                aria-label={
-                  hasOverflowActive
-                    ? `Add attachments and tools: ${overflowActiveCount} active`
-                    : 'Add attachments and tools'
-                }
-                aria-pressed={hasOverflowActive}
-                aria-expanded={showOverflowMenu}
-              >
-                <Plus className="h-5 w-5" />
-                {/* AUDIT-FIX CMP-13: the active state used to be a colour tint
-                  only (WCAG 1.4.1). The count badge repeats it as shape and
-                  text; the label above repeats it for screen readers. */}
-                {hasOverflowActive && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground"
-                  >
-                    {overflowActiveCount}
-                  </span>
-                )}
-              </button>
-
-              {/* + Menu Popover.
-
-                Portaled and viewport-clamped (see AnchoredComposerMenu): as an
-                `absolute bottom-full` child it was clipped by the chat shell's
-                overflow-hidden column, and at ordinary laptop viewport heights
-                the clip removed its FIRST row, "Add photos & files", leaving
-                the product with no reachable way to attach a file. */}
-              <AnchoredComposerMenu
-                anchorRef={overflowTriggerRef}
-                open={showOverflowMenu}
-                label="More composer options"
-                onRequestClose={() => setShowOverflowMenu(false)}
-                align="start"
-                contentRef={overflowMenuRef}
-                className="w-64 p-1.5"
-              >
-                {
-                  <>
-                    {/* 0. Work mode (Chat | AGI Work), shown in the menu ONLY
-                        below sm, where the home composer's second-row segmented
-                        toggle is hidden to free row width for the model
-                        selector. Keeps work-mode fully switchable on the narrow
-                        (mobile) composer instead of dropping the control. Home
-                        only: an existing chat's mode was set at creation. */}
-                    {emptyState && projectPicker && !imageMode && canUseAgiWork && (
-                      <div className="chat-composer-mode-in-menu sm:hidden">
-                        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-                          <span className="flex-1 text-left text-sm">Mode</span>
-                          <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
-                            {(['chat', 'agiwork'] as const).map((mode) => (
-                              <button
-                                key={mode}
-                                type="button"
-                                onClick={() => handleWorkModeChange(mode)}
-                                disabled={isTurnActive || composerDisabled}
-                                aria-pressed={workMode === mode}
-                                title={WORK_MODE_TITLES[mode]}
-                                className={cn(
-                                  'flex h-7 items-center rounded-full px-3 transition-colors',
-                                  workMode === mode
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground',
-                                  (isTurnActive || composerDisabled) &&
-                                    'cursor-not-allowed opacity-50',
-                                )}
-                              >
-                                {WORK_MODE_LABELS[mode]}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="my-1 border-t border-border/40" />
-                      </div>
-                    )}
-
-                    {/* 1. Add photos and files.
-
-                        AUDIT-FIX MEDIA-VIDEO-01: this row was available
-                        unconditionally in image/video mode, where the send path
-                        cannot carry an attachment and `clearComposerState()`
-                        destroyed it. Disabled with the reason on the row rather
-                        than hidden, so the affordance does not vanish without
-                        explanation the moment a media mode is entered. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        fileInputRef.current?.click();
-                        closeMenu();
-                      }}
-                      disabled={mediaModeActive}
-                      title={
-                        mediaModeActive
-                          ? `${mediaModeNoun} generation works from your prompt only. Leave ${mediaModeNoun.toLowerCase()} mode to attach files.`
-                          : undefined
-                      }
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                        mediaModeActive ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <Paperclip className="h-4 w-4 text-muted-foreground" />
-                      <span className="flex-1 text-left">Add photos &amp; files</span>
-                      {mediaModeActive && (
-                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Not used here
-                        </span>
-                      )}
-                    </button>
-
-                    {hostCanGenerateImage && (
-                      <>
-                        {/* 2. Create image.
-
-                        AUDIT-FIX CMP-11: this row had NO tier check in the
-                        composer while /api/media/image/generate rejects
-                        non-Pro with 403, the user composed a whole prompt and
-                        failed after a round trip, with `onUpgradeRequest`
-                        available and never called. Deep Research one row below
-                        was already gated correctly; this now matches it. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            closeMenu();
-                            if (!billingPolicyReady) {
-                              if (billingPolicyError) {
-                                setLocalNotice("Couldn't verify your plan. Retrying…");
-                                void refreshBillingPolicy();
-                              } else {
-                                setLocalNotice('Checking your plan…');
-                              }
-                              return;
-                            }
-                            if (mediaAvailabilityStatus !== 'ready') {
-                              setLocalNotice(
-                                mediaAvailabilityStatus === 'error'
-                                  ? (mediaAvailabilityError ??
-                                      'Could not check image model availability.')
-                                  : 'Checking image model availability…',
-                              );
-                              if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                              return;
-                            }
-                            if (availableImageModels.length === 0) {
-                              setLocalNotice('This deployment is not ready for image generation.');
-                              return;
-                            }
-                            if (!canUseImageGeneration) {
-                              onUpgradeRequest?.();
-                              return;
-                            }
-                            setImageMode(true);
-                            setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
-                          }}
-                          title={
-                            !billingPolicyReady
-                              ? billingPolicyError
-                                ? 'Your plan could not be verified. Click to retry.'
-                                : 'Checking your plan.'
-                              : mediaAvailabilityStatus === 'loading'
-                                ? 'Checking configured image providers.'
-                                : mediaAvailabilityStatus === 'error'
-                                  ? 'Image provider availability could not be checked. Click to retry.'
-                                  : availableImageModels.length === 0
-                                    ? 'This deployment is not ready for image generation.'
-                                    : !canUseImageGeneration
-                                      ? 'Image generation is available on Pro and above.'
-                                      : undefined
-                          }
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            imageMode && 'text-primary',
-                          )}
-                        >
-                          <ImagePlus
-                            className={cn(
-                              'h-4 w-4',
-                              imageMode ? 'text-primary' : 'text-muted-foreground',
-                            )}
-                          />
-                          <span className="flex-1 text-left">Create image</span>
-                          {!billingPolicyReady ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {billingPolicyError ? 'Retry' : 'Checking'}
-                            </span>
-                          ) : mediaAvailabilityStatus !== 'ready' ||
-                            availableImageModels.length === 0 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
-                            </span>
-                          ) : !canUseImageGeneration ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
-                              Upgrade
-                            </span>
-                          ) : null}
-                        </button>
-                      </>
-                    )}
-
-                    {hostCanGenerateVideo && (
-                      <>
-                        {/* 2b. Create video.
-
-                        /api/media/video/generate has been implemented and
-                        entitled (billing-catalog: max_15x + enterprise) all
-                        along, and MessageBubble already renders the in-flight
-                        shimmer and the finished player, but nothing in the
-                        product ever started one, so every state below the
-                        composer was unreachable. Same component, same gating
-                        idiom, same upgrade affordance as "Create image" one row
-                        above; only the capability key differs. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            closeMenu();
-                            if (!billingPolicyReady) {
-                              if (billingPolicyError) {
-                                setLocalNotice("Couldn't verify your plan. Retrying…");
-                                void refreshBillingPolicy();
-                              } else {
-                                setLocalNotice('Checking your plan…');
-                              }
-                              return;
-                            }
-                            if (mediaAvailabilityStatus !== 'ready') {
-                              setLocalNotice(
-                                mediaAvailabilityStatus === 'error'
-                                  ? (mediaAvailabilityError ??
-                                      'Could not check video model availability.')
-                                  : 'Checking video model availability…',
-                              );
-                              if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                              return;
-                            }
-                            if (availableVideoModels.length === 0) {
-                              setLocalNotice('This deployment is not ready for video generation.');
-                              return;
-                            }
-                            if (!canUseVideoGeneration) {
-                              onUpgradeRequest?.();
-                              return;
-                            }
-                            setVideoMode(true);
-                            setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
-                          }}
-                          title={
-                            !billingPolicyReady
-                              ? billingPolicyError
-                                ? 'Your plan could not be verified. Click to retry.'
-                                : 'Checking your plan.'
-                              : mediaAvailabilityStatus === 'loading'
-                                ? 'Checking configured video providers.'
-                                : mediaAvailabilityStatus === 'error'
-                                  ? 'Video provider availability could not be checked. Click to retry.'
-                                  : availableVideoModels.length === 0
-                                    ? 'This deployment is not ready for video generation.'
-                                    : !canUseVideoGeneration
-                                      ? 'Video generation is available on Max 15x and Enterprise.'
-                                      : undefined
-                          }
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            videoMode && 'text-primary',
-                          )}
-                        >
-                          <Video
-                            className={cn(
-                              'h-4 w-4',
-                              videoMode ? 'text-primary' : 'text-muted-foreground',
-                            )}
-                          />
-                          <span className="flex-1 text-left">Create video</span>
-                          {!billingPolicyReady ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {billingPolicyError ? 'Retry' : 'Checking'}
-                            </span>
-                          ) : mediaAvailabilityStatus !== 'ready' ||
-                            availableVideoModels.length === 0 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
-                            </span>
-                          ) : !canUseVideoGeneration ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
-                              Upgrade
-                            </span>
-                          ) : null}
-                        </button>
-                      </>
-                    )}
-
-                    {/* 3. Take a screenshot, desktop-only capability. Render-gated
-                        so it is ABSENT (not merely disabled) on web/mobile.
-
-                        AUDIT-FIX CMP-10: this rendered an icon and a label with
-                        NO onClick, it did nothing and did not even close the
-                        menu. The shared AttachmentMenu already implements the
-                        real behaviour (capture → attach as a File); this is now
-                        the same contract, driven by the same capability flag. */}
-                    {canTakeScreenshotCap && (
-                      <button
-                        type="button"
-                        disabled={isCapturingScreenshot}
-                        onClick={() => {
-                          void handleTakeScreenshot();
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          isCapturingScreenshot && 'cursor-not-allowed opacity-50',
-                        )}
-                      >
-                        <Camera className="h-4 w-4" />
-                        <span className="flex-1 text-left">
-                          {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* 4. Select working folder, desktop-only capability (local
-                        File System Access). Render-gated: ABSENT on web/mobile.
-                        The browser-API `canPickFolder` check is NOT the platform
-                        gate; it only disables when the desktop browser lacks the
-                        API. When the unified "Project or folder" picker is
-                        present, folder selection lives there ("Choose a
-                        different folder"), this legacy row only renders on
-                        surfaces without the picker so the control never
-                        appears twice. */}
-                    {!projectPicker && canUseWorkingDirectory && (
-                      <button
-                        type="button"
-                        disabled={!canPickFolder}
-                        title={
-                          canPickFolder
-                            ? folderName
-                              ? `Working folder: ${folderName}`
-                              : undefined
-                            : 'Folder access is not supported in this browser'
-                        }
-                        onClick={() => {
-                          pickFolder();
-                          closeMenu();
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          !canPickFolder && 'cursor-not-allowed opacity-50',
-                          canPickFolder && folderName
-                            ? 'text-amber-300 hover:bg-muted/60'
-                            : 'hover:bg-muted/60',
-                        )}
-                      >
-                        {folderName ? (
-                          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
-                        ) : (
-                          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="flex-1 text-left">
-                          {folderName ? folderName : 'Add working folder'}
-                        </span>
-                        {folderName && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearFolder();
-                            }}
-                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                            aria-label="Clear working folder"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                        {!canPickFolder && (
-                          <span className="text-[12px] text-muted-foreground">Not supported</span>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Divider */}
-                    <div className="my-1 border-t border-border/30" />
-
-                    {/* 5. Skills -- entry point that opens the settings modal at
-                        the Skills pane (founder directive 2026-07-10: the plus-menu
-                        holds ENTRIES, not inline lists, the lists live in the
-                        settings modal). Per-message skill selection stays available
-                        via the @mention dropdown in the textarea. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        closeMenu();
-                        openSettings('skills');
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                        selectedSkillName && 'text-primary',
-                      )}
-                    >
-                      <Sparkles
-                        className={cn(
-                          'h-4 w-4',
-                          selectedSkillName ? 'text-primary' : 'text-muted-foreground',
-                        )}
-                      />
-                      <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-
-                    {/* 6. Connectors -- expands into a submenu of the CONNECTED
-                        connectors, each with an enable/disable checkbox for
-                        THIS conversation (AUDIT-FIX WEB-CONNECTORS-PER-CONVO-01:
-                        the row used to only deep-link to Settings because
-                        per-conversation enablement had no runtime backing; the
-                        chat store and the completion request now carry it). The
-                        deep link to Settings stays, as the last row, for
-                        connect/disconnect and per-tool permissions. */}
-                    <button
-                      type="button"
-                      onClick={() => setConnectorsSubmenuOpen((open) => !open)}
-                      aria-expanded={connectorsSubmenuOpen}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    >
-                      {/* Simple connector icon */}
-                      <svg
-                        className="h-4 w-4 text-muted-foreground"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        aria-hidden="true"
-                      >
-                        <circle cx="3.5" cy="8" r="2" />
-                        <circle cx="12.5" cy="8" r="2" />
-                        <path d="M5.5 8h5" />
-                      </svg>
-                      <span className="flex-1 text-left">Connectors</span>
-                      <ChevronRight
-                        className={cn(
-                          'h-3.5 w-3.5 text-muted-foreground transition-transform',
-                          connectorsSubmenuOpen && 'rotate-90',
-                        )}
-                      />
-                    </button>
-                    {connectorsSubmenuOpen && (
-                      <div role="menu" aria-label="Connectors" className="space-y-0.5 pb-1">
-                        {connectedConnectorOptions.length === 0 ? (
-                          <p className="px-3 py-2 pl-8 text-[12px] text-muted-foreground">
-                            No connectors connected yet.
-                          </p>
-                        ) : (
-                          connectedConnectorOptions.map((connector) => (
-                            <ConnectorCheckboxRow
-                              key={connector.id}
-                              label={connector.label}
-                              checked={!disabledConnectorIds.includes(connector.id)}
-                              onToggle={() =>
-                                setConnectorEnabled(
-                                  connector.id,
-                                  disabledConnectorIds.includes(connector.id),
-                                )
-                              }
-                            />
-                          ))
-                        )}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            closeMenu();
-                            openSettings('connectors');
-                          }}
-                          className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
-                        >
-                          Manage in Settings
-                        </button>
-                      </div>
-                    )}
-
-                    {/* 7. Plugins -- entry point that opens the settings modal at
-                        the Plugins pane. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        closeMenu();
-                        openSettings('plugins');
-                      }}
-                      // Was the ONLY row in this menu carrying
-                      // `text-muted-foreground`, so a fully-wired entry
-                      // rendered greyed-out beside Skills and Connectors and
-                      // read as disabled. Matches its siblings now.
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    >
-                      <svg
-                        className="h-4 w-4"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        aria-hidden="true"
-                      >
-                        <rect x="2" y="2" width="5" height="5" rx="1" />
-                        <rect x="9" y="2" width="5" height="5" rx="1" />
-                        <rect x="2" y="9" width="5" height="5" rx="1" />
-                        <path d="M11.5 9v6M9 11.5h6" />
-                      </svg>
-                      <span className="flex-1 text-left">Plugins</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-
-                    {/* Divider */}
-                    <div className="my-1 border-t border-border/30" />
-
-                    {/* 7a. Standing web-search status. Search is ambient
-                        (model/deployment driven, not a manual toggle), so this
-                        is a status row, never a button pretending to control
-                        it; the on state also shows as a small marked glyph in
-                        the right cluster. */}
-                    {billingPolicyReady && (
-                      <div
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground"
-                        title={
-                          webSearchEnabled
-                            ? 'This model can search the web when the question needs current information.'
-                            : 'This model has no web-search path, so this turn answers from its training data.'
-                        }
-                      >
-                        <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="flex-1 text-left">Web search</span>
-                        <span className="text-[12px] font-medium">
-                          {webSearchEnabled ? 'On' : 'Off'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 8. Deep Research toggle */}
-                    <MenuToggleRow
-                      icon={Telescope}
-                      label="Deep Research"
-                      checked={researchEnabled}
-                      onToggle={() => {
-                        handleResearchToggle();
-                        closeMenu();
-                      }}
-                      disabled={disabled || isFreeTrial || !researchAvailableForModel}
-                      title={
-                        isFreeTrial
-                          ? 'Upgrade to use Deep Research'
-                          : !researchAvailableForModel
-                            ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
-                            : undefined
-                      }
-                    />
-
-                    {/* 8a. Code execution toggle */}
-                    <MenuToggleRow
-                      icon={Terminal}
-                      label="Run code"
-                      checked={codeExecutionEnabled}
-                      onToggle={() => {
-                        handleCodeExecutionToggle();
-                        closeMenu();
-                      }}
-                      disabled={disabled || !modelSupportsCodeExecution}
-                      title={
-                        !modelSupportsCodeExecution
-                          ? "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
-                          : undefined
-                      }
-                    />
-
-                    {/* 8b. Managed Office creation, server-owned DOCX/PPTX bytes,
-                        persisted through the same generated-file pipeline as sandbox output. */}
-                    <MenuToggleRow
-                      icon={FileText}
-                      label="Create Office files"
-                      checked={officeCreationEnabled}
-                      onToggle={() => {
-                        handleOfficeCreationToggle();
-                        closeMenu();
-                      }}
-                      disabled={disabled || !modelSupportsOfficeCreation}
-                      title={
-                        !modelSupportsOfficeCreation
-                          ? "Office file creation isn't available for this model."
-                          : undefined
-                      }
-                    />
-
-                    {/* 8b-1. Per-chat Memory toggle. On by default, mirroring the
-                        settings-level Memory switch which sets the account-wide
-                        default this overrides for one conversation only. */}
-                    <MenuToggleRow
-                      icon={Brain}
-                      label="Memory"
-                      checked={memoryCapabilityEnabled && memoryEnabledForChat}
-                      onToggle={() => {
-                        handleMemoryToggle();
-                        closeMenu();
-                      }}
-                      disabled={disabled || !memoryCapabilityEnabled}
-                      title={
-                        !memoryCapabilityEnabled
-                          ? 'Turn on Memory in Settings > Capabilities to use it here.'
-                          : undefined
-                      }
-                    />
-
-                    {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
-                        render-gated on the host actually providing a persistence
-                        path, an unbacked privacy switch is worse than none. */}
-                    {activeConversationId && onSetTemporaryChat && (
-                      <MenuToggleRow
-                        icon={EyeOff}
-                        label={isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'}
-                        checked={isIncognito}
-                        onToggle={() => {
-                          void handleIncognitoToggle();
-                          closeMenu();
-                        }}
-                        disabled={!canToggleIncognito}
-                      />
-                    )}
-
-                    {/* 9. Send route (managed cloud state); moved out of the
-                        footer entirely (target: one quiet disclaimer+model
-                        line), so this is now its sole, every-width home. It
-                        is last so the menu's initial focus still lands on an
-                        action, and it is the card variant because the compact
-                        one opens an `absolute bottom-full` popover that this
-                        panel's own `overflow-y-auto` would clip. */}
-                    {sendPreviewPresentation && (
-                      <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
-                        <div className="my-1 border-t border-border/40" />
-                        <SendPreview presentation={sendPreviewPresentation} variant="card" />
-                      </div>
-                    )}
-                  </>
-                }
-              </AnchoredComposerMenu>
-            </div>
-
             {/* Textbox, grows to a cap then scrolls internally; the card
                 itself never changes width while it grows. */}
             <div
@@ -3901,271 +3250,953 @@ const ChatComposerNewComponent = ({
               )}
             </div>
 
-            {/* Standing web-search indicator, a small marked glyph, not a
+            {/* `flex-nowrap` is load-bearing: the field owns the first line, so
+                these controls must share one line rather than wrapping a third
+                row onto a phone. `chat-composer-leading-end` carries the auto
+                right margin that pushes the rest to the right edge. */}
+            <div className="chat-composer-controls flex w-full min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2">
+              <div className="chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2">
+                {/* + Overflow Menu Button */}
+                <div className="relative shrink-0" ref={overflowRef}>
+                  <button
+                    ref={overflowTriggerRef}
+                    onClick={() => {
+                      const next = !showOverflowMenu;
+                      setShowOverflowMenu(next);
+                    }}
+                    disabled={composerDisabled}
+                    className={cn(
+                      'relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors',
+                      hasOverflowActive
+                        ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
+                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                      composerDisabled && 'cursor-not-allowed opacity-50',
+                    )}
+                    aria-label={
+                      hasOverflowActive
+                        ? `Add attachments and tools: ${overflowActiveCount} active`
+                        : 'Add attachments and tools'
+                    }
+                    aria-pressed={hasOverflowActive}
+                    aria-expanded={showOverflowMenu}
+                  >
+                    <Plus className="h-5 w-5" />
+                    {/* AUDIT-FIX CMP-13: the active state used to be a colour tint
+                  only (WCAG 1.4.1). The count badge repeats it as shape and
+                  text; the label above repeats it for screen readers. */}
+                    {hasOverflowActive && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground"
+                      >
+                        {overflowActiveCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* + Menu Popover.
+
+                Portaled and viewport-clamped (see AnchoredComposerMenu): as an
+                `absolute bottom-full` child it was clipped by the chat shell's
+                overflow-hidden column, and at ordinary laptop viewport heights
+                the clip removed its FIRST row, "Add photos & files", leaving
+                the product with no reachable way to attach a file. */}
+                  <AnchoredComposerMenu
+                    anchorRef={overflowTriggerRef}
+                    open={showOverflowMenu}
+                    label="More composer options"
+                    onRequestClose={() => setShowOverflowMenu(false)}
+                    align="start"
+                    contentRef={overflowMenuRef}
+                    className="w-64 p-1.5"
+                  >
+                    {
+                      <>
+                        {/* 1. Add photos and files.
+
+                        AUDIT-FIX MEDIA-VIDEO-01: this row was available
+                        unconditionally in image/video mode, where the send path
+                        cannot carry an attachment and `clearComposerState()`
+                        destroyed it. Disabled with the reason on the row rather
+                        than hidden, so the affordance does not vanish without
+                        explanation the moment a media mode is entered. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fileInputRef.current?.click();
+                            closeMenu();
+                          }}
+                          disabled={mediaModeActive}
+                          title={
+                            mediaModeActive
+                              ? `${mediaModeNoun} generation works from your prompt only. Leave ${mediaModeNoun.toLowerCase()} mode to attach files.`
+                              : undefined
+                          }
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                            mediaModeActive ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <Paperclip className="h-4 w-4 text-muted-foreground" />
+                          <span className="flex-1 text-left">Add photos &amp; files</span>
+                          {mediaModeActive && (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Not used here
+                            </span>
+                          )}
+                        </button>
+
+                        {hostCanGenerateImage && (
+                          <>
+                            {/* 2. Create image.
+
+                        AUDIT-FIX CMP-11: this row had NO tier check in the
+                        composer while /api/media/image/generate rejects
+                        non-Pro with 403, the user composed a whole prompt and
+                        failed after a round trip, with `onUpgradeRequest`
+                        available and never called. Deep Research one row below
+                        was already gated correctly; this now matches it. */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeMenu();
+                                if (!billingPolicyReady) {
+                                  if (billingPolicyError) {
+                                    setLocalNotice("Couldn't verify your plan. Retrying…");
+                                    void refreshBillingPolicy();
+                                  } else {
+                                    setLocalNotice('Checking your plan…');
+                                  }
+                                  return;
+                                }
+                                if (mediaAvailabilityStatus !== 'ready') {
+                                  setLocalNotice(
+                                    mediaAvailabilityStatus === 'error'
+                                      ? (mediaAvailabilityError ??
+                                          'Could not check image model availability.')
+                                      : 'Checking image model availability…',
+                                  );
+                                  if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                                  return;
+                                }
+                                if (availableImageModels.length === 0) {
+                                  setLocalNotice(
+                                    'This deployment is not ready for image generation.',
+                                  );
+                                  return;
+                                }
+                                if (!canUseImageGeneration) {
+                                  onUpgradeRequest?.();
+                                  return;
+                                }
+                                setImageMode(true);
+                                setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+                              }}
+                              title={
+                                !billingPolicyReady
+                                  ? billingPolicyError
+                                    ? 'Your plan could not be verified. Click to retry.'
+                                    : 'Checking your plan.'
+                                  : mediaAvailabilityStatus === 'loading'
+                                    ? 'Checking configured image providers.'
+                                    : mediaAvailabilityStatus === 'error'
+                                      ? 'Image provider availability could not be checked. Click to retry.'
+                                      : availableImageModels.length === 0
+                                        ? 'This deployment is not ready for image generation.'
+                                        : !canUseImageGeneration
+                                          ? 'Image generation is available on Pro and above.'
+                                          : undefined
+                              }
+                              className={cn(
+                                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                                imageMode && 'text-primary',
+                              )}
+                            >
+                              <ImagePlus
+                                className={cn(
+                                  'h-4 w-4',
+                                  imageMode ? 'text-primary' : 'text-muted-foreground',
+                                )}
+                              />
+                              <span className="flex-1 text-left">Create image</span>
+                              {!billingPolicyReady ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {billingPolicyError ? 'Retry' : 'Checking'}
+                                </span>
+                              ) : mediaAvailabilityStatus !== 'ready' ||
+                                availableImageModels.length === 0 ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {mediaAvailabilityStatus === 'loading'
+                                    ? 'Checking'
+                                    : 'Unavailable'}
+                                </span>
+                              ) : !canUseImageGeneration ? (
+                                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
+                                  Upgrade
+                                </span>
+                              ) : null}
+                            </button>
+                          </>
+                        )}
+
+                        {hostCanGenerateVideo && (
+                          <>
+                            {/* 2b. Create video.
+
+                        /api/media/video/generate has been implemented and
+                        entitled (billing-catalog: max_15x + enterprise) all
+                        along, and MessageBubble already renders the in-flight
+                        shimmer and the finished player, but nothing in the
+                        product ever started one, so every state below the
+                        composer was unreachable. Same component, same gating
+                        idiom, same upgrade affordance as "Create image" one row
+                        above; only the capability key differs. */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeMenu();
+                                if (!billingPolicyReady) {
+                                  if (billingPolicyError) {
+                                    setLocalNotice("Couldn't verify your plan. Retrying…");
+                                    void refreshBillingPolicy();
+                                  } else {
+                                    setLocalNotice('Checking your plan…');
+                                  }
+                                  return;
+                                }
+                                if (mediaAvailabilityStatus !== 'ready') {
+                                  setLocalNotice(
+                                    mediaAvailabilityStatus === 'error'
+                                      ? (mediaAvailabilityError ??
+                                          'Could not check video model availability.')
+                                      : 'Checking video model availability…',
+                                  );
+                                  if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                                  return;
+                                }
+                                if (availableVideoModels.length === 0) {
+                                  setLocalNotice(
+                                    'This deployment is not ready for video generation.',
+                                  );
+                                  return;
+                                }
+                                if (!canUseVideoGeneration) {
+                                  onUpgradeRequest?.();
+                                  return;
+                                }
+                                setVideoMode(true);
+                                setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+                              }}
+                              title={
+                                !billingPolicyReady
+                                  ? billingPolicyError
+                                    ? 'Your plan could not be verified. Click to retry.'
+                                    : 'Checking your plan.'
+                                  : mediaAvailabilityStatus === 'loading'
+                                    ? 'Checking configured video providers.'
+                                    : mediaAvailabilityStatus === 'error'
+                                      ? 'Video provider availability could not be checked. Click to retry.'
+                                      : availableVideoModels.length === 0
+                                        ? 'This deployment is not ready for video generation.'
+                                        : !canUseVideoGeneration
+                                          ? 'Video generation is available on Max 15x and Enterprise.'
+                                          : undefined
+                              }
+                              className={cn(
+                                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                                videoMode && 'text-primary',
+                              )}
+                            >
+                              <Video
+                                className={cn(
+                                  'h-4 w-4',
+                                  videoMode ? 'text-primary' : 'text-muted-foreground',
+                                )}
+                              />
+                              <span className="flex-1 text-left">Create video</span>
+                              {!billingPolicyReady ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {billingPolicyError ? 'Retry' : 'Checking'}
+                                </span>
+                              ) : mediaAvailabilityStatus !== 'ready' ||
+                                availableVideoModels.length === 0 ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {mediaAvailabilityStatus === 'loading'
+                                    ? 'Checking'
+                                    : 'Unavailable'}
+                                </span>
+                              ) : !canUseVideoGeneration ? (
+                                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
+                                  Upgrade
+                                </span>
+                              ) : null}
+                            </button>
+                          </>
+                        )}
+
+                        {/* 3. Take a screenshot, desktop-only capability. Render-gated
+                        so it is ABSENT (not merely disabled) on web/mobile.
+
+                        AUDIT-FIX CMP-10: this rendered an icon and a label with
+                        NO onClick, it did nothing and did not even close the
+                        menu. The shared AttachmentMenu already implements the
+                        real behaviour (capture → attach as a File); this is now
+                        the same contract, driven by the same capability flag. */}
+                        {canTakeScreenshotCap && (
+                          <button
+                            type="button"
+                            disabled={isCapturingScreenshot}
+                            onClick={() => {
+                              void handleTakeScreenshot();
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                              isCapturingScreenshot && 'cursor-not-allowed opacity-50',
+                            )}
+                          >
+                            <Camera className="h-4 w-4" />
+                            <span className="flex-1 text-left">
+                              {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
+                            </span>
+                          </button>
+                        )}
+
+                        {/* 4. Select working folder, desktop-only capability (local
+                        File System Access). Render-gated: ABSENT on web/mobile.
+                        The browser-API `canPickFolder` check is NOT the platform
+                        gate; it only disables when the desktop browser lacks the
+                        API. When the unified "Project or folder" picker is
+                        present, folder selection lives there ("Choose a
+                        different folder"), this legacy row only renders on
+                        surfaces without the picker so the control never
+                        appears twice. */}
+                        {!projectPicker && canUseWorkingDirectory && (
+                          <button
+                            type="button"
+                            disabled={!canPickFolder}
+                            title={
+                              canPickFolder
+                                ? folderName
+                                  ? `Working folder: ${folderName}`
+                                  : undefined
+                                : 'Folder access is not supported in this browser'
+                            }
+                            onClick={() => {
+                              pickFolder();
+                              closeMenu();
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                              !canPickFolder && 'cursor-not-allowed opacity-50',
+                              canPickFolder && folderName
+                                ? 'text-amber-300 hover:bg-muted/60'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            {folderName ? (
+                              <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+                            ) : (
+                              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className="flex-1 text-left">
+                              {folderName ? folderName : 'Add working folder'}
+                            </span>
+                            {folderName && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearFolder();
+                                }}
+                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                aria-label="Clear working folder"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                            {!canPickFolder && (
+                              <span className="text-[12px] text-muted-foreground">
+                                Not supported
+                              </span>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Divider */}
+                        <div className="my-1 border-t border-border/30" />
+
+                        {/* 5. Skills -- entry point that opens the settings modal at
+                        the Skills pane (founder directive 2026-07-10: the plus-menu
+                        holds ENTRIES, not inline lists, the lists live in the
+                        settings modal). Per-message skill selection stays available
+                        via the @mention dropdown in the textarea. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeMenu();
+                            openSettings('skills');
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                            selectedSkillName && 'text-primary',
+                          )}
+                        >
+                          <Sparkles
+                            className={cn(
+                              'h-4 w-4',
+                              selectedSkillName ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          />
+                          <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+
+                        {/* 6. Connectors -- expands into a submenu of the CONNECTED
+                        connectors, each with an enable/disable checkbox for
+                        THIS conversation (AUDIT-FIX WEB-CONNECTORS-PER-CONVO-01:
+                        the row used to only deep-link to Settings because
+                        per-conversation enablement had no runtime backing; the
+                        chat store and the completion request now carry it). The
+                        deep link to Settings stays, as the last row, for
+                        connect/disconnect and per-tool permissions. */}
+                        <button
+                          type="button"
+                          onClick={() => setConnectorsSubmenuOpen((open) => !open)}
+                          aria-expanded={connectorsSubmenuOpen}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                        >
+                          {/* Simple connector icon */}
+                          <svg
+                            className="h-4 w-4 text-muted-foreground"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            aria-hidden="true"
+                          >
+                            <circle cx="3.5" cy="8" r="2" />
+                            <circle cx="12.5" cy="8" r="2" />
+                            <path d="M5.5 8h5" />
+                          </svg>
+                          <span className="flex-1 text-left">Connectors</span>
+                          <ChevronRight
+                            className={cn(
+                              'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                              connectorsSubmenuOpen && 'rotate-90',
+                            )}
+                          />
+                        </button>
+                        {connectorsSubmenuOpen && (
+                          <div role="menu" aria-label="Connectors" className="space-y-0.5 pb-1">
+                            {connectedConnectorOptions.length === 0 ? (
+                              <p className="px-3 py-2 pl-8 text-[12px] text-muted-foreground">
+                                No connectors connected yet.
+                              </p>
+                            ) : (
+                              connectedConnectorOptions.map((connector) => (
+                                <ConnectorCheckboxRow
+                                  key={connector.id}
+                                  label={connector.label}
+                                  checked={!disabledConnectorIds.includes(connector.id)}
+                                  onToggle={() =>
+                                    setConnectorEnabled(
+                                      connector.id,
+                                      disabledConnectorIds.includes(connector.id),
+                                    )
+                                  }
+                                />
+                              ))
+                            )}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                closeMenu();
+                                openSettings('connectors');
+                              }}
+                              className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
+                            >
+                              Manage in Settings
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 7. Plugins -- entry point that opens the settings modal at
+                        the Plugins pane. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeMenu();
+                            openSettings('plugins');
+                          }}
+                          // Was the ONLY row in this menu carrying
+                          // `text-muted-foreground`, so a fully-wired entry
+                          // rendered greyed-out beside Skills and Connectors and
+                          // read as disabled. Matches its siblings now.
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            aria-hidden="true"
+                          >
+                            <rect x="2" y="2" width="5" height="5" rx="1" />
+                            <rect x="9" y="2" width="5" height="5" rx="1" />
+                            <rect x="2" y="9" width="5" height="5" rx="1" />
+                            <path d="M11.5 9v6M9 11.5h6" />
+                          </svg>
+                          <span className="flex-1 text-left">Plugins</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+
+                        {/* Divider */}
+                        <div className="my-1 border-t border-border/30" />
+
+                        {/* 7a. Standing web-search status. Search is ambient
+                        (model/deployment driven, not a manual toggle), so this
+                        is a status row, never a button pretending to control
+                        it; the on state also shows as a small marked glyph in
+                        the right cluster. */}
+                        {billingPolicyReady && (
+                          <div
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground"
+                            title={
+                              webSearchEnabled
+                                ? 'This model can search the web when the question needs current information.'
+                                : 'This model has no web-search path, so this turn answers from its training data.'
+                            }
+                          >
+                            <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                            <span className="flex-1 text-left">Web search</span>
+                            <span className="text-[12px] font-medium">
+                              {webSearchEnabled ? 'On' : 'Off'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 7a. AGI Work scope intake. The attached bar took the
+                        strip its collapsed pill used to sit in, so this is now
+                        the only way to open the panel. */}
+                        {canUseAgiWork && workMode === 'agiwork' && !mediaModeActive && (
+                          <MenuToggleRow
+                            icon={ListChecks}
+                            label={tAgiWork('agiWork.compose.scopeAdd')}
+                            checked={agiWorkFieldsOpen}
+                            onToggle={() => {
+                              setAgiWorkFieldsOpen((open) => !open);
+                              closeMenu();
+                            }}
+                            disabled={isTurnActive || composerDisabled}
+                          />
+                        )}
+
+                        {/* 8. Deep Research toggle */}
+                        <MenuToggleRow
+                          icon={Telescope}
+                          label="Deep Research"
+                          checked={researchEnabled}
+                          onToggle={() => {
+                            handleResearchToggle();
+                            closeMenu();
+                          }}
+                          disabled={disabled || isFreeTrial || !researchAvailableForModel}
+                          title={
+                            isFreeTrial
+                              ? 'Upgrade to use Deep Research'
+                              : !researchAvailableForModel
+                                ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
+                                : undefined
+                          }
+                        />
+
+                        {/* 8a. Code execution toggle */}
+                        <MenuToggleRow
+                          icon={Terminal}
+                          label="Run code"
+                          checked={codeExecutionEnabled}
+                          onToggle={() => {
+                            handleCodeExecutionToggle();
+                            closeMenu();
+                          }}
+                          disabled={disabled || !modelSupportsCodeExecution}
+                          title={
+                            !modelSupportsCodeExecution
+                              ? "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+                              : undefined
+                          }
+                        />
+
+                        {/* 8b. Managed Office creation, server-owned DOCX/PPTX bytes,
+                        persisted through the same generated-file pipeline as sandbox output. */}
+                        <MenuToggleRow
+                          icon={FileText}
+                          label="Create Office files"
+                          checked={officeCreationEnabled}
+                          onToggle={() => {
+                            handleOfficeCreationToggle();
+                            closeMenu();
+                          }}
+                          disabled={disabled || !modelSupportsOfficeCreation}
+                          title={
+                            !modelSupportsOfficeCreation
+                              ? "Office file creation isn't available for this model."
+                              : undefined
+                          }
+                        />
+
+                        {/* 8b-1. Per-chat Memory toggle. On by default, mirroring the
+                        settings-level Memory switch which sets the account-wide
+                        default this overrides for one conversation only. */}
+                        <MenuToggleRow
+                          icon={Brain}
+                          label="Memory"
+                          checked={memoryCapabilityEnabled && memoryEnabledForChat}
+                          onToggle={() => {
+                            handleMemoryToggle();
+                            closeMenu();
+                          }}
+                          disabled={disabled || !memoryCapabilityEnabled}
+                          title={
+                            !memoryCapabilityEnabled
+                              ? 'Turn on Memory in Settings > Capabilities to use it here.'
+                              : undefined
+                          }
+                        />
+
+                        {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
+                        render-gated on the host actually providing a persistence
+                        path, an unbacked privacy switch is worse than none. */}
+                        {activeConversationId && onSetTemporaryChat && (
+                          <MenuToggleRow
+                            icon={EyeOff}
+                            label={
+                              isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'
+                            }
+                            checked={isIncognito}
+                            onToggle={() => {
+                              void handleIncognitoToggle();
+                              closeMenu();
+                            }}
+                            disabled={!canToggleIncognito}
+                          />
+                        )}
+
+                        {/* 9. Send route (managed cloud state); moved out of the
+                        footer entirely (target: one quiet disclaimer+model
+                        line), so this is now its sole, every-width home. It
+                        is last so the menu's initial focus still lands on an
+                        action, and it is the card variant because the compact
+                        one opens an `absolute bottom-full` popover that this
+                        panel's own `overflow-y-auto` would clip. */}
+                        {sendPreviewPresentation && (
+                          <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
+                            <div className="my-1 border-t border-border/40" />
+                            <SendPreview presentation={sendPreviewPresentation} variant="card" />
+                          </div>
+                        )}
+                      </>
+                    }
+                  </AnchoredComposerMenu>
+                </div>
+
+                {/* Chat | AGI Work sits on the face at every width and in an
+                existing chat, so the "+" menu carries no Mode row. */}
+                {projectPicker && canUseAgiWork && !imageMode && !videoMode && (
+                  <div
+                    data-testid="composer-work-mode"
+                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium"
+                  >
+                    {(['chat', 'agiwork'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => handleWorkModeChange(mode)}
+                        disabled={isTurnActive || composerDisabled}
+                        aria-pressed={workMode === mode}
+                        title={WORK_MODE_TITLES[mode]}
+                        className={cn(
+                          'flex h-6 items-center rounded-full px-1.5 transition-colors',
+                          workMode === mode
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                          (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
+                        )}
+                      >
+                        {WORK_MODE_LABELS[mode]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Standing web-search indicator, a small marked glyph, not a
                 control: search is ambient (model/deployment driven), so this
                 is text/status, never a button pretending to toggle it. Full
                 reachability lives in the "+" menu's status row below. */}
-            {billingPolicyReady && (
-              <span
-                data-testid="web-search-indicator"
-                data-active={webSearchEnabled ? 'true' : 'false'}
-                title={
-                  webSearchEnabled
-                    ? 'This model can search the web when the question needs current information.'
-                    : 'This model has no web-search path, so this turn answers from its training data.'
-                }
-                className={cn(
-                  'inline-flex h-2 w-2 shrink-0 items-center justify-center self-center rounded-full',
-                  webSearchEnabled ? 'bg-[var(--chat-accent-primary)]' : 'bg-transparent',
-                )}
-              >
-                <span className="sr-only">
-                  {webSearchEnabled ? 'Web search on' : 'Web search off'}
+              {billingPolicyReady && (
+                <span
+                  data-testid="web-search-indicator"
+                  data-active={webSearchEnabled ? 'true' : 'false'}
+                  title={
+                    webSearchEnabled
+                      ? 'This model can search the web when the question needs current information.'
+                      : 'This model has no web-search path, so this turn answers from its training data.'
+                  }
+                  className={cn(
+                    'inline-flex h-2 w-2 shrink-0 items-center justify-center self-center rounded-full',
+                    webSearchEnabled ? 'bg-[var(--chat-accent-primary)]' : 'bg-transparent',
+                  )}
+                >
+                  <span className="sr-only">
+                    {webSearchEnabled ? 'Web search on' : 'Web search off'}
+                  </span>
                 </span>
-              </span>
-            )}
+              )}
 
-            {/* Per-chat Memory-off marker, same treatment as the web-search
+              {/* Per-chat Memory-off marker, same treatment as the web-search
                 glyph: visible without opening the menu, silent when memory is
                 on (the common case). */}
-            {memoryCapabilityEnabled && !memoryEnabledForChat && (
-              <span
-                data-testid="memory-indicator"
-                data-active="false"
-                title="Memory is off for this conversation. This turn neither reads nor saves account memories."
-                className="inline-flex shrink-0 items-center self-center text-[var(--chat-text-muted)]"
-              >
-                <Brain className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="sr-only">Memory off</span>
-              </span>
-            )}
-
-            {primaryOverflowActive && PrimaryOverflowIcon && (
-              <div
-                role="status"
-                aria-label={`Active options: ${overflowActiveOptions
-                  .map((option) => option.label)
-                  .join(', ')}`}
-                title={overflowActiveOptions.map((option) => option.label).join(', ')}
-                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[12px] font-medium text-[var(--chat-accent-primary-text)]"
-              >
-                <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden max-w-24 truncate sm:inline">
-                  {primaryOverflowActive.label}
-                </span>
-                {overflowActiveCount > 1 && (
-                  <span aria-hidden="true" className="shrink-0 tabular-nums">
-                    +{overflowActiveCount - 1}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Image-mode pills (only when the user is generating an image). */}
-            {imageMode && (
-              <div className={cn('flex shrink-0 items-center gap-1')}>
-                {/* Image pill: click to exit image mode */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageMode(false);
-                    setImageAspectRatio('auto');
-                    setImageModelId(availableImageModels[0]?.id ?? '');
-                  }}
-                  className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
-                  aria-label="Exit image generation mode"
-                  title="Click to exit image generation mode"
+              {memoryCapabilityEnabled && !memoryEnabledForChat && (
+                <span
+                  data-testid="memory-indicator"
+                  data-active="false"
+                  title="Memory is off for this conversation. This turn neither reads nor saves account memories."
+                  className="inline-flex shrink-0 items-center self-center text-[var(--chat-text-muted)]"
                 >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  <span>Image</span>
-                  <X className="h-3 w-3 opacity-60" />
-                </button>
+                  <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="sr-only">Memory off</span>
+                </span>
+              )}
 
-                {/* Aspect ratio selector */}
-                <div className="relative">
+              {primaryOverflowActive && PrimaryOverflowIcon && (
+                <div
+                  role="status"
+                  aria-label={`Active options: ${overflowActiveOptions
+                    .map((option) => option.label)
+                    .join(', ')}`}
+                  title={overflowActiveOptions.map((option) => option.label).join(', ')}
+                  className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[12px] font-medium text-[var(--chat-accent-primary-text)]"
+                >
+                  <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden max-w-24 truncate sm:inline">
+                    {primaryOverflowActive.label}
+                  </span>
+                  {overflowActiveCount > 1 && (
+                    <span aria-hidden="true" className="shrink-0 tabular-nums">
+                      +{overflowActiveCount - 1}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Image-mode pills (only when the user is generating an image). */}
+              {imageMode && (
+                <div className={cn('flex shrink-0 items-center gap-1')}>
+                  {/* Image pill: click to exit image mode */}
                   <button
-                    ref={imageAspectTriggerRef}
                     type="button"
                     onClick={() => {
-                      setShowImageAspectMenu((p) => !p);
-                      setShowImageModelMenu(false);
+                      setImageMode(false);
+                      setImageAspectRatio('auto');
+                      setImageModelId(availableImageModels[0]?.id ?? '');
                     }}
-                    className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                    aria-label="Select aspect ratio"
+                    className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                    aria-label="Exit image generation mode"
+                    title="Click to exit image generation mode"
                   >
-                    {imageAspectOptions.find((option) => option.id === effectiveImageAspectRatio)
-                      ?.label ?? 'Auto'}
-                    <ChevronDown className="h-3 w-3" />
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span>Image</span>
+                    <X className="h-3 w-3 opacity-60" />
                   </button>
-                  <AnchoredComposerMenu
-                    anchorRef={imageAspectTriggerRef}
-                    open={showImageAspectMenu}
-                    label="Image aspect ratio"
-                    onRequestClose={() => setShowImageAspectMenu(false)}
-                    className="w-44 p-1"
-                  >
-                    {imageAspectOptions.map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                          setImageAspectRatio(opt.id);
-                          setShowImageAspectMenu(false);
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                          effectiveImageAspectRatio === opt.id
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-muted/60',
-                        )}
-                      >
-                        <span className="flex-1 text-left">{opt.label}</span>
-                        {effectiveImageAspectRatio === opt.id && (
-                          <Check className="h-3 w-3 shrink-0 text-primary" />
-                        )}
-                      </button>
-                    ))}
-                  </AnchoredComposerMenu>
-                </div>
-              </div>
-            )}
 
-            {/* Video-mode controls. Aspect/quality come from the selected
-              model's catalog output tuples; restricted qualities carry their
-              required duration on send. Exit resets the whole media choice. */}
-            {videoMode && (
-              <div className={cn('flex shrink-0 items-center gap-1')}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVideoMode(false);
-                    setVideoModelId(availableVideoModels[0]?.id ?? '');
-                    setVideoAspectRatio('16:9');
-                    setVideoResolution('720p');
-                    setShowVideoAspectMenu(false);
-                    setShowVideoQualityMenu(false);
-                  }}
-                  className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
-                  aria-label="Exit video generation mode"
-                  title="Click to exit video generation mode"
-                >
-                  <Video className="h-3.5 w-3.5" />
-                  <span>Video</span>
-                  <X className="h-3 w-3 opacity-60" />
-                </button>
-
-                {/* Aspect ratio. Options come from the model's published
-                    `videoGeneration.outputSizes`, so a model that offers only
-                    landscape shows one entry rather than a lie. */}
-                {videoAspectOptions.length > 1 && (
+                  {/* Aspect ratio selector */}
                   <div className="relative">
                     <button
-                      ref={videoAspectTriggerRef}
+                      ref={imageAspectTriggerRef}
                       type="button"
                       onClick={() => {
-                        setShowVideoAspectMenu((p) => !p);
-                        setShowVideoQualityMenu(false);
-                        setShowVideoModelMenu(false);
+                        setShowImageAspectMenu((p) => !p);
+                        setShowImageModelMenu(false);
                       }}
                       className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                      aria-label="Select video aspect ratio"
+                      aria-label="Select aspect ratio"
                     >
-                      {effectiveVideoAspectRatio}
+                      {imageAspectOptions.find((option) => option.id === effectiveImageAspectRatio)
+                        ?.label ?? 'Auto'}
                       <ChevronDown className="h-3 w-3" />
                     </button>
                     <AnchoredComposerMenu
-                      anchorRef={videoAspectTriggerRef}
-                      open={showVideoAspectMenu}
-                      label="Video aspect ratio"
-                      onRequestClose={() => setShowVideoAspectMenu(false)}
+                      anchorRef={imageAspectTriggerRef}
+                      open={showImageAspectMenu}
+                      label="Image aspect ratio"
+                      onRequestClose={() => setShowImageAspectMenu(false)}
                       className="w-44 p-1"
                     >
-                      {videoAspectOptions.map((opt) => (
+                      {imageAspectOptions.map((opt) => (
                         <button
                           key={opt.id}
                           type="button"
                           onClick={() => {
-                            setVideoAspectRatio(opt.id);
-                            setShowVideoAspectMenu(false);
+                            setImageAspectRatio(opt.id);
+                            setShowImageAspectMenu(false);
                           }}
                           className={cn(
                             'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                            effectiveVideoAspectRatio === opt.id
+                            effectiveImageAspectRatio === opt.id
                               ? 'bg-primary/10 text-primary'
                               : 'hover:bg-muted/60',
                           )}
                         >
                           <span className="flex-1 text-left">{opt.label}</span>
-                          {effectiveVideoAspectRatio === opt.id && (
+                          {effectiveImageAspectRatio === opt.id && (
                             <Check className="h-3 w-3 shrink-0 text-primary" />
                           )}
                         </button>
                       ))}
                     </AnchoredComposerMenu>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Quality. Scoped to the chosen aspect because the two are not
+              {/* Video-mode controls. Aspect/quality come from the selected
+              model's catalog output tuples; restricted qualities carry their
+              required duration on send. Exit resets the whole media choice. */}
+              {videoMode && (
+                <div className={cn('flex shrink-0 items-center gap-1')}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoMode(false);
+                      setVideoModelId(availableVideoModels[0]?.id ?? '');
+                      setVideoAspectRatio('16:9');
+                      setVideoResolution('720p');
+                      setShowVideoAspectMenu(false);
+                      setShowVideoQualityMenu(false);
+                    }}
+                    className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                    aria-label="Exit video generation mode"
+                    title="Click to exit video generation mode"
+                  >
+                    <Video className="h-3.5 w-3.5" />
+                    <span>Video</span>
+                    <X className="h-3 w-3 opacity-60" />
+                  </button>
+
+                  {/* Aspect ratio. Options come from the model's published
+                    `videoGeneration.outputSizes`, so a model that offers only
+                    landscape shows one entry rather than a lie. */}
+                  {videoAspectOptions.length > 1 && (
+                    <div className="relative">
+                      <button
+                        ref={videoAspectTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowVideoAspectMenu((p) => !p);
+                          setShowVideoQualityMenu(false);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="Select video aspect ratio"
+                      >
+                        {effectiveVideoAspectRatio}
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={videoAspectTriggerRef}
+                        open={showVideoAspectMenu}
+                        label="Video aspect ratio"
+                        onRequestClose={() => setShowVideoAspectMenu(false)}
+                        className="w-44 p-1"
+                      >
+                        {videoAspectOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setVideoAspectRatio(opt.id);
+                              setShowVideoAspectMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoAspectRatio === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {effectiveVideoAspectRatio === opt.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+
+                  {/* Quality. Scoped to the chosen aspect because the two are not
                     independent, a resolution can exist in landscape and not in
                     portrait. Durations a quality restricts are surfaced inline
                     so the 8s-only rule is visible BEFORE a failed send. */}
-                {videoQualityOptions.length > 1 && (
-                  <div className="relative">
-                    <button
-                      ref={videoQualityTriggerRef}
-                      type="button"
-                      onClick={() => {
-                        setShowVideoQualityMenu((p) => !p);
-                        setShowVideoAspectMenu(false);
-                        setShowVideoModelMenu(false);
-                      }}
-                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                      aria-label="Select video quality"
-                    >
-                      {videoQualityOptions.find((o) => o.id === effectiveVideoResolution)?.label ??
-                        effectiveVideoResolution}
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                    <AnchoredComposerMenu
-                      anchorRef={videoQualityTriggerRef}
-                      open={showVideoQualityMenu}
-                      label="Video quality"
-                      onRequestClose={() => setShowVideoQualityMenu(false)}
-                      className="w-52 p-1"
-                    >
-                      {videoQualityOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => {
-                            setVideoResolution(opt.id);
-                            setShowVideoQualityMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                            effectiveVideoResolution === opt.id
-                              ? 'bg-primary/10 text-primary'
-                              : 'hover:bg-muted/60',
-                          )}
-                        >
-                          <span className="flex-1 text-left">{opt.label}</span>
-                          {opt.durationSecs && (
-                            <span className="shrink-0 text-[12px] text-muted-foreground">
-                              {opt.durationSecs.join('/')}s only
-                            </span>
-                          )}
-                          {effectiveVideoResolution === opt.id && (
-                            <Check className="h-3 w-3 shrink-0 text-primary" />
-                          )}
-                        </button>
-                      ))}
-                    </AnchoredComposerMenu>
-                  </div>
-                )}
-              </div>
-            )}
+                  {videoQualityOptions.length > 1 && (
+                    <div className="relative">
+                      <button
+                        ref={videoQualityTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowVideoQualityMenu((p) => !p);
+                          setShowVideoAspectMenu(false);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="Select video quality"
+                      >
+                        {videoQualityOptions.find((o) => o.id === effectiveVideoResolution)
+                          ?.label ?? effectiveVideoResolution}
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={videoQualityTriggerRef}
+                        open={showVideoQualityMenu}
+                        label="Video quality"
+                        onRequestClose={() => setShowVideoQualityMenu(false)}
+                        className="w-52 p-1"
+                      >
+                        {videoQualityOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setVideoResolution(opt.id);
+                              setShowVideoQualityMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoResolution === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {opt.durationSecs && (
+                              <span className="shrink-0 text-[12px] text-muted-foreground">
+                                {opt.durationSecs.join('/')}s only
+                              </span>
+                            )}
+                            {effectiveVideoResolution === opt.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Style and model selectors. In normal mode the full ComposerFooter
+              {/* Style and model selectors. In normal mode the full ComposerFooter
               sits inline beside the send button; in image mode the image-model
               picker takes its place. The textbox above carries the row's
               `flex-1`, so these right-cluster controls need no `ml-auto` of
@@ -4181,189 +4212,198 @@ const ChatComposerNewComponent = ({
               stale-model-label class the capability-honesty rule forbids. Showing no
               model here is strictly better than showing the wrong one; surfacing the
               resolved video model as a read-only label is the follow-up. */}
-            {!imageMode && !videoMode && (
-              <ComposerFooter
-                inline
-                className="min-w-0 shrink"
-                showModelSelector
-                lockModelSelector={false}
-                showStyleSelector={!isFreeTrial}
-                onUpgradeRequest={onUpgradeRequest}
-                onModelChange={onModelChange}
-              />
-            )}
+              {!imageMode && !videoMode && (
+                <ComposerFooter
+                  inline
+                  className="min-w-0 shrink"
+                  showModelSelector
+                  lockModelSelector={false}
+                  showStyleSelector={!isFreeTrial}
+                  onUpgradeRequest={onUpgradeRequest}
+                  onModelChange={onModelChange}
+                />
+              )}
 
-            {imageMode && (
-              <div className="relative shrink-0">
-                <button
-                  ref={imageModelTriggerRef}
-                  type="button"
-                  onClick={() => {
-                    setShowImageModelMenu((p) => !p);
-                    setShowImageAspectMenu(false);
-                  }}
-                  className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                  aria-label="Select image model"
-                >
-                  {/* AUDIT-FIX CMP-26: no hardcoded model name. The catalog is
+              {imageMode && (
+                <div className="relative shrink-0">
+                  <button
+                    ref={imageModelTriggerRef}
+                    type="button"
+                    onClick={() => {
+                      setShowImageModelMenu((p) => !p);
+                      setShowImageAspectMenu(false);
+                    }}
+                    className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                    aria-label="Select image model"
+                  >
+                    {/* AUDIT-FIX CMP-26: no hardcoded model name. The catalog is
                       the only source for image models (this file's own header
                       says so); when it yields none there is nothing to pick and
                       the honest label says exactly that. */}
-                  <span className="max-w-[120px] truncate">
-                    {availableImageModels.find((m) => m.id === imageModelId)?.label ??
-                      (mediaAvailabilityStatus === 'loading'
-                        ? 'Checking image models…'
-                        : 'No image model available')}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </button>
-                <AnchoredComposerMenu
-                  anchorRef={imageModelTriggerRef}
-                  open={showImageModelMenu}
-                  label="Image model"
-                  onRequestClose={() => setShowImageModelMenu(false)}
-                  align="end"
-                  className="w-52 p-1"
-                >
-                  {availableImageModels.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setImageModelId(m.id);
-                        if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
-                          setImageAspectRatio('auto');
-                        }
-                        setShowImageModelMenu(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                        imageModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <span className="flex-1 text-left">{m.label}</span>
-                      {imageModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
-                    </button>
-                  ))}
-                  {mediaAvailabilityStatus === 'error' && (
-                    <button
-                      type="button"
-                      onClick={retryMediaAvailability}
-                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                    >
-                      Retry model availability
-                    </button>
-                  )}
-                  {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">
-                      This deployment is not ready for image generation.
-                    </p>
-                  )}
-                </AnchoredComposerMenu>
-              </div>
-            )}
+                    <span className="max-w-[120px] truncate">
+                      {availableImageModels.find((m) => m.id === imageModelId)?.label ??
+                        (mediaAvailabilityStatus === 'loading'
+                          ? 'Checking image models…'
+                          : 'No image model available')}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </button>
+                  <AnchoredComposerMenu
+                    anchorRef={imageModelTriggerRef}
+                    open={showImageModelMenu}
+                    label="Image model"
+                    onRequestClose={() => setShowImageModelMenu(false)}
+                    align="end"
+                    className="w-52 p-1"
+                  >
+                    {availableImageModels.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setImageModelId(m.id);
+                          if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
+                            setImageAspectRatio('auto');
+                          }
+                          setShowImageModelMenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                          imageModelId === m.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="flex-1 text-left">{m.label}</span>
+                        {imageModelId === m.id && (
+                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                    {mediaAvailabilityStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryMediaAvailability}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry model availability
+                      </button>
+                    )}
+                    {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        This deployment is not ready for image generation.
+                      </p>
+                    )}
+                  </AnchoredComposerMenu>
+                </div>
+              )}
 
-            {/* Video model picker. Mirrors the image picker above and takes the
+              {/* Video model picker. Mirrors the image picker above and takes the
                 place of the text-model ComposerFooter, which is hidden in video
                 mode. Before this existed, entering video mode left the TEXT
                 selector on screen, so "Describe the video you want" sat beside a
                 text model that had no part in the
                 generation the send button ran, a stale model label. */}
-            {videoMode && (
-              <div className="relative shrink-0">
-                <button
-                  ref={videoModelTriggerRef}
-                  type="button"
-                  onClick={() => setShowVideoModelMenu((p) => !p)}
-                  className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                  aria-label="Select video model"
-                >
-                  {/* Same contract as the image label: the catalog is the only
+              {videoMode && (
+                <div className="relative shrink-0">
+                  <button
+                    ref={videoModelTriggerRef}
+                    type="button"
+                    onClick={() => setShowVideoModelMenu((p) => !p)}
+                    className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                    aria-label="Select video model"
+                  >
+                    {/* Same contract as the image label: the catalog is the only
                       source, so an empty catalog says so instead of naming a
                       model that cannot run. */}
-                  <span className="max-w-[120px] truncate">
-                    {availableVideoModels.find((m) => m.id === videoModelId)?.label ??
-                      (mediaAvailabilityStatus === 'loading'
-                        ? 'Checking video models…'
-                        : 'No video model available')}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </button>
-                <AnchoredComposerMenu
-                  anchorRef={videoModelTriggerRef}
-                  open={showVideoModelMenu}
-                  label="Video model"
-                  onRequestClose={() => setShowVideoModelMenu(false)}
-                  align="end"
-                  className="w-52 p-1"
-                >
-                  {availableVideoModels.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setVideoModelId(m.id);
-                        setShowVideoModelMenu(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                        videoModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <span className="flex-1 text-left">{m.label}</span>
-                      {videoModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
-                    </button>
-                  ))}
-                  {mediaAvailabilityStatus === 'error' && (
-                    <button
-                      type="button"
-                      onClick={retryMediaAvailability}
-                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                    >
-                      Retry model availability
-                    </button>
-                  )}
-                  {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">
-                      This deployment is not ready for video generation.
-                    </p>
-                  )}
-                </AnchoredComposerMenu>
-              </div>
-            )}
+                    <span className="max-w-[120px] truncate">
+                      {availableVideoModels.find((m) => m.id === videoModelId)?.label ??
+                        (mediaAvailabilityStatus === 'loading'
+                          ? 'Checking video models…'
+                          : 'No video model available')}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </button>
+                  <AnchoredComposerMenu
+                    anchorRef={videoModelTriggerRef}
+                    open={showVideoModelMenu}
+                    label="Video model"
+                    onRequestClose={() => setShowVideoModelMenu(false)}
+                    align="end"
+                    className="w-52 p-1"
+                  >
+                    {availableVideoModels.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setVideoModelId(m.id);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                          videoModelId === m.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="flex-1 text-left">{m.label}</span>
+                        {videoModelId === m.id && (
+                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                    {mediaAvailabilityStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryMediaAvailability}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry model availability
+                      </button>
+                    )}
+                    {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        This deployment is not ready for video generation.
+                      </p>
+                    )}
+                  </AnchoredComposerMenu>
+                </div>
+              )}
 
-            {/* Voice input is part of free chat and remains capability-neutral. */}
-            <div className="relative shrink-0">
-              {/* AUDIT-FIX CMP-16: dictation follows the textarea, which stays
+              {/* Voice input is part of free chat and remains capability-neutral. */}
+              <div className="relative shrink-0">
+                {/* AUDIT-FIX CMP-16: dictation follows the textarea, which stays
                   enabled during streaming for type-ahead. Disabling the mic
                   meant a queued follow-up could be typed but never dictated. */}
-              <VoiceInputButton
-                onStart={dictation.start}
-                active={dictation.isActive}
-                disabled={composerDisabled}
-              />
-            </div>
+                <VoiceInputButton
+                  onStart={dictation.start}
+                  active={dictation.isActive}
+                  disabled={composerDisabled}
+                />
+              </div>
 
-            {/* Trailing slot: voice entry while the field is empty, send once
+              {/* Trailing slot: voice entry while the field is empty, send once
                 it has text, Stop while a turn is running. */}
-            {onEnterVoiceMode && sendButtonMode !== 'stop' && !hasContent ? (
-              <VoiceEntryButton onStart={onEnterVoiceMode} disabled={composerDisabled} />
-            ) : (
-              <SendButton
-                mode={sendButtonMode}
-                isSending={isSendPending}
-                hasContent={hasContent}
-                disabled={
-                  composerDisabled ||
-                  (sendButtonMode !== 'stop' &&
-                    (hasAttachmentConflict ||
-                      mediaAttachmentConflict ||
-                      selectedMediaModelUnavailable))
-                }
-                onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-                className="shrink-0"
-              />
-            )}
+              {onEnterVoiceMode && sendButtonMode !== 'stop' && !hasContent ? (
+                <VoiceEntryButton onStart={onEnterVoiceMode} disabled={composerDisabled} />
+              ) : (
+                <SendButton
+                  mode={sendButtonMode}
+                  isSending={isSendPending}
+                  hasContent={hasContent}
+                  disabled={
+                    composerDisabled ||
+                    (sendButtonMode !== 'stop' &&
+                      (hasAttachmentConflict ||
+                        mediaAttachmentConflict ||
+                        selectedMediaModelUnavailable))
+                  }
+                  onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
+                  className="shrink-0"
+                />
+              )}
+            </div>
           </div>
 
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
@@ -4380,34 +4420,6 @@ const ChatComposerNewComponent = ({
                 </>
               )}
             </p>
-          )}
-
-          {/* Second row, home composer only: Chat | AGI Work mode toggle.
-              An existing chat's mode was set at creation, so the composer for
-              an ongoing conversation stays a single row (mobile still reaches
-              this through the "+" menu's Mode row). */}
-          {emptyState && projectPicker && !imageMode && canUseAgiWork && (
-            <div className="chat-composer-mode-inline hidden shrink-0 items-center self-start rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
-              {(['chat', 'agiwork'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => handleWorkModeChange(mode)}
-                  disabled={isTurnActive || composerDisabled}
-                  aria-pressed={workMode === mode}
-                  title={WORK_MODE_TITLES[mode]}
-                  className={cn(
-                    'flex h-7 items-center rounded-full px-3 transition-colors',
-                    workMode === mode
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                    (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {WORK_MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
           )}
         </div>
 
@@ -4428,55 +4440,153 @@ const ChatComposerNewComponent = ({
         />
       </div>
 
-      {/* Project scope row. Paid AGI Work can select a project or local folder;
-          Free keeps ordinary project-scoped chat and never exposes the folder/
-          Cowork boundary. */}
+      {/* Scope surface under the card. In AGI Work it is the attached bar the
+          leaders use: project, files, the connected plugins, and the desktop
+          app in one strip. Free has no work-mode axis, so it keeps the single
+          project pill that is its only scope control. */}
       {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode && (
-        <div className="relative mt-2 flex items-center gap-2" ref={projectPickerRef}>
-          <div
-            className={cn(
-              'flex h-8 min-w-0 items-center rounded-full border transition-all',
-              pickerHasSelection
-                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
-                : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-            )}
-          >
-            <button
-              ref={projectPickerTriggerRef}
-              type="button"
-              onClick={() => {
-                setShowProjectPicker((prev) => !prev);
-                setProjectQuery('');
-              }}
-              disabled={isTurnActive || composerDisabled}
-              className={cn(
-                'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
-                pickerHasSelection ? 'pr-1' : 'pr-2.5',
-                (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label={pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel}
-              aria-expanded={showProjectPicker}
-              title={pickerHasSelection ? pickerLabel : undefined}
+        <div className="relative" ref={projectPickerRef}>
+          {workScopeBarVisible ? (
+            <div
+              data-testid="composer-work-bar"
+              className="-mt-3 flex flex-wrap items-center gap-1 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-2 pb-1.5 pt-4"
             >
-              {pickerFolderName ? (
-                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <Folder className="h-3.5 w-3.5 shrink-0" />
+              <button
+                ref={projectPickerTriggerRef}
+                type="button"
+                onClick={() => {
+                  setShowProjectPicker((prev) => !prev);
+                  setProjectQuery('');
+                }}
+                disabled={isTurnActive || composerDisabled}
+                className={cn(
+                  WORK_BAR_ITEM_CLASS,
+                  pickerHasSelection && WORK_BAR_ITEM_ACTIVE_CLASS,
+                )}
+                aria-label={
+                  pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel
+                }
+                aria-expanded={showProjectPicker}
+                title={pickerHasSelection ? pickerLabel : undefined}
+              >
+                {pickerFolderName ? (
+                  <FolderOpen className={WORK_BAR_GLYPH_CLASS} />
+                ) : (
+                  <Folder className={WORK_BAR_GLYPH_CLASS} />
+                )}
+                <span className="max-w-[180px] truncate">
+                  {pickerHasSelection ? pickerLabel : WORK_BAR_LABELS.project}
+                </span>
+              </button>
+
+              {pickerHasSelection && (
+                <button
+                  type="button"
+                  onClick={handleClearPickerSelection}
+                  className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  aria-label="Clear project or folder selection"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               )}
-              <span className="max-w-[220px] truncate">{pickerLabel}</span>
-              <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-            </button>
-            {pickerHasSelection && (
+
               <button
                 type="button"
-                onClick={handleClearPickerSelection}
-                className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
-                aria-label="Clear project or folder selection"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isTurnActive || composerDisabled}
+                className={WORK_BAR_ITEM_CLASS}
               >
-                <X className="h-3 w-3" />
+                <LibraryBig className={WORK_BAR_GLYPH_CLASS} />
+                {WORK_BAR_LABELS.files}
               </button>
-            )}
-          </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOverflowMenu(true);
+                  setConnectorsSubmenuOpen(true);
+                }}
+                className={WORK_BAR_ITEM_CLASS}
+              >
+                {connectedConnectorOptions.length > 0 && (
+                  <span className="flex shrink-0 items-center" aria-hidden="true">
+                    {connectedConnectorOptions
+                      .slice(0, WORK_BAR_CONNECTOR_MARKS)
+                      .map((connector, index) => (
+                        <OfficialConnectorLogo
+                          key={connector.id}
+                          connector={connector}
+                          className={cn(
+                            'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
+                            index > 0 && '-ml-1.5',
+                          )}
+                        />
+                      ))}
+                  </span>
+                )}
+                {!connectedConnectorOptions.length && <Globe className={WORK_BAR_GLYPH_CLASS} />}
+                {WORK_BAR_LABELS.plugins}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push(DESKTOP_APP_HREF)}
+                className={cn(WORK_BAR_ITEM_CLASS, 'ml-auto')}
+              >
+                <Monitor className={WORK_BAR_GLYPH_CLASS} />
+                {WORK_BAR_LABELS.desktop}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 flex items-center gap-2">
+              <div
+                className={cn(
+                  'flex h-8 min-w-0 items-center rounded-full border transition-all',
+                  pickerHasSelection
+                    ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
+                    : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+              >
+                <button
+                  ref={projectPickerTriggerRef}
+                  type="button"
+                  onClick={() => {
+                    setShowProjectPicker((prev) => !prev);
+                    setProjectQuery('');
+                  }}
+                  disabled={isTurnActive || composerDisabled}
+                  className={cn(
+                    'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
+                    pickerHasSelection ? 'pr-1' : 'pr-2.5',
+                    (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
+                  )}
+                  aria-label={
+                    pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel
+                  }
+                  aria-expanded={showProjectPicker}
+                  title={pickerHasSelection ? pickerLabel : undefined}
+                >
+                  {pickerFolderName ? (
+                    <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <Folder className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span className="max-w-[220px] truncate">{pickerLabel}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                </button>
+                {pickerHasSelection && (
+                  <button
+                    type="button"
+                    onClick={handleClearPickerSelection}
+                    className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
+                    aria-label="Clear project or folder selection"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <AnchoredComposerMenu
             anchorRef={projectPickerTriggerRef}
@@ -4569,98 +4679,52 @@ const ChatComposerNewComponent = ({
       {/* CAP-048 AGI Work goal intake. The composed message is the objective;
           these optional inline fields let the user pin down scope + deliverable
           without a modal wall. Shown only in paid AGI Work mode. */}
-      {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && (
+      {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && agiWorkFieldsOpen && (
         <div className="mt-2">
-          {agiWorkFieldsOpen ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 p-2.5">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <ListChecks className="h-3.5 w-3.5" />
-                  {tAgiWork('agiWork.compose.constraintsLabel')} ·{' '}
-                  {tAgiWork('agiWork.compose.deliverableLabel')}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAgiWorkFieldsOpen(false)}
-                  className="rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                >
-                  {tAgiWork('agiWork.compose.scopeHide')}
-                </button>
-              </div>
-              <label className="flex flex-col gap-1">
-                <span className="text-[12px] font-medium text-muted-foreground">
-                  {tAgiWork('agiWork.compose.constraintsLabel')}
-                </span>
-                <input
-                  type="text"
-                  value={agiWorkConstraints}
-                  onChange={(e) => setAgiWorkConstraints(e.target.value.slice(0, 1000))}
-                  placeholder={tAgiWork('agiWork.compose.constraintsPlaceholder')}
-                  disabled={isTurnActive || composerDisabled}
-                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[12px] font-medium text-muted-foreground">
-                  {tAgiWork('agiWork.compose.deliverableLabel')}
-                </span>
-                <input
-                  type="text"
-                  value={agiWorkDeliverable}
-                  onChange={(e) => setAgiWorkDeliverable(e.target.value.slice(0, 1000))}
-                  placeholder={tAgiWork('agiWork.compose.deliverablePlaceholder')}
-                  disabled={isTurnActive || composerDisabled}
-                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
-                />
-              </label>
+          <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <ListChecks className="h-3.5 w-3.5" />
+                {tAgiWork('agiWork.compose.constraintsLabel')} ·{' '}
+                {tAgiWork('agiWork.compose.deliverableLabel')}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAgiWorkFieldsOpen(false)}
+                className="rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              >
+                {tAgiWork('agiWork.compose.scopeHide')}
+              </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAgiWorkFieldsOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            >
-              <ListChecks className="h-3 w-3" />
-              {tAgiWork('agiWork.compose.scopeAdd')}
-              {agiWorkConstraints.trim() || agiWorkDeliverable.trim() ? (
-                <span
-                  aria-hidden
-                  className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--chat-accent-primary)]"
-                />
-              ) : null}
-            </button>
-          )}
+            <label className="flex flex-col gap-1">
+              <span className="text-[12px] font-medium text-muted-foreground">
+                {tAgiWork('agiWork.compose.constraintsLabel')}
+              </span>
+              <input
+                type="text"
+                value={agiWorkConstraints}
+                onChange={(e) => setAgiWorkConstraints(e.target.value.slice(0, 1000))}
+                placeholder={tAgiWork('agiWork.compose.constraintsPlaceholder')}
+                disabled={isTurnActive || composerDisabled}
+                className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[12px] font-medium text-muted-foreground">
+                {tAgiWork('agiWork.compose.deliverableLabel')}
+              </span>
+              <input
+                type="text"
+                value={agiWorkDeliverable}
+                onChange={(e) => setAgiWorkDeliverable(e.target.value.slice(0, 1000))}
+                placeholder={tAgiWork('agiWork.compose.deliverablePlaceholder')}
+                disabled={isTurnActive || composerDisabled}
+                className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
+              />
+            </label>
+          </div>
         </div>
       )}
-
-      {/* Footer: one quiet line under the card, disclaimer left, resolved
-          model and effort right. The model summary drops below md, where the
-          picker directly above already names the model; the disclaimer is
-          the one thing every width keeps. */}
-      <div className="mt-2 flex min-h-5 items-center justify-between gap-2 text-[12px] text-muted-foreground">
-        {/* Accuracy caveat, in the position ChatGPT and Claude both use. The
-           explicit Article 50(1) "you are interacting with an AI system"
-           sentence was removed on 2026-08-14 in reliance on the regulation's
-           obviousness carve-out, which counsel has NOT reviewed, see
-           ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
-           disclaimer is what deliberately stayed; do not trim it too. */}
-        <span
-          data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${COMPOSER_FOOTER_KEYS.accuracy}`}
-        >
-          <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
-        </span>
-        <span
-          data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${COMPOSER_FOOTER_KEYS.model}`}
-          className={cn(
-            'shrink-0 whitespace-nowrap',
-            DESK_ONLY_COMPOSER_FOOTER_KEYS.has(COMPOSER_FOOTER_KEYS.model)
-              ? 'hidden md:inline'
-              : 'inline',
-          )}
-        >
-          <ComposerModelSummary />
-        </span>
-      </div>
     </div>
   );
 };
