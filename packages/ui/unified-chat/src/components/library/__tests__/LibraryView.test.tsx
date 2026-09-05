@@ -11,7 +11,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LibraryView, type LibraryTransport } from '../LibraryView';
 
 function jsonResponse(body: unknown, ok = true): Response {
@@ -523,13 +523,14 @@ describe('shared LibraryView', () => {
       expect(transport.openPreview).not.toHaveBeenCalled();
     });
 
-    it('keeps a non-artifact row on the host preview gesture', async () => {
+    it('opens a non-artifact row in the in-app file viewer, not the host preview gesture', async () => {
       const transport = makeTransport({ listPage: pageOf([{ ...ITEM, previewable: true }]) });
       render(<LibraryView transport={transport} />);
 
       fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
 
-      expect(transport.openPreview).toHaveBeenCalledWith('/api/files/asset-1');
+      expect(await screen.findByTestId('library-file-viewer')).toBeTruthy();
+      expect(transport.openPreview).not.toHaveBeenCalled();
     });
 
     it('reports an artifact that cannot be read instead of an empty viewer', async () => {
@@ -597,6 +598,143 @@ describe('shared LibraryView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
 
       expect(screen.queryByRole('button', { name: /^Export as/ })).toBeNull();
+    });
+  });
+
+  describe('file viewer (slice E item 5)', () => {
+    const DOC_ITEM = { ...ITEM, previewable: true };
+    const IMAGE_ITEM = {
+      ...ITEM,
+      id: 'asset-image',
+      file_name: 'chart.png',
+      mime_type: 'image/png',
+      previewable: true,
+    };
+
+    it('shows a Library breadcrumb naming the open file, with download and close', async () => {
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      const viewer = await screen.findByTestId('library-file-viewer');
+
+      expect(viewer.textContent).toContain('Library');
+      expect(viewer.textContent).toContain('quarterly-report.pdf');
+      expect(screen.getByRole('button', { name: 'Download quarterly-report.pdf' })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close file viewer' }));
+      expect(screen.queryByTestId('library-file-viewer')).toBeNull();
+    });
+
+    it('offers zoom for an image with an inline preview and none for a document', async () => {
+      const transport = makeTransport({
+        listPage: pageOf([IMAGE_ITEM]),
+        inlinePreviewUri: (uri) => uri,
+      });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open chart.png' }));
+      await screen.findByTestId('library-file-viewer');
+
+      expect(screen.getByRole('group', { name: 'Zoom' })).toBeTruthy();
+      expect(screen.getByText('100%')).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      expect(screen.getByText('125%')).toBeTruthy();
+    });
+
+    it('falls back to a download prompt when the host has no inline preview for it', async () => {
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      await screen.findByTestId('library-file-viewer');
+
+      expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
+      expect(screen.getByText('Preview isn’t available for this file inline.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Download to view' })).toBeTruthy();
+    });
+
+    it('hands the typed question and the file to askAboutFile, then clears the composer', async () => {
+      const askAboutFile = vi.fn();
+      const transport = makeTransport({
+        listPage: pageOf([DOC_ITEM]),
+        askAboutFile,
+      });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      const input = await screen.findByLabelText('Ask about this file');
+
+      fireEvent.change(input, { target: { value: 'What is the Q3 revenue?' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      expect(askAboutFile).toHaveBeenCalledWith(DOC_ITEM, 'What is the Q3 revenue?');
+      expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('omits the ask composer entirely when the host offers no askAboutFile', async () => {
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      await screen.findByTestId('library-file-viewer');
+
+      expect(screen.queryByLabelText('Ask about this file')).toBeNull();
+    });
+
+    it('closes on Escape', async () => {
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      await screen.findByTestId('library-file-viewer');
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByTestId('library-file-viewer')).toBeNull();
+    });
+
+    it('portals into the given container, covering it without reaching the rest of the page', async () => {
+      const overlayRoot = document.createElement('div');
+      overlayRoot.id = 'shell-content-overlay';
+      document.body.appendChild(overlayRoot);
+
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} overlayContainerId="shell-content-overlay" />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      const viewer = await screen.findByTestId('library-file-viewer');
+
+      expect(overlayRoot.contains(viewer)).toBe(true);
+      expect(viewer.className).toContain('absolute');
+      expect(viewer.className).not.toContain('fixed');
+
+      document.body.removeChild(overlayRoot);
+    });
+
+    it('falls back to a full-viewport overlay when the named container is not found', async () => {
+      const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
+      render(<LibraryView transport={transport} overlayContainerId="does-not-exist" />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      const viewer = await screen.findByTestId('library-file-viewer');
+
+      expect(viewer.className).toContain('fixed');
+    });
+
+    it('shows the ask pill in the composer shape: attach, model, mic and a round send', async () => {
+      const transport = makeTransport({
+        listPage: pageOf([DOC_ITEM]),
+        askAboutFile: vi.fn(),
+      });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
+      await screen.findByLabelText('Ask about this file');
+
+      const pill = (await screen.findByLabelText('Ask about this file')).closest('form');
+      expect(pill).toBeTruthy();
+      expect(within(pill as HTMLElement).getAllByRole('button', { hidden: true }).length).toBe(3);
     });
   });
 });
