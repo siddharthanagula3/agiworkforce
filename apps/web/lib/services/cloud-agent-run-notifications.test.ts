@@ -184,7 +184,7 @@ describe('cloud agent run notifications', () => {
 
     await saveCloudAgentApprovalCheckpoint(db, approvalSaveArgs());
 
-    expect(mocks.notify).toHaveBeenCalledWith({
+    expect(mocks.notify).toHaveBeenCalledWith(db, {
       userId: 'user-1',
       runId: RUN_ROW.id,
       event: 'approval_required',
@@ -202,7 +202,7 @@ describe('cloud agent run notifications', () => {
 
     await saveCloudAgentInputCheckpoint(db, inputSaveArgs());
 
-    expect(mocks.notify).toHaveBeenCalledWith({
+    expect(mocks.notify).toHaveBeenCalledWith(db, {
       userId: 'user-1',
       runId: RUN_ROW.id,
       event: 'input_required',
@@ -218,12 +218,12 @@ describe('cloud agent run notifications', () => {
     await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'completed' });
     await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'failed' });
 
-    expect(mocks.notify).toHaveBeenNthCalledWith(1, {
+    expect(mocks.notify).toHaveBeenNthCalledWith(1, db, {
       userId: 'user-1',
       runId: RUN_ROW.id,
       event: 'completed',
     });
-    expect(mocks.notify).toHaveBeenNthCalledWith(2, {
+    expect(mocks.notify).toHaveBeenNthCalledWith(2, db, {
       userId: 'user-1',
       runId: RUN_ROW.id,
       event: 'failed',

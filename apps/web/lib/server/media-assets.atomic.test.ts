@@ -54,7 +54,7 @@ describe('insertMediaAssetsAtomically', () => {
       .mockResolvedValueOnce([{ id: 'asset-2' }]);
 
     await expect(
-      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')]),
+      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], dbMocks),
     ).resolves.toEqual(['asset-1', 'asset-2']);
     expect(dbMocks.transaction).toHaveBeenCalledTimes(1);
     expect(dbMocks.query).toHaveBeenCalledTimes(2);
@@ -68,7 +68,7 @@ describe('insertMediaAssetsAtomically', () => {
     dbMocks.query.mockResolvedValueOnce([{ id: 'asset-1' }]);
 
     await expect(
-      insertMediaAssetsAtomically([{ ...image('media/first.png'), organizationId: null }]),
+      insertMediaAssetsAtomically([{ ...image('media/first.png'), organizationId: null }], dbMocks),
     ).resolves.toEqual(['asset-1']);
 
     expect(dbMocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe('insertMediaAssetsAtomically', () => {
       .mockRejectedValueOnce(new Error('second insert failed'));
 
     await expect(
-      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')]),
+      insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], dbMocks),
     ).rejects.toThrow('second insert failed');
     expect(dbMocks.transaction).toHaveBeenCalledTimes(1);
   });

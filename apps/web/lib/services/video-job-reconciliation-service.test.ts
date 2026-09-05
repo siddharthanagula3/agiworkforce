@@ -211,7 +211,10 @@ describe('video job reconciliation', () => {
     expect(mocks.storeFile).toHaveBeenCalledWith(
       expect.objectContaining({ storageId: JOB_ID, filePath: '/tmp/provider-video' }),
     );
-    expect(mocks.upsertAsset).toHaveBeenCalledWith(expect.objectContaining({ id: JOB_ID }));
+    expect(mocks.upsertAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ id: JOB_ID }),
+      expect.anything(),
+    );
     expect(mocks.finalize).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'completed', assetId: JOB_ID }),
     );
@@ -418,7 +421,7 @@ describe('video job reconciliation', () => {
     expect(result.status).toBe('outcome_unknown');
     expect(result.incidentAlertStatus).toBe('pending');
     expect(mocks.deleteStored).toHaveBeenCalledWith(`media/video/user-1/${JOB_ID}.mp4`);
-    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1');
+    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1', expect.anything());
     expect(mocks.markUnknown).toHaveBeenCalledOnce();
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
@@ -436,7 +439,7 @@ describe('video job reconciliation', () => {
     const result = await reconcileVideoGenerationJob(db, failing);
 
     expect(mocks.deleteStored).toHaveBeenCalledWith(`private-media/video/owner/${JOB_ID}.mp4`);
-    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1');
+    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1', expect.anything());
     expect(result.status).toBe('outcome_unknown');
     expect(result.incidentAlertStatus).toBe('pending');
     expect(mocks.markUnknown).toHaveBeenCalledOnce();
@@ -558,7 +561,7 @@ describe('video job reconciliation', () => {
     expect(result.status).toBe('outcome_unknown');
     expect(result.incidentAlertStatus).toBe('pending');
     expect(mocks.deleteStored).toHaveBeenCalledWith(`media/video/user-1/${JOB_ID}.mp4`);
-    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1');
+    expect(mocks.deleteAsset).toHaveBeenCalledWith(JOB_ID, 'user-1', expect.anything());
     expect(mocks.deleteStored.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.markUnknown.mock.invocationCallOrder[0]!,
     );

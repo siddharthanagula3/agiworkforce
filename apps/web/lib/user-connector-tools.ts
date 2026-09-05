@@ -17,6 +17,7 @@ import type { InteractiveCard } from '@agiworkforce/types';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
@@ -462,8 +463,18 @@ function entryToMcpConfig(entry: RemoteConnectorEntry): McpServerConfig {
   };
 }
 
+/**
+ * A connector belongs to the person, not to whichever workspace they happen to
+ * have open: the routes that write `user_connectors` and `user_custom_connectors`
+ * resolve no organization, so every row carries a null one and the tenant
+ * predicate on those tables only matches a session bound the same way.
+ */
+function connectorOwnerDb(userId: string) {
+  return createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+}
+
 async function getUserActiveConnectorIds(userId: string): Promise<Set<string>> {
-  const db = getNeonDb();
+  const db = connectorOwnerDb(userId);
   try {
     const rows = await db.query<{ connector_id: string }>(
       `select connector_id from user_connectors where user_id = $1 and is_active = true`,
@@ -725,7 +736,7 @@ async function getUserCustomConnectorRows(
   userId: string,
   limit?: number,
 ): Promise<CustomConnectorRow[]> {
-  const db = getNeonDb();
+  const db = connectorOwnerDb(userId);
   try {
     const rows = await db.query<CustomConnectorRow>(
       `select id, short_id, name, url, transport, auth_header_enc
@@ -893,7 +904,7 @@ async function executeCustomConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const db = getNeonDb();
+  const db = connectorOwnerDb(userId);
   let rows: CustomConnectorRow[];
   try {
     rows = await db.query<CustomConnectorRow>(
@@ -1291,7 +1302,7 @@ async function resolveConnectorOrganizationId(
   userId: string,
   admittedOrganizationId?: string | null,
 ): Promise<string | null> {
-  const db = getNeonDb();
+  const db = connectorOwnerDb(userId);
   try {
     if (admittedOrganizationId === undefined) {
       return await resolveActiveOrganizationId(db, userId);

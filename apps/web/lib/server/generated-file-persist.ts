@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/media-storage';
 import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 
 export const MAX_GENERATED_FILE_BYTES = 20 * 1024 * 1024;
@@ -135,10 +136,14 @@ export async function persistGeneratedFileBytes(
     conversationId?: string;
     extraMetadata?: Record<string, unknown>;
   },
-  db: Parameters<typeof insertMediaAsset>[1] = getNeonDb(),
+  callerDb?: Parameters<typeof insertMediaAsset>[1],
 ): Promise<PersistGeneratedFileOutcome> {
   const { userId, organizationId, data, mimeType, filename, provider, origin, model, prompt } =
     params;
+  // Tool output is persisted from the loop and from the sandbox file sweep,
+  // neither of which always carries the request connection, so an absent one is
+  // rebuilt as the owner's own scope rather than left unbound.
+  const db = callerDb ?? createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
 
   if (!isGeneratedMediaStorageConfigured()) return { ok: false, reason: 'not_configured' };
   if (data.byteLength > MAX_GENERATED_FILE_BYTES) {

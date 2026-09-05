@@ -1158,9 +1158,32 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   const storageConfigured = isImageStorageConfigured();
+  if (process.env.NODE_ENV === 'production' && !storageConfigured) {
+    logger.error(
+      { userId, provider, model: catalogModel.id },
+      'Image generation unavailable because durable media storage is not configured',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Image generation is temporarily unavailable because generated images cannot be saved. Please try again later.',
+          type: 'server_error',
+          code: 'media_storage_unavailable',
+        },
+      },
+      {
+        status: 503,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
   let mediaCatalogConfigured = false;
   try {
-    mediaCatalogConfigured = await isMediaAssetStoreReady();
+    mediaCatalogConfigured = await isMediaAssetStoreReady((await callerScope()).db);
   } catch (error) {
     logger.error(
       { error, userId, provider, model: catalogModel.id },
@@ -1175,29 +1198,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
             'Image generation is temporarily unavailable because generated images cannot be cataloged. Please try again later.',
           type: 'server_error',
           code: 'media_catalog_unavailable',
-        },
-      },
-      {
-        status: 503,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-  if (process.env.NODE_ENV === 'production' && !storageConfigured) {
-    logger.error(
-      { userId, provider, model: catalogModel.id },
-      'Image generation unavailable because durable media storage is not configured',
-    );
-    return NextResponse.json(
-      {
-        error: {
-          message:
-            'Image generation is temporarily unavailable because generated images cannot be saved. Please try again later.',
-          type: 'server_error',
-          code: 'media_storage_unavailable',
         },
       },
       {

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { readStoredMedia } from '@/lib/server/media-storage';
 import { getMediaAssetById } from '@/lib/server/media-assets';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   isChatImageMimeType,
   isSupportedChatAttachment,
@@ -230,7 +231,10 @@ async function fetchAttachmentPayload(
   const asset = await withSpan(
     'chat_attachment.asset_lookup',
     { domain: 'retrieval', attributes: { 'chat_attachment.asset_id': assetId } },
-    () => getMediaAssetById(assetId),
+    // Deliberately unconstrained: the row may belong to another account, and
+    // telling those two cases apart is what turns a wrong asset id into
+    // "not yours" rather than "deleted". The owner check is the line below.
+    () => getMediaAssetById(assetId, getNeonDb()),
   );
 
   if (asset && asset.userId !== userId) return { kind: 'foreign' };

@@ -208,7 +208,7 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<void> {
 }
 
 function noticeEvents(): unknown[] {
-  return mocks.notify.mock.calls.map(([notice]) => (notice as { event: string }).event);
+  return mocks.notify.mock.calls.map(([, notice]) => (notice as { event: string }).event);
 }
 
 describe('terminal cloud agent notifications across the real termination order', () => {
@@ -238,7 +238,7 @@ describe('terminal cloud agent notifications across the real termination order',
     await settleWorkflowInvocation(workflowInput(), 'completed');
 
     expect(mocks.notify).toHaveBeenCalledTimes(1);
-    expect(mocks.notify).toHaveBeenCalledWith({
+    expect(mocks.notify).toHaveBeenCalledWith(expect.anything(), {
       userId: 'user-1',
       runId: RUN_ID,
       event: 'completed',
