@@ -9,6 +9,48 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-10 Tool support loss is learned, not edited
+
+- Question: how the system learns that a model stopped honouring tool calls, and who acts on it.
+- Evidence: the system map (docs/architecture/system-map-2026-09-05.md) found the capability flag
+  is compile time only, the liveness probe sends no tools, and the governor's withdrawal lasts one
+  turn and is never written back; the day's sandbox incident showed a per turn signal exists.
+- Current implementation: static capability in the catalog; per turn withdrawal in the tool turn
+  governor; route health store tracks errors and latency, not capabilities.
+- Options: a catalog edit cadence driven by support tickets; a durable per route capability
+  observation in the route health store fed by the governor and ranked by the resolver; a periodic
+  probe that sends a trivial tool.
+- Decision: the durable observation, with the probe as a cheap second signal; the catalog keeps the
+  declared capability and gains an observed field the registry never overwrites by hand.
+- Why: routing already ranks by observed health; capability is the same shape of fact.
+- Tradeoff: one more state written on the request path; a noisy model can be demoted by its own
+  users' prompts, so the threshold is per route per hour, not per call.
+- Reversibility: high; the ranking input is optional and defaults to the declared flag.
+- Revisit trigger: a vendor publishes machine readable capability status per model.
+
+## D-2026-09-05-09 Model selector shape
+
+- Question: how hundreds of models feel simple on the composer while power users keep control.
+- Evidence: both leaders show a few models with an effort or mode control and no catalogue; the
+  coding tool the founder pointed at groups a catalogue by provider behind favourites and search;
+  the gateway sync added 349 entries in one day and broke every flat rendering it touched; the unit
+  economics doc shows two paid tiers buy budget, not a wider model list, which the picker must say.
+- Current implementation: a flat list with search, an effort row and capability glyphs; the switch
+  dialog was removed in 0c2b851c7; Auto keeps the conversation's model (D-06).
+- Options: modes over models only; a provider grouped catalogue as the primary picker; Auto first
+  with a short curated list and the catalogue behind a disclosure grouped by provider with search
+  and favourites, tier ceilings named inline.
+- Decision: the third; every layer reads the registry (family slots for the curated list, provider
+  groups for the disclosure, tier ceilings from the billing catalog), so adding a hundred models
+  changes the disclosure's contents and nothing on the composer face. Supersedes the deferral in
+  D-03; the earlier grouped picker brief is reshaped to this before any UI work starts.
+- Why: it is what the evidence and the founder's stated preference both point at, and it is the
+  only shape that survives catalog growth without a design change.
+- Tradeoff: two clicks to reach a specific synced model; favourites and search make that one.
+- Reversibility: medium; the composer face contract is small, the disclosure is a component.
+- Revisit trigger: picker open rate and depth telemetry after two weeks of use, or a leader
+  shipping a catalogue on the composer face.
+
 ## D-2026-09-05-08 Free inference from user connected accounts
 
 - Question: should users connect their own free provider capacity, and how simply.
