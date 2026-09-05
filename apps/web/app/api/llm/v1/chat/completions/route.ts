@@ -20,7 +20,7 @@ import {
 } from '@/lib/services/free-lane/runtime-state-service';
 import { resolveFailoverBreakerView } from './lib/route-breaker';
 import { buildServingRouteId } from './lib/tool-loop-anthropic';
-import type { ResilienceScope } from '@agiworkforce/routing';
+import { routeOutcomeClassForCategory, type ResilienceScope } from '@agiworkforce/routing';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
@@ -282,25 +282,16 @@ function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun)
     `/api/llm/v1/chat/completions/runs/${encodeURIComponent(run.id)}`;
 }
 
-const RESILIENCE_OBSERVATION_OUTCOME_BY_SCOPE = {
-  provider: { class: 'server_error' },
-  credential: { class: 'rate_limit' },
-  model: { class: 'model_rejected' },
-} as const;
-
-/**
- * Persists one managed-failover attempt failure into the resilience scope
- * `resilienceScopeForCategory` (`@agiworkforce/routing`) sorted it into.
- * Fire-and-forget like every other route-health write on this request's error
- * path: a real user's latency must never wait on a statistic.
- */
 function recordResilienceObservation(observation: {
   scope: ResilienceScope;
   provider: string;
   model: string;
   routeId: string | null;
+  category: string;
 }): void {
-  const outcome = RESILIENCE_OBSERVATION_OUTCOME_BY_SCOPE[observation.scope];
+  const outcomeClass = routeOutcomeClassForCategory(observation.category);
+  if (!outcomeClass) return;
+  const outcome = { class: outcomeClass };
   const persist =
     observation.scope === 'provider'
       ? recordCredentialOutcome(observation.provider, outcome)

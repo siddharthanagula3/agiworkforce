@@ -238,9 +238,27 @@ describe('free-lane rotation never reaches paid capacity', () => {
     expect(mockResolveProviderFromModel).not.toHaveBeenCalled();
   });
 
-  it('still refuses to rotate on a class that must never rotate', () => {
+  it('spends the one billing rotation inside the free lane, never onto the paid plan', () => {
+    // The D-14 exception is at its safest here: the next admitted route is
+    // another zero-cost one, so the goal completes and the rotation cannot
+    // spend anything at all. What it must not do is reach the paid plan, which
+    // is why the assertion is on the route rather than merely on non-null.
+    const plan = makePlan(
+      makeProcessed({
+        fallbackModels: [PAID_MODEL],
+        freeLane: freeLanePlan(FREE_LANE_MODES.prefer, freeState()),
+      }),
+    );
+    const unfunded = httpError(402, 'credit balance is too low');
+
+    expect(plan.next(unfunded)?.processed.freeLane?.dispatchedRouteId).toBe(FAST_ROUTE);
+    expect(plan.next(unfunded)).toBeNull();
+    expect(mockResolveProviderFromModel).not.toHaveBeenCalled();
+  });
+
+  it('still refuses to rotate on a refusal, which has no exception', () => {
     const plan = makePlan(makeProcessed());
-    expect(plan.next(httpError(402, 'credit balance is too low'))).toBeNull();
+    expect(plan.next(httpError(400, 'content was blocked by safety'))).toBeNull();
   });
 });
 
