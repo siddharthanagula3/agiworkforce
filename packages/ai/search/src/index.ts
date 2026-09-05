@@ -8,4 +8,5 @@
  */
 
 export * from './explicit-search-intent';
+export * from './place-intent';
 export * from './web-search-support';
