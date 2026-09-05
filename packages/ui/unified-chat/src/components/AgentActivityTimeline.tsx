@@ -182,9 +182,27 @@ function hasReportableWork(entries: readonly AgentActivityEntry[]): boolean {
   return entries.some((entry) => !isLocalPlaceholderActivityEntry(entry));
 }
 
+function distinctCompletedToolSummary(activity: AgentActivityState): string | undefined {
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (!entry || entry.kind !== 'tool' || !entry.summary) continue;
+    if (
+      entry.category === 'web-search' &&
+      entry.summary.startsWith(WEB_SEARCH_IN_PROGRESS_PREFIX)
+    ) {
+      return undefined;
+    }
+    return entry.summary;
+  }
+  return undefined;
+}
+
 function collapsedCompletionSummary(activity: AgentActivityState): string {
   if (isSearchOnlyRun(activity.entries)) {
-    return webSearchCompletedLabel(totalSearchSources(activity.entries));
+    return (
+      distinctCompletedToolSummary(activity) ??
+      webSearchCompletedLabel(totalSearchSources(activity.entries))
+    );
   }
   return `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`;
 }
