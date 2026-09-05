@@ -579,17 +579,20 @@ describe('MessageBubble', () => {
       expect(screen.getByRole('button', { name: /toggle tool timeline/i })).toBeInTheDocument();
     });
 
-    it('reads a completed assistant response aloud through the list-owned controller', () => {
+    it('reads a completed assistant response aloud through the list-owned controller', async () => {
+      const user = userEvent.setup();
       const onReadAloud = vi.fn();
       const msg = assistantMsg();
 
       render(<MessageBubble message={msg} isReadAloudSupported onReadAloud={onReadAloud} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Read message aloud' }));
+      await user.click(screen.getByLabelText('More message actions'));
+      await user.click(screen.getByRole('menuitemcheckbox', { name: 'Read message aloud' }));
       expect(onReadAloud).toHaveBeenCalledWith(msg.id, msg.content);
     });
 
-    it('shows an honest stop action only for the response currently being read', () => {
+    it('shows an honest stop action only for the response currently being read', async () => {
+      const user = userEvent.setup();
       const onReadAloud = vi.fn();
       const msg = assistantMsg();
 
@@ -602,13 +605,15 @@ describe('MessageBubble', () => {
         />,
       );
 
-      const stopButton = screen.getByRole('button', { name: 'Stop reading message' });
-      expect(stopButton).toHaveAttribute('aria-pressed', 'true');
-      fireEvent.click(stopButton);
+      await user.click(screen.getByLabelText('More message actions'));
+      const stopItem = screen.getByRole('menuitemcheckbox', { name: 'Stop reading message' });
+      expect(stopItem).toHaveAttribute('aria-checked', 'true');
+      await user.click(stopItem);
       expect(onReadAloud).toHaveBeenCalledWith(msg.id, msg.content);
     });
 
-    it('does not offer read aloud to user messages or unsupported browsers', () => {
+    it('does not offer read aloud to user messages or unsupported browsers', async () => {
+      const user = userEvent.setup();
       const onReadAloud = vi.fn();
       const { rerender } = render(
         <MessageBubble
@@ -618,10 +623,13 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.queryByRole('button', { name: 'Read message aloud' })).toBeNull();
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.queryByRole('menuitemcheckbox', { name: 'Read message aloud' })).toBeNull();
+      await user.keyboard('{Escape}');
 
       rerender(<MessageBubble message={assistantMsg()} onReadAloud={onReadAloud} />);
-      expect(screen.queryByRole('button', { name: 'Read message aloud' })).toBeNull();
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.queryByRole('menuitemcheckbox', { name: 'Read message aloud' })).toBeNull();
     });
   });
 
@@ -721,29 +729,187 @@ describe('MessageBubble', () => {
     });
   });
 
-  describe('pin toggle button', () => {
-    it('renders the pin action only when onPin is provided', () => {
-      const { rerender } = render(<MessageBubble message={makeMessage()} />);
-      expect(screen.queryByLabelText('Pin message')).not.toBeInTheDocument();
+  describe('action row visibility', () => {
+    const HOVER_GATE = 'group-hover:opacity-100';
 
-      rerender(<MessageBubble message={makeMessage()} onPin={vi.fn()} />);
-      expect(screen.getByLabelText('Pin message')).toBeInTheDocument();
+    it('hides the row on an earlier assistant turn until hover or focus', () => {
+      render(<MessageBubble message={makeMessage({ role: 'assistant', content: 'Earlier' })} />);
+      const row = screen.getByTestId('message-action-row');
+      expect(row).toHaveClass('opacity-0');
+      expect(row).toHaveClass(HOVER_GATE);
+      expect(row).toHaveClass('group-focus-within:opacity-100');
+      expect(row).toHaveClass('flex-nowrap');
     });
 
-    it('calls onPin with the message id when clicked', () => {
+    it('keeps the row visible on the latest assistant turn', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant', content: 'Latest' })}
+          isLatestTurn
+        />,
+      );
+      const row = screen.getByTestId('message-action-row');
+      expect(row).toHaveClass('opacity-100');
+      expect(row).not.toHaveClass('opacity-0');
+    });
+
+    it('hover-gates the user bubble row even on the latest turn and keeps it to edit, copy and more', async () => {
+      const user = userEvent.setup();
+      const onBranch = vi.fn();
+      render(
+        <MessageBubble
+          message={makeMessage({ id: 'u-1' })}
+          onEdit={vi.fn()}
+          onBranch={onBranch}
+          onPin={vi.fn()}
+          isLatestTurn
+        />,
+      );
+      const row = screen.getByTestId('message-action-row');
+      expect(row).toHaveClass('opacity-0');
+      expect(row).toHaveClass(HOVER_GATE);
+      const labels = Array.from(row.querySelectorAll('button')).map((button) =>
+        button.getAttribute('aria-label'),
+      );
+      expect(labels).toEqual(['Edit message', 'Copy message', 'More message actions']);
+
+      await user.click(screen.getByLabelText('More message actions'));
+      await user.click(screen.getByRole('menuitem', { name: 'Branch conversation from here' }));
+      expect(onBranch).toHaveBeenCalledWith('u-1');
+    });
+
+    it('keeps read aloud, pin and the timestamp out of the assistant row', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant', content: 'Reply' })}
+          onRegenerate={vi.fn()}
+          onBranch={vi.fn()}
+          onPin={vi.fn()}
+          onReadAloud={vi.fn()}
+          isReadAloudSupported
+          isLatestTurn
+        />,
+      );
+      const row = screen.getByTestId('message-action-row');
+      const labels = Array.from(row.querySelectorAll('button')).map((button) =>
+        button.getAttribute('aria-label'),
+      );
+      expect(labels).toEqual([
+        'Copy message',
+        'Good response',
+        'Bad response',
+        'Regenerate response',
+        'Branch conversation from here',
+        'More message actions',
+      ]);
+      expect(row.querySelector('time')).toBeNull();
+    });
+  });
+
+  describe('regenerate model choice', () => {
+    const options = [
+      { id: 'model-a', name: 'Model A' },
+      { id: 'model-b', name: 'Model B' },
+    ];
+
+    it('regenerates directly when the page offers no model choice', () => {
+      const onRegenerate = vi.fn();
+      render(
+        <MessageBubble
+          message={makeMessage({ id: 'msg-9', role: 'assistant', content: 'Reply' })}
+          onRegenerate={onRegenerate}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Regenerate response' }));
+      expect(onRegenerate).toHaveBeenCalledWith('msg-9');
+    });
+
+    it('opens a menu with try again and the offered models, marking the current one', async () => {
+      const user = userEvent.setup();
+      const onRegenerate = vi.fn();
+      const onRegenerateWithModel = vi.fn();
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'msg-9',
+            role: 'assistant',
+            content: 'Reply',
+            model: 'model-b',
+          })}
+          onRegenerate={onRegenerate}
+          onRegenerateWithModel={onRegenerateWithModel}
+          regenerateModelOptions={options}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Regenerate response' }));
+      expect(onRegenerate).not.toHaveBeenCalled();
+      const current = screen.getByRole('menuitem', { name: 'Model B' });
+      expect(current.querySelector('svg')).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Model A' }).querySelector('svg')).toBeNull();
+
+      await user.click(screen.getByRole('menuitem', { name: 'Model A' }));
+      expect(onRegenerateWithModel).toHaveBeenCalledWith('msg-9', 'model-a');
+
+      await user.click(screen.getByRole('button', { name: 'Regenerate response' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Try again' }));
+      expect(onRegenerate).toHaveBeenCalledWith('msg-9');
+    });
+  });
+
+  describe('streaming marker', () => {
+    it('flags the assistant body while it streams so the caret can attach to the last block', () => {
+      const { rerender } = render(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant', content: 'Partial', isStreaming: true })}
+        />,
+      );
+      expect(document.querySelector('.message-text')?.getAttribute('data-streaming')).toBe('true');
+
+      rerender(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant', content: 'Partial', isStreaming: false })}
+        />,
+      );
+      expect(document.querySelector('.message-text')?.hasAttribute('data-streaming')).toBe(false);
+    });
+
+    it('never flags the user bubble', () => {
+      render(<MessageBubble message={makeMessage({ isStreaming: true })} />);
+      expect(document.querySelector('.message-text')?.hasAttribute('data-streaming')).toBe(false);
+    });
+  });
+
+  describe('pin toggle button', () => {
+    it('renders the pin action only when onPin is provided', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<MessageBubble message={makeMessage()} />);
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.queryByRole('menuitemcheckbox', { name: 'Pin message' })).toBeNull();
+      await user.keyboard('{Escape}');
+
+      rerender(<MessageBubble message={makeMessage()} onPin={vi.fn()} />);
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Pin message' })).toBeInTheDocument();
+    });
+
+    it('calls onPin with the message id when clicked', async () => {
+      const user = userEvent.setup();
       const onPin = vi.fn();
       render(<MessageBubble message={makeMessage({ id: 'msg-42' })} onPin={onPin} />);
 
-      fireEvent.click(screen.getByLabelText('Pin message'));
+      await user.click(screen.getByLabelText('More message actions'));
+      await user.click(screen.getByRole('menuitemcheckbox', { name: 'Pin message' }));
       expect(onPin).toHaveBeenCalledWith('msg-42');
     });
 
-    it('reflects pinned state via aria-label and aria-pressed', () => {
+    it('reflects pinned state via its label and aria-checked', async () => {
+      const user = userEvent.setup();
       render(
         <MessageBubble message={makeMessage({ metadata: { isPinned: true } })} onPin={vi.fn()} />,
       );
-      const btn = screen.getByLabelText('Unpin message');
-      expect(btn).toHaveAttribute('aria-pressed', 'true');
+      await user.click(screen.getByLabelText('More message actions'));
+      const item = screen.getByRole('menuitemcheckbox', { name: 'Unpin message' });
+      expect(item).toHaveAttribute('aria-checked', 'true');
     });
   });
 
@@ -897,7 +1063,8 @@ describe('MessageBubble', () => {
   });
 
   describe('token metadata in dropdown', () => {
-    it('renders the catalog display name instead of a transport model identifier', () => {
+    it('renders the catalog display name instead of a transport model identifier', async () => {
+      const user = userEvent.setup();
       const modelName = getModelMetadataById(CHAT_MODEL_ID)?.name;
       expect(modelName).toBeTruthy();
 
@@ -907,6 +1074,7 @@ describe('MessageBubble', () => {
         />,
       );
 
+      await user.click(screen.getByLabelText('More message actions'));
       expect(screen.getByText(modelName!)).toBeInTheDocument();
       if (modelName !== CHAT_MODEL_ID) {
         expect(screen.queryByText(CHAT_MODEL_ID)).not.toBeInTheDocument();
@@ -923,7 +1091,8 @@ describe('MessageBubble', () => {
       expect(() => render(<MessageBubble message={msg} />)).not.toThrow();
     });
 
-    it('does not resurrect a retired managed model identifier from historical messages', () => {
+    it('does not resurrect a retired managed model identifier from historical messages', async () => {
+      const user = userEvent.setup();
       const retiredFixtureId = 'fixture-retired-managed-model';
       render(
         <MessageBubble
@@ -935,6 +1104,7 @@ describe('MessageBubble', () => {
         />,
       );
 
+      await user.click(screen.getByLabelText('More message actions'));
       expect(screen.getByText('Unavailable model')).toBeInTheDocument();
       expect(screen.queryByText(retiredFixtureId)).not.toBeInTheDocument();
     });

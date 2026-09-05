@@ -99,6 +99,7 @@
     --chat-radius-lg: var(--corner-surface);
     --chat-radius-xl: var(--corner-panel);
     --chat-radius-2xl: var(--corner-overlay);
+    --chat-user-bubble-radius: var(--corner-panel);
   }
 
   .dark {
