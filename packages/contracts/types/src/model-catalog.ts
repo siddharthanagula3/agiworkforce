@@ -1411,6 +1411,39 @@ export function getModelFamilySlotForModel(modelId: string): ModelFamilySlot | n
   return MODEL_TO_FAMILY_SLOT.get(modelId) ?? null;
 }
 
+export interface ModelRegistryFacts {
+  family: string | null;
+  isRouter: boolean;
+  aliases: readonly string[];
+  releasedOn: string | null;
+  stage: string | null;
+  capabilities: NormalizedModelCapabilities;
+}
+
+interface RegistryModelRecord {
+  identity: { family?: string | null; role?: string; aliases?: string[] };
+  lifecycle: { releasedOn?: string | null; stage?: string | null };
+}
+
+export function getModelRegistryFacts(modelId: string): ModelRegistryFacts | null {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) return null;
+  const models = modelRegistry.models as Readonly<Record<string, RegistryModelRecord>>;
+  const entry = models[canonicalModelId];
+  if (!entry) return null;
+  const capabilities = (
+    modelRegistry.capabilities as Readonly<Record<string, NormalizedModelCapabilities>>
+  )[canonicalModelId];
+  return {
+    family: entry.identity.family ?? null,
+    isRouter: entry.identity.role === 'router',
+    aliases: Object.freeze([...(entry.identity.aliases ?? [])]),
+    releasedOn: entry.lifecycle.releasedOn ?? null,
+    stage: entry.lifecycle.stage ?? null,
+    capabilities: capabilities ?? {},
+  };
+}
+
 const MODEL_TO_FIRST_SLOT: ReadonlyMap<string, RoutingSlot> = (() => {
   const m = new Map<string, RoutingSlot>();
   for (const [slotKey, def] of Object.entries(SLOT_REGISTRY)) {
@@ -1511,13 +1544,153 @@ export function normalizeSubscriptionAccessTier(tier: string): SubscriptionAcces
   }
 }
 
+export const CHAT_MODEL_TYPES = [
+  'chat',
+  'code',
+  'reasoning',
+  'multimodal',
+  'search',
+] as const satisfies readonly ModelType[];
+
+export function listChatModels(): ModelMetadata[] {
+  const types = new Set<string>(CHAT_MODEL_TYPES);
+  return listCanonicalModels().filter((model) => types.has(model.modelType));
+}
+
+export const MODEL_PRICE_BAND_SCALE = 4;
+
+export interface ModelPriceBand {
+  filled: number;
+  scale: number;
+}
+
+function blendedModelPrice(model: ModelMetadata): number | null {
+  if (!Number.isFinite(model.inputCost) || !Number.isFinite(model.outputCost)) return null;
+  return model.inputCost + model.outputCost;
+}
+
+/**
+ * D-2026-09-05-13. Bands rank a model against the population some plan admits,
+ * which is plan independent, so a band never moves when a plan changes. Lazy
+ * because the servable population is itself an admission answer.
+ */
+let servablePriceBands: ReadonlyMap<string, ModelPriceBand> | null = null;
+
+function computeServablePriceBands(): ReadonlyMap<string, ModelPriceBand> {
+  const prices = new Map<string, number>();
+  for (const model of listChatModels()) {
+    if (getMinimumRequiredTier(model.id) === null) continue;
+    const price = blendedModelPrice(model);
+    if (price !== null) prices.set(model.id, price);
+  }
+  const ladder = [...new Set(prices.values())].sort((left, right) => left - right);
+  const bands = new Map<string, ModelPriceBand>();
+  for (const [modelId, price] of prices) {
+    const rank = ladder.indexOf(price);
+    bands.set(modelId, {
+      filled: Math.min(
+        MODEL_PRICE_BAND_SCALE,
+        1 + Math.floor((rank / ladder.length) * MODEL_PRICE_BAND_SCALE),
+      ),
+      scale: MODEL_PRICE_BAND_SCALE,
+    });
+  }
+  return bands;
+}
+
+export function getModelPriceBand(modelId: string): ModelPriceBand | null {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) return null;
+  servablePriceBands ??= computeServablePriceBands();
+  return servablePriceBands.get(canonicalModelId) ?? null;
+}
+
+const MANAGED_TRAFFIC_COMMERCIAL_STATUSES: ReadonlySet<string> = Object.freeze(
+  new Set<string>(['agi_direct', 'authorized_marketplace', 'free_commercial']),
+);
+
+interface RegistryRouteRecord {
+  modelKey: string;
+  trustModes: readonly string[];
+  selectable: boolean;
+  commercialStatus: string;
+}
+
+const MANAGED_TRAFFIC_MODEL_IDS: ReadonlySet<string> = (() => {
+  const permitted = new Set<string>();
+  const routes = modelRegistry.routes as Readonly<Record<string, RegistryRouteRecord>>;
+  for (const route of Object.values(routes)) {
+    if (!route.selectable) continue;
+    if (!route.trustModes.includes('managed_cloud')) continue;
+    if (!MANAGED_TRAFFIC_COMMERCIAL_STATUSES.has(route.commercialStatus)) continue;
+    permitted.add(route.modelKey);
+  }
+  return permitted;
+})();
+
+export function isManagedTrafficPermitted(modelId: string): boolean {
+  const canonicalModelId = normalizeModelId(modelId);
+  return canonicalModelId ? MANAGED_TRAFFIC_MODEL_IDS.has(canonicalModelId) : false;
+}
+
+function isNamedInAnyTier(canonicalModelId: string): boolean {
+  return (
+    getAllowedModelsForTier('flagship_additions').includes(canonicalModelId) ||
+    getAllowedModelsForTier('pro_additions').includes(canonicalModelId) ||
+    getAllowedModelsForTier('economy').includes(canonicalModelId)
+  );
+}
+
+const NAMED_TIER_PLAN_FLOOR = [
+  { tier: 'economy', plan: 'basic' },
+  { tier: 'pro_additions', plan: 'pro' },
+  { tier: 'flagship_additions', plan: 'max' },
+] as const satisfies readonly { tier: TierKey; plan: 'basic' | 'pro' | 'max' }[];
+
+/**
+ * The blended price ceiling each plan already covers, read from the models the
+ * allow list names at that plan. Cumulative so the ladder cannot invert when a
+ * dearer model is named at a lower plan than a cheaper one.
+ */
+let namedPlanCeilings: readonly { plan: 'basic' | 'pro' | 'max'; ceiling: number }[] | null = null;
+
+function computeNamedPlanCeilings(): readonly { plan: 'basic' | 'pro' | 'max'; ceiling: number }[] {
+  let running = 0;
+  return NAMED_TIER_PLAN_FLOOR.map(({ tier, plan }) => {
+    for (const modelId of getAllowedModelsForTier(tier)) {
+      const metadata = getModelMetadataById(modelId);
+      const price = metadata ? blendedModelPrice(metadata) : null;
+      if (price !== null && price > running) running = price;
+    }
+    return { plan, ceiling: running };
+  });
+}
+
+/**
+ * D-2026-09-05-13. `tierAllowedModels` stays authoritative for every model it
+ * names; a chat model it names nowhere derives its floor here so the picker,
+ * the request processor and managed failover all read one answer.
+ */
+function deriveMinimumRequiredTier(canonicalModelId: string): 'basic' | 'pro' | 'max' | null {
+  if (!isManagedTrafficPermitted(canonicalModelId)) return null;
+  const metadata = getModelMetadataById(canonicalModelId);
+  if (!metadata) return null;
+  const types = new Set<string>(CHAT_MODEL_TYPES);
+  if (!types.has(metadata.modelType)) return null;
+  const price = blendedModelPrice(metadata);
+  if (price === null) return null;
+  namedPlanCeilings ??= computeNamedPlanCeilings();
+  const covering = namedPlanCeilings.find((entry) => price <= entry.ceiling);
+  return covering?.plan ?? namedPlanCeilings[namedPlanCeilings.length - 1]!.plan;
+}
+
 export function getMinimumRequiredTier(modelId: string): 'basic' | 'pro' | 'max' | null {
   const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return null;
   if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) return 'max';
   if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) return 'pro';
   if (getAllowedModelsForTier('economy').includes(canonicalModelId)) return 'basic';
-  return null;
+  return deriveMinimumRequiredTier(canonicalModelId);
 }
 
 export function canAccessModelForSubscriptionTier(
@@ -1529,6 +1702,14 @@ export function canAccessModelForSubscriptionTier(
 
   const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return false;
+
+  if (!isNamedInAnyTier(canonicalModelId)) {
+    const derived = deriveMinimumRequiredTier(canonicalModelId);
+    if (!derived) return false;
+    if (derived === 'basic') return tier !== 'free' || rawTier === 'free';
+    if (derived === 'pro') return tier === 'pro' || tier === 'max' || tier === 'enterprise';
+    return tier === 'max' || tier === 'enterprise';
+  }
 
   if (tier === 'free') {
     if (rawTier !== 'free') return false;
