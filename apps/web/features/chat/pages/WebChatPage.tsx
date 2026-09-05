@@ -3269,6 +3269,16 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     setProjectSettingsId(projectId);
   }, []);
 
+  const handleProjectShare = useCallback(async (projectId: string) => {
+    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(projectId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Project link copied');
+    } catch {
+      toast.error('Could not copy the project link');
+    }
+  }, []);
+
   /**
    * Project settings: open the settings dialog.
    */
@@ -4705,6 +4715,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onProjectOpen: handleProjectOpen,
     onProjectNewChat: handleProjectNewChat,
     onProjectRename: handleProjectRename,
+    onProjectShare: (id: string) => void handleProjectShare(id),
     onProjectSettings: handleProjectSettings,
     onProjectPin: handleProjectPin,
     onProjectDelete: handleProjectDelete,
