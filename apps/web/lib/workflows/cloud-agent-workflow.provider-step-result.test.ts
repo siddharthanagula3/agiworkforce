@@ -41,6 +41,7 @@ function fullLine(): Required<CollectedProviderLine> {
         elapsedMs: 42,
       },
     ],
+    searchActivity: false,
   };
 }
 
