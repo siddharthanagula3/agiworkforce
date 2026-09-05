@@ -135,11 +135,8 @@ minimum data required, apply least privilege, and never commit a secret. Desktop
 egress funnels through `apps/desktop/src/lib/egressGuard.ts`; Rust transports
 must use the host-owned egress policy.
 
-Enforced by: `check:trust-boundaries`, `check:rust-egress-boundary`,
-`check:db-isolation`, `check:rls-boundary` (fails a file under `apps/web` that
-reaches the BYPASSRLS `getNeonDb()` connection while referencing a user-owned
-table without a reason declared in `scripts/config/rls-boundary-allowlist.json`),
-`check:secrets`, and a per-surface `trust-boundary.test.ts`.
+Enforced by: `check:trust-boundaries`, `check:rust-egress-boundary`, `check:db-isolation`,
+`check:rls-boundary`, `check:secrets`, and a per-surface `trust-boundary.test.ts`.
 
 ## 7. Models, routing, and cost
 
