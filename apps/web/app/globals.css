@@ -2308,9 +2308,10 @@ html[data-contrast='more'] *:focus-visible {
 } /*
  * The composer can become narrow even on a wide viewport when both the chat
  * sidebar and Artifacts panel are open. Viewport breakpoints cannot see that
- * constraint, so make the composer its own query container and move the
- * Chat/AGI Work selector into the + menu before it crowds the model, voice,
- * and Send controls.
+ * constraint, so make the composer its own query container and give the text
+ * field a row of its own before the plus, model, voice and Send controls
+ * squeeze it down to a couple of characters. The leading control keeps the
+ * left edge of the second row; everything after it is pushed to the right.
  */
 .chat-composer-container {
   container-type: inline-size;
@@ -2319,13 +2320,22 @@ html[data-contrast='more'] *:focus-visible {
   padding-bottom: 1rem;
 }
 
+.chat-composer-row {
+  flex-wrap: nowrap;
+}
+
 @container (max-width: 560px) {
-  .chat-composer-mode-inline {
-    display: none !important;
+  .chat-composer-row {
+    flex-wrap: wrap;
   }
 
-  .chat-composer-mode-in-menu {
-    display: block !important;
+  .chat-composer-field {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .chat-composer-leading-end {
+    margin-right: auto;
   }
 } /* ─── Print ─────────────────────────────────────────────────────────────────
  *

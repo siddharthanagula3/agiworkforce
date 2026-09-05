@@ -45,4 +45,21 @@ describe('StyleSelector trigger', () => {
     expect(trigger).toHaveTextContent('Style');
     expect(trigger.className).not.toContain('text-[var(--chat-accent-primary-text)]');
   });
+
+  // It lives in the "+" menu beside Skills and Connectors, so it carries their
+  // row shape: full width, the same padding and text size, and a label that
+  // survives a narrow composer instead of collapsing to a bare icon.
+  it('renders as a full-width labelled menu row at every width', () => {
+    render(<StyleSelector />);
+
+    const trigger = screen.getByRole('button', { name: 'Response style' });
+    const label = screen.getByText('Style');
+
+    expect(trigger.contains(label)).toBe(true);
+    expect(label.className).not.toContain('hidden');
+    for (const rowClass of ['w-full', 'px-3', 'py-2', 'text-sm']) {
+      expect(trigger.className).toContain(rowClass);
+    }
+    expect(trigger.className).not.toContain('rounded-full');
+  });
 });
