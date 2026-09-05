@@ -158,9 +158,9 @@ describe('ComposerFooter · layout', () => {
     expect(container.textContent).not.toMatch(/Cmd\+Enter|Enter to send|newline/i);
   });
 
-  it('renders BudgetTrackerDisplay', () => {
+  it('does NOT render BudgetTrackerDisplay on the composer face', () => {
     render(<ComposerFooter />);
-    expect(screen.getByTestId('budget-tracker-display')).toBeInTheDocument();
+    expect(screen.queryByTestId('budget-tracker-display')).not.toBeInTheDocument();
   });
 
   it('renders StyleSelector', () => {
