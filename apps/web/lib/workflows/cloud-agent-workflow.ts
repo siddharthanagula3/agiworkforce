@@ -231,6 +231,7 @@ const ToolResultSchema = z
     content: z.string(),
     isError: z.boolean(),
     unavailable: z.boolean().optional(),
+    unavailableFamily: z.literal('execution').optional(),
     interactiveCard: z
       .custom<InteractiveCard>((value) => parseInteractiveCardDelta({ card: value }) !== null)
       .optional(),

@@ -406,6 +406,12 @@ export interface ToolLoopToolResult {
    * The governor withdraws such a tool so the model cannot retry it all turn.
    */
   unavailable?: boolean;
+  /**
+   * Set when the reason applies to a whole family rather than to this one tool:
+   * a sandbox that will not start refuses every execution tool, so withdrawing
+   * only the one that was called leaves the same refusal one call away.
+   */
+  unavailableFamily?: 'execution';
   interactiveCard?: InteractiveCard;
   source?: FetchedSource;
   sources?: FetchedSource[];
@@ -1590,6 +1596,7 @@ async function runMcpTool(
         content: `Tool ${toolCall.qualifiedName} is not available.`,
         isError: true,
         unavailable: true,
+        unavailableFamily: 'execution',
       };
     }
     // Enforced HERE because the execution tools are declared by the client in
@@ -1608,6 +1615,7 @@ async function runMcpTool(
           'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.',
         isError: true,
         unavailable: true,
+        unavailableFamily: 'execution',
       };
     }
     const { executor, cause } = await e2bExecutor();
@@ -1622,7 +1630,7 @@ async function runMcpTool(
       content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
       isError: !result.ok,
       pngResults: result.pngResults,
-      ...(result.unavailable ? { unavailable: true } : {}),
+      ...(result.unavailable ? { unavailable: true, unavailableFamily: 'execution' as const } : {}),
     };
   }
 
@@ -2575,6 +2583,7 @@ export async function* runToolLoop(
       content: string;
       isError: boolean;
       unavailable?: boolean;
+      unavailableFamily?: 'execution';
       source?: FetchedSource;
       sources?: FetchedSource[];
       pngResults?: string[];
@@ -2701,7 +2710,13 @@ export async function* runToolLoop(
     // A tool that could not run is not a tool the model should try again: it
     // leaves the offered set here so the remaining steps go to the answer.
     for (const r of results) {
-      if (r.unavailable) toolGovernor.withdraw(r.tc.qualifiedName, 'unavailable');
+      if (!r.unavailable) continue;
+      toolGovernor.withdraw(r.tc.qualifiedName, 'unavailable');
+      if (r.unavailableFamily !== 'execution') continue;
+      for (const tool of llmRequest.tools ?? []) {
+        const name = functionToolName(tool);
+        if (name && isExecutionTool(name)) toolGovernor.withdraw(name, 'unavailable');
+      }
     }
 
     for (const r of results) {
@@ -3295,6 +3310,9 @@ export async function* runToolLoop(
         isForcedSkillToolChoice(llmRequest.tool_choice)
           ? { tool_choice: 'auto' as const }
           : {}),
+        // A tool choice with no tools on offer is a request providers refuse.
+        // The governor can empty the set mid-turn, so the choice goes with it.
+        ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
       if (processed.freeTrial) {
         const fitted = applyFreeTrialProviderBudget({
