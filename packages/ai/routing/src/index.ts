@@ -45,6 +45,7 @@ export {
   previewAutoRoute,
   resolveAutoRoute,
   resolveTierMaximumProfile,
+  unhonouredCapabilityPenalty,
   CANARY_ENV,
   OBSERVED_HEALTH_ENV,
 } from './auto';
@@ -87,6 +88,7 @@ export {
   DEFAULT_ROUTE_HEALTH_CONFIG,
   encodeRouteOutcomeEvent,
   healthyRouteHealthSnapshot,
+  isCredentialUnfunded,
   isRouteBreakerOpen,
   isRouteHealthDegraded,
   parseRouteOutcomeEvents,
@@ -140,9 +142,32 @@ export {
   resilienceScopeForCategory,
   resolveCredentialClass,
   routeHealthConfigFromBreakerProfile,
+  routeOutcomeClassForCategory,
   trustModesForProvider,
 } from './breaker-profiles';
 export type { BreakerProfile, CredentialClass, ResilienceScope } from './breaker-profiles';
+export {
+  buildCapabilityHealthSnapshot,
+  capabilityHealthEventsKey,
+  createCapabilityHealthStore,
+  DEFAULT_CAPABILITY_HEALTH_CONFIG,
+  honouredCapabilitySnapshot,
+  resolveCapabilityHealthConfig,
+  unhonouredCapabilitiesByRoute,
+  CAPABILITY_HEALTH_MISS_THRESHOLD_ENV,
+  CAPABILITY_HEALTH_WINDOW_ENV,
+} from './capability-health';
+export type {
+  CapabilityHealthByRoute,
+  CapabilityHealthConfig,
+  CapabilityHealthKey,
+  CapabilityHealthSnapshot,
+  CapabilityHealthStore,
+  CapabilityHealthStoreFailureEvent,
+  CapabilityHealthStoreOptions,
+  CapabilityObservationEvent,
+  ObservedCapability,
+} from './capability-health';
 export type {
   AutoCapabilityEnvelope,
   AutoCapabilityEnvelopeRequest,
