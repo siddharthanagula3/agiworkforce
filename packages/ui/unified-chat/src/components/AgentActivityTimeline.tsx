@@ -197,6 +197,22 @@ function restatesSummary(entry: AgentActivityEntry, totalRows: number, summary: 
   return entry.summary === summary;
 }
 
+/**
+ * A step that asks for three execution tools at once gets three identical "not
+ * available" results, and three rows saying the same sentence is noise, not
+ * information. One notice per distinct sentence per run; the tools that ran are
+ * untouched.
+ */
+function dedupeUnavailableNotices(entries: AgentActivityEntry[]): AgentActivityEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (entry.kind !== 'tool' || !entry.unavailable) return true;
+    if (seen.has(entry.summary)) return false;
+    seen.add(entry.summary);
+    return true;
+  });
+}
+
 function hasReportableWork(entries: readonly AgentActivityEntry[]): boolean {
   return entries.some((entry) => !isLocalPlaceholderActivityEntry(entry));
 }
@@ -697,9 +713,11 @@ export function AgentActivityTimeline({
   // A child row that only restates the summary above it is not a step. The
   // collapsed line is derived from the latest entry, so a run with one entry
   // printed the same sentence twice, once as the header and once beneath it.
-  const visibleEntries = rowEntries
-    .slice(hiddenEntryCount)
-    .filter((entry) => !restatesSummary(entry, rowEntries.length, summary));
+  const visibleEntries = dedupeUnavailableNotices(
+    rowEntries
+      .slice(hiddenEntryCount)
+      .filter((entry) => !restatesSummary(entry, rowEntries.length, summary)),
+  );
   const expandable = visibleEntries.length > 0 || hiddenEntryCount > 0;
 
   if (activity.status === 'completed' && !hasReportableWork(activity.entries)) return null;

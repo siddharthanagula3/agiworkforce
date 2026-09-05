@@ -2384,21 +2384,27 @@ export async function* runToolLoop(
       ? managedCloudE2BSessionScope(options.userId, conversationId)
       : undefined;
   let e2bExecutor: E2BExecutor | null = null;
-  let e2bExecutorResolved = false;
   let e2bUnavailableCause: E2BUnavailableCause | null = null;
   let e2bBaseline: SandboxSnapshot | null = null;
   let executionToolRan = false;
   const turnPngResults: string[] = [];
+  // Memoised on the PROMISE, not on a flag: a step that asks for three
+  // execution tools at once runs them in parallel, and a flag let all three
+  // race past it and each attempt its own sandbox. One attempt per turn, and
+  // every caller after the first sees the answer the first one got.
+  let e2bResolution: Promise<E2BExecutorResolution> | null = null;
   async function resolveE2BExecutor(): Promise<E2BExecutorResolution> {
-    if (!e2bExecutorResolved) {
-      e2bExecutor = await getE2BExecutor(e2bSessionScope, (cause) => {
-        e2bUnavailableCause ??= cause;
-      });
-      e2bExecutorResolved = true;
-      if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
-    }
     executionToolRan = true;
-    return { executor: e2bExecutor, cause: e2bUnavailableCause };
+    if (!e2bResolution) {
+      e2bResolution = (async () => {
+        e2bExecutor = await getE2BExecutor(e2bSessionScope, (cause) => {
+          e2bUnavailableCause ??= cause;
+        });
+        if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
+        return { executor: e2bExecutor, cause: e2bUnavailableCause };
+      })();
+    }
+    return e2bResolution;
   }
 
   async function harvestGeneratedFilesEvents(): Promise<SseLine[]> {
