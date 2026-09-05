@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { LIBRARY_DEFAULT_SORT, type LibrarySort } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
@@ -370,7 +371,8 @@ export interface LibraryAssetRow {
 }
 
 export interface ListLibraryAssetsOptions {
-  kind?: MediaKind;
+  kinds?: readonly MediaKind[];
+  sort?: LibrarySort;
   surface?: 'artifact' | 'file';
   origin?: 'generated' | 'uploaded';
   search?: string;
@@ -380,6 +382,14 @@ export interface ListLibraryAssetsOptions {
 }
 
 const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
+
+const DELETED_ORDER_CLAUSE = 'deleted_at desc';
+
+const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
+  modified: 'created_at desc',
+  name: "coalesce(metadata->>'filename', kind) asc",
+  size: 'byte_size desc nulls last',
+};
 
 function escapeIlike(term: string): string {
   return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -412,9 +422,9 @@ export async function listLibraryAssets(
     const params: unknown[] = [userId, organizationId];
     const clauses: string[] = [];
 
-    if (opts.kind) {
-      params.push(opts.kind);
-      clauses.push(`and kind = $${params.length}`);
+    if (opts.kinds && opts.kinds.length > 0) {
+      params.push(opts.kinds);
+      clauses.push(`and kind = any($${params.length}::text[])`);
     }
     if (opts.surface) {
       params.push(opts.surface);
@@ -439,7 +449,9 @@ export async function listLibraryAssets(
     const lifecycleClause = opts.deleted
       ? "and deleted_at is not null and deleted_at > now() - interval '30 days'"
       : 'and deleted_at is null';
-    const orderColumn = opts.deleted ? 'deleted_at' : 'created_at';
+    const orderClause = opts.deleted
+      ? DELETED_ORDER_CLAUSE
+      : ORDER_CLAUSE_BY_SORT[opts.sort ?? LIBRARY_DEFAULT_SORT];
 
     params.push(limit, offset);
     const rows = await db.query<Record<string, unknown>>(
@@ -448,7 +460,7 @@ export async function listLibraryAssets(
         where user_id = $1
           and organization_id is not distinct from $2::uuid
           ${lifecycleClause} ${clauses.join(' ')}
-        order by ${orderColumn} desc, id desc
+        order by ${orderClause}, id desc
         limit $${params.length - 1} offset $${params.length}`,
       params,
     );

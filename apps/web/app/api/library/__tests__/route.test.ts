@@ -123,9 +123,46 @@ describe('GET /api/library', () => {
     const res = await GET(makeRequest('?kind=image&surface=artifact'));
     expect(res.status).toBe(200);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('and kind = $3');
+    expect(sql).toContain('and kind = any($3::text[])');
     expect(sql).toContain("coalesce(metadata->>'surface', 'file') = $4");
-    expect(params).toEqual(['user-owner', null, 'image', 'artifact', 25, 0]);
+    expect(params).toEqual(['user-owner', null, ['image'], 'artifact', 25, 0]);
+  });
+
+  // The Images tab shows videos beside stills, so one request has to carry both
+  // kinds. A per-kind request would page them independently and interleave wrong.
+  it('accepts several kinds in one request so a tab can span them', async () => {
+    const res = await GET(makeRequest('?kind=image,video'));
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('and kind = any($3::text[])');
+    expect(params[2]).toEqual(['image', 'video']);
+  });
+
+  it('rejects a kind the catalog does not define rather than ignoring it', async () => {
+    const res = await GET(makeRequest('?kind=image,binary'));
+    expect(res.status).toBe(400);
+  });
+
+  it('orders by the requested sort and defaults to most recently modified', async () => {
+    await GET(makeRequest(''));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by created_at desc');
+
+    mockQuery.mockClear();
+    await GET(makeRequest('?sort=name'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
+      "order by coalesce(metadata->>'filename', kind) asc",
+    );
+
+    mockQuery.mockClear();
+    await GET(makeRequest('?sort=size'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
+      'order by byte_size desc nulls last',
+    );
+  });
+
+  it('keeps the deleted bin on its own ordering, whatever sort is asked for', async () => {
+    await GET(makeRequest('?deleted=true&sort=size'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by deleted_at desc');
   });
 
   it('derives the uploaded/generated origin filter from metadata.origin', async () => {

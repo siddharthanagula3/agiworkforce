@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 import { GENERATED_FILE_SURFACES } from './generated-files';
 
@@ -29,8 +28,18 @@ export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 export const LIBRARY_DEFAULT_PAGE_SIZE = 24;
 export const LIBRARY_MAX_PAGE_SIZE = 100;
 
+export const LIBRARY_SORTS = ['modified', 'name', 'size'] as const;
+export type LibrarySort = (typeof LIBRARY_SORTS)[number];
+export const LIBRARY_DEFAULT_SORT: LibrarySort = 'modified';
+
+const LibraryKindListSchema = z
+  .string()
+  .transform((value) => value.split(',').map((entry) => entry.trim()))
+  .pipe(z.array(z.enum(LIBRARY_KINDS)).min(1));
+
 export const LibraryListQuerySchema = z.object({
-  kind: z.enum(LIBRARY_KINDS).optional(),
+  kind: LibraryKindListSchema.optional(),
+  sort: z.enum(LIBRARY_SORTS).default(LIBRARY_DEFAULT_SORT),
   surface: z.enum(GENERATED_FILE_SURFACES).optional(),
   origin: z.enum(LIBRARY_ORIGINS).optional(),
   q: z.string().trim().min(1).max(200).optional(),
