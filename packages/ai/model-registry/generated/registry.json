@@ -195,10 +195,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "April 2026",
+        "released": "April 22, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-04-22",
         "deprecatedOn": null
       },
       "evidenceRefs": []
@@ -220,10 +220,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "February 2026",
+        "released": "February 19, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-02-19",
         "deprecatedOn": null
       },
       "evidenceRefs": []
@@ -255,10 +255,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "July 2026",
+        "released": "July 21, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-07-21",
         "deprecatedOn": null
       },
       "evidenceRefs": []
@@ -632,10 +632,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "April 2026",
+        "released": "April 21, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-04-21",
         "deprecatedOn": null
       },
       "evidenceRefs": []
@@ -678,10 +678,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "September 2026",
+        "released": "September 2, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-09-02",
         "deprecatedOn": null
       },
       "evidenceRefs": []
@@ -1051,10 +1051,10 @@
       "lifecycle": {
         "status": "active",
         "availability": "preview",
-        "released": "June 2026",
+        "released": "June 30, 2026",
         "deprecationDate": "2026-09-30",
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-06-30",
         "deprecatedOn": "2026-09-30"
       },
       "evidenceRefs": []
