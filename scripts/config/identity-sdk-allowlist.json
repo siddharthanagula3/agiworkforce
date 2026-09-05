@@ -6,12 +6,8 @@
       "reason": "Mounts the provider's React context around the app. The port covers what the product asks of a provider, not the provider's own component tree, so the mount is part of a swap rather than a leak the port can absorb."
     },
     {
-      "path": "apps/web/app/login/page.tsx",
-      "reason": "Renders the provider's hosted sign-in component. A swap replaces this page with the new provider's component; nothing behind it needs to know."
-    },
-    {
-      "path": "apps/web/app/signup/page.tsx",
-      "reason": "Renders the provider's hosted sign-up component, for the same reason as the sign-in page."
+      "path": "apps/web/features/auth/identityAuthAdapter.tsx",
+      "reason": "The only browser importer of the provider's sign-in and sign-up hooks. It turns them into this product's own auth contract (start with email, submit password, submit code, resend, start a provider, finish the redirect), so /login, /signup and the SSO callback name no vendor and a swap replaces this file alone."
     },
     {
       "path": "apps/web/lib/identity/client.ts",
