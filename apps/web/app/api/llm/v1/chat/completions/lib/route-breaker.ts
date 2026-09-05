@@ -12,6 +12,7 @@ import { isRouteBreakerOpen } from '@agiworkforce/routing';
 import { logger } from '@/lib/logger';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import {
+  getCredentialCooldownSnapshot,
   getCredentialHealthSnapshot,
   getRouteHealthSnapshot,
   providerOfRouteId,
@@ -27,6 +28,7 @@ export interface FailoverBreakerView {
   openCredentialProviders: readonly string[];
   onCredentialRejected: (provider: string) => void;
   isCandidateBreakerOpen: (candidate: { modelKey: string; provider: string }) => boolean;
+  isCredentialCooling: (candidate: { modelKey: string; provider: string }) => boolean;
 }
 
 function providerOfCandidate(modelKey: string, fallbackProvider: string): string {
@@ -68,9 +70,10 @@ export async function resolveFailoverBreakerView(
   const routeIds = candidateRouteIds(processed);
   const providerIds = [...new Set(routeIds.map(providerOfRouteId))];
 
-  const [routeSnapshots, credentialSnapshots] = await Promise.all([
+  const [routeSnapshots, credentialSnapshots, cooldownSnapshots] = await Promise.all([
     getRouteHealthSnapshot(routeIds, nowMs),
     getCredentialHealthSnapshot(providerIds, nowMs),
+    getCredentialCooldownSnapshot(providerIds, nowMs),
   ]);
 
   const openCredentialProviders = providerIds.filter((providerId) =>
@@ -82,5 +85,6 @@ export async function resolveFailoverBreakerView(
     onCredentialRejected: recordCredentialRejection,
     isCandidateBreakerOpen: ({ modelKey, provider }) =>
       isRouteBreakerOpen(routeSnapshots[buildServingRouteId(provider, modelKey)]),
+    isCredentialCooling: ({ provider }) => isRouteBreakerOpen(cooldownSnapshots[provider]),
   };
 }
