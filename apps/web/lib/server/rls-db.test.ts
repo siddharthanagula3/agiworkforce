@@ -24,7 +24,10 @@ vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...(args as [])),
 }));
 
-vi.mock('@clerk/backend', () => ({ verifyToken: vi.fn() }));
+const mockVerifyToken = vi.fn();
+vi.mock('@clerk/backend', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...(args as [])),
+}));
 
 const mockVerifyKey = vi.fn();
 vi.mock('@/lib/services/api-key-service', () => ({
@@ -159,8 +162,7 @@ describe('getUserScopedDb with an API-key principal', () => {
       method: 'POST',
       headers: { authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.session.sig' },
     });
-    const { verifyToken } = await import('@clerk/backend');
-    vi.mocked(verifyToken).mockResolvedValue({ sub: 'user_session' } as never);
+    mockVerifyToken.mockResolvedValue({ sub: 'user_session' });
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
 
     const scoped = await getUserScopedDb(request);
@@ -250,8 +252,7 @@ describe('tenant scope propagation onto the active trace context', () => {
       method: 'POST',
       headers: { authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.session.sig' },
     });
-    const { verifyToken } = await import('@clerk/backend');
-    vi.mocked(verifyToken).mockResolvedValue({ sub: 'user_session' } as never);
+    mockVerifyToken.mockResolvedValue({ sub: 'user_session' });
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
 
     await withTrace(async () => {

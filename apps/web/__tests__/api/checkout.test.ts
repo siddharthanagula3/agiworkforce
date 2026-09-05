@@ -32,14 +32,14 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
   getCheckoutPriceSelection: (...args: unknown[]) => mockGetCheckoutPriceSelection(...args),
 }));
 
+const identityState = vi.hoisted(() => ({ userId: 'test-user-id' as string | null }));
 vi.mock('@clerk/nextjs/server', () => ({
-  auth: vi.fn(() => ({ userId: 'test-user-id' })),
+  auth: vi.fn(async () => ({ userId: identityState.userId, getToken: async () => 'jwt' })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => {
-    const { auth } = await import('@clerk/nextjs/server');
-    const { userId } = (await auth()) as unknown as { userId: string | null };
+    const { userId } = identityState;
     if (!userId) {
       const { createError } = await import('@/lib/errors');
       throw createError.unauthorized();
@@ -105,11 +105,11 @@ describe('POST /api/checkout', () => {
       if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_test123' }];
       return [];
     });
+    identityState.userId = 'test-user-id';
   });
 
   it('should return 401 if user is not authenticated', async () => {
-    const { auth } = await import('@clerk/nextjs/server');
-    vi.mocked(auth).mockReturnValueOnce({ userId: null } as unknown as ReturnType<typeof auth>);
+    identityState.userId = null;
 
     const request = new NextRequest('http://localhost/api/checkout', {
       method: 'POST',

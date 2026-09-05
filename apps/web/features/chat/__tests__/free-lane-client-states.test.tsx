@@ -9,9 +9,17 @@ import { MessageBubble } from '../components/messages/MessageBubble';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
-vi.mock('@clerk/nextjs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@clerk/nextjs')>();
-  return { ...actual, useAuth: () => ({ getToken: authMocks.getToken }) };
+vi.mock('@/lib/identity/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/identity/client')>();
+  return {
+    ...actual,
+    useSession: () => ({
+      isLoaded: true,
+      isSignedIn: true,
+      userId: 'user_test',
+      getToken: authMocks.getToken,
+    }),
+  };
 });
 
 vi.mock('@/lib/client/csrf', () => ({
