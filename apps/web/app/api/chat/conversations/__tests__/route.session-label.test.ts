@@ -20,6 +20,7 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
