@@ -16,6 +16,16 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.query(...args) })),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute?.(...args),
+    },
+    userId: 'user-1',
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mocks.getSubscription },
 }));
