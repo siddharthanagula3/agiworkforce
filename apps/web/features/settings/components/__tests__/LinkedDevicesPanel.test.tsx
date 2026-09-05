@@ -93,4 +93,34 @@ describe('LinkedDevicesPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Upstream unavailable');
     expect(screen.getByRole('button', { name: /Try again/ })).toBeVisible();
   });
+
+  it('shows skeleton rows instead of loading text, then renders one row per device', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    fetchMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+
+    render(<LinkedDevicesPanel />);
+
+    expect(screen.queryByText(/loading linked devices/i)).toBeNull();
+    expect(document.querySelector('.animate-pulse')).not.toBeNull();
+
+    resolveFetch(jsonResponse({ devices: [DESKTOP], totalCount: 1 }));
+
+    await screen.findByText(/Work laptop/);
+    expect(document.querySelector('[class*="rounded-lg border"]')).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('carries the unlink explanation as the section description, not a trailing paragraph', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ devices: [DESKTOP], totalCount: 1 }));
+
+    render(<LinkedDevicesPanel />);
+
+    const heading = await screen.findByText('Linked devices');
+    const description = screen.getByText(/Unlinking revokes the device's stored credential/);
+    expect(heading.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
 });
