@@ -22,6 +22,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: async () => 'csrf-token',
   addCsrfHeaders: async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf-token',

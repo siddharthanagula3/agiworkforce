@@ -219,7 +219,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce(authSession('user-round-trip'));
+    mockAuth.mockResolvedValue(authSession('user-round-trip'));
     const createRes = await createApiKeyRoute(makeCreateRequest());
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
@@ -229,7 +229,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     expect(created.full_key).toMatch(/^sk_live_[0-9a-f]{16}_[0-9a-f]{48}$/);
     expect(created.api_key.scopes).toEqual(['models:read', 'inference:write']);
 
-    mockAuth.mockResolvedValueOnce(authSession(null));
+    mockAuth.mockResolvedValue(authSession(null));
     const authResult = await getClerkAuthUser(makeBearerRequest(created.full_key), {
       apiKeyScope: 'inference:write',
     });
@@ -241,9 +241,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('enforces the selected scope and denies API keys on routes without an API-key contract', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce(authSession('scoped-user'));
+    mockAuth.mockResolvedValue(authSession('scoped-user'));
     const createRes = await createApiKeyRoute(makeCreateRequest('models only', ['models:read']));
     const created = (await createRes.json()) as { full_key: string };
+
+    mockAuth.mockResolvedValue(authSession(null));
 
     await expect(
       getClerkAuthUser(makeBearerRequest(created.full_key), {
@@ -286,7 +288,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
   it('rejects new key issuance without at least one scope', async () => {
     makeFakeDb();
-    mockAuth.mockResolvedValueOnce(authSession('scope-required-user'));
+    mockAuth.mockResolvedValue(authSession('scope-required-user'));
 
     const response = await createApiKeyRoute(makeCreateRequest('scope-less', []));
 
@@ -296,16 +298,16 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('rejects a key after it is revoked through the real DELETE route', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce(authSession('user-revoke-me'));
+    mockAuth.mockResolvedValue(authSession('user-revoke-me'));
     const createRes = await createApiKeyRoute(makeCreateRequest());
     const created = (await createRes.json()) as { api_key: { id: string }; full_key: string };
 
-    mockAuth.mockResolvedValueOnce(authSession('user-revoke-me'));
+    mockAuth.mockResolvedValue(authSession('user-revoke-me'));
     const { req, ctx } = makeRevokeRequest(created.api_key.id);
     const revokeRes = await revokeApiKeyRoute(req, ctx);
     expect(revokeRes.status).toBe(200);
 
-    mockAuth.mockResolvedValueOnce(authSession(null));
+    mockAuth.mockResolvedValue(authSession(null));
     await expect(
       getClerkAuthUser(makeBearerRequest(created.full_key), {
         apiKeyScope: 'inference:write',
@@ -510,9 +512,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('stamps the resolved user id for a verified API-key bearer', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce(authSession('scoped-user'));
+      mockAuth.mockResolvedValue(authSession('scoped-user'));
       const createRes = await createApiKeyRoute(makeCreateRequest('scoped', ['models:read']));
       const created = (await createRes.json()) as { full_key: string };
+
+      mockAuth.mockResolvedValue(authSession(null));
 
       const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
       await runWithTraceContext(context, async () => {

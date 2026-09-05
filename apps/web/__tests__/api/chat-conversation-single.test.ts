@@ -33,7 +33,10 @@ vi.mock('@/lib/e2b/runtime', () => ({
   killE2BSession: (...args: unknown[]) => mockKillE2BSession(...args),
 }));
 
-vi.mock('@/lib/server/neon-chat', () => ({
+vi.mock('server-only', () => ({}));
+
+vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
