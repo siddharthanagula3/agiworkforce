@@ -105,7 +105,7 @@ beforeEach(() => {
     userId: 'user-1',
     organizationId: null,
   });
-  mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+  mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
   mocks.assertTierUnitAllowance.mockResolvedValue({
     unit: 'transcription_seconds',
     hardLimit: null,

@@ -29,6 +29,15 @@ const ignoredParts = new Set([
 
 const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);
 
+const MANAGED_COMPUTE_ROUTE_ROOT = 'apps/web/app/api';
+const MANAGED_COMPUTE_ALLOWLIST_PATH = 'scripts/config/managed-compute-evaluator-allowlist.json';
+const MANAGED_COMPUTE_EVALUATOR_MARKER = 'evaluateManagedComputeAccess';
+const MANAGED_COMPUTE_START_MARKERS = ['reserveManagedUsageRequest', 'getE2BExecutor'];
+const MANAGED_COMPUTE_EVALUATOR_PATTERN = new RegExp(`\\b${MANAGED_COMPUTE_EVALUATOR_MARKER}\\b`);
+const MANAGED_COMPUTE_START_PATTERNS = MANAGED_COMPUTE_START_MARKERS.map(
+  (marker) => new RegExp(`\\b${marker}\\b`),
+);
+
 /**
  * Vendor SDKs that may only be reached through the port adapter that owns them.
  * A second consumer means a second retry budget, a second credential
@@ -321,6 +330,77 @@ for (const scanRoot of scanRoots) {
   }
 }
 
+function loadManagedComputeAllowlist() {
+  const abs = path.join(root, MANAGED_COMPUTE_ALLOWLIST_PATH);
+  if (!fs.existsSync(abs)) return { schemaVersion: 1, entries: [] };
+  return JSON.parse(fs.readFileSync(abs, 'utf8'));
+}
+
+function validateManagedComputeAllowlist(allowlist) {
+  const seen = new Set();
+  for (const entry of allowlist.entries ?? []) {
+    if (!entry.path || typeof entry.path !== 'string') {
+      errors.push(`${MANAGED_COMPUTE_ALLOWLIST_PATH}: an entry is missing a "path" string.`);
+      continue;
+    }
+    if (seen.has(entry.path)) {
+      errors.push(`${MANAGED_COMPUTE_ALLOWLIST_PATH}: duplicate entry for ${entry.path}.`);
+    }
+    seen.add(entry.path);
+    if (!entry.reason || typeof entry.reason !== 'string' || entry.reason.trim().length < 10) {
+      errors.push(
+        `${MANAGED_COMPUTE_ALLOWLIST_PATH}: entry ${entry.path} needs a one-line reason.`,
+      );
+    }
+  }
+}
+
+function findManagedComputeRouteOffenders() {
+  const offenders = new Map();
+  const routeDir = path.join(root, MANAGED_COMPUTE_ROUTE_ROOT);
+  if (!fs.existsSync(routeDir)) return offenders;
+  const routeFiles = walk(routeDir).filter((file) => path.basename(file) === 'route.ts');
+  for (const file of routeFiles) {
+    const rel = relativePath(file);
+    const stripped = stripComments(fs.readFileSync(file, 'utf8'));
+    if (MANAGED_COMPUTE_EVALUATOR_PATTERN.test(stripped)) continue;
+    const startedBy = MANAGED_COMPUTE_START_MARKERS.filter((marker, index) =>
+      MANAGED_COMPUTE_START_PATTERNS[index].test(stripped),
+    );
+    if (startedBy.length === 0) continue;
+    offenders.set(rel, startedBy);
+  }
+  return offenders;
+}
+
+const managedComputeAllowlist = loadManagedComputeAllowlist();
+validateManagedComputeAllowlist(managedComputeAllowlist);
+const managedComputeAllowlistByPath = new Map(
+  (managedComputeAllowlist.entries ?? []).map((entry) => [entry.path, entry]),
+);
+const managedComputeOffenders = findManagedComputeRouteOffenders();
+
+for (const [rel, startedBy] of managedComputeOffenders) {
+  if (managedComputeAllowlistByPath.has(rel)) continue;
+  errors.push(
+    `${rel} starts managed compute (${startedBy.join(', ')}) without importing and calling ` +
+      `${MANAGED_COMPUTE_EVALUATOR_MARKER} from apps/web/lib/services/managed-compute-access.ts, ` +
+      `and carries no entry in ${MANAGED_COMPUTE_ALLOWLIST_PATH}.`,
+  );
+}
+
+const staleManagedComputeAllowlistPaths = (managedComputeAllowlist.entries ?? [])
+  .map((entry) => entry.path)
+  .filter((relPath) => !managedComputeOffenders.has(relPath));
+
+if (staleManagedComputeAllowlistPaths.length > 0) {
+  errors.push(
+    `${MANAGED_COMPUTE_ALLOWLIST_PATH}: ${staleManagedComputeAllowlistPaths.length} entr(ies) ` +
+      `no longer need an allowlist entry and must be removed:\n  ` +
+      staleManagedComputeAllowlistPaths.join('\n  '),
+  );
+}
+
 if (errors.length > 0) {
   console.error('Boundary check failed:');
   for (const error of errors) {
@@ -329,4 +409,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('Boundary check passed.');
+console.log(
+  `Boundary check passed (${managedComputeOffenders.size} managed-compute route(s) checked ` +
+    `for ${MANAGED_COMPUTE_EVALUATOR_MARKER}, all allowlisted).`,
+);
