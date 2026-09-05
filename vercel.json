@@ -28,7 +28,7 @@
     },
     {
       "path": "/api/cron/reclaim-sandboxes",
-      "schedule": "45 5 * * *"
+      "schedule": "45 * * * *"
     },
     {
       "path": "/api/cron/purge-deleted-media",
