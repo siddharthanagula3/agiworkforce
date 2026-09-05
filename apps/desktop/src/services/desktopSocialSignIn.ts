@@ -1,3 +1,4 @@
+import { resolveAuthProviders, type AuthProviderId } from '@agiworkforce/client-runtime';
 
 import { isElectronHost } from '../lib/runtimeEnvironment';
 import {
@@ -8,13 +9,16 @@ import {
   type ClerkSignIn,
 } from './clerkNativeAuth';
 
-export const SOCIAL_PROVIDERS = [
-  { id: 'google', strategy: 'oauth_google', label: 'Google' },
-  { id: 'microsoft', strategy: 'oauth_microsoft', label: 'Microsoft' },
-  { id: 'apple', strategy: 'oauth_apple', label: 'Apple' },
-] as const;
+const SOCIAL_STRATEGY_PREFIX = 'oauth_';
+const CONFIGURED_PROVIDERS_ENV_KEY = 'VITE_AGI_AUTH_PROVIDERS';
 
-export type SocialProviderId = (typeof SOCIAL_PROVIDERS)[number]['id'];
+export function socialSignInStrategy(provider: AuthProviderId): string {
+  return `${SOCIAL_STRATEGY_PREFIX}${provider}`;
+}
+
+export function configuredSocialProviders() {
+  return resolveAuthProviders(import.meta.env[CONFIGURED_PROVIDERS_ENV_KEY] as string | undefined);
+}
 
 export const SSO_REDIRECT_URL = isElectronHost
   ? 'agiworkforce-cloud://sso-callback'
