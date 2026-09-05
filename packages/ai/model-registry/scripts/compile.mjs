@@ -19,6 +19,12 @@ import {
   resolveFamilyRefsDeep,
   validateFamilyCatalog,
 } from './families.mjs';
+import {
+  LIFECYCLE_STAGE,
+  formatStageCensus,
+  isLifecycleStage,
+  stageAtOrBefore,
+} from './lifecycle-stages.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
@@ -980,9 +986,48 @@ function buildModelFamilyIndex(catalog, familyCatalog) {
   return families;
 }
 
-function normalizeLifecycle(modelKey, model) {
+const LIFECYCLE_STAGE_FIELDS = ['stage', 'stagedOn', 'source'];
+const NON_LIVE_AVAILABILITY_STAGE_CEILING = LIFECYCLE_STAGE.shadow;
+const DEPRECATED_STAGES = new Set([LIFECYCLE_STAGE.deprecated, LIFECYCLE_STAGE.removed]);
+
+function normalizeLifecycleStage(modelKey, model, availability, deprecated) {
+  const authored = model.lifecycle;
+  assert.ok(
+    authored && typeof authored === 'object' && !Array.isArray(authored),
+    `${modelKey} must declare a lifecycle block naming the stage it has reached`,
+  );
+  const unsupported = Object.keys(authored).filter((key) => !LIFECYCLE_STAGE_FIELDS.includes(key));
+  assert.deepEqual(
+    unsupported,
+    [],
+    `${modelKey} lifecycle has unsupported keys: ${unsupported.join(', ')}`,
+  );
+  assert.ok(
+    isLifecycleStage(authored.stage),
+    `${modelKey} lifecycle.stage ${String(authored.stage)} is not one of the canonical stages`,
+  );
+  assert.ok(
+    typeof authored.source === 'string' && authored.source.length > 0,
+    `${modelKey} lifecycle.stage ${authored.stage} must name the source that justifies it`,
+  );
+  const stagedOn = assertIsoDateOrUnknown(`${modelKey} lifecycle.stagedOn`, authored.stagedOn);
+  assert.ok(stagedOn !== UNKNOWN_DATE, `${modelKey} lifecycle.stagedOn must be a calendar day`);
+  assert.ok(
+    availability === 'live' || stageAtOrBefore(authored.stage, NON_LIVE_AVAILABILITY_STAGE_CEILING),
+    `${modelKey} availability is ${availability}, so it may not sit past lifecycle stage ${NON_LIVE_AVAILABILITY_STAGE_CEILING}, found ${authored.stage}`,
+  );
+  assert.equal(
+    DEPRECATED_STAGES.has(authored.stage),
+    deprecated,
+    `${modelKey} lifecycle.stage ${authored.stage} disagrees with deprecated=${deprecated}`,
+  );
+  return { stage: authored.stage, stagedOn, stageSource: authored.source };
+}
+
+export function normalizeLifecycle(modelKey, model) {
   const unavailable = model.availability && model.availability !== 'live';
   const deprecated = model.deprecated === true || model.status === 'deprecated';
+  const availability = unavailable ? model.availability : 'live';
   const deprecatedOn = assertIsoDateOrUnknown(
     `${modelKey} lifecycle.deprecatedOn`,
     typeof model.deprecation_date === 'string' ? model.deprecation_date.trim() : UNKNOWN_DATE,
@@ -990,7 +1035,7 @@ function normalizeLifecycle(modelKey, model) {
   return {
     ...defined({
       status: deprecated ? 'deprecated' : (model.status ?? 'active'),
-      availability: unavailable ? model.availability : 'live',
+      availability,
       unavailableReason: model.unavailableReason,
       released: model.released,
       deprecationDate: model.deprecation_date,
@@ -1001,6 +1046,7 @@ function normalizeLifecycle(modelKey, model) {
       isoDayFromProse(model.released),
     ),
     deprecatedOn,
+    ...normalizeLifecycleStage(modelKey, model, availability, deprecated),
   };
 }
 
@@ -2045,6 +2091,12 @@ function checkGeneratedArtifact(file, expected) {
   return true;
 }
 
+function lifecycleStages(registry) {
+  return Object.fromEntries(
+    Object.entries(registry.models).map(([modelKey, model]) => [modelKey, model.lifecycle.stage]),
+  );
+}
+
 async function generate() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
@@ -2066,6 +2118,7 @@ async function generate() {
     `[sync] generate → ${Object.keys(catalog.models).length} compatibility models + ` +
       `${Object.keys(artifacts.registry.models).length} normalized models written`,
   );
+  console.log(`[sync] lifecycle → ${formatStageCensus(lifecycleStages(artifacts.registry))}`);
   return catalog;
 }
 
