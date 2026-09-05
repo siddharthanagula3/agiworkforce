@@ -52,6 +52,21 @@ vi.mock('@/lib/server/neon-db', () => ({
   ),
 }));
 
+const mockAssertMfaPolicy = vi.fn(async () => {});
+vi.mock('@/lib/mfa-policy-gate', () => ({
+  assertMfaPolicy: (...args: unknown[]) => mockAssertMfaPolicy(...(args as [])),
+  isMfaRequiredError: () => false,
+  resolveMfaEnrolled: vi.fn(async () => true),
+  MfaRequiredError: class MfaRequiredError extends Error {},
+}));
+
+const mockAssertIpAllowList = vi.fn(async () => {});
+vi.mock('@/lib/ip-allow-list-gate', () => ({
+  assertIpAllowList: (...args: unknown[]) => mockAssertIpAllowList(...(args as [])),
+  isIpNotAllowedError: () => false,
+  IpNotAllowedError: class IpNotAllowedError extends Error {},
+}));
+
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
   resolveOrganizationMembershipId: vi.fn(async () => null),
@@ -254,5 +269,37 @@ describe('tenant scope propagation onto the active trace context', () => {
       await getCurrentUserRlsDb();
       expect(getTenantScope().userId).toBe('user_1');
     });
+  });
+});
+
+describe('getUserScopedDb on a cookie session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    serviceQuery.mockResolvedValue([]);
+  });
+
+  it('applies the workspace mfa gate and ip allow list the bearer path already applies', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_cookie', getToken: async () => 'jwt-token' });
+    const request = new NextRequest('https://example.test/api/settings/2fa');
+
+    const scoped = await getUserScopedDb(request, { resolveOrganization: false });
+
+    expect(scoped.userId).toBe('user_cookie');
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie', request);
+    expect(mockAssertIpAllowList).toHaveBeenCalledWith('user_cookie', request);
+  });
+
+  it('refuses the request when the workspace mfa gate rejects it', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_cookie', getToken: async () => 'jwt-token' });
+    mockAssertMfaPolicy.mockRejectedValueOnce(new Error('mfa required'));
+
+    const error = await capture(
+      getUserScopedDb(new NextRequest('https://example.test/api/settings/2fa'), {
+        resolveOrganization: false,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(rlsWithUser).not.toHaveBeenCalled();
   });
 });
