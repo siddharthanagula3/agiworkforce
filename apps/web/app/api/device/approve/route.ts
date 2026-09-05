@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -119,7 +120,11 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     // unauthenticated, so there is no account to consult until a human approves.
     // Both gates sit after the deny branch so a rejection still works when the
     // account has device sign-in switched off.
-    if (!(await isDeviceCodeSignInEnabled(userId))) {
+    const approverDb = createClaimedUserScopedDb(getNeonDb(), {
+      userId,
+      organizationId: null,
+    });
+    if (!(await isDeviceCodeSignInEnabled(approverDb, userId))) {
       logger.info({ userId }, 'Device approval refused: device sign-in is off');
       return NextResponse.json(
         {

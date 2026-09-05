@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
 export const CODE_EXECUTION_SETTINGS_NAMESPACE = 'capabilities';
@@ -20,9 +20,12 @@ const PG_UNDEFINED_TABLE = '42P01';
  * in the request body. A client-side check alone would be a preference the
  * caller could simply decline to honour.
  */
-export async function isCloudCodeExecutionEnabled(userId: string): Promise<boolean> {
+export async function isCloudCodeExecutionEnabled(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<boolean> {
   try {
-    const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(
+    const rows = await db.query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );

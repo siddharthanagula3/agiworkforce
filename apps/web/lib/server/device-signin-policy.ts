@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
 export const DEVICE_SIGNIN_SETTINGS_NAMESPACE = 'security';
@@ -17,9 +17,12 @@ const PG_UNDEFINED_TABLE = '42P01';
  * users out of their own devices, and the flow still requires an authenticated
  * human to approve a code they were shown.
  */
-export async function isDeviceCodeSignInEnabled(userId: string): Promise<boolean> {
+export async function isDeviceCodeSignInEnabled(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<boolean> {
   try {
-    const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(
+    const rows = await db.query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );

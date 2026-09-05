@@ -1,13 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getBundledSkillDownloadForPlugins } from '@/lib/services/skill-catalog-service';
-import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 
 export const runtime = 'nodejs';
 
@@ -17,14 +16,14 @@ async function handleDownload(
 ) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   const { name } = await context.params;
   if (!name || name.length > 200) {
     throw createError.validation('skill name is required (1–200 chars)');
   }
 
-  const enabledPluginIds = await listEnabledPluginIdsForUser(userId);
+  const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const download = await getBundledSkillDownloadForPlugins(enabledPluginIds, name);
   if (download === null) {
     throw createError.notFound(`Bundled skill "${name}" not found`);

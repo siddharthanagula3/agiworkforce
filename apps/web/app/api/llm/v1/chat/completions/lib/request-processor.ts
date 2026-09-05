@@ -171,7 +171,7 @@ import {
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
-import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble } from './capability-preamble';
 import {
@@ -2676,7 +2676,9 @@ export async function processRequest(
     let managedSkillCatalog: Skill[];
     try {
       managedSkillCatalog = await timePhase(CHAT_TURN_PHASE.skillCatalog, async () =>
-        getManagedSkillCatalogForPlugins(await listEnabledPluginIdsForUser(userId)),
+        getManagedSkillCatalogForPlugins(
+          await listEnabledPluginIds((await scopedDbPromise).db, userId),
+        ),
       );
     } catch (error) {
       if (error instanceof SkillCatalogUnavailableError) {

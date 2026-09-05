@@ -6,8 +6,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mockQuery = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
+const scopedDb = { query: mockQuery } as unknown as DatabaseAdapter;
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isDeviceCodeSignInEnabled } from '../device-signin-policy';
 
 beforeEach(() => vi.clearAllMocks());
@@ -18,37 +19,37 @@ beforeEach(() => vi.clearAllMocks());
 describe('device-code sign-in policy', () => {
   it('is on for an account that never touched the setting', async () => {
     mockQuery.mockResolvedValue([{ settings: {} }]);
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(true);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('is on when the account has no settings row at all', async () => {
     mockQuery.mockResolvedValue([]);
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(true);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('is off only when explicitly set to false', async () => {
     mockQuery.mockResolvedValue([{ settings: { security: { deviceCodeSignInEnabled: false } } }]);
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(false);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(false);
   });
 
   it('is on when explicitly set to true', async () => {
     mockQuery.mockResolvedValue([{ settings: { security: { deviceCodeSignInEnabled: true } } }]);
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(true);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('ignores a non-boolean value rather than treating it as off', async () => {
     mockQuery.mockResolvedValue([{ settings: { security: { deviceCodeSignInEnabled: 'no' } } }]);
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(true);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('fails open when the settings read throws', async () => {
     mockQuery.mockRejectedValue(new Error('connection lost'));
-    await expect(isDeviceCodeSignInEnabled('u1')).resolves.toBe(true);
+    await expect(isDeviceCodeSignInEnabled(scopedDb, 'u1')).resolves.toBe(true);
   });
 
   it('scopes the read to the caller', async () => {
     mockQuery.mockResolvedValue([{ settings: {} }]);
-    await isDeviceCodeSignInEnabled('u1');
+    await isDeviceCodeSignInEnabled(scopedDb, 'u1');
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['u1']);
   });
 });
@@ -62,7 +63,7 @@ describe('the approval route enforces it', () => {
       'utf8',
     );
 
-    expect(source).toContain('isDeviceCodeSignInEnabled(authUser.userId)');
+    expect(source).toContain('isDeviceCodeSignInEnabled(approverDb, authUser.userId)');
     expect(source).toContain('DEVICE_SIGNIN_DISABLED');
     // Enforced before terms and before the row is marked approved: an approval
     // recorded and then refused would leave a device believing it is pending.
