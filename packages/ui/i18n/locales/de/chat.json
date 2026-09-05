@@ -127,7 +127,9 @@
     "unpinProject": "Projekt lösen",
     "unstar": "Markierung entfernen",
     "untitled": "Unbenannt",
-    "untitledChat": "Unbenannter Chat"
+    "untitledChat": "Unbenannter Chat",
+    "navLabel": "Chatverlauf",
+    "toggleSidebar": "Seitenleiste umschalten"
   },
   "composer": {
     "addAttachment": "Anhang hinzufügen",

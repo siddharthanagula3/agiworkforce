@@ -127,7 +127,9 @@
     "unpinProject": "Désépingler le projet",
     "unstar": "Retirer des favoris",
     "untitled": "Sans titre",
-    "untitledChat": "Conversation sans titre"
+    "untitledChat": "Conversation sans titre",
+    "navLabel": "Historique des conversations",
+    "toggleSidebar": "Afficher ou masquer la barre latérale"
   },
   "composer": {
     "addAttachment": "Ajouter une pièce jointe",

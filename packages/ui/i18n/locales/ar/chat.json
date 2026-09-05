@@ -127,7 +127,9 @@
     "unpinProject": "إلغاء تثبيت المشروع",
     "unstar": "إزالة النجمة",
     "untitled": "بدون عنوان",
-    "untitledChat": "محادثة بدون عنوان"
+    "untitledChat": "محادثة بدون عنوان",
+    "navLabel": "سجل الدردشة",
+    "toggleSidebar": "تبديل الشريط الجانبي"
   },
   "composer": {
     "addAttachment": "إضافة مرفق",
