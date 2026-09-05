@@ -1515,6 +1515,18 @@ function formatRoutingSlotLabel(slotId) {
     .join(' ');
 }
 
+const SLOT_CANDIDATE_FIELDS = {
+  shadow: ['modelKey', 'dailyRequestCap'],
+  canary: ['modelKey', 'trafficFraction'],
+};
+
+function resolveSlotCandidates(slot) {
+  return defined({
+    shadow: slot.shadow === undefined ? undefined : { ...slot.shadow },
+    canary: slot.canary === undefined ? undefined : { ...slot.canary },
+  });
+}
+
 function resolveAutoPolicy(autoPolicy, catalog) {
   return {
     ...autoPolicy,
@@ -1527,7 +1539,8 @@ function resolveAutoPolicy(autoPolicy, catalog) {
           hasProviderTask,
           `Routing slot ${slotId} must declare exactly one of modelKey or providerTask`,
         );
-        if (hasModelKey) return [slotId, { modelKey: slot.modelKey }];
+        const candidates = resolveSlotCandidates(slot);
+        if (hasModelKey) return [slotId, { modelKey: slot.modelKey, ...candidates }];
 
         const { provider, task } = slot.providerTask ?? {};
         assert.equal(
@@ -1547,7 +1560,7 @@ function resolveAutoPolicy(autoPolicy, catalog) {
           modelKey,
           `Routing slot ${slotId} references missing provider task ${provider}.${task}`,
         );
-        return [slotId, { modelKey }];
+        return [slotId, { modelKey, ...candidates }];
       }),
     ),
   };
@@ -1588,6 +1601,7 @@ function validateAutoPolicy(autoPolicy, models, capabilities) {
       models[slot.modelKey],
       `Routing slot ${slotId} references unknown model ${slot.modelKey}`,
     );
+    validateSlotLifecycle(slotId, slot, models);
   }
   for (const [taskType, task] of Object.entries(autoPolicy.tasks)) {
     for (const capability of task.requiredCapabilities) {
@@ -1612,6 +1626,79 @@ function validateAutoPolicy(autoPolicy, models, capabilities) {
     }
   }
   validateAutoTaskFamilies(autoPolicy, capabilities);
+}
+
+const SERVING_STAGES = new Set([LIFECYCLE_STAGE.promoted, LIFECYCLE_STAGE.canary]);
+const MINIMUM_CANARY_FRACTION = 0;
+const MAXIMUM_CANARY_FRACTION = 1;
+
+/**
+ * A slot is a promise that traffic lands on something that earned it. The
+ * primary must be promoted, a canary must be a canary and sit beside a promoted
+ * primary so a pull always has somewhere to land, and a shadow must declare the
+ * ceiling on what it may spend before it is allowed to mirror anything.
+ */
+export function validateSlotLifecycle(slotId, slot, models) {
+  const stage = models[slot.modelKey].lifecycle.stage;
+  assert.ok(
+    SERVING_STAGES.has(stage),
+    `Routing slot ${slotId} serves ${slot.modelKey} at lifecycle stage ${stage}; a slot may serve only ${[...SERVING_STAGES].join(' or ')}`,
+  );
+
+  if (slot.canary !== undefined) {
+    const unsupported = Object.keys(slot.canary).filter(
+      (key) => !SLOT_CANDIDATE_FIELDS.canary.includes(key),
+    );
+    assert.deepEqual(
+      unsupported,
+      [],
+      `Routing slot ${slotId} canary has unsupported keys: ${unsupported.join(', ')}`,
+    );
+    assert.ok(
+      models[slot.canary.modelKey],
+      `Routing slot ${slotId} canary references unknown model ${slot.canary.modelKey}`,
+    );
+    assert.equal(
+      models[slot.canary.modelKey].lifecycle.stage,
+      LIFECYCLE_STAGE.canary,
+      `Routing slot ${slotId} canary ${slot.canary.modelKey} is not at lifecycle stage ${LIFECYCLE_STAGE.canary}`,
+    );
+    assert.equal(
+      stage,
+      LIFECYCLE_STAGE.promoted,
+      `Routing slot ${slotId} has a canary but no promoted sibling to pull back to; ${slot.modelKey} is ${stage}`,
+    );
+    assert.ok(
+      typeof slot.canary.trafficFraction === 'number' &&
+        slot.canary.trafficFraction > MINIMUM_CANARY_FRACTION &&
+        slot.canary.trafficFraction < MAXIMUM_CANARY_FRACTION,
+      `Routing slot ${slotId} canary trafficFraction must sit strictly between ${MINIMUM_CANARY_FRACTION} and ${MAXIMUM_CANARY_FRACTION}`,
+    );
+  }
+
+  if (slot.shadow !== undefined) {
+    const unsupported = Object.keys(slot.shadow).filter(
+      (key) => !SLOT_CANDIDATE_FIELDS.shadow.includes(key),
+    );
+    assert.deepEqual(
+      unsupported,
+      [],
+      `Routing slot ${slotId} shadow has unsupported keys: ${unsupported.join(', ')}`,
+    );
+    assert.ok(
+      models[slot.shadow.modelKey],
+      `Routing slot ${slotId} shadow references unknown model ${slot.shadow.modelKey}`,
+    );
+    assert.equal(
+      models[slot.shadow.modelKey].lifecycle.stage,
+      LIFECYCLE_STAGE.shadow,
+      `Routing slot ${slotId} shadow ${slot.shadow.modelKey} is not at lifecycle stage ${LIFECYCLE_STAGE.shadow}`,
+    );
+    assert.ok(
+      Number.isInteger(slot.shadow.dailyRequestCap) && slot.shadow.dailyRequestCap > 0,
+      `Routing slot ${slotId} shadow must declare a positive dailyRequestCap before it may mirror anything`,
+    );
+  }
 }
 
 function validateAutoTaskFamilies(autoPolicy, capabilities) {

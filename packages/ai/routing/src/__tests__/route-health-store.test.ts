@@ -103,6 +103,33 @@ describe('route health key shape', () => {
       `agi-rhealth:credential:${CREDENTIAL_ID}`,
     );
   });
+
+  it('puts shadow observations somewhere route ranking cannot read them', () => {
+    expect(routeHealthEventsKey('shadow', ROUTE_ID)).toBe(`agi-rhealth:shadow:${ROUTE_ID}`);
+    expect(routeHealthEventsKey('shadow', ROUTE_ID)).not.toBe(
+      routeHealthEventsKey('route', ROUTE_ID),
+    );
+  });
+});
+
+describe('shadow observations', () => {
+  it('records a mirrored failure without touching the route the ranker reads', async () => {
+    const { health } = store();
+    await health.recordOutcome('shadow', ROUTE_ID, { class: 'server_error' }, NOW);
+    await health.recordOutcome('shadow', ROUTE_ID, { class: 'server_error' }, NOW + 1);
+    await health.recordOutcome('shadow', ROUTE_ID, { class: 'server_error' }, NOW + 2);
+
+    const routeSnapshots = await health.snapshots('route', [ROUTE_ID], NOW + 3);
+    expect(routeSnapshots[ROUTE_ID]).toMatchObject({ available: true, sampleCount: 0 });
+  });
+
+  it('reads back on its own scope, so a mirror is still measurable', async () => {
+    const { health } = store();
+    await health.recordOutcome('shadow', ROUTE_ID, { class: 'success', ttftMs: 100 }, NOW);
+
+    const shadowSnapshots = await health.snapshots('shadow', [ROUTE_ID], NOW + 1);
+    expect(shadowSnapshots[ROUTE_ID]).toMatchObject({ sampleCount: 1, successRate: 1 });
+  });
 });
 
 describe('snapshot construction', () => {
