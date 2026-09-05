@@ -188,7 +188,7 @@ export async function runCloudAgentTurn(
   };
 
   if (!areDurableInitialTurnsEnabled()) return degrade('kill_switch');
-  if (isDurableTransportCoolingDown()) return degrade('transport_cooling_down');
+  if (await isDurableTransportCoolingDown()) return degrade('transport_cooling_down');
 
   try {
     const workflow = await startCloudAgentWorkflowExecution(input);
