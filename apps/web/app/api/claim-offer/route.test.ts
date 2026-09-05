@@ -12,6 +12,13 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: vi.fn(async () => ({ userId
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: 'user-1',
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
