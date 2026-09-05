@@ -30,7 +30,8 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   })),
   logCacheAnalytics: vi.fn(),
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal()),
   validateEgressUrl: vi.fn(),
   validateUserImageUrl: vi.fn(),
   EgressPolicyError: class EgressPolicyError extends Error {},
@@ -207,6 +208,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   },
   normalizeProviderId: (provider: string | null | undefined) =>
     typeof provider === 'string' ? provider.toLowerCase() : null,
+  CACHE_WRITE_FALLBACK_MULTIPLIERS: { write5m: 1.25, write1h: 2 },
+  isCacheTokensDisjointFromInput: vi.fn(() => false),
+  resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
