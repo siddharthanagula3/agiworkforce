@@ -207,7 +207,7 @@ export function CloudVoiceActionDialog({
             {error && (
               <p
                 role="alert"
-                className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500"
+                className="mt-3 rounded-lg bg-[var(--chat-destructive)]/10 px-3 py-2 text-xs text-[var(--chat-destructive-text)]"
               >
                 {error}
               </p>
@@ -247,7 +247,10 @@ export function CloudVoiceActionDialog({
         )}
 
         {error && !stepApproval && (
-          <p role="alert" className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500">
+          <p
+            role="alert"
+            className="mt-3 rounded-lg bg-[var(--chat-destructive)]/10 px-3 py-2 text-xs text-[var(--chat-destructive-text)]"
+          >
             {error}
           </p>
         )}
