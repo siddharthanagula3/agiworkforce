@@ -218,11 +218,29 @@ const BESPOKE_ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
   },
 };
 
-export const ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
-  ...protocolRouteProviders(),
-  ...gatewayRouteProviders(),
-  ...BESPOKE_ADAPTER_PROVIDERS,
-};
+let adapterProvidersTable: Record<string, AdapterProviderEntry> | null = null;
+
+function adapterProvidersOnce(): Record<string, AdapterProviderEntry> {
+  adapterProvidersTable ??= {
+    ...protocolRouteProviders(),
+    ...gatewayRouteProviders(),
+    ...BESPOKE_ADAPTER_PROVIDERS,
+  };
+  return adapterProvidersTable;
+}
+
+export const ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = new Proxy(
+  {} as Record<string, AdapterProviderEntry>,
+  {
+    get: (_target, key) => (typeof key === 'string' ? adapterProvidersOnce()[key] : undefined),
+    has: (_target, key) => typeof key === 'string' && key in adapterProvidersOnce(),
+    ownKeys: () => Reflect.ownKeys(adapterProvidersOnce()),
+    getOwnPropertyDescriptor: (_target, key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(adapterProvidersOnce(), key);
+      return descriptor ? { ...descriptor, configurable: true } : undefined;
+    },
+  },
+);
 
 export function resolveWireMode(provider: string): AdapterProviderEntry['wireMode'] {
   const entry = ADAPTER_PROVIDERS[provider];
