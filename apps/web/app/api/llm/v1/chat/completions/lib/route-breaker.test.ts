@@ -8,6 +8,9 @@ vi.mock('@/lib/logger', () => ({
 const mockResolveProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
+  buildServerProviderAdapter: vi.fn(),
+  listAvailableManagedProviderIds: () => new Set<string>(),
+  toGenericUpstreamError: vi.fn(),
 }));
 
 const mockGetRouteHealthSnapshot = vi.fn();
@@ -21,6 +24,8 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getCredentialCooldownSnapshot: (...args: unknown[]) => mockGetCredentialCooldownSnapshot(...args),
   recordCredentialOutcome: (...args: unknown[]) => mockRecordCredentialOutcome(...args),
   providerOfRouteId: (routeId: string) => routeId.split('/')[0],
+  getServedRouteAffinity: vi.fn(async () => null),
+  getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
 import { recordCredentialRejection, resolveFailoverBreakerView } from './route-breaker';
