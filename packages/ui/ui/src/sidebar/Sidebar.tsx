@@ -934,6 +934,31 @@ export function Sidebar(props: SidebarProps) {
   );
 }
 
+function useTitleTruncated<T extends HTMLElement>(
+  dependency: unknown,
+): {
+  ref: (node: T | null) => void;
+  truncated: boolean;
+} {
+  const [node, setNode] = useState<T | null>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useEffect(() => {
+    if (!node) return;
+    const measure = () => setTruncated(node.scrollWidth > node.clientWidth);
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [node, dependency]);
+
+  return { ref: setNode, truncated };
+}
+
 function RailButton({
   label,
   icon: Icon,
@@ -1011,6 +1036,7 @@ function ProjectRow({
 }: ProjectRowProps) {
   const { t } = useUiTranslation('chat');
   const [menuOpen, setMenuOpen] = useState(false);
+  const titleTruncation = useTitleTruncated<HTMLSpanElement>(project.name);
 
   const isExpanded = expandedProjectIds.has(project.id);
   const showAllChats = projectShowAllChats.has(project.id);
@@ -1068,9 +1094,21 @@ function ProjectRow({
               aria-hidden="true"
             />
           )}
-          <span className="flex-1 truncate text-sm text-[hsl(var(--foreground))]">
-            {project.name}
-          </span>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  ref={titleTruncation.ref}
+                  className="flex-1 truncate text-sm text-[hsl(var(--foreground))]"
+                >
+                  {project.name}
+                </span>
+              </TooltipTrigger>
+              {titleTruncation.truncated && (
+                <TooltipContent side="bottom">{project.name}</TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </button>
 
         {/* Hover actions (ChatGPT pattern): hidden at rest, revealed on row
