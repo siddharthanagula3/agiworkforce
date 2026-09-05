@@ -35,6 +35,7 @@ vi.mock('@/lib/server/object-storage', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
+  resolveOrganizationMembershipId: vi.fn(),
 }));
 
 import { DELETE, GET } from '@/app/api/projects/[id]/knowledge-files/[fileId]/route';
