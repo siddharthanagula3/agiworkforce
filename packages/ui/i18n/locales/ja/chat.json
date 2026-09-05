@@ -195,6 +195,8 @@
     "renameConversation": "会話名を変更",
     "saveTitle": "タイトルを保存",
     "shareConversation": "会話を共有",
+    "temporaryChat": "一時的なチャット",
+    "temporaryChatRetentionNote": "履歴には保存されず、このターンではメモリーも使用されません。",
     "toggleArtifacts": "アーティファクトパネルの表示切り替え",
     "toggleArtifactsCount": "アーティファクトパネルの表示切り替え（{{count}}）",
     "toggleStats": "統計"

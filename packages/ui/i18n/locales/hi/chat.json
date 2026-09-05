@@ -195,6 +195,8 @@
     "renameConversation": "बातचीत का नाम बदलें",
     "saveTitle": "शीर्षक सहेजें",
     "shareConversation": "बातचीत साझा करें",
+    "temporaryChat": "अस्थायी चैट",
+    "temporaryChatRetentionNote": "यह आपके इतिहास में सेव नहीं होगी और इस बार मेमोरी का उपयोग नहीं करेगी।",
     "toggleArtifacts": "आर्टिफ़ैक्ट पैनल टॉगल करें",
     "toggleArtifactsCount": "आर्टिफ़ैक्ट पैनल टॉगल करें ({{count}})",
     "toggleStats": "आँकड़े"

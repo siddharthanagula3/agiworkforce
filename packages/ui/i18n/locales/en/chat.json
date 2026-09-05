@@ -195,6 +195,8 @@
     "renameConversation": "Rename conversation",
     "saveTitle": "Save title",
     "shareConversation": "Share conversation",
+    "temporaryChat": "Temporary chat",
+    "temporaryChatRetentionNote": "Won't be saved to your history and skips memory for this turn.",
     "toggleArtifacts": "Toggle artifacts panel",
     "toggleArtifactsCount": "Toggle artifacts panel ({{count}})",
     "toggleStats": "Stats"

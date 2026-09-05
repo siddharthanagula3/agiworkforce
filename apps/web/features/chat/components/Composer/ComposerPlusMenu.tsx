@@ -74,6 +74,8 @@ const ROW_LABEL_OFFICE = 'Create Office files';
 const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = 'Temporary chat';
 const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
+export const TEMPORARY_CHAT_RETENTION_NOTE =
+  "Won't be saved to your history and skips memory for this turn.";
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
 const CONNECTORS_EMPTY_COPY = 'No connectors connected yet.';
 const WEB_SEARCH_ON = 'On';
@@ -808,6 +810,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
           checked={props.isIncognito}
           onToggle={props.onToggleIncognito}
           disabled={!props.canToggleIncognito}
+          title={TEMPORARY_CHAT_RETENTION_NOTE}
         />
       )}
 
@@ -988,6 +991,7 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         checked={props.isIncognito}
         onToggle={props.onToggleIncognito}
         disabled={!props.canToggleIncognito}
+        title={TEMPORARY_CHAT_RETENTION_NOTE}
       />
     ),
   ].filter(Boolean);

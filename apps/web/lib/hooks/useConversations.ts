@@ -315,8 +315,13 @@ export function useConversations(): UseConversationsReturn {
             // Sent AT CREATION, not applied afterwards. Marking a conversation
             // temporary in a follow-up write races the first message's save,
             // and a "never save my chats" preference that saves the first
-            // message is worse than no preference at all.
-            ...(useSettingsStore.getState().newChatsTemporary ? { isTemporary: true } : {}),
+            // message is worse than no preference at all. The account-wide
+            // default and a one-off "Temporary chat" armed from the composer
+            // before this conversation existed are both consumed here.
+            ...(useSettingsStore.getState().newChatsTemporary ||
+            useChatStore.getState().pendingTemporaryChat
+              ? { isTemporary: true }
+              : {}),
           }),
         });
 

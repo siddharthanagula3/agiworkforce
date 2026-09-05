@@ -195,6 +195,8 @@
     "renameConversation": "Rinomina conversazione",
     "saveTitle": "Salva titolo",
     "shareConversation": "Condividi la conversazione",
+    "temporaryChat": "Chat temporanea",
+    "temporaryChatRetentionNote": "Non verrà salvata nella cronologia e salta la memoria per questo turno.",
     "toggleArtifacts": "Attiva/disattiva il pannello degli artefatti",
     "toggleArtifactsCount": "Attiva/disattiva il pannello degli artefatti ({{count}})",
     "toggleStats": "Statistiche"
