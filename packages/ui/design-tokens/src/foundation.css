@@ -143,6 +143,18 @@
     --gutter-regular: var(--space-5);
     --gutter-wide: var(--space-6);
 
+    /* ---- layer 2: brand marks, mode invariant ---------------------------
+     * A third party's logo colours. They belong to that brand, not to this
+     * palette, so they are declared once and never re-tuned per theme. */
+    --brand-google-blue: #4285f4;
+    --brand-google-red: #ea4335;
+    --brand-google-yellow: #fbbc05;
+    --brand-google-green: #34a853;
+    --brand-microsoft-red: #f25022;
+    --brand-microsoft-green: #7fba00;
+    --brand-microsoft-blue: #00a4ef;
+    --brand-microsoft-yellow: #ffb900;
+
     --layer-base: 0;
     --layer-sticky: 100;
     --layer-dropdown: 200;
