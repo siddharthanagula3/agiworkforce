@@ -14,6 +14,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
 const CATALOG_DIR = path.join(REGISTRY_DIR, 'catalog');
 const CURATION_JSON = path.join(CATALOG_DIR, 'models.curation.json');
+const RETIRED_MODELS_JSON = path.join(CATALOG_DIR, 'retired-models.json');
 const OUTPUT_JSON = openRouterSyncedCatalogPath(CATALOG_DIR);
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/models';
@@ -32,6 +33,8 @@ const DYNAMIC_PRICING_QUALITY_TIER = { qualityTier: 'balanced', quality: 'good' 
 const UNKNOWN_SPEED_DEFAULT = 'medium';
 
 const SCHEMA_KNOWN_MODALITIES = new Set(['text', 'image', 'audio', 'video']);
+
+const GPT_MODEL_ID_PATTERN = /\bgpt-[0-9][a-z0-9._-]*\b/giu;
 
 const COMPAT_CAPABILITY_KEYS = [
   'streaming',
@@ -80,6 +83,52 @@ function loadCuratedOpenRouterIdentifiers() {
     if (typeof model.openRouterSlug === 'string') identifiers.add(model.openRouterSlug);
   }
   return identifiers;
+}
+
+function loadRetiredAndGuardedModelIds() {
+  const retired = readJson(RETIRED_MODELS_JSON);
+  return new Set([
+    ...(retired.retiredModelIds ?? []),
+    ...(retired.guardedNonCanonicalModelIds ?? []),
+  ]);
+}
+
+function loadCanonicalGptIdentifiers() {
+  const curation = readJson(CURATION_JSON);
+  const identifiers = new Set();
+  const add = (value) => {
+    if (typeof value === 'string' && /^gpt-[0-9]/iu.test(value)) {
+      identifiers.add(value.toLowerCase());
+    }
+  };
+  for (const [id, model] of Object.entries(curation.models)) {
+    add(id);
+    add(model?.id);
+    add(model?.apiModelId);
+  }
+  for (const provider of Object.values(curation.providers ?? {})) {
+    add(provider?.defaultModel);
+    for (const value of Object.values(provider?.taskRouting ?? {})) add(value);
+    for (const [alias, target] of Object.entries(provider?.canonicalization ?? {})) {
+      add(alias);
+      add(target);
+    }
+  }
+  return identifiers;
+}
+
+function staleGptIdentifiers(value, canonicalGptIdentifiers) {
+  if (typeof value !== 'string') return [];
+  return [...value.matchAll(GPT_MODEL_ID_PATTERN)]
+    .map((match) => match[0])
+    .filter((id) => !canonicalGptIdentifiers.has(id.toLowerCase()));
+}
+
+function bannedCatalogReason(value, retiredAndGuardedIds, canonicalGptIdentifiers) {
+  if (typeof value !== 'string') return null;
+  if (retiredAndGuardedIds.has(value)) return 'retired';
+  if (staleGptIdentifiers(value, canonicalGptIdentifiers).length > 0) return 'stale-gpt';
+  return null;
 }
 
 function slugToModelKey(openRouterId) {
@@ -284,10 +333,14 @@ export async function buildSyncedCatalog({ fetchImpl = fetch, now = new Date() }
   const fetchedAt = now.toISOString().slice(0, 10);
   const rawModels = await fetchOpenRouterCatalog(fetchImpl);
   const curated = loadCuratedOpenRouterIdentifiers();
+  const retiredAndGuardedIds = loadRetiredAndGuardedModelIds();
+  const canonicalGptIdentifiers = loadCanonicalGptIdentifiers();
 
   const models = {};
   let includedCount = 0;
   let skippedCuratedCount = 0;
+  let skippedRetiredCount = 0;
+  let skippedStaleGptCount = 0;
   let freeCount = 0;
 
   for (const model of [...rawModels].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -295,9 +348,21 @@ export async function buildSyncedCatalog({ fetchImpl = fetch, now = new Date() }
       skippedCuratedCount += 1;
       continue;
     }
+    const key = slugToModelKey(model.id);
+    const reason =
+      bannedCatalogReason(key, retiredAndGuardedIds, canonicalGptIdentifiers) ??
+      bannedCatalogReason(model.id, retiredAndGuardedIds, canonicalGptIdentifiers);
+    if (reason === 'retired') {
+      skippedRetiredCount += 1;
+      continue;
+    }
+    if (reason === 'stale-gpt') {
+      skippedStaleGptCount += 1;
+      continue;
+    }
     const isFree = model.id.endsWith(FREE_ID_SUFFIX);
     const dynamic = isDynamicPricing(model.pricing);
-    const [key, entry] = transformModel(model, { fetchedAt, isFree, dynamic });
+    const [, entry] = transformModel(model, { fetchedAt, isFree, dynamic });
     models[key] = entry;
     includedCount += 1;
     if (isFree) freeCount += 1;
@@ -324,9 +389,16 @@ export async function buildSyncedCatalog({ fetchImpl = fetch, now = new Date() }
         'is recorded as the neutral default "medium" for every entry. Entries already ' +
         'hand-curated in models.curation.json (matched by apiModelId or openRouterSlug) are ' +
         'skipped so this file never duplicates or shadows curated data; ' +
-        'mergeOpenRouterSyncedCatalog folds the ' +
-        'file never duplicates or shadows curated data; mergeOpenRouterSyncedCatalog folds the ' +
-        'rest into the compiled catalog additively. Re-run to refresh.',
+        'mergeOpenRouterSyncedCatalog folds the rest into the compiled catalog additively. ' +
+        `${skippedRetiredCount} entr${skippedRetiredCount === 1 ? 'y was' : 'ies were'} skipped ` +
+        'because its id or apiModelId exactly matches an entry in ' +
+        'packages/ai/model-registry/catalog/retired-models.json (retiredModelIds or ' +
+        `guardedNonCanonicalModelIds); ${skippedStaleGptCount} entr${skippedStaleGptCount === 1 ? 'y was' : 'ies were'} ` +
+        'skipped because its id or apiModelId matches the gpt-<digit> pattern without already ' +
+        'being a canonical GPT identifier in models.curation.json, mirroring the stale-GPT check ' +
+        "in scripts/check-model-catalog-integrity.mjs; both are the guard's only supported " +
+        'outcome for a banned id, since it scans catalog structures for id/apiModelId membership ' +
+        'directly and carries no lifecycle-stage exemption. Re-run to refresh.',
       modelCount: includedCount,
       models: sortedModels,
     },
@@ -334,6 +406,8 @@ export async function buildSyncedCatalog({ fetchImpl = fetch, now = new Date() }
       fetchedCount: rawModels.length,
       includedCount,
       skippedCuratedCount,
+      skippedRetiredCount,
+      skippedStaleGptCount,
       freeCount,
     },
   };
@@ -345,7 +419,9 @@ async function main() {
   process.stdout.write(
     `[sync-openrouter] fetched ${stats.fetchedCount} models from ${OPENROUTER_ENDPOINT}\n` +
       `[sync-openrouter] wrote ${stats.includedCount} entries to ${path.relative(process.cwd(), OUTPUT_JSON)} ` +
-      `(${stats.freeCount} free variants, ${stats.skippedCuratedCount} skipped as already curated)\n`,
+      `(${stats.freeCount} free variants, ${stats.skippedCuratedCount} skipped as already curated, ` +
+      `${stats.skippedRetiredCount} skipped as retired/guarded, ` +
+      `${stats.skippedStaleGptCount} skipped as a stale GPT identifier)\n`,
   );
 }
 
