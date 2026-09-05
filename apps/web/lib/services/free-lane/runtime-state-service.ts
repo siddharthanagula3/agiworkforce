@@ -14,7 +14,7 @@ import {
 import type { ErrorCategory } from '@agiworkforce/provider-runtime';
 
 import { logger } from '@/lib/logger';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { readRedisWithinBudget, wasRedisReadAbandoned } from '@/lib/server/bounded-redis-read';
 import {
   loadFreePools,
@@ -313,11 +313,11 @@ async function readRuntimeState(
   const routeIds = Object.keys(freeEligibility);
   if (routeIds.length === 0) return unknownCapacityState(nowMs, freeEligibility);
 
-  const client = getSharedRedisClient();
-  if (!client) {
+  const store = getKeyValueStore();
+  if (!store) {
     logger.error(
       { routeCount: routeIds.length },
-      '[free-lane] no Redis client; every free pool is unknown and the lane will strand',
+      '[free-lane] no shared store; every free pool is unknown and the lane will strand',
     );
     return unknownCapacityState(nowMs, freeEligibility);
   }
@@ -341,15 +341,15 @@ async function readRuntimeState(
   const providerIds = [...new Set(routeIds.map(providerOfRouteId))];
 
   try {
-    const pipeline = client.pipeline();
+    const batch = store.batch();
     const windowStarts = accounts.map((account) => windowStartMs(account.window, nowMs));
     accounts.forEach((account, index) => {
-      pipeline.get(poolKey(account.id, windowStarts[index]!));
+      batch.get(poolKey(account.id, windowStarts[index]!));
     });
-    for (const routeId of routeIds) pipeline.hgetall(routeHealthKey(routeId));
-    for (const providerId of providerIds) pipeline.hgetall(providerHealthKey(providerId));
+    for (const routeId of routeIds) batch.hashGetAll(routeHealthKey(routeId));
+    for (const providerId of providerIds) batch.hashGetAll(providerHealthKey(providerId));
 
-    const read = await readRedisWithinBudget(pipeline.exec());
+    const read = await readRedisWithinBudget(batch.exec());
     if (wasRedisReadAbandoned(read)) {
       logger.error(
         { routeCount: routeIds.length },
@@ -433,16 +433,17 @@ export async function recordFreeLaneUsage(input: {
   const units = settledUnits(entry.unit, input.usage);
   if (units === null || units <= 0) return;
 
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
 
   const startMs = windowStartMs(entry.window, input.nowMs);
   const key = poolKey(entry.poolId, startMs);
   try {
-    const pipeline = client.pipeline();
-    pipeline.incrby(key, units);
-    pipeline.pexpireat(key, windowEndMs(entry.window, startMs));
-    await pipeline.exec();
+    await store
+      .batch()
+      .increment(key, units)
+      .expireAt(key, windowEndMs(entry.window, startMs))
+      .exec();
   } catch (error) {
     logger.error(
       { error, routeId: input.routeId, poolId: entry.poolId },
@@ -466,14 +467,11 @@ async function updateHealth(
   nowMs: number,
   next: (current: RouteHealth | undefined) => Record<string, string | number>,
 ): Promise<void> {
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   try {
-    const current = parseHealth(await client.hgetall(key), nowMs);
-    const pipeline = client.pipeline();
-    pipeline.hset(key, next(current));
-    pipeline.expire(key, HEALTH_KEY_TTL_SECONDS);
-    await pipeline.exec();
+    const current = parseHealth(await store.hashGetAll(key), nowMs);
+    await store.batch().hashSet(key, next(current)).expire(key, HEALTH_KEY_TTL_SECONDS).exec();
   } catch (error) {
     logger.error({ error, key }, '[free-lane] route health was not recorded');
   }
@@ -558,15 +556,16 @@ async function markPoolSpent(
 ): Promise<void> {
   const entry = entryForRoute(routeId, document);
   if (!entry) return;
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   const startMs = windowStartMs(entry.window, nowMs);
   const key = poolKey(entry.poolId, startMs);
   try {
-    const pipeline = client.pipeline();
-    pipeline.set(key, entry.limit);
-    pipeline.pexpireat(key, windowEndMs(entry.window, startMs));
-    await pipeline.exec();
+    await store
+      .batch()
+      .set(key, entry.limit)
+      .expireAt(key, windowEndMs(entry.window, startMs))
+      .exec();
   } catch (error) {
     logger.error(
       { error, routeId, poolId: entry.poolId },
@@ -637,7 +636,8 @@ const ROUTE_HEALTH_LONG_WINDOW_MS = 30 * 60_000;
 const ROUTE_HEALTH_EVENT_TTL_BUFFER_SECONDS = 60;
 const ROUTE_HEALTH_EVENT_TTL_SECONDS =
   Math.ceil(ROUTE_HEALTH_LONG_WINDOW_MS / MS_PER_SECOND) + ROUTE_HEALTH_EVENT_TTL_BUFFER_SECONDS;
-const ROUTE_HEALTH_EVENTS_RANGE_MAX = '+inf' as const;
+const ROUTE_HEALTH_EVENTS_RANGE_MIN = 0;
+const ROUTE_HEALTH_EVENTS_RANGE_MAX = Number.POSITIVE_INFINITY;
 const ROUTE_HEALTH_CONSECUTIVE_FAILURE_THRESHOLD = 3;
 const ROUTE_HEALTH_FAILURE_RATIO_THRESHOLD = 0.5;
 const ROUTE_HEALTH_MIN_SAMPLES_FOR_RATIO_TRIP = 5;
@@ -866,8 +866,8 @@ export async function recordRouteOutcome(
   outcome: RouteOutcome,
   nowMs: number = Date.now(),
 ): Promise<void> {
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   const key = routeHealthEventsKey(routeId);
   const member = JSON.stringify({
     [HEALTH_FIELD_EVENT_NOW]: nowMs,
@@ -882,11 +882,12 @@ export async function recordRouteOutcome(
     [HEALTH_FIELD_EVENT_NONCE]: Math.random().toString(36).slice(2),
   });
   try {
-    const pipeline = client.pipeline();
-    pipeline.zadd(key, { score: nowMs, member });
-    pipeline.zremrangebyscore(key, 0, nowMs - ROUTE_HEALTH_LONG_WINDOW_MS);
-    pipeline.expire(key, ROUTE_HEALTH_EVENT_TTL_SECONDS);
-    await pipeline.exec();
+    await store
+      .batch()
+      .sortedAdd(key, { score: nowMs, member })
+      .sortedRemoveByScore(key, ROUTE_HEALTH_EVENTS_RANGE_MIN, nowMs - ROUTE_HEALTH_LONG_WINDOW_MS)
+      .expire(key, ROUTE_HEALTH_EVENT_TTL_SECONDS)
+      .exec();
   } catch (error) {
     logger.error({ error, routeId }, '[route-health] outcome was not recorded');
   }
@@ -907,20 +908,19 @@ export async function getRouteHealthSnapshot(
     return cachedRouteHealthSnapshots.snapshots;
   }
 
-  const client = getSharedRedisClient();
-  if (!client) return healthyRouteHealthSnapshots(routeIds);
+  const store = getKeyValueStore();
+  if (!store) return healthyRouteHealthSnapshots(routeIds);
 
   try {
-    const pipeline = client.pipeline();
+    const batch = store.batch();
     for (const routeId of routeIds) {
-      pipeline.zrange(
+      batch.sortedRangeByScore(
         routeHealthEventsKey(routeId),
         nowMs - ROUTE_HEALTH_LONG_WINDOW_MS,
         ROUTE_HEALTH_EVENTS_RANGE_MAX,
-        { byScore: true },
       );
     }
-    const read = await readRedisWithinBudget(pipeline.exec());
+    const read = await readRedisWithinBudget(batch.exec());
     if (wasRedisReadAbandoned(read)) {
       logger.error(
         { routeCount: routeIds.length },
@@ -987,19 +987,20 @@ export async function recordServedRouteAffinity(input: {
   upstreamProvider?: string;
 }): Promise<void> {
   if (input.ttlMs <= 0) return;
-  const client = getSharedRedisClient();
-  if (!client) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   const key = routeAffinityKey(input.conversationId);
   try {
-    const pipeline = client.pipeline();
-    pipeline.hset(key, {
-      [AFFINITY_FIELD_ROUTE_ID]: input.routeId,
-      ...(input.upstreamProvider
-        ? { [AFFINITY_FIELD_UPSTREAM_PROVIDER]: input.upstreamProvider }
-        : {}),
-    });
-    pipeline.pexpire(key, input.ttlMs);
-    await pipeline.exec();
+    await store
+      .batch()
+      .hashSet(key, {
+        [AFFINITY_FIELD_ROUTE_ID]: input.routeId,
+        ...(input.upstreamProvider
+          ? { [AFFINITY_FIELD_UPSTREAM_PROVIDER]: input.upstreamProvider }
+          : {}),
+      })
+      .expireIn(key, input.ttlMs)
+      .exec();
   } catch (error) {
     logger.error(
       { error, conversationId: input.conversationId },
@@ -1011,10 +1012,10 @@ export async function recordServedRouteAffinity(input: {
 export async function getServedRouteAffinity(
   conversationId: string,
 ): Promise<ServedRouteAffinity | null> {
-  const client = getSharedRedisClient();
-  if (!client) return null;
+  const store = getKeyValueStore();
+  if (!store) return null;
   try {
-    const raw = await readRedisWithinBudget(client.hgetall(routeAffinityKey(conversationId)));
+    const raw = await readRedisWithinBudget(store.hashGetAll(routeAffinityKey(conversationId)));
     if (wasRedisReadAbandoned(raw)) {
       logger.error(
         { conversationId },

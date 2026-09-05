@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { NextRequest } from 'next/server';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+import { KEY_VALUE_PROVIDER_ENV } from '@agiworkforce/key-value';
+
+const NO_SHARED_STORE = 'none';
 
 const upstash = vi.hoisted(() => ({
   client: {
@@ -173,6 +176,7 @@ describe('managed concurrent-turn ceiling', () => {
     upstash.client.expire.mockResolvedValue(1);
     process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.invalid';
     process.env['UPSTASH_REDIS_REST_TOKEN'] = 'token';
+    process.env[KEY_VALUE_PROVIDER_ENV] = 'upstash';
     delete process.env[POLICY_ENV];
     delete process.env['VERCEL_ENV'];
   });
@@ -180,6 +184,7 @@ describe('managed concurrent-turn ceiling', () => {
   afterEach(() => {
     delete process.env['UPSTASH_REDIS_REST_URL'];
     delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[KEY_VALUE_PROVIDER_ENV] = NO_SHARED_STORE;
     delete process.env[POLICY_ENV];
   });
 
@@ -230,6 +235,7 @@ describe('managed concurrent-turn ceiling', () => {
   it('refuses the turn when Redis is configured away entirely under a fail-closed policy', async () => {
     delete process.env['UPSTASH_REDIS_REST_URL'];
     delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[KEY_VALUE_PROVIDER_ENV] = NO_SHARED_STORE;
     process.env[POLICY_ENV] = 'fail-closed';
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
@@ -261,6 +267,7 @@ describe('managed concurrent-turn ceiling', () => {
   it('keeps a Redis-less dev box working without an explicit policy', async () => {
     delete process.env['UPSTASH_REDIS_REST_URL'];
     delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[KEY_VALUE_PROVIDER_ENV] = NO_SHARED_STORE;
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
     const result = await acquireManagedTurnSlot({

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KEY_VALUE_PROVIDER_ENV } from '@agiworkforce/key-value';
 
 vi.mock('server-only', () => ({}));
 
@@ -34,6 +35,7 @@ describe('E2B session-store tenant isolation', () => {
     vi.clearAllMocks();
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.example.test');
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token');
+    vi.stubEnv(KEY_VALUE_PROVIDER_ENV, 'upstash');
     redisMocks.get.mockResolvedValue(null);
     redisMocks.set.mockResolvedValue('OK');
     redisMocks.del.mockResolvedValue(1);

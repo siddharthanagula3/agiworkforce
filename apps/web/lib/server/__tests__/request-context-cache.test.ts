@@ -7,12 +7,21 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
-  getSharedRedisClient: vi.fn(),
+  getKeyValueStore: vi.fn(),
 }));
-vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mocks.getSharedRedisClient }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
+
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
 
 function fakeRedis() {
   return { get: vi.fn(), set: vi.fn(), del: vi.fn() };
+}
+function asKeyValueStore(client: unknown): KeyValueStore {
+  return createUpstashKeyValueStore(client as UpstashRedisLike);
 }
 
 describe('request-context-cache, account status', () => {
@@ -23,7 +32,7 @@ describe('request-context-cache, account status', () => {
   it('returns undefined on a cache miss so the caller falls through to Postgres', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue(null);
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedAccountStatus } = await import('../request-context-cache');
     await expect(getCachedAccountStatus('user-1')).resolves.toBeUndefined();
@@ -33,7 +42,7 @@ describe('request-context-cache, account status', () => {
   it('returns a cached null status distinctly from a miss', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue({ status: null });
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedAccountStatus } = await import('../request-context-cache');
     await expect(getCachedAccountStatus('user-1')).resolves.toBeNull();
@@ -42,7 +51,7 @@ describe('request-context-cache, account status', () => {
   it('returns a cached suspended status on hit', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue({ status: 'suspended' });
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedAccountStatus } = await import('../request-context-cache');
     await expect(getCachedAccountStatus('user-1')).resolves.toBe('suspended');
@@ -51,7 +60,7 @@ describe('request-context-cache, account status', () => {
   it('falls through on a Redis outage instead of throwing', async () => {
     const redis = fakeRedis();
     redis.get.mockRejectedValue(new Error('ECONNRESET'));
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedAccountStatus } = await import('../request-context-cache');
     await expect(getCachedAccountStatus('user-1')).resolves.toBeUndefined();
@@ -59,7 +68,7 @@ describe('request-context-cache, account status', () => {
 
   it('writes the status with the shared TTL', async () => {
     const redis = fakeRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { setCachedAccountStatus, REQUEST_CONTEXT_CACHE_TTL_SECONDS } =
       await import('../request-context-cache');
@@ -75,7 +84,7 @@ describe('request-context-cache, account status', () => {
   it('never throws when the write itself fails', async () => {
     const redis = fakeRedis();
     redis.set.mockRejectedValue(new Error('write failed'));
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { setCachedAccountStatus } = await import('../request-context-cache');
     await expect(setCachedAccountStatus('user-1', 'active')).resolves.toBeUndefined();
@@ -83,7 +92,7 @@ describe('request-context-cache, account status', () => {
 
   it('deletes the cached entry on invalidation', async () => {
     const redis = fakeRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { invalidateAccountStatusCache } = await import('../request-context-cache');
     await invalidateAccountStatusCache('user-1');
@@ -92,7 +101,7 @@ describe('request-context-cache, account status', () => {
   });
 
   it('no-ops every operation when Redis is unavailable', async () => {
-    mocks.getSharedRedisClient.mockReturnValue(null);
+    mocks.getKeyValueStore.mockReturnValue(null);
 
     const { getCachedAccountStatus, setCachedAccountStatus, invalidateAccountStatusCache } =
       await import('../request-context-cache');
@@ -103,7 +112,7 @@ describe('request-context-cache, account status', () => {
   });
 
   it('treats a client that throws on access as an outage, not a crash', async () => {
-    mocks.getSharedRedisClient.mockImplementation(() => {
+    mocks.getKeyValueStore.mockImplementation(() => {
       throw new Error('client not configured');
     });
 
@@ -120,7 +129,7 @@ describe('request-context-cache, active organization', () => {
   it('returns undefined on a cache miss', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue(null);
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedActiveOrganizationId } = await import('../request-context-cache');
     await expect(getCachedActiveOrganizationId('user-1')).resolves.toBeUndefined();
@@ -130,7 +139,7 @@ describe('request-context-cache, active organization', () => {
   it('returns a cached personal-workspace null distinctly from a miss', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue({ organizationId: null });
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedActiveOrganizationId } = await import('../request-context-cache');
     await expect(getCachedActiveOrganizationId('user-1')).resolves.toBeNull();
@@ -139,7 +148,7 @@ describe('request-context-cache, active organization', () => {
   it('returns a cached organization id on hit', async () => {
     const redis = fakeRedis();
     redis.get.mockResolvedValue({ organizationId: 'org-1' });
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedActiveOrganizationId } = await import('../request-context-cache');
     await expect(getCachedActiveOrganizationId('user-1')).resolves.toBe('org-1');
@@ -148,7 +157,7 @@ describe('request-context-cache, active organization', () => {
   it('falls through on a Redis outage instead of throwing', async () => {
     const redis = fakeRedis();
     redis.get.mockRejectedValue(new Error('ECONNRESET'));
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedActiveOrganizationId } = await import('../request-context-cache');
     await expect(getCachedActiveOrganizationId('user-1')).resolves.toBeUndefined();
@@ -156,7 +165,7 @@ describe('request-context-cache, active organization', () => {
 
   it('writes the organization id with the shared TTL', async () => {
     const redis = fakeRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { setCachedActiveOrganizationId, REQUEST_CONTEXT_CACHE_TTL_SECONDS } =
       await import('../request-context-cache');
@@ -171,7 +180,7 @@ describe('request-context-cache, active organization', () => {
 
   it('deletes the cached entry on invalidation', async () => {
     const redis = fakeRedis();
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { invalidateActiveOrganizationCache } = await import('../request-context-cache');
     await invalidateActiveOrganizationCache('user-1');
@@ -180,7 +189,7 @@ describe('request-context-cache, active organization', () => {
   });
 
   it('no-ops every operation when Redis is unavailable', async () => {
-    mocks.getSharedRedisClient.mockReturnValue(null);
+    mocks.getKeyValueStore.mockReturnValue(null);
 
     const {
       getCachedActiveOrganizationId,
@@ -208,7 +217,7 @@ describe('request-context-cache, first-token path cost', () => {
         settleRead = resolve;
       }),
     );
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { getCachedAccountStatus } = await import('../request-context-cache');
     const { resolveRequestPathRedisReadTimeoutMs } = await import('../bounded-redis-read');
@@ -226,7 +235,7 @@ describe('request-context-cache, first-token path cost', () => {
         settleWrite = resolve;
       }),
     );
-    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     const { setCachedActiveOrganizationId } = await import('../request-context-cache');
     await expect(setCachedActiveOrganizationId('user-1', 'org-1')).resolves.toBeUndefined();

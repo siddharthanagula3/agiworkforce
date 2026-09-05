@@ -10,7 +10,10 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
-  getSharedRedisClient: vi.fn(() => null),
+}));
+
+vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueStore: vi.fn(() => null),
 }));
 
 const mockAuth = vi.fn();
@@ -160,7 +163,12 @@ function makeFakeDb() {
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { clearIpAllowListCacheForTests } from '@/lib/services/organization-ip-allow-list-cache';
@@ -774,6 +782,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 });
 
 describe('assertAccountActive, warm Redis cache', () => {
+  function asKeyValueStore(client: unknown): KeyValueStore {
+    return createUpstashKeyValueStore(client as UpstashRedisLike);
+  }
+
   function fakeCacheRedis() {
     const store = new Map<string, unknown>();
     return {
@@ -792,7 +804,7 @@ describe('assertAccountActive, warm Redis cache', () => {
 
   it('reads Postgres once across two consecutive calls for the same user', async () => {
     mockNeonQuery.mockResolvedValue([{ account_status: null }]);
-    vi.mocked(getSharedRedisClient).mockReturnValue(fakeCacheRedis() as never);
+    vi.mocked(getKeyValueStore).mockReturnValue(asKeyValueStore(fakeCacheRedis()));
 
     await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
     await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
@@ -802,7 +814,7 @@ describe('assertAccountActive, warm Redis cache', () => {
 
   it('rejects from the cached suspended status without a second Postgres read', async () => {
     mockNeonQuery.mockResolvedValue([{ account_status: 'suspended' }]);
-    vi.mocked(getSharedRedisClient).mockReturnValue(fakeCacheRedis() as never);
+    vi.mocked(getKeyValueStore).mockReturnValue(asKeyValueStore(fakeCacheRedis()));
 
     await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
     await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });

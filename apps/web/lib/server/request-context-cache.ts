@@ -2,7 +2,7 @@ import 'server-only';
 
 import { after } from 'next/server';
 
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 import { readRedisWithinBudget, wasRedisReadAbandoned } from '@/lib/server/bounded-redis-read';
 
@@ -38,9 +38,9 @@ function activeOrganizationKey(userId: string): string {
  * Never throws. A misconfigured or unavailable Redis client is exactly the
  * outage this cache must fall through on, not a reason to fail the request.
  */
-function resolveRedis(): ReturnType<typeof getSharedRedisClient> | null {
+function resolveStore(): ReturnType<typeof getKeyValueStore> {
   try {
-    return getSharedRedisClient();
+    return getKeyValueStore();
   } catch {
     return null;
   }
@@ -53,11 +53,11 @@ function resolveRedis(): ReturnType<typeof getSharedRedisClient> | null {
  * a miss.
  */
 export async function getCachedAccountStatus(userId: string): Promise<string | null | undefined> {
-  const redis = resolveRedis();
-  if (!redis) return undefined;
+  const store = resolveStore();
+  if (!store) return undefined;
   try {
     const cached = await readRedisWithinBudget(
-      redis.get<CachedAccountStatus>(accountStatusKey(userId)),
+      store.get<CachedAccountStatus>(accountStatusKey(userId)),
     );
     if (wasRedisReadAbandoned(cached) || !cached) return undefined;
     return cached.status;
@@ -68,15 +68,13 @@ export async function getCachedAccountStatus(userId: string): Promise<string | n
 }
 
 export async function setCachedAccountStatus(userId: string, status: string | null): Promise<void> {
-  const redis = resolveRedis();
-  if (!redis) return;
+  const store = resolveStore();
+  if (!store) return;
   writeOffRequestPath(async () => {
     try {
-      await redis.set<CachedAccountStatus>(
-        accountStatusKey(userId),
-        { status },
-        { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
-      );
+      await store.set(accountStatusKey(userId), { status } satisfies CachedAccountStatus, {
+        ttlSeconds: REQUEST_CONTEXT_CACHE_TTL_SECONDS,
+      });
     } catch (err) {
       logger.debug({ err, userId }, '[request-context-cache] account-status write failed');
     }
@@ -84,10 +82,10 @@ export async function setCachedAccountStatus(userId: string, status: string | nu
 }
 
 export async function invalidateAccountStatusCache(userId: string): Promise<void> {
-  const redis = resolveRedis();
-  if (!redis) return;
+  const store = resolveStore();
+  if (!store) return;
   try {
-    await redis.del(accountStatusKey(userId));
+    await store.delete(accountStatusKey(userId));
   } catch (err) {
     logger.debug({ err, userId }, '[request-context-cache] account-status invalidation failed');
   }
@@ -96,11 +94,11 @@ export async function invalidateAccountStatusCache(userId: string): Promise<void
 export async function getCachedActiveOrganizationId(
   userId: string,
 ): Promise<string | null | undefined> {
-  const redis = resolveRedis();
-  if (!redis) return undefined;
+  const store = resolveStore();
+  if (!store) return undefined;
   try {
     const cached = await readRedisWithinBudget(
-      redis.get<CachedActiveOrganization>(activeOrganizationKey(userId)),
+      store.get<CachedActiveOrganization>(activeOrganizationKey(userId)),
     );
     if (wasRedisReadAbandoned(cached) || !cached) return undefined;
     return cached.organizationId;
@@ -114,14 +112,14 @@ export async function setCachedActiveOrganizationId(
   userId: string,
   organizationId: string | null,
 ): Promise<void> {
-  const redis = resolveRedis();
-  if (!redis) return;
+  const store = resolveStore();
+  if (!store) return;
   writeOffRequestPath(async () => {
     try {
-      await redis.set<CachedActiveOrganization>(
+      await store.set(
         activeOrganizationKey(userId),
-        { organizationId },
-        { ex: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
+        { organizationId } satisfies CachedActiveOrganization,
+        { ttlSeconds: REQUEST_CONTEXT_CACHE_TTL_SECONDS },
       );
     } catch (err) {
       logger.debug({ err, userId }, '[request-context-cache] active-organization write failed');
@@ -130,10 +128,10 @@ export async function setCachedActiveOrganizationId(
 }
 
 export async function invalidateActiveOrganizationCache(userId: string): Promise<void> {
-  const redis = resolveRedis();
-  if (!redis) return;
+  const store = resolveStore();
+  if (!store) return;
   try {
-    await redis.del(activeOrganizationKey(userId));
+    await store.delete(activeOrganizationKey(userId));
   } catch (err) {
     logger.debug(
       { err, userId },

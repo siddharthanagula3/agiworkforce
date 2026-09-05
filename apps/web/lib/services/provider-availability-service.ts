@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { ErrorCategory } from '@agiworkforce/provider-runtime';
 import { logger } from '@/lib/logger';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 
 const DEGRADED_KEY_PREFIX = 'agi-model-avail:degraded';
 const DEGRADED_TTL_SECONDS = 5 * 60;
@@ -55,11 +55,11 @@ export function markProviderDegraded(
   const untilMs = nowMs + DEGRADED_TTL_SECONDS * 1000;
   memoryMarks.set(providerKey, { reason, untilMs });
 
-  const client = getSharedRedisClient();
-  if (!client) return;
-  client
-    .pipeline()
-    .hset(degradedKey(providerKey), { [FIELD_REASON]: reason, [FIELD_UNTIL_MS]: untilMs })
+  const store = getKeyValueStore();
+  if (!store) return;
+  store
+    .batch()
+    .hashSet(degradedKey(providerKey), { [FIELD_REASON]: reason, [FIELD_UNTIL_MS]: untilMs })
     .expire(degradedKey(providerKey), DEGRADED_TTL_SECONDS)
     .exec()
     .catch((error: unknown) => {
@@ -71,10 +71,10 @@ export async function getProviderAvailability(
   providerKey: string,
   nowMs: number = Date.now(),
 ): Promise<ProviderAvailabilitySignal | null> {
-  const client = getSharedRedisClient();
-  if (client) {
+  const store = getKeyValueStore();
+  if (store) {
     try {
-      const record = await client.hgetall<Record<string, string | number>>(
+      const record = await store.hashGetAll<Record<string, string | number>>(
         degradedKey(providerKey),
       );
       const untilMs = record?.[FIELD_UNTIL_MS] !== undefined ? Number(record[FIELD_UNTIL_MS]) : NaN;

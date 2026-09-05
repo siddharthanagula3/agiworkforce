@@ -5,7 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 
 /**
  * Membership marks which organisations currently have an enabled destination,
@@ -15,11 +15,13 @@ import { getSharedRedisClient } from '@/lib/rate-limit';
  */
 export const AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY = 'agi-audit-stream:active-organizations';
 
+const NO_ACTIVE_DESTINATIONS = 0;
+
 async function markAuditStreamActive(organizationId: string): Promise<void> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return;
-    await redis.sadd(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
+    const store = getKeyValueStore();
+    if (!store) return;
+    await store.setAdd(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
   } catch (error) {
     logger.error({ error, organizationId }, 'Audit stream active-org marker set failed');
   }
@@ -27,9 +29,9 @@ async function markAuditStreamActive(organizationId: string): Promise<void> {
 
 async function markAuditStreamInactive(organizationId: string): Promise<void> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return;
-    await redis.srem(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
+    const store = getKeyValueStore();
+    if (!store) return;
+    await store.setRemove(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
   } catch (error) {
     logger.error({ error, organizationId }, 'Audit stream active-org marker clear failed');
   }
@@ -37,10 +39,10 @@ async function markAuditStreamInactive(organizationId: string): Promise<void> {
 
 export async function hasActiveAuditStreamDestinations(): Promise<boolean | null> {
   try {
-    const redis = getSharedRedisClient();
-    if (!redis) return null;
-    const count = await redis.scard(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
-    return count > 0;
+    const store = getKeyValueStore();
+    if (!store) return null;
+    const count = await store.setSize(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
+    return count > NO_ACTIVE_DESTINATIONS;
   } catch (error) {
     logger.error({ error }, 'Audit stream active-org membership check failed');
     return null;
