@@ -239,6 +239,10 @@
         {
           "pathPrefix": "apps/web/shared/components/agi/AgiChatDemo.tsx",
           "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical HeroAppWindow preview instead."
+        },
+        {
+          "pathPrefix": "apps/web/lib/web-search/grounding-cost.ts",
+          "reason": "Prices grounded search overflow once the tool loop reports the per turn grounded response count; the tool loop hook is owned by the chat run slice and lands next, at which point this entry is removed."
         }
       ],
       "unreachableDebt": {
