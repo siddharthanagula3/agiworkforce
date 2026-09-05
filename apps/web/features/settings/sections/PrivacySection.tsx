@@ -317,48 +317,43 @@ export function PrivacySection() {
         >
           Privacy
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          AGI is local-first. Web privacy controls are loaded from and saved to your account
-          settings.
-        </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
           {loadingPreferences
             ? 'Loading account settings...'
             : savingPreferences
               ? 'Saving...'
               : preferenceError
                 ? `Save failed: ${preferenceError}`
-                : 'Synced to your account'}
+                : 'Saved'}
         </p>
       </div>
 
-      {/* Informational banner */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
+      {/* Privacy Policy, and the two expandable rows explaining data handling */}
+      <div>
         <div
           style={{
-            padding: '14px 20px',
-            fontSize: 13,
-            color: 'var(--text-2)',
-            lineHeight: 1.6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
           }}
         >
-          AGI believes in transparent data practices. Learn how your information is protected when
-          using AGI products and visit our{' '}
+          <span style={{ fontSize: 14, color: 'var(--text-1)' }}>Privacy Policy</span>
           <SettingsPageLink
             href="/privacy"
-            style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+            style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              padding: '6px 14px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+            }}
           >
-            Privacy Policy
-          </SettingsPageLink>{' '}
-          for more details.
+            View
+          </SettingsPageLink>
         </div>
 
         <ExpandableSection title="How we protect your data">
@@ -405,34 +400,14 @@ export function PrivacySection() {
             copy here only when the toggle and its consumer both ship.
           */}
         </ExpandableSection>
-      </section>
 
-      {/* Preferences (toggles) */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Preferences
-        </div>
-        {TOGGLES.map((spec, idx) => (
+        {/* Telemetry toggle */}
+        {TOGGLES.map((spec) => (
           <div
             key={spec.id}
             style={{
-              padding: '16px 20px',
-              borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
+              padding: '14px 0',
+              borderBottom: '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
@@ -441,7 +416,7 @@ export function PrivacySection() {
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-1)' }}>
                 {spec.label}
                 {spec.managedOnly ? (
                   <span
@@ -470,32 +445,13 @@ export function PrivacySection() {
             />
           </div>
         ))}
-      </section>
+      </div>
 
-      {/* Your data section */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
+      {/* Your data */}
+      <div>
         <div
           style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Your data
-        </div>
-
-        <div
-          style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -528,7 +484,7 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -561,7 +517,7 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderTop: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -594,7 +550,7 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -631,7 +587,7 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -696,7 +652,7 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'flex-start',
@@ -755,7 +711,7 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -800,7 +756,7 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -839,7 +795,7 @@ export function PrivacySection() {
         <div
           id="export-data"
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
@@ -884,7 +840,7 @@ export function PrivacySection() {
         {/* Memory preferences row */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -907,7 +863,7 @@ export function PrivacySection() {
             Manage
           </SettingsSectionLink>
         </div>
-      </section>
+      </div>
 
       {/* Delete account, cross-link only. This used to be a second, independent
           delete-account implementation (its own fetch, its own hardcoded
@@ -917,40 +873,29 @@ export function PrivacySection() {
           on Account settings, via useDeleteAccount. Same pattern as
           SecuritySection's session-management cross-link: point at the owning
           surface instead of re-implementing it here. */}
-      <section
-        aria-label="Account deletion availability"
-        style={{
-          border: '1px solid rgba(218,119,86,0.35)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
+      <div aria-label="Account deletion availability">
+        <p
           style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid rgba(218,119,86,0.25)',
+            margin: '0 0 4px',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--chat-accent-primary-text)',
           }}
         >
           Danger zone
-        </div>
-        <div style={{ padding: '16px 20px' }}>
-          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-            Permanently deleting your account, including all conversations and billing history, is
-            handled from{' '}
-            <SettingsSectionLink
-              section="account"
-              style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
-            >
-              Account settings
-            </SettingsSectionLink>
-            .
-          </p>
-        </div>
-      </section>
+        </p>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+          Permanently deleting your account, including all conversations and billing history, is
+          handled from{' '}
+          <SettingsSectionLink
+            section="account"
+            style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+          >
+            Account settings
+          </SettingsSectionLink>
+          .
+        </p>
+      </div>
     </div>
   );
 }
