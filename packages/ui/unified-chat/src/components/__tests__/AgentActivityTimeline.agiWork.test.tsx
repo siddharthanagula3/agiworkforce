@@ -105,6 +105,26 @@ describe('AgentActivityTimeline in AGI Work', () => {
     expect(screen.getByText('2. Draft the comparison table.')).not.toBeNull();
   });
 
+  it('drops the goal entry from the rows instead of echoing the prompt back', () => {
+    const withGoal = runningRun();
+    withGoal.entries = [
+      {
+        kind: 'progress',
+        id: 'progress:agiwork:goal',
+        progressId: 'agiwork:goal',
+        summary: 'Compare vendor pricing tiers and produce a table.',
+        status: 'completed',
+        startedAtMs: 1_010,
+      },
+      ...withGoal.entries,
+    ];
+
+    render(<AgentActivityTimeline activity={withGoal} workMode="agiwork" />);
+
+    expect(screen.queryByText('Compare vendor pricing tiers and produce a table.')).toBeNull();
+    expect(screen.getByText('2. Draft the comparison table.')).not.toBeNull();
+  });
+
   it('shows no plan line when the run streamed no plan', () => {
     render(
       <AgentActivityTimeline
