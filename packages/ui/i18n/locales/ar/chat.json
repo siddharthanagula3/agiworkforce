@@ -129,7 +129,10 @@
     "untitled": "بدون عنوان",
     "untitledChat": "محادثة بدون عنوان",
     "navLabel": "سجل الدردشة",
-    "toggleSidebar": "تبديل الشريط الجانبي"
+    "toggleSidebar": "تبديل الشريط الجانبي",
+    "copyLink": "نسخ الرابط",
+    "markUnread": "تحديد كغير مقروء",
+    "markRead": "تحديد كمقروء"
   },
   "composer": {
     "addAttachment": "إضافة مرفق",

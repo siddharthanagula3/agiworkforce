@@ -129,7 +129,10 @@
     "untitled": "Unbenannt",
     "untitledChat": "Unbenannter Chat",
     "navLabel": "Chatverlauf",
-    "toggleSidebar": "Seitenleiste umschalten"
+    "toggleSidebar": "Seitenleiste umschalten",
+    "copyLink": "Link kopieren",
+    "markUnread": "Als ungelesen markieren",
+    "markRead": "Als gelesen markieren"
   },
   "composer": {
     "addAttachment": "Anhang hinzufügen",

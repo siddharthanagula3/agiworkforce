@@ -129,7 +129,10 @@
     "untitled": "Sans titre",
     "untitledChat": "Conversation sans titre",
     "navLabel": "Historique des conversations",
-    "toggleSidebar": "Afficher ou masquer la barre latérale"
+    "toggleSidebar": "Afficher ou masquer la barre latérale",
+    "copyLink": "Copier le lien",
+    "markUnread": "Marquer comme non lu",
+    "markRead": "Marquer comme lu"
   },
   "composer": {
     "addAttachment": "Ajouter une pièce jointe",

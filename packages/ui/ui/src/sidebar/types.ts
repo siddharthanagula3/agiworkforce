@@ -26,6 +26,8 @@ export interface SidebarSession {
    * dot) instead of filing tasks somewhere else.
    */
   agiWork?: boolean;
+  /** Marked unread from the row menu; renders the title with more weight. */
+  unread?: boolean;
 }
 
 export interface SidebarProject {

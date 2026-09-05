@@ -125,6 +125,7 @@ export function Sidebar(props: SidebarProps) {
     onShare,
     onMoveToProject,
     onOpenCustomInstructions,
+    onMarkUnread,
   } = props;
 
   const { t } = useUiTranslation('chat');
@@ -373,6 +374,7 @@ export function Sidebar(props: SidebarProps) {
             onShare={onShare}
             onMoveToProject={onMoveToProject}
             onOpenCustomInstructions={onOpenCustomInstructions}
+            onMarkUnread={onMarkUnread}
           />
         </div>
       );
@@ -395,6 +397,7 @@ export function Sidebar(props: SidebarProps) {
       onShare,
       onMoveToProject,
       onOpenCustomInstructions,
+      onMarkUnread,
     ],
   );
 
