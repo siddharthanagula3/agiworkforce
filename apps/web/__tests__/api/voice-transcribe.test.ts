@@ -51,9 +51,9 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
-// The route meters usage over the pooled connection, not a request-scoped one:
-// rls-db refuses sk_live_/sk_test_ tokens outright, and this route accepts
-// developer API keys.
+// The route reserves on the tenant-scoped handle above. This mock only keeps the pooled
+// client that other modules in the import graph construct from reaching for a real
+// connection, whose driver would answer the stubbed global fetch.
 const mockGetNeonDb = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: (...args: unknown[]) => mockGetNeonDb(...args),
