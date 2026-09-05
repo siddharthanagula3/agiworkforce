@@ -285,11 +285,6 @@
       "file": "apps/web/lib/services/web-push-service.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
-    },
-    {
-      "file": "apps/web/shared/stores/web-chat-store.ts",
-      "migration": 156,
-      "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     }
   ]
 }
