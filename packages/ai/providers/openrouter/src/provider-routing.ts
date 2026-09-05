@@ -36,13 +36,20 @@ function readMetadataRoutingPreferences(
   };
 }
 
+const ZERO_DATA_RETENTION_POLICY: OpenRouterDataCollectionPolicy = 'deny';
+
 export function applyOpenRouterProviderRouting(
   params: OpenAIChatCompletionCreateParams,
   configDefault: OpenRouterProviderRoutingPreferences | undefined,
   requestMetadata: ChatRequest['metadata'],
+  zeroDataRetentionOnly?: boolean,
 ): void {
   const requestOverride = readMetadataRoutingPreferences(requestMetadata);
-  const merged: OpenRouterProviderRoutingPreferences = { ...configDefault, ...requestOverride };
+  const merged: OpenRouterProviderRoutingPreferences = {
+    ...configDefault,
+    ...requestOverride,
+    ...(zeroDataRetentionOnly ? { dataCollection: ZERO_DATA_RETENTION_POLICY } : {}),
+  };
   if (
     merged.order === undefined &&
     merged.allowFallbacks === undefined &&

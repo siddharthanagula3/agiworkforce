@@ -225,14 +225,24 @@
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
       "trustModes": ["byok"],
-      "features": {}
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
     },
     "open-router/chat-completions-managed": {
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
     },
     "open_router/media": {
       "provider": "open_router",

@@ -4,6 +4,9 @@ import { resolveAutoRoute } from '../auto';
 
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
 const ZERO_RETENTION = 'zero_retention';
+const CONDITIONAL = 'conditional';
+const ZERO_DATA_RETENTION_ON_REQUEST_FEATURE = 'zeroDataRetentionOnRequest';
+const IMPLEMENTED = 'implemented';
 const INELIGIBLE_COMMERCIAL_STATUSES = new Set(['blocked', 'experimental_only']);
 
 type RegistryRoute = (typeof modelRegistry.routes)[string];
@@ -18,6 +21,25 @@ function isEligibleManagedRoute(route: RegistryRoute | undefined): route is Regi
   );
 }
 
+function honoursRequirementPerRequest(route: RegistryRoute): boolean {
+  const harnesses = modelRegistry.harnesses as Record<
+    string,
+    { features: Record<string, { implementation: string } | undefined> } | undefined
+  >;
+  return (
+    harnesses[route.harnessId]?.features[ZERO_DATA_RETENTION_ON_REQUEST_FEATURE]?.implementation ===
+    IMPLEMENTED
+  );
+}
+
+function findEligibleRoute(predicate: (route: RegistryRoute) => boolean): RegistryRoute {
+  const route = Object.values(modelRegistry.routes).find(
+    (candidate) => isEligibleManagedRoute(candidate) && predicate(candidate),
+  );
+  if (!route) throw new Error('no compiled route matches the case under test');
+  return route;
+}
+
 function routesForModel(modelKey: string): RegistryRoute[] {
   return Object.values(modelRegistry.routes).filter((route) => route.modelKey === modelKey);
 }
@@ -28,11 +50,15 @@ function findModelWithOnlyProviderDefaultRoutes(): { modelKey: string; provider:
   }>) {
     const eligible = routesForModel(model.identity.key).filter(isEligibleManagedRoute);
     if (eligible.length === 0) continue;
-    if (eligible.every((route) => route.dataRetention !== ZERO_RETENTION)) {
+    if (
+      eligible.every(
+        (route) => route.dataRetention !== ZERO_RETENTION && !honoursRequirementPerRequest(route),
+      )
+    ) {
       return { modelKey: model.identity.key, provider: model.identity.provider };
     }
   }
-  throw new Error('every compiled model has an eligible zero_retention route');
+  throw new Error('every compiled model has a route that guarantees zero data retention');
 }
 
 describe('zero data retention routing policy', () => {
@@ -44,32 +70,40 @@ describe('zero data retention routing policy', () => {
     }
   });
 
-  it('admits a route under a ZDR requirement only when its provider declares zero retention', () => {
-    const governance = modelRegistry.governance as Record<string, { dataRetentionClass: string }>;
-    const declared = Object.values(modelRegistry.routes).filter(
-      (route) =>
-        isEligibleManagedRoute(route) &&
-        governance[route.provider]?.dataRetentionClass === ZERO_RETENTION,
+  it('admits a conditional route when its harness declares it honours the requirement per request', () => {
+    const route = findEligibleRoute(
+      (candidate) =>
+        candidate.dataRetention === CONDITIONAL && honoursRequirementPerRequest(candidate),
     );
 
-    for (const route of declared) {
-      const result = resolveAutoRoute({
-        selection: route.modelKey,
-        taskType: 'coding',
-        subscriptionTier: 'max',
-        trustMode: MANAGED_CLOUD_TRUST_MODE,
-        zeroDataRetentionOnly: true,
-      });
-      expect(result.status).toBe('selected');
-    }
+    const result = resolveAutoRoute({
+      selection: route.modelKey,
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: MANAGED_CLOUD_TRUST_MODE,
+      zeroDataRetentionOnly: true,
+    });
 
-    if (declared.length === 0) {
-      expect(
-        Object.values(modelRegistry.routes).every(
-          (route) => route.dataRetention !== ZERO_RETENTION,
-        ),
-      ).toBe(true);
-    }
+    expect(result.status).toBe('selected');
+    if (result.status !== 'selected') return;
+    const admitted = modelRegistry.routes[result.routeId as keyof typeof modelRegistry.routes];
+    expect(
+      admitted.dataRetention === ZERO_RETENTION || honoursRequirementPerRequest(admitted),
+    ).toBe(true);
+  });
+
+  it('refuses a model whose every route leaves the requirement undeclared', () => {
+    const { modelKey } = findModelWithOnlyProviderDefaultRoutes();
+
+    const result = resolveAutoRoute({
+      selection: modelKey,
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: MANAGED_CLOUD_TRUST_MODE,
+      zeroDataRetentionOnly: true,
+    });
+
+    expect(result.status).toBe('unavailable');
   });
 
   it('excludes every route and reports unavailable for a model with no zero_retention route', () => {

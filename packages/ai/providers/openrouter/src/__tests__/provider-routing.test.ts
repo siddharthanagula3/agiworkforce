@@ -18,6 +18,33 @@ describe('applyOpenRouterProviderRouting', () => {
     expect((params as unknown as { provider?: unknown }).provider).toBeUndefined();
   });
 
+  it('denies data collection when the request carries the zero-retention requirement', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(params, undefined, undefined, true);
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      data_collection: 'deny',
+    });
+  });
+
+  it('sends no provider field for a request without the zero-retention requirement', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(params, undefined, undefined, false);
+    expect((params as unknown as { provider?: unknown }).provider).toBeUndefined();
+  });
+
+  it('overrides a caller preference to allow collection when the requirement is present', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { dataCollection: 'allow' },
+      { openRouterProviderRouting: { dataCollection: 'allow' } },
+      true,
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      data_collection: 'deny',
+    });
+  });
+
   it('applies the adapter-config default order, allow_fallbacks and data_collection', () => {
     const params = buildParams();
     applyOpenRouterProviderRouting(
