@@ -54,7 +54,6 @@ import {
   listAvailableManagedProviderIds,
   resolveProviderFromModel,
 } from '@/lib/services/provider-adapter-service';
-import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
@@ -1375,6 +1374,31 @@ function candidateRouteIdsForSelection(selection: string): readonly string[] {
  * `rankRoutes` can deprioritize a route in cooldown instead of treating an
  * absent `routeHealthSnapshots` entry as the only signal it has.
  */
+/**
+ * The workspace model policy, read once per request, before routing.
+ *
+ * Fails OPEN on every uncertainty, personal scope, no policy row, or an
+ * unreachable table: model governance is a deployment control over which
+ * approved tool staff use, not a containment barrier, and turning a database
+ * fault into a denial would stop every member's chat. The tenancy layer is what
+ * stops cross-workspace access, and it fails closed.
+ */
+async function readWorkspaceModelPolicy(
+  scoped: { db: Parameters<typeof readModelPolicy>[0]; organizationId: string | null },
+  requestId: string,
+): Promise<ModelAccessPolicy | null> {
+  if (!scoped.organizationId) return null;
+  try {
+    return await readModelPolicy(scoped.db, scoped.organizationId);
+  } catch (error) {
+    logger.error(
+      { error, requestId, organizationId: scoped.organizationId },
+      '[model-policy] policy read failed; this request is ungoverned',
+    );
+    return null;
+  }
+}
+
 export async function resolveRouteHealthRuntimeState(
   selection: string,
   nowMs: number,
@@ -1421,6 +1445,11 @@ export function resolveWebCloudModelRoute(
   availableProviderIds?: ReadonlySet<string>,
   zeroDataRetentionOnly?: boolean,
   zeroDataRetentionProviders?: ReadonlySet<string>,
+  /**
+   * The workspace policy snapshot, so the resolver refuses a candidate the
+   * workspace may not run instead of the caller filtering the plan afterwards.
+   */
+  organizationPolicy?: ModelAccessPolicy | null,
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -1453,6 +1482,7 @@ export function resolveWebCloudModelRoute(
     ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
       ? { zeroDataRetentionProviders }
       : {}),
+    ...(organizationPolicy ? { organizationPolicy } : {}),
   });
 }
 
@@ -2397,9 +2427,13 @@ export async function processRequest(
   };
 
   const routeResolutionNowMs = Date.now();
-  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy] = await timePhase(
-    CHAT_TURN_PHASE.routeSelection,
-    () =>
+  // The workspace policy is read BEFORE routing so the resolver can refuse a
+  // candidate the workspace may not run. Reading it after, as this path used to,
+  // meant the router could pick a blocked model and every later hop had to be
+  // filtered separately. One read serves the resolver, the primary gate and
+  // every downgrade below.
+  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy, workspaceModelPolicy] =
+    await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
       Promise.all([
         resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
         chatRequest.conversation_id
@@ -2408,8 +2442,9 @@ export async function processRequest(
         scopedDbPromise.then((scoped) =>
           resolveZeroDataRetentionPolicy(scoped.db, userId, request),
         ),
+        scopedDbPromise.then((scoped) => readWorkspaceModelPolicy(scoped, requestId)),
       ]),
-  );
+    );
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
@@ -2427,6 +2462,7 @@ export async function processRequest(
     availableProviderIds,
     zeroDataRetentionOnly,
     zeroDataRetentionProviders,
+    workspaceModelPolicy,
   );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
@@ -2458,6 +2494,7 @@ export async function processRequest(
         availableProviderIds,
         zeroDataRetentionOnly,
         zeroDataRetentionProviders,
+        workspaceModelPolicy,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -2537,49 +2574,33 @@ export async function processRequest(
   // The scoped handle resolved the active workspace back at line ~1300,
   // including the x-agi-organization-id override. Re-resolving here would add a
   // second round trip to the hot path for an answer already in hand.
-  const scopedForPolicy = await scopedDbPromise;
   // Both provider identities, spelled out at the call site: the VENDOR the
   // catalog says owns this model and, separately, the TRANSPORT the dispatch
   // layer resolved. See `resolveProviderIdentities` for why one string was not
   // enough, and the evaluator for what each identity is allowed to decide.
-  const primaryIdentities = resolveProviderIdentities(chatRequest.model, routeDecision.routeId);
-  const modelAccess = await timePhase(CHAT_TURN_PHASE.modelPolicy, () =>
-    evaluateModelAccessForOrganization(scopedForPolicy.db, scopedForPolicy.organizationId, {
-      provider: primaryIdentities.vendor,
-      transportProvider: primaryIdentities.transport,
-      modelId: chatRequest.model,
-    }),
-  );
-  if (!modelAccess.allowed) {
-    return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
-  }
-
-  // The gate above covers only the router's FIRST pick. Two later hops choose a
-  // DIFFERENT model inside this same request, the cheaper-model downgrade when
-  // credits run short (below), and the managed-failover rotation that consumes
-  // the `fallbackModels` plan (managed-failover.ts), and a policy enforced only
-  // on the happy path is not a policy. Read the row ONCE here and evaluate every
-  // candidate against that one snapshot, so each hop answers to exactly the
-  // policy the primary model answered to.
   //
-  // `ungoverned` above already means there is nothing to enforce: personal
-  // scope, no policy row, or a read that failed, which model-policy-gate
-  // deliberately treats as allow, so that a briefly unreachable policy table
-  // does not stop every member's chat. Every candidate is ungoverned for the
-  // same reason, so only a genuinely governed workspace pays the extra read.
-  let workspaceModelPolicy: ModelAccessPolicy | null = null;
-  const policyOrganizationId = scopedForPolicy.organizationId;
-  if (modelAccess.code !== 'ungoverned' && policyOrganizationId) {
-    try {
-      workspaceModelPolicy = await timePhase(CHAT_TURN_PHASE.modelPolicy, () =>
-        readModelPolicy(scopedForPolicy.db, policyOrganizationId),
-      );
-    } catch (error) {
-      logger.error(
-        { error, requestId, organizationId: scopedForPolicy.organizationId },
-        '[model-policy] candidate policy read failed; failover candidates ungoverned',
-      );
-    }
+  // Evaluated against the snapshot the RESOLVER already answered to, not a
+  // second read: the router refuses a governed candidate during admission, so
+  // this gate is the belt to that braces, and it must not be able to disagree
+  // with the plan by reading a row that changed in between. An explicit model
+  // selection the resolver admitted for other reasons still stops here.
+  const primaryIdentities = resolveProviderIdentities(chatRequest.model, routeDecision.routeId);
+  const modelAccess = evaluateModelAccess(workspaceModelPolicy, {
+    provider: primaryIdentities.vendor,
+    transportProvider: primaryIdentities.transport,
+    modelId: chatRequest.model,
+  });
+  if (!modelAccess.allowed) {
+    logger.info(
+      {
+        requestId,
+        provider: primaryIdentities.vendor,
+        model: chatRequest.model,
+        code: modelAccess.code,
+      },
+      '[model-policy] model refused by workspace policy',
+    );
+    return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
   }
 
   const fallbackAllowedByPolicy = (candidateModel: string): boolean => {
@@ -3503,19 +3524,17 @@ export async function processRequest(
     usedFallback,
     fallbackReason,
     originalModel,
-    // Policy-filtered here rather than at rotation time: a candidate the
-    // workspace may not run never enters the failover plan, so no rotation can
-    // land on it. An empty list is a rotation-free request served by the
-    // primary model, which the gate above already admitted.
+    // Policy-filtered by the RESOLVER, not here: `organizationPolicy` is an
+    // admission input, so a candidate the workspace may not run never enters
+    // the plan and no rotation can land on one. An empty list is a
+    // rotation-free request served by the primary model.
     // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
     // stage's ranked tail, every member already verified zero-cost, so rotation
     // cannot leave the lane. The trial path stays rotation-free as before.
     fallbackModels:
       freeTrialEnabled && !freeLanePlan
         ? []
-        : routeDecision.fallbacks
-            .map((fallback) => fallback.modelKey)
-            .filter((modelKey) => fallbackAllowedByPolicy(modelKey)),
+        : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
     ...(freeLanePlan ? { freeLane: freeLanePlan, routeLane: ROUTE_LANES.free } : {}),
     // Carried, not re-read: the OpenRouter route-retry inside managed failover
     // is outside the plan above and must answer to this same snapshot.

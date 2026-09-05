@@ -11,6 +11,7 @@ import {
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
 import { effectiveModelPricing } from './pricing';
+import { evaluateModelAccess, type ModelAccessPolicy } from './model-policy';
 import {
   effectiveRouteHealth,
   type RouteHealthSnapshot,
@@ -200,6 +201,17 @@ export interface AutoRoutingRequest {
    */
   observedRouteHealth?: Readonly<Record<string, ObservedRouteHealth>>;
   enableObservedHealthRanking?: boolean;
+  /**
+   * The workspace administrator's model policy, applied HERE rather than by the
+   * caller afterwards.
+   *
+   * A candidate the workspace may not run never enters the plan, so no later
+   * hop, a failover rotation, a cheaper-model downgrade, a route retry, can
+   * land on one. `null` means ungoverned, which admits everything: a workspace
+   * with no policy, personal scope, or a policy read that deliberately failed
+   * open must not lose access to every model.
+   */
+  organizationPolicy?: ModelAccessPolicy | null;
 }
 
 export interface ObservedRouteHealth {
@@ -637,8 +649,22 @@ function routeAdmissionRejections(
   route: RegistryRoute,
   task: AutoTaskPolicy,
   request: AutoRoutingRequest,
+  vendor: string,
 ): string[] {
   const reasons: string[] = [];
+  if (request.organizationPolicy) {
+    // Both provider identities: the VENDOR that owns the model and the
+    // TRANSPORT this route dispatches through. The evaluator decides what each
+    // identity may do, and a block on either one refuses.
+    const decision = evaluateModelAccess(request.organizationPolicy, {
+      provider: vendor,
+      transportProvider: route.provider,
+      modelId: route.modelKey,
+    });
+    if (!decision.allowed) {
+      reasons.push(`route ${routeId} is refused by workspace model policy: ${decision.code}`);
+    }
+  }
   if (route.commercialStatus === BLOCKED_COMMERCIAL_STATUS) {
     reasons.push(`route ${routeId} commercial status is ${route.commercialStatus}`);
   }
@@ -760,7 +786,13 @@ function evaluateEligibility(
   const routeReasons: string[] = [];
   const admissible: RankedRoute[] = [];
   for (const [routeId, route] of trustModeRoutes) {
-    const rejections = routeAdmissionRejections(routeId, route, task, request);
+    const rejections = routeAdmissionRejections(
+      routeId,
+      route,
+      task,
+      request,
+      model.identity.provider,
+    );
     if (rejections.length > 0) {
       routeReasons.push(...rejections);
       continue;
