@@ -10,7 +10,8 @@
  * main process is its own egress chokepoint.
  */
 
-export const CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
+const PRODUCTION_CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
+const CLOUD_APP_ORIGIN_ENV = 'AGI_CLOUD_APP_ORIGIN';
 
 export type RendererMode = 'remote' | 'bundled';
 
@@ -50,6 +51,14 @@ export function isAllowedApiBaseUrl(rawUrl: string): boolean {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
   return isLocalhost || host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com');
 }
+
+function resolveCloudAppOrigin(): string {
+  const requested = process.env[CLOUD_APP_ORIGIN_ENV];
+  if (requested && isAllowedApiBaseUrl(requested)) return requested.replace(/\/+$/, '');
+  return PRODUCTION_CLOUD_APP_ORIGIN;
+}
+
+export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin();
 
 export const RENDERER_CSP = [
   "default-src 'self'",
