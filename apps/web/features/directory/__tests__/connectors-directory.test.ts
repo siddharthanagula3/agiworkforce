@@ -115,7 +115,7 @@ describe('toConnectorSection', () => {
     ]);
     expect(section.sources?.map((source) => source.label)).toEqual([
       'All',
-      'Built by AGI',
+      'Official',
       'Community',
     ]);
   });
