@@ -529,6 +529,7 @@ const UNPOLICED_APP_ENFORCED_TABLES = new Map([
     'agent_tool_executions',
     'agent_tools',
     'chat_folders',
+    'conversation_tags',
     'message_bookmarks',
     'message_reactions',
     'search_history',

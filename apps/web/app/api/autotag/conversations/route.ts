@@ -1,12 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const VALID_TAGS = [
   'coding',
@@ -23,9 +20,7 @@ async function handleGetConversationsByTag(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const { searchParams } = new URL(request.url);
   const tag = searchParams.get('tag');
