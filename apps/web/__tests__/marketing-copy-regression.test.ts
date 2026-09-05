@@ -278,6 +278,7 @@ describe('public marketing copy regressions', () => {
 
   it('presents managed cloud as open by default, not waitlist-gated (WEB-12)', () => {
     const home = [
+      'features/marketing/components/MarketingLanding.tsx',
       'features/marketing/components/landing/LandingPage.tsx',
       'features/marketing/components/landing/landing-content.ts',
     ]
