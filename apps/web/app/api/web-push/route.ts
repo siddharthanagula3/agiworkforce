@@ -9,11 +9,14 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getWebPushPublicKey, isDeliverableSubscription } from '@/lib/services/web-push-service';
 
 export const runtime = 'nodejs';
 
 const RATE_LIMIT_BUCKET = 'web-push';
+
+const PUSH_SCOPE = { resolveOrganization: false } as const;
 
 const MAX_ENDPOINT_CHARS = 2048;
 const MAX_P256DH_CHARS = 200;
@@ -61,16 +64,19 @@ async function handleSubscribe(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request, PUSH_SCOPE);
 
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse as NextResponse;
 
   const subscription = await readSubscription(request);
   const userAgent = request.headers.get('user-agent')?.slice(0, MAX_USER_AGENT_CHARS) ?? null;
-  const db = getNeonDb();
 
-  const existing = await db.query<{ user_id: string }>(
+  // The endpoint is a globally unique key the browser mints, and the row that
+  // holds it may belong to another account, which the caller's own scope cannot
+  // see. Reading it over the schema owner is what turns a takeover into a 403
+  // instead of a unique-violation 500 on the upsert below.
+  const existing = await getNeonDb().query<{ user_id: string }>(
     `select user_id
        from public.web_push_subscriptions
       where endpoint = $1
@@ -106,7 +112,7 @@ async function handleUnsubscribe(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request, PUSH_SCOPE);
 
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -117,7 +123,7 @@ async function handleUnsubscribe(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    await getNeonDb().execute(
+    await db.execute(
       `delete from public.web_push_subscriptions
         where endpoint = $1 and user_id = $2`,
       [parsed.data.endpoint, userId],

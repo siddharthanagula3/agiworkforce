@@ -119,7 +119,7 @@
     },
     {
       "path": "apps/web/app/api/mobile/push-token/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the client-supplied device id may already be held by another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the token clear are caller-scoped"
     },
     {
       "path": "apps/web/app/api/portal/route.ts",
@@ -151,7 +151,7 @@
     },
     {
       "path": "apps/web/app/api/web-push/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the push endpoint the browser mints is a globally unique key, and the row holding it may belong to another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the delete are caller-scoped"
     },
     {
       "path": "apps/web/app/share/[token]/page.tsx",
