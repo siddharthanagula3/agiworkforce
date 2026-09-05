@@ -15,6 +15,7 @@ const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
 export const MIGRATION_TARGETS = ['local', 'ci', 'branch', 'production'];
 export const DEPLOYMENT_SURFACES = ['web', 'gateway'];
 export const DEPLOYMENT_HISTORY_LIMIT = 20;
+export const MIGRATION_LEDGER_TABLE = 'public.schema_migrations';
 
 export class MigrationContractError extends Error {
   constructor(message, details = []) {

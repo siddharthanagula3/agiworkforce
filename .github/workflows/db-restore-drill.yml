@@ -1,0 +1,77 @@
+name: Database Restore Drill
+
+on:
+  schedule:
+    - cron: '13 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: db-restore-drill-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  logical-restore-drill:
+    name: Logical restore drill (postgres:17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: agiworkforce_drill
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The service container ships postgres:17 but not its client tools; the
+      # default Ubuntu 24.04 archive ships an older client major version, and
+      # pg_dump must be the same major version as the server or newer, never
+      # older, so the matching client comes from the PGDG apt repository.
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wget ca-certificates gnupg lsb-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo wget --quiet -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Apply canonical Postgres migrations
+        env:
+          AGI_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_drill
+        run: pnpm db:migrate -- apply --target ci
+
+      # No seed script exists yet for the core tables the drill checks; the
+      # drill still proves dump, restore, presence and count comparison work
+      # against a real postgres:17 server with an empty-but-migrated schema.
+      - name: Run the logical restore drill
+        env:
+          AGI_RESTORE_DRILL_SOURCE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_drill
+          AGI_RESTORE_DRILL_TARGET_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node scripts/db-restore-drill-logical.mjs

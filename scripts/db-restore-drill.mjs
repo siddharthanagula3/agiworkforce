@@ -6,14 +6,9 @@ import {
   deleteDrillBranch,
   waitUntilQueryable,
 } from './lib/neon-branch-api.mjs';
+import { CORE_TABLES, countTableRows } from './lib/restore-drill-core.mjs';
 
-export const CORE_TABLES = [
-  'public.profiles',
-  'public.organizations',
-  'public.web_conversations',
-  'public.connector_oauth_grants',
-  'public.token_credits',
-];
+export { CORE_TABLES };
 
 const BRANCH_NAME_PREFIX = 'drill-restore';
 
@@ -62,8 +57,7 @@ export async function runRestoreDrill({
     await waitUntilQueryable(query, { onRetry });
 
     for (const table of tables) {
-      const rows = await query(`select count(*)::int as count from ${table}`);
-      report.tables[table] = rows[0]?.count ?? null;
+      report.tables[table] = await countTableRows(query, table);
     }
   } finally {
     if (!keep) {
