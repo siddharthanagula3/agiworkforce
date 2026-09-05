@@ -5,7 +5,8 @@
  * # Cloud-provider-portable data layer interfaces
  *
  * These interfaces are the **only** contract feature code should rely on for
- * persistence, auth, blob storage, and pub/sub. Hosted account data is wired
+ * persistence, auth, and pub/sub. Object storage has its own port in
+ * `@agiworkforce/object-storage`. Hosted account data is wired
  * to Neon for Postgres and Clerk for identity; future providers must be added
  * through adapters, not direct SDK calls in app features.
  *
@@ -115,21 +116,6 @@ export interface AuthAdapter {
   refreshToken?(refreshToken: string): Promise<RefreshedTokens | null>;
 }
 
-export interface StoragePutResult {
-  url: string;
-  key: string;
-}
-
-export interface StorageAdapter {
-  put(bucket: string, key: string, data: Uint8Array): Promise<StoragePutResult>;
-
-  get(bucket: string, key: string): Promise<Uint8Array | null>;
-
-  delete(bucket: string, key: string): Promise<void>;
-
-  signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string>;
-}
-
 /**
  * Realtime adapter for low-latency pub/sub. Not durable, for durable queues
  * use a separate adapter (TODO: add `QueueAdapter` when we ship background jobs).
@@ -154,14 +140,11 @@ export type DatabaseProvider = 'neon';
 
 export type AuthProvider = 'auth0' | 'clerk' | 'cognito';
 
-export type StorageProvider = 's3' | 'r2' | 'b2';
-
 export type RealtimeProvider = 'pusher' | 'ably' | 'self-hosted';
 
 export interface DataLayerConfig {
   database: { provider: DatabaseProvider } & Partial<DatabaseConnectionConfig>;
   auth: { provider: AuthProvider } & Record<string, unknown>;
-  storage: { provider: StorageProvider } & Record<string, unknown>;
   realtime: { provider: RealtimeProvider } & Record<string, unknown>;
 }
 
