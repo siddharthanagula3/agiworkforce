@@ -427,6 +427,8 @@ interface Message {
     isSearching?: boolean;
     /** True when this turn's request had web search on (see useChatStream). */
     webSearchRequested?: boolean;
+    /** True when the user's own words asked for a search (see useChatStream). */
+    webSearchAskedInText?: boolean;
     tools?: ToolEntry[];
     /** Canonical Cloud activity spine; preferred over legacy `tools`. */
     agentActivity?: AgentActivityState;
@@ -1443,14 +1445,18 @@ const MessageBubbleComponent = function MessageBubble({
   // deciding it already knew, which reads to the user as search being broken.
   // Naming which one happened is what makes the retry make sense. A turn that
   // reached for some other tool answered with work, not recollection, so it
-  // gets neither notice.
+  // gets neither notice. An empty search is only news to a user who asked for
+  // one: a toggle left on is a standing preference, and reporting its empty
+  // result on a question that was never about the web is noise with a Retry
+  // attached.
   const searchNotice = useMemo<'no-results' | 'not-invoked' | null>(() => {
     if (isUser || message.isStreaming) return null;
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
     if (hasStreamError({ metadata: message.metadata })) return null;
     if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
-    return searchSources.length === 0 ? 'no-results' : null;
+    if (searchSources.length > 0) return null;
+    return message.metadata?.webSearchAskedInText === true ? 'no-results' : null;
   }, [
     isUser,
     message.isStreaming,
