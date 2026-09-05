@@ -43,8 +43,20 @@
 
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  isDestructiveTool,
+  isParallelSafeTool as isParallelSafeContractTool,
+  type ToolActionClass as ContractToolActionClass,
+  type ToolApprovalReason,
+  type ToolDefinition,
+  type ToolPermissionDecision,
+} from '@agiworkforce/types';
 
-export type ToolActionClass = 'read' | 'write' | 'delete' | 'execute' | 'external_send';
+export type ToolActionClass = ContractToolActionClass;
+
+export type ToolCallVerdict = ToolPermissionDecision;
+
+export type ToolCallReason = ToolApprovalReason;
 
 export interface ToolMetadata {
   actionClass: ToolActionClass;
@@ -192,16 +204,7 @@ export function resolveConnectorToolMetadata(connectorId: string, toolName: stri
 }
 
 export function isDestructiveToolMetadata(metadata: ToolMetadata): boolean {
-  switch (metadata.actionClass) {
-    case 'read':
-      return false;
-    case 'delete':
-    case 'external_send':
-      return true;
-    case 'write':
-    case 'execute':
-      return !metadata.reversible;
-  }
+  return isDestructiveTool(metadata);
 }
 
 export function isDestructiveConnectorTool(connectorId: string, toolName: string): boolean {
@@ -215,8 +218,7 @@ export function isDestructiveConnectorTool(connectorId: string, toolName: string
  *, serializes, preserving the loop's "mutating tools are serial" guarantee.
  */
 export function isParallelSafeTool(name: string): boolean {
-  const metadata = resolveToolMetadata(name);
-  return metadata.declared && metadata.actionClass === 'read';
+  return isParallelSafeContractTool(resolveToolMetadata(name));
 }
 
 export function toolCreatesEgressPath(name: string): boolean {
@@ -232,4 +234,37 @@ export function isSensitiveSourceTool(
 ): boolean {
   if (PLATFORM_TOOL_METADATA[def.qualifiedName]) return false;
   return parseQualifiedToolName(def.qualifiedName) !== null || def.origin === 'connector';
+}
+
+function toolAuthRequirement(def: WebMcpToolDef): ToolDefinition['auth'] {
+  const parsed = parseQualifiedToolName(def.qualifiedName);
+  const connectorId = def.origin === 'connector' ? (parsed?.serverId ?? def.serverId) : undefined;
+  if (!connectorId) return { kind: 'user_session', scopes: [] };
+  return { kind: 'connector_grant', connectorId, scopes: [] };
+}
+
+/**
+ * The web declaration expressed as the cross-surface tool primitive
+ * (decision D-P0-5). `category` is passed in rather than re-derived: the
+ * activity-feed resolver in the tool loop owns that mapping and needs the
+ * offered-tool list to answer it.
+ */
+export function toContractToolDefinition(
+  def: WebMcpToolDef,
+  category: ToolDefinition['category'],
+): ToolDefinition {
+  const metadata = resolveToolMetadata(def.qualifiedName);
+  return {
+    name: def.qualifiedName,
+    description: def.description,
+    inputSchema: def.inputSchema,
+    category,
+    actionClass: metadata.actionClass,
+    auth: toolAuthRequirement(def),
+    reversible: metadata.reversible,
+    acceptsUntrustedContent: metadata.acceptsUntrustedContent,
+    createsEgressPath: metadata.createsEgressPath,
+    retrySafety: metadata.actionClass === 'read' ? 'idempotent' : 'unknown',
+    declared: metadata.declared,
+  };
 }
