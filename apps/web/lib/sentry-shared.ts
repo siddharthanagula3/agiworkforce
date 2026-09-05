@@ -272,8 +272,12 @@ export interface TenantTaggedEvent {
   tags?: Record<string, unknown>;
 }
 
+export const DEFAULT_TRACES_SAMPLE_RATE = 0.1;
+
 export interface CommonInitOptions {
   tenantTagHook?: (event: TenantTaggedEvent) => void;
+  tracesSampleRate?: number;
+  skipOpenTelemetrySetup?: boolean;
 }
 
 function scrubAndTagEvent(hook: (event: TenantTaggedEvent) => void) {
@@ -293,13 +297,14 @@ function scrubAndTagTransaction(hook: (event: TenantTaggedEvent) => void) {
 }
 
 export function commonInitOptions(options: CommonInitOptions = {}) {
-  const { tenantTagHook } = options;
+  const { tenantTagHook, tracesSampleRate, skipOpenTelemetrySetup } = options;
   return {
     dsn: getSentryDsn(),
     enabled: isSentryConfigured(),
     environment: process.env.NODE_ENV,
     sendDefaultPii: false,
-    tracesSampleRate: 0.1,
+    tracesSampleRate: tracesSampleRate ?? DEFAULT_TRACES_SAMPLE_RATE,
+    ...(skipOpenTelemetrySetup ? { skipOpenTelemetrySetup: true } : {}),
     beforeSend: tenantTagHook ? scrubAndTagEvent(tenantTagHook) : scrubEvent,
     beforeSendTransaction: tenantTagHook
       ? scrubAndTagTransaction(tenantTagHook)
