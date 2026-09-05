@@ -161,6 +161,35 @@ accessibility driver, and what is it called". The Linux `uia` shim in `automatio
 errors on every call, now with one named constant rather than ten copies of a sentence, so a caller
 that reaches it past the tier gets the same answer the router already gave.
 
+### Per-step routing inside the visual loop (2026-09-05)
+
+The visual loop is the fallback for one step, not for a whole task. Its planner may name the
+control a step addresses (`"target": "the Send button"`, plus `"value"` to pick one entry out of a
+list), and a step that names one is offered to the same three tiers before any pointer moves; the
+coordinates it planned are what runs when they decline. The routing decision for a step rides the
+same `computer_use:action_routed` event as a top-level action, carrying `stepIndex`.
+
+Two verbs, `read` and `navigate`, have no pointer equivalent, so a decline ends the step with the
+reasons recorded rather than moving the mouse. Every other planned step keeps its raw form. The
+safety layer still judges that raw form, so its verdict governs the step whichever driver takes it.
+
+### Confirmation pause and resume (2026-09-05)
+
+A step the safety layer flags for confirmation pauses the task at that step and holds. The wait is
+the same channel every other desktop tool confirmation uses
+(`ToolConfirmationState::await_confirmation`), so there is one pending map, one standing-grant rule
+and one `respond_tool_confirmation` that answers it. Only the surface differs: the request is
+emitted as `computer_use:confirmation_required` carrying the shared `ToolApprovalRequest` and is
+answered on the voice consent dialog, so one decision never shows two Approve buttons. The main
+window is raised before the request goes out.
+
+Approval resumes that same step through whichever driver the router picks for it. A denial ends the
+task as `confirmation_denied`. An unanswered request expires at `CONFIRMATION_TIMEOUT_SECS` (120
+seconds, bounded well below the background approval bound because the pause holds the pointer of a
+machine the user is sitting at) and ends the task as `confirmation_timed_out`. Neither outcome falls
+through to running the action. A grant the user offers is session-scoped and never offered at all
+for a tool on `NEVER_REMEMBERABLE`.
+
 ## Dispatch and scheduled routines (shipped; verified 2026-08-09)
 
 Mobile-to-Desktop Dispatch and on-device scheduled routines both exist in code, which is what the
