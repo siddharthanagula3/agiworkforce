@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -482,6 +481,7 @@ export const useNotificationStore = create<NotificationStore>()(
       {
         name: 'agi-notification-store',
         version: 1,
+        migrate: (persisted) => persisted,
         partialize: (state) => ({
           notifications: state.notifications,
           unreadCount: state.unreadCount,
