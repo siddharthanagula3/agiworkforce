@@ -336,7 +336,7 @@ async function flushEligibleConversation(
           }),
           ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
         },
-        { signal, organizationId },
+        { signal, organizationId, retryRateLimited: false },
       );
     } catch (error) {
       await handleFlushError(owner, conversationId, error);
