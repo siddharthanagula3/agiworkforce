@@ -40,14 +40,18 @@ static RE_IMAGE_PHRASE: Lazy<Regex> = Lazy::new(|| {
 /// Code fence used to wrap code blocks in markdown.
 static RE_CODE_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new("```").expect("valid regex"));
 
-/// Coding signals: language keywords, SQL, common runtime errors.
+/// Strong coding signals: language keywords, SQL, common runtime errors.
 /// Case-SENSITIVE, matching the canonical TS `RE_CODING`.
 static RE_CODING: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"\bfunction\b|\bclass\b|\bSELECT\b|\bdef\b|\bimport\b|stack ?trace|TypeError|undefined|NullPointerException",
-    )
-    .expect("valid regex")
+    Regex::new(r"\bfunction\b|\bSELECT\b|\bdef\b|stack ?trace|TypeError|NullPointerException")
+        .expect("valid regex")
 });
+
+/// Weak coding signals, words that are also ordinary English. The canonical
+/// scores them below every other heuristic, so they fire last on this surface
+/// too rather than pulling prose onto a coding model.
+static RE_CODING_WEAK: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\bclass\b|\bimport\b|undefined").expect("valid regex"));
 
 /// Reasoning-mode action verbs (math / proof / formal derivation).
 static RE_REASONING_VERB: Lazy<Regex> = Lazy::new(|| {
@@ -151,14 +155,19 @@ pub fn classify_turn_task(message: &str, has_image_attachment: bool) -> RoutingT
         return RoutingTaskType::CreativeWriting;
     }
 
-    // 10. Simple chat, cheap length check before the word split.
+    // 10. Coding, weak signals only, after every stronger heuristic.
+    if RE_CODING_WEAK.is_match(message) {
+        return RoutingTaskType::Coding;
+    }
+
+    // 11. Simple chat, cheap length check before the word split.
     if message.len() < SIMPLE_CHAT_MAX_CHARS
         && message.split_whitespace().count() < SIMPLE_CHAT_MAX_WORDS
     {
         return RoutingTaskType::SimpleChat;
     }
 
-    // 11. General fallback.
+    // 12. General fallback.
     RoutingTaskType::General
 }
 
@@ -239,6 +248,27 @@ mod tests {
         assert_eq!(
             classify_turn_task("```js\nconsole.log(1)\n```", false),
             RoutingTaskType::Coding
+        );
+    }
+
+    #[test]
+    fn weak_coding_words_lose_to_every_stronger_heuristic() {
+        // "class", "import" and "undefined" are ordinary English, so they only
+        // pick coding once nothing above them on the ladder fires.
+        assert_eq!(
+            classify_turn_task(
+                "the import tariffs are undefined for that class of goods",
+                false
+            ),
+            RoutingTaskType::Coding
+        );
+        assert_eq!(
+            classify_turn_task("write a poem about the class clown", false),
+            RoutingTaskType::CreativeWriting
+        );
+        assert_eq!(
+            classify_turn_task("search the web for the latest import rules", false),
+            RoutingTaskType::Research
         );
     }
 
@@ -405,6 +435,7 @@ mod tests {
             ("RE_IMAGE_PHRASE", &*RE_IMAGE_PHRASE),
             ("RE_CODE_FENCE", &*RE_CODE_FENCE),
             ("RE_CODING", &*RE_CODING),
+            ("RE_CODING_WEAK", &*RE_CODING_WEAK),
             ("RE_REASONING_VERB", &*RE_REASONING_VERB),
             ("RE_REASONING_MATH", &*RE_REASONING_MATH),
             ("RE_AGENTIC", &*RE_AGENTIC),
