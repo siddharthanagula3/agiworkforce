@@ -79,6 +79,10 @@ import {
   recordServedRouteAffinity,
   routeAffinityTtlMs,
 } from '@/lib/services/free-lane/runtime-state-service';
+import {
+  recordCapabilityObservation,
+  TOOL_CALLING_CAPABILITY,
+} from '@/lib/services/free-lane/capability-health-service';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import type { FailoverStepContext } from './managed-failover';
 import {
@@ -104,7 +108,9 @@ import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
 import { recordGoogleGroundingCost } from '@/lib/web-search/grounding-cost';
 import {
   createToolTurnGovernor,
+  emptyToolCapabilityEvidence,
   repeatedQueryMessage,
+  resolveToolCapabilityObservation,
   resolveTurnToolCallCap,
   turnToolCapMessage,
   turnToolCapRowSummary,
@@ -511,6 +517,12 @@ export interface PendingToolCall {
   id: string;
   qualifiedName: string;
   args: Record<string, unknown>;
+  /**
+   * The model emitted arguments that are not JSON. The call still runs on the
+   * raw text, and the flag is what the capability observation reads: a route
+   * that keeps doing this has stopped honouring the tool contract it declares.
+   */
+  argsMalformed?: true;
 }
 
 export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
@@ -1370,15 +1382,22 @@ export async function collectProviderStream(
     if (!tc.name) continue;
     if (pendingToolCalls.length >= MAX_TOOL_CALLS_PER_STEP) break;
     let args: Record<string, unknown> = {};
+    let argsMalformed = false;
     try {
       args = JSON.parse(tc.argsJson || '{}') as Record<string, unknown>;
     } catch {
       args = { _raw: tc.argsJson };
+      argsMalformed = true;
     }
     let id = tc.id || crypto.randomUUID();
     if (seenToolCallIds.has(id)) id = crypto.randomUUID();
     seenToolCallIds.add(id);
-    pendingToolCalls.push({ id, qualifiedName: tc.name, args });
+    pendingToolCalls.push({
+      id,
+      qualifiedName: tc.name,
+      args,
+      ...(argsMalformed ? { argsMalformed: true as const } : {}),
+    });
   }
 
   return {
@@ -1797,17 +1816,24 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
     const name = typeof fnObj['name'] === 'string' ? fnObj['name'] : '';
     if (!name) continue;
     let args: Record<string, unknown> = {};
+    let argsMalformed = false;
     const rawArgs = fnObj['arguments'];
     if (typeof rawArgs === 'string') {
       try {
         args = JSON.parse(rawArgs || '{}') as Record<string, unknown>;
       } catch {
         args = { _raw: rawArgs };
+        argsMalformed = true;
       }
     } else if (rawArgs && typeof rawArgs === 'object') {
       args = rawArgs as Record<string, unknown>;
     }
-    out.push({ id, qualifiedName: name, args });
+    out.push({
+      id,
+      qualifiedName: name,
+      args,
+      ...(argsMalformed ? { argsMalformed: true as const } : {}),
+    });
   }
   return out;
 }
@@ -1921,7 +1947,7 @@ function recordProviderStepSuccess(input: {
   attemptStartedAtMs: number;
   firstProviderLineAtMs: number | undefined;
   nowMs: number;
-}): void {
+}): string | undefined {
   try {
     const observations = input.result.usage.providerCallObservations;
     const lastObservation = observations?.[observations.length - 1];
@@ -1939,7 +1965,7 @@ function recordProviderStepSuccess(input: {
       },
       input.nowMs,
     );
-    if (!input.processed.conversationId) return;
+    if (!input.processed.conversationId) return routeId;
     const routePricing = getRoutePricing(routeId);
     void recordServedRouteAffinity({
       conversationId: input.processed.conversationId,
@@ -1951,8 +1977,10 @@ function recordProviderStepSuccess(input: {
       ...(routePricing?.modelKey ? { modelKey: routePricing.modelKey } : {}),
       taskType: input.processed.resolvedTaskType,
     });
+    return routeId;
   } catch (error) {
     logger.warn({ error }, '[tool-loop] route outcome / affinity was not recorded');
+    return undefined;
   }
 }
 
@@ -2214,6 +2242,8 @@ export async function* runToolLoop(
 
   let servingProcessed: ProcessedRequest = processed;
   let emptyResponseRotationUsed = false;
+  let servedRouteId: string | undefined;
+  const toolCapabilityEvidence = emptyToolCapabilityEvidence();
 
   async function runProviderStepWithFailover(
     step: number,
@@ -2299,15 +2329,16 @@ export async function* runToolLoop(
             continue;
           }
         }
-        recordProviderStepSuccess({
-          processed,
-          attemptProcessed,
-          attemptRequest,
-          result,
-          attemptStartedAtMs,
-          firstProviderLineAtMs,
-          nowMs: now(),
-        });
+        servedRouteId =
+          recordProviderStepSuccess({
+            processed,
+            attemptProcessed,
+            attemptRequest,
+            result,
+            attemptStartedAtMs,
+            firstProviderLineAtMs,
+            nowMs: now(),
+          }) ?? servedRouteId;
         return result;
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
@@ -2649,8 +2680,32 @@ export async function* runToolLoop(
         '[tool-loop] required code execution adherence',
       );
     }
+    recordToolCapabilityObservation(reason);
     yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
+  }
+
+  /**
+   * Only a turn the model itself finished is evidence. A cancelled or errored
+   * turn was cut short by us or by the provider, and a turn that never offered a
+   * tool says nothing either way.
+   */
+  function recordToolCapabilityObservation(reason: AgentEventStopReason): void {
+    if (reason !== 'end-turn') return;
+    if (searchRequired && !searchObserved) toolCapabilityEvidence.requiredToolsMissed += 1;
+    if (executionRequirement.required && !executionToolCalled) {
+      toolCapabilityEvidence.requiredToolsMissed += 1;
+    }
+    const honoured = resolveToolCapabilityObservation(toolCapabilityEvidence);
+    if (honoured === undefined) return;
+    const routeId =
+      servedRouteId ??
+      buildServingRouteId(servingProcessed.provider, servingProcessed.llmRequest.model);
+    void recordCapabilityObservation(routeId, TOOL_CALLING_CAPABILITY, honoured).catch(
+      (error: unknown) => {
+        logger.warn({ error, routeId }, '[tool-loop] tool capability observation was not recorded');
+      },
+    );
   }
 
   async function* runAndStreamToolCalls(
@@ -2665,6 +2720,8 @@ export async function* runToolLoop(
 
     const toolStartedAt = new Map<string, number>();
     for (const tc of calls) {
+      if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
+      else toolCapabilityEvidence.wellFormedCalls += 1;
       if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
@@ -3402,6 +3459,7 @@ export async function* runToolLoop(
       const stepTools = toolGovernor.capReached()
         ? undefined
         : toolGovernor.offered(offeredTools, offeredToolName);
+      if ((stepTools?.length ?? 0) > 0) toolCapabilityEvidence.toolsOffered = true;
       const stepRequest = {
         ...llmRequest,
         messages,

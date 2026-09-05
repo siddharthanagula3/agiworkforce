@@ -90,6 +90,46 @@ export function repeatedQueryMessage(query: string): string {
   );
 }
 
+/**
+ * Withdrawal reasons that are evidence about the MODEL rather than about us.
+ *
+ * Empty by design and read through the predicate below, so a reason added later
+ * is not evidence until someone deliberately puts it here. Every reason the
+ * governor has today is a harness fact: `unavailable` is a sandbox or executor
+ * down on our side, `budget` and `turn-cap` are our own caps, and
+ * `repeated-query` is a search loop rather than a loss of tool support.
+ */
+const MODEL_ATTRIBUTABLE_WITHDRAWALS: ReadonlySet<ToolWithdrawalReason> =
+  new Set<ToolWithdrawalReason>();
+
+export function withdrawalIsModelEvidence(reason: ToolWithdrawalReason): boolean {
+  return MODEL_ATTRIBUTABLE_WITHDRAWALS.has(reason);
+}
+
+export interface ToolCapabilityEvidence {
+  toolsOffered: boolean;
+  wellFormedCalls: number;
+  malformedCalls: number;
+  requiredToolsMissed: number;
+}
+
+export function emptyToolCapabilityEvidence(): ToolCapabilityEvidence {
+  return { toolsOffered: false, wellFormedCalls: 0, malformedCalls: 0, requiredToolsMissed: 0 };
+}
+
+/**
+ * `undefined` means the turn says nothing about tool support: either no tool was
+ * offered, or one was offered, none was required, and the model answered without
+ * calling it, which is a legitimate answer rather than a failure.
+ */
+export function resolveToolCapabilityObservation(
+  evidence: ToolCapabilityEvidence,
+): boolean | undefined {
+  if (!evidence.toolsOffered) return undefined;
+  if (evidence.malformedCalls > 0 || evidence.requiredToolsMissed > 0) return false;
+  return evidence.wellFormedCalls > 0 ? true : undefined;
+}
+
 export function createToolTurnGovernor(cap: number): ToolTurnGovernor {
   const withdrawn = new Map<string, ToolWithdrawalReason>();
   const queriesByTool = new Map<string, Set<string>>();
