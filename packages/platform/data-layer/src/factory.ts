@@ -23,7 +23,6 @@
  * |------------------------------------|---------------|--------------|
  * | `AGI_DATABASE_PROVIDER`            | `neon`        | DB factory   |
  * | `AGI_AUTH_PROVIDER`                | `clerk`       | Auth factory |
- * | `AGI_STORAGE_PROVIDER`             | explicit only | Storage      |
  * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
  * | `AGI_DATABASE_URL` / `DATABASE_URL`|, | Neon DB      |
  * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`|, | Clerk auth   |
@@ -41,8 +40,6 @@ import {
   type AuthProvider,
   type RealtimeAdapter,
   type RealtimeProvider,
-  type StorageAdapter,
-  type StorageProvider,
   DataLayerConfigError,
 } from './types';
 import { ClerkAuthAdapter } from './adapters/clerk';
@@ -66,7 +63,7 @@ function readRequiredEnvProvider<T extends string>(name: string, allowed: readon
   const raw = readEnv(name);
   if (!raw) {
     throw new DataLayerConfigError(
-      `${name} is required. Storage/realtime have no implicit runtime default; ` +
+      `${name} is required. Realtime has no implicit runtime default; ` +
         'choose an explicit supported provider for this surface.',
     );
   }
@@ -188,27 +185,6 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
     case 'cognito':
       throw new DataLayerConfigError(
         `Auth provider "${provider}" is documented in docs/architecture/overview.md but no adapter ships yet. `,
-      );
-  }
-}
-
-const STORAGE_PROVIDERS = ['s3', 'r2', 'b2'] as const;
-
-export interface CreateStorageClientOptions {
-  provider?: StorageProvider;
-}
-
-export function createStorageClient(opts: CreateStorageClientOptions = {}): StorageAdapter {
-  const provider =
-    opts.provider ??
-    readRequiredEnvProvider<StorageProvider>('AGI_STORAGE_PROVIDER', STORAGE_PROVIDERS);
-
-  switch (provider) {
-    case 's3':
-    case 'r2':
-    case 'b2':
-      throw new DataLayerConfigError(
-        `Storage provider "${provider}" is documented in docs/architecture/overview.md but no adapter ships yet. `,
       );
   }
 }
