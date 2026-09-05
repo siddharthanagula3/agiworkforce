@@ -9,6 +9,27 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-11 Three resilience scopes, not one breaker
+
+- Question: what a failure should close: the provider, the credential, or the model on that route.
+- Evidence: OmniRoute separates provider breaker, credential cooldown and model lockout
+  (docs/research/omniroute-learnings-2026-09-05.md); today's spend incident showed a capped key
+  pinning a whole provider closed while other keys and models on it were healthy.
+- Current implementation: 84eaf9dc3, b9e077d80 and 642b32800 split the route health store into
+  provider, credential and route scopes, classify each error category to one scope, select the
+  breaker profile from the provider's trust mode in the registry, and skip a cooling credential in
+  failover the way an open breaker is skipped.
+- Options: one provider breaker with tuned thresholds; three scopes with one profile; three scopes
+  with a profile per credential class.
+- Decision: three scopes with a profile per credential class (static key, session token, local
+  runtime), all thresholds from one config object and env names, none inline.
+- Why: a rate limit on one key is not a provider outage, and a rejected model id is not a key
+  problem; closing the wrong scope strands healthy capacity.
+- Tradeoff: three snapshots to read per candidate; the route preview should surface which scope
+  excluded a candidate (follow-up on the preview reasons).
+- Reversibility: high; scopes default to the previous shared thresholds under new env names.
+- Revisit trigger: a provider publishes per key rate limit headers the runtime can read directly.
+
 ## D-2026-09-05-10 Tool support loss is learned, not edited
 
 - Question: how the system learns that a model stopped honouring tool calls, and who acts on it.
