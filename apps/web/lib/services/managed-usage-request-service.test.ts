@@ -4,6 +4,15 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { BLOCK_APPEAL_PATH } from '@/lib/security-audit';
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
+const loggerError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: (...args: unknown[]) => loggerError(...args),
+  },
+}));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCost(...args),
 }));
@@ -198,6 +207,36 @@ describe('managed usage request service', () => {
 
     expect(error).toBeInstanceOf(ManagedUsageRequestError);
     expect(error).toMatchObject({ status: 429, code });
+  });
+
+  it('logs the database failure it hides behind the billing-unavailable envelope', async () => {
+    const failure = Object.assign(
+      new Error('permission denied for function reserve_managed_usage'),
+      {
+        code: '42501',
+      },
+    );
+    const db = fakeDb([]);
+    (db.query as ReturnType<typeof vi.fn>).mockRejectedValue(failure);
+
+    await expect(
+      reserveManagedUsageRequest({
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'agi.chat.web.send.turn_12345',
+        requestHash: 'a'.repeat(64),
+        provider: 'anthropic',
+        model: 'fixture-model',
+        estimatedCostCents: 7,
+        planTier: 'pro',
+        isFlagship: true,
+      }),
+    ).rejects.toMatchObject({ status: 503, code: 'billing_unavailable' });
+
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ error: failure, code: '42501', statement: expect.any(String) }),
+      expect.stringContaining('usage query failed'),
+    );
   });
 
   it('marks provider start and finalizes actual usage with the same identity', async () => {
