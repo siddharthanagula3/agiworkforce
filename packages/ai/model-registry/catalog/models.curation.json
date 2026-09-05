@@ -4,6 +4,12 @@
   "verificationLog": [
     {
       "date": "2026-09-04",
+      "verifiedBy": "official-anthropic-moonshot-deepseek-google-minimax-openrouter-groq-pages",
+      "status": "ADDITION",
+      "notes": "Founder-directed catalog refresh, additions. Every row below was verified against the provider page named in its pricingNote on 2026-09-04, and none of them takes a family slot: each either sits outside its family pattern or is an older generation than the slot already holds. Anthropic: claude-haiku-4-5, the pinned snapshot claude-haiku-4-5-20251001, extended thinking only with no effort parameter, a 4,096-token minimum cacheable prompt, and a retirement commitment that runs only to 2025-10-15. Moonshot: kimi-k2.7-code, a dedicated coding lane with forced thinking, and kimi-k2.6, the only Kimi with a thinking toggle; both are 256K context, both publish a Modified MIT License, and both are chat-completions only because Moonshot documents just kimi-k3 on its Messages API. DeepSeek: deepseek-v4-flash-vision-exp, the only DeepSeek model that accepts images. The DeepSeek vision task now routes to it: correcting both text rows to text-only left that task pointed at a model that cannot take an image. Google: gemini-3.6-flash, the only Flash at or above 3.6 that accepts the minimal thinking level; gemini-3.1-flash-lite with its announced 2027-05-07 shutdown; the premium and cheap image lanes gemini-3-pro-image and gemini-3.1-flash-lite-image; and the realtime voice and text-to-speech previews gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. MiniMax: MiniMax-M2.7, text only and always thinking, in the same pro band and at the same price as M3. OpenRouter: openrouter/auto-beta, still labelled Beta, priced -1 like the production router, so it must be metered against the model named in the response. Groq: gpt-oss-safeguard-20b, a policy classifier rather than a chat model, plus qwen3.6-27b and qwen3.8-27b. All four Groq and OpenRouter beta rows are marked preview, which is what makes them addressable but not selectable, because both providers warn that preview endpoints can be withdrawn at short notice. Skipped: gemini-3.5-flash and gemini-3.7-flash, whose ids are in retired-models.json and which the catalog policy test forbids reintroducing, and qwen3.7-flash, which would present as a promotion candidate older than qwen3.8-flash and whose video input, required by the Qwen family contract, no fetched page confirms."
+    },
+    {
+      "date": "2026-09-04",
       "verifiedBy": "official-anthropic-xai-alibaba-model-pages",
       "status": "ROSTER",
       "notes": "Founder-directed generation swap, part two of two. Added claude-fable-5-1 (Claude API id claude-fable-5-1, released 2026-09-01, 1M context, 128K output, $10/$50 with cache reads at $0.25, which is 0.025x input rather than the 0.1x every other Claude model uses, five effort levels default high, sampling parameters rejected, 512-token minimum cacheable prompt) and promoted anthropic/claude-fable to it through the gated tool; claude-fable-5 was then removed from the roster and added to retired-models.json, matching how glm-5.2 and gemini-3.7-flash were retired on 2026-09-03. Added grok-4.6 (released 2026-08-12, 500,000 context, $2/$6 with cached input $0.50, rising to $4/$12/$1.00 for every token once a prompt reaches 200,000 tokens, low through xhigh effort) and promoted xai/grok to it, then retired grok-4.5. No maximum output length is recorded for grok-4.6: xAI publishes none, and the 450,000 figure in the proposal came from OpenRouter, which is why that part of the proposal was refuted. The three Anthropic family patterns now accept a dashed minor version, and generation parsing splits on dots and dashes, because Anthropic writes claude-fable-5-1 where the previous pattern only admitted a dotted 5.1. Added qwen3.8-flash (single International band $0.15/$0.47 across the full 1M window, 131,072 output, no published cache rates) and moved qwen3.5-flash to the same International basis it is actually served from. The qwen/qwen-flash promotion is BLOCKED and was not forced: the cost gate reports input rising 50% against a 25% ceiling, which is a real price increase on the economy lane and needs an owner, not a widened threshold. qwen3.8-flash is in the catalog and addressable but is in no tier list until that decision is made."
@@ -416,7 +422,7 @@
         "code_generation": "family:deepseek/deepseek-flash",
         "complex_reasoning": "family:deepseek/deepseek-pro",
         "chat": "family:deepseek/deepseek-flash",
-        "vision": "family:deepseek/deepseek-flash",
+        "vision": "deepseek-v4-flash-vision-exp",
         "long_context": "family:deepseek/deepseek-flash"
       },
       "canonicalization": {}
@@ -1224,6 +1230,67 @@
       "speedOverride": "fast",
       "releasedOverride": "June 30, 2026"
     },
+    "claude-haiku-4-5": {
+      "id": "claude-haiku-4-5",
+      "apiModelId": "claude-haiku-4-5-20251001",
+      "openRouterSlug": "anthropic/claude-haiku-4.5",
+      "name": "Claude Haiku 4.5",
+      "provider": "anthropic",
+      "modelType": "chat",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "claude-sonnet-5",
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 64000,
+      "knowledgeCutoff": "2025-02",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Low Latency", "High Volume", "Tool Use"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "thinkingDefault": "off",
+        "supportsManualThinking": true,
+        "request": {
+          "api": "messages",
+          "effortPath": null,
+          "togglePath": "thinking.type",
+          "budgetPath": "thinking.budget_tokens"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 1,
+        "outputCost": 5,
+        "cached_input": 0.1,
+        "cached_write": 1.25,
+        "cached_write_1h": 2
+      },
+      "contextOverride": 200000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "promptCacheMinimumTokens": 4096,
+      "pricingNote": "The pinned Claude API id is the dated snapshot claude-haiku-4-5-20251001; claude-haiku-4-5 is an alias that resolves to it. Extended thinking only, through thinking.type enabled plus thinking.budget_tokens; the effort parameter is not supported and adaptive thinking returns 400. Minimum cacheable prompt is 4,096 tokens. Batch is 50% off at $0.50/$2.50. Anthropic commits only to no retirement before 2025-10-15, so this is a short-horizon row. Verified against platform.claude.com/docs/en/models/haiku-4-5/overview, retrieved 2026-09-04.",
+      "speedOverride": "very-fast",
+      "releasedOverride": "October 15, 2025"
+    },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
       "apiModelId": "gemini-embedding-2",
@@ -1335,6 +1402,64 @@
         "minTier": "free"
       }
     },
+    "gemini-3.1-flash-lite": {
+      "id": "gemini-3.1-flash-lite",
+      "apiModelId": "gemini-3.1-flash-lite",
+      "openRouterSlug": "google/gemini-3.1-flash-lite",
+      "name": "Gemini 3.1 Flash-Lite",
+      "provider": "google",
+      "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
+      "inputModalities": ["text", "image", "audio", "video", "pdf"],
+      "variantPartner": "gemini-3.5-flash-lite",
+      "maxOutputTokens": 65536,
+      "knowledgeCutoff": "2025-01",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Cheapest Multimodal", "Function Calling", "High Volume"],
+      "deprecation_date": "2027-05-07",
+      "pricingNote": "Input $0.25/1M for text, image and video and $0.50/1M for audio; output $1.50/1M; cache read $0.025/1M text, image and video and $0.05/1M audio, plus $1.00 per 1M tokens per hour of storage. Cheaper than gemini-3.5-flash-lite but Google has announced a 2027-05-07 shutdown and the knowledge cutoff is a year older, so gemini-3.5-flash-lite stays the family slot. Verified against ai.google.dev/gemini-api/docs/pricing and the deprecations page, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": false,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.25,
+        "outputCost": 1.5,
+        "cached_input": 0.025
+      },
+      "contextOverride": 1048576,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "May 7, 2026"
+    },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
       "apiModelId": "gemini-3.1-flash-image",
@@ -1377,6 +1502,105 @@
       "releasedOverride": "March 2026",
       "imagePerImageCost": 0.067,
       "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table."
+    },
+    "gemini-3-pro-image": {
+      "id": "gemini-3-pro-image",
+      "apiModelId": "gemini-3-pro-image",
+      "openRouterSlug": "google/gemini-3-pro-image",
+      "name": "Gemini 3 Pro Image",
+      "provider": "google",
+      "modelType": "image",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "gemini-3.1-flash-image",
+      "maxOutputTokens": 32768,
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Studio Image Generation", "4K Output", "Search-Grounded Imagery"],
+      "deprecation_date": null,
+      "imageApi": "gemini",
+      "imageOutputMimeType": "image/jpeg",
+      "imagePerImageCost": 0.134,
+      "pricingNote": "Input $2.00/1M for text and images, roughly $0.0011 per input image. Output $12.00/1M for text and thinking tokens and $120.00/1M for image tokens: a 1K or 2K image is 1,120 tokens ($0.134) and a 4K image is 2,000 tokens ($0.24). imagePerImageCost carries the 1K and 2K rate. Batch halves input and output. Search grounding bills $14 per 1,000 requests after 5,000 free each month. Google publishes no thinking-level row and no knowledge cutoff for this model, so neither is recorded. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 2,
+        "outputCost": 120
+      },
+      "contextOverride": 65536,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "slow",
+      "releasedOverride": "May 28, 2026"
+    },
+    "gemini-3.1-flash-lite-image": {
+      "id": "gemini-3.1-flash-lite-image",
+      "apiModelId": "gemini-3.1-flash-lite-image",
+      "openRouterSlug": "google/gemini-3.1-flash-lite-image",
+      "name": "Gemini 3.1 Flash-Lite Image",
+      "provider": "google",
+      "modelType": "image",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "gemini-3.1-flash-image",
+      "maxOutputTokens": 4096,
+      "knowledgeCutoff": "2025-01",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Cheap Image Generation", "1K Output", "High Volume"],
+      "deprecation_date": null,
+      "imageApi": "gemini",
+      "imageOutputMimeType": "image/jpeg",
+      "imagePerImageCost": 0.0336,
+      "pricingNote": "Input $0.25/1M for text, image and video. Output $1.50/1M for text and thinking tokens and $30.00/1M for image tokens: a 1K (1024x1024) image is 1,120 tokens, so $0.0336 per image, half the per-image price of gemini-3.1-flash-image. Batch halves both. Optimised for 1K output across 14 aspect ratios, with no search grounding, caching, function calling or structured output. No free tier. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.25,
+        "outputCost": 30
+      },
+      "contextOverride": 65536,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "June 30, 2026"
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1469,6 +1693,63 @@
       "providerCompatibility": {
         "forcedToolChoice": false
       }
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "id": "deepseek-v4-flash-vision-exp",
+      "apiModelId": "deepseek-v4-flash-vision-exp",
+      "openRouterSlug": "deepseek/deepseek-v4-flash-vision-exp",
+      "name": "DeepSeek V4 Flash Vision (Experimental)",
+      "provider": "deepseek",
+      "modelType": "code",
+      "openWeight": true,
+      "license": "MIT",
+      "inputModalities": ["text", "image"],
+      "variantPartner": "deepseek-v4-flash",
+      "maxOutputTokens": 384000,
+      "quality": "excellent",
+      "qualityTier": "fast",
+      "bestFor": ["Vision", "Coding", "Long Context", "Cost-Effective"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.44,
+        "outputCost": 1.32,
+        "cached_input": 0.014
+      },
+      "contextOverride": 1000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "pricingNote": "The only DeepSeek model that accepts images, and the correct target for the DeepSeek vision task. Same peak and off-peak clock as deepseek-v4-flash: peak $0.44/1M cache-miss input, $1.32/1M output, $0.014/1M cache hit between 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, exactly half in every other hour. The catalog carries the peak rate because it is the only figure never undercut. Images convert to input tokens by dimension at an upper bound of 384 tokens per image with no per-image fee. Experimental endpoint: DeepSeek publishes no sunset date but has retired a temporary endpoint at two weeks notice before, so treat availability as short-horizon. Effort levels are inherited from deepseek-v4-flash; the effort-mapping table names only the two text models. Verified against api-docs.deepseek.com, retrieved 2026-09-04.",
+      "speedOverride": "very-fast",
+      "releasedOverride": "August 21, 2026"
     },
     "qwen-3.5-flash": {
       "id": "qwen-3.5-flash",
@@ -1987,6 +2268,75 @@
         "minTier": "basic"
       }
     },
+    "gemini-3.6-flash": {
+      "id": "gemini-3.6-flash",
+      "apiModelId": "gemini-3.6-flash",
+      "openRouterSlug": "google/gemini-3.6-flash",
+      "name": "Gemini 3.6 Flash",
+      "provider": "google",
+      "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
+      "inputModalities": ["text", "image", "audio", "video", "pdf"],
+      "variantPartner": "gemini-3.8-flash",
+      "maxOutputTokens": 65536,
+      "knowledgeCutoff": "2026-03",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": [
+        "Lowest Latency Flash",
+        "Function Calling",
+        "Search Grounding",
+        "Multimodal Reasoning"
+      ],
+      "deprecation_date": null,
+      "promo_expires_at": "2027-01-01T00:00:00Z",
+      "post_promo_prices": {
+        "input": 1.5,
+        "output": 7.5,
+        "cached_input": 0.15
+      },
+      "pricingNote": "Same introductory schedule as the newer Flash rows: $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31, then $1.50/$7.50/$0.15 from 2027-01-01. The only Flash at or above 3.6 that accepts the minimal thinking level, which makes it the lowest-latency Flash lane at the same price as 3.8. Stable with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": false,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.75,
+        "outputCost": 3.75,
+        "cached_input": 0.075
+      },
+      "contextOverride": 1048576,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "July 21, 2026"
+    },
     "glm-5.3": {
       "id": "glm-5.3",
       "apiModelId": "glm-5.3",
@@ -2177,6 +2527,116 @@
         "minTier": "pro"
       },
       "releasedOverride": "July 16, 2026"
+    },
+    "kimi-k2.7-code": {
+      "id": "kimi-k2.7-code",
+      "apiModelId": "kimi-k2.7-code",
+      "openRouterSlug": "moonshotai/kimi-k2.7-code",
+      "name": "Kimi K2.7 Code",
+      "provider": "moonshot",
+      "modelType": "code",
+      "openWeight": true,
+      "license": "Modified MIT License",
+      "inputModalities": ["text", "image", "video"],
+      "variantPartner": "kimi-k3",
+      "maxOutputTokens": 32768,
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Agentic Coding", "Tool Use", "Vision"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.95,
+        "outputCost": 4,
+        "cached_input": 0.19
+      },
+      "contextOverride": 262144,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.19/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. Thinking is forced on: thinking.type accepts only enabled and there is no reasoning_effort. The 32,768 output figure is the documented default; Moonshot publishes no ceiling. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k27-code, retrieved 2026-09-04.",
+      "speedOverride": "medium"
+    },
+    "kimi-k2.6": {
+      "id": "kimi-k2.6",
+      "apiModelId": "kimi-k2.6",
+      "openRouterSlug": "moonshotai/kimi-k2.6",
+      "name": "Kimi K2.6",
+      "provider": "moonshot",
+      "modelType": "multimodal",
+      "openWeight": true,
+      "license": "Modified MIT License",
+      "inputModalities": ["text", "image", "video"],
+      "variantPartner": "kimi-k3",
+      "maxOutputTokens": 32768,
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["General Chat", "Tool Use", "Vision"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "thinkingDefault": "enabled",
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.95,
+        "outputCost": 4,
+        "cached_input": 0.16
+      },
+      "contextOverride": 262144,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.16/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. The 32,768 output figure is the documented default; Moonshot publishes no ceiling and no knowledge cutoff. Older than kimi-k3 and below the Kimi family context floor, so it can never take the family slot. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k26, retrieved 2026-09-04.",
+      "speedOverride": "medium",
+      "releasedOverride": "April 20, 2026"
     },
     "grok-4.6": {
       "id": "grok-4.6",
@@ -2548,6 +3008,47 @@
       },
       "cached_input": 0.06
     },
+    "minimax-m2.7": {
+      "id": "minimax-m2.7",
+      "apiModelId": "MiniMax-M2.7",
+      "openRouterSlug": "minimax/minimax-m2.7",
+      "name": "MiniMax M2.7",
+      "provider": "minimax",
+      "modelType": "reasoning",
+      "openWeight": true,
+      "inputModalities": ["text"],
+      "variantPartner": "minimax-m3",
+      "maxOutputTokens": 204800,
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Text Reasoning", "Open-Weight Deployment"],
+      "deprecation_date": null,
+      "releasedOverride": "March 18, 2026",
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "contextWindow": 204800,
+      "inputCost": 0.3,
+      "outputCost": 1.2,
+      "cached_input": 0.06,
+      "pricingNote": "Flat rate with no context tiers: $0.30/1M input, $1.20/1M output, $0.06/1M cache read. The $0.375/1M cache-write price applies only to explicit cache_control caching on the Anthropic-compatible route; the OpenAI-compatible route this catalog calls uses passive caching and charges no write fee, so none is recorded. Text only and always thinking, older than MiniMax-M3 but still classed as current by MiniMax. No knowledge cutoff and no structured-output support are documented. Verified against platform.minimax.io, retrieved 2026-09-04.",
+      "speedOverride": "medium",
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": false,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      }
+    },
     "veo-3.1-lite": {
       "id": "veo-3.1-lite",
       "apiModelId": "veo-3.1-lite-generate-preview",
@@ -2704,6 +3205,100 @@
       "speedOverride": "fast",
       "releasedOverride": "June 2026"
     },
+    "gemini-3.1-flash-live-preview": {
+      "id": "gemini-3.1-flash-live-preview",
+      "apiModelId": "gemini-3.1-flash-live-preview",
+      "name": "Gemini 3.1 Flash Live",
+      "provider": "google",
+      "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
+      "inputModalities": ["text", "image", "audio", "video"],
+      "maxOutputTokens": 65536,
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Search grounding bills $14 per 1,000 requests after 5,000 free each month. Free tier is free of charge and batch is not supported. Thinking levels come from the model card's migration notes; the docs thinking table has no row for it, and no knowledge cutoff is published. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "minimal",
+        "canDisableThinking": false,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
+      "costOverride": {
+        "inputCost": 0.75,
+        "outputCost": 4.5
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": false,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "March 11, 2026"
+    },
+    "gemini-3.1-flash-tts-preview": {
+      "id": "gemini-3.1-flash-tts-preview",
+      "apiModelId": "gemini-3.1-flash-tts-preview",
+      "name": "Gemini 3.1 Flash TTS",
+      "provider": "google",
+      "modelType": "tts",
+      "openWeight": false,
+      "license": "proprietary",
+      "maxOutputTokens": 16384,
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Voice Generation", "Narration"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Input $1.00/1M text tokens, output $20.00/1M audio tokens, batch at half both. Free tier is free of charge. Streaming through streamGenerateContent has been supported since 2026-06-17. The current Gemini text-to-speech model: the 2.5 TTS previews name it as their replacement. Still preview with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1,
+        "outputCost": 20
+      },
+      "contextOverride": 8192,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "April 13, 2026"
+    },
     "openrouter-auto": {
       "id": "openrouter-auto",
       "apiModelId": "openrouter/auto",
@@ -2726,6 +3321,52 @@
         "minTier": "free"
       },
       "releasedOverride": "November 8, 2023"
+    },
+    "openrouter-auto-beta": {
+      "id": "openrouter-auto-beta",
+      "apiModelId": "openrouter/auto-beta",
+      "openRouterSlug": "openrouter/auto-beta",
+      "name": "OpenRouter Auto (Beta)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "openrouter-auto",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Task-Aware Routing", "Mixed Workloads", "Cost Balancing"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Task-aware sibling of the Auto Router, still labelled Beta by OpenRouter, so it does not replace openrouter/auto. OpenRouter publishes prompt and completion prices of -1, meaning the request bills at the selected model's standard rate with no router fee; the zero rates here are a placeholder for that dynamic price, so meter the model named in the response and never at zero. No maximum completion length is published, so none is recorded. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 2000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": true,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "medium",
+      "releasedOverride": "July 17, 2026"
     },
     "openrouter-free": {
       "id": "openrouter-free",
@@ -2808,6 +3449,178 @@
       "tierPolicy": {
         "minTier": "free"
       }
+    },
+    "gpt-oss-safeguard-20b": {
+      "id": "gpt-oss-safeguard-20b",
+      "apiModelId": "openai/gpt-oss-safeguard-20b",
+      "openRouterSlug": "openai/gpt-oss-safeguard-20b",
+      "name": "GPT-OSS Safeguard 20B",
+      "provider": "groq",
+      "modelType": "reasoning",
+      "openWeight": true,
+      "license": "Apache-2.0",
+      "inputModalities": ["text"],
+      "variantPartner": "gpt-oss-20b",
+      "maxOutputTokens": 65536,
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["Policy Classification", "Content Moderation", "Open-Weight Deployment"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate identical to gpt-oss-20b: $0.075/1M input, $0.30/1M output, $0.0375/1M cached input, which is the 50% cached-input discount Groq states applied to the input rate. Not on the batch eligibility list. This is a policy-following safety classifier that takes its own policy as input, Groq's replacement for Llama Guard 4, not a chat model. Verified against console.groq.com/docs/model/openai/gpt-oss-safeguard-20b, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.075,
+        "outputCost": 0.3,
+        "cached_input": 0.0375
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "October 29, 2025"
+    },
+    "qwen-3.6-27b": {
+      "id": "qwen-3.6-27b",
+      "apiModelId": "qwen/qwen3.6-27b",
+      "openRouterSlug": "qwen/qwen3.6-27b",
+      "name": "Qwen3.6 27B",
+      "provider": "groq",
+      "modelType": "reasoning",
+      "openWeight": true,
+      "license": "Apache-2.0",
+      "inputModalities": ["text", "image"],
+      "variantPartner": "qwen-3.8-27b",
+      "maxOutputTokens": 16384,
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Open-Weight Vision", "Tool Use", "Low Latency"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.60/1M input, $3.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Thinking is on by default and is turned off with reasoning_effort 'none'. An adapter must send reasoning_format hidden or parsed when tools or JSON mode are on. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.6-27b, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort",
+        "supportedEfforts": ["none", "default"],
+        "defaultEffort": "default",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.6,
+        "outputCost": 3
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "April 2026"
+    },
+    "qwen-3.8-27b": {
+      "id": "qwen-3.8-27b",
+      "apiModelId": "qwen/qwen3.8-27b",
+      "openRouterSlug": "qwen/qwen3.8-27b",
+      "name": "Qwen3.8 27B",
+      "provider": "groq",
+      "modelType": "reasoning",
+      "openWeight": true,
+      "license": "Apache-2.0",
+      "inputModalities": ["text", "image"],
+      "variantPartner": "qwen-3.6-27b",
+      "maxOutputTokens": 16384,
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Open-Weight Vision", "Strict Structured Output", "Tool Use"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.80/1M input, $4.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Adds strict JSON schema and five-level reasoning_effort over qwen3.6-27b. Thinking is turned off with reasoning_effort none. Groq prints the context window as 131,042 in both its models table and the model card, where every other Groq model reads 131,072; the documented figure is carried here as the safe lower bound. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.8-27b, retrieved 2026-09-04.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort",
+        "supportedEfforts": ["none", "default", "low", "medium", "high"],
+        "defaultEffort": "default",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.8,
+        "outputCost": 4
+      },
+      "contextOverride": 131042,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "August 2026"
     }
   },
   "tierAllowedModels": {
@@ -2826,7 +3639,8 @@
       "family:qwen/qwen-plus",
       "family:zhipu/glm",
       "family:moonshot/kimi",
-      "minimax-m3"
+      "minimax-m3",
+      "minimax-m2.7"
     ],
     "flagship_additions": [
       "family:openai/gpt-frontier",
