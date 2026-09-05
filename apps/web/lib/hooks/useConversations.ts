@@ -242,6 +242,11 @@ export function useConversations(): UseConversationsReturn {
       nextOffsetRef.current = data.nextOffset;
       setHasMoreConversations(data.hasMore);
     } catch (err) {
+      // A scheduled retry is already handling this and the sidebar still holds
+      // the list it last loaded, so announcing a failure would replace a usable
+      // sidebar with a dead end over something that fixes itself. It becomes the
+      // user's problem only once the retries are spent.
+      if (listRetryTimeoutRef.current !== null) return;
       setListError(toUserMessage(err, 'Failed to fetch conversations'));
     } finally {
       setIsFetchingConversations(false);

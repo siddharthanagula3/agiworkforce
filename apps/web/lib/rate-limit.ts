@@ -245,6 +245,15 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 conversation operations per minute
     failClosed: false,
   },
+  'chat-conversation-list': {
+    // The sidebar reads this list on every page load, on every navigation, and
+    // again whenever a conversation changes, while `chat-conversation` is a
+    // shared bucket a dozen other reads also spend from. A read is cheap and
+    // refusing it empties the sidebar, so it gets its own generous budget.
+    limit: 600,
+    window: '1 m',
+    failClosed: false,
+  },
   'code-provider-proxy': {
     limit: 120,
     window: '1 m', // one managed sandbox's coding-agent LLM calls, generous for an active turn
@@ -669,6 +678,7 @@ const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
   'llm-completion',
   'chat-message',
   'chat-conversation',
+  'chat-conversation-list',
   'prompt-completion',
   'image-generation',
   'video-generation',
