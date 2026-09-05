@@ -440,3 +440,53 @@ describe('OpenRouter route failover', () => {
     expect(makePlan(withFunctionTools).next(httpError(503))?.provider).toBe('openrouter');
   });
 });
+
+describe('shared breakers consulted before dispatch', () => {
+  function planWithBreakers(
+    options: Partial<Parameters<typeof createFailoverPlan>[1]> = {},
+  ): ReturnType<typeof createFailoverPlan> {
+    return createFailoverPlan(makeProcessed(), {
+      signal: new AbortController().signal,
+      isProviderDispatchable: () => true,
+      ...options,
+    });
+  }
+
+  it('skips a candidate whose route breaker is open', () => {
+    const attempt = planWithBreakers({
+      isCandidateBreakerOpen: ({ modelKey }) => modelKey === 'candidate-a',
+    }).next(httpError(503));
+
+    expect(attempt?.model).toBe('candidate-b');
+  });
+
+  it('refuses to rotate when every candidate route is parked', () => {
+    const attempt = planWithBreakers({ isCandidateBreakerOpen: () => true }).next(httpError(503));
+
+    expect(attempt).toBeNull();
+  });
+
+  it('skips a provider whose credential the shared breaker already holds open', () => {
+    const attempt = planWithBreakers({ openCredentialProviders: ['openai'] }).next(httpError(503));
+
+    expect(attempt?.model).toBe('candidate-b');
+  });
+
+  it('reports a credential rejection so it outlives the request', () => {
+    const rejected: string[] = [];
+    planWithBreakers({ onCredentialRejected: (provider) => rejected.push(provider) }).next(
+      httpError(401, 'authentication error (401)'),
+    );
+
+    expect(rejected).toEqual(['anthropic']);
+  });
+
+  it('never reports an unfunded credential as a rejection', () => {
+    const rejected: string[] = [];
+    planWithBreakers({ onCredentialRejected: (provider) => rejected.push(provider) }).next(
+      Object.assign(new Error('Your credit balance is too low to access the API'), { status: 400 }),
+    );
+
+    expect(rejected).toEqual([]);
+  });
+});
