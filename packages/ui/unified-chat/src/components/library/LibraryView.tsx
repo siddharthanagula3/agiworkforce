@@ -1,68 +1,97 @@
-/**
- * LibraryView: the Library surface body: browse the user's cataloged files
- * (`media_assets` via `GET /api/library`) with origin/kind filter chips, a
- * filename/prompt search box, a card grid, and offset "Show more" paging.
- *
- * Parity of concept with mobile's LibraryScreen (grid + filter chips + honest
- * empty state) and ChatGPT's Library; presentation reuses the shared
- * `GeneratedFileCard` from `@agiworkforce/unified-chat`, no forked card.
- *
- * Host-agnostic: every network call and the preview gesture arrive through the
- * injected {@link LibraryTransport}, so web can use same-origin cookies + CSRF
- * while desktop uses its bearer-token cloudFetch. Neither copy of this view
- * exists, that duplication is what the shared package prevents.
- *
- * Downloads and image previews go through the host's authed route. Failures
- * surface as an inline error with Retry; empty states never fake content.
- *
- * Origin-conversation links are intentionally absent: `media_assets.metadata`
- * carries no conversation id today (verified against every writer), so there
- * is nothing truthful to link to.
- */
-
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { toUserMessageWithStatus } from '../../lib/network-error';
-import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
-import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
+import {
+  ChevronDown,
+  Folder,
+  LayoutGrid,
+  List,
+  MoreHorizontal,
+  Play,
+  Plus,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import { SEARCH_INPUT_DEBOUNCE_MS, formatBytes } from '@agiworkforce/utils';
 import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
+  LIBRARY_DEFAULT_SORT,
   type LibraryItem,
+  type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
+import { generatedFileTrustBoundary } from '../MessageGeneratedFiles';
+import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
+import { Button, Spinner, useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import {
-  summarizeGeneratedFileBundle,
   type ArtifactType,
   type GeneratedFile,
   type GeneratedFileKind,
   type SourceSurface,
 } from '@agiworkforce/types';
-import { generatedFileTrustBoundary } from '../MessageGeneratedFiles';
-import { GeneratedFileCard } from '../GeneratedFileCard';
-import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
-import { Button, useConfirmAction } from '@agiworkforce/ui';
+import { FileKindIcon } from './FileKindIcon';
 
-type OriginFilter = 'all' | 'generated' | 'uploaded';
-type KindFilter = 'all' | 'image' | 'video' | 'file';
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
+export type LibraryTab = 'all' | 'images' | 'documents';
+export type LibraryViewMode = 'grid' | 'list';
 
-const SURFACE_FILTERS: Array<{ id: SurfaceFilter; label: string }> = [
-  { id: 'all', label: 'Everything' },
-  { id: 'artifact', label: 'Artifacts' },
-  { id: 'file', label: 'Files' },
-];
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  updatedAt: string;
+  itemCount: number | null;
+}
 
-const ORIGIN_FILTERS: Array<{ id: OriginFilter; label: string }> = [
+const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'all', label: 'All' },
-  { id: 'generated', label: 'Generated' },
-  { id: 'uploaded', label: 'Uploaded' },
+  { id: 'images', label: 'Images' },
+  { id: 'documents', label: 'Documents' },
 ];
 
-const KIND_FILTERS: Array<{ id: KindFilter; label: string }> = [
-  { id: 'all', label: 'All types' },
-  { id: 'image', label: 'Images' },
-  { id: 'video', label: 'Videos' },
-  { id: 'file', label: 'Files' },
+const KIND_PARAM_BY_TAB: Readonly<Record<LibraryTab, string | null>> = {
+  all: null,
+  images: 'image,video',
+  documents: 'file',
+};
+
+const SORT_OPTIONS: ReadonlyArray<{ id: LibrarySort; label: string }> = [
+  { id: 'modified', label: 'Modified' },
+  { id: 'name', label: 'Name' },
+  { id: 'size', label: 'Size' },
 ];
+
+const VIEW_MODE_STORAGE_KEY = 'agi-library-view-mode';
+const VIEW_MODES: ReadonlySet<string> = new Set<LibraryViewMode>(['grid', 'list']);
+
+function loadViewMode(): LibraryViewMode {
+  if (typeof window === 'undefined') return 'grid';
+  try {
+    const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored !== null && VIEW_MODES.has(stored) ? (stored as LibraryViewMode) : 'grid';
+  } catch {
+    return 'grid';
+  }
+}
+
+function saveViewMode(mode: LibraryViewMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    return;
+  }
+}
 
 export function iconKindFor(fileName: string, mimeType: string): GeneratedFileKind {
   const mime = mimeType.toLowerCase();
@@ -93,11 +122,6 @@ const ARTIFACT_TYPE_BY_EXTENSION: Readonly<Record<string, ArtifactType>> = {
   json: 'json',
 };
 
-/**
- * The artifact class a Library row renders as. `media_assets.metadata.surface`
- * (written by the server's `classifyGeneratedFile`) already decided that this
- * row IS an artifact; this only picks which renderer inside that family.
- */
 export function artifactTypeForLibraryItem(item: LibraryItem): ArtifactType {
   const mime = item.mime_type.toLowerCase();
   if (mime.startsWith('image/svg')) return 'svg';
@@ -141,11 +165,6 @@ export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
     computeSessionId: '',
     ownerUserId: '',
     sourceSurface,
-    // SECURITY-FIX F3 (CWE-863): every Library row used to render a "Managed"
-    // privacy chip regardless of which provider produced it. The row records
-    // the provider and the model, so the boundary is read from those; managed
-    // survives only as the fallback, which is honest here because the Library
-    // lists files already held in managed-cloud storage.
     ...generatedFileTrustBoundary({ provider: item.provider, model: item.model }),
     kind: iconKindFor(item.file_name, item.mime_type),
     fileName: item.file_name,
@@ -169,6 +188,12 @@ export interface LibraryTransport {
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
   startChat?: () => void;
+  /** Folders the host lists alongside files. Hosts without one omit it and no
+   *  folder row is rendered, rather than an empty section that implies none. */
+  listFolders?: () => Promise<LibraryFolder[]>;
+  openFolder?: (folder: LibraryFolder) => void;
+  createFolder?: () => void;
+  uploadFiles?: (files: File[]) => Promise<void>;
   /** Native document export. Hosts that cannot produce a format must leave it
    *  out of `nativeExportFormats` so the option is never offered. */
   exportNative?: (
@@ -192,6 +217,40 @@ async function requireSuccessfulMutation(response: Response): Promise<void> {
   if (body.success !== true) throw new Error('The file is no longer available');
 }
 
+function isImageItem(item: LibraryItem): boolean {
+  return item.mime_type.toLowerCase().startsWith('image/');
+}
+
+function isVideoItem(item: LibraryItem): boolean {
+  return item.mime_type.toLowerCase().startsWith('video/');
+}
+
+const MODIFIED_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function formatModified(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, MODIFIED_DATE_FORMAT);
+}
+
+function formatSize(bytes: number | null): string {
+  return bytes === null ? '' : formatBytes(bytes, 0);
+}
+
+function sortFolders(folders: readonly LibraryFolder[], sort: LibrarySort): LibraryFolder[] {
+  const sorted = [...folders];
+  if (sort === 'modified') {
+    sorted.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    return sorted;
+  }
+  sorted.sort((a, b) => a.name.localeCompare(b.name));
+  return sorted;
+}
+
 export interface LibraryViewProps {
   transport: LibraryTransport;
   initialQuery?: string;
@@ -206,29 +265,35 @@ export function LibraryView({
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
-  const [surface, setSurface] = useState<SurfaceFilter>(initialSurface);
-  const [origin, setOrigin] = useState<OriginFilter>('all');
-  const [kind, setKind] = useState<KindFilter>('all');
+  const [surface] = useState<SurfaceFilter>(initialSurface);
+  const [tab, setTab] = useState<LibraryTab>('all');
+  const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
+  const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');
   const [searchInput, setSearchInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
+  const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasResolvedPage, setHasResolvedPage] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
-  const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<string>>(() => new Set());
   const [viewDeleted, setViewDeleted] = useState(false);
-  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmAction();
-  const [confirmingPermanentDeleteId, setConfirmingPermanentDeleteId] = useState<string | null>(
-    null,
-  );
-  const [permanentlyDeletingId, setPermanentlyDeletingId] = useState<string | null>(null);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [openArtifactIds, setOpenArtifactIds] = useState<ReadonlySet<string>>(() => new Set());
   const [artifactSources, setArtifactSources] = useState<Record<string, ArtifactSource>>({});
   const requestSeq = useRef(0);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => setViewMode(loadViewMode()), []);
+
+  const changeViewMode = useCallback((mode: LibraryViewMode) => {
+    setViewMode(mode);
+    saveViewMode(mode);
+  }, []);
 
   useEffect(() => {
     setSearchInput(initialQuery);
@@ -244,15 +309,16 @@ export function LibraryView({
     (offset: number) => {
       const params = new URLSearchParams();
       params.set('limit', String(LIBRARY_DEFAULT_PAGE_SIZE));
+      params.set('sort', sort);
       if (offset > 0) params.set('offset', String(offset));
       if (surface !== 'all') params.set('surface', surface);
-      if (origin !== 'all') params.set('origin', origin);
-      if (kind !== 'all') params.set('kind', kind);
+      const kindParam = KIND_PARAM_BY_TAB[tab];
+      if (kindParam) params.set('kind', kindParam);
       if (query) params.set('q', query);
       if (viewDeleted) params.set('deleted', 'true');
       return params;
     },
-    [surface, origin, kind, query, viewDeleted],
+    [surface, tab, sort, query, viewDeleted],
   );
 
   const loadPage = useCallback(
@@ -303,6 +369,35 @@ export function LibraryView({
     void loadPage(0, false);
   }, [isAuthReady, isSignedIn, loadPage]);
 
+  const listFolders = transport.listFolders;
+  useEffect(() => {
+    if (!isAuthReady || !isSignedIn || !listFolders) return;
+    let active = true;
+    void (async () => {
+      try {
+        const loaded = await listFolders();
+        if (active) setFolders(loaded);
+      } catch {
+        if (active) setFolders([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isAuthReady, isSignedIn, listFolders]);
+
+  const setRowError = useCallback((id: string, message: string | null) => {
+    setRowErrors((prev) => {
+      if (message === null) {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: message };
+    });
+  }, []);
+
   const handleDownload = useCallback(
     async (item: LibraryItem) => {
       try {
@@ -315,25 +410,20 @@ export function LibraryView({
         }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = item.file_name;
-        a.click();
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = item.file_name;
+        anchor.click();
         URL.revokeObjectURL(url);
-        setDownloadErrors((prev) => {
-          if (!(item.id in prev)) return prev;
-          const next = { ...prev };
-          delete next[item.id];
-          return next;
-        });
+        setRowError(item.id, null);
       } catch (err) {
-        setDownloadErrors((prev) => ({
-          ...prev,
-          [item.id]: err instanceof Error ? err.message : String(err),
-        }));
+        setRowError(
+          item.id,
+          `Download failed (${err instanceof Error ? err.message : String(err)}).`,
+        );
       }
     },
-    [transport],
+    [transport, setRowError],
   );
 
   const handleThumbnailError = useCallback(
@@ -344,88 +434,59 @@ export function LibraryView({
           setUnavailableIds((current) => new Set(current).add(item.id));
         }
       } catch {
-        // A transient transport error is not proof that durable bytes are
-        // gone. The card already falls back to its kind icon for this mount.
+        return;
       }
     },
     [transport],
+  );
+
+  const removeFromPage = useCallback((id: string) => {
+    setPage((prev) => ({ ...prev, items: prev.items.filter((entry) => entry.id !== id) }));
+  }, []);
+
+  const runMutation = useCallback(
+    async (id: string, label: string, call: () => Promise<Response>) => {
+      setRowError(id, null);
+      try {
+        await requireSuccessfulMutation(await call());
+        removeFromPage(id);
+      } catch (err) {
+        setRowError(id, `${label} failed (${err instanceof Error ? err.message : String(err)}).`);
+      }
+    },
+    [removeFromPage, setRowError],
   );
 
   const handleRestore = useCallback(
-    async (id: string) => {
-      setRestoringId(id);
-      setMutationErrors((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      try {
-        const res = await transport.restoreItem(id);
-        await requireSuccessfulMutation(res);
-        setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
-      } catch (err) {
-        setMutationErrors((prev) => ({
-          ...prev,
-          [id]: err instanceof Error ? err.message : String(err),
-        }));
-      } finally {
-        setRestoringId(null);
-      }
-    },
-    [transport],
+    (id: string) => runMutation(id, 'Restore', () => transport.restoreItem(id)),
+    [runMutation, transport],
   );
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      setMutationErrors((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      try {
-        const res = await transport.deleteItem(id);
-        await requireSuccessfulMutation(res);
-        setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
-      } catch (err) {
-        setMutationErrors((prev) => ({
-          ...prev,
-          [id]: err instanceof Error ? err.message : String(err),
-        }));
-      }
-    },
-    [transport],
+  const confirmDelete = useCallback(
+    (item: LibraryItem) =>
+      confirm({
+        title: `Delete ${item.file_name}?`,
+        description:
+          'It moves to Recently deleted, where it stays restorable for 30 days before it is removed for good.',
+        confirmLabel: 'Delete',
+        destructive: true,
+        onConfirm: () => runMutation(item.id, 'Delete', () => transport.deleteItem(item.id)),
+      }),
+    [confirm, runMutation, transport],
   );
 
-  const handlePermanentDelete = useCallback(
-    async (id: string) => {
-      setPermanentlyDeletingId(id);
-      setMutationErrors((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      try {
-        const res = await transport.permanentlyDeleteItem(id);
-        await requireSuccessfulMutation(res);
-        setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
-        setConfirmingPermanentDeleteId(null);
-      } catch (err) {
-        setMutationErrors((prev) => ({
-          ...prev,
-          [id]: err instanceof Error ? err.message : String(err),
-        }));
-      } finally {
-        setPermanentlyDeletingId(null);
-      }
-    },
-    [transport],
-  );
-
-  const handlePreview = useCallback(
-    (item: LibraryItem) => {
-      transport.openPreview(item.uri);
-    },
-    [transport],
+  const confirmPermanentDelete = useCallback(
+    (item: LibraryItem) =>
+      confirm({
+        title: `Permanently delete ${item.file_name}?`,
+        description:
+          'The stored bytes are erased now. Nothing restores this file, and anything linking to it stops resolving.',
+        confirmLabel: 'Delete permanently',
+        destructive: true,
+        onConfirm: () =>
+          runMutation(item.id, 'Permanent delete', () => transport.permanentlyDeleteItem(item.id)),
+      }),
+    [confirm, runMutation, transport],
   );
 
   const loadArtifactSource = useCallback(
@@ -461,54 +522,126 @@ export function LibraryView({
     [transport],
   );
 
-  const toggleArtifact = useCallback(
+  const openItem = useCallback(
     (item: LibraryItem) => {
-      const wasOpen = openArtifactIds.has(item.id);
-      setOpenArtifactIds((current) => {
-        const next = new Set(current);
-        if (wasOpen) next.delete(item.id);
-        else next.add(item.id);
-        return next;
-      });
-      if (!wasOpen && artifactSources[item.id]?.status !== 'ready') {
-        void loadArtifactSource(item);
+      if (unavailableIds.has(item.id)) return;
+      if (item.surface === 'artifact') {
+        const wasOpen = openArtifactIds.has(item.id);
+        setOpenArtifactIds((current) => {
+          const next = new Set(current);
+          if (wasOpen) next.delete(item.id);
+          else next.add(item.id);
+          return next;
+        });
+        if (!wasOpen && artifactSources[item.id]?.status !== 'ready') {
+          void loadArtifactSource(item);
+        }
+        return;
+      }
+      if (item.previewable) transport.openPreview(item.uri);
+    },
+    [unavailableIds, openArtifactIds, artifactSources, loadArtifactSource, transport],
+  );
+
+  const uploadFiles = transport.uploadFiles;
+  const handleUploadPicked = useCallback(
+    async (files: FileList | null) => {
+      if (!uploadFiles || !files || files.length === 0) return;
+      setUploadError(null);
+      setUploading(true);
+      try {
+        await uploadFiles(Array.from(files));
+        await loadPage(0, false);
+      } catch (err) {
+        setUploadError(toUserMessageWithStatus(err, 'That upload did not finish.'));
+      } finally {
+        setUploading(false);
       }
     },
-    [openArtifactIds, artifactSources, loadArtifactSource],
+    [uploadFiles, loadPage],
   );
 
-  const cards = useMemo(
-    () =>
-      page.items.map((item) => {
-        const isUnavailable = unavailableIds.has(item.id);
-        return {
-          item,
-          isUnavailable,
-          isArtifact: item.surface === 'artifact',
-          presentation: summarizeGeneratedFileBundle({
-            generatedFile: generatedFileFromLibraryItem(item),
-            fallbackStatus: isUnavailable ? 'failed' : 'completed',
-          }),
-        };
-      }),
-    [page.items, unavailableIds],
+  const requestUpload = useCallback(() => uploadInputRef.current?.click(), []);
+
+  const visibleFolders = useMemo(() => {
+    if (tab !== 'all' || viewDeleted || folders.length === 0) return [];
+    const needle = query.toLowerCase();
+    const matched = needle
+      ? folders.filter((folder) => folder.name.toLowerCase().includes(needle))
+      : folders;
+    return sortFolders(matched, sort);
+  }, [folders, tab, viewDeleted, query, sort]);
+
+  const rowActions = useMemo(
+    () => ({
+      onOpen: openItem,
+      onDownload: handleDownload,
+      onDelete: confirmDelete,
+      onRestore: handleRestore,
+      onPermanentDelete: confirmPermanentDelete,
+    }),
+    [openItem, handleDownload, confirmDelete, handleRestore, confirmPermanentDelete],
   );
+
+  const isBusy = !isAuthReady || (isSignedIn && (!hasResolvedPage || loading));
+  const isEmpty =
+    isAuthReady &&
+    (!isSignedIn || hasResolvedPage) &&
+    !loading &&
+    !error &&
+    page.items.length === 0 &&
+    visibleFolders.length === 0;
+
+  const sharedListProps = {
+    items: page.items,
+    folders: visibleFolders,
+    unavailableIds,
+    rowErrors,
+    viewDeleted,
+    actions: rowActions,
+    onOpenFolder: transport.openFolder,
+    onThumbnailError: handleThumbnailError,
+    inlinePreviewUri: transport.inlinePreviewUri,
+    openArtifactIds,
+    artifactSources,
+    onRetryArtifact: loadArtifactSource,
+    exportNative: transport.exportNative,
+    nativeExportFormats: transport.nativeExportFormats,
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6" data-testid="library-view">
-      {confirmDeleteDialog}
-      <header className="flex flex-col gap-1">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5" data-testid="library-view">
+      {confirmDialog}
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium text-[var(--chat-text-primary)]">
           Library
         </h1>
-        <p className="text-sm text-[var(--chat-text-muted)]">
-          Files generated in your conversations, in one place.
-        </p>
+        {uploadFiles || transport.createFolder ? (
+          <NewMenu
+            onUpload={uploadFiles ? requestUpload : undefined}
+            onCreateFolder={transport.createFolder}
+            busy={uploading}
+          />
+        ) : null}
       </header>
 
-      {/* Search + filter chips */}
+      {uploadFiles ? (
+        <input
+          ref={uploadInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(event) => {
+            void handleUploadPicked(event.target.files);
+            event.target.value = '';
+          }}
+        />
+      ) : null}
+
       <div className="flex flex-col gap-3">
-        <label className="relative block max-w-md">
+        <label className="relative block">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chat-text-muted)]"
             aria-hidden
@@ -516,53 +649,72 @@ export function LibraryView({
           <input
             type="search"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by file name or prompt"
-            aria-label="Search library files"
-            className="w-full rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-muted)] focus:outline-none focus:ring-2 focus:ring-primary"
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search files and projects"
+            aria-label="Search the library by name"
+            className="w-full rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
           />
         </label>
-        <div
-          className="flex flex-wrap items-center gap-2"
-          role="group"
-          aria-label="Library filters"
-        >
-          {SURFACE_FILTERS.map((f) => (
-            <FilterChip
-              key={f.id}
-              label={f.label}
-              active={surface === f.id}
-              onClick={() => setSurface(f.id)}
-            />
-          ))}
-          <span className="mx-1 h-4 w-px bg-[var(--chat-border)]" aria-hidden />
-          {ORIGIN_FILTERS.map((f) => (
-            <FilterChip
-              key={f.id}
-              label={f.label}
-              active={origin === f.id}
-              onClick={() => setOrigin(f.id)}
-            />
-          ))}
-          <span className="mx-1 h-4 w-px bg-[var(--chat-border)]" aria-hidden />
-          {KIND_FILTERS.map((f) => (
-            <FilterChip
-              key={f.id}
-              label={f.label}
-              active={kind === f.id}
-              onClick={() => setKind(f.id)}
-            />
-          ))}
-          <span className="mx-1 h-4 w-px bg-[var(--chat-border)]" aria-hidden />
-          <FilterChip
-            label={viewDeleted ? 'Back to library' : 'Recently deleted'}
-            active={viewDeleted}
-            onClick={() => setViewDeleted((v) => !v)}
-          />
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="tablist" aria-label="Filter the library" className="flex items-center gap-1">
+            {TABS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === entry.id}
+                onClick={() => setTab(entry.id)}
+                className={
+                  tab === entry.id
+                    ? 'min-h-9 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
+                    : 'min-h-9 rounded-[var(--chat-radius-md)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                }
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <SortMenu sort={sort} onChange={setSort} />
+            <ToolbarToggle
+              label="Recently deleted"
+              pressed={viewDeleted}
+              onClick={() => setViewDeleted((current) => !current)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </ToolbarToggle>
+            <div
+              role="group"
+              aria-label="Library layout"
+              className="ml-1 flex items-center gap-1 border-l border-[var(--chat-border)] pl-1"
+            >
+              <IconToggle
+                label="Grid view"
+                pressed={viewMode === 'grid'}
+                onClick={() => changeViewMode('grid')}
+              >
+                <LayoutGrid className="h-4 w-4" aria-hidden />
+              </IconToggle>
+              <IconToggle
+                label="List view"
+                pressed={viewMode === 'list'}
+                onClick={() => changeViewMode('list')}
+              >
+                <List className="h-4 w-4" aria-hidden />
+              </IconToggle>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Error state with retry, never silent. */}
+      {uploadError ? (
+        <p role="alert" className="text-sm text-[var(--chat-destructive-text)]">
+          {uploadError}
+        </p>
+      ) : null}
+
       {error ? (
         <div
           data-testid="library-error"
@@ -582,193 +734,27 @@ export function LibraryView({
         </div>
       ) : null}
 
-      {(!isAuthReady || (isSignedIn && (!hasResolvedPage || loading))) && cards.length === 0 ? (
+      {isBusy && page.items.length === 0 ? (
         <div
           data-testid="library-loading"
-          role="status"
           className="flex items-center gap-2 py-16 text-sm text-[var(--chat-text-muted)]"
         >
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading your library…
+          <Spinner size="sm" />
+          Loading your library
         </div>
       ) : null}
 
-      {isAuthReady &&
-      (!isSignedIn || hasResolvedPage) &&
-      !loading &&
-      !error &&
-      cards.length === 0 ? (
+      {isEmpty ? (
         <EmptyState
-          origin={origin}
           hasQuery={query.length > 0}
           viewDeleted={viewDeleted}
+          onUpload={uploadFiles ? requestUpload : undefined}
           startChat={transport.startChat}
         />
       ) : null}
 
-      {cards.length > 0 ? (
-        <div
-          data-testid="library-grid"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {cards.map(({ item, isUnavailable, isArtifact, presentation }) => (
-            <div
-              key={item.id}
-              className="flex h-full flex-col overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]"
-            >
-              <GeneratedFileCard
-                className="h-auto flex-1 rounded-none border-0 bg-transparent"
-                presentation={{
-                  ...presentation,
-                  previewUri:
-                    !isUnavailable &&
-                    item.previewable &&
-                    item.mime_type.toLowerCase().startsWith('image/')
-                      ? transport.inlinePreviewUri?.(item.uri)
-                      : undefined,
-                  canPreview: !isUnavailable && item.previewable,
-                }}
-                onDownload={isUnavailable ? undefined : () => void handleDownload(item)}
-                onPreview={
-                  isUnavailable || !item.previewable
-                    ? undefined
-                    : isArtifact
-                      ? // An artifact-class row's bytes are markup or source, so
-                        // handing them to the host's raw-bytes tab is both a worse
-                        // reading experience and an unsandboxed one. Render it
-                        // through the same sandboxed renderer the chat panel uses.
-                        () => toggleArtifact(item)
-                      : () => handlePreview(item)
-                }
-                onPreviewError={() => void handleThumbnailError(item)}
-              />
-              {isArtifact && openArtifactIds.has(item.id) ? (
-                <ArtifactSection
-                  item={item}
-                  source={artifactSources[item.id]}
-                  onRetry={() => void loadArtifactSource(item)}
-                  {...(transport.exportNative ? { exportNative: transport.exportNative } : {})}
-                  {...(transport.nativeExportFormats
-                    ? { nativeExportFormats: transport.nativeExportFormats }
-                    : {})}
-                />
-              ) : null}
-              <div className="flex flex-col gap-2 border-t border-[var(--chat-border)] px-3 py-2">
-                {isUnavailable ? (
-                  <p className="text-xs text-[var(--chat-destructive-text)]" role="status">
-                    Stored file bytes are no longer available. You can remove this stale Library
-                    entry.
-                  </p>
-                ) : null}
-                {viewDeleted ? (
-                  confirmingPermanentDeleteId === item.id ? (
-                    <div
-                      className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
-                      role="group"
-                      aria-label={`Permanently delete ${item.file_name}`}
-                    >
-                      <p className="text-xs text-[var(--chat-text-secondary)]">
-                        Delete permanently? This file cannot be restored.
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmingPermanentDeleteId(null)}
-                          disabled={permanentlyDeletingId === item.id}
-                          className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handlePermanentDelete(item.id)}
-                          disabled={permanentlyDeletingId === item.id}
-                          className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2 disabled:opacity-50"
-                        >
-                          {permanentlyDeletingId === item.id ? 'Deleting…' : 'Delete permanently'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void handleRestore(item.id)}
-                        disabled={restoringId === item.id}
-                        className="text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
-                      >
-                        {restoringId === item.id ? 'Restoring…' : 'Restore'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingPermanentDeleteId(item.id)}
-                        className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2"
-                      >
-                        Delete permanently
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmDelete({
-                        title: `Delete “${item.file_name}”?`,
-                        description:
-                          'This moves the file to Recently deleted. You can restore it for 30 days before it is permanently removed.',
-                        confirmLabel: 'Delete',
-                        onConfirm: () => handleDelete(item.id),
-                      })
-                    }
-                    className="flex min-h-6 self-start items-center gap-1 py-1 text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2"
-                    aria-label={`Delete ${item.file_name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    Delete
-                  </button>
-                )}
-                {mutationErrors[item.id] ? (
-                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive-text)]">
-                    <span>
-                      {viewDeleted && confirmingPermanentDeleteId === item.id
-                        ? 'Permanent delete'
-                        : viewDeleted
-                          ? 'Restore'
-                          : 'Delete'}{' '}
-                      failed ({mutationErrors[item.id]}).
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void (viewDeleted
-                          ? confirmingPermanentDeleteId === item.id
-                            ? handlePermanentDelete(item.id)
-                            : handleRestore(item.id)
-                          : handleDelete(item.id))
-                      }
-                      className="font-medium underline underline-offset-2"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : null}
-                {downloadErrors[item.id] ? (
-                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive-text)]">
-                    <span>Download failed ({downloadErrors[item.id]}).</span>
-                    <button
-                      type="button"
-                      onClick={() => void handleDownload(item)}
-                      className="font-medium underline underline-offset-2"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {!isEmpty && !isBusy && viewMode === 'grid' ? <LibraryGrid {...sharedListProps} /> : null}
+      {!isEmpty && !isBusy && viewMode === 'list' ? <LibraryList {...sharedListProps} /> : null}
 
       {page.hasMore && page.nextOffset != null ? (
         <div className="flex justify-center pb-8">
@@ -779,14 +765,615 @@ export function LibraryView({
             onClick={() => void loadPage(page.nextOffset ?? 0, true)}
             data-testid="library-show-more"
           >
-            {loadingMore ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : null}
+            {loadingMore ? <Spinner size="sm" className="mr-1.5 h-3.5 w-3.5" /> : null}
             Show more
           </Button>
         </div>
       ) : null}
     </div>
+  );
+}
+
+interface RowActions {
+  onOpen: (item: LibraryItem) => void;
+  onDownload: (item: LibraryItem) => Promise<void>;
+  onDelete: (item: LibraryItem) => void;
+  onRestore: (id: string) => Promise<void>;
+  onPermanentDelete: (item: LibraryItem) => void;
+}
+
+interface LibraryListProps {
+  items: readonly LibraryItem[];
+  folders: readonly LibraryFolder[];
+  unavailableIds: ReadonlySet<string>;
+  rowErrors: Record<string, string>;
+  viewDeleted: boolean;
+  actions: RowActions;
+  onOpenFolder?: (folder: LibraryFolder) => void;
+  onThumbnailError: (item: LibraryItem) => Promise<void>;
+  inlinePreviewUri?: (uri: string) => string;
+  openArtifactIds: ReadonlySet<string>;
+  artifactSources: Record<string, ArtifactSource>;
+  onRetryArtifact: (item: LibraryItem) => Promise<void>;
+  exportNative?: LibraryTransport['exportNative'];
+  nativeExportFormats?: readonly NativeExportFormat[];
+}
+
+function artifactPanelFor(props: LibraryListProps, item: LibraryItem): ReactNode {
+  if (item.surface !== 'artifact' || !props.openArtifactIds.has(item.id)) return null;
+  return (
+    <ArtifactSection
+      item={item}
+      source={props.artifactSources[item.id]}
+      onRetry={() => void props.onRetryArtifact(item)}
+      {...(props.exportNative ? { exportNative: props.exportNative } : {})}
+      {...(props.nativeExportFormats ? { nativeExportFormats: props.nativeExportFormats } : {})}
+    />
+  );
+}
+
+function GridTile({
+  name,
+  meta,
+  ariaLabel,
+  onOpen,
+  menu,
+  testId,
+  children,
+  notes,
+}: {
+  name: string;
+  meta: string;
+  ariaLabel: string;
+  onOpen: () => void;
+  menu?: ReactNode;
+  testId: string;
+  children: ReactNode;
+  notes?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2" data-testid={testId}>
+      <div className="group relative">
+        <button type="button" onClick={onOpen} aria-label={ariaLabel} className={TILE_MEDIA_CLASS}>
+          {children}
+        </button>
+        {menu ? <div className="absolute right-1.5 top-1.5">{menu}</div> : null}
+      </div>
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <span className="truncate text-sm text-[var(--chat-text-primary)]" title={name}>
+          {name}
+        </span>
+        <span className="text-xs text-[var(--chat-text-muted)]">{meta}</span>
+      </div>
+      {notes}
+    </div>
+  );
+}
+
+function LibraryGrid(props: LibraryListProps) {
+  return (
+    <div
+      data-testid="library-grid"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+    >
+      {props.folders.map((folder) => (
+        <GridTile
+          key={folder.id}
+          testId="library-folder-tile"
+          name={folder.name}
+          meta={formatModified(folder.updatedAt)}
+          ariaLabel={`Open ${folder.name}`}
+          onOpen={() => props.onOpenFolder?.(folder)}
+        >
+          <Folder className={TILE_GLYPH_CLASS} aria-hidden />
+        </GridTile>
+      ))}
+
+      {props.items.map((item) => {
+        const unavailable = props.unavailableIds.has(item.id);
+        const thumbnailUri =
+          !unavailable && isImageItem(item) ? props.inlinePreviewUri?.(item.uri) : undefined;
+        const rowError = props.rowErrors[item.id];
+        return (
+          <GridTile
+            key={item.id}
+            testId="library-tile"
+            name={item.file_name}
+            meta={formatModified(item.created_at)}
+            ariaLabel={`Open ${item.file_name}`}
+            onOpen={() => props.actions.onOpen(item)}
+            menu={
+              <ItemMenu
+                item={item}
+                viewDeleted={props.viewDeleted}
+                actions={props.actions}
+                triggerClassName={MENU_TRIGGER_OVERLAY_CLASS}
+              />
+            }
+            notes={
+              <>
+                {unavailable ? (
+                  <p className="px-0.5 text-xs text-[var(--chat-destructive-text)]" role="status">
+                    The stored bytes are gone. Remove this entry.
+                  </p>
+                ) : null}
+                {rowError ? (
+                  <p className="px-0.5 text-xs text-[var(--chat-destructive-text)]" role="status">
+                    {rowError}
+                  </p>
+                ) : null}
+                {artifactPanelFor(props, item)}
+              </>
+            }
+          >
+            {thumbnailUri ? (
+              <img
+                src={thumbnailUri}
+                data-testid="library-thumbnail"
+                alt=""
+                loading="lazy"
+                className="h-full w-full object-cover"
+                onError={() => void props.onThumbnailError(item)}
+              />
+            ) : isVideoItem(item) ? (
+              <Play className={TILE_GLYPH_CLASS} aria-hidden />
+            ) : (
+              <FileKindIcon
+                kind={iconKindFor(item.file_name, item.mime_type)}
+                className={TILE_GLYPH_CLASS}
+              />
+            )}
+          </GridTile>
+        );
+      })}
+    </div>
+  );
+}
+
+const TILE_SHELL_CLASS =
+  'rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+
+const TILE_MEDIA_CLASS = `flex aspect-square w-full items-center justify-center overflow-hidden ${TILE_SHELL_CLASS}`;
+
+const TILE_GLYPH_CLASS = 'h-1/3 w-1/3 text-[var(--chat-text-secondary)]';
+
+const HEADER_CELL_CLASS =
+  'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--chat-text-muted)]';
+
+function LibraryList(props: LibraryListProps) {
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="library-list" className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-[var(--chat-border)]">
+            <th scope="col" className={HEADER_CELL_CLASS}>
+              Name
+            </th>
+            <th scope="col" className={HEADER_CELL_CLASS}>
+              Modified
+            </th>
+            <th scope="col" className={`hidden sm:table-cell ${HEADER_CELL_CLASS}`}>
+              Size
+            </th>
+            <th scope="col" className="px-3 py-2">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.folders.map((folder) => (
+            <tr
+              key={folder.id}
+              data-testid="library-folder-row"
+              tabIndex={0}
+              onClick={() => props.onOpenFolder?.(folder)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  props.onOpenFolder?.(folder);
+                }
+              }}
+              className="cursor-pointer border-b border-[var(--chat-border-subtle)] hover:bg-[var(--chat-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+            >
+              <td className="px-3 py-2">
+                <span className="flex items-center gap-2">
+                  <Folder
+                    className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
+                    aria-hidden
+                  />
+                  <span className="truncate text-[var(--chat-text-primary)]">{folder.name}</span>
+                </span>
+              </td>
+              <td className="px-3 py-2 text-[var(--chat-text-muted)]">
+                {formatModified(folder.updatedAt)}
+              </td>
+              <td className="hidden px-3 py-2 text-[var(--chat-text-muted)] sm:table-cell" />
+              <td className="px-3 py-2" />
+            </tr>
+          ))}
+
+          {props.items.map((item) => {
+            const unavailable = props.unavailableIds.has(item.id);
+            const rowError = props.rowErrors[item.id];
+            const panel = artifactPanelFor(props, item);
+            return (
+              <Fragment key={item.id}>
+                <tr
+                  data-testid="library-row"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      props.actions.onOpen(item);
+                    }
+                  }}
+                  className="border-b border-[var(--chat-border-subtle)] hover:bg-[var(--chat-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                >
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => props.actions.onOpen(item)}
+                      className="flex w-full items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                    >
+                      <FileKindIcon
+                        kind={iconKindFor(item.file_name, item.mime_type)}
+                        className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
+                      />
+                      <span className="truncate text-[var(--chat-text-primary)]">
+                        {item.file_name}
+                      </span>
+                    </button>
+                    {unavailable ? (
+                      <span className="mt-1 block text-xs text-[var(--chat-destructive-text)]">
+                        The stored bytes are gone. Remove this entry.
+                      </span>
+                    ) : null}
+                    {rowError ? (
+                      <span
+                        role="status"
+                        className="mt-1 block text-xs text-[var(--chat-destructive-text)]"
+                      >
+                        {rowError}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)]">
+                    {formatModified(item.created_at)}
+                  </td>
+                  <td className="hidden whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)] sm:table-cell">
+                    {formatSize(item.byte_count)}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end">
+                      <ItemMenu
+                        item={item}
+                        viewDeleted={props.viewDeleted}
+                        actions={props.actions}
+                      />
+                    </div>
+                  </td>
+                </tr>
+                {panel ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 pb-3">
+                      {panel}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const MENU_PANEL_CLASS =
+  'absolute right-0 z-20 mt-1 min-w-44 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
+
+const MENU_TRIGGER_CLASS =
+  'flex h-8 w-8 items-center justify-center rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+
+/**
+ * The tile chip stays in the DOM at low emphasis and gains its border and full
+ * ink on hover or keyboard focus. A reveal that removes it until hover would be
+ * unreachable on a touch pointer, which has neither.
+ */
+const MENU_TRIGGER_OVERLAY_CLASS =
+  'flex h-8 w-8 items-center justify-center rounded-[var(--chat-radius-sm)] border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+
+const MENU_ITEM_CLASS =
+  'flex w-full min-h-9 items-center gap-2 rounded-[var(--chat-radius-sm)] px-2.5 py-1.5 text-left text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+
+const MENU_ITEM_DESTRUCTIVE_CLASS =
+  'flex w-full min-h-9 items-center gap-2 rounded-[var(--chat-radius-sm)] px-2.5 py-1.5 text-left text-sm text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+
+function useDismissOnOutsideClick(
+  open: boolean,
+  onClose: () => void,
+  containerRef: RefObject<HTMLElement | null>,
+): void {
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open, onClose, containerRef]);
+}
+
+function ItemMenu({
+  item,
+  viewDeleted,
+  actions,
+  triggerClassName = MENU_TRIGGER_CLASS,
+}: {
+  item: LibraryItem;
+  viewDeleted: boolean;
+  actions: RowActions;
+  triggerClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard({ open, onClose: close, panelRef, triggerRef });
+  useDismissOnOutsideClick(open, close, containerRef);
+
+  const choose = (run: () => void) => () => {
+    close();
+    triggerRef.current?.focus();
+    run();
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        aria-label={`Actions for ${item.file_name}`}
+        className={triggerClassName}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden />
+      </button>
+      {open ? (
+        <div
+          ref={panelRef}
+          role="menu"
+          aria-label={`Actions for ${item.file_name}`}
+          className={MENU_PANEL_CLASS}
+        >
+          {viewDeleted ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASS}
+              onClick={choose(() => void actions.onRestore(item.id))}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Restore
+            </button>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASS}
+              onClick={choose(() => void actions.onDownload(item))}
+            >
+              <Upload className="h-4 w-4 rotate-180" aria-hidden />
+              Download
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_DESTRUCTIVE_CLASS}
+            onClick={choose(() =>
+              viewDeleted ? actions.onPermanentDelete(item) : actions.onDelete(item),
+            )}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+            {viewDeleted ? 'Delete permanently' : 'Delete'}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NewMenu({
+  onUpload,
+  onCreateFolder,
+  busy,
+}: {
+  onUpload?: () => void;
+  onCreateFolder?: () => void;
+  busy: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard({ open, onClose: close, panelRef, triggerRef });
+  useDismissOnOutsideClick(open, close, containerRef);
+
+  const choose = (run: () => void) => () => {
+    close();
+    run();
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Button
+        ref={triggerRef}
+        size="sm"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={busy}
+        onClick={() => setOpen((current) => !current)}
+        className="gap-1.5"
+      >
+        {busy ? (
+          <Spinner size="sm" className="h-3.5 w-3.5" />
+        ) : (
+          <Plus className="h-4 w-4" aria-hidden />
+        )}
+        New
+        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+      </Button>
+      {open ? (
+        <div
+          ref={panelRef}
+          role="menu"
+          aria-label="Add to the library"
+          className={MENU_PANEL_CLASS}
+        >
+          {onUpload ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASS}
+              onClick={choose(onUpload)}
+            >
+              <Upload className="h-4 w-4" aria-hidden />
+              Upload file
+            </button>
+          ) : null}
+          {onCreateFolder ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASS}
+              onClick={choose(onCreateFolder)}
+            >
+              <Folder className="h-4 w-4" aria-hidden />
+              New project
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SortMenu({
+  sort,
+  onChange,
+}: {
+  sort: LibrarySort;
+  onChange: (next: LibrarySort) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard({ open, onClose: close, panelRef, triggerRef });
+  useDismissOnOutsideClick(open, close, containerRef);
+  const active = SORT_OPTIONS.find((option) => option.id === sort);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        aria-label={`Sort by ${active?.label ?? sort}`}
+        className="flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+      >
+        <SlidersHorizontal className="h-4 w-4" aria-hidden />
+        <span className="hidden sm:inline">{active?.label}</span>
+      </button>
+      {open ? (
+        <div ref={panelRef} role="menu" aria-label="Sort the library" className={MENU_PANEL_CLASS}>
+          {SORT_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={sort === option.id}
+              className={MENU_ITEM_CLASS}
+              onClick={() => {
+                close();
+                triggerRef.current?.focus();
+                onChange(option.id);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolbarToggle({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={label}
+      onClick={onClick}
+      className={
+        pressed
+          ? 'flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-2.5 py-1.5 text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+      }
+    >
+      {children}
+      <span className="hidden sm:inline" aria-hidden>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function IconToggle({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={
+        pressed
+          ? 'flex h-9 w-9 items-center justify-center rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex h-9 w-9 items-center justify-center rounded-[var(--chat-radius-md)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+      }
+    >
+      {children}
+    </button>
   );
 }
 
@@ -807,10 +1394,10 @@ function ArtifactSection({
     return (
       <div
         data-testid={`library-artifact-loading-${item.id}`}
-        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-text-muted)]"
+        className="flex items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-text-muted)]"
       >
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        Loading preview…
+        <Spinner size="sm" className="h-3.5 w-3.5" />
+        Loading preview
       </div>
     );
   }
@@ -819,9 +1406,9 @@ function ArtifactSection({
     return (
       <div
         data-testid={`library-artifact-error-${item.id}`}
-        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive-text)]"
+        className="flex items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive-text)]"
       >
-        <span>Couldn&apos;t open this artifact ({source.message}).</span>
+        <span>This artifact would not open ({source.message}).</span>
         <button
           type="button"
           onClick={onRetry}
@@ -834,7 +1421,7 @@ function ArtifactSection({
   }
 
   return (
-    <div className="border-t border-[var(--chat-border)] p-3">
+    <div className="rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] p-3">
       <ArtifactRenderer
         artifact={{
           id: item.id,
@@ -850,66 +1437,48 @@ function ArtifactSection({
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={
-        active
-          ? 'rounded-full border border-primary/50 bg-primary/10 px-3 py-1 text-xs font-medium text-primary'
-          : 'rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-1 text-xs font-medium text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]'
-      }
-    >
-      {label}
-    </button>
-  );
-}
-
 function EmptyState({
-  origin,
   hasQuery,
   viewDeleted,
+  onUpload,
   startChat,
 }: {
-  origin: OriginFilter;
   hasQuery: boolean;
   viewDeleted: boolean;
+  onUpload?: () => void;
   startChat?: () => void;
 }) {
-  const title = viewDeleted ? 'Recently deleted is empty' : 'Nothing here yet';
+  const title = viewDeleted
+    ? 'Recently deleted is empty'
+    : hasQuery
+      ? 'No matches'
+      : 'Your library is empty';
   const copy = hasQuery
-    ? viewDeleted
-      ? 'No deleted files match your search.'
-      : 'No files match your search.'
+    ? 'Nothing here matches that name. Try a shorter search.'
     : viewDeleted
-      ? 'Files you delete stay here for 30 days so you can restore them before they are permanently removed.'
-      : origin === 'uploaded'
-        ? 'Uploaded files aren’t cataloged in the Library yet: files you upload stay with their conversation. Generated files appear under Generated.'
-        : 'Files created in your conversations (images, documents, spreadsheets) will appear here.';
-  const EmptyIcon = viewDeleted ? Trash2 : FolderOpen;
+      ? 'Deleted files wait here for 30 days, so you can put one back before it is removed for good.'
+      : 'Files you upload and files your work produces collect here, with your projects.';
   return (
     <div
       data-testid="library-empty-state"
       className="flex flex-col items-center gap-3 py-20 text-center"
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
-        <EmptyIcon className="h-7 w-7 text-[var(--chat-accent-primary-text)]" aria-hidden />
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-surface-hover)]">
+        {viewDeleted ? (
+          <Trash2 className="h-7 w-7 text-[var(--chat-text-secondary)]" aria-hidden />
+        ) : (
+          <Folder className="h-7 w-7 text-[var(--chat-text-secondary)]" aria-hidden />
+        )}
       </div>
       <p className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</p>
       <p className="max-w-md text-sm text-[var(--chat-text-muted)]">{copy}</p>
-      {/* A search miss has an obvious way out (clear the query); a genuinely
-          empty Library does not, so only that case gets the CTA. */}
-      {startChat && !hasQuery && !viewDeleted ? (
+      {!hasQuery && !viewDeleted && onUpload ? (
+        <Button size="sm" className="mt-1 gap-1.5" onClick={onUpload}>
+          <Upload className="h-4 w-4" aria-hidden />
+          Upload a file
+        </Button>
+      ) : null}
+      {!hasQuery && !viewDeleted && !onUpload && startChat ? (
         <Button size="sm" className="mt-1" onClick={startChat}>
           Start a chat
         </Button>

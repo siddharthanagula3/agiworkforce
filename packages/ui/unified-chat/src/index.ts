@@ -254,7 +254,13 @@ export {
   iconKindFor,
   generatedFileFromLibraryItem,
 } from './components/library/LibraryView';
-export type { LibraryTransport, SurfaceFilter } from './components/library/LibraryView';
+export type {
+  LibraryFolder,
+  LibraryTab,
+  LibraryTransport,
+  LibraryViewMode,
+  SurfaceFilter,
+} from './components/library/LibraryView';
 export { TasksPage } from './components/tasks/TasksPage';
 export type { TasksTransport } from './components/tasks/TasksPage';
 export type { AgiWorkRerunGoal } from './components/tasks/task-display';
