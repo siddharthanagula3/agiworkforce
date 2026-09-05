@@ -3,7 +3,6 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 import { resolveAutoRoute } from '../auto';
 
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
-const OPEN_ROUTER_PROVIDER_ID = 'open_router';
 const ZERO_RETENTION = 'zero_retention';
 const INELIGIBLE_COMMERCIAL_STATUSES = new Set(['blocked', 'experimental_only']);
 
@@ -23,17 +22,6 @@ function routesForModel(modelKey: string): RegistryRoute[] {
   return Object.values(modelRegistry.routes).filter((route) => route.modelKey === modelKey);
 }
 
-function findModelWithEligibleOpenRouterRoute(): { modelKey: string; defaultProvider: string } {
-  for (const route of Object.values(modelRegistry.routes)) {
-    if (route.provider !== OPEN_ROUTER_PROVIDER_ID || !isEligibleManagedRoute(route)) continue;
-    const model = modelRegistry.models[route.modelKey as keyof typeof modelRegistry.models] as
-      | { identity: { provider: string } }
-      | undefined;
-    if (model) return { modelKey: route.modelKey, defaultProvider: model.identity.provider };
-  }
-  throw new Error('no compiled model has an eligible open_router route');
-}
-
 function findModelWithOnlyProviderDefaultRoutes(): { modelKey: string; provider: string } {
   for (const model of Object.values(modelRegistry.models) as Array<{
     identity: { key: string; provider: string };
@@ -48,22 +36,40 @@ function findModelWithOnlyProviderDefaultRoutes(): { modelKey: string; provider:
 }
 
 describe('zero data retention routing policy', () => {
-  it('resolves the selected route to a zero_retention route when required', () => {
-    const { modelKey } = findModelWithEligibleOpenRouterRoute();
+  it('takes every route retention class straight from the provider governance record', () => {
+    const governance = modelRegistry.governance as Record<string, { dataRetentionClass: string }>;
+    for (const [routeId, route] of Object.entries(modelRegistry.routes)) {
+      expect(governance[route.provider], `${routeId} has no governance record`).toBeDefined();
+      expect(route.dataRetention).toBe(governance[route.provider]?.dataRetentionClass);
+    }
+  });
 
-    const result = resolveAutoRoute({
-      selection: modelKey,
-      taskType: 'coding',
-      subscriptionTier: 'max',
-      trustMode: MANAGED_CLOUD_TRUST_MODE,
-      zeroDataRetentionOnly: true,
-    });
-
-    expect(result.status).toBe('selected');
-    if (result.status !== 'selected') return;
-    expect(modelRegistry.routes[result.routeId as keyof typeof modelRegistry.routes]).toMatchObject(
-      { dataRetention: ZERO_RETENTION },
+  it('admits a route under a ZDR requirement only when its provider declares zero retention', () => {
+    const governance = modelRegistry.governance as Record<string, { dataRetentionClass: string }>;
+    const declared = Object.values(modelRegistry.routes).filter(
+      (route) =>
+        isEligibleManagedRoute(route) &&
+        governance[route.provider]?.dataRetentionClass === ZERO_RETENTION,
     );
+
+    for (const route of declared) {
+      const result = resolveAutoRoute({
+        selection: route.modelKey,
+        taskType: 'coding',
+        subscriptionTier: 'max',
+        trustMode: MANAGED_CLOUD_TRUST_MODE,
+        zeroDataRetentionOnly: true,
+      });
+      expect(result.status).toBe('selected');
+    }
+
+    if (declared.length === 0) {
+      expect(
+        Object.values(modelRegistry.routes).every(
+          (route) => route.dataRetention !== ZERO_RETENTION,
+        ),
+      ).toBe(true);
+    }
   });
 
   it('excludes every route and reports unavailable for a model with no zero_retention route', () => {
