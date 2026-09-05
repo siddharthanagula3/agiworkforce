@@ -572,24 +572,47 @@ mod tests {
         }
     }
 
+    /// Presence is asserted against the SSOT rather than demanded outright: a
+    /// model whose curated entry carries no published date keeps an empty
+    /// string, and inventing one would be worse than reporting the gap. Every
+    /// date the SSOT does publish must still normalize to `YYYY-MM`.
     #[test]
     fn test_all_models_have_release_date() {
+        let mut dated = 0usize;
         for model in model_catalog() {
-            assert!(
-                !model.release_date.is_empty(),
-                "Model {} has empty release_date",
-                model.id
-            );
-            // Verify YYYY-MM format
-            let parts: Vec<&str> = model.release_date.split('-').collect();
+            let published = ssot_string_field(&model.id, "released").unwrap_or_default();
             assert_eq!(
-                parts.len(),
-                2,
+                model.release_date.is_empty(),
+                published.trim().is_empty(),
+                "release_date for {} disagrees with models.json released {:?}",
+                model.id,
+                published
+            );
+            if model.release_date.is_empty() {
+                continue;
+            }
+            let (year, month) = model
+                .release_date
+                .split_once('-')
+                .unwrap_or_else(|| panic!("{} release_date must be YYYY-MM", model.id));
+            assert!(
+                year.len() == 4 && year.chars().all(|c| c.is_ascii_digit()),
                 "Model {} release_date should be YYYY-MM, got: {}",
                 model.id,
                 model.release_date
             );
+            assert!(
+                month.len() == 2 && (1..=12).contains(&month.parse::<u8>().unwrap_or_default()),
+                "Model {} release_date should be YYYY-MM, got: {}",
+                model.id,
+                model.release_date
+            );
+            dated += 1;
         }
+        assert!(
+            dated >= 10,
+            "expected the catalog to carry at least 10 published release dates, got {dated}"
+        );
     }
 
     #[test]
@@ -624,24 +647,50 @@ mod tests {
             .any(|model| model.supports_reasoning));
     }
 
+    fn ssot_models() -> &'static serde_json::Map<String, serde_json::Value> {
+        static SSOT: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+        SSOT.get_or_init(|| {
+            serde_json::from_str(include_str!(
+                "../../../packages/contracts/types/src/models.json"
+            ))
+            .expect("models.json must parse")
+        })
+        .get("models")
+        .and_then(|models| models.as_object())
+        .expect("models.json must have a models object")
+    }
+
+    fn ssot_entry(api_id: &str) -> Option<&'static serde_json::Value> {
+        ssot_models().iter().find_map(|(canonical_id, entry)| {
+            let entry_api_id = entry
+                .get("apiModelId")
+                .and_then(|value| value.as_str())
+                .unwrap_or(canonical_id);
+            (entry_api_id == api_id).then_some(entry)
+        })
+    }
+
+    fn ssot_string_field(api_id: &str, field: &str) -> Option<String> {
+        ssot_entry(api_id)
+            .and_then(|entry| entry.get(field))
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    }
+
     /// Guard against test-vs-SSOT drift: derive reasoning expectations from
     /// `packages/contracts/types/src/models.json` (the SSOT the catalog is compiled
     /// from) instead of hardcoding per-model booleans. A capability flip in
     /// the SSOT (e.g. Haiku 4.5 thinking=true in the effort-catalog wave)
     /// must never leave this suite asserting stale values.
+    ///
+    /// The lookup is exact, never `find_model`: its unambiguous-prefix fallback
+    /// binds an SSOT id the CLI catalog excludes to a sibling that shares its
+    /// prefix, and then compares that sibling's capabilities to the wrong entry.
     #[test]
     fn test_reasoning_flags_match_ssot_thinking_capability() {
-        let ssot: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../packages/contracts/types/src/models.json"
-        ))
-        .expect("models.json must parse");
-        let models = ssot
-            .get("models")
-            .and_then(|m| m.as_object())
-            .expect("models.json must have a models object");
-
+        let catalog = model_catalog();
         let mut checked = 0usize;
-        for (canonical_id, entry) in models {
+        for (canonical_id, entry) in ssot_models() {
             let api_id = entry
                 .get("apiModelId")
                 .and_then(|v| v.as_str())
@@ -653,7 +702,7 @@ mod tests {
                 .unwrap_or(false);
             // Only models that made it into the CLI catalog (supported
             // provider, CLI-compatible modelType, not deprecated) are checked.
-            if let Some(model) = find_model(api_id) {
+            if let Some(model) = catalog.iter().find(|model| model.id == api_id) {
                 assert_eq!(
                     model.supports_reasoning, thinking,
                     "supports_reasoning for '{}' diverged from models.json capabilities.thinking",
@@ -1005,7 +1054,11 @@ mod tests {
         assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains("$1.32 / $3.96"));
+        assert!(detail.contains(&format!(
+            "${:.2} / ${:.2} per 1M tokens",
+            model.input_price_per_1m, model.output_price_per_1m
+        )));
+        assert!(model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0);
     }
 
     // ── format_model_list ──────────────────────────────────────
