@@ -20,14 +20,6 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:cd44386b4579ab79f7675cea2530f764c0dcb6e2a26dbbade8adca1965e53b97"
     },
-    "ad-creative": {
-      "path": ".agents/skills/ad-creative",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ad-creative)",
-      "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.8.2",
-      "computedHash": "sha256-tree-v1:94093efbb3bd607c4eb64c3bac6ea6351eac038a0ff4945c9c77b2926fb4b01f"
-    },
     "ads": {
       "path": ".agents/skills/ads",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ads)",
