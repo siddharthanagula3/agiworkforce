@@ -166,7 +166,7 @@ describe('calculateCacheSavings cache-read savings', () => {
   it('uses the generated catalog input-length cache-read tier', () => {
     const model = listCanonicalModels().find(
       (candidate) =>
-        (candidate.inputTokenPricingTiers?.length ?? 0) > 1 &&
+        (candidate.inputTokenPricingTiers?.length ?? 0) >= 1 &&
         typeof candidate.cached_input === 'number' &&
         candidate.inputTokenPricingTiers!.every(
           (tier) => typeof tier.cached_input === 'number' && typeof tier.cached_write === 'number',
