@@ -28,10 +28,18 @@ go at the top. Model names are omitted by rule; families and slots only.
 - Options: ship the Tauri app as the product; port capabilities into Electron with native
   modules; run the Tauri host as a sidecar the shell launches and talks to over a local
   authenticated socket with the same command names, so the renderer's invoke routes to it.
-- Decision: the sidecar transport, after a two day spike that proves one round trip end to end
-  (renderer invoke, shell, sidecar, native accessibility read, back) on a signed local build;
-  the decision is reopened if the spike shows the sidecar cannot hold the OS permissions the
-  capabilities need (accessibility, screen recording, input monitoring are granted per binary).
+- Decision (amended the same evening): the Tauri app becomes the desktop product and the Electron
+  shell is retired after a parity week, recommended to the founder and awaiting confirmation
+  because the 2026-09-04 launch decision named the Electron shell. The sidecar option is dropped
+  on evidence: macOS permission grants attach to one signed bundle, and the Tauri bundle already
+  declares accessibility, screen recording, apple events, camera and microphone usage strings on
+  one executable, so a sidecar would need its own signature and duplicate every prompt. The Tauri
+  release pipeline already ships signed, notarized, updater verified builds for macOS, Linux and
+  Windows with SBOMs; the Electron shell ships a manually redownloaded macOS image with no auto
+  update and no other target. The four Electron only features (quick ask, screenshot to chat,
+  dictation chord, tray) are one to five days each to port on the shared renderer. Prerequisite
+  before cutover: wdio specs on the real binary for dictation, voice and computer use, which do
+  not exist today.
 - Why: the Rust layer holds every capability the flagship promises and the shell holds the
   account and update plumbing; a bridge is smaller than either rewrite, and the wiring guard
   already enforces the command surface both sides must agree on.
