@@ -209,6 +209,12 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl(url)).not.toThrow();
   });
 
+  it('allows the places provider host the places tool calls', () => {
+    expect(() =>
+      validateEgressUrl('https://places.googleapis.com/v1/places:searchText'),
+    ).not.toThrow();
+  });
+
   it.each(['https://localhost/v1/messages', 'https://127.0.0.1/v1/messages'])(
     'still rejects the canonical list local-dev carve-out: %s',
     (url) => {

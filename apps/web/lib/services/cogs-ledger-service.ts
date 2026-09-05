@@ -14,6 +14,7 @@ export const COGS_CAPABILITIES = [
   'embedding',
   'computer_use',
   'sandbox',
+  'tool',
 ] as const;
 
 export const COGS_UNIT_BASES = ['token', 'image', 'second', 'minute', 'request'] as const;
@@ -97,6 +98,7 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   embedding: 'embedding',
   computer_use: 'computer_use',
   sandbox: 'sandbox',
+  tool: 'tool',
 };
 
 const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
@@ -107,6 +109,7 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   embedding: 'token',
   computer_use: 'request',
   sandbox: 'minute',
+  tool: 'request',
 };
 
 function numeric(value: unknown): number | null {
@@ -140,6 +143,7 @@ export function resolveCogsUnits(
         units: (numeric(usage['audioSeconds']) ?? numeric(usage['estimatedSeconds']) ?? 0) / 60,
       };
     case 'computer_use':
+    case 'tool':
       return { unitBasis, units: numeric(usage['requests']) ?? 1 };
     case 'sandbox':
       return { unitBasis, units: numeric(usage['sandboxMinutes']) ?? 0 };
