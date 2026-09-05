@@ -14,7 +14,7 @@ import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validation
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClient } from '@/lib/server/stripe-client';
 import {
   getLocalizedPricingCatalog,
   getPriceSelectionForCurrency,
@@ -33,14 +33,6 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
-
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
 
 /**
  * What Stripe will actually charge the moment the upgrade is confirmed.
@@ -151,7 +143,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
 
   const db = getNeonDb();
   const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
-  const stripe = getStripe();
+  const stripe = getStripeClient();
 
   type SubRow = Pick<
     SubscriptionRow,

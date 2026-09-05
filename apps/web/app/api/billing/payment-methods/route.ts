@@ -12,11 +12,9 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 
-const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
-
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS) : null;
+const stripe = getStripeClientOrNull();
 
 async function handleGetPaymentMethods(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-payment-methods');

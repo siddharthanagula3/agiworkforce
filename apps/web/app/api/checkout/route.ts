@@ -6,7 +6,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
-import { getOptionalEnv, requireEnv } from '@shared/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -15,7 +15,7 @@ import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validation
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
@@ -24,14 +24,6 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
-
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
 
 const CHECKOUT_ENABLED_RAW = process.env['STRIPE_CHECKOUT_ENABLED']?.trim().toLowerCase();
 const CHECKOUT_ENABLED =
@@ -136,7 +128,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const { priceId, currency } = priceSelection;
 
   let stripeCustomerId: string | null = null;
-  const stripe = getStripe();
+  const stripe = getStripeClient();
 
   type SubRow = Pick<
     SubscriptionRow,

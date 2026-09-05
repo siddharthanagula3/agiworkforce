@@ -12,22 +12,20 @@ import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
 
-const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
-
-if (!STRIPE_SECRET_KEY) {
+if (!process.env['STRIPE_SECRET_KEY']) {
   logger.warn(
     '[billing] STRIPE_SECRET_KEY is not set. Portal endpoint will return 500 until configured.',
   );
 }
 
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS) : null;
+const stripe = getStripeClientOrNull();
 
 function getValidatedOrigin(request: Request): string {
   const allowedOriginsEnv =

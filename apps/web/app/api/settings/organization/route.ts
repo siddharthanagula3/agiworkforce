@@ -3,8 +3,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import Stripe from 'stripe';
-import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -19,7 +17,7 @@ import {
   requireTeamAdminAccess,
   type TeamAdminAccess,
 } from '@/app/api/settings/team/team-admin-access';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClient } from '@/lib/server/stripe-client';
 import {
   resolvePurchasedSeatsForOwner,
   type OwnerPurchasedSeats,
@@ -42,14 +40,6 @@ import {
   type CollectionState,
 } from '@/lib/services/enterprise-collection-state';
 import { countActiveLegalHolds } from '@/lib/services/retention-service';
-
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
 
 const CreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -271,7 +261,7 @@ async function handleCreate(request: NextRequest) {
 
   let purchasedSeats: OwnerPurchasedSeats | null;
   try {
-    purchasedSeats = await resolvePurchasedSeatsForOwner(db, getStripe, userId);
+    purchasedSeats = await resolvePurchasedSeatsForOwner(db, getStripeClient, userId);
   } catch (error) {
     const reason =
       error instanceof Error && error.message.includes('STRIPE_SECRET_KEY')

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +8,7 @@ export const dynamic = 'force-dynamic';
 import { getStripeWebhookDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { checkRateLimit, verifyStripeSignature } from './lib/verify';
 import { checkIdempotency, markEventSucceeded, markEventFailed } from './lib/idempotency';
 import { dispatchStripeEvent } from './lib/handlers';
@@ -23,7 +22,7 @@ if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
   );
 }
 
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS) : null;
+const stripe = getStripeClientOrNull();
 
 export async function POST(request: NextRequest) {
   return withSpan('stripe.webhook', { kind: 'server', domain: 'billing' }, (span) =>

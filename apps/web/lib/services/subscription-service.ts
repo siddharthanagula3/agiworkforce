@@ -10,7 +10,7 @@ import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 import { resolveEnterprisePlanTier } from '@/lib/services/enterprise-billing-service';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
@@ -298,13 +298,11 @@ export class SubscriptionService {
   }
 
   static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
-    const stripeKey = process.env['STRIPE_SECRET_KEY'];
-    if (!stripeKey) {
+    const stripe = getStripeClientOrNull();
+    if (!stripe) {
       logger.warn('STRIPE_SECRET_KEY not set, skipping sync');
       return null;
     }
-
-    const stripe = new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS);
 
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
