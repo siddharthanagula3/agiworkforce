@@ -1,0 +1,192 @@
+name: Web Container Drill
+
+on:
+  schedule:
+    - cron: '27 4 * * 2'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/web/Dockerfile'
+      - 'apps/web/next.config.ts'
+      - 'apps/web/lib/server/hosting.ts'
+      - 'apps/web/lib/security/bot-protection.ts'
+      - '.github/workflows/web-container-drill.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-container-drill-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boot-outside-the-platform:
+    name: Boot the web image with no platform services
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: agiworkforce_drill
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: changeme
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DRILL_DATABASE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_drill
+      DRILL_APP_ORIGIN: http://127.0.0.1:3000
+      DRILL_IMAGE: agiworkforce-web-drill
+      DRILL_CONTAINER: agiworkforce-web-drill
+      # The same public, non-routable clerk-ci.invalid fixture the packaging and
+      # a11y jobs use. A pk_test_ key names a Clerk development instance, which
+      # answers any page that calls auth() with a handshake redirect to a host
+      # that does not resolve; a live-format key reads cookies directly, so a
+      # request with no cookies is simply signed out.
+      DRILL_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply canonical Postgres migrations
+        env:
+          AGI_DATABASE_URL: ${{ env.DRILL_DATABASE_URL }}
+        run: pnpm db:migrate -- apply --target ci
+
+      # --network=host so the build reaches the postgres service the same way
+      # the repository's own web build job does, and so no database credential
+      # is baked into a layer of the runtime image.
+      - name: Build the web image
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          set -euo pipefail
+          docker build \
+            --network=host \
+            --file apps/web/Dockerfile \
+            --tag "$DRILL_IMAGE" \
+            --build-arg AGI_RELEASE_SHA="$GITHUB_SHA" \
+            --build-arg DATABASE_URL="$DRILL_DATABASE_URL" \
+            --build-arg NEXT_PUBLIC_APP_URL="$DRILL_APP_ORIGIN" \
+            --build-arg NEXT_PUBLIC_API_URL="$DRILL_APP_ORIGIN" \
+            --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$DRILL_CLERK_PUBLISHABLE_KEY" \
+            --build-arg NEXT_PUBLIC_AGI_BOT_PROTECTION=off \
+            .
+
+      # Every platform service is replaced by an in-process or containerised
+      # substitute: no key-value service, no object store, no bot-protection
+      # provider, and the durable workflow runtime on its local world. The
+      # deployment environment is named through the neutral env var, which is
+      # what keeps the rate limiter's production Redis requirement from firing
+      # on a single-instance drill that has no Redis by design.
+      - name: Start the container
+        run: |
+          set -euo pipefail
+          docker run --detach --name "$DRILL_CONTAINER" \
+            --network=host \
+            --env NODE_ENV=production \
+            --env PORT=3000 \
+            --env AGI_DEPLOY_ENV=preview \
+            --env AGI_DEPLOY_REGION=drill \
+            --env AGI_ALLOW_INVALID_ENV=1 \
+            --env AGI_BOT_PROTECTION=off \
+            --env AGI_KV_PROVIDER=memory \
+            --env AGI_DATABASE_PROVIDER=postgres \
+            --env AGI_STORAGE_PROVIDER=memory \
+            --env DATABASE_URL="$DRILL_DATABASE_URL" \
+            --env AGI_DATABASE_URL="$DRILL_DATABASE_URL" \
+            --env NEXT_PUBLIC_APP_URL="$DRILL_APP_ORIGIN" \
+            --env NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$DRILL_CLERK_PUBLISHABLE_KEY" \
+            --env CLERK_SECRET_KEY=drill-clerk-secret-key \
+            --env CLERK_AUTHORIZED_PARTIES="$DRILL_APP_ORIGIN" \
+            "$DRILL_IMAGE"
+
+      - name: Wait for the container to answer
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            if [ "$(docker inspect -f '{{.State.Running}}' "$DRILL_CONTAINER")" != "true" ]; then
+              echo "Container exited before it became ready"
+              exit 1
+            fi
+            if curl -fsS "$DRILL_APP_ORIGIN/api/health" > /dev/null 2>&1; then
+              echo "Container answered after $((attempt * 2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container never answered on $DRILL_APP_ORIGIN"
+          exit 1
+
+      - name: Assert the portability contract
+        run: |
+          set -euo pipefail
+          failures=0
+
+          assert_status() {
+            label="$1"; expected="$2"; shift 2
+            actual="$(curl -s -o /dev/null -w '%{http_code}' "$@")"
+            if [ "$actual" = "$expected" ]; then
+              echo "ok: $label answered $actual"
+            else
+              echo "FAIL: $label answered $actual, expected $expected"
+              failures=$((failures + 1))
+            fi
+          }
+
+          assert_status "health route" 200 "$DRILL_APP_ORIGIN/api/health"
+          assert_status "marketing home" 200 "$DRILL_APP_ORIGIN/"
+          assert_status "protected route" 307 "$DRILL_APP_ORIGIN/settings"
+
+          location="$(curl -s -o /dev/null -w '%{redirect_url}' "$DRILL_APP_ORIGIN/settings")"
+          case "$location" in
+            *"/login"*) echo "ok: protected route redirected to $location" ;;
+            *)
+              echo "FAIL: protected route redirected to '$location', expected the login page"
+              failures=$((failures + 1))
+              ;;
+          esac
+
+          assert_status "unauthenticated chat completion" 401 \
+            -X POST "$DRILL_APP_ORIGIN/api/llm/v1/chat/completions" \
+            -H 'content-type: application/json' \
+            --data '{"messages":[{"role":"user","content":"drill"}]}'
+
+          version="$(curl -fsS "$DRILL_APP_ORIGIN/api/version")"
+          echo "version route reported: $version"
+          case "$version" in
+            *"\"environment\":\"preview\""*) echo "ok: neutral deployment environment resolved" ;;
+            *)
+              echo "FAIL: version route did not resolve the neutral deployment environment"
+              failures=$((failures + 1))
+              ;;
+          esac
+
+          if [ "$failures" -gt 0 ]; then
+            echo "$failures portability assertion(s) failed"
+            exit 1
+          fi
+
+      - name: Report the container logs
+        if: always()
+        run: docker logs "$DRILL_CONTAINER" 2>&1 | tail -300 || true
+
+      - name: Stop the container
+        if: always()
+        run: docker rm --force "$DRILL_CONTAINER" || true
