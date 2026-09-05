@@ -39,6 +39,13 @@ const vendorAdapterOwnership = [
     packages: ['@upstash/redis', '@upstash/ratelimit'],
     owner: 'packages/platform/key-value/src/adapters/upstash.ts',
     port: '@agiworkforce/key-value',
+    alsoAllowed: [],
+  },
+  {
+    packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+    owner: 'packages/platform/object-storage/src/adapters/s3.ts',
+    port: '@agiworkforce/object-storage',
+    alsoAllowed: ['packages/platform/object-storage/src/__tests__/fake-s3-endpoint.ts'],
   },
 ];
 
@@ -265,7 +272,7 @@ for (const scanRoot of scanRoots) {
         ) {
           continue;
         }
-        if (rel === ownership.owner) continue;
+        if (rel === ownership.owner || ownership.alsoAllowed.includes(rel)) continue;
         errors.push(
           `${rel} imports ${specifier} directly; reach it through ${ownership.port}, whose adapter in ${ownership.owner} owns that SDK.`,
         );
