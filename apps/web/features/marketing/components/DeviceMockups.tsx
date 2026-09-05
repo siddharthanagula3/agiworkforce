@@ -1,3 +1,5 @@
+import './legacy-landing.css';
+import './motion/motion.css';
 import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
