@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { formatRelativeTime } from '@shared/utils/format';
 import { ScheduleCard } from './ScheduleCard';
 import type { ScheduleHistoryState } from './ScheduleRunHistory';
 import type { ScheduleTask } from '../types';
@@ -56,6 +57,9 @@ function renderCard(schedule: ScheduleTask) {
       onToggleHistory={vi.fn()}
       onRetryHistory={vi.fn()}
       onLoadMoreHistory={vi.fn()}
+      onShare={vi.fn()}
+      onOpenNotificationSettings={vi.fn()}
+      onViewResult={vi.fn()}
     />,
   );
 }
@@ -87,5 +91,29 @@ describe('ScheduleCard timing', () => {
 
     const timing = screen.getByText('Every 1 hour');
     expect(timing).not.toHaveAttribute('title');
+  });
+});
+
+describe('ScheduleCard summary line (slice E item 6)', () => {
+  it('shows the next run as relative time under the title, not the absolute date', () => {
+    renderCard(baseSchedule);
+
+    const expected = `Next run ${formatRelativeTime(baseSchedule.nextExecutionAt as string)}`;
+    expect(screen.getByText(expected)).toBeInTheDocument();
+    expect(screen.getByText('Next Run').nextElementSibling).toHaveTextContent(/2026/);
+  });
+
+  it('shows Paused instead of a relative time when disabled', () => {
+    renderCard({ ...baseSchedule, isEnabled: false });
+
+    expect(screen.getAllByText('Paused')).toHaveLength(2);
+    expect(screen.queryByText(/^Next run /)).toBeNull();
+  });
+
+  it('renders no summary line when enabled with no next run scheduled', () => {
+    renderCard({ ...baseSchedule, nextExecutionAt: null });
+
+    expect(screen.queryByText(/^Next run /)).toBeNull();
+    expect(screen.queryByText('Paused')).toBeNull();
   });
 });
