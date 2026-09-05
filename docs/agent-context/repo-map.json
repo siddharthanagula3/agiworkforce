@@ -932,6 +932,20 @@
       "evidence": ["packages/platform/key-value/src/factory.ts", "apps/web/lib/server/key-value.ts"]
     },
     {
+      "path": "packages/platform/object-storage",
+      "kind": "package",
+      "canonicalOwner": "Backend and data",
+      "consumers": ["apps/web"],
+      "deployability": "server-library",
+      "trustBoundary": "bucket bytes behind the objectstore port",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/object-storage/src/factory.ts",
+        "apps/web/lib/server/object-storage-runtime.ts"
+      ]
+    },
+    {
       "path": "packages/platform/local-llm",
       "kind": "package",
       "canonicalOwner": "Mobile platform",
