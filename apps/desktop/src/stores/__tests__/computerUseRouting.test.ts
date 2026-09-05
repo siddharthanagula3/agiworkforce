@@ -44,20 +44,89 @@ describe('computer-use routing and approval records', () => {
     useComputerUseStore.getState().reset();
   });
 
-  it('records which tier took the action and why the earlier tiers declined', () => {
+  it('records which tier took the action, the driver that ran it, and why the earlier tiers declined', () => {
     emit('computer_use:action_routed', {
       sessionId: 'session-1',
       decision: {
         selected: 'ui',
-        call: { tier: 'ui', tool: 'ui_click', parameters: {} },
+        driver: 'macos_accessibility',
+        call: {
+          tier: 'ui',
+          driver: 'macos_accessibility',
+          tool: 'ui_click',
+          parameters: {},
+        },
         declined: [{ tier: 'api', decline: { decline: 'out_of_scope' } }],
       },
     });
 
     const routing = useComputerUseStore.getState().lastRouting;
     expect(routing?.selected).toBe('ui');
+    expect(routing?.driver).toBe('macos_accessibility');
     expect(routing?.tool).toBe('ui_click');
     expect(routing?.declined).toEqual([{ tier: 'api', decline: { decline: 'out_of_scope' } }]);
+  });
+
+  it('records a page target the dom tier drove through the devtools protocol', () => {
+    emit('computer_use:action_routed', {
+      sessionId: 'session-4',
+      decision: {
+        selected: 'browser',
+        driver: 'chrome_devtools_protocol',
+        call: {
+          tier: 'browser',
+          driver: 'chrome_devtools_protocol',
+          tool: 'browser_click',
+          parameters: { selector: '#send', tab_id: 'tab-1' },
+        },
+        declined: [
+          { tier: 'api', decline: { decline: 'out_of_scope' } },
+          {
+            tier: 'ui',
+            decline: {
+              decline: 'platform_unsupported',
+              platform: 'linux',
+              capability: null,
+            },
+          },
+        ],
+      },
+    });
+
+    const routing = useComputerUseStore.getState().lastRouting;
+    expect(routing?.selected).toBe('browser');
+    expect(routing?.driver).toBe('chrome_devtools_protocol');
+    expect(routing?.tool).toBe('browser_click');
+    expect(routing?.declined[1]?.decline).toEqual({
+      decline: 'platform_unsupported',
+      platform: 'linux',
+      capability: null,
+    });
+  });
+
+  it('records a tie the router refused to break', () => {
+    emit('computer_use:action_routed', {
+      sessionId: 'session-5',
+      decision: {
+        selected: 'visual',
+        driver: 'visual_loop',
+        call: null,
+        declined: [
+          {
+            tier: 'ui',
+            decline: { decline: 'target_ambiguous', query: 'Send', candidates: 2 },
+          },
+        ],
+      },
+    });
+
+    const routing = useComputerUseStore.getState().lastRouting;
+    expect(routing?.driver).toBe('visual_loop');
+    expect(routing?.declined[0]?.decline).toEqual({
+      decline: 'target_ambiguous',
+      query: 'Send',
+      candidates: 2,
+    });
   });
 
   it('records a fallthrough to the visual loop with every decline that led there', () => {
@@ -65,6 +134,7 @@ describe('computer-use routing and approval records', () => {
       sessionId: 'session-2',
       decision: {
         selected: 'visual',
+        driver: 'visual_loop',
         call: null,
         declined: [
           { tier: 'api', decline: { decline: 'out_of_scope' } },
@@ -76,6 +146,7 @@ describe('computer-use routing and approval records', () => {
 
     const routing = useComputerUseStore.getState().lastRouting;
     expect(routing?.selected).toBe('visual');
+    expect(routing?.driver).toBe('visual_loop');
     expect(routing?.tool).toBeNull();
     expect(routing?.declined.map((assessment) => assessment.tier)).toEqual([
       'api',

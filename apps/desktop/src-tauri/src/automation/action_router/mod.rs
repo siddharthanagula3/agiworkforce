@@ -6,8 +6,11 @@
 //! is skipped only for a reason the decision records, and the visual loop is
 //! reached only after every cheaper tier has said no.
 
+pub mod accessibility;
 pub mod dispatch;
+pub mod dom;
 pub mod intent;
+pub mod matching;
 pub mod tiers;
 
 use anyhow::Result;
@@ -15,12 +18,14 @@ use async_trait::async_trait;
 use serde::Serialize;
 use std::sync::Arc;
 
-pub use dispatch::{DispatchError, TierDispatch};
-pub use intent::{ActionIntent, IntentOperation};
-pub use tiers::{
-    AccessibilityProbe, ApiTier, BrowserTier, BrowserTransportProbe, DesktopBrowserTransportProbe,
-    NativeAccessibilityProbe, UiTier,
+pub use accessibility::{
+    AccessibilityCapability, AccessibilityProbe, ElementTarget, NativeAccessibilityProbe,
 };
+pub use dispatch::{DispatchError, TierDispatch};
+pub use dom::{BrowserTransportProbe, PageSnapshot};
+pub use intent::{ActionIntent, IntentOperation, TargetRole};
+pub use matching::Match;
+pub use tiers::{ApiTier, BrowserTier, DesktopBrowserTransportProbe, UiTier};
 
 use crate::automation::AutomationService;
 
@@ -28,6 +33,7 @@ use crate::automation::AutomationService;
 /// tier list, so no configuration can leave an action with nowhere to go and
 /// none can put vision ahead of a cheaper driver.
 pub const FALLBACK_TIER: ExecutorTier = ExecutorTier::Visual;
+pub const FALLBACK_DRIVER: &str = "visual_loop";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -45,18 +51,28 @@ pub enum TierDecline {
     OutOfScope,
     /// The utterance carries more operations than one existing tool call.
     MultipleOperations { clauses: usize },
-    /// The tier's driver is a permanent stub on this operating system.
-    PlatformUnsupported { platform: String },
+    /// The tier's driver cannot do this on this operating system. `capability`
+    /// names the one verb when the rest of the tier still works there.
+    PlatformUnsupported {
+        platform: String,
+        capability: Option<String>,
+    },
     /// The driver exists but could not be reached on this run.
     DriverUnavailable { detail: String },
     /// The driver was reached and the target is not there.
     TargetNotFound { query: String },
+    /// The driver was reached and more than one target answers to the name, so
+    /// acting would mean picking one the user did not distinguish.
+    TargetAmbiguous { query: String, candidates: usize },
+    /// The destination is one the egress policy refuses.
+    DestinationBlocked { detail: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutedCall {
     pub tier: ExecutorTier,
+    pub driver: String,
     pub tool: String,
     pub parameters: serde_json::Value,
 }
@@ -73,6 +89,7 @@ pub struct TierAssessment {
 pub struct RoutingDecision {
     pub intent: ActionIntent,
     pub selected: ExecutorTier,
+    pub driver: String,
     pub call: Option<RoutedCall>,
     pub declined: Vec<TierAssessment>,
 }
@@ -122,6 +139,7 @@ impl ActionRouter {
                     return RoutingDecision {
                         intent,
                         selected: tier.tier(),
+                        driver: call.driver.clone(),
                         call: Some(call),
                         declined,
                     }
@@ -136,6 +154,7 @@ impl ActionRouter {
         RoutingDecision {
             intent,
             selected: FALLBACK_TIER,
+            driver: String::from(FALLBACK_DRIVER),
             call: None,
             declined,
         }
@@ -145,6 +164,8 @@ impl ActionRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_DRIVER: &str = "test_driver";
 
     struct FixedTier {
         tier: ExecutorTier,
@@ -168,6 +189,7 @@ mod tests {
             verdict: || {
                 Ok(RoutedCall {
                     tier: ExecutorTier::Api,
+                    driver: String::from(TEST_DRIVER),
                     tool: String::from("api_call"),
                     parameters: serde_json::json!({}),
                 })
@@ -209,6 +231,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_decision_names_the_driver_that_handled_the_action() {
+        let router = ActionRouter::new(vec![accepting(ExecutorTier::Ui)]);
+
+        let decision = router.route(intent()).await;
+
+        assert_eq!(decision.driver, TEST_DRIVER);
+        assert_eq!(
+            decision.call.as_ref().map(|call| call.driver.as_str()),
+            Some(TEST_DRIVER)
+        );
+    }
+
+    #[tokio::test]
     async fn an_earlier_tier_is_never_skipped_for_a_later_one() {
         let router = ActionRouter::new(vec![
             accepting(ExecutorTier::Api),
@@ -233,6 +268,7 @@ mod tests {
 
         assert!(decision.is_visual());
         assert_eq!(decision.selected, ExecutorTier::Visual);
+        assert_eq!(decision.driver, FALLBACK_DRIVER);
         assert!(decision.call.is_none());
         assert_eq!(
             decision
@@ -257,8 +293,9 @@ mod tests {
         let router = ActionRouter::new(vec![Arc::new(FixedTier {
             tier: ExecutorTier::Ui,
             verdict: || {
-                Err(TierDecline::TargetNotFound {
+                Err(TierDecline::TargetAmbiguous {
                     query: String::from("Send"),
+                    candidates: 2,
                 })
             },
         })]);
@@ -270,8 +307,26 @@ mod tests {
             recorded,
             serde_json::json!([{
                 "tier": "ui",
-                "decline": { "decline": "target_not_found", "query": "Send" }
+                "decline": { "decline": "target_ambiguous", "query": "Send", "candidates": 2 }
             }])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_platform_decline_names_the_capability_it_lacks() {
+        let recorded = serde_json::to_value(TierDecline::PlatformUnsupported {
+            platform: String::from("linux"),
+            capability: None,
+        })
+        .expect("serialize");
+
+        assert_eq!(
+            recorded,
+            serde_json::json!({
+                "decline": "platform_unsupported",
+                "platform": "linux",
+                "capability": serde_json::Value::Null
+            })
         );
     }
 
