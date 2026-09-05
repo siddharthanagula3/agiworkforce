@@ -7,11 +7,18 @@ import {
   PROBE_MAX_OUTPUT_TOKENS,
   PROBE_OUTCOME,
   PROBE_PROMPT,
+  PROBE_TOOL,
+  PROBE_TOOL_CHOICE,
+  PROBE_TOOL_MAX_OUTPUT_TOKENS,
+  PROBE_TOOL_NAME,
+  PROBE_TOOL_PROMPT,
   PROBES_JSON,
   REPO_ROOT,
+  TOOL_PROBE_OUTCOME,
   advancedStages,
   answeringModelKeys,
   buildProbePlan,
+  routesNotHonouringTools,
   runProbes,
   silentPromotedModels,
 } from './probe-models.mjs';
@@ -217,6 +224,88 @@ test('an answered probe advances a registered model, and nothing else', async ()
     [['alpha', LIFECYCLE_STAGE.registered, LIFECYCLE_STAGE.probed]],
   );
   assert.match(advanced[0].source, /probes\.json#alpha$/);
+});
+
+function* callsTheTool() {
+  yield { type: 'tool-use-start', toolUseId: 'probe-1', name: PROBE_TOOL_NAME };
+  yield { type: 'stop', reason: 'tool_use' };
+}
+
+function toolProbeBehaviour(onTools) {
+  return function* behaviour(request) {
+    if (!request.tools) {
+      yield* answers();
+      return;
+    }
+    yield* onTools();
+  };
+}
+
+test('the tool probe is off by default and carries no tool', async () => {
+  const { adapters, requests } = fakeAdapters(answers);
+  const probed = await runProbes(fakeRegistry(), {
+    adapters,
+    env: { [CREDENTIAL_ENV]: 'a-key' },
+  });
+  assert.equal(requests.length, 2);
+  for (const request of requests) assert.equal(request.tools, undefined);
+  assert.equal(probed.probes.alpha.toolOutcome, undefined);
+});
+
+test('the tool probe sends one trivial tool and records that it was honoured', async () => {
+  const { adapters, requests } = fakeAdapters(toolProbeBehaviour(callsTheTool));
+  const probed = await runProbes(fakeRegistry(), {
+    adapters,
+    env: { [CREDENTIAL_ENV]: 'a-key' },
+    tools: true,
+  });
+
+  const toolRequests = requests.filter((request) => request.tools);
+  assert.equal(toolRequests.length, 2);
+  for (const request of toolRequests) {
+    assert.deepEqual(request.tools, [PROBE_TOOL]);
+    assert.equal(request.toolChoice, PROBE_TOOL_CHOICE);
+    assert.equal(request.maxOutputTokens, PROBE_TOOL_MAX_OUTPUT_TOKENS);
+    assert.deepEqual(request.messages, [{ role: 'user', content: PROBE_TOOL_PROMPT }]);
+  }
+  assert.equal(probed.probes.alpha.toolOutcome, TOOL_PROBE_OUTCOME.honoured);
+  assert.equal(probed.probes.alpha.outcome, PROBE_OUTCOME.answered);
+  assert.deepEqual(routesNotHonouringTools(probed), []);
+});
+
+test('a route that answers without calling the tool is reported per route', async () => {
+  const { adapters } = fakeAdapters(toolProbeBehaviour(answers));
+  const probed = await runProbes(fakeRegistry(), {
+    adapters,
+    env: { [CREDENTIAL_ENV]: 'a-key' },
+    tools: true,
+  });
+  assert.equal(probed.probes.alpha.toolOutcome, TOOL_PROBE_OUTCOME.notHonoured);
+  assert.deepEqual(routesNotHonouringTools(probed).sort(), ['fake/alpha', 'fake/beta']);
+});
+
+test('a tool probe error never changes the liveness verdict', async () => {
+  const { adapters } = fakeAdapters(toolProbeBehaviour(refuses));
+  const probed = await runProbes(fakeRegistry(), {
+    adapters,
+    env: { [CREDENTIAL_ENV]: 'a-key' },
+    tools: true,
+  });
+  assert.equal(probed.probes.beta.outcome, PROBE_OUTCOME.answered);
+  assert.equal(probed.probes.beta.toolOutcome, TOOL_PROBE_OUTCOME.failed);
+  assert.deepEqual(silentPromotedModels(fakeRegistry(), probed), []);
+  assert.deepEqual([...answeringModelKeys(probed)].sort(), ['alpha', 'beta']);
+});
+
+test('a model that never answered is not asked about tools', async () => {
+  const { adapters, requests } = fakeAdapters(refuses);
+  const probed = await runProbes(fakeRegistry(), {
+    adapters,
+    env: { [CREDENTIAL_ENV]: 'a-key' },
+    tools: true,
+  });
+  assert.equal(requests.filter((request) => request.tools).length, 0);
+  assert.equal(probed.probes.alpha.toolOutcome, TOOL_PROBE_OUTCOME.skipped);
 });
 
 test('the committed probe file covers exactly the models the plan names', () => {
