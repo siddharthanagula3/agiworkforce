@@ -111,6 +111,10 @@ describe('AgentActivityTimeline', () => {
 
     const trigger = screen.getByRole('button', { name: /show agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.textContent).toContain('Working');
+    expect(screen.queryByText('Starting AGI Work')).toBeNull();
+
+    fireEvent.click(trigger);
     expect(screen.getAllByText('Starting AGI Work')).toHaveLength(1);
   });
 
@@ -344,6 +348,237 @@ describe('AgentActivityTimeline', () => {
 
     expect(screen.getByText('Progress step 1')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /show .* earlier steps/i })).toBeNull();
+  });
+
+  it('shows a generic Working label for the first second after send', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_500);
+    try {
+      const starting = activity({
+        startedAtMs: 1_000,
+        entries: [
+          {
+            kind: 'tool',
+            id: 'tool:search-1',
+            toolCallId: 'search-1',
+            name: 'web_search',
+            category: 'web-search',
+            summary: 'Searching official sources',
+            status: 'running',
+            startedAtMs: 1_100,
+          },
+        ],
+      });
+
+      render(<AgentActivityTimeline activity={starting} />);
+      const trigger = screen.getByRole('button', { name: /agent activity/i });
+      expect(trigger.textContent).toContain('Working');
+      expect(trigger.textContent).not.toContain('Searching');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds a phase label for about 400ms before replacing it with the next one', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5_000);
+    try {
+      const writing = activity({
+        startedAtMs: 1_000,
+        entries: [
+          {
+            kind: 'progress',
+            id: 'progress:generation:1',
+            progressId: 'generation',
+            summary: 'Writing response',
+            status: 'running',
+            startedAtMs: 4_000,
+          },
+        ],
+      });
+      const { rerender } = render(<AgentActivityTimeline activity={writing} />);
+      const trigger = () => screen.getByRole('button', { name: /agent activity/i });
+      expect(trigger().textContent).toContain('Writing response');
+
+      const searching = activity({
+        startedAtMs: 1_000,
+        entries: [
+          {
+            kind: 'tool',
+            id: 'tool:search-1',
+            toolCallId: 'search-1',
+            name: 'web_search',
+            category: 'web-search',
+            summary: 'Searching the web',
+            status: 'running',
+            startedAtMs: 5_000,
+          },
+        ],
+      });
+      rerender(<AgentActivityTimeline activity={searching} />);
+      expect(trigger().textContent).toContain('Writing response');
+
+      act(() => {
+        vi.advanceTimersByTime(399);
+      });
+      expect(trigger().textContent).toContain('Writing response');
+
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      expect(trigger().textContent).toContain('Searching the web');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('collapses a completed run with no tools to a worked-for duration', () => {
+    const completed = activity({
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 6_000,
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Writing response',
+          status: 'completed',
+          startedAtMs: 1_200,
+          completedAtMs: 6_000,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={completed} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('Worked for 5s');
+  });
+
+  it('folds the local connecting placeholder into the generic label once the window closes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5_000);
+    try {
+      const connecting = activity({
+        lastSequence: -1,
+        startedAtMs: 1_000,
+        entries: [
+          {
+            kind: 'progress',
+            id: 'progress:local-starting',
+            progressId: 'local-starting',
+            summary: 'Connecting to a model',
+            status: 'running',
+            startedAtMs: 1_000,
+          },
+        ],
+      });
+
+      render(<AgentActivityTimeline activity={connecting} />);
+      const trigger = screen.getByRole('button', { name: /agent activity/i });
+      expect(trigger.textContent).toContain('Working');
+      expect(trigger.textContent).not.toContain('Connecting');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('renders nothing for a completed run whose only steps were local placeholders', () => {
+    const completed = activity({
+      lastSequence: -1,
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 3_000,
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:local-starting',
+          progressId: 'local-starting',
+          summary: 'Response ready',
+          status: 'completed',
+          startedAtMs: 1_000,
+          completedAtMs: 3_000,
+        },
+      ],
+    });
+
+    const { container } = render(<AgentActivityTimeline activity={completed} />);
+    expect(container.textContent).toBe('');
+  });
+
+  it('reports minutes and seconds for a long completed run and never zero seconds', () => {
+    const long = activity({
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 1_000 + 75_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:shell-1',
+          toolCallId: 'shell-1',
+          name: 'shell',
+          category: 'shell',
+          summary: 'Ran a command',
+          status: 'completed',
+          startedAtMs: 1_100,
+          completedAtMs: 70_000,
+        },
+      ],
+    });
+    const { unmount } = render(<AgentActivityTimeline activity={long} />);
+    expect(screen.getByRole('button', { name: /show agent activity/i }).textContent).toContain(
+      'Worked for 1m 15s',
+    );
+    unmount();
+
+    const instant = activity({
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 1_200,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:shell-2',
+          toolCallId: 'shell-2',
+          name: 'shell',
+          category: 'shell',
+          summary: 'Ran a command',
+          status: 'completed',
+          startedAtMs: 1_050,
+          completedAtMs: 1_150,
+        },
+      ],
+    });
+    render(<AgentActivityTimeline activity={instant} />);
+    expect(screen.getByRole('button', { name: /show agent activity/i }).textContent).toContain(
+      'Worked for 1s',
+    );
+  });
+
+  it('collapses a completed run with non-search tools to a duration, not the last tool summary', () => {
+    const completed = activity({
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 4_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:shell-1',
+          toolCallId: 'shell-1',
+          name: 'shell',
+          category: 'shell',
+          summary: 'Ran a command',
+          status: 'completed',
+          startedAtMs: 1_100,
+          completedAtMs: 3_500,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={completed} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('Worked for 3s');
+    expect(trigger.textContent).not.toContain('Ran a command');
   });
 });
 

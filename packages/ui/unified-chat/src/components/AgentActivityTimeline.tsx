@@ -16,6 +16,7 @@ import {
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
   isGenerationProgressEntry,
+  isLocalPlaceholderActivityEntry,
   REASONING_PROGRESS_SUMMARY,
   type AgentActivityEntry,
   type AgentActivityState,
@@ -32,6 +33,11 @@ import { ConnectorConnectCard } from './ConnectorConnectCard';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
+const GENERIC_START_LABEL = 'Working';
+const GENERIC_START_WINDOW_MS = 1_000;
+const LABEL_HOLD_MS = 400;
+const SECONDS_PER_MINUTE = 60;
+const MIN_REPORTED_DURATION_SECONDS = 1;
 
 export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
@@ -69,6 +75,16 @@ const WEB_SEARCH_COMPLETED_SUMMARY = 'Searched the web';
 const WEB_SEARCH_CANCELLED_SUMMARY = 'Search stopped';
 const WEB_SEARCH_IN_PROGRESS_PREFIX = 'Searching';
 
+function sourceCountLabel(sourceCount: number): string {
+  return `${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+}
+
+function webSearchCompletedLabel(sourceCount: number): string {
+  return sourceCount > 0
+    ? `${WEB_SEARCH_COMPLETED_SUMMARY} · ${sourceCountLabel(sourceCount)}`
+    : WEB_SEARCH_COMPLETED_SUMMARY;
+}
+
 function finalSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
@@ -77,10 +93,7 @@ function finalSummary(activity: AgentActivityState): string | undefined {
       if (entry.status === 'cancelled') return WEB_SEARCH_CANCELLED_SUMMARY;
       if (entry.status !== 'failed') {
         if (!entry.summary.startsWith(WEB_SEARCH_IN_PROGRESS_PREFIX)) return entry.summary;
-        const sourceCount = entry.sources?.length ?? 0;
-        return sourceCount > 0
-          ? `${WEB_SEARCH_COMPLETED_SUMMARY} · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
-          : WEB_SEARCH_COMPLETED_SUMMARY;
+        return webSearchCompletedLabel(entry.sources?.length ?? 0);
       }
     }
     return entry.summary;
@@ -101,10 +114,11 @@ function labelForActivity(activity: AgentActivityState, nowMs: number): string |
       (entry.kind === 'tool' || entry.kind === 'progress') &&
       (entry.status === 'running' || entry.status === 'awaiting-approval')
     ) {
+      if (isLocalPlaceholderActivityEntry(entry)) return undefined;
       if (entry.kind === 'tool' && entry.category === 'web-search') {
         const sourceCount = entry.sources?.length ?? 0;
         if (sourceCount > 0) {
-          return `Reading ${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+          return `Reading ${sourceCountLabel(sourceCount)}`;
         }
         return entry.summary || 'Searching the web';
       }
@@ -117,6 +131,42 @@ function labelForActivity(activity: AgentActivityState, nowMs: number): string |
   return undefined;
 }
 
+function isSearchOnlyRun(entries: readonly AgentActivityEntry[]): boolean {
+  const toolEntries = entries.filter(
+    (entry): entry is AgentActivityToolEntry => entry.kind === 'tool',
+  );
+  return toolEntries.length > 0 && toolEntries.every((entry) => entry.category === 'web-search');
+}
+
+function totalSearchSources(entries: readonly AgentActivityEntry[]): number {
+  return entries.reduce((total, entry) => {
+    if (entry.kind !== 'tool' || entry.category !== 'web-search') return total;
+    return total + (entry.sources?.length ?? 0);
+  }, 0);
+}
+
+function formatRunDuration(activity: AgentActivityState): string {
+  const endedAtMs = activity.completedAtMs ?? activity.updatedAtMs;
+  const totalSeconds = Math.max(
+    MIN_REPORTED_DURATION_SECONDS,
+    Math.round((endedAtMs - activity.startedAtMs) / 1000),
+  );
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function hasReportableWork(entries: readonly AgentActivityEntry[]): boolean {
+  return entries.some((entry) => !isLocalPlaceholderActivityEntry(entry));
+}
+
+function collapsedCompletionSummary(activity: AgentActivityState): string {
+  if (isSearchOnlyRun(activity.entries)) {
+    return webSearchCompletedLabel(totalSearchSources(activity.entries));
+  }
+  return `Worked for ${formatRunDuration(activity)}`;
+}
+
 export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: number): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
@@ -126,11 +176,14 @@ export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: n
   if (activity.status === 'failed') return finalSummary(activity) ?? 'Failed';
   if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
   if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
-  if (activity.status === 'completed') return finalSummary(activity) ?? 'Done';
-  return labelForActivity(activity, nowMs) ?? 'Working…';
+  if (activity.status === 'completed') return collapsedCompletionSummary(activity);
+  const liveLabel = labelForActivity(activity, nowMs);
+  const withinGenericWindow = nowMs - activity.startedAtMs < GENERIC_START_WINDOW_MS;
+  if (withinGenericWindow || liveLabel === undefined) return GENERIC_START_LABEL;
+  return liveLabel;
 }
 
-function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
+function buildAgentActivityAnnouncement(activity: AgentActivityState, summary: string): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
     return active ? `Approval needed: ${active}` : 'Approval needed';
@@ -140,8 +193,7 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
   if (activity.status === 'partial') return 'Agent activity finished with errors';
   if (activity.status === 'cancelled') return 'Agent activity cancelled';
   if (activity.status === 'completed') return 'Agent activity completed';
-  const running = labelForActivity(activity, Date.now());
-  return running ? `Agent working: ${running}` : 'Agent working';
+  return `Agent working: ${summary}`;
 }
 
 function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
@@ -461,6 +513,49 @@ function StaticRow({
   );
 }
 
+function useGenericStartWindowExpiry(
+  startedAtMs: number,
+  status: AgentActivityState['status'],
+  setNowMs: (nowMs: number) => void,
+): void {
+  useEffect(() => {
+    if (status !== 'running') return;
+    const remaining = GENERIC_START_WINDOW_MS - (Date.now() - startedAtMs);
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setNowMs(Date.now()), remaining);
+    return () => clearTimeout(timer);
+  }, [startedAtMs, status, setNowMs]);
+}
+
+function useHeldRunningSummary(
+  turnId: string,
+  isRunningPhase: boolean,
+  bypassHold: boolean,
+  rawSummary: string,
+): string {
+  const [committed, setCommitted] = useState(rawSummary);
+  const committedRef = useRef(rawSummary);
+  const turnIdRef = useRef(turnId);
+
+  useEffect(() => {
+    const commit = () => {
+      committedRef.current = rawSummary;
+      setCommitted(rawSummary);
+    };
+    const turnChanged = turnIdRef.current !== turnId;
+    turnIdRef.current = turnId;
+    if (turnChanged || !isRunningPhase || bypassHold) {
+      commit();
+      return;
+    }
+    if (rawSummary === committedRef.current) return;
+    const timer = setTimeout(commit, LABEL_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [turnId, rawSummary, isRunningPhase, bypassHold]);
+
+  return isRunningPhase && !bypassHold ? committed : rawSummary;
+}
+
 function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
   if (status === 'running') {
     return (
@@ -540,15 +635,22 @@ export function AgentActivityTimeline({
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isReasoning]);
+  useGenericStartWindowExpiry(activity.startedAtMs, activity.status, setNowMs);
 
-  const summary = useMemo(() => buildAgentActivitySummary(activity, nowMs), [activity, nowMs]);
-  const announcement = buildAgentActivityAnnouncement(activity);
+  const rawSummary = useMemo(() => buildAgentActivitySummary(activity, nowMs), [activity, nowMs]);
+  const summary = useHeldRunningSummary(
+    activity.turnId,
+    activity.status === 'running',
+    isReasoning,
+    rawSummary,
+  );
+  const announcement = buildAgentActivityAnnouncement(activity, summary);
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
   const hiddenEntryCount = Math.max(0, activity.entries.length - visibleEntryCount);
   const visibleEntries = activity.entries.slice(hiddenEntryCount);
 
-  if (activity.entries.length === 0 && activity.status === 'completed') return null;
+  if (activity.status === 'completed' && !hasReportableWork(activity.entries)) return null;
 
   return (
     <section className={cn('w-full max-w-3xl', className)} aria-label="Agent activity">
