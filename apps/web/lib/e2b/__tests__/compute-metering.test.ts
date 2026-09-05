@@ -219,6 +219,37 @@ describe('meterSandboxComputeInterval', () => {
   });
 });
 
+describe('compute pricing is read from the registry, not a literal', () => {
+  beforeEach(() => {
+    clearScopedEnv();
+    resetMocks();
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.doUnmock('@agiworkforce/types');
+  });
+
+  it('reflects a different registry rate for the same vCPU count', async () => {
+    vi.doMock('@agiworkforce/types', () => ({
+      getProviderComputePricing: () => ({ unit: 'usd_per_vcpu_second', ratePerUnit: 0.00005 }),
+    }));
+    const mod = await loadModule();
+    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(100);
+  });
+
+  it('is unpriced and logs an error when the registry has no compute-pricing entry', async () => {
+    vi.doMock('@agiworkforce/types', () => ({
+      getProviderComputePricing: () => null,
+    }));
+    const mod = await loadModule();
+    expect(mod.sandboxComputeIsPriceable()).toBe(false);
+    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(0);
+    expect(logger.error).toHaveBeenCalled();
+  });
+});
+
 describe('sandboxComputeCostCents', () => {
   it('charges nothing for a zero, negative or implausibly long interval', async () => {
     const mod = await loadModule();

@@ -6065,6 +6065,15 @@
       }
     }
   },
+  "computePricing": {
+    "e2b": {
+      "unit": "usd_per_vcpu_second",
+      "ratePerUnit": 0.000014,
+      "source": "https://e2b.dev/pricing",
+      "verifiedOn": "2026-09-04",
+      "note": "Uniform across the Hobby and Pro tiers, linear across vCPU counts."
+    }
+  },
   "endpointHosts": {
     "rules": [
       {

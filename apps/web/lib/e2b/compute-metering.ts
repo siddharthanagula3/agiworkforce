@@ -1,23 +1,18 @@
 import 'server-only';
 
+import { getProviderComputePricing } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { CreditService } from '@/lib/services/credit-service';
 
 export const E2B_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
+const E2B_COMPUTE_PROVIDER_ID = 'e2b';
 
 const MICROUSD_PER_CENT = 10_000;
 const USD_TO_MICROUSD = 1_000_000;
 
 const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-/**
- * E2B's published per-vCPU compute rate, USD per second, linear across
- * vCPU counts. Source: https://e2b.dev/pricing, fetched 2026-09-04
- * ($0.000014/vCPU/s, uniform across the Hobby and Pro tiers).
- */
-const E2B_VCPU_USD_PER_SECOND_UNIT = 0.000014;
 
 /** E2B's own default sandbox size when a template does not declare one. */
 const DEFAULT_E2B_VCPU_COUNT = 2;
@@ -40,21 +35,34 @@ function resolveConfiguredOverride(): ConfiguredRate | null {
   return { ok: true, microusdPerSecond: parsed };
 }
 
-function tableMicrousdPerSecond(vcpuCount: number | null | undefined): number {
+function tableRate(vcpuCount: number | null | undefined): ConfiguredRate {
+  const declared = getProviderComputePricing(E2B_COMPUTE_PROVIDER_ID);
+  if (!declared) {
+    logger.error(
+      { provider: E2B_COMPUTE_PROVIDER_ID },
+      '[e2b] no compute-pricing entry declared in the registry; refusing to price sandbox compute',
+    );
+    return { ok: false };
+  }
   const resolvedVcpuCount =
     typeof vcpuCount === 'number' && vcpuCount > 0 ? vcpuCount : DEFAULT_E2B_VCPU_COUNT;
-  return Math.round(resolvedVcpuCount * E2B_VCPU_USD_PER_SECOND_UNIT * USD_TO_MICROUSD);
+  return {
+    ok: true,
+    microusdPerSecond: Math.round(resolvedVcpuCount * declared.ratePerUnit * USD_TO_MICROUSD),
+  };
+}
+
+function resolveRate(vcpuCount: number | null | undefined): ConfiguredRate {
+  return resolveConfiguredOverride() ?? tableRate(vcpuCount);
 }
 
 export function sandboxComputeIsPriceable(): boolean {
-  const override = resolveConfiguredOverride();
-  return override === null || override.ok;
+  return resolveRate(DEFAULT_E2B_VCPU_COUNT).ok;
 }
 
 export function getSandboxComputeMicrousdPerSecond(vcpuCount?: number | null): number {
-  const override = resolveConfiguredOverride();
-  if (override === null) return tableMicrousdPerSecond(vcpuCount);
-  return override.ok ? override.microusdPerSecond : 0;
+  const resolved = resolveRate(vcpuCount);
+  return resolved.ok ? resolved.microusdPerSecond : 0;
 }
 
 function isBillableInterval(elapsedMs: number): boolean {
@@ -86,12 +94,8 @@ export async function meterSandboxComputeInterval(
   if (!isBillableInterval(elapsedMs)) return 0;
 
   const override = resolveConfiguredOverride();
-  const rate =
-    override === null
-      ? tableMicrousdPerSecond(interval.vcpuCount)
-      : override.ok
-        ? override.microusdPerSecond
-        : 0;
+  const resolved = override ?? tableRate(interval.vcpuCount);
+  const rate = resolved.ok ? resolved.microusdPerSecond : 0;
   const costCents = sandboxComputeCostCents(elapsedMs, rate);
   if (costCents <= 0) {
     unbilledMs += elapsedMs;
@@ -102,10 +106,12 @@ export async function meterSandboxComputeInterval(
       elapsedMs,
       unbilledMs,
     };
-    if (override?.ok === false) {
+    if (!resolved.ok) {
       logger.error(
         base,
-        '[e2b] sandbox compute is UNPRICED: the configured rate override is invalid, these seconds bill nothing and move no usage cap',
+        override?.ok === false
+          ? '[e2b] sandbox compute is UNPRICED: the configured rate override is invalid, these seconds bill nothing and move no usage cap'
+          : '[e2b] sandbox compute is UNPRICED: no compute-pricing entry is declared in the registry, these seconds bill nothing and move no usage cap',
       );
     } else {
       logger.warn(
