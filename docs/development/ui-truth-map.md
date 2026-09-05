@@ -81,20 +81,21 @@ routes).
 
 ## Controls verified inside routes (2026-09-05)
 
-| Control                              | Route               | Reads and writes               | Status                         |
-| ------------------------------------ | ------------------- | ------------------------------ | ------------------------------ |
-| Composer send, stop, retry           | /chat               | chat store, completions API    | verified                       |
-| Model trigger and short list         | /chat               | model store, registry, billing | verified                       |
-| Style, Chat and AGI Work toggle      | /chat               | composer state                 | verified                       |
-| Web search toggle                    | /chat               | persistent preference          | verified; notice rule fixed    |
-| Chat dock (In this chat, Sources)    | /chat/[id]          | turn metadata                  | verified                       |
-| Command palette                      | all                 | conversations, actions         | verified                       |
-| Chat row menu                        | sidebar             | conversation actions, projects | verified, 01fd497c7            |
-| Project row and card menus           | sidebar, projects   | project actions                | approved                       |
-| Project icon and colour picker       | /chat/projects/[id] | PUT /api/projects/:id          | approved                       |
-| Schedule row menu                    | /chat/schedules     | schedule actions               | approved                       |
-| Settings sections (16)               | /settings           | preferences, billing, usage    | reviewed; propagation untested |
-| Library viewer, zoom, ask about file | /chat/library       | media assets, starter prompt   | corrections pending            |
+| Control                              | Route               | Reads and writes                                  | Status                                                                  |
+| ------------------------------------ | ------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| Composer send, stop, retry           | /chat               | chat store, completions API                       | verified                                                                |
+| Model trigger and short list         | /chat               | model store, registry, billing                    | verified, 5d4984b06 a984e8777                                           |
+| Model catalogue (All models)         | /chat               | catalogue projection route, favourites preference | verified 2026-09-05, 8770dc62d; locked rows by route evidence and tests |
+| Style, Chat and AGI Work toggle      | /chat               | composer state                                    | verified                                                                |
+| Web search toggle                    | /chat               | persistent preference                             | verified; notice rule fixed                                             |
+| Chat dock (In this chat, Sources)    | /chat/[id]          | turn metadata                                     | verified                                                                |
+| Command palette                      | all                 | conversations, actions                            | verified                                                                |
+| Chat row menu                        | sidebar             | conversation actions, projects                    | verified, 01fd497c7                                                     |
+| Project row and card menus           | sidebar, projects   | project actions                                   | approved                                                                |
+| Project icon and colour picker       | /chat/projects/[id] | PUT /api/projects/:id                             | approved                                                                |
+| Schedule row menu                    | /chat/schedules     | schedule actions                                  | approved                                                                |
+| Settings sections (16)               | /settings           | preferences, billing, usage                       | reviewed; propagation untested                                          |
+| Library viewer, zoom, ask about file | /chat/library       | media assets, starter prompt                      | corrections pending                                                     |
 
 ## Desktop (Electron shell), from the 2026-09-05 reconnaissance
 
