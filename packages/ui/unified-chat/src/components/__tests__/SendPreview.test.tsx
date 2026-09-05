@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { summarizeSendPreview, type SendPreviewPresentation } from '@agiworkforce/types';
@@ -17,14 +16,17 @@ function localPresentation(): SendPreviewPresentation {
 }
 
 describe('SendPreview', () => {
-  it('renders a privacy-positive banner for Local turns', () => {
+  it('renders a privacy-positive banner for Local turns, one line until expanded', () => {
     render(<SendPreview presentation={localPresentation()} />);
     expect(screen.getByText('Stays on this device')).toBeDefined();
     expect(screen.getByText('Local')).toBeDefined();
+    expect(screen.queryByText(/nothing is uploaded/i)).toBeNull();
+
+    fireEvent.click(screen.getByText(/Show details/i));
     expect(screen.getByText(/nothing is uploaded/i)).toBeDefined();
   });
 
-  it('renders the BYOK destination host call-out', () => {
+  it('renders the BYOK destination host call-out behind the disclosure', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
@@ -33,16 +35,22 @@ describe('SendPreview', () => {
     render(<SendPreview presentation={presentation} />);
     expect(screen.getByText('Sent to api.anthropic.com')).toBeDefined();
     expect(screen.getByText('BYOK')).toBeDefined();
+    expect(screen.queryByText(/your API key/i)).toBeNull();
+
+    fireEvent.click(screen.getByText(/Show details/i));
     expect(screen.getByText(/your API key/i)).toBeDefined();
   });
 
-  it('renders the Managed gateway call-out for ManagedNative', () => {
+  it('renders the Managed gateway call-out for ManagedNative behind the disclosure', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'ManagedNative',
     });
     render(<SendPreview presentation={presentation} />);
     expect(screen.getByText('Sent through AGI Managed gateway')).toBeDefined();
     expect(screen.getByText('Managed')).toBeDefined();
+    expect(screen.queryByText(/managed-mode retention/i)).toBeNull();
+
+    fireEvent.click(screen.getByText(/Show details/i));
     expect(screen.getByText(/managed-mode retention/i)).toBeDefined();
   });
 
@@ -76,14 +84,19 @@ describe('SendPreview', () => {
     expect(screen.queryByTestId('send-preview-details')).toBeNull();
   });
 
-  it('omits the expand toggle when there are no extra details to show', () => {
+  it('keeps the disclosure for the banner text but omits the details grid when there is nothing extra', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'Local',
       // No body, attachments, system prompt, context, tools, source-session.
     });
     render(<SendPreview presentation={presentation} />);
-    expect(screen.queryByText(/Show details/i)).toBeNull();
     expect(screen.queryByTestId('send-preview-details')).toBeNull();
+
+    fireEvent.click(screen.getByText(/Show details/i));
+    const details = screen.getByTestId('send-preview-details');
+    expect(details).toBeDefined();
+    expect(screen.getByText(presentation.bannerCopy)).toBeDefined();
+    expect(details.querySelector('dl')).toBeNull();
   });
 
   it('applies different accent classes per provider mode', () => {
