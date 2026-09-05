@@ -875,14 +875,6 @@ interface RoutingLane {
   paretoHead: ReadonlySet<string>;
 }
 
-/**
- * The tier/profile/slot-ordering setup common to every alias-based decision.
- *
- * Extracted so `resolveAutoRoute` and `previewAutoRoute` compute the SAME
- * lane from the SAME inputs: a preview can describe a candidate's tier
- * admission, profile and slot position only if that position came from the
- * exact function that placed it there for the real decision.
- */
 function resolveRoutingLane(
   request: AutoRoutingRequest,
   task: AutoTaskPolicy,
@@ -1464,16 +1456,11 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
 }
 
 export interface RoutePreviewScoreFactors {
-  /** 1 for the request's own model (explicit/continuity); a slot's share of its lane position otherwise, 0 for a candidate reached only as a fallback. */
   taskFit: number;
-  /** Whether the workspace policy, tier gate and US-only policy admit this candidate. */
   policyAllowed: boolean;
   budget: 'affordable' | 'unaffordable' | 'unconstrained';
-  /** `observedRoutePenalty` for the candidate's best route; 0 when unobserved or the flag is off. */
   observedHealthPenalty: number;
-  /** Whether this candidate is the conversation's current model. */
   continuity: boolean;
-  /** The profile lane the candidate was ranked under; `null` for an explicit or continuity pull outside the slot ladder. */
   lane: RoutingProfile | null;
 }
 
@@ -1507,22 +1494,6 @@ const POLICY_DENIAL_MARKERS = [
   'excluded by the US-only policy',
 ] as const;
 
-/**
- * Explain what `resolveAutoRoute` would decide, without deciding anything.
- *
- * `selected` is `resolveAutoRoute(request)` itself, called directly: the two
- * can never disagree because they are not two computations kept in sync, they
- * are one call. `candidates` and `excluded` are built by walking the SAME lane
- * (`resolveRoutingLane`) over the SAME per-candidate evaluator
- * (`evaluateEligibility`) `resolveAutoRoute` used to reach that answer, so a
- * candidate's admission, route and reasons here are the exact values the real
- * decision was computed from, not a re-derivation of them.
- *
- * Pure and read-only: no field on `AutoRoutingRequest` this function reads is
- * ever written back, and every registry lookup it performs is the same static,
- * in-memory table `resolveAutoRoute` already reads. No upstream provider is
- * ever named or contacted.
- */
 export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview {
   const selected = resolveAutoRoute(request);
   const policy = registry.policies.auto;
