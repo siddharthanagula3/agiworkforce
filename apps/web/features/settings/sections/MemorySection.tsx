@@ -118,7 +118,7 @@ export function MemorySection() {
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }} role="status">
             {memoryCount} saved {memoryCount === 1 ? 'memory' : 'memories'}
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button
               type="button"
               onClick={importDialog.open}
@@ -132,6 +132,8 @@ export function MemorySection() {
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               Import memories
@@ -151,6 +153,8 @@ export function MemorySection() {
                 borderRadius: 'var(--radius-md)',
                 cursor: memoryCount === 0 ? 'default' : 'pointer',
                 opacity: memoryCount === 0 ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               Manage memories
@@ -170,6 +174,8 @@ export function MemorySection() {
                 borderRadius: 'var(--radius-md)',
                 cursor: memoryCount === 0 ? 'default' : 'pointer',
                 opacity: memoryCount === 0 ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               Clear all memories
