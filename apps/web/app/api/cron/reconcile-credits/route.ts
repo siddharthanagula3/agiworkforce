@@ -1,11 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { CreditService, type CreditSettlementQueueSummary } from '@/lib/services/credit-service';
 import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
 import {
@@ -145,27 +144,27 @@ function buildStripeDivergenceAlert(summary: StripeReconciliationSummary): {
 }
 
 async function runStripeReconciliation(): Promise<StripeReconciliationSummary | null> {
-  const stripeKey = process.env['STRIPE_SECRET_KEY'];
-  if (!stripeKey) {
+  const stripe = getStripeClientOrNull();
+  if (!stripe) {
     logger.warn('STRIPE_SECRET_KEY is not set; subscription state was not compared against Stripe');
     return null;
   }
 
   return reconcileStripeSettlement({
     db: getNeonDb(),
-    stripe: new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS),
+    stripe,
   });
 }
 
 const COGS_IMPORT_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
 
 async function runCogsImport(): Promise<StripeCogsImportSummary | null> {
-  const stripeKey = process.env['STRIPE_SECRET_KEY'];
-  if (!stripeKey) return null;
+  const stripe = getStripeClientOrNull();
+  if (!stripe) return null;
 
   const until = new Date();
   return importStripeCogsAdjustments({
-    stripe: new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS),
+    stripe,
     since: new Date(until.getTime() - COGS_IMPORT_LOOKBACK_MS),
     until,
     db: getNeonDb(),

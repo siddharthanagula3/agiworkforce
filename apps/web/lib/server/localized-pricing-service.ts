@@ -1,9 +1,7 @@
 import 'server-only';
 
-import Stripe from 'stripe';
-import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import type { BillingInterval } from '@agiworkforce/types';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredPriceId, type ConfiguredCheckoutPlan } from '@/lib/pricing';
 import {
   getCurrencyForCountry,
@@ -43,19 +41,12 @@ const PLAN_INTERVALS: Readonly<Record<ConfiguredCheckoutPlan, readonly BillingIn
 
 const PRICE_CACHE_TTL_MS = 10 * 60 * 1000;
 const priceCache = new Map<string, { expiresAt: number; price: StripePriceLike }>();
-let stripeClient: Stripe | null = null;
-
-function getStripe(): Stripe | null {
-  if (!getOptionalEnv('STRIPE_SECRET_KEY')) return null;
-  stripeClient ??= new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  return stripeClient;
-}
 
 async function retrieveStripePrice(priceId: string): Promise<StripePriceLike | null> {
   const cached = priceCache.get(priceId);
   if (cached && cached.expiresAt > Date.now()) return cached.price;
 
-  const stripe = getStripe();
+  const stripe = getStripeClientOrNull();
   if (!stripe) return null;
 
   let price;
