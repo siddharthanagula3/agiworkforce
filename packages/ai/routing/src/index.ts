@@ -35,7 +35,13 @@
  */
 
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
-export { resolveAutoRoute } from './auto';
+export {
+  observedHealthRankingEnabled,
+  observedRouteHealthFromSnapshots,
+  observedRoutePenalty,
+  resolveAutoRoute,
+  OBSERVED_HEALTH_ENV,
+} from './auto';
 export { getAutoCapabilityEnvelope } from './auto-capability-envelope';
 export { resolveFreeAutoRoute } from './free-auto';
 export type {
@@ -103,6 +109,7 @@ export type {
   AutoFallbackRoute,
   AutoRoutingRequest,
   IntrinsicCapability,
+  ObservedRouteHealth,
   RouteCacheClass,
   RouteCommercialStatus,
   RouteDataRetention,
