@@ -29,6 +29,7 @@ const COMPOSER_LABEL = /message input/i;
 const STOP_BUTTON_LABEL = /stop the current response/i;
 const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const REGENERATE_LABEL = 'Regenerate response';
+const REGENERATE_NOW_LABEL = 'Try again';
 const PREVIOUS_VARIANT_LABEL = 'Previous response';
 const NEXT_VARIANT_LABEL = 'Next response';
 const EDIT_BUTTON_LABEL = 'Edit message';
@@ -156,6 +157,9 @@ async function runTurn(
 async function regenerateLast(page: Page, mock: SseChatMock, answer: string): Promise<void> {
   const before = await mock.requestCount();
   await assistantBubbles(page).last().getByRole('button', { name: REGENERATE_LABEL }).click();
+  await page
+    .getByRole('menuitem', { name: REGENERATE_NOW_LABEL, exact: true })
+    .click({ timeout: 10_000 });
   await mock.waitForRequest(before);
   await mock.push(answer);
   await settleStream(page, mock);
