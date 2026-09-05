@@ -1,0 +1,22 @@
+{
+  "googleGrounding": {
+    "source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "fetchedAt": "2026-09-05",
+    "provider": "google",
+    "currentTier": {
+      "poolWindow": "month",
+      "poolFreeRequests": 5000,
+      "usdPerThousandBeyondPool": 14
+    },
+    "previousTier": {
+      "poolWindow": "day",
+      "poolFreeRequests": 1500,
+      "usdPerThousandBeyondPool": 35
+    }
+  },
+  "perplexitySearch": {
+    "source": "https://docs.perplexity.ai/docs/getting-started/pricing",
+    "fetchedAt": "2026-09-05",
+    "usdPerThousandRequests": 5
+  }
+}

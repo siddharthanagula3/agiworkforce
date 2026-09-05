@@ -6,6 +6,7 @@ import {
   pinnedPublicFetch,
 } from '@/lib/egress-policy';
 import { extractPageTitle } from '@/lib/url-fetch/url-fetch-tool';
+import { recordPerplexitySearchCost } from '@/lib/web-search/perplexity-search-cost';
 
 export const WEB_SEARCH_TOOL = 'web_search';
 
@@ -91,6 +92,15 @@ export interface WebSearchOverrides {
   timeoutMs?: number;
   maxResults?: number;
   signal?: AbortSignal;
+  /**
+   * Present only when the caller can attribute this call to a user and turn.
+   * When set, a successful call is billed through `recordPerplexitySearchCost`;
+   * omitting it (as today's only caller does) simply skips billing rather
+   * than throwing, so wiring identity through is additive, not required.
+   */
+  userId?: string;
+  organizationId?: string | null;
+  turnRef?: string;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -210,6 +220,15 @@ export async function executeWebSearch(
           : rawSnippet;
       const date = typeof r.date === 'string' ? r.date : undefined;
       results.push({ url: r.url, title, snippet, ...(date ? { date } : {}) });
+    }
+
+    if (overrides.userId) {
+      await recordPerplexitySearchCost({
+        userId: overrides.userId,
+        organizationId: overrides.organizationId ?? null,
+        turnRef: overrides.turnRef ?? query,
+        calls: 1,
+      });
     }
 
     return { ok: true, query, results, ...(queryTruncated ? { queryTruncated: true } : {}) };

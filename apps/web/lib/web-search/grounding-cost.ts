@@ -2,7 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
-import { resolveGroundingPricingTier } from '@/lib/web-search/grounding-pricing';
+import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
 
 export const GOOGLE_GROUNDING_UNIT_PRICE_ENV = 'AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL';
 const GOOGLE_GROUNDING_TOOL_NAME = 'google_search_grounding';
@@ -28,13 +28,13 @@ function configuredUnitPriceMicrousd(): number | null {
 
 /**
  * The published per-call rate for grounded requests beyond the free pool,
- * for the tier `model`'s registry family maps to in `grounding-pricing.json`.
- * An env override applies uniformly across tiers.
+ * for the tier `model` resolves to in `web-search-pricing.json`. An env
+ * override applies uniformly across tiers.
  */
 export function googleGroundingMicrousdPerCall(model: string): number {
   const configured = configuredUnitPriceMicrousd();
   if (configured !== null) return configured;
-  const tier = resolveGroundingPricingTier(model);
+  const tier = resolveGoogleGroundingPricingTier(model);
   return Math.round((tier.usdPerThousandBeyondPool / REQUESTS_PER_PRICED_BLOCK) * USD_TO_MICROUSD);
 }
 
