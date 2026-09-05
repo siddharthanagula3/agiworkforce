@@ -129,7 +129,10 @@
     "unpinProject": "Unpin project",
     "unstar": "Unstar",
     "untitled": "Untitled",
-    "untitledChat": "Untitled chat"
+    "untitledChat": "Untitled chat",
+    "copyLink": "Copy link",
+    "markUnread": "Mark as unread",
+    "markRead": "Mark as read"
   },
   "composer": {
     "addAttachment": "Add attachment",

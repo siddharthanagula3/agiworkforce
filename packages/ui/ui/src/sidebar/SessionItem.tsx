@@ -1,9 +1,11 @@
 'use client';
 
 import { memo, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { toast } from 'sonner';
 import {
   Archive,
   ArchiveRestore,
+  CircleDot,
   Folder,
   Link2,
   MoreHorizontal,
@@ -13,11 +15,22 @@ import {
   Sparkles,
   Star,
   Trash2,
+  Upload,
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';
 import type { SidebarProject, SidebarSession } from './types';
+
+async function copySessionLink(href: string): Promise<void> {
+  const url = typeof window === 'undefined' ? href : `${window.location.origin}${href}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success('Link copied');
+  } catch {
+    toast.error('Could not copy the link');
+  }
+}
 
 export interface SessionItemHandlers {
   onSelect: (id: string) => void;
@@ -30,6 +43,7 @@ export interface SessionItemHandlers {
   onShare?: (id: string) => void;
   onMoveToProject?: (id: string, projectId: string) => void;
   onOpenCustomInstructions?: (id: string) => void;
+  onMarkUnread?: (id: string) => void;
 }
 
 export interface SessionItemProps extends SessionItemHandlers {
@@ -60,6 +74,7 @@ function SessionItemBase({
   onShare,
   onMoveToProject,
   onOpenCustomInstructions,
+  onMarkUnread,
 }: SessionItemProps) {
   const { t } = useUiTranslation('chat');
   const [isRenaming, setIsRenaming] = useState(false);
@@ -137,7 +152,14 @@ function SessionItemBase({
           aria-hidden="true"
         />
       )}
-      <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">{rowLabel}</span>
+      <span
+        className={cn(
+          'truncate text-sm text-[hsl(var(--foreground))]',
+          session.unread ? 'font-semibold' : 'font-medium',
+        )}
+      >
+        {rowLabel}
+      </span>
     </div>
   );
 
@@ -261,6 +283,38 @@ function SessionItemBase({
           >
             {({ close }) => (
               <>
+                {/* Order: Share, Copy link, Rename, Pin, Star, Mark as
+                    unread, then a separator ahead of Archive and Delete, then
+                    Move to project last, matching the leaders' row menus
+                    (ChatGPT's ordering with Claude's copy-link and
+                    mark-as-unread folded in). */}
+                {!simple && onShare && (
+                  <MenuItem
+                    close={close}
+                    onSelect={() => onShare(session.id)}
+                    icon={<Upload className="h-4 w-4" />}
+                  >
+                    {t('sidebar.share', 'Share')}
+                  </MenuItem>
+                )}
+                {!simple && href && (
+                  <MenuItem
+                    close={close}
+                    onSelect={() => void copySessionLink(href)}
+                    icon={<Link2 className="h-4 w-4" />}
+                  >
+                    {t('sidebar.copyLink', 'Copy link')}
+                  </MenuItem>
+                )}
+                {!simple && (
+                  <MenuItem
+                    close={close}
+                    onSelect={() => setIsRenaming(true)}
+                    icon={<Pencil className="h-4 w-4" />}
+                  >
+                    {t('sidebar.rename', 'Rename')}
+                  </MenuItem>
+                )}
                 {!simple && onTogglePin && (
                   <MenuItem
                     close={close}
@@ -281,24 +335,46 @@ function SessionItemBase({
                     {session.starred ? t('sidebar.unstar', 'Unstar') : t('sidebar.star', 'Star')}
                   </MenuItem>
                 )}
-                {!simple && (
+                {!simple && onMarkUnread && (
                   <MenuItem
                     close={close}
-                    onSelect={() => setIsRenaming(true)}
-                    icon={<Pencil className="h-4 w-4" />}
+                    onSelect={() => onMarkUnread(session.id)}
+                    icon={<CircleDot className="h-4 w-4" />}
                   >
-                    {t('sidebar.rename', 'Rename')}
+                    {session.unread
+                      ? t('sidebar.markRead', 'Mark as read')
+                      : t('sidebar.markUnread', 'Mark as unread')}
                   </MenuItem>
                 )}
-                {!simple && onShare && (
-                  <MenuItem
-                    close={close}
-                    onSelect={() => onShare(session.id)}
-                    icon={<Link2 className="h-4 w-4" />}
-                  >
-                    {t('sidebar.share', 'Share')}
-                  </MenuItem>
-                )}
+                {!simple && <MenuSeparator />}
+                {!simple &&
+                  (session.archived
+                    ? onRestore && (
+                        <MenuItem
+                          close={close}
+                          onSelect={() => onRestore(session.id)}
+                          icon={<ArchiveRestore className="h-4 w-4" />}
+                        >
+                          {t('sidebar.restore', 'Restore')}
+                        </MenuItem>
+                      )
+                    : onArchive && (
+                        <MenuItem
+                          close={close}
+                          onSelect={() => onArchive(session.id)}
+                          icon={<Archive className="h-4 w-4" />}
+                        >
+                          {t('sidebar.archive', 'Archive')}
+                        </MenuItem>
+                      ))}
+                <MenuItem
+                  close={close}
+                  onSelect={() => onDelete(session.id)}
+                  icon={<Trash2 className="h-4 w-4" />}
+                  destructive
+                >
+                  {t('sidebar.delete', 'Delete')}
+                </MenuItem>
                 {!simple && onMoveToProject && projects && projects.length > 0 && (
                   <>
                     <MenuSeparator />
@@ -324,38 +400,6 @@ function SessionItemBase({
                     ))}
                   </>
                 )}
-                {!simple && (onArchive || onRestore) && (
-                  <>
-                    <MenuSeparator />
-                    {session.archived
-                      ? onRestore && (
-                          <MenuItem
-                            close={close}
-                            onSelect={() => onRestore(session.id)}
-                            icon={<ArchiveRestore className="h-4 w-4" />}
-                          >
-                            {t('sidebar.restore', 'Restore')}
-                          </MenuItem>
-                        )
-                      : onArchive && (
-                          <MenuItem
-                            close={close}
-                            onSelect={() => onArchive(session.id)}
-                            icon={<Archive className="h-4 w-4" />}
-                          >
-                            {t('sidebar.archive', 'Archive')}
-                          </MenuItem>
-                        )}
-                  </>
-                )}
-                <MenuItem
-                  close={close}
-                  onSelect={() => onDelete(session.id)}
-                  icon={<Trash2 className="h-4 w-4" />}
-                  destructive
-                >
-                  {t('sidebar.delete', 'Delete')}
-                </MenuItem>
               </>
             )}
           </Menu>
