@@ -170,6 +170,91 @@ async function countUserSandboxes(
   return count;
 }
 
+/**
+ * Free the slot held by this user's least recently started PAUSED sandbox.
+ * Returns whether one was killed. A running sandbox is never touched: it may
+ * be another turn's, and only a paused one is certainly idle.
+ */
+async function evictColdestPausedSandbox(
+  Sandbox: NonNullable<Awaited<ReturnType<typeof importSandbox>>>,
+  requestingScope: E2BSessionScope,
+): Promise<boolean> {
+  const { userId } = requestingScope;
+  let coldest: { sandboxId: string; startedAt: Date; metadata: Record<string, string> } | null =
+    null;
+  try {
+    const paginator = Sandbox.list({
+      query: { metadata: { userId }, state: ['paused'] },
+    });
+    while (paginator.hasNext) {
+      const page = await paginator.nextItems();
+      for (const info of page) {
+        if (!coldest || info.startedAt.getTime() < coldest.startedAt.getTime()) {
+          coldest = {
+            sandboxId: info.sandboxId,
+            startedAt: info.startedAt,
+            metadata: info.metadata ?? {},
+          };
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, userId }, '[e2b] could not list paused sandboxes to free a slot');
+    return false;
+  }
+
+  if (!coldest) return false;
+
+  try {
+    await Sandbox.kill(coldest.sandboxId);
+  } catch (err) {
+    logger.warn(
+      { err, userId, sandboxId: coldest.sandboxId },
+      '[e2b] could not kill the coldest paused sandbox',
+    );
+    return false;
+  }
+
+  // The slot is already free. Clearing the stale mapping is bookkeeping, so a
+  // failure here must not turn a successful eviction into a refused turn.
+  try {
+    const evictedScope = pausedSandboxScope(requestingScope, coldest.metadata);
+    if (evictedScope) {
+      const mapped = await getE2BSession(evictedScope);
+      if (mapped?.sandboxId === coldest.sandboxId) await deleteE2BSession(evictedScope);
+    }
+  } catch (err) {
+    logger.warn(
+      { err, userId, sandboxId: coldest.sandboxId },
+      '[e2b] evicted sandbox mapping was not cleared',
+    );
+  }
+  logger.info(
+    { userId, sandboxId: coldest.sandboxId, startedAt: coldest.startedAt.toISOString() },
+    '[e2b] freed a sandbox slot by killing the coldest paused sandbox',
+  );
+  return true;
+}
+
+/**
+ * The evicted sandbox belongs to the same tenant and user as the caller, so the
+ * scope is rebuilt from theirs rather than from a tenant constant this module
+ * would otherwise have to import.
+ */
+function pausedSandboxScope(
+  requestingScope: E2BSessionScope,
+  metadata: Record<string, string>,
+): E2BSessionScope | null {
+  const { tenantId, userId } = requestingScope;
+  const conversationId = metadata['conversationId'];
+  if (conversationId) return { tenantId, userId, conversationId };
+  const codeSessionId = metadata['codeSessionId'];
+  if (codeSessionId) {
+    return { tenantId, userId, resource: { kind: 'code_session', id: codeSessionId } };
+  }
+  return null;
+}
+
 interface NotebookResultLike {
   text?: string;
   html?: string;
@@ -589,7 +674,16 @@ export async function getE2BExecutor(
     const limit = maxSandboxes;
     const guarded = await withUserSandboxLock(scope, async () => {
       try {
-        const live = await countUserSandboxes(SandboxCtor, scope.userId, limit);
+        let live = await countUserSandboxes(SandboxCtor, scope.userId, limit);
+        // A paused sandbox costs nothing to run but still holds a slot, so a
+        // user who ran code in `limit` conversations loses code execution
+        // entirely until the day-old reaper catches up. Its state is a cache,
+        // not the conversation, so the coldest one gives up its slot rather
+        // than the turn giving up.
+        if (live >= limit) {
+          const evicted = await evictColdestPausedSandbox(SandboxCtor, scope);
+          if (evicted) live = await countUserSandboxes(SandboxCtor, scope.userId, limit);
+        }
         if (live >= limit) {
           logger.warn(
             { userId: scope.userId, live, limit, planTier, ...scopeLog(scope) },

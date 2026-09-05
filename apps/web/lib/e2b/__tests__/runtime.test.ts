@@ -101,27 +101,43 @@ const create = vi.fn(async () => {
   return makeSandboxInstance(`sbx-${sandboxCounter}`);
 });
 const connect = vi.fn(async (sandboxId: string) => makeSandboxInstance(sandboxId));
-const staticKill = vi.fn(async () => true);
+// Killing takes the sandbox out of the listing, as the real API does, so a
+// re-count after an eviction sees the slot it freed.
+const staticKill = vi.fn(async (sandboxId?: string) => {
+  if (sandboxId) listedSandboxes = listedSandboxes.filter((s) => s.sandboxId !== sandboxId);
+  return true;
+});
 const staticPause = vi.fn(async () => true);
 
-let listedSandboxes: Array<{ metadata: Record<string, string> }> = [];
-const staticList = vi.fn((opts?: { query?: { metadata?: Record<string, string> } }) => {
-  const wanted = opts?.query?.metadata ?? {};
-  const items = listedSandboxes.filter((s) =>
-    Object.entries(wanted).every(([k, v]) => s.metadata[k] === v),
-  );
-  let served = false;
-  return {
-    get hasNext() {
-      return !served;
-    },
-    nextItems: vi.fn(async () => {
-      if (served) return [];
-      served = true;
-      return items;
-    }),
-  };
-});
+interface ListedSandbox {
+  metadata: Record<string, string>;
+  sandboxId: string;
+  startedAt: Date;
+  state: 'running' | 'paused';
+}
+let listedSandboxes: ListedSandbox[] = [];
+const staticList = vi.fn(
+  (opts?: { query?: { metadata?: Record<string, string>; state?: string[] } }) => {
+    const wanted = opts?.query?.metadata ?? {};
+    const wantedStates = opts?.query?.state;
+    const items = listedSandboxes.filter(
+      (s) =>
+        Object.entries(wanted).every(([k, v]) => s.metadata[k] === v) &&
+        (!wantedStates || wantedStates.includes(s.state)),
+    );
+    let served = false;
+    return {
+      get hasNext() {
+        return !served;
+      },
+      nextItems: vi.fn(async () => {
+        if (served) return [];
+        served = true;
+        return items;
+      }),
+    };
+  },
+);
 
 function makeSandboxInstance(sandboxId: string) {
   return {
@@ -162,9 +178,13 @@ vi.mock('@e2b/code-interpreter', () => ({
 function liveSandboxesFor(
   userId: string,
   count: number,
-): Array<{ metadata: Record<string, string> }> {
+  state: 'running' | 'paused' = 'running',
+): ListedSandbox[] {
   return Array.from({ length: count }, (_, i) => ({
     metadata: { userId, conversationId: `conv-${userId}-${i}` },
+    sandboxId: `sbx-${userId}-${i}`,
+    startedAt: new Date(1_000 + i * 1_000),
+    state,
   }));
 }
 
@@ -905,6 +925,43 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     listedSandboxes = liveSandboxesFor('user-max', 5);
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q3', 'user-max'));
+    expect(executor).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('frees the coldest paused slot rather than refusing the turn', async () => {
+    listedSandboxes = [
+      ...liveSandboxesFor('user-evict', 3, 'running'),
+      {
+        metadata: { userId: 'user-evict', conversationId: 'conv-cold' },
+        sandboxId: 'sbx-cold',
+        startedAt: new Date(1),
+        state: 'paused',
+      },
+      {
+        metadata: { userId: 'user-evict', conversationId: 'conv-warm' },
+        sandboxId: 'sbx-warm',
+        startedAt: new Date(90_000),
+        state: 'paused',
+      },
+    ];
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-new', 'user-evict'));
+
+    expect(staticKill).toHaveBeenCalledWith('sbx-cold');
+    expect(staticKill).not.toHaveBeenCalledWith('sbx-warm');
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('still refuses when every slot is held by a running sandbox', async () => {
+    listedSandboxes = liveSandboxesFor('user-busy', 5, 'running');
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-busy', 'user-busy'));
+
+    expect(staticKill).not.toHaveBeenCalled();
     expect(executor).toBeNull();
     expect(create).not.toHaveBeenCalled();
   });
