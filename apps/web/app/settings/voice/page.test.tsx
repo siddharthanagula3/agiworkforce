@@ -2,15 +2,13 @@ import { render, screen } from '@testing-library/react';
 import VoiceSettingsPage from './page';
 
 describe('Web Voice settings', () => {
-  it('shows working dictation and a truthful managed-voice boundary without inert controls', () => {
+  it('shows only the dictation toggle and language select that work on web', () => {
     render(<VoiceSettingsPage />);
 
-    expect(screen.getByText('Composer dictation works today')).toBeInTheDocument();
-    expect(screen.getByText('Managed voice is not available')).toBeInTheDocument();
-    expect(
-      screen.getByText(/This page does not show disabled settings that the runtime cannot consume/),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Not available yet')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Learn about BYOK' })).toHaveAttribute('href', '/byok');
+    expect(screen.getByRole('switch', { name: 'Dictation' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Dictation language' })).toBeInTheDocument();
+    expect(screen.queryByText('Managed voice is not available')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Bring Your Own Key/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Learn about BYOK' })).not.toBeInTheDocument();
   });
 });

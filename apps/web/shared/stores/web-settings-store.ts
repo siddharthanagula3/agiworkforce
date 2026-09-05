@@ -53,6 +53,8 @@ interface SettingsState {
    * useConversations, so the very first message is never persisted.
    */
   newChatsTemporary: boolean;
+  /** Composer microphone dictation. Read by the composer's dictation entry point. */
+  dictationEnabled: boolean;
   codeBlockWrap: boolean;
   accentColor: AccentColor;
   highContrast: boolean;
@@ -65,6 +67,7 @@ interface SettingsState {
   restoreShortcutDefaults: () => void;
   setNavItemVisible: (id: string, visible: boolean) => void;
   setNewChatsTemporary: (temporary: boolean) => void;
+  setDictationEnabled: (enabled: boolean) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
   setAccentColor: (accent: AccentColor) => void;
   setHighContrast: (on: boolean) => void;
@@ -83,6 +86,7 @@ export const useSettingsStore = create<SettingsState>()(
       disabledShortcutIds: [],
       hiddenNavIds: [],
       newChatsTemporary: false,
+      dictationEnabled: true,
       codeBlockWrap: false,
       accentColor: 'default',
       highContrast: false,
@@ -101,6 +105,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       restoreShortcutDefaults: () => set({ disabledShortcutIds: [] }),
       setNewChatsTemporary: (temporary) => set({ newChatsTemporary: temporary }),
+      setDictationEnabled: (enabled) => set({ dictationEnabled: enabled }),
       setNavItemVisible: (id, visible) =>
         set((s) => ({
           hiddenNavIds: visible
