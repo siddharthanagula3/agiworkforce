@@ -82,6 +82,11 @@ import {
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
+import { VoiceActivityAffordance } from '@/features/chat/components/Voice/VoiceActivityAffordance';
+import {
+  useVoiceModeActive,
+  useVoiceSessionStore,
+} from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
 import {
   AgentActivityTimeline,
@@ -1354,6 +1359,8 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.isMultiAgent &&
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
+  const voiceModeActive = useVoiceModeActive();
+  const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
   const answeredByModelId = !isUser ? (message.model ?? message.metadata?.model) : undefined;
   const answeredByLabel = answeredByModelId
@@ -1577,7 +1584,14 @@ const MessageBubbleComponent = function MessageBubble({
           {/* One canonical Cloud run spine. It is collapsed inline by default,
               expands in place, and each tool then owns its own request/response
               disclosure. Legacy tool events below are a migration fallback only. */}
-          {!isUser && canonicalActivity && (
+          {!isUser && canonicalActivity && voiceModeActive && (
+            <VoiceActivityAffordance
+              activity={canonicalActivity}
+              onOpen={() => setVoiceActivityMessageId(message.id)}
+            />
+          )}
+
+          {!isUser && canonicalActivity && !voiceModeActive && (
             <AgentActivityTimeline
               className="mb-3"
               // `defaultExpanded` only seeds AgentActivityTimeline's own expand
@@ -2477,6 +2491,7 @@ const MessageBubbleComponent = function MessageBubble({
                   {variantPager}
 
                   {!isUser &&
+                    !voiceModeActive &&
                     onRegenerate &&
                     message.metadata?.toolType !== 'image-generation' &&
                     message.metadata?.toolType !== 'video-generation' &&
@@ -2531,7 +2546,7 @@ const MessageBubbleComponent = function MessageBubble({
                       </Tooltip>
                     ))}
 
-                  {!isUser && onBranch && (
+                  {!isUser && !voiceModeActive && onBranch && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

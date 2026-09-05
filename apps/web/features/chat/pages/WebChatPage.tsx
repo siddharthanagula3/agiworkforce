@@ -75,6 +75,7 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
+  getAutoRoutingProfiles,
   getBillingPlanPricing,
   summarizeSendPreview,
   type BillingPlanTier,
@@ -128,7 +129,16 @@ import {
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
-import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
+import { VoiceHeaderLabel } from '../components/Voice/VoiceHeaderLabel';
+import { VoiceActivityPanel } from '../components/Voice/VoiceActivityPanel';
+import {
+  enterVoiceSession,
+  useVoiceModeActive,
+  useVoiceSessionStore,
+  type VoiceIntelligence,
+} from '../stores/voice-session-store';
 import {
   conversationDeleteConfirm,
   projectDeleteConfirm,
@@ -313,6 +323,10 @@ function buildSendFingerprint(content: string, attachments?: File[]): string {
  * the persistence pattern in features/notifications/components/WebPushOptIn.tsx.
  */
 const NOTIF_BANNER_STORAGE_KEY = 'agi.chat-notif-banner.resolved';
+
+const VOICE_LIBRARY_NAV_ID = 'library';
+const VOICE_CONNECTORS_SETTINGS_SECTION = 'connectors';
+const VOICE_FOCUS_FADE_CLASS = 'pointer-events-none opacity-0 transition-opacity duration-300';
 
 function readNotifBannerResolved(): boolean {
   if (typeof window === 'undefined') return false;
@@ -4377,6 +4391,59 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     !displayedConversationId ||
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
 
+  const voiceModeActive = useVoiceModeActive();
+  const voiceFocusMode = useVoiceSessionStore((state) => state.focusMode);
+  const voiceActivityMessageId = useVoiceSessionStore((state) => state.activityMessageId);
+  const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
+
+  const voiceReply = useMemo(() => {
+    const last = [...displayedMessages].reverse().find((m) => m.role === 'assistant');
+    return last ? { id: last.id, content: last.content ?? '' } : null;
+  }, [displayedMessages]);
+
+  const voiceActivity = useMemo(() => {
+    if (!voiceActivityMessageId) return null;
+    const message = displayedMessages.find((m) => m.id === voiceActivityMessageId);
+    return message?.metadata?.agentActivity ?? null;
+  }, [displayedMessages, voiceActivityMessageId]);
+
+  const handleVoiceSend = useCallback(
+    (text: string) => {
+      const outcome = handleSend(text);
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [handleSend],
+  );
+
+  const handleVoiceOpenLibrary = useCallback(() => {
+    const href = APP_NAV_DESTINATIONS.find(
+      (destination) => destination.id === VOICE_LIBRARY_NAV_ID,
+    )?.href;
+    if (href) router.push(href);
+  }, [router]);
+
+  const handleVoiceOpenConnectors = useCallback(() => {
+    openSettings(VOICE_CONNECTORS_SETTINGS_SECTION);
+  }, [openSettings]);
+
+  const handleVoiceIntelligenceChange = useCallback(
+    (intelligence: VoiceIntelligence) => {
+      const profile = getAutoRoutingProfiles().find((entry) => entry.profile === intelligence);
+      if (profile) void handleConversationModelChange(profile.id);
+    },
+    [handleConversationModelChange],
+  );
+
+  const voiceSurfaceProps = {
+    turnActive: isLoading || isStreaming,
+    reply: voiceReply,
+    onSend: handleVoiceSend,
+    onNewChat: handleNewChat,
+    onOpenLibrary: handleVoiceOpenLibrary,
+    onOpenConnectors: handleVoiceOpenConnectors,
+    onIntelligenceChange: handleVoiceIntelligenceChange,
+  };
+
   const turnFailureNotice = resolveTurnFailureNotice({
     error: chatError,
     transcriptMounted: !isConversationTranscriptPending && !isEmptyChat,
@@ -4680,7 +4747,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   <Menu className="h-5 w-5" aria-hidden="true" />
                 </Button>
               )}
-              {hasMessages &&
+              {voiceModeActive && <VoiceHeaderLabel />}
+              {!voiceModeActive &&
+                hasMessages &&
                 activeConversationTitle &&
                 activeConversationTitle !== NEW_CHAT_TITLE &&
                 displayedConversationId && (
@@ -4870,39 +4939,52 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     active={composerToggles?.workMode === AGI_WORK_MODE}
                     onReviewApprovals={handleReviewApprovals}
                   />
-                  <ChatComposerNew
-                    onSend={handleSend}
-                    conversationId={displayedConversationId}
-                    onStop={handleStopGeneration}
-                    isLoading={isLoading}
-                    isGenerating={isStreaming}
-                    placeholder={t('chat:placeholderEmpty')}
-                    prefillText={composerPrefill}
-                    onPrefillConsumed={handleComposerPrefillConsumed}
-                    onTypingChange={handleTypingChange}
-                    clearSignal={composerClearSignal}
-                    droppedFiles={restoredAttachments}
-                    onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
-                    emptyState
-                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                    sendPreviewPresentation={sendPreviewPresentation}
-                    onUpgradeRequest={handleOpenUpgradeDialog}
-                    onModelChange={handleConversationModelChange}
-                    onGenerateImage={handleGenerateImage}
-                    onGenerateVideo={handleGenerateVideo}
-                    projectPicker={composerProjectPicker}
-                    onSetTemporaryChat={handleSetTemporaryChat}
-                    freeTrial={{
-                      enabled: isWebsiteFreeTrial,
-                      limitReached: freeUsageLimitReached,
-                    }}
-                  />
+                  {voiceModeActive ? (
+                    <VoiceModeSurface
+                      variant={VOICE_SURFACE_VARIANT.empty}
+                      {...voiceSurfaceProps}
+                    />
+                  ) : (
+                    <ChatComposerNew
+                      onSend={handleSend}
+                      onEnterVoiceMode={enterVoiceSession}
+                      conversationId={displayedConversationId}
+                      onStop={handleStopGeneration}
+                      isLoading={isLoading}
+                      isGenerating={isStreaming}
+                      placeholder={t('chat:placeholderEmpty')}
+                      prefillText={composerPrefill}
+                      onPrefillConsumed={handleComposerPrefillConsumed}
+                      onTypingChange={handleTypingChange}
+                      clearSignal={composerClearSignal}
+                      droppedFiles={restoredAttachments}
+                      onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                      emptyState
+                      attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                      sendPreviewPresentation={sendPreviewPresentation}
+                      onUpgradeRequest={handleOpenUpgradeDialog}
+                      onModelChange={handleConversationModelChange}
+                      onGenerateImage={handleGenerateImage}
+                      onGenerateVideo={handleGenerateVideo}
+                      projectPicker={composerProjectPicker}
+                      onSetTemporaryChat={handleSetTemporaryChat}
+                      freeTrial={{
+                        enabled: isWebsiteFreeTrial,
+                        limitReached: freeUsageLimitReached,
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
           ) : (
             <>
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div
+                className={cn(
+                  'min-h-0 flex-1 overflow-hidden',
+                  voiceFocusMode && VOICE_FOCUS_FADE_CLASS,
+                )}
+              >
                 {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                 <ToolApprovalProvider value={resolveToolApproval}>
@@ -4964,33 +5046,38 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     active={composerToggles?.workMode === AGI_WORK_MODE}
                     onReviewApprovals={handleReviewApprovals}
                   />
-                  <ChatComposerNew
-                    onSend={handleSend}
-                    conversationId={displayedConversationId}
-                    onStop={handleStopGeneration}
-                    isLoading={isLoading}
-                    isGenerating={isStreaming}
-                    placeholder={t('chat:placeholder')}
-                    prefillText={composerPrefill}
-                    onPrefillConsumed={handleComposerPrefillConsumed}
-                    onTypingChange={handleTypingChange}
-                    clearSignal={composerClearSignal}
-                    droppedFiles={restoredAttachments}
-                    onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
-                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                    sendPreviewPresentation={sendPreviewPresentation}
-                    onUpgradeRequest={handleOpenUpgradeDialog}
-                    onModelChange={handleConversationModelChange}
-                    onGenerateImage={handleGenerateImage}
-                    onGenerateVideo={handleGenerateVideo}
-                    projectPicker={composerProjectPicker}
-                    onSetTemporaryChat={handleSetTemporaryChat}
-                    freeTrial={{
-                      enabled: isWebsiteFreeTrial,
-                      limitReached: freeUsageLimitReached,
-                    }}
-                    suppressAutoFocus={Boolean(highlightMessageId)}
-                  />
+                  {voiceModeActive ? (
+                    <VoiceModeSurface variant={VOICE_SURFACE_VARIANT.chat} {...voiceSurfaceProps} />
+                  ) : (
+                    <ChatComposerNew
+                      onSend={handleSend}
+                      onEnterVoiceMode={enterVoiceSession}
+                      conversationId={displayedConversationId}
+                      onStop={handleStopGeneration}
+                      isLoading={isLoading}
+                      isGenerating={isStreaming}
+                      placeholder={t('chat:placeholder')}
+                      prefillText={composerPrefill}
+                      onPrefillConsumed={handleComposerPrefillConsumed}
+                      onTypingChange={handleTypingChange}
+                      clearSignal={composerClearSignal}
+                      droppedFiles={restoredAttachments}
+                      onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                      attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                      sendPreviewPresentation={sendPreviewPresentation}
+                      onUpgradeRequest={handleOpenUpgradeDialog}
+                      onModelChange={handleConversationModelChange}
+                      onGenerateImage={handleGenerateImage}
+                      onGenerateVideo={handleGenerateVideo}
+                      projectPicker={composerProjectPicker}
+                      onSetTemporaryChat={handleSetTemporaryChat}
+                      freeTrial={{
+                        enabled: isWebsiteFreeTrial,
+                        limitReached: freeUsageLimitReached,
+                      }}
+                      suppressAutoFocus={Boolean(highlightMessageId)}
+                    />
+                  )}
                 </div>
               </div>
             </>
@@ -5001,6 +5088,13 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             messages={displayedMessages}
             open={workSessionPanelOpen}
             onClose={() => setWorkSessionPanelOpen(false)}
+          />
+        )}
+        {voiceModeActive && (
+          <VoiceActivityPanel
+            open={Boolean(voiceActivityMessageId)}
+            activity={voiceActivity}
+            onClose={() => setVoiceActivityMessageId(null)}
           />
         )}
         <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
