@@ -37,7 +37,8 @@ vi.mock('react-i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
@@ -192,7 +193,8 @@ vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
   ArtifactsPanel: () => null,
   ArtifactsToggleButton: () => null,
 }));
-vi.mock('../../components/research/ResearchPanel', () => ({
+vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
+  ...(await importOriginal()),
   ResearchPanel: ({ children }: { children?: ReactNode }) => <>{children}</>,
   ResearchToggleButton: () => null,
 }));

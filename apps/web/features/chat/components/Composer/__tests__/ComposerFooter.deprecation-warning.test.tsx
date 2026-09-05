@@ -99,7 +99,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   },
 }));
 
-vi.mock('@shared/config/llm', () => ({
+vi.mock('@shared/config/llm', async (importOriginal) => ({
+  ...(await importOriginal()),
   getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
   getBestAutoModeForTier: () => 'auto-premium',
   getModelMetadata: (id: string) => ({
