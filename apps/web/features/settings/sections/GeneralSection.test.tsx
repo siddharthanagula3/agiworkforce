@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -297,5 +297,59 @@ describe('GeneralSection read-aloud disclosure', () => {
     render(<GeneralSection />);
 
     expect(screen.getByText(/exposes no speech voices/i)).toBeVisible();
+  });
+});
+
+describe('GeneralSection row density', () => {
+  beforeEach(() => {
+    mocks.fetchPreferences.mockReset();
+    mocks.fetchPreferences.mockResolvedValue({});
+  });
+
+  it('renders the four characteristics as label-left selects, not sliders', () => {
+    render(<GeneralSection />);
+
+    for (const label of ['Warmth', 'Enthusiasm', 'Headers and lists', 'Emoji']) {
+      const select = screen.getByRole('combobox', { name: label });
+      expect(select).toHaveValue('default');
+      expect(
+        within(select)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['Less', 'Default', 'More']);
+    }
+    expect(screen.queryByRole('slider')).toBeNull();
+  });
+
+  it('writes the chosen level back to the personalization state', async () => {
+    render(<GeneralSection />);
+
+    const select = screen.getByRole('combobox', { name: 'Warmth' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await userEvent.selectOptions(select, 'more');
+
+    expect(select).toHaveValue('more');
+  });
+
+  it('renders chat font as a select rather than a button group', () => {
+    render(<GeneralSection />);
+
+    const select = screen.getByRole('combobox', { name: 'Chat font' });
+    expect(select).toHaveValue('default');
+    expect(screen.queryByRole('button', { name: /chat font$/i })).toBeNull();
+  });
+
+  it('shows no loading text once preferences have resolved', async () => {
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.queryByText(/loading/i)).toBeNull();
+  });
+
+  it('renders no prose card around the profile form', async () => {
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(document.querySelector('[class*="rounded-xl border"]')).toBeNull();
   });
 });
