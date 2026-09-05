@@ -19,6 +19,7 @@
       "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
       "@agiworkforce/icons",
+      "@agiworkforce/key-value",
       "@agiworkforce/licensing",
       "@agiworkforce/local-llm",
       "@agiworkforce/mcp",
@@ -662,6 +663,10 @@
       {
         "from": "@agiworkforce/web",
         "to": "@agiworkforce/icons"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/key-value"
       },
       {
         "from": "@agiworkforce/web",
