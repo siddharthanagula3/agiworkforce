@@ -12,6 +12,30 @@
   "roots": [".agents/skills"],
   "referenceTrees": ["packages/tools/skills/reference-bundles"],
   "skills": {
+    "ab-testing": {
+      "path": ".agents/skills/ab-testing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ab-testing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:cd44386b4579ab79f7675cea2530f764c0dcb6e2a26dbbade8adca1965e53b97"
+    },
+    "ad-creative": {
+      "path": ".agents/skills/ad-creative",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ad-creative)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.8.2",
+      "computedHash": "sha256-tree-v1:94093efbb3bd607c4eb64c3bac6ea6351eac038a0ff4945c9c77b2926fb4b01f"
+    },
+    "ads": {
+      "path": ".agents/skills/ads",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ads)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.3.2",
+      "computedHash": "sha256-tree-v1:0e25d8be2e2a9c10b5057d992ba79c3ba13a555f612c8205b62a7ba1a4f2f985"
+    },
     "agiworkforce-design": {
       "path": ".agents/skills/agiworkforce-design",
       "source": "AGI Workforce repository",
@@ -19,6 +43,22 @@
       "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:fdc9eda5c874b26aa58990c905384f7d294f6270ef24bf1ed15b15c99af21d5c"
+    },
+    "ai-seo": {
+      "path": ".agents/skills/ai-seo",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ai-seo)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.5.0",
+      "computedHash": "sha256-tree-v1:9cd0cf137ee681def2215fdb39b106b1c4b81b1cdbf32fd6b0d863e58e44cd34"
+    },
+    "analytics": {
+      "path": ".agents/skills/analytics",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/analytics)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:522e00c7aa9ccb010ba3296339bbd475d7ba46518661ff2b80b27107914ad436"
     },
     "antislop": {
       "path": ".agents/skills/antislop",
@@ -76,6 +116,38 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:ece86dc2cb8a48faa6ff3206103b5981eb8118c2d1d3375786c2baae9caeb2be"
     },
+    "aso": {
+      "path": ".agents/skills/aso",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/aso)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:962ab59ad3f600ea0fb2ca835dd02f2a49a45a01862c46dba6a70c4bbe157ccd"
+    },
+    "attribution": {
+      "path": ".agents/skills/attribution",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/attribution)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.1.0",
+      "computedHash": "sha256-tree-v1:a70b0e267232adc473a9f6b3dfde68d8dca5cfbc63d4d9c4bb3f3fdb3ffd32fd"
+    },
+    "churn-prevention": {
+      "path": ".agents/skills/churn-prevention",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/churn-prevention)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:5a5f5f349d2a13855e14082d11a6fbd4616cf6bc73f6931d175b2450c248fa5b"
+    },
+    "co-marketing": {
+      "path": ".agents/skills/co-marketing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/co-marketing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:54003827d9e02e30166db187c74ff674dac0834c54b30a74373b19ba13a51ff0"
+    },
     "code-review": {
       "path": ".agents/skills/code-review",
       "source": "AGI Workforce repository",
@@ -83,6 +155,78 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:8826b9bfb55108c8be4b5a0610e2193548dc4ac4fb4ba4d20a2f3094727f8632"
+    },
+    "cold-email": {
+      "path": ".agents/skills/cold-email",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/cold-email)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:fae077f5ac3aa41f07a4de411fbba4d1278fc499dd5ac910b53c710bcc22f3de"
+    },
+    "community-marketing": {
+      "path": ".agents/skills/community-marketing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/community-marketing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:77f74448382cb0136662776a0d331fe226ae1f00a4d99187ae55ef0e5e6b8e3d"
+    },
+    "competitor-profiling": {
+      "path": ".agents/skills/competitor-profiling",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/competitor-profiling)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:42daa8b5146665b712b7be996dd9f46ef5c8421c194a2ddcfa93241c4741a99a"
+    },
+    "competitors": {
+      "path": ".agents/skills/competitors",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/competitors)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:402322d2cb6e626baa83790ba1110cd3142497cd1309b60ac44c967a31b9deee"
+    },
+    "content-strategy": {
+      "path": ".agents/skills/content-strategy",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/content-strategy)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.1.1",
+      "computedHash": "sha256-tree-v1:ccfca9258fe48281da2223611b60cfd389c1c62e7dfd0c35bcfe75a1924cab8b"
+    },
+    "copy-editing": {
+      "path": ".agents/skills/copy-editing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/copy-editing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:5b5c08cb21bb90a58d48b12d8061e91da96464917f09ddaa351945469b826878"
+    },
+    "copywriting": {
+      "path": ".agents/skills/copywriting",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/copywriting)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.2",
+      "computedHash": "sha256-tree-v1:197d3a1e513df875f3f02497feba984daba2e97ba8ab5fed7405430941d42bbc"
+    },
+    "cro": {
+      "path": ".agents/skills/cro",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/cro)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:b1610c3e9befd4cddb01df472c3e94c09d098645aff2bf5938f99c8f95b3a673"
+    },
+    "customer-research": {
+      "path": ".agents/skills/customer-research",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/customer-research)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.2",
+      "computedHash": "sha256-tree-v1:014c6d3490eef206ec85cab329dd4d1596be9d1ee5bdaafc39a6b19b06bcd5ca"
     },
     "data-analysis": {
       "path": ".agents/skills/data-analysis",
@@ -100,6 +244,14 @@
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
       "computedHash": "sha256-tree-v1:70bf53cb0d61fbbe54e33b34ef1ce6ae1ebe3b188a6bcf6dd180e47ea4a10289"
     },
+    "directory-submissions": {
+      "path": ".agents/skills/directory-submissions",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/directory-submissions)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:131473046060d8ba7b33131253fec76d0d1a27061f85ee7b7350bf944d8bd25f"
+    },
     "document-creation": {
       "path": ".agents/skills/document-creation",
       "source": "AGI Workforce repository",
@@ -108,6 +260,14 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:81e3542b5e4a43d081456d03edebbce0010167480f3a95c53390cfc12f36d955"
     },
+    "emails": {
+      "path": ".agents/skills/emails",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/emails)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:a3c6e3d847cb660988cf58f03ed31dc1b9bc1db94805b18264aa8f30154bd2a3"
+    },
     "emil-design-eng": {
       "path": ".agents/skills/emil-design-eng",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/emil-design-eng)",
@@ -115,6 +275,14 @@
       "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:1c6440bc64540bb46df5bfbe8015be9f434109083dd4838c1b01201ba214cda7"
+    },
+    "events": {
+      "path": ".agents/skills/events",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/events)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:438c1fdc00535b7845d4c086409ee04b423468c6feebd1bb0826f3b852b0094f"
     },
     "extract-design-system": {
       "path": ".agents/skills/extract-design-system",
@@ -132,6 +300,14 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:69536cb282f3873212ba4b059a96a115b5a1eceffa59df051d3ad4536f87065d"
     },
+    "free-tools": {
+      "path": ".agents/skills/free-tools",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/free-tools)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:61804aef120814cf2ee3f426dff864f19e2a94adeeb8bf31e601475813831602"
+    },
     "frontend-design": {
       "path": ".agents/skills/frontend-design",
       "source": "https://github.com/anthropics/skills @ 41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f (skills/frontend-design)",
@@ -148,6 +324,38 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:00eb031c8a266fdacdb9c41f983df8cc450ab62dc093edc935211c454e2ffe9e"
     },
+    "image": {
+      "path": ".agents/skills/image",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/image)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:b00e52c6eb03d0667e45286fc41bffbee3095834e1c63b77178ef4fe476b1362"
+    },
+    "influencer-marketing": {
+      "path": ".agents/skills/influencer-marketing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/influencer-marketing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.1.0",
+      "computedHash": "sha256-tree-v1:41b997472b79235ae2ca49b732c9a9bc090b5d7fe2e3fb954dfc8685b68ff2b9"
+    },
+    "launch": {
+      "path": ".agents/skills/launch",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/launch)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.2",
+      "computedHash": "sha256-tree-v1:2b3c5069ea0c2ba8826e654d664a84e8f64ad318ee1b16549ff4eb66233902cd"
+    },
+    "lead-magnets": {
+      "path": ".agents/skills/lead-magnets",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/lead-magnets)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:14d6ff55b18f8d52cc92638c4ddbd5a3078e47b974de7e08534eecc9565481a6"
+    },
     "literature-review": {
       "path": ".agents/skills/literature-review",
       "source": "AGI Workforce repository",
@@ -155,6 +363,46 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:1c14aa6fcbc26babdaee02a2aae846e5c8116896a5d1e355d5e28a8a8cfdfb37"
+    },
+    "marketing-council": {
+      "path": ".agents/skills/marketing-council",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-council)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:f6bb72f229743c3428c9dbcacac9f69325c53b089fbcdb9d04fbe28610406417"
+    },
+    "marketing-ideas": {
+      "path": ".agents/skills/marketing-ideas",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-ideas)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:64915509854ccd1f91e48de9877e412d7d23e00174a45a3b4d41fd8574e6ac9c"
+    },
+    "marketing-loops": {
+      "path": ".agents/skills/marketing-loops",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-loops)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.2.0",
+      "computedHash": "sha256-tree-v1:bfbd0adb94c768fa25f31b6fcb5bf81f634cda0f52b4a44de943331d9ebbe71f"
+    },
+    "marketing-plan": {
+      "path": ".agents/skills/marketing-plan",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-plan)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.1.1",
+      "computedHash": "sha256-tree-v1:b0018fd725e034eb06731bbc78d13bf3c2f59ee346f891598ef9ddd80c98204f"
+    },
+    "marketing-psychology": {
+      "path": ".agents/skills/marketing-psychology",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-psychology)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:671e1ac1b45749b64a1b9d53068f0f12896d73888119cf160321df52169a9471"
     },
     "model-orchestration": {
       "path": ".agents/skills/model-orchestration",
@@ -172,6 +420,30 @@
       "declaredVersion": "02e0b2f852b39ea00c43283f999b83fc12079273",
       "computedHash": "sha256-tree-v1:22b5d712f6fef95a92672a94604c5552bcef9a3a41ac92214af14a983445a446"
     },
+    "offers": {
+      "path": ".agents/skills/offers",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/offers)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.0.1",
+      "computedHash": "sha256-tree-v1:7a49417c1f620c0c5ccc1617c3183e66a35a2b6186b317b16c3c007fba652fc3"
+    },
+    "onboarding": {
+      "path": ".agents/skills/onboarding",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/onboarding)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:8a8e7877d13a393d52b71aed34daf92c674680627491e00b08f625a438b3f5e8"
+    },
+    "paywalls": {
+      "path": ".agents/skills/paywalls",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/paywalls)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:cf381d9a6dbbdd611a60ef68f4851b7416375cf7b7e9559e98364f910c12578b"
+    },
     "pick-ui-library": {
       "path": ".agents/skills/pick-ui-library",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/pick-ui-library)",
@@ -179,6 +451,14 @@
       "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:27cebe322d30aaf7fb4da75fe9af2bd5a01750ccdcf0a77aa2a7c16f62c07ba1"
+    },
+    "popups": {
+      "path": ".agents/skills/popups",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/popups)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:60075b2a442ed9f3e1dd40c6fca85ed2eee69ad9b7b01a631b19f5327c6f3e6a"
     },
     "presentation-creation": {
       "path": ".agents/skills/presentation-creation",
@@ -188,6 +468,46 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:f078799049723b0c48326bd17251691932d2add8e164b487f5c75bbf325c9637"
     },
+    "pricing": {
+      "path": ".agents/skills/pricing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/pricing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.1.1",
+      "computedHash": "sha256-tree-v1:970abf008373bf3d3012f1f65f3b2ab95c70b3aa59fd94187d73d278f89b7ea9"
+    },
+    "product-marketing": {
+      "path": ".agents/skills/product-marketing",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/product-marketing)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.1.0",
+      "computedHash": "sha256-tree-v1:733cb2459a9ddbe553d4fda91e9a6fde611db985b26ac70c22325cf674adde02"
+    },
+    "programmatic-seo": {
+      "path": ".agents/skills/programmatic-seo",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/programmatic-seo)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:3b34cc776313afccd9fe7a4b3eac5f7fe89ce31414a22f1b23ca84ca32883b13"
+    },
+    "prospecting": {
+      "path": ".agents/skills/prospecting",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/prospecting)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.1.0",
+      "computedHash": "sha256-tree-v1:8dfd5788b6b261bf8bd0b7b0a181f95bc189ed2dc271df1aea30e8f619db0331"
+    },
+    "public-relations": {
+      "path": ".agents/skills/public-relations",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/public-relations)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.1.1",
+      "computedHash": "sha256-tree-v1:c31239404ff7f77b56a72a1f2212d2154c7cda7ab7af49f11307374a28b60d34"
+    },
     "redesign-existing-projects": {
       "path": ".agents/skills/redesign-existing-projects",
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/redesign-skill)",
@@ -195,6 +515,14 @@
       "audience": "developer",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
       "computedHash": "sha256-tree-v1:474529ab3dedcde2626c2b61a4d4bfe9d5c10003a28f9b3a5711ed76c23317a0"
+    },
+    "referrals": {
+      "path": ".agents/skills/referrals",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/referrals)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:5627fee245e8037c663d8d8b45ac1bee30ce28671ef314b605932db210a0d8a6"
     },
     "research-and-citations": {
       "path": ".agents/skills/research-and-citations",
@@ -212,6 +540,54 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:108544cf22d1a9398c2004fae3bb0cd2465294993e36fd99a61ddb16d4228539"
     },
+    "revops": {
+      "path": ".agents/skills/revops",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/revops)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:003913bfc11e15f2e47852b8984ac8f649ec2630a503eb636465af8b97b7145a"
+    },
+    "sales-enablement": {
+      "path": ".agents/skills/sales-enablement",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/sales-enablement)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:18c068db9b1f7788d18be7096f90a65ce297531b44aee38d05a9a3e9fdbe0492"
+    },
+    "schema": {
+      "path": ".agents/skills/schema",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/schema)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:7d5d586618354d2d4ac43e2e936caa34b894294d621463963c688a0bad2c78c7"
+    },
+    "seo-audit": {
+      "path": ".agents/skills/seo-audit",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/seo-audit)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.1",
+      "computedHash": "sha256-tree-v1:aa23ebe2ad7fcf7bb93cd909b6d00361e725c5c711ce07ea69338b3aabe7ba60"
+    },
+    "signup": {
+      "path": ".agents/skills/signup",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/signup)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:4d13c163ff7e1485cbf644a8b1d3024456b3bcb240527763241884d7bd25c70a"
+    },
+    "site-architecture": {
+      "path": ".agents/skills/site-architecture",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/site-architecture)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:a0323fbb602cbd6944cfbf6bed8b89fef60850a6e6b4c1322c728178c9e43c99"
+    },
     "skill-creator": {
       "path": ".agents/skills/skill-creator",
       "source": "AGI Workforce repository",
@@ -219,6 +595,22 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:3e808a8f26f6cda032bdaf26b09241b468c1c4ef525cf251f253d94a1a2e8fa2"
+    },
+    "sms": {
+      "path": ".agents/skills/sms",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/sms)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:3c5412e7910e19bd686c089d3a71f6e42445916159f7297bd5537883e76c846f"
+    },
+    "social": {
+      "path": ".agents/skills/social",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/social)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.2.0",
+      "computedHash": "sha256-tree-v1:7d45aa851b5a5743c02e5b2a5f73f48df623c91973cc4d21591267274e50d3a4"
     },
     "systematic-debugging": {
       "path": ".agents/skills/systematic-debugging",
@@ -243,6 +635,14 @@
       "audience": "developer",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:dbc8b5af55a7d8f7f7733368114ee5dab255bd6926c611451f688edc6e40a082"
+    },
+    "video": {
+      "path": ".agents/skills/video",
+      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/video)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "2.1.0",
+      "computedHash": "sha256-tree-v1:0f072a8c0f45f43a8b34cd61a8202ad91e0cd3d9c400ca0eb14a41647b260cb5"
     },
     "web-design-guidelines": {
       "path": ".agents/skills/web-design-guidelines",
