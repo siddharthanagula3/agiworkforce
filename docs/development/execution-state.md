@@ -91,11 +91,14 @@ resilience 84eaf9dc3 b9e077d80 642b32800 e7c829ba6; adherence 81be75123
 
 ## CI and security
 
-CI: green on 35ceaa689 except the desktop lane (fixed 095847562 7710bce1e);
-runs on later shas in progress. Guards: 58 check chain green on the pushed
-commits; pre-push moving to a clean worktree of HEAD. Security: trust
-boundary, egress, secrets, RLS boundary guards green; HIPAA unsupported by
-decision; web span scrubbing in flight.
+CI: 1e8902ccd went red in seven lanes with four causes (an index export swept ahead
+of its definition, colour literals in the project page, a lint warning in the
+trace timeline, a desktop wire id collision from the gateway sync); all four fixed,
+33 commits pushed as b77bd2da8 through the new clean worktree pre-push hook
+(954523697), the Rust dedup follows. Guards: the hook now judges commits, not
+the shared tree. Security: trust boundary, egress, secrets, RLS boundary guards
+green; web span scrubbing landed (2cc92999e); vendor adapter allowlist is config
+(1c628446a); HIPAA unsupported by decision.
 
 ## Surfaces
 
