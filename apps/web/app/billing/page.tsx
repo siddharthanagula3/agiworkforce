@@ -1,5 +1,3 @@
-
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Stripe from 'stripe';
 import { isSelfServePaidPlanTier } from '@agiworkforce/types';
@@ -7,6 +5,7 @@ import { requireEnv } from '@shared/utils/env';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { isStripeCheckoutSessionId } from '@/lib/server/stripe-resource-ids';
 import { UpgradeWelcome } from './UpgradeWelcome';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 let stripeClient: Stripe | null = null;
 
@@ -27,7 +26,7 @@ export default async function BillingPage({
     return redirect('/settings/billing');
   }
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     return redirect(`/login?redirectTo=${encodeURIComponent('/settings/billing')}`);
   }

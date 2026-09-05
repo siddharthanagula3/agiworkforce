@@ -11,6 +11,7 @@ import { createError, isAppError, type AppError } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { readJsonBody } from '@/lib/read-json-body';
 import { setCachedAccountStatus } from '@/lib/server/request-context-cache';
+import { getIdentityProvider } from '@/lib/server/identity';
 
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
   return NextResponse.json(
@@ -249,9 +250,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const { clerkClient } = await import('@clerk/nextjs/server');
-          const clerk = await clerkClient();
-          await clerk.users.banUser(targetUserId);
+          await getIdentityProvider().setUserSuspended(targetUserId, true);
         } catch (banError) {
           logger.warn(
             { error: banError, targetUserId },
@@ -311,9 +310,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const { clerkClient } = await import('@clerk/nextjs/server');
-          const clerk = await clerkClient();
-          await clerk.users.unbanUser(targetUserId);
+          await getIdentityProvider().setUserSuspended(targetUserId, false);
         } catch (unbanError) {
           logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Clerk ban');
         }

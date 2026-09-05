@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { auth } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
 import { OperatorDashboardPage } from '@/features/admin/pages/OperatorDashboardPage';
 import {
   isPlatformAdmin,
   PLATFORM_ADMIN_ENV_VAR,
 } from '@/features/admin/lib/platform-admin-access';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
  * authorisation, only the route is.
  */
 export default async function AdminDashboardPage() {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) redirect('/login?redirectTo=/operator');
   if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) notFound();
 

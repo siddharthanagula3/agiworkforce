@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { IdentityProvider } from '@agiworkforce/identity';
 
 import { logger } from '@/lib/logger';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
@@ -42,20 +43,10 @@ const REVOKE_BATCH = 10;
 const MAX_SESSION_PAGES = 10;
 const SESSION_PAGE_SIZE = 50;
 
-interface SessionRevoker {
-  sessions: {
-    getSessionList(options: {
-      userId: string;
-      status: 'active';
-      limit: number;
-      offset: number;
-    }): Promise<{ data: Array<{ id: string }> }>;
-    revokeSession(sessionId: string): Promise<unknown>;
-  };
-}
+type SessionRevoker = Pick<IdentityProvider, 'listUserSessions' | 'revokeSession'>;
 
-async function revokeClerkSessions(
-  client: SessionRevoker,
+async function revokeProviderSessions(
+  identity: SessionRevoker,
   userId: string,
 ): Promise<{ revoked: number; failed: number; errors: string[] }> {
   const ids: string[] = [];
@@ -63,14 +54,13 @@ async function revokeClerkSessions(
 
   try {
     for (let page = 0; page < MAX_SESSION_PAGES; page++) {
-      const response = await client.sessions.getSessionList({
-        userId,
+      const response = await identity.listUserSessions(userId, {
         status: 'active',
         limit: SESSION_PAGE_SIZE,
         offset: page * SESSION_PAGE_SIZE,
       });
-      ids.push(...response.data.map((session) => session.id));
-      if (response.data.length < SESSION_PAGE_SIZE) break;
+      ids.push(...response.sessions.map((session) => session.id));
+      if (response.sessions.length < SESSION_PAGE_SIZE) break;
     }
   } catch (error) {
     // Listing failed, so we cannot know what to revoke. Say so rather than
@@ -88,7 +78,7 @@ async function revokeClerkSessions(
 
   for (let index = 0; index < ids.length; index += REVOKE_BATCH) {
     const batch = ids.slice(index, index + REVOKE_BATCH);
-    const results = await Promise.allSettled(batch.map((id) => client.sessions.revokeSession(id)));
+    const results = await Promise.allSettled(batch.map((id) => identity.revokeSession(id)));
     for (const result of results) {
       if (result.status === 'fulfilled') revoked += 1;
       else failed += 1;
@@ -103,7 +93,7 @@ async function revokeClerkSessions(
  * Revokes every credential a departing member holds.
  *
  * Each step is independent and a failure in one does not abandon the rest: a
- * Clerk outage must not leave the member's developer keys live as well. What
+ * provider outage must not leave the member's developer keys live as well. What
  * could not be reached is returned so the caller can record it, because a
  * deprovision that silently half-succeeded is worse than one that failed
  * loudly.
@@ -116,13 +106,13 @@ async function revokeClerkSessions(
  */
 export async function deprovisionMember(
   db: DatabaseAdapter,
-  clerk: SessionRevoker,
+  identity: SessionRevoker,
   input: { userId: string; organizationId: string },
 ): Promise<DeprovisionResult> {
   const { userId, organizationId } = input;
   const errors: string[] = [];
 
-  const sessions = await revokeClerkSessions(clerk, userId);
+  const sessions = await revokeProviderSessions(identity, userId);
   errors.push(...sessions.errors);
 
   let deviceTokensRevoked = 0;

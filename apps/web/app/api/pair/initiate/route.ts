@@ -1,11 +1,11 @@
 export const runtime = 'nodejs';
 
-import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
 const DEFAULT_TTL_SECONDS = 300;
@@ -32,7 +32,7 @@ const signalingResponseSchema = z.object({
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

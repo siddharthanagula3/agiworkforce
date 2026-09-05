@@ -1,5 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
-
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
@@ -8,6 +6,7 @@ import {
   ContinueWithCurrentTerms,
   RecordTermsAcceptance,
 } from '../../signup/complete/RecordTermsAcceptance';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -19,7 +18,7 @@ export default async function LoginCompletePage({
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/');
   const isDesktopSurface = params.surface === 'desktop';
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   if (!userId) {
     // NOT a redirect. /login renders Clerk's <SignIn forceRedirectUrl> pointing

@@ -3,9 +3,10 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
-import { auth } from '@clerk/nextjs/server';
+import type { IdentityRequestAuth } from '@agiworkforce/identity';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getRequestIdentity } from '@/lib/server/identity';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -94,7 +95,7 @@ export async function getUserScopedDb(
     };
   }
 
-  const { userId, getToken } = await auth();
+  const { subject: userId, getToken } = await getRequestIdentity();
   if (userId) {
     const token = await getToken();
     if (token) {
@@ -123,15 +124,16 @@ export interface CurrentUserRlsDb {
 }
 
 export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
-  let session: Awaited<ReturnType<typeof auth>>;
+  let session: IdentityRequestAuth;
   try {
-    session = await auth();
+    session = await getRequestIdentity();
   } catch {
-    // Routes the Clerk proxy matcher excludes have no auth context; auth()
-    // throws there, and for this helper that simply means signed out.
+    // Routes the proxy's session matcher excludes have no auth context; reading
+    // the request identity throws there, and for this helper that simply means
+    // signed out.
     return null;
   }
-  const { userId, getToken } = session;
+  const { subject: userId, getToken } = session;
   if (!userId) return null;
   const token = await getToken();
   if (!token) return null;

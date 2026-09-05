@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -20,6 +19,7 @@ import {
 } from '@/lib/server/data-rights-requests';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const CreateRequestSchema = z.object({
   requestType: z.string().refine(isDataRightsRequestType, 'Unknown request type'),
@@ -97,7 +97,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   let userId: string | null = null;
   try {
-    userId = (await auth()).userId ?? null;
+    userId = (await getRequestIdentity()).subject ?? null;
   } catch {
     userId = null;
   }
@@ -147,7 +147,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized('Sign in to see the requests recorded against your account');
   }

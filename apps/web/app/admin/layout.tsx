@@ -1,7 +1,7 @@
-import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { assertAccountActive } from '@/lib/api-auth';
+import { getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
 import { logger } from '@/lib/logger';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
@@ -13,7 +13,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   if (!userId) {
     return redirect('/login?redirectTo=/admin');
@@ -27,9 +27,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // sync). Demanding the org role here would lock the operator out of their own
   // console, so the segment admits either and each page gates itself.
   if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId as string);
-    if (!hasAdminConsoleAccess(user.publicMetadata)) {
+    const user = await getIdentityUser(userId);
+    if (!hasAdminConsoleAccess(user?.publicMetadata)) {
       redirect('/');
     }
   }

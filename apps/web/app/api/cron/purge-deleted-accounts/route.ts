@@ -10,6 +10,7 @@ import {
   eraseUserAccountData,
   openErasureTombstone,
 } from '@/lib/server/account-erasure';
+import { getIdentityProvider } from '@/lib/server/identity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -40,16 +41,14 @@ function isMissingTable(error: unknown): boolean {
   return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
 }
 
-async function deleteClerkIdentity(
+async function deleteProviderIdentity(
   userId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { clerkClient } = await import('@clerk/nextjs/server');
-  const client = await clerkClient();
   try {
-    await client.users.deleteUser(userId);
+    await getIdentityProvider().deleteUser(userId);
     return { ok: true };
-  } catch (clerkError) {
-    const message = clerkError instanceof Error ? clerkError.message : String(clerkError);
+  } catch (deleteError) {
+    const message = deleteError instanceof Error ? deleteError.message : String(deleteError);
     if (/not\s*found|404/i.test(message)) return { ok: true };
     return { ok: false, error: message };
   }
@@ -169,7 +168,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const identity = await deleteClerkIdentity(userId);
+      const identity = await deleteProviderIdentity(userId);
       if (!identity.ok) {
         failed++;
         logger.error({ userId, error: identity.error }, 'Clerk account deletion failed');
@@ -246,7 +245,7 @@ export async function GET(request: NextRequest) {
       await closeErasureTombstone(userId);
 
       if (profilePresent) {
-        const identity = await deleteClerkIdentity(userId);
+        const identity = await deleteProviderIdentity(userId);
         if (!identity.ok) {
           reErasureFailed++;
           logger.error(

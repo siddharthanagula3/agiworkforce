@@ -1,7 +1,6 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
@@ -62,7 +61,8 @@ export async function requireCurrentUserId(request?: NextRequest): Promise<strin
     const { getClerkAuthUser } = await import('@/lib/api-auth');
     return (await getClerkAuthUser(request)).userId;
   }
-  const { userId } = await auth();
+  const { getRequestIdentity } = await import('@/lib/server/identity');
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized();
   }

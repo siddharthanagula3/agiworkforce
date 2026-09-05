@@ -3,7 +3,6 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { requireCsrfToken } from '@/lib/csrf';
@@ -22,6 +21,7 @@ import {
   normalizeToken,
   type PublicContentTarget,
 } from '../admin/takedown/lib/public-target';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 // Public intake for a rights-holder notice about content this deployment serves
 // at a public URL. It is unauthenticated on purpose: the person whose work was
@@ -171,7 +171,7 @@ async function handleNotice(request: NextRequest): Promise<NextResponse> {
 
   let reporterUserId: string | null = null;
   try {
-    reporterUserId = (await auth()).userId ?? null;
+    reporterUserId = (await getRequestIdentity()).subject ?? null;
   } catch {
     reporterUserId = null;
   }
