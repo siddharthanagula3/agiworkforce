@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import AdminConsolePage, { READINESS_ATTESTED_AS_OF } from './AdminConsolePage';
+import AdminConsolePage from './AdminConsolePage';
 
 vi.mock('../components/SecurityOperationsPanel', () => ({
   default: () => <div data-testid="security-operations-panel">Live security operations</div>,
@@ -113,42 +113,26 @@ describe('AdminConsolePage, readiness ledger provenance', () => {
     const disclaimer = screen.getByTestId('readiness-ledger-disclaimer').textContent ?? '';
 
     expect(disclaimer).toMatch(/not a live health check/i);
-    expect(disclaimer).toContain(READINESS_ATTESTED_AS_OF);
+    expect(disclaimer).toMatch(/read from this deployment/i);
     expect(ledgerRows(container).length).toBeGreaterThan(0);
   });
 
-  it('carries a machine-readable as-of date rather than an undated claim', () => {
-    render(<AdminConsolePage />);
-    const stamp = screen.getByText(READINESS_ATTESTED_AS_OF, { selector: 'time' });
-
-    expect(stamp.getAttribute('dateTime')).toBe(READINESS_ATTESTED_AS_OF);
-    expect(READINESS_ATTESTED_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it('labels every row as either live configuration or a dated self-attestation', () => {
+  it('no longer carries a row that is only a written self-attestation', () => {
     const { container } = render(<AdminConsolePage />);
+    const section = container.querySelector('[aria-labelledby="readiness-ledger-title"]');
 
-    for (const row of ledgerRows(container)) {
-      const badge = within(row).getByText(/.+/, { selector: '[data-source]' });
-      const source = badge.getAttribute('data-source');
-
-      expect(['config', 'attested']).toContain(source);
-      if (source === 'attested') {
-        expect(badge.textContent).toContain(READINESS_ATTESTED_AS_OF);
-      }
-    }
+    expect(section?.querySelectorAll('[data-source]').length).toBe(0);
+    expect(section?.textContent ?? '').not.toMatch(/self-attested/i);
   });
 
-  it('does not pass prose-only claims off as live configuration', () => {
+  it('keeps only the areas this build can answer from its own configuration', () => {
     const { container } = render(<AdminConsolePage />);
-    const attested = ledgerRows(container)
-      .filter((row) => row.querySelector('[data-source="attested"]'))
-      .map((row) => row.querySelector('td')?.textContent ?? '');
+    const areas = ledgerRows(container).map((row) => row.querySelector('td')?.textContent ?? '');
 
-    expect(attested).toEqual(['Identity', 'Audit logs', 'Support loop']);
+    expect(areas).toEqual(['Privacy modes', 'Managed compute']);
   });
 
-  it('marks the env-driven managed-compute row as live configuration', () => {
+  it('reads the managed-compute row from the environment on every render', () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', 'off');
     const { container } = render(<AdminConsolePage />);
     const row = ledgerRows(container).find((candidate) =>
@@ -156,6 +140,6 @@ describe('AdminConsolePage, readiness ledger provenance', () => {
     );
 
     expect(row).toBeDefined();
-    expect(row?.querySelector('[data-source]')?.getAttribute('data-source')).toBe('config');
+    expect(row?.textContent).toContain('is engaged as an incident-response kill-switch');
   });
 });
