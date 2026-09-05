@@ -111,3 +111,35 @@ describe('ProjectCard, archive/unarchive menu', () => {
     expect(onUnarchive).toHaveBeenCalledWith(archived);
   });
 });
+
+describe('ProjectCard, kebab menu (leader-matched shape)', () => {
+  it('lists Share, Edit details, Archive, Delete in that order, without a duplicate Star', () => {
+    render(
+      <ProjectCard
+        project={PROJECT}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onArchive={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Project options' }));
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim());
+    expect(items).toEqual(['Share', 'Edit details', 'Archive', 'Delete']);
+  });
+
+  it('calls onShare with the project and closes the menu', () => {
+    const onShare = vi.fn();
+    render(<ProjectCard project={PROJECT} onShare={onShare} onEdit={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Project options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
+    expect(onShare).toHaveBeenCalledWith(PROJECT);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('omits Share when the host supplies no handler', () => {
+    render(<ProjectCard project={PROJECT} onEdit={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Project options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Share' })).toBeNull();
+  });
+});

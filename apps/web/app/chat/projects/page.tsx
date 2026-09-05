@@ -119,6 +119,16 @@ export default function ProjectsPage() {
     [updateProject],
   );
 
+  const handleShareProject = useCallback(async (project: Project) => {
+    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(project.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Project link copied');
+    } catch (error) {
+      toast.error(toUserMessage(error, 'Could not copy the project link'));
+    }
+  }, []);
+
   const handleDeleteProjectServer = useCallback(
     async (project: Project, alreadyRemovedFromView: boolean) => {
       try {
@@ -362,6 +372,7 @@ export default function ProjectsPage() {
                 onSelect={(project) => {
                   router.push(`/chat/projects/${encodeURIComponent(project.id)}`);
                 }}
+                onShareProject={(project) => void handleShareProject(project)}
                 onEditProject={(project) => setEditProject(project)}
                 onArchiveProject={(project) => {
                   void handleArchiveProjectServer(project, true);
@@ -442,6 +453,7 @@ export default function ProjectsPage() {
                           setActiveProject(p.id);
                           router.push(`/chat/projects/${encodeURIComponent(p.id)}`);
                         }}
+                        onShare={(p) => void handleShareProject(p)}
                         onEdit={(p) => setEditProject(p)}
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}
                         onUnarchive={(p) => void handleUnarchiveProjectServer(p)}
