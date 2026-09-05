@@ -2,26 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
+  scoped: vi.fn(),
   query: vi.fn(),
   execute: vi.fn(),
-  resolveOrganization: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.auth }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mocks.resolveOrganization,
-}));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.scoped }));
 
 import { POST } from './route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -35,8 +29,12 @@ function request(): NextRequest {
 
 describe('POST /api/autotag/classify workspace boundary', () => {
   beforeEach(() => {
-    mocks.auth.mockResolvedValue({ userId: 'user-1' });
-    mocks.resolveOrganization.mockResolvedValue(ORGANIZATION_ID);
+    vi.clearAllMocks();
+    mocks.scoped.mockResolvedValue({
+      db: { query: mocks.query, execute: mocks.execute },
+      userId: 'user-1',
+      organizationId: ORGANIZATION_ID,
+    });
     mocks.query
       .mockResolvedValueOnce([{ id: 'conversation-1' }])
       .mockResolvedValueOnce([{ content: 'Please fix this test failure' }]);
@@ -63,5 +61,11 @@ describe('POST /api/autotag/classify workspace boundary', () => {
     expect(response.status).toBe(404);
     expect(mocks.query).toHaveBeenCalledTimes(1);
     expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('reads and writes through the rls scoped handle, never the schema owner', async () => {
+    await POST(request());
+
+    expect(getUserScopedDb).toHaveBeenCalledTimes(1);
   });
 });

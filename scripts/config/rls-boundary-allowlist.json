@@ -22,18 +22,6 @@
       "reason": "RFC 8628 device flow, the row is resolved by device_id and user_code, not the caller, until the poll succeeds and a developer token is minted"
     },
     {
-      "path": "apps/web/app/api/autotag/batch/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/autotag/classify/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/autotag/conversations/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/billing/top-up/route.ts",
       "reason": "pending scoped migration"
     },
