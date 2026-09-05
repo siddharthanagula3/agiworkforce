@@ -37,9 +37,6 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 /** Both shells gate their narrow layout on this query; `md:` is its complement. */
 const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 const FOOTER_ENTRY_SELECTOR = '[data-testid^="composer-footer-entry-"]';
-const FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
-const ACCURACY_ENTRY_TESTID = `${FOOTER_ENTRY_TESTID_PREFIX}accuracy`;
-const MODEL_ENTRY_TESTID = `${FOOTER_ENTRY_TESTID_PREFIX}model`;
 const MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 const DESTINATION_HOST = 'AGI managed cloud';
 
@@ -69,20 +66,12 @@ function renderComposer() {
   );
 }
 
-/** Entries the phone actually paints: everything without the `hidden` gate. */
-function mobileVisibleEntryKeys(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOOTER_ENTRY_SELECTOR))
-    .filter((entry) => !entry.className.split(/\s+/).includes('hidden'))
-    .map((entry) => entry.dataset['testid']?.slice(FOOTER_ENTRY_TESTID_PREFIX.length) ?? '');
-}
-
-// M11/parity wave 1. The footer is now exactly one quiet line: the disclaimer
-// left, the resolved model and effort right (Claude's convention); every
-// other entry (web search, memory, the send route, Privacy, Feedback) moved
-// out entirely, each with a second entry point named at its new render site.
-// jsdom does not evaluate media queries, so what is asserted here is the
-// responsive CLASS contract; the pixel outcome belongs to a browser run.
-describe('composer footer collapses at the mobile breakpoint (M11)', () => {
+// The founder removed the footer line on 2026-09-05, so there is no longer a
+// quiet row under the card to collapse at a breakpoint: the accuracy caveat
+// and the resolved-model summary are both gone and nothing replaced them.
+// What still has to hold is that every entry point the footer used to own has
+// a home elsewhere, which for the send route is the "+" menu at every width.
+describe('composer carries no footer line under the card', () => {
   beforeEach(() => {
     useBillingStore.setState({
       subscription: {
@@ -107,37 +96,21 @@ describe('composer footer collapses at the mobile breakpoint (M11)', () => {
     })) as unknown as typeof window.matchMedia;
   });
 
-  it('leaves the accuracy disclaimer as the only footer entry a phone paints', () => {
+  it('renders no footer entry at any width', () => {
     const { container } = renderComposer();
 
-    expect(mobileVisibleEntryKeys(container)).toEqual(['accuracy']);
-    expect(screen.getByTestId('ai-accuracy-disclaimer').textContent).toBe(AI_ACCURACY_DISCLAIMER);
+    expect(container.querySelectorAll(FOOTER_ENTRY_SELECTOR)).toHaveLength(0);
   });
 
-  it('gates only the resolved-model entry on the same breakpoint the shells use', () => {
-    const { container } = renderComposer();
-
-    const gated = Array.from(container.querySelectorAll<HTMLElement>(FOOTER_ENTRY_SELECTOR)).filter(
-      (entry) => entry.className.split(/\s+/).includes('hidden'),
-    );
-
-    expect(gated.map((entry) => entry.dataset['testid'])).toEqual([MODEL_ENTRY_TESTID]);
-    for (const entry of gated) {
-      expect(entry.className).toContain('md:inline');
-    }
-  });
-
-  it('renders the accuracy entry with no separator (the footer is a two-child row, not a joined list)', () => {
+  it('drops the accuracy caveat and the resolved-model summary with the line', () => {
     renderComposer();
 
-    const separator = screen
-      .getByTestId(ACCURACY_ENTRY_TESTID)
-      .querySelector<HTMLElement>('[aria-hidden="true"]');
-
-    expect(separator).toBeNull();
+    expect(screen.queryByTestId('ai-accuracy-disclaimer')).not.toBeInTheDocument();
+    expect(screen.queryByText(AI_ACCURACY_DISCLAIMER)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composer-model-summary')).not.toBeInTheDocument();
   });
 
-  it('keeps the send route reachable from the "+" menu at every width once the footer drops it', () => {
+  it('keeps the send route reachable from the "+" menu at every width', () => {
     renderComposer();
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
@@ -145,15 +118,5 @@ describe('composer footer collapses at the mobile breakpoint (M11)', () => {
     const route = screen.getByTestId(MENU_SEND_ROUTE_TESTID);
     expect(route.className).not.toContain('md:hidden');
     expect(within(route).getByText(`Sent to ${DESTINATION_HOST}`)).toBeTruthy();
-  });
-
-  it('still renders both entries for a desktop viewport to reveal', () => {
-    const { container } = renderComposer();
-
-    expect(
-      Array.from(container.querySelectorAll<HTMLElement>(FOOTER_ENTRY_SELECTOR)).map(
-        (entry) => entry.dataset['testid'],
-      ),
-    ).toEqual([ACCURACY_ENTRY_TESTID, MODEL_ENTRY_TESTID]);
   });
 });

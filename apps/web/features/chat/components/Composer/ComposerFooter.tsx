@@ -84,7 +84,7 @@ const PICKER_ROW_CLASS =
 const PICKER_ROW_NAME_CLASS = 'block truncate text-sm leading-5';
 const PICKER_ROW_GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const PICKER_BADGE_CLASS =
-  'shrink-0 rounded-full px-1.5 py-px text-[11px] font-semibold uppercase tracking-wide';
+  'shrink-0 rounded-full px-1.5 py-px text-xs font-semibold uppercase tracking-wide';
 const PICKER_DIVIDER_CLASS = 'shrink-0 border-b border-[var(--chat-border)]';
 const PICKER_GLYPH_CLASS = 'h-3 w-3';
 const PICKER_ICON_SIZE = 16;
@@ -681,43 +681,6 @@ interface ComposerFooterProps {
   className?: string;
 }
 
-/**
- * Plain-text "resolved model · effort" summary, the value the composer
- * footer line shows on its right (matching the Claude convention). Owns its
- * own store reads so a caller mounts it without threading the model/effort
- * state this file already resolves for the picker itself.
- */
-export function ComposerModelSummary({ className }: { className?: string }) {
-  useModelStore((s) => s.selectedModelId);
-  const getSelectedModel = useModelStore((s) => s.getSelectedModel);
-  const thinkingEffort = useThinkingStore((s) => s.effort);
-  const subscription = useBillingStore((s) => s.subscription);
-  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
-  const billingUnauthenticated = useBillingStore((s) => s.unauthenticated === true);
-  const tier = subscription?.tier ?? 'free';
-  const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
-
-  const selectedModel = getSelectedModel();
-  const reasoning = reasoningFor(selectedModel);
-  const supportsAdaptive = modelSupportsThinking(selectedModel);
-  const { allowed: effortChips } =
-    knownTier === null
-      ? { allowed: reasoning.supportedEfforts ?? [] }
-      : splitEffortsByEntitlement(reasoning, knownTier);
-  const hasEffortControl = supportsAdaptive && effortChips.length > 0;
-  const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
-  const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
-    ? thinkingEffort
-    : defaultStoreEffort(reasoning);
-
-  return (
-    <span className={className} data-testid="composer-model-summary">
-      {selectedModel.name}
-      {hasEffortControl ? ` · ${EFFORT_LABEL[effectiveEffort]}` : ''}
-    </span>
-  );
-}
-
 export function ComposerFooter({
   showModelSelector = true,
   showModelSearch = true,
@@ -993,10 +956,9 @@ export function ComposerFooter({
             ChatComposerNew: plain Enter sends, Shift+Enter newline (ChatGPT/Claude
             convention), Cmd/Ctrl+Enter also sends. */}
         <div className="flex min-w-0 items-center gap-2">
-          {/* Response style selector · hidden below sm so the model selector keeps a
-              usable width on the narrow (mobile) composer row. Style is a secondary
-              control and, like claude.ai's mobile composer, is dropped at small widths
-              rather than crushing the model picker. */}
+          {/* Response style selector, dropped below sm so the model trigger,
+              mic and send keep the control row to a single line on a phone.
+              claude.ai's mobile composer drops it for the same reason. */}
           {showStyleSelector && (
             <div className="hidden sm:block">
               <StyleSelector />
@@ -1041,11 +1003,11 @@ export function ComposerFooter({
                       layouts. Floor + the narrow-width control trims in ChatComposerNew
                       keep this selector visible, tappable, and clear of Send down to
                       ~320px. */}
-                  <span className="min-w-[3.5rem] max-w-[140px] shrink truncate">
+                  <span className="min-w-[3.5rem] max-w-[140px] shrink truncate font-medium">
                     {modelChangePending ? 'Saving…' : selectedModel.name}
                   </span>
                   {hasEffortControl && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="shrink-0 font-normal text-muted-foreground">
                       {EFFORT_LABEL[effectiveEffort]}
                     </span>
                   )}
@@ -1091,7 +1053,7 @@ export function ComposerFooter({
                       {showThinkingSwitch && (
                         <div className={PICKER_ROW_CLASS}>
                           <span className="min-w-0 flex-1">
-                            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground/85`}>
+                            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
                               Extended thinking
                             </span>
                             <span className={PICKER_ROW_GUIDANCE_CLASS}>
@@ -1119,7 +1081,7 @@ export function ComposerFooter({
                             aria-controls={effortPanelId}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className={`${PICKER_ROW_NAME_CLASS} text-foreground/85`}>
+                              <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
                                 Effort
                               </span>
                               <span className={PICKER_ROW_GUIDANCE_CLASS}>
@@ -1225,7 +1187,7 @@ export function ComposerFooter({
                           aria-expanded={showMore}
                         >
                           <span className="min-w-0 flex-1">
-                            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground/85`}>
+                            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
                               More models
                             </span>
                           </span>
