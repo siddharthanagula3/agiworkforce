@@ -86,6 +86,7 @@ export interface ScheduleInput {
   expiresAt?: string | null;
   maxExecutions?: number | null;
   notificationSettings?: unknown;
+  projectId?: string | null;
 }
 
 export type ScheduleUpdateInput = Partial<ScheduleInput>;
@@ -122,6 +123,7 @@ interface TaskRow extends Record<string, unknown> {
   id: string;
   user_id: string;
   organization_id: string | null;
+  project_id: string | null;
   name: string;
   description: string | null;
   schedule_type: string;
@@ -202,6 +204,7 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
   return {
     id: row.id,
     userId: row.user_id,
+    projectId: row.project_id,
     name: row.name,
     description: row.description,
     scheduleType: scheduleType as ScheduleTask['scheduleType'],
@@ -293,6 +296,7 @@ interface ValidatedScheduleDefinition {
   description: string | null;
   prompt: string;
   model: string;
+  projectId: string | null;
   scheduleType: ScheduleTask['scheduleType'];
   cronExpression: string | null;
   executeAt: string | null;
@@ -323,6 +327,7 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'expiresAt',
   'maxExecutions',
   'notificationSettings',
+  'projectId',
 ]);
 
 function validateScheduleInput(
@@ -348,6 +353,7 @@ function validateScheduleInput(
     if (description && description.length > 2_000) {
       throw new ScheduleValidationError('Description must be 2,000 characters or less');
     }
+    const projectId = input.projectId?.trim() || null;
     if (input.notificationSettings !== undefined) {
       throw new ScheduleValidationError('Schedule notifications are not available yet');
     }
@@ -415,6 +421,7 @@ function validateScheduleInput(
       description,
       prompt,
       model: normalizeModel(input.model),
+      projectId,
       scheduleType,
       cronExpression,
       executeAt,
@@ -472,18 +479,45 @@ export async function assertScheduleQuota(
   }
 }
 
+export async function assertProjectOwnership(
+  db: DatabaseAdapter,
+  userId: string,
+  projectId: string,
+): Promise<void> {
+  const [row] = await db.query<{ id: string }>(
+    `select id from user_projects where id = $1 and user_id = $2 and deleted_at is null limit 1`,
+    [projectId, userId],
+  );
+  if (!row) {
+    throw new ScheduleValidationError('Project not found or not owned by this account');
+  }
+}
+
 export async function listSchedules(
   db: DatabaseAdapter,
   userId: string,
-  page: { limit: number; offset: number },
+  page: { limit: number; offset: number; projectId?: string | null },
 ): Promise<ScheduleTask[]> {
-  const rows = await db.query<TaskRow>(
-    `select * from scheduled_tasks
-     where user_id = $1
-     order by created_at desc, id desc
-     limit $2 offset $3`,
-    [userId, clampInteger(page.limit, 1, MAX_PAGE_SIZE), clampInteger(page.offset, 0, 10_000)],
-  );
+  const rows = page.projectId
+    ? await db.query<TaskRow>(
+        `select * from scheduled_tasks
+         where user_id = $1 and project_id = $2
+         order by created_at desc, id desc
+         limit $3 offset $4`,
+        [
+          userId,
+          page.projectId,
+          clampInteger(page.limit, 1, MAX_PAGE_SIZE),
+          clampInteger(page.offset, 0, 10_000),
+        ],
+      )
+    : await db.query<TaskRow>(
+        `select * from scheduled_tasks
+         where user_id = $1
+         order by created_at desc, id desc
+         limit $2 offset $3`,
+        [userId, clampInteger(page.limit, 1, MAX_PAGE_SIZE), clampInteger(page.offset, 0, 10_000)],
+      );
   return rows.map(mapScheduleTask);
 }
 
@@ -522,15 +556,18 @@ export async function createSchedule(
   options: { now?: Date } = {},
 ): Promise<ScheduleTask> {
   const definition = validateScheduleInput(input, options.now ?? new Date());
+  if (definition.projectId) await assertProjectOwnership(db, userId, definition.projectId);
   const [row] = await db.query<TaskRow>(
     `insert into scheduled_tasks (
        user_id, name, description, schedule_type, cron_expression, execute_at,
        interval_ms, timezone, is_enabled, expires_at, max_executions,
-       action_type, action_config, prompt, model, status, next_execution_at, metadata
+       action_type, action_config, prompt, model, status, next_execution_at, metadata,
+       project_id
      ) values (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10, $11,
-       'agent', null, $12, $13, $14, $15, $16::jsonb
+       'agent', null, $12, $13, $14, $15, $16::jsonb,
+       $17
      ) returning *`,
     [
       userId,
@@ -549,6 +586,7 @@ export async function createSchedule(
       definition.status,
       definition.nextExecutionAt,
       JSON.stringify(definition.metadata),
+      definition.projectId,
     ],
   );
   if (!row) throw new Error('Schedule insert returned no row');
@@ -588,6 +626,7 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     isActive: task.isEnabled,
     expiresAt: task.expiresAt,
     maxExecutions: task.maxExecutions,
+    projectId: task.projectId ?? null,
   };
 }
 
@@ -639,6 +678,9 @@ export async function updateSchedule(
         throw new ScheduleValidationError('Schedule expiration must be after its next occurrence');
       }
     }
+    if (definition.projectId && definition.projectId !== (current.projectId ?? null)) {
+      await assertProjectOwnership(tx, userId, definition.projectId);
+    }
 
     const [row] = await tx.query<TaskRow>(
       `update scheduled_tasks
@@ -646,6 +688,7 @@ export async function updateSchedule(
            execute_at = $7, interval_ms = $8, timezone = $9, is_enabled = $10,
            expires_at = $11, max_executions = $12, prompt = $13, model = $14,
            status = $15, next_execution_at = $16, metadata = $17::jsonb,
+           project_id = $18,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
@@ -667,6 +710,7 @@ export async function updateSchedule(
         definition.status,
         definition.nextExecutionAt,
         JSON.stringify(definition.metadata),
+        definition.projectId,
       ],
     );
     if (!row) throw new ScheduleNotFoundError();
