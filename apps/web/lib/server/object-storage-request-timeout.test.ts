@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createS3ObjectStore, type ObjectStore } from '@agiworkforce/object-storage';
+import { OBJECT_STORAGE_REQUEST_TIMEOUT_MS } from './object-storage-timeouts';
 
 const sendMock = vi.hoisted(() => vi.fn());
+const storeMock = vi.hoisted(() => ({ current: null as ObjectStore | null }));
 
-vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@aws-sdk/client-s3')>();
+vi.mock('./object-storage-runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./object-storage-runtime')>();
   return {
     ...actual,
-    S3Client: class {
-      readonly send = sendMock;
-    },
+    getObjectStore: () => storeMock.current,
   };
 });
 
 import { getPrivateObject, ObjectStorageTimeoutError } from './object-storage';
-import { OBJECT_STORAGE_REQUEST_TIMEOUT_MS } from './object-storage-timeouts';
 
 const ENV_KEYS = [
   'CLOUDFLARE_R2_ACCOUNT_ID',
@@ -33,6 +33,10 @@ beforeEach(() => {
   process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'public-media';
   process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'private-media';
   sendMock.mockReset();
+  storeMock.current = createS3ObjectStore({
+    client: { send: sendMock } as never,
+    requestTimeoutMs: OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
+  });
 });
 
 afterEach(() => {
