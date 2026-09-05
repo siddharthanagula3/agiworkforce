@@ -40,6 +40,7 @@ let listedSandboxes: Array<{
   sandboxId: string;
   startedAt: Date;
   metadata: Record<string, string>;
+  state?: 'running' | 'paused';
 }> = [];
 const list = vi.fn(() => {
   let served = false;
@@ -140,5 +141,57 @@ describe('reclaimAbandonedE2BSandboxes', () => {
 
     expect(report.skipped).toBe(true);
     expect(list).not.toHaveBeenCalled();
+  });
+});
+
+describe('paused sandboxes give up their slot sooner', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+
+  it('reclaims a paused sandbox past the paused window a running one would keep', async () => {
+    const now = new Date(20 * HOUR_MS);
+    listedSandboxes = [
+      {
+        sandboxId: 'sbx-paused',
+        startedAt: new Date(now.getTime() - 3 * HOUR_MS),
+        metadata: { userId: 'user-1', codeSessionId: 'cs-1' },
+        state: 'paused',
+      },
+      {
+        sandboxId: 'sbx-running',
+        startedAt: new Date(now.getTime() - 3 * HOUR_MS),
+        metadata: { userId: 'user-1', codeSessionId: 'cs-2' },
+        state: 'running',
+      },
+    ];
+    sessions.set('cs-1', { sandboxId: 'sbx-paused' });
+    sessions.set('cs-2', { sandboxId: 'sbx-running' });
+
+    const { reclaimAbandonedE2BSandboxes } = await import('../reclaim');
+    const report = await reclaimAbandonedE2BSandboxes({ now });
+
+    expect(report.reclaimed).toBe(1);
+    expect(report.retained).toBe(1);
+    expect(kill).toHaveBeenCalledWith('sbx-paused');
+    expect(kill).not.toHaveBeenCalledWith('sbx-running');
+  });
+
+  it('keeps a paused sandbox that is still inside the paused window', async () => {
+    const now = new Date(20 * HOUR_MS);
+    listedSandboxes = [
+      {
+        sandboxId: 'sbx-warm',
+        startedAt: new Date(now.getTime() - 10 * 60 * 1000),
+        metadata: { userId: 'user-1', codeSessionId: 'cs-1' },
+        state: 'paused',
+      },
+    ];
+    sessions.set('cs-1', { sandboxId: 'sbx-warm' });
+
+    const { reclaimAbandonedE2BSandboxes } = await import('../reclaim');
+    const report = await reclaimAbandonedE2BSandboxes({ now });
+
+    expect(report.reclaimed).toBe(0);
+    expect(report.retained).toBe(1);
+    expect(kill).not.toHaveBeenCalled();
   });
 });
