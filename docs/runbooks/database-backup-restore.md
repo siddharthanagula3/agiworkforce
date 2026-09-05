@@ -170,8 +170,8 @@ database name, which is how the drill runs locally and in CI. Run it against
 the Homebrew Postgres this project uses for local development:
 
 ```bash
-AGI_RESTORE_DRILL_SOURCE_URL="postgresql://neondb_owner:localdev@127.0.0.1:5432/agiworkforce_dev" \
-AGI_RESTORE_DRILL_TARGET_ADMIN_URL="postgresql://neondb_owner:localdev@127.0.0.1:5432/postgres" \
+AGI_RESTORE_DRILL_SOURCE_URL="postgresql://<user>:<your-password>@127.0.0.1:5432/agiworkforce_dev" \
+AGI_RESTORE_DRILL_TARGET_ADMIN_URL="postgresql://<user>:<your-password>@127.0.0.1:5432/postgres" \
 AGI_RESTORE_DRILL_PG_BIN_DIR="/opt/homebrew/opt/postgresql@17/bin" \
   node scripts/db-restore-drill-logical.mjs
 ```
