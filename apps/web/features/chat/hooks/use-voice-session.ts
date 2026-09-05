@@ -16,7 +16,7 @@ import {
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
   type VoiceSessionState,
-} from '@features/chat/lib/voice-session-machine';
+} from '@agiworkforce/unified-chat';
 import {
   ANALYSER_FFT_SIZE,
   readAnalyserLevel,

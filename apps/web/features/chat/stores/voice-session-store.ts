@@ -9,7 +9,7 @@ import {
   VOICE_SESSION_EVENT,
   type VoiceSessionEvent,
   type VoiceSessionState,
-} from '@features/chat/lib/voice-session-machine';
+} from '@agiworkforce/unified-chat';
 
 const STORE_NAME = 'agi-web-voice-session';
 const STORE_VERSION = 1;
