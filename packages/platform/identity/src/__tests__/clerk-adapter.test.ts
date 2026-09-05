@@ -148,7 +148,10 @@ describe('account and session reads', () => {
       getUser: async () => ({
         id: 'user_1',
         emailAddresses: [{ emailAddress: 'first@b.test' }, { emailAddress: 'second@b.test' }],
-        primaryEmailAddress: { emailAddress: 'primary@b.test' },
+        primaryEmailAddress: {
+          emailAddress: 'primary@b.test',
+          verification: { status: 'verified' },
+        },
         firstName: 'Ada',
         lastName: 'Lovelace',
         username: 'ada',
@@ -166,6 +169,7 @@ describe('account and session reads', () => {
     await expect(new ClerkIdentityProvider().getUser('user_1')).resolves.toEqual({
       id: 'user_1',
       primaryEmail: 'primary@b.test',
+      primaryEmailVerification: 'verified',
       emails: ['first@b.test', 'second@b.test'],
       firstName: 'Ada',
       lastName: 'Lovelace',
