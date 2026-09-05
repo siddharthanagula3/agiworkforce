@@ -388,35 +388,6 @@
       "released": "July 2026",
       "speed": "medium"
     },
-    "grok-4.5": {
-      "contextWindow": 500000,
-      "inputCost": 2.0,
-      "outputCost": 6.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": true,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": false
-      },
-      "benchmarks": {
-        "swebench": 68,
-        "humaneval": 96.5,
-        "mmlu": 91.5,
-        "gpqa": 80,
-        "aime": 82
-      },
-      "speed": "fast",
-      "released": "July 2026"
-    },
     "openrouter-auto": {
       "contextWindow": 2000000,
       "inputCost": 0,

@@ -56,7 +56,7 @@ const anthropicPremiumModelKey = registry.policies.auto.slots.flagship_coding.mo
 const currentAnthropic = {
   [anthropicComplexModelKey]: {
     input: 10,
-    cacheRead: 1,
+    cacheRead: curation.models[anthropicComplexModelKey].costOverride.cached_input,
     cacheWrite5m: 12.5,
     cacheWrite1h: 20,
     output: 50,
@@ -171,6 +171,10 @@ test('publishes the current Anthropic roster with canonical API IDs, limits, and
     assert.equal(registry.capabilities[modelKey].textOutput, true);
     assert.equal(registry.pricing[modelKey].inputPerMillion, expected.input);
     assert.equal(registry.pricing[modelKey].cacheReadPerMillion, expected.cacheRead);
+    assert.ok(
+      expected.cacheRead > 0 && expected.cacheRead <= expected.input * 0.1,
+      `${modelKey} cache reads must stay at or below a tenth of its input rate`,
+    );
     assert.equal(registry.pricing[modelKey].cacheWritePerMillion, expected.cacheWrite5m);
     assert.equal(registry.pricing[modelKey].cacheWrite1hPerMillion, expected.cacheWrite1h);
     assert.equal(registry.pricing[modelKey].outputPerMillion, expected.output);
@@ -286,7 +290,15 @@ test('publishes the canonical multimodal Qwen IDs and limits', () => {
       compatibility.models[modelKey].apiModelId,
     );
     assert.equal(registry.limits[modelKey].contextTokens, 1_000_000);
-    assert.equal(registry.limits[modelKey].maxOutputTokens, 64_000);
+    assert.equal(
+      registry.limits[modelKey].maxOutputTokens,
+      curation.models[modelKey].maxOutputTokens,
+      `${modelKey} must publish the max output the catalog authored`,
+    );
+    assert.ok(
+      registry.limits[modelKey].maxOutputTokens >= 64_000,
+      `${modelKey} must not drop below the Qwen family output floor`,
+    );
     assert.equal(registry.capabilities[modelKey].textInput, true);
     assert.equal(registry.capabilities[modelKey].imageInput, true);
     assert.equal(registry.capabilities[modelKey].videoInput, true);

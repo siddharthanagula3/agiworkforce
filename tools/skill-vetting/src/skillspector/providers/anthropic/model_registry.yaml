@@ -5,6 +5,6 @@ models:
   'claude-sonnet-5':
     context_length: 1000000
     max_output_tokens: 128000
-  'claude-fable-5':
+  'claude-fable-5-1':
     context_length: 1000000
     max_output_tokens: 128000

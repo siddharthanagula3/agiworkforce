@@ -62,13 +62,15 @@ export function collectFamilyRefs(value, policy, found = new Set()) {
   return found;
 }
 
+const GENERATION_SEPARATOR = /[.-]/;
+
 export function parseGeneration(text) {
   const parts = String(text)
-    .split('.')
+    .split(GENERATION_SEPARATOR)
     .map((segment) => Number.parseInt(segment, 10));
   assert.ok(
     parts.length > 0 && parts.every((segment) => Number.isInteger(segment)),
-    `Generation ${text} is not a dotted integer version`,
+    `Generation ${text} is not a dotted or dashed integer version`,
   );
   return parts;
 }
