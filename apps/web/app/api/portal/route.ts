@@ -2,10 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError, isAppError } from '@/lib/errors';
@@ -26,6 +25,8 @@ if (!process.env['STRIPE_SECRET_KEY']) {
 }
 
 const stripe = getStripeClientOrNull();
+
+const PORTAL_SCOPE = { resolveOrganization: false } as const;
 
 function getValidatedOrigin(request: Request): string {
   const allowedOriginsEnv =
@@ -125,7 +126,7 @@ function isCancellationDisabled(error: unknown): boolean {
 }
 
 async function handlePortal(request: NextRequest) {
-  const { userId, email: userEmail } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, PORTAL_SCOPE);
   const body = await request
     .clone()
     .json()
@@ -147,9 +148,6 @@ async function handlePortal(request: NextRequest) {
   if (!stripe) {
     throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
   }
-
-  const db = getNeonDb();
-  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
 
   type SubRow = Pick<
     SubscriptionRow,
@@ -186,7 +184,7 @@ async function handlePortal(request: NextRequest) {
     try {
       let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
       try {
-        profileRows = await scopedDb.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+        profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
           'select stripe_customer_id from profiles where id = $1 limit 1',
           [userId],
         );
@@ -207,6 +205,7 @@ async function handlePortal(request: NextRequest) {
         );
       } else {
         // TODO(2026-Q3): Remove email fallback entirely. Track via DEPRECATION_PORTAL_EMAIL_FALLBACK metric.
+        const { email: userEmail } = await getClerkAuthUser(request);
         if (!userEmail) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
@@ -254,7 +253,7 @@ async function handlePortal(request: NextRequest) {
         customerId = ownedCustomer.id;
 
         try {
-          await scopedDb.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+          await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
             customerId,
             userId,
           ]);
