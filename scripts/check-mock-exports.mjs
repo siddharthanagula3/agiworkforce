@@ -501,6 +501,30 @@ export function findSubjectFiles(repoRoot, testFileAbsolutePath, testText, mocke
   return [...subjects];
 }
 
+/**
+ * Expands relevance one level past `findSubjectFiles`: for each subject
+ * file, resolves that subject's own direct import specifiers (first-party
+ * files only, resolved the same way any other import is) and returns the
+ * resulting files. A subject that reaches the mocked module only through one
+ * of its own imports (a route importing a processor that imports the mocked
+ * module, for example) is picked up through this set.
+ */
+export function findTransitiveImportFiles(repoRoot, subjectFiles) {
+  const subjectSet = new Set(subjectFiles);
+  const transitive = new Set();
+  for (const subjectFile of subjectFiles) {
+    const bySpecifier = loadImportsBySpecifier(subjectFile);
+    for (const specifier of bySpecifier.keys()) {
+      const resolved = resolveSpecifier(repoRoot, subjectFile, specifier);
+      if (!resolved) continue;
+      if (isTestFilePath(resolved)) continue;
+      if (subjectSet.has(resolved)) continue;
+      transitive.add(resolved);
+    }
+  }
+  return [...transitive];
+}
+
 const exportsCache = new Map();
 function loadExports(absolutePath) {
   if (exportsCache.has(absolutePath)) return exportsCache.get(absolutePath);
@@ -521,8 +545,9 @@ function loadImportsBySpecifier(absolutePath) {
 
 /**
  * Checks one test file for `vi.mock` factories that omit a real named
- * export of the mocked module which the module under test actually
- * imports from that same specifier.
+ * export of the mocked module which the module under test, or a file the
+ * module under test directly imports, actually imports from that same
+ * specifier.
  */
 export function checkTestFile(repoRoot, testFileAbsolutePath) {
   const testText = readTextFile(testFileAbsolutePath);
@@ -549,15 +574,16 @@ export function checkTestFile(repoRoot, testFileAbsolutePath) {
       testText,
       mockedSpecifiers,
     );
+    const relevantFiles = [...subjectFiles, ...findTransitiveImportFiles(repoRoot, subjectFiles)];
     const requiredNames = new Map();
-    for (const subjectFile of subjectFiles) {
-      const bySpecifier = loadImportsBySpecifier(subjectFile);
+    for (const relevantFile of relevantFiles) {
+      const bySpecifier = loadImportsBySpecifier(relevantFile);
       for (const [specifier, names] of bySpecifier) {
-        const subjectMockedPath = resolveSpecifier(repoRoot, subjectFile, specifier);
-        if (subjectMockedPath !== mockedAbsolutePath) continue;
+        const relevantMockedPath = resolveSpecifier(repoRoot, relevantFile, specifier);
+        if (relevantMockedPath !== mockedAbsolutePath) continue;
         for (const name of names) {
           if (!requiredNames.has(name)) requiredNames.set(name, new Set());
-          requiredNames.get(name).add(relFromRoot(repoRoot, subjectFile));
+          requiredNames.get(name).add(relFromRoot(repoRoot, relevantFile));
         }
       }
     }
