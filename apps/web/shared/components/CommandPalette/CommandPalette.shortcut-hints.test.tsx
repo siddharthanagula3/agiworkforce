@@ -17,6 +17,10 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }),
 }));
 
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
+}));
+
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
@@ -79,14 +83,14 @@ describe('CommandPalette keyboard hints', () => {
     expect(unbound).toEqual([]);
   });
 
-  it('does not label Go to Chat with the combination bound to Copy last message', () => {
+  it('does not label the Chat action with the combination bound to Copy last message', () => {
     render(<CommandPalette open onOpenChange={vi.fn()} />);
 
     const copyDoc = KEYBOARD_SHORTCUT_DOCS.find((doc) => doc.description === 'Copy last message');
     expect(copyDoc).toBeDefined();
 
-    const goToChat = screen.getByText('Go to Chat').closest('button');
-    expect(goToChat).not.toBeNull();
-    expect(goToChat?.querySelector('kbd')).toBeNull();
+    const chatAction = screen.getByText('Chat').closest('button');
+    expect(chatAction).not.toBeNull();
+    expect(chatAction?.querySelector('kbd')).toBeNull();
   });
 });

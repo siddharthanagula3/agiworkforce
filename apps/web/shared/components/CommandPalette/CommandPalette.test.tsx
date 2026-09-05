@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
@@ -29,12 +28,13 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: mockSetTheme }),
 }));
 
-const mockToggleSidebar = vi.fn();
+const chatStoreState = vi.hoisted(() => ({ conversations: [] as unknown[] }));
 vi.mock('@shared/stores/web-chat-store', () => ({
-  useChatStore: () => ({
-    sidebarCollapsed: false,
-    toggleSidebar: mockToggleSidebar,
-  }),
+  useChatStore: (selector: (state: typeof chatStoreState) => unknown) => selector(chatStoreState),
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
 }));
 
 vi.mock('@/shared/stores/model-store', () => ({
@@ -136,7 +136,7 @@ describe('CommandPalette', () => {
       fireEvent.change(input, { target: { value: 'settings' } });
 
       expect(screen.getByText('Go to Settings')).toBeInTheDocument();
-      expect(screen.queryByText('New Chat')).not.toBeInTheDocument();
+      expect(screen.queryByText('New chat')).not.toBeInTheDocument();
     });
 
     it('shows "No commands found." when query has no match', () => {
@@ -174,9 +174,9 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Actions')).toBeInTheDocument();
     });
 
-    it('shows Navigate group', () => {
+    it('shows Quick actions group', () => {
       renderPalette();
-      expect(screen.getByText('Navigate')).toBeInTheDocument();
+      expect(screen.getByText('Quick actions')).toBeInTheDocument();
     });
 
     it('shows Preferences group', () => {
@@ -184,9 +184,9 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Preferences')).toBeInTheDocument();
     });
 
-    it('renders New Chat command', () => {
+    it('renders New chat command', () => {
       renderPalette();
-      expect(screen.getByText('New Chat')).toBeInTheDocument();
+      expect(screen.getByText('New chat')).toBeInTheDocument();
     });
 
     it('renders Search Conversations command', () => {
@@ -217,11 +217,11 @@ describe('CommandPalette', () => {
   });
 
   describe('navigation commands', () => {
-    it('navigates to /chat on New Chat click', () => {
+    it('navigates to /chat on New chat click', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      fireEvent.click(screen.getByText('New Chat'));
+      fireEvent.click(screen.getByText('New chat'));
       expect(mockPush).toHaveBeenCalledWith('/chat');
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
@@ -287,7 +287,7 @@ describe('CommandPalette', () => {
       fireEvent.keyDown(input, { key: 'Escape' });
 
       expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
-      expect(screen.getByText('New Chat')).toBeInTheDocument();
+      expect(screen.getByText('New chat')).toBeInTheDocument();
     });
 
     it('shows "Back to main menu" button in sub-menu', () => {
@@ -303,7 +303,7 @@ describe('CommandPalette', () => {
       fireEvent.click(screen.getByLabelText('Back to main menu'));
 
       expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
-      expect(screen.getByText('New Chat')).toBeInTheDocument();
+      expect(screen.getByText('New chat')).toBeInTheDocument();
     });
   });
 

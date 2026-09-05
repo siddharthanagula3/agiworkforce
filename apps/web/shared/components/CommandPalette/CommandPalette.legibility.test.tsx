@@ -16,6 +16,10 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }),
 }));
 
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
+}));
+
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
