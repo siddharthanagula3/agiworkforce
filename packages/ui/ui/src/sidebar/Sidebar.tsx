@@ -43,6 +43,7 @@ export interface SidebarProps extends SessionItemHandlers {
   projects?: SidebarProject[];
   isLoading?: boolean;
   error?: string | null;
+  onRetryLoad?: () => void;
 
   className?: string;
   collapsed?: boolean;
@@ -88,6 +89,7 @@ export function Sidebar(props: SidebarProps) {
     projects = [],
     isLoading = false,
     error = null,
+    onRetryLoad,
     className,
     collapsed = false,
     width = 260,
@@ -232,6 +234,14 @@ export function Sidebar(props: SidebarProps) {
    * which groups happen to be open.
    */
   const hasMatchingConversations = filtered.length > 0 || pinned.length > 0;
+
+  /*
+   * A failed list is not an empty account. Emptiness is only claimable when
+   * nothing was ever loaded AND nothing failed: a 429 on the recents fetch told
+   * an account with 50 chats to "Start a new chat", and a later refresh failing
+   * over an already-populated rail must leave those rows alone.
+   */
+  const showLoadFailure = sessions.length === 0 && !isLoading && Boolean(error);
 
   const toggleGroup = useCallback((group: SidebarTemporalGroup) => {
     setExpandedGroups((prev) => {
@@ -829,20 +839,26 @@ export function Sidebar(props: SidebarProps) {
                 </div>
               )}
 
-              {/* Error state, distinguishes a failed fetch from a genuinely
-                empty account so users don't mistake a transient error for
-                "you have no chats". */}
-              {!hasMatchingConversations && !isLoading && error && (
+              {showLoadFailure && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                   <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
                   <p className="text-sm text-[hsl(var(--muted-foreground))]">
                     {t('sidebar.loadFailed', "Couldn't load conversations")}
                   </p>
                   <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{error}</p>
+                  {onRetryLoad && (
+                    <button
+                      type="button"
+                      onClick={onRetryLoad}
+                      className="mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline"
+                    >
+                      {tCommon('retry', 'Retry')}
+                    </button>
+                  )}
                 </div>
               )}
 
-              {!hasMatchingConversations && !isLoading && !error && (
+              {!hasMatchingConversations && !isLoading && !showLoadFailure && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                   <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]" />
                   <p className="text-sm text-[hsl(var(--muted-foreground))]">
