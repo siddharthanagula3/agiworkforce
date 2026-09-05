@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: vi.fn(() => 'anthropic'),
+  buildServerProviderAdapter: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-code-agent-service', () => ({
   executePersistedAgentTurn: vi.fn(async () => ({
