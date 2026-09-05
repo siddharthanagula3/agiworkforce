@@ -2,15 +2,13 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/read-json-body';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_FUNCTION = '42883';
 
@@ -107,9 +105,7 @@ async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
@@ -385,9 +381,7 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const body = await readJsonBody(request);
   const parsed = TrackSearchSchema.safeParse(body);
@@ -412,9 +406,7 @@ async function handleDelete(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const [result] = await db.query<{ clear_search_history: number }>(
     'select clear_search_history($1, $2)',

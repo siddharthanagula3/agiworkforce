@@ -6,7 +6,6 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -43,7 +42,7 @@ async function handleGetProjects(request: NextRequest) {
 
   let data: Record<string, unknown>[];
   try {
-    data = await getNeonDb().query<Record<string, unknown>>(
+    data = await db.query<Record<string, unknown>>(
       `select p.id, p.user_id, p.organization_id, p.name, p.description, p.instructions,
               p.color, p.is_archived, p.uses_global_memory, p.metadata, p.default_privacy_mode,
               p.default_provider_mode, p.allowed_surfaces, p.default_model_id, p.last_used_at,
