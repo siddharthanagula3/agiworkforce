@@ -169,11 +169,33 @@ function translateNativeTool(tool: unknown): ResponsesNativeTool {
   return { ...raw, type };
 }
 
-function translateToolChoice(choice: ToolChoice | undefined): ResponsesToolChoice | undefined {
+/**
+ * A hosted Responses tool is chosen by its own `type`, not by the function
+ * shape: `{ type: 'web_search' }`, never `{ type: 'function', name:
+ * 'web_search' }`. The canonical `ToolChoice` carries only a name, so the
+ * request's own tool list is what resolves which of the two shapes to send.
+ * Dated hosted variants (`web_search_2025_08_26`) answer to the undated name.
+ */
+function findHostedToolType(tools: readonly ResponsesTool[], name: string): string | undefined {
+  return tools.find(
+    (tool) =>
+      tool.type !== 'function' &&
+      (tool.type === name || tool.type.startsWith(`${name}${HOSTED_TOOL_VARIANT_SEPARATOR}`)),
+  )?.type;
+}
+
+const HOSTED_TOOL_VARIANT_SEPARATOR = '_';
+
+function translateToolChoice(
+  choice: ToolChoice | undefined,
+  tools: readonly ResponsesTool[],
+): ResponsesToolChoice | undefined {
   if (choice === undefined) return undefined;
   if (choice === 'auto') return 'auto';
   if (choice === 'none') return 'none';
   if (choice === 'required') return 'required';
+  const hostedType = findHostedToolType(tools, choice.name);
+  if (hostedType !== undefined) return { type: hostedType };
   return { type: 'function', name: choice.name };
 }
 
@@ -249,7 +271,7 @@ export function translateChatRequestToResponses(
   const usesNativeWebSearch = tools.some(
     (tool) => tool.type === 'web_search' || tool.type === 'web_search_2025_08_26',
   );
-  const toolChoice = translateToolChoice(req.toolChoice);
+  const toolChoice = translateToolChoice(req.toolChoice, tools);
 
   const reasoning = resolveReasoningConfig(req, compat);
 
