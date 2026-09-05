@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   BrainCircuit,
@@ -65,6 +65,14 @@ export interface AgentActivityTimelineProps {
   onResend?: (toolCallId: string) => void;
   isApprovalExpired?: (toolCallId: string) => boolean;
   onRetryTurn?: () => void;
+  /**
+   * Why this turn failed, in the user's terms. Rendered on the run's own
+   * summary line rather than as a second row underneath it, so one failure
+   * reads as one row.
+   */
+  failureReason?: string;
+  /** Actions for that failure, rendered beside the summary line. */
+  failureActions?: ReactNode;
 }
 
 export function hasCanonicalToolActivity(
@@ -176,6 +184,17 @@ function formatRunDuration(activity: AgentActivityState): string {
     activity.startedAtMs,
     activity.completedAtMs ?? activity.updatedAtMs,
   );
+}
+
+/**
+ * True when this entry adds nothing the collapsed line has not already said.
+ * Only applies to a lone progress entry: with more than one row the sequence
+ * itself is information, and a tool row always carries its own detail.
+ */
+function restatesSummary(entry: AgentActivityEntry, totalRows: number, summary: string): boolean {
+  if (totalRows > 1) return false;
+  if (entry.kind !== 'progress') return false;
+  return entry.summary === summary;
 }
 
 function hasReportableWork(entries: readonly AgentActivityEntry[]): boolean {
@@ -354,106 +373,23 @@ function safeHref(value: string): string | undefined {
   }
 }
 
-function sourceDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
+const TRACE_QUERY_SEPARATOR = ' · ';
+
+/**
+ * The trace says what was searched, not what came back. Result rows belong in
+ * the dock, where one list serves the whole turn; repeating them per search
+ * inside the transcript buried the answer under the same five links.
+ */
+function traceRowName(entry: AgentActivityToolEntry): string {
+  const query = entry.query?.trim();
+  if (!query) return entry.summary;
+  return `${entry.summary}${TRACE_QUERY_SEPARATOR}${query}`;
 }
 
-function SourceFavicon({ url }: { url: string }) {
-  const [errored, setErrored] = useState(false);
-  let domain = '';
-  try {
-    domain = new URL(url).hostname;
-  } catch {
-    /* keep empty */
-  }
-  const src = !errored && domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
-  if (!src) {
-    return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted">
-        <Globe2 className="h-3 w-3" aria-hidden="true" />
-      </span>
-    );
-  }
-  return (
-    <img
-      src={src}
-      alt=""
-      className="h-5 w-5 shrink-0 rounded-full"
-      onError={() => setErrored(true)}
-    />
-  );
-}
-
-const MAX_VISIBLE_SOURCES = 5;
-
-function SourceLinks({
-  entry,
-}: {
-  entry: Extract<AgentActivityEntry, { kind: 'tool' | 'sources' }>;
-}) {
-  const [showAll, setShowAll] = useState(false);
-  if (!entry.sources || entry.sources.length === 0) return null;
-  const total = entry.sources.length;
-  const visible = showAll ? entry.sources : entry.sources.slice(0, MAX_VISIBLE_SOURCES);
-  const hidden = total - visible.length;
-  return (
-    <div className="ml-8 mt-1.5 space-y-1.5 pb-1" aria-label="Sources">
-      <div className="flex items-center gap-2">
-        {entry.query && (
-          <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{entry.query}</p>
-        )}
-        <span className="shrink-0 text-[12px] text-muted-foreground">
-          {total} result{total === 1 ? '' : 's'}
-        </span>
-      </div>
-      {visible.map((source, index) => {
-        const href = safeHref(source.url);
-        const content = (
-          <>
-            <SourceFavicon url={source.url} />
-            <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-              {source.title || sourceDomain(source.url)}
-            </span>
-            <span className="shrink-0 text-[12px] text-muted-foreground">
-              {sourceDomain(source.url)}
-            </span>
-            {href && <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />}
-          </>
-        );
-        return href ? (
-          <a
-            key={`${source.url}:${index}`}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-w-0 touch-manipulation items-center gap-2 rounded-lg border border-border/50 px-2 py-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {content}
-          </a>
-        ) : (
-          <div
-            key={`${source.url}:${index}`}
-            className="flex min-w-0 items-center gap-2 rounded-lg border border-border/50 px-2 py-1.5 text-muted-foreground"
-          >
-            {content}
-          </div>
-        );
-      })}
-      {hidden > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="touch-manipulation rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          +{hidden} more
-        </button>
-      )}
-    </div>
-  );
+function sourcesFoundLabel(count: number, query: string | undefined): string {
+  const found = `Found ${sourceCountLabel(count)}`;
+  const trimmed = query?.trim();
+  return trimmed ? `${found}${TRACE_QUERY_SEPARATOR}${trimmed}` : found;
 }
 
 function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'progress' }> }) {
@@ -497,9 +433,8 @@ function StaticRow({
           aria-hidden="true"
         />
         <p className="text-sm text-foreground">
-          Found {entry.sources.length} source{entry.sources.length === 1 ? '' : 's'}
+          {sourcesFoundLabel(entry.sources.length, entry.query)}
         </p>
-        <SourceLinks entry={entry} />
       </div>
     );
   }
@@ -644,6 +579,8 @@ export function AgentActivityTimeline({
   onResend,
   isApprovalExpired,
   onRetryTurn,
+  failureReason,
+  failureActions,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -675,6 +612,29 @@ export function AgentActivityTimeline({
     }
     prevActive.current = isActive;
   }, [isActive]);
+
+  // A streaming trace folds and replaces rows as events arrive, and every time
+  // it got shorter the turn above it moved. The container keeps the tallest
+  // height it has reached for as long as the run is live, so rows can arrive
+  // and fold without the message above them shifting. Measured after every
+  // render and only ever raised, which converges: once the floor matches the
+  // content, the measurement stops changing.
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const reservedTurnRef = useRef(activity.turnId);
+  const [reservedRowsHeight, setReservedRowsHeight] = useState(0);
+  useEffect(() => {
+    if (reservedTurnRef.current !== activity.turnId) {
+      reservedTurnRef.current = activity.turnId;
+      setReservedRowsHeight(0);
+      return;
+    }
+    if (!isActive || !isOpen) {
+      setReservedRowsHeight((current) => (current === 0 ? current : 0));
+      return;
+    }
+    const measured = rowsRef.current?.offsetHeight ?? 0;
+    setReservedRowsHeight((current) => (measured > current ? measured : current));
+  });
 
   const handleToggle = () => {
     if (isOpen) {
@@ -717,7 +677,11 @@ export function AgentActivityTimeline({
     () => (isAgiWork ? agiWorkPlanSentence(activity.entries) : undefined),
     [isAgiWork, activity.entries],
   );
-  const announcement = buildAgentActivityAnnouncement(activity, summary);
+  // A failure gets ONE row. The reason rides on the run's own summary line and
+  // the actions sit beside it, so the transcript never carries a status row and
+  // a separate reason line saying the same thing twice.
+  const failureLead = failureReason ? `${summary}: ${failureReason}` : summary;
+  const announcement = buildAgentActivityAnnouncement(activity, failureLead);
   // The first plan step renders as the plan line above the rows, so the row it
   // would otherwise occupy is dropped rather than printed twice. The goal
   // entry's summary is the run's own restatement of the user's prompt, shown
@@ -730,7 +694,13 @@ export function AgentActivityTimeline({
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
   const hiddenEntryCount = Math.max(0, rowEntries.length - visibleEntryCount);
-  const visibleEntries = rowEntries.slice(hiddenEntryCount);
+  // A child row that only restates the summary above it is not a step. The
+  // collapsed line is derived from the latest entry, so a run with one entry
+  // printed the same sentence twice, once as the header and once beneath it.
+  const visibleEntries = rowEntries
+    .slice(hiddenEntryCount)
+    .filter((entry) => !restatesSummary(entry, rowEntries.length, summary));
+  const expandable = visibleEntries.length > 0 || hiddenEntryCount > 0;
 
   if (activity.status === 'completed' && !hasReportableWork(activity.entries)) return null;
 
@@ -739,23 +709,29 @@ export function AgentActivityTimeline({
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </span>
-      <button
-        type="button"
-        onClick={handleToggle}
-        aria-expanded={isOpen}
-        aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${summary}`}
-        className="group flex w-full min-w-0 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <RunStatusIcon status={activity.status} spinnerless={isAgiWork} />
-        <span className="min-w-0 flex-1 truncate">{summary}</span>
-        <ChevronRight
-          className={cn(
-            'h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none',
-            isOpen && 'rotate-90',
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={!expandable}
+          aria-expanded={expandable ? isOpen : undefined}
+          aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${failureLead}`}
+          className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
+        >
+          <RunStatusIcon status={activity.status} spinnerless={isAgiWork} />
+          <span className="min-w-0 flex-1 truncate">{failureLead}</span>
+          {expandable && (
+            <ChevronRight
+              className={cn(
+                'h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none',
+                isOpen && 'rotate-90',
+              )}
+              aria-hidden="true"
+            />
           )}
-          aria-hidden="true"
-        />
-      </button>
+        </button>
+        {failureActions && <div className="flex shrink-0 items-center">{failureActions}</div>}
+      </div>
 
       {planSentence && (
         <p data-testid="agi-work-plan-sentence" className="mb-1 ml-2 text-sm text-foreground">
@@ -763,8 +739,13 @@ export function AgentActivityTimeline({
         </p>
       )}
 
-      {isOpen && (
-        <div className="relative ml-2 mt-1 space-y-0.5 border-l border-border/70 pl-4">
+      {isOpen && expandable && (
+        <div
+          ref={rowsRef}
+          data-testid="agent-activity-rows"
+          style={reservedRowsHeight > 0 ? { minHeight: reservedRowsHeight } : undefined}
+          className="relative ml-2 mt-1 space-y-0.5 border-l border-border/70 pl-4"
+        >
           {hiddenEntryCount > 0 && (
             <button
               type="button"
@@ -798,7 +779,7 @@ export function AgentActivityTimeline({
                 <div key={entry.id} className="relative py-1 pl-7">
                   <ToolCallCard
                     id={entry.toolCallId}
-                    name={entry.summary}
+                    name={traceRowName(entry)}
                     status={toToolStatus(entry)}
                     requiresApproval={entry.status === 'awaiting-approval'}
                     args={asRecord(entry.input)}
@@ -817,7 +798,6 @@ export function AgentActivityTimeline({
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}
-                    footer={entry.sources ? <SourceLinks entry={entry} /> : undefined}
                   />
                   {connectRequest ? (
                     <div className="mt-1.5">
