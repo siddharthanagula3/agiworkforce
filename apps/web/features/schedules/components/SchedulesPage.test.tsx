@@ -103,6 +103,33 @@ describe('SchedulesPage', () => {
     );
   });
 
+  it('keeps the header to a heading, one sentence, and the create action', async () => {
+    const api = createApi();
+    render(<SchedulesPage api={api} />);
+    await screen.findByText('No schedules yet');
+
+    expect(screen.getByRole('heading', { name: 'Schedules' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Schedule' })).toBeInTheDocument();
+    expect(screen.queryByText('Managed Cloud')).not.toBeInTheDocument();
+    expect(screen.queryByText('Text Output')).not.toBeInTheDocument();
+    expect(screen.queryByText('Managed Models')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Chat Memory')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Tools')).not.toBeInTheDocument();
+  });
+
+  it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<SchedulesPage api={api} />);
+    await screen.findByText('No schedules yet');
+
+    await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    expect(
+      within(dialog).getByText('Limited to the models Managed Cloud runs schedules on.'),
+    ).toBeInTheDocument();
+  });
+
   it('shows a real loading state, then an actionable empty state', async () => {
     const request = deferred<ReturnType<typeof page>>();
     const api = createApi({ listSchedules: vi.fn(() => request.promise) });
