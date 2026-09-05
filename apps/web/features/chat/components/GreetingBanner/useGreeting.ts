@@ -7,6 +7,13 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 
 interface GreetingResult {
   headline: string;
+  /** The normalized first name the headline used, absent when none is known. */
+  firstName: string | undefined;
+  /**
+   * False while the account is still loading. A caller that greets by name must
+   * wait for this, or the nameless variant renders first and the name pops in.
+   */
+  nameResolved: boolean;
 }
 
 type TimeBand = 'earlyMorning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'lateNight';
@@ -71,7 +78,7 @@ function getTimeBand(hour: number): TimeBand {
 }
 
 export function useGreeting(): GreetingResult {
-  const { user: compatibilityUser } = useAuthStore();
+  const { user: compatibilityUser, isLoading, initialized } = useAuthStore();
   const canonicalUser = useBillingStore((state) => state.user);
 
   const userName =
@@ -105,5 +112,7 @@ export function useGreeting(): GreetingResult {
 
   return {
     headline,
+    firstName,
+    nameResolved: Boolean(firstName) || (initialized && !isLoading),
   };
 }
