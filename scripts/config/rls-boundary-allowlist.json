@@ -158,18 +158,6 @@
       "reason": "pending scoped migration"
     },
     {
-      "path": "apps/web/app/api/settings/activity/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/settings/audit-logs/actions/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/settings/audit-logs/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/share/[token]/route.ts",
       "reason": "reading a shared conversation by its unguessable token is the feature, a public share link has no viewer subject to constrain by"
     },
