@@ -130,7 +130,7 @@
       "sourceType": "github",
       "audience": "product",
       "declaredVersion": "1.1.0",
-      "computedHash": "sha256-tree-v1:a70b0e267232adc473a9f6b3dfde68d8dca5cfbc63d4d9c4bb3f3fdb3ffd32fd"
+      "computedHash": "sha256-tree-v1:e7b21747603220d10baf0f921c7ec4ec3da10c3ee062909c0ab1628bc6152ce9"
     },
     "churn-prevention": {
       "path": ".agents/skills/churn-prevention",
