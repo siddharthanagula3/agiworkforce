@@ -66,7 +66,7 @@ function originOf(url: string): string | null {
 
 const BADGE_CHIP_ORDER: readonly DirectoryBadge[] = ['first-party', 'registry', 'community'];
 const BADGE_CHIP_LABELS: Record<DirectoryBadge, string> = {
-  'first-party': 'Built by AGI',
+  'first-party': 'Official',
   registry: 'Verified',
   community: 'Community',
 };
