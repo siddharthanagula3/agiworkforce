@@ -9,8 +9,7 @@ import {
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
-import { getBillingPlanPricing, normalizeUsagePercentage } from '@agiworkforce/types';
-import { useBillingStore } from '@shared/stores/web-auth-store';
+import { normalizeUsagePercentage } from '@agiworkforce/types';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 
 const MINUTE_MS = 60 * 1000;
@@ -117,9 +116,6 @@ export function UsageSection() {
     return () => clearInterval(timer);
   }, []);
 
-  const billingTier = useBillingStore((s) => s.subscription?.tier);
-  const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
-  const planName = getBillingPlanPricing(rawTier).label;
   // A missing payload normalises to 0 used, which renders as a FULL allowance.
   // Gate every bar on having actually read a figure rather than letting the
   // fallback speak for the server.
@@ -187,27 +183,10 @@ export function UsageSection() {
           style={{
             padding: '14px 20px',
             borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
             Plan usage limits
-          </span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: 'var(--text-3)',
-              background: 'var(--bg-hover, rgba(255,255,255,0.05))',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 4,
-              padding: '2px 8px',
-            }}
-          >
-            {planName}
           </span>
         </div>
 

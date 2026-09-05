@@ -105,4 +105,11 @@ describe('UsageSection', () => {
     expect(screen.queryByText(/tokens today/i)).toBeNull();
     expect(screen.queryByText(/credits/i)).toBeNull();
   });
+
+  it('drops the plan chip, already shown on Billing', async () => {
+    render(React.createElement(UsageSection));
+    await screen.findByText('Plan usage limits');
+    expect(screen.queryByText('Free')).toBeNull();
+    expect(screen.queryByText('Pro')).toBeNull();
+  });
 });
