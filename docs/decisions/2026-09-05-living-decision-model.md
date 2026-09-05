@@ -9,6 +9,31 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-12 Explicit tool requests are enforced, ambient toggles stay silent
+
+- Question: what the harness owes the user when the text asks for a tool, and what a persistent
+  toggle means when the model does not use it.
+- Evidence: the lead's live run on 2026-09-05 asked for Python and got invented output with no
+  execution call (the initial code tool choice was the bare "required", satisfied by the search
+  tool the toggle had forced, and the intent regex missed "use Python to compute"); earlier in
+  the day search adherence measured about a third of turns invoking an offered search tool;
+  claude.ai keeps web search as a persistent default-on preference, chatgpt.com reaches search
+  through Work and the plus menu, neither treats the toggle as a per turn command.
+- Current implementation: search adherence forces the search tool through tool choice on the first
+  step when the toggle is on or the text asks; code execution had no equivalent; the "search
+  returned nothing" notice fired on every toggle-on turn.
+- Options: trust the model; enforce only when the text asks; enforce for the toggle and the text.
+- Decision: enforce for both, per tool, through the adapter's tool choice by name (never a bare
+  "required"), with adherence telemetry per tool; the web search toggle is a persistent default
+  preference, and a toggle-only search that finds nothing shows no notice, while a text request
+  that finds nothing keeps the notice; plan gated execution says the plan, never the tool.
+- Why: the product promise ("Web search: On", "use Python") is the harness's to keep on every
+  provider, which is also the model neutral way to make cheap models behave.
+- Tradeoff: one forced tool call on the first step even when a stronger model would have chosen
+  it anyway; a phrase list to maintain in one config object.
+- Reversibility: high; the enforcement is a per tool stage with the phrase list as data.
+- Revisit trigger: adherence telemetry shows forced calls hurting answer quality on a task type.
+
 ## D-2026-09-05-11 Three resilience scopes, not one breaker
 
 - Question: what a failure should close: the provider, the credential, or the model on that route.
