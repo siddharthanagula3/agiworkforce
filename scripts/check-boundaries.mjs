@@ -28,6 +28,20 @@ const ignoredParts = new Set([
 ]);
 
 const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);
+
+/**
+ * Vendor SDKs that may only be reached through the port adapter that owns them.
+ * A second consumer means a second retry budget, a second credential
+ * resolution, and a swap that has to visit every call site.
+ */
+const vendorAdapterOwnership = [
+  {
+    packages: ['@upstash/redis', '@upstash/ratelimit'],
+    owner: 'packages/platform/key-value/src/adapters/upstash.ts',
+    port: '@agiworkforce/key-value',
+  },
+];
+
 const workspacePackages = new Map();
 
 function walk(dir, files = []) {
@@ -243,6 +257,18 @@ for (const scanRoot of scanRoots) {
             errors.push(`${rel} imports app code via ${specifier}`);
           }
         }
+      }
+
+      for (const ownership of vendorAdapterOwnership) {
+        if (
+          !ownership.packages.some((name) => specifier === name || specifier.startsWith(`${name}/`))
+        ) {
+          continue;
+        }
+        if (rel === ownership.owner) continue;
+        errors.push(
+          `${rel} imports ${specifier} directly; reach it through ${ownership.port}, whose adapter in ${ownership.owner} owns that SDK.`,
+        );
       }
 
       for (const [packageName, packageInfo] of workspacePackages.entries()) {
