@@ -93,6 +93,7 @@ const PICKER_VIEWPORT_INSET_PX = 16;
 const PICKER_ANCHOR_OFFSET_PX = 6;
 const PICKER_ROW_ATTR = 'data-picker-row';
 const PICKER_ITEM_SELECTOR = `[${PICKER_ROW_ATTR}]`;
+const PICKER_FOCUSABLE_SELECTOR = 'button:not([disabled]), input, a[href], [tabindex="0"]';
 const PICKER_ROW_CLASS =
   'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 text-left transition-colors focus-visible:outline-none';
 const PICKER_ROW_NAME_CLASS = 'block truncate text-sm leading-5';
@@ -659,8 +660,41 @@ export function ComposerFooter({
     setEffortExpanded(false);
   }, []);
 
+  const closeCatalogue = useCallback(() => {
+    setCatalogueOpen(false);
+    setSearchQuery('');
+  }, []);
+
+  /**
+   * A dialog keeps Tab inside itself. jsdom moves no focus on Tab and the
+   * popover is not modal, so the cycle is explicit here.
+   */
+  const handleCatalogueKeys = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const panel = pickerPanelRef.current;
+      if (!panel) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeCatalogue();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(PICKER_FOCUSABLE_SELECTOR),
+      ).filter((element) => !element.hasAttribute('disabled'));
+      if (focusable.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const current = focusable.indexOf(document.activeElement as HTMLElement);
+      const step = event.shiftKey ? -1 : 1;
+      const next = current === -1 ? 0 : (current + step + focusable.length) % focusable.length;
+      focusable[next]?.focus();
+    },
+    [closeCatalogue],
+  );
+
   const handlePickerTypeAhead = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.currentTarget.dataset['catalogueOpen'] === 'true') return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Backspace') {
       event.stopPropagation();
@@ -673,7 +707,7 @@ export function ComposerFooter({
   }, []);
 
   useMenuKeyboard({
-    open,
+    open: open && !catalogueOpen,
     onClose: closeModelPopover,
     panelRef: pickerPanelRef,
     triggerRef: modelTriggerRef,
@@ -1037,7 +1071,12 @@ export function ComposerFooter({
                 data-catalogue-open={catalogueOpen ? 'true' : 'false'}
                 className={`flex max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
                 aria-label={PICKER_TITLE}
-                onKeyDownCapture={handlePickerTypeAhead}
+                onKeyDownCapture={catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead}
+                onEscapeKeyDown={(event) => {
+                  if (!catalogueOpen) return;
+                  event.preventDefault();
+                  closeCatalogue();
+                }}
                 onCloseAutoFocus={(event) => {
                   event.preventDefault();
                   modelTriggerRef.current?.focus();
@@ -1068,10 +1107,7 @@ export function ComposerFooter({
                           ? { locked: false }
                           : { locked: true, ...(result.reason ? { reason: result.reason } : {}) };
                       }}
-                      onBack={() => {
-                        setCatalogueOpen(false);
-                        setSearchQuery('');
-                      }}
+                      onBack={closeCatalogue}
                     />
                   ) : (
                     <div className="min-h-0 flex-1 overflow-y-auto p-1">
