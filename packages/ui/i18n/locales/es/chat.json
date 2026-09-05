@@ -129,7 +129,10 @@
     "untitled": "Sin título",
     "untitledChat": "Chat sin título",
     "navLabel": "Historial de chats",
-    "toggleSidebar": "Mostrar u ocultar la barra lateral"
+    "toggleSidebar": "Mostrar u ocultar la barra lateral",
+    "copyLink": "Copiar enlace",
+    "markUnread": "Marcar como no leído",
+    "markRead": "Marcar como leído"
   },
   "composer": {
     "addAttachment": "Añadir archivo adjunto",

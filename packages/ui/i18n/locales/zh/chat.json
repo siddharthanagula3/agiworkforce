@@ -129,7 +129,10 @@
     "untitled": "无标题",
     "untitledChat": "无标题对话",
     "navLabel": "聊天记录",
-    "toggleSidebar": "切换侧边栏"
+    "toggleSidebar": "切换侧边栏",
+    "copyLink": "复制链接",
+    "markUnread": "标记为未读",
+    "markRead": "标记为已读"
   },
   "composer": {
     "addAttachment": "添加附件",

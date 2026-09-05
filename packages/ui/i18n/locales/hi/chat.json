@@ -129,7 +129,10 @@
     "untitled": "शीर्षकहीन",
     "untitledChat": "शीर्षकहीन चैट",
     "navLabel": "चैट इतिहास",
-    "toggleSidebar": "साइडबार टॉगल करें"
+    "toggleSidebar": "साइडबार टॉगल करें",
+    "copyLink": "लिंक कॉपी करें",
+    "markUnread": "अपठित के रूप में चिह्नित करें",
+    "markRead": "पठित के रूप में चिह्नित करें"
   },
   "composer": {
     "addAttachment": "अटैचमेंट जोड़ें",

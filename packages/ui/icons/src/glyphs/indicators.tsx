@@ -71,3 +71,11 @@ export const Ban = createIcon(
     <path d="m5.6 5.6 12.8 12.8" />
   </>,
 );
+
+export const CircleDot = createIcon(
+  'CircleDot',
+  <>
+    <circle {...RING} />
+    <circle cx="12" cy="12" r="1" />
+  </>,
+);
