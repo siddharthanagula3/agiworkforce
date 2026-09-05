@@ -1,10 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { CannotRetryError, FallbackTriggeredError } from '../errors';
-import { computeDelay, createRetryContext, withRetry, type RetryEvent } from '../retry';
+import {
+  computeDelay,
+  createRetryContext,
+  withRetry,
+  MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
+  type RetryEvent,
+} from '../retry';
 
 const PRIMARY_FIXTURE_MODEL_ID = 'fixture-primary-model';
 const FALLBACK_FIXTURE_MODEL_ID = 'fixture-fallback-model';
+
+describe('MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST', () => {
+  it('caps a grounded request to one same-provider retry', () => {
+    expect(MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST).toBe(1);
+  });
+});
 
 describe('computeDelay', () => {
   it('honours retry-after when present', () => {
