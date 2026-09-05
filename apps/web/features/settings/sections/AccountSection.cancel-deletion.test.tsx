@@ -34,7 +34,8 @@ vi.mock('@shared/stores/authentication-store', () => ({
     selector({ user: { id: 'user-1' }, logout: vi.fn() }),
 }));
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: mockAddCsrfHeaders,
 }));
 

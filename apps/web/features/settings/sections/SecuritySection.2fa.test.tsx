@@ -20,9 +20,10 @@ vi.mock('@features/settings/services/user-preferences', () => ({
   settingsService: service,
 }));
 
-vi.mock('@features/settings/hooks/use-settings-queries', () => {
+vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) => {
   const settings = { two_factor_enabled: false, session_timeout: 60 };
   return {
+    ...(await importOriginal()),
     useUserSettings: () => ({ data: settings, isLoading: false }),
     useUpdateSettings: () => ({ mutate: vi.fn(), isPending: false }),
     useChangePassword: () => ({ mutate: vi.fn(), isPending: false }),
