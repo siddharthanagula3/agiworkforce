@@ -1,3 +1,5 @@
+export type EnvironmentSource = Readonly<Record<string, string | undefined>>;
+
 export interface OtelExportConfig {
   readonly tracesEndpoint: string;
   readonly serviceName: string;
@@ -44,7 +46,7 @@ export function parseOtelSampleRatio(raw: string | undefined): number | null {
   return Math.min(MAX_SAMPLE_RATIO, Math.max(MIN_SAMPLE_RATIO, parsed));
 }
 
-export function resolveOtelExportConfig(env: NodeJS.ProcessEnv): OtelExportConfig | null {
+export function resolveOtelExportConfig(env: EnvironmentSource): OtelExportConfig | null {
   const endpoint = env[OTEL_ENDPOINT_ENV]?.trim();
   if (!endpoint) return null;
   try {
