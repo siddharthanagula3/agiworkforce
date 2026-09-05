@@ -22,6 +22,13 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ execute: mockExecute, query: mockQuery }),
 }));
 vi.mock('@/lib/server/neon-chat', () => ({ requireCurrentUserId: mockRequireUser }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { execute: mockExecute, query: mockQuery },
+    userId: await mockRequireUser(),
+    organizationId: null,
+  })),
+}));
 
 const { isDeliverableSubscription } = await vi.importActual<
   typeof import('@/lib/services/web-push-service')
