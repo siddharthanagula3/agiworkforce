@@ -26,6 +26,7 @@ export type ChatConversationRow = {
   archived: boolean;
   is_temporary: boolean;
   active_leaf_message_id?: string | null;
+  work_mode?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -43,6 +44,20 @@ export type ChatMessageRow = {
   created_at: string;
   metadata: Record<string, unknown> | null;
 };
+
+/**
+ * The mode a conversation was STARTED in, read from its earliest agent run.
+ * `cloud_agent_runs` already records `work_mode` per turn under the same RLS
+ * scope, so the badge needs no column of its own, and ordering by the run's
+ * creation keeps a later Chat turn in an AGI Work task from retitling it.
+ */
+export const CONVERSATION_WORK_MODE_SELECT = `(
+      select r.work_mode
+        from cloud_agent_runs r
+       where r.conversation_id = web_conversations.id
+       order by r.created_at asc
+       limit 1
+    ) as work_mode`;
 
 export function getNeonChatDb(): DatabaseAdapter {
   return getNeonDb();

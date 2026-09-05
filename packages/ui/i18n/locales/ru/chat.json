@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "Активный чат",
+    "agiWork": "AGI Work",
     "archive": "В архив",
     "archivedCount": "В архиве ({{count}})",
     "budgetUsed": "Использовано {{percent}}% бюджета токенов",

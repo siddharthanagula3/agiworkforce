@@ -130,9 +130,22 @@ function SessionItemBase({
           <span className="sr-only">{t('sidebar.running', 'Running')}</span>
         </span>
       )}
+      {session.agiWork && (
+        <span
+          data-testid={`session-agi-work-${session.id}`}
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+          aria-hidden="true"
+        />
+      )}
       <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">{rowLabel}</span>
     </div>
   );
+
+  // The dot is the only thing separating a task from a chat, so the row's
+  // accessible name has to carry the mode rather than leave it to colour.
+  const rowAccessibleName = session.agiWork
+    ? `${rowLabel}, ${t('sidebar.agiWork', 'AGI Work')}`
+    : undefined;
 
   const rowClassName = 'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left';
 
@@ -184,6 +197,7 @@ function SessionItemBase({
             onClick={handleRowActivate}
             onDoubleClick={() => setIsRenaming(true)}
             aria-current={isActive ? 'page' : undefined}
+            aria-label={rowAccessibleName}
             title={rowTitle}
             className={rowClassName}
           >
@@ -198,6 +212,7 @@ function SessionItemBase({
             onClick={() => onSelect(session.id)}
             onDoubleClick={() => setIsRenaming(true)}
             aria-current={isActive ? 'page' : undefined}
+            aria-label={rowAccessibleName}
             title={rowTitle}
             className={rowClassName}
           >

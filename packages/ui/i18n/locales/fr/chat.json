@@ -70,6 +70,7 @@
   },
   "sidebar": {
     "activeConversation": "Conversation active",
+    "agiWork": "AGI Work",
     "archive": "Archiver",
     "archivedCount": "Archivées ({{count}})",
     "budgetUsed": "{{percent}} % du budget de tokens utilisé",
