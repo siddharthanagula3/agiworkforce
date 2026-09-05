@@ -26,10 +26,6 @@
       "reason": "pending scoped migration"
     },
     {
-      "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/checkout/route.ts",
       "reason": "pending scoped migration"
     },
@@ -80,10 +76,6 @@
     {
       "path": "apps/web/app/api/github/webhook/route.ts",
       "reason": "GitHub webhook verified by HMAC signature, resolves its own installation subject from the signed payload"
-    },
-    {
-      "path": "apps/web/app/api/interactive-cards/respond/route.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
@@ -176,10 +168,6 @@
     {
       "path": "apps/web/lib/server/developer-token.ts",
       "reason": "revocation targets the row resolved from the presented token signature and family id, the credential is the subject"
-    },
-    {
-      "path": "apps/web/lib/server/neon-chat.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/lib/server/organization-erasure.ts",

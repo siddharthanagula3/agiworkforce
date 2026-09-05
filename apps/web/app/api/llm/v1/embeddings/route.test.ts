@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: () => mocks.requireUser(),
-  getNeonChatDb: () => ({ query: vi.fn() }),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));

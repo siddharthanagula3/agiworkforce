@@ -16,12 +16,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import {
-  getNeonChatDb,
-  normalizeMessageMetadata,
-  requireCurrentUserId,
-} from '@/lib/server/neon-chat';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { normalizeMessageMetadata } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   InteractiveCardResponseRequestSchema,
   interactiveCardAcceptsResponse,
@@ -87,7 +83,7 @@ function settleClarifyBody(
 }
 
 async function handleRespond(request: NextRequest) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -113,8 +109,6 @@ async function handleRespond(request: NextRequest) {
     response: payload,
   } = parsed.data;
 
-  const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<{ id: string }>(
     `select id
        from web_conversations

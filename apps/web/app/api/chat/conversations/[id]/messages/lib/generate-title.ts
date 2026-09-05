@@ -33,9 +33,7 @@ import {
 } from '@/lib/services/exact-response-cache-service';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
-import type { getNeonChatDb } from '@/lib/server/neon-chat';
-
-type ChatDb = ReturnType<typeof getNeonChatDb>;
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 /** ~6 words at temperature 0; generous headroom over the sanitizer's own cap. */
 const MAX_OUTPUT_TOKENS = 24;
@@ -72,7 +70,7 @@ export function sanitizeGeneratedTitle(raw: string): string | null {
 }
 
 export interface ScheduleTitleGenerationInput {
-  db: ChatDb;
+  db: DatabaseAdapter;
   conversationId: string;
   userId: string;
   organizationId: string | null;
@@ -110,7 +108,7 @@ function clientTruncatedTitleCandidate(rawContent: string): string {
 }
 
 async function isTemporaryConversation(
-  db: ChatDb,
+  db: DatabaseAdapter,
   conversationId: string,
   userId: string,
 ): Promise<boolean> {

@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-chat', () => ({
-  requireCurrentUserId: vi.fn(async () => 'user-1'),
-  getNeonChatDb: () => ({ query: mocks.query, execute: mocks.execute }),
   normalizeMessageMetadata: (value: unknown) => value,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: mocks.query, execute: mocks.execute },
+    userId: 'user-1',
+    organizationId: ORGANIZATION_ID,
+  })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -34,6 +36,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 const { POST } = await import('./route');
+const { getUserScopedDb } = await import('@/lib/server/rls-db');
 
 const cardEnvelope = {
   schemaVersion: 1,
@@ -364,6 +367,14 @@ describe('POST /api/interactive-cards/respond', () => {
 
     expect(response.status).toBe(403);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('reads and settles the card through the rls scoped handle', async () => {
+    seedRows();
+
+    await POST(respondRequest(answersFor([{ question_id: 'q1', option_ids: ['o1'] }])));
+
+    expect(getUserScopedDb).toHaveBeenCalledTimes(1);
   });
 
   it('leaves every other card on the message untouched', async () => {
