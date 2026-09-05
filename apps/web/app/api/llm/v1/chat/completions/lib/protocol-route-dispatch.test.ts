@@ -7,6 +7,7 @@ vi.mock('server-only', () => ({}));
 
 const OPENAI_CHAT_FIXTURE_BASE_URL = 'https://openrouter.ai/api/v1';
 const ANTHROPIC_DIALECT_FIXTURE_BASE_URL = 'https://api.deepseek.com/anthropic';
+const GEMINI_DIALECT_FIXTURE_BASE_URL = 'https://fixture-vendor-gemini.example/v1';
 const FIXTURE_KEY_ENV = 'AGI_FIXTURE_RESELLER_API_KEY';
 const UPSTREAM_ERROR_STATUS = '429';
 
@@ -143,5 +144,33 @@ describe('protocol-route dispatch', () => {
     entry.buildAdapter(cachingRequest);
 
     expect(buildProtocolRouteAdapter).not.toHaveBeenCalled();
+  });
+
+  it('resolves wireMode by protocol for a gemini_native route under a non-google provider id', async () => {
+    const provider: string = 'fixture_vendor_gemini';
+    protocolRoutes.push(
+      protocolRouteFixture({
+        provider,
+        harnessId: 'fixture-vendor-gemini/generate-content',
+        apiFamily: 'generate_content',
+        protocol: 'gemini_native',
+        baseUrl: GEMINI_DIALECT_FIXTURE_BASE_URL,
+      }),
+    );
+
+    const { resolveWireMode } = await loadDispatchTable();
+    const legacyCallSiteWireMode =
+      provider === 'anthropic' || provider === 'google' ? 'legacy-web' : 'openai-passthrough';
+
+    expect(resolveWireMode(provider)).toBe('legacy-web');
+    expect(legacyCallSiteWireMode).not.toBe(resolveWireMode(provider));
+  });
+
+  it('throws for a provider that is not registered in ADAPTER_PROVIDERS', async () => {
+    const { resolveWireMode } = await loadDispatchTable();
+
+    expect(() => resolveWireMode('fixture_unregistered_provider')).toThrow(
+      'fixture_unregistered_provider',
+    );
   });
 });

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
+import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
   buildServerProviderAdapter,
@@ -72,10 +73,7 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     stream: false,
   });
 
-  const wireMode =
-    route.provider === 'anthropic' || route.provider === 'google'
-      ? 'legacy-web'
-      : 'openai-passthrough';
+  const wireMode = resolveWireMode(route.provider);
 
   try {
     const response = await drainToLlmResponse(

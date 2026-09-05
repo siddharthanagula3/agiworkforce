@@ -3,7 +3,10 @@ import 'server-only';
 import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById, getSlotForModel, getTierPolicy } from '@agiworkforce/types';
-import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
+import {
+  ADAPTER_PROVIDERS,
+  resolveWireMode,
+} from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
@@ -330,10 +333,7 @@ async function runScheduledCompletion(input: {
     max_tokens: MAX_OUTPUT_TOKENS,
     stream: false,
   });
-  const wireMode =
-    input.route.provider === 'anthropic' || input.route.provider === 'google'
-      ? 'legacy-web'
-      : 'openai-passthrough';
+  const wireMode = resolveWireMode(input.route.provider);
   const response = await drainToLlmResponse(
     adapter.stream(chatRequest, input.signal),
     input.route.modelKey,

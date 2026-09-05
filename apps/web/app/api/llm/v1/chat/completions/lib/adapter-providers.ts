@@ -204,3 +204,11 @@ export const ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
   ...protocolRouteProviders(),
   ...BESPOKE_ADAPTER_PROVIDERS,
 };
+
+export function resolveWireMode(provider: string): AdapterProviderEntry['wireMode'] {
+  const entry = ADAPTER_PROVIDERS[provider];
+  if (!entry) {
+    throw new Error(`Provider "${provider}" is not registered in ADAPTER_PROVIDERS.`);
+  }
+  return entry.wireMode;
+}
