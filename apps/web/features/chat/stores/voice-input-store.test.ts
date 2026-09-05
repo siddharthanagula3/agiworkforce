@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { canonicalVoiceModel } = vi.hoisted(() => ({
@@ -11,26 +10,27 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 import { useVoiceInputStore, _resetRuntimeRefs } from './voice-input-store';
+import { clearCsrfToken } from '@/lib/client/csrf';
 
-class MockSpeechRecognition {
-  continuous = false;
-  interimResults = false;
-  lang = 'en-US';
+const CSRF_ENDPOINT = '/api/csrf';
+const CSRF_TOKEN = 'csrf-token-fixture';
+const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
 
-  onresult: ((e: unknown) => void) | null = null;
-  onerror: ((e: unknown) => void) | null = null;
-  onend: (() => void) | null = null;
-  onstart: (() => void) | null = null;
-
-  start = vi.fn();
-  stop = vi.fn();
-  abort = vi.fn();
+function stubFetch(transcribe: () => unknown) {
+  const mock = vi.fn(async (url: string) => {
+    if (url === CSRF_ENDPOINT) {
+      return { ok: true, json: async () => ({ token: CSRF_TOKEN, expiresIn: 3_600_000 }) };
+    }
+    return transcribe();
+  });
+  vi.stubGlobal('fetch', mock);
+  return mock;
 }
 
-let currentMockRecognition: MockSpeechRecognition;
-
-function SpeechRecognitionCtor(this: MockSpeechRecognition) {
-  return currentMockRecognition;
+function transcribeCall(mock: ReturnType<typeof stubFetch>) {
+  const call = mock.mock.calls.find(([url]) => url === TRANSCRIBE_ENDPOINT);
+  if (!call) throw new Error('the transcription endpoint was never called');
+  return call;
 }
 
 class MockMediaRecorder {
@@ -63,18 +63,53 @@ function resetStore() {
     transcript: '',
     error: null,
     language: 'en-US',
-    preferServerTranscription: false,
+    captureStream: null,
+  });
+}
+
+function defineWindowValue(key: string, value: unknown) {
+  Object.defineProperty(window, key, { value, writable: true, configurable: true });
+}
+
+function installCapture(): { stream: MediaStream; stop: ReturnType<typeof vi.fn> } {
+  _resetRuntimeRefs();
+  currentMockRecorder = new MockMediaRecorder();
+  defineWindowValue('MediaRecorder', MediaRecorderCtor);
+
+  const stop = vi.fn();
+  const stream = { getTracks: vi.fn().mockReturnValue([{ stop }]) } as unknown as MediaStream;
+
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    writable: true,
+    configurable: true,
+  });
+
+  return { stream, stop };
+}
+
+function installFailingCapture(error: DOMException) {
+  _resetRuntimeRefs();
+  currentMockRecorder = new MockMediaRecorder();
+  defineWindowValue('MediaRecorder', MediaRecorderCtor);
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: { getUserMedia: vi.fn().mockRejectedValue(error) },
+    writable: true,
+    configurable: true,
   });
 }
 
 describe('voiceInputStore', () => {
   beforeEach(() => {
     resetStore();
+    clearCsrfToken();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     resetStore();
+    defineWindowValue('MediaRecorder', undefined);
+    vi.unstubAllGlobals();
   });
 
   describe('initial state', () => {
@@ -90,14 +125,14 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().error).toBeNull();
     });
 
+    it('starts with no capture stream', () => {
+      expect(useVoiceInputStore.getState().captureStream).toBeNull();
+    });
+
     it('has a default language string', () => {
       const { language } = useVoiceInputStore.getState();
       expect(typeof language).toBe('string');
       expect(language.length).toBeGreaterThan(0);
-    });
-
-    it('defaults to not preferring server transcription', () => {
-      expect(useVoiceInputStore.getState().preferServerTranscription).toBe(false);
     });
   });
 
@@ -109,21 +144,21 @@ describe('voiceInputStore', () => {
     });
 
     it('does not change mode', () => {
-      useVoiceInputStore.setState({ mode: 'idle', transcript: 'text' });
+      useVoiceInputStore.setState({ mode: 'listening', transcript: 'hello' });
       useVoiceInputStore.getState().clearTranscript();
-      expect(useVoiceInputStore.getState().mode).toBe('idle');
+      expect(useVoiceInputStore.getState().mode).toBe('listening');
     });
   });
 
   describe('clearError', () => {
     it('resets error to null', () => {
-      useVoiceInputStore.setState({ error: 'some error', mode: 'error' });
+      useVoiceInputStore.setState({ error: 'boom' });
       useVoiceInputStore.getState().clearError();
       expect(useVoiceInputStore.getState().error).toBeNull();
     });
 
     it('resets mode to idle', () => {
-      useVoiceInputStore.setState({ error: 'some error', mode: 'error' });
+      useVoiceInputStore.setState({ mode: 'error', error: 'boom' });
       useVoiceInputStore.getState().clearError();
       expect(useVoiceInputStore.getState().mode).toBe('idle');
     });
@@ -141,46 +176,28 @@ describe('voiceInputStore', () => {
     });
   });
 
-  describe('setPreferServerTranscription', () => {
-    it('enables server transcription preference', () => {
-      useVoiceInputStore.getState().setPreferServerTranscription(true);
-      expect(useVoiceInputStore.getState().preferServerTranscription).toBe(true);
-    });
-
-    it('disables server transcription preference', () => {
-      useVoiceInputStore.setState({ preferServerTranscription: true });
-      useVoiceInputStore.getState().setPreferServerTranscription(false);
-      expect(useVoiceInputStore.getState().preferServerTranscription).toBe(false);
-    });
-  });
-
-  describe('startListening · Web Speech API path', () => {
+  describe('startListening', () => {
     beforeEach(() => {
-      currentMockRecognition = new MockSpeechRecognition();
-      Object.defineProperty(window, 'SpeechRecognition', {
-        value: SpeechRecognitionCtor,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(window, 'webkitSpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-      useVoiceInputStore.setState({ mode: 'idle', preferServerTranscription: false });
+      installCapture();
     });
 
-    afterEach(() => {
-      Object.defineProperty(window, 'SpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-    });
-
-    it('transitions mode to listening', async () => {
+    it('transitions mode to listening after getUserMedia resolves', async () => {
       await useVoiceInputStore.getState().startListening();
       expect(useVoiceInputStore.getState().mode).toBe('listening');
+    });
+
+    it('exposes the capture stream so a level meter can read it', async () => {
+      const { stream } = installCapture();
+      await useVoiceInputStore.getState().startListening();
+      expect(useVoiceInputStore.getState().captureStream).toBe(stream);
+    });
+
+    it('captures audio even where the browser offers speech recognition', async () => {
+      defineWindowValue('webkitSpeechRecognition', function noop() {});
+      await useVoiceInputStore.getState().startListening();
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledOnce();
+      expect(useVoiceInputStore.getState().captureStream).not.toBeNull();
+      defineWindowValue('webkitSpeechRecognition', undefined);
     });
 
     it('clears previous error on start', async () => {
@@ -195,101 +212,24 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().transcript).toBe('');
     });
 
-    it('calls recognition.start()', async () => {
-      await useVoiceInputStore.getState().startListening();
-      expect(currentMockRecognition.start).toHaveBeenCalledOnce();
-    });
-
-    it('sets language on the recognition instance', async () => {
-      useVoiceInputStore.setState({ mode: 'idle', language: 'de-DE' });
-      await useVoiceInputStore.getState().startListening();
-      expect(currentMockRecognition.lang).toBe('de-DE');
-    });
-
     it('does nothing if already in listening mode', async () => {
       useVoiceInputStore.setState({ mode: 'listening' });
       await useVoiceInputStore.getState().startListening();
-      expect(currentMockRecognition.start).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('stopListening · mode guard', () => {
-    it('returns immediately if not in listening mode', async () => {
-      useVoiceInputStore.setState({ mode: 'idle' });
-      await expect(useVoiceInputStore.getState().stopListening()).resolves.toBeUndefined();
-      expect(useVoiceInputStore.getState().mode).toBe('idle');
-    });
-  });
-
-  describe('startListening · MediaRecorder path', () => {
-    let mockStream: MediaStream;
-
-    beforeEach(() => {
-      Object.defineProperty(window, 'SpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(window, 'webkitSpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-
-      currentMockRecorder = new MockMediaRecorder();
-      Object.defineProperty(window, 'MediaRecorder', {
-        value: MediaRecorderCtor,
-        writable: true,
-        configurable: true,
-      });
-
-      mockStream = {
-        getTracks: vi.fn().mockReturnValue([{ stop: vi.fn() }]),
-      } as unknown as MediaStream;
-
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: { getUserMedia: vi.fn().mockResolvedValue(mockStream) },
-        writable: true,
-        configurable: true,
-      });
-
-      useVoiceInputStore.setState({ mode: 'idle', preferServerTranscription: false });
-    });
-
-    afterEach(() => {
-      Object.defineProperty(window, 'MediaRecorder', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-    });
-
-    it('transitions mode to listening after getUserMedia resolves', async () => {
-      await useVoiceInputStore.getState().startListening();
-      expect(useVoiceInputStore.getState().mode).toBe('listening');
+      expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     });
 
     it('sets mode to error on NotAllowedError', async () => {
-      const permissionError = new DOMException('Permission denied', 'NotAllowedError');
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: { getUserMedia: vi.fn().mockRejectedValue(permissionError) },
-        writable: true,
-        configurable: true,
-      });
+      installFailingCapture(new DOMException('Permission denied', 'NotAllowedError'));
 
       await useVoiceInputStore.getState().startListening();
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toContain('denied');
+      expect(useVoiceInputStore.getState().captureStream).toBeNull();
     });
 
     it('sets mode to error on NotFoundError', async () => {
-      const notFoundError = new DOMException('Device not found', 'NotFoundError');
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: { getUserMedia: vi.fn().mockRejectedValue(notFoundError) },
-        writable: true,
-        configurable: true,
-      });
+      installFailingCapture(new DOMException('Device not found', 'NotFoundError'));
 
       await useVoiceInputStore.getState().startListening();
 
@@ -298,68 +238,55 @@ describe('voiceInputStore', () => {
     });
   });
 
-  describe('transcribeViaServer · correct endpoint URL', () => {
-    let mockStream: MediaStream;
-
-    beforeEach(() => {
-      _resetRuntimeRefs();
-
-      Object.defineProperty(window, 'SpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(window, 'webkitSpeechRecognition', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-
-      currentMockRecorder = new MockMediaRecorder();
-      Object.defineProperty(window, 'MediaRecorder', {
-        value: MediaRecorderCtor,
-        writable: true,
-        configurable: true,
-      });
-
-      mockStream = {
-        getTracks: vi.fn().mockReturnValue([{ stop: vi.fn() }]),
-      } as unknown as MediaStream;
-
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: { getUserMedia: vi.fn().mockResolvedValue(mockStream) },
-        writable: true,
-        configurable: true,
-      });
-
-      useVoiceInputStore.setState({ mode: 'idle', preferServerTranscription: false });
+  describe('stopListening', () => {
+    it('returns immediately if not in listening mode', async () => {
+      useVoiceInputStore.setState({ mode: 'idle' });
+      await expect(useVoiceInputStore.getState().stopListening()).resolves.toBeUndefined();
+      expect(useVoiceInputStore.getState().mode).toBe('idle');
     });
 
-    afterEach(() => {
-      Object.defineProperty(window, 'MediaRecorder', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-      vi.unstubAllGlobals();
-    });
-
-    it('POSTs to /api/voice/transcribe (not /api/voice/transcriptions)', async () => {
-      const fetchMock = vi.fn().mockResolvedValue({
+    it('POSTs to /api/voice/transcribe with the catalog voice model and a csrf token', async () => {
+      installCapture();
+      const fetchMock = stubFetch(() => ({
         ok: true,
         json: async () => ({ text: 'hello' }),
         text: async () => '',
-      });
-      vi.stubGlobal('fetch', fetchMock);
+      }));
 
       await useVoiceInputStore.getState().startListening();
       await useVoiceInputStore.getState().stopListening();
 
-      expect(fetchMock).toHaveBeenCalled();
-
-      expect(fetchMock.mock.calls[0]![0]).toBe('/api/voice/transcribe');
-      const request = fetchMock.mock.calls[0]![1] as RequestInit;
+      const [, init] = transcribeCall(fetchMock);
+      const request = init as RequestInit;
       expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
+      expect((request.headers as Record<string, string>)['x-csrf-token']).toBe(CSRF_TOKEN);
+      expect(useVoiceInputStore.getState().transcript).toBe('hello');
+      expect(useVoiceInputStore.getState().captureStream).toBeNull();
+    });
+
+    it('reports a transcription failure without keeping the recording', async () => {
+      installCapture();
+      stubFetch(() => ({ ok: false, status: 500 }));
+
+      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().stopListening();
+
+      expect(useVoiceInputStore.getState().mode).toBe('error');
+      expect(useVoiceInputStore.getState().transcript).toBe('');
+    });
+  });
+
+  describe('cancelListening', () => {
+    it('releases the microphone and drops the recording', async () => {
+      const { stop } = installCapture();
+      await useVoiceInputStore.getState().startListening();
+
+      useVoiceInputStore.getState().cancelListening();
+
+      expect(stop).toHaveBeenCalled();
+      expect(useVoiceInputStore.getState().mode).toBe('idle');
+      expect(useVoiceInputStore.getState().transcript).toBe('');
+      expect(useVoiceInputStore.getState().captureStream).toBeNull();
     });
   });
 
