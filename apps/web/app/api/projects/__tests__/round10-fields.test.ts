@@ -98,6 +98,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+  resolveOrganizationMembershipId: vi.fn(),
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
