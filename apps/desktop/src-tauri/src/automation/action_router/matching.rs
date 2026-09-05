@@ -98,10 +98,7 @@ where
         };
     }
 
-    distinct
-        .pop()
-        .map(Match::Found)
-        .unwrap_or(Match::NotFound)
+    distinct.pop().map(Match::Found).unwrap_or(Match::NotFound)
 }
 
 #[cfg(test)]
@@ -126,7 +123,10 @@ mod tests {
     fn an_exact_label_outranks_a_prefix_and_a_containment() {
         assert_eq!(score_label("send", "send"), Some(LabelScore::Exact));
         assert_eq!(score_label("send", "send later"), Some(LabelScore::Prefix));
-        assert_eq!(score_label("send", "resend now"), Some(LabelScore::Contains));
+        assert_eq!(
+            score_label("send", "resend now"),
+            Some(LabelScore::Contains)
+        );
         assert_eq!(score_label("send", "reply"), None);
         assert_eq!(score_label("", "send"), None);
     }

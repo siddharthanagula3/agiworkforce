@@ -180,9 +180,7 @@ impl AccessibilityProbe for NativeAccessibilityProbe {
 
             let picked = pick_best(
                 target.phrase,
-                found
-                    .into_iter()
-                    .map(|element| (element.name, element.id)),
+                found.into_iter().map(|element| (element.name, element.id)),
             );
 
             if !picked.is_not_found() {
@@ -239,13 +237,13 @@ mod tests {
     #[test]
     fn a_role_the_platform_has_no_token_for_widens_instead_of_failing() {
         for (role, _) in MACOS_ROLE_TOKENS {
-            assert!(WINDOWS_ROLE_TOKENS
-                .iter()
-                .any(|(mapped, _)| mapped == role)
-                || matches!(
-                    role,
-                    TargetRole::Link | TargetRole::Tab | TargetRole::ScrollArea
-                ));
+            assert!(
+                WINDOWS_ROLE_TOKENS.iter().any(|(mapped, _)| mapped == role)
+                    || matches!(
+                        role,
+                        TargetRole::Link | TargetRole::Tab | TargetRole::ScrollArea
+                    )
+            );
         }
     }
 
@@ -269,10 +267,7 @@ mod tests {
         let probe = NativeAccessibilityProbe::new(None);
         let supported = probe.driver().is_some();
 
-        assert_eq!(
-            probe.supports(AccessibilityCapability::Invoke),
-            supported
-        );
+        assert_eq!(probe.supports(AccessibilityCapability::Invoke), supported);
         assert_eq!(
             probe.supports(AccessibilityCapability::Scroll),
             supported && SCROLL_SUPPORTED

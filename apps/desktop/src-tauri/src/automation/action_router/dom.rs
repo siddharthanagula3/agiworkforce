@@ -131,7 +131,12 @@ fn accessible_candidates(accessibility: &Value) -> Vec<(String, String, u64)> {
 
     nodes
         .iter()
-        .filter(|node| !node.get(IGNORED_KEY).and_then(Value::as_bool).unwrap_or(false))
+        .filter(|node| {
+            !node
+                .get(IGNORED_KEY)
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
         .filter_map(|node| {
             let name = node
                 .get(NAME_KEY)
@@ -273,11 +278,7 @@ fn structural_path(nodes: &[DomNode], node: &DomNode) -> Option<String> {
         if step.tag.is_empty() {
             return None;
         }
-        steps.push(format!(
-            "{}:nth-child({})",
-            step.tag,
-            step.child_index
-        ));
+        steps.push(format!("{}:nth-child({})", step.tag, step.child_index));
         current = step
             .parent
             .and_then(|parent| nodes.iter().find(|node| node.backend_node_id == parent));
@@ -520,7 +521,10 @@ mod tests {
         let mut page = snapshot();
         page.document = json!({ "root": { "nodeType": 9, "nodeName": "#document" } });
 
-        assert_eq!(locate(&page, "Send", Some(TargetRole::Button)), Match::NotFound);
+        assert_eq!(
+            locate(&page, "Send", Some(TargetRole::Button)),
+            Match::NotFound
+        );
     }
 
     #[test]
