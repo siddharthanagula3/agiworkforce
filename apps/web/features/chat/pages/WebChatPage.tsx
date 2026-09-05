@@ -1147,6 +1147,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     // the empty-chat greeting before its transcript arrives.
     isLoading: isConversationLoading,
     listError: conversationListError,
+    fetchConversations,
     getConversationLoadError,
     createConversation,
     loadConversation,
@@ -4563,6 +4564,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     activeSessionId: displayedConversationId ?? undefined,
     isLoading: isConversationSidebarPending,
     error: conversationListError,
+    onRetryLoad: () => void fetchConversations(),
     mode: 'cloud' as const,
     headerSlot: <SidebarWordmark />,
     onNewChat: handleSidebarNewChat,

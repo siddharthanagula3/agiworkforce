@@ -140,6 +140,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
     deleteConversation,
     updateConversation,
     isLoading: isConversationsLoading,
+    listError: conversationListError,
+    fetchConversations,
   } = useConversations();
 
   // ---- Projects ----
@@ -401,6 +403,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
     // bootstrap interval as loading too, otherwise a signed-in reload briefly
     // claims the account has no conversations.
     isLoading: isAccountLoading || isConversationsLoading,
+    error: conversationListError,
+    onRetryLoad: () => void fetchConversations(),
     mode: 'cloud' as const,
     headerSlot: <SidebarWordmark />,
     navItems: sidebarNavItems,
