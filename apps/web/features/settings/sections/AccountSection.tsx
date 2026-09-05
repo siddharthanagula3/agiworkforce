@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignOut } from '@/lib/identity/client';
-import { LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, RefreshCw, Undo2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +78,124 @@ function readApiError(data: unknown, fallback: string): string {
   return toUserMessage(new Error(raw), fallback);
 }
 
+const titleStyle: CSSProperties = {
+  fontFamily: 'var(--sans)',
+  fontSize: 24,
+  fontWeight: 500,
+  color: 'var(--text-1)',
+  margin: '0 0 4px',
+};
+
+const sectionHeadingStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--text-2)',
+  margin: '20px 0 12px',
+};
+
+const rowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  padding: '14px 0',
+  borderBottom: '1px solid var(--settings-border)',
+  flexWrap: 'wrap',
+};
+
+const chevronRowStyle: CSSProperties = {
+  ...rowStyle,
+  width: '100%',
+  background: 'transparent',
+  border: 'none',
+  borderBottom: '1px solid var(--settings-border)',
+  textAlign: 'left',
+  cursor: 'pointer',
+};
+
+const rowLabelStyle: CSSProperties = {
+  fontSize: 14,
+  color: 'var(--text-1)',
+  margin: 0,
+};
+
+const rowHintStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--text-3)',
+  margin: '2px 0 0',
+};
+
+const outlineButtonStyle: CSSProperties = {
+  flexShrink: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '8px 14px',
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--text-1)',
+  background: 'transparent',
+  border: '1px solid var(--settings-border)',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+};
+
+const dangerButtonStyle: CSSProperties = {
+  flexShrink: 0,
+  padding: '8px 14px',
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--settings-destructive-text)',
+  background: 'transparent',
+  border: '1px solid var(--settings-destructive)',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+};
+
+const backRowStyle: CSSProperties = {
+  alignSelf: 'flex-start',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--text-2)',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+};
+
+const errorTextStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: 'var(--settings-destructive-text)',
+};
+
+function AccountRow({
+  label,
+  labelTestId,
+  hint,
+  children,
+}: {
+  label: string;
+  labelTestId?: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={rowStyle}>
+      <div style={{ minWidth: 0 }}>
+        <p data-testid={labelTestId} style={rowLabelStyle}>
+          {label}
+        </p>
+        {hint && <p style={rowHintStyle}>{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function AccountSection() {
   // Reads the Clerk-backed auth store. PER-3: `useBillingStore.user` used to be
   // structurally null (its only writer, `_setUser`, had zero call sites); that
@@ -93,6 +212,7 @@ export function AccountSection() {
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [showApiKeys, setShowApiKeys] = useState(false);
 
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -234,535 +354,347 @@ export function AccountSection() {
   const pendingDeletion = deletionStatus.data?.pending === true;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {confirmDialog}
-      <div>
-        <h1
-          style={{
-            fontFamily: 'var(--sans)',
-            fontSize: 24,
-            fontWeight: 500,
-            color: 'var(--text-1)',
-            margin: '0 0 4px',
-          }}
-        >
-          Account
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Session management and account security.
-        </p>
-      </div>
 
-      {/* Account-wide session control */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Sessions
-        </div>
-        <div
-          style={{
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}>
-              Log out of all devices
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-              This will end all active sessions including this one.
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Log out of all devices"
-            onClick={() =>
-              confirm({
-                title: 'Log out of all devices?',
-                description:
-                  'Every signed-in session on every device ends immediately, including this one. You will need to sign in again.',
-                confirmLabel: 'Log out everywhere',
-                onConfirm: () => handleLogOutAll(),
-              })
-            }
-            disabled={loggingOut}
-            style={{
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 14px',
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--text-1)',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              cursor: loggingOut ? 'default' : 'pointer',
-              opacity: loggingOut ? 0.5 : 1,
-            }}
-          >
-            <LogOut size={14} />
-            {loggingOut ? 'Signing out...' : 'Log out'}
+      {showApiKeys ? (
+        <>
+          <button type="button" onClick={() => setShowApiKeys(false)} style={backRowStyle}>
+            <ChevronLeft size={16} aria-hidden="true" />
+            API keys
           </button>
-        </div>
-        {logoutError && (
-          <div
-            style={{
-              padding: '0 20px 16px',
-              fontSize: 12,
-              color: 'var(--settings-destructive-text)',
-            }}
-          >
-            {logoutError}
-          </div>
-        )}
-      </section>
+          <ApiKeysManager />
+        </>
+      ) : (
+        <>
+          <h1 style={titleStyle}>Account</h1>
 
-      <ApiKeysManager />
-
-      {/* Delete account, real, working flow (confirm dialog -> DELETE /api/user/delete-account) */}
-      <section
-        style={{
-          border: '1px solid var(--settings-destructive)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-destructive)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--settings-destructive-text)',
-          }}
-        >
-          Danger Zone
-        </div>
-        {pendingDeletion ? (
-          <div
-            style={{
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <div>
-              <p
-                data-testid="pending-deletion-title"
-                style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}
+          <div>
+            <AccountRow
+              label="Log out of all devices"
+              hint="This will end all active sessions including this one."
+            >
+              <button
+                type="button"
+                aria-label="Log out of all devices"
+                onClick={() =>
+                  confirm({
+                    title: 'Log out of all devices?',
+                    description:
+                      'Every signed-in session on every device ends immediately, including this one. You will need to sign in again.',
+                    confirmLabel: 'Log out everywhere',
+                    onConfirm: () => handleLogOutAll(),
+                  })
+                }
+                disabled={loggingOut}
+                style={{ ...outlineButtonStyle, opacity: loggingOut ? 0.5 : 1 }}
               >
-                Account deletion scheduled
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-                Your account and all data will be permanently erased on{' '}
-                {formatDateTime(
+                <LogOut size={14} />
+                {loggingOut ? 'Signing out...' : 'Log out'}
+              </button>
+            </AccountRow>
+            {logoutError && <p style={{ ...errorTextStyle, padding: '0 0 12px' }}>{logoutError}</p>}
+
+            <button
+              type="button"
+              onClick={() => setShowApiKeys(true)}
+              style={chevronRowStyle}
+              aria-label="API keys"
+            >
+              <span style={rowLabelStyle}>API keys</span>
+              <ChevronRight size={16} aria-hidden="true" color="var(--text-3)" />
+            </button>
+
+            {pendingDeletion ? (
+              <AccountRow
+                label="Account deletion scheduled"
+                labelTestId="pending-deletion-title"
+                hint={`Your account and all data will be permanently erased on ${formatDateTime(
                   deletionStatus.data?.scheduledFor
                     ? new Date(deletionStatus.data.scheduledFor)
                     : null,
-                )}
-                .{' '}
-                {deletionStatus.data?.canCancel
-                  ? 'You can cancel any time before then.'
-                  : 'The cancellation window has closed and erasure is already underway.'}
-              </p>
-            </div>
-            {deletionStatus.data?.canCancel && (
-              <button
-                type="button"
-                data-testid="cancel-deletion-trigger"
-                onClick={() => {
-                  cancelDeletionMutation.reset();
-                  setShowCancelDialog(true);
-                }}
-                style={{
-                  alignSelf: 'flex-start',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 14px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: 'var(--text-1)',
-                  background: 'transparent',
-                  border: '1px solid var(--settings-border)',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                }}
+                )}. ${
+                  deletionStatus.data?.canCancel
+                    ? 'You can cancel any time before then.'
+                    : 'The cancellation window has closed and erasure is already underway.'
+                }`}
               >
-                <Undo2 size={14} />
-                Cancel deletion
-              </button>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div>
-              <p
-                style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}
-              >
-                Delete account
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-                To delete your account and all associated data, confirm below. This cannot be
-                undone.
-              </p>
-              {deletionStatus.isError && (
-                <p
-                  role="alert"
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--settings-destructive-text)',
-                    margin: '6px 0 0',
-                  }}
-                >
-                  Could not check whether a deletion is already pending.{' '}
+                {deletionStatus.data?.canCancel && (
                   <button
                     type="button"
-                    onClick={() => void deletionStatus.refetch()}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      color: 'inherit',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
+                    data-testid="cancel-deletion-trigger"
+                    onClick={() => {
+                      cancelDeletionMutation.reset();
+                      setShowCancelDialog(true);
                     }}
+                    style={outlineButtonStyle}
                   >
-                    Retry
+                    <Undo2 size={14} />
+                    Cancel deletion
                   </button>
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              data-testid="delete-account-trigger"
-              disabled={deletionStatus.isLoading}
-              onClick={() => {
-                setDeleteConfirmInput('');
-                deleteAccountMutation.reset();
-                setShowDeleteDialog(true);
-              }}
-              style={{
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 14px',
-                fontSize: 13,
-                fontWeight: 500,
-                color: 'var(--settings-destructive-foreground)',
-                background: 'var(--settings-destructive)',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-              }}
-            >
-              <Trash2 size={14} />
-              Delete account
-            </button>
-          </div>
-        )}
-      </section>
-
-      {/* Account identifier */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Account identifier
-        </div>
-        <div style={{ padding: '20px' }}>
-          <CopyableIdField
-            id="user-id-field"
-            label="User ID"
-            value={userId}
-            copyLabel="Copy user ID"
-            hint="Your account identifier. Share with support when reporting issues."
-          />
-
-          {/*
-            Organization ID, matching what claude.ai shows beside the user id.
-            Rendered only when the account is actually in an organization.
-            "Not available" for a solo account would imply something failed to
-            load rather than that there is nothing to show.
-          */}
-          {organizationId ? (
-            <div style={{ marginTop: 20 }}>
-              <CopyableIdField
-                id="organization-id-field"
-                label="Organization ID"
-                value={organizationId}
-                copyLabel="Copy organization ID"
-                hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
-              />
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <LinkedDevicesPanel />
-
-      {/* Active sessions table */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Active sessions
-        </div>
-
-        {sessionsLoading ? (
-          <div role="status" style={{ padding: '20px', fontSize: 13, color: 'var(--text-3)' }}>
-            Loading active sessions…
-          </div>
-        ) : sessionsError ? (
-          <div style={{ padding: '20px' }}>
-            <p
-              role="alert"
-              style={{
-                margin: '0 0 12px',
-                fontSize: 13,
-                color: 'var(--settings-destructive-text)',
-              }}
-            >
-              {sessionsError}
-            </p>
-            <button
-              type="button"
-              onClick={() => void loadSessions()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 11px',
-                fontSize: 12,
-                color: 'var(--text-1)',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-              }}
-            >
-              <RefreshCw size={13} />
-              Retry
-            </button>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div style={{ padding: '20px', fontSize: 13, color: 'var(--text-3)' }}>
-            No active sessions found.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr
+                )}
+              </AccountRow>
+            ) : (
+              <AccountRow label="Delete account" hint="This cannot be undone.">
+                <button
+                  type="button"
+                  data-testid="delete-account-trigger"
+                  disabled={deletionStatus.isLoading}
+                  onClick={() => {
+                    setDeleteConfirmInput('');
+                    deleteAccountMutation.reset();
+                    setShowDeleteDialog(true);
+                  }}
+                  style={dangerButtonStyle}
+                >
+                  Delete
+                </button>
+              </AccountRow>
+            )}
+            {deletionStatus.isError && (
+              <p role="alert" style={{ ...errorTextStyle, padding: '12px 0 0' }}>
+                Could not check whether a deletion is already pending.{' '}
+                <button
+                  type="button"
+                  onClick={() => void deletionStatus.refetch()}
                   style={{
-                    borderBottom: '1px solid var(--settings-border)',
-                    background: 'var(--bg-hover, rgba(255,255,255,0.03))',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: 'inherit',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
                   }}
                 >
-                  {['Device', 'Location', 'Created', 'Last active', ''].map((col, index) => (
-                    <th
-                      key={col || `actions-${index}`}
-                      scope="col"
-                      style={{
-                        padding: '10px 16px',
-                        textAlign: 'left',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        color: 'var(--text-3)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {col || <span className="sr-only">Actions</span>}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((row, idx) => (
-                  <tr
-                    key={row.id}
-                    style={{
-                      borderBottom:
-                        idx < sessions.length - 1 ? '1px solid var(--settings-border)' : 'none',
-                    }}
-                  >
-                    <td style={{ padding: '12px 16px', color: 'var(--text-1)', fontWeight: 500 }}>
-                      <div>{row.device}</div>
-                      {row.browser ? (
-                        <div
+                  Retry
+                </button>
+              </p>
+            )}
+
+            <div style={{ padding: '14px 0', borderBottom: '1px solid var(--settings-border)' }}>
+              <CopyableIdField
+                id="user-id-field"
+                label="User ID"
+                value={userId}
+                copyLabel="Copy user ID"
+                hint="Your account identifier. Share with support when reporting issues."
+              />
+            </div>
+
+            {/*
+              Organization ID, matching what claude.ai shows beside the user id.
+              Rendered only when the account is actually in an organization.
+              "Not available" for a solo account would imply something failed to
+              load rather than that there is nothing to show.
+            */}
+            {organizationId ? (
+              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--settings-border)' }}>
+                <CopyableIdField
+                  id="organization-id-field"
+                  label="Organization ID"
+                  value={organizationId}
+                  copyLabel="Copy organization ID"
+                  hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <LinkedDevicesPanel />
+
+          <div>
+            <h2 style={sectionHeadingStyle}>Active sessions</h2>
+
+            {sessionsLoading ? (
+              <div role="status" style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-3)' }}>
+                Loading active sessions…
+              </div>
+            ) : sessionsError ? (
+              <div>
+                <p role="alert" style={{ ...errorTextStyle, margin: '0 0 12px', fontSize: 13 }}>
+                  {sessionsError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void loadSessions()}
+                  style={outlineButtonStyle}
+                >
+                  <RefreshCw size={13} />
+                  Retry
+                </button>
+              </div>
+            ) : sessions.length === 0 ? (
+              <p style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+                No active sessions found.
+              </p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--settings-border)' }}>
+                      {['Device', 'Location', 'Created', 'Last active', ''].map((col, index) => (
+                        <th
+                          key={col || `actions-${index}`}
+                          scope="col"
                           style={{
-                            marginTop: 2,
-                            color: 'var(--text-3)',
-                            fontSize: 12,
-                            fontWeight: 400,
-                          }}
-                        >
-                          {row.browser}
-                        </div>
-                      ) : null}
-                      {row.isCurrent && (
-                        <span
-                          style={{
-                            marginLeft: 8,
+                            padding: '0 16px 10px 0',
+                            textAlign: 'left',
                             fontSize: 12,
                             fontWeight: 700,
-                            letterSpacing: '0.05em',
+                            letterSpacing: '0.06em',
                             textTransform: 'uppercase',
-                            color: 'var(--teal-text)',
-                            background: 'rgba(33,128,141,0.12)',
-                            borderRadius: 3,
-                            padding: '1px 5px',
+                            color: 'var(--text-3)',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          Current
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
-                    >
-                      {row.location ?? 'Not available'}
-                    </td>
-                    <td
-                      style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
-                    >
-                      {formatSessionDateTime(row.createdAt)}
-                    </td>
-                    <td
-                      style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
-                    >
-                      {formatSessionDateTime(row.lastActiveAt)}
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          confirm({
-                            title: row.isCurrent
-                              ? 'Log out this session?'
-                              : `Revoke the ${row.device} session?`,
-                            description: row.isCurrent
-                              ? 'You will be signed out on this device and returned to the sign-in page.'
-                              : 'That device is signed out immediately and has to sign in again to regain access.',
-                            confirmLabel: row.isCurrent ? 'Log out' : 'Revoke session',
-                            onConfirm: () => handleRevokeSession(row),
-                          })
-                        }
-                        disabled={revokingSessionId !== null || loggingOut}
-                        aria-label={
-                          row.isCurrent ? 'Log out current session' : `Revoke ${row.device} session`
-                        }
+                          {col || <span className="sr-only">Actions</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((row, idx) => (
+                      <tr
+                        key={row.id}
                         style={{
-                          padding: '6px 10px',
-                          fontSize: 12,
-                          fontWeight: 500,
-                          // The fill value, not the text one: in dark it is
-                          // 0 62.8% 30.6%, which measured 1.77:1 on the panel
-                          // behind it. --settings-destructive-text is the role
-                          // for a word on the page, and line 324 already uses it.
-                          color: row.isCurrent
-                            ? 'var(--text-2)'
-                            : 'var(--settings-destructive-text)',
-                          background: 'transparent',
-                          border: '1px solid var(--settings-border)',
-                          borderRadius: 'var(--radius-md)',
-                          cursor: revokingSessionId !== null || loggingOut ? 'default' : 'pointer',
-                          opacity:
-                            revokingSessionId !== null && revokingSessionId !== row.id ? 0.5 : 1,
-                          whiteSpace: 'nowrap',
+                          borderBottom:
+                            idx < sessions.length - 1 ? '1px solid var(--settings-border)' : 'none',
                         }}
                       >
-                        {revokingSessionId === row.id
-                          ? 'Ending…'
-                          : row.isCurrent
-                            ? 'Log out'
-                            : 'Revoke'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <td
+                          style={{
+                            padding: '12px 16px 12px 0',
+                            color: 'var(--text-1)',
+                            fontWeight: 500,
+                          }}
+                        >
+                          <div>{row.device}</div>
+                          {row.browser ? (
+                            <div
+                              style={{
+                                marginTop: 2,
+                                color: 'var(--text-3)',
+                                fontSize: 12,
+                                fontWeight: 400,
+                              }}
+                            >
+                              {row.browser}
+                            </div>
+                          ) : null}
+                          {row.isCurrent && (
+                            <span
+                              style={{
+                                marginLeft: 8,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                letterSpacing: '0.05em',
+                                textTransform: 'uppercase',
+                                color: 'var(--teal-text)',
+                                background: 'rgba(33,128,141,0.12)',
+                                borderRadius: 3,
+                                padding: '1px 5px',
+                              }}
+                            >
+                              Current
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px 16px 12px 0',
+                            color: 'var(--text-3)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {row.location ?? 'Not available'}
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px 16px 12px 0',
+                            color: 'var(--text-3)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatSessionDateTime(row.createdAt)}
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px 16px 12px 0',
+                            color: 'var(--text-3)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatSessionDateTime(row.lastActiveAt)}
+                        </td>
+                        <td style={{ padding: '12px 0', textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirm({
+                                title: row.isCurrent
+                                  ? 'Log out this session?'
+                                  : `Revoke the ${row.device} session?`,
+                                description: row.isCurrent
+                                  ? 'You will be signed out on this device and returned to the sign-in page.'
+                                  : 'That device is signed out immediately and has to sign in again to regain access.',
+                                confirmLabel: row.isCurrent ? 'Log out' : 'Revoke session',
+                                onConfirm: () => handleRevokeSession(row),
+                              })
+                            }
+                            disabled={revokingSessionId !== null || loggingOut}
+                            aria-label={
+                              row.isCurrent
+                                ? 'Log out current session'
+                                : `Revoke ${row.device} session`
+                            }
+                            style={{
+                              padding: '6px 10px',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              // The fill value, not the text one: in dark it is
+                              // 0 62.8% 30.6%, which measured 1.77:1 on the panel
+                              // behind it. --settings-destructive-text is the role
+                              // for a word on the page, and line 324 already uses it.
+                              color: row.isCurrent
+                                ? 'var(--text-2)'
+                                : 'var(--settings-destructive-text)',
+                              background: 'transparent',
+                              border: '1px solid var(--settings-border)',
+                              borderRadius: 'var(--radius-md)',
+                              cursor:
+                                revokingSessionId !== null || loggingOut ? 'default' : 'pointer',
+                              opacity:
+                                revokingSessionId !== null && revokingSessionId !== row.id
+                                  ? 0.5
+                                  : 1,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {revokingSessionId === row.id
+                              ? 'Ending…'
+                              : row.isCurrent
+                                ? 'Log out'
+                                : 'Revoke'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {sessionActionError ? (
+              <p role="alert" style={{ ...errorTextStyle, padding: '12px 0 0' }}>
+                {sessionActionError}
+              </p>
+            ) : null}
+            <p style={{ padding: '12px 0 0', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+              Sessions are reported by your account provider across devices. Revoke anything you do
+              not recognize, or use &ldquo;Log out of all devices&rdquo; above.
+            </p>
           </div>
-        )}
-        {sessionActionError ? (
-          <p
-            role="alert"
-            style={{
-              padding: '0 20px 12px',
-              fontSize: 12,
-              color: 'var(--settings-destructive-text)',
-              margin: 0,
-            }}
-          >
-            {sessionActionError}
-          </p>
-        ) : null}
-        <p style={{ padding: '12px 20px 16px', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-          Sessions are reported by your account provider across devices. Revoke anything you do not
-          recognize, or use &ldquo;Log out of all devices&rdquo; above.
-        </p>
-      </section>
+        </>
+      )}
 
       {/* Deletion confirmation dialog */}
       <AlertDialog
