@@ -184,7 +184,7 @@ export default function ProjectsPage() {
             >
               <h1
                 style={{
-                  fontFamily: 'var(--serif)',
+                  fontFamily: 'var(--sans)',
                   fontSize: 28,
                   fontWeight: 500,
                   color: 'var(--agi-ink)',

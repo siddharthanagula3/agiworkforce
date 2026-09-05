@@ -122,7 +122,7 @@ export function NotificationsSection() {
       <div>
         <h1
           style={{
-            fontFamily: 'var(--serif)',
+            fontFamily: 'var(--sans)',
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',

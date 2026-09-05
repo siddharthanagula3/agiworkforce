@@ -119,7 +119,7 @@ export function PublishedArtifactsSection() {
       <div>
         <h2
           style={{
-            fontFamily: 'var(--serif)',
+            fontFamily: 'var(--sans)',
             fontSize: 18,
             fontWeight: 500,
             color: 'var(--text-1)',
