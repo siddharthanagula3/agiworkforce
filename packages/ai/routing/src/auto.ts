@@ -863,6 +863,72 @@ function rankRoutes(
   return [preferred, ...ordered.filter((entry) => entry !== preferred)];
 }
 
+interface RoutingLane {
+  tier: ReturnType<typeof normalizeTier>;
+  requestedProfile: RoutingProfile;
+  effectiveProfile: RoutingProfile;
+  tierSlotOrder: readonly string[];
+  allowedSlots: ReadonlySet<string>;
+  preferredSlots: readonly string[];
+  taskFamilyDecision: TaskFamilyStageDecision;
+  orderedSlots: readonly string[];
+  paretoHead: ReadonlySet<string>;
+}
+
+/**
+ * The tier/profile/slot-ordering setup common to every alias-based decision.
+ *
+ * Extracted so `resolveAutoRoute` and `previewAutoRoute` compute the SAME
+ * lane from the SAME inputs: a preview can describe a candidate's tier
+ * admission, profile and slot position only if that position came from the
+ * exact function that placed it there for the real decision.
+ */
+function resolveRoutingLane(
+  request: AutoRoutingRequest,
+  task: AutoTaskPolicy,
+  alias: AutoPolicy['aliases'][string],
+): RoutingLane {
+  const policy = registry.policies.auto;
+  const tier = normalizeTier(request.subscriptionTier);
+  const maximumProfile = policy.tierMaximumProfiles[tier] ?? 'economy';
+  const requestedProfile: RoutingProfile = alias.computeProfile
+    ? (policy.autoProfileByTask?.[request.taskType] ?? alias.profile)
+    : alias.profile;
+  const effectiveProfile = clampProfile(requestedProfile, maximumProfile, policy.profileOrder);
+  const tierSlotOrder = policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot];
+  const allowedSlots = new Set(tierSlotOrder);
+  const preferredSlots = task.preferredSlots[effectiveProfile] ?? [];
+
+  const taskFamilyDecision = resolveTaskFamilyOrdering({
+    enabled: request.enableTaskFamilyStage ?? taskFamilyRoutingStageEnabled(),
+    family: request.taskFamily ?? null,
+    taskType: request.taskType,
+    preferredSlots,
+    preferredSlotsByProfile: task.preferredSlots,
+    profileOrder: policy.profileOrder,
+    slots: policy.slots,
+    estimateCents: (modelKey) => estimatedRequestCents(modelKey, request),
+  });
+  const orderedSlots = applySlotPreference(
+    taskFamilyDecision.ordering?.slots ?? preferredSlots,
+    request.preferSlots,
+    allowedSlots,
+  );
+  const paretoHead = new Set(taskFamilyDecision.ordering?.aboveFloor ?? []);
+
+  return {
+    tier,
+    requestedProfile,
+    effectiveProfile,
+    tierSlotOrder,
+    allowedSlots,
+    preferredSlots,
+    taskFamilyDecision,
+    orderedSlots,
+    paretoHead,
+  };
+}
+
 function evaluateEligibility(
   modelKey: string,
   task: AutoTaskPolicy,
@@ -1211,32 +1277,17 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     };
   }
 
-  const tier = normalizeTier(request.subscriptionTier);
-  const maximumProfile = policy.tierMaximumProfiles[tier] ?? 'economy';
-  const requestedProfile: RoutingProfile = alias.computeProfile
-    ? (policy.autoProfileByTask?.[request.taskType] ?? alias.profile)
-    : alias.profile;
-  const effectiveProfile = clampProfile(requestedProfile, maximumProfile, policy.profileOrder);
-  const tierSlotOrder = policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot];
-  const allowedSlots = new Set(tierSlotOrder);
-  const preferredSlots = task.preferredSlots[effectiveProfile] ?? [];
-
-  const taskFamilyDecision = resolveTaskFamilyOrdering({
-    enabled: request.enableTaskFamilyStage ?? taskFamilyRoutingStageEnabled(),
-    family: request.taskFamily ?? null,
-    taskType: request.taskType,
-    preferredSlots,
-    preferredSlotsByProfile: task.preferredSlots,
-    profileOrder: policy.profileOrder,
-    slots: policy.slots,
-    estimateCents: (modelKey) => estimatedRequestCents(modelKey, request),
-  });
-  const orderedSlots = applySlotPreference(
-    taskFamilyDecision.ordering?.slots ?? preferredSlots,
-    request.preferSlots,
+  const {
+    tier,
+    requestedProfile,
+    effectiveProfile,
+    tierSlotOrder,
     allowedSlots,
-  );
-  const paretoHead = new Set(taskFamilyDecision.ordering?.aboveFloor ?? []);
+    preferredSlots,
+    taskFamilyDecision,
+    orderedSlots,
+    paretoHead,
+  } = resolveRoutingLane(request, task, alias);
 
   if (
     request.currentModelKey &&
@@ -1410,4 +1461,235 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     taskType: request.taskType,
     reasons: [...new Set(reasons)],
   };
+}
+
+export interface RoutePreviewScoreFactors {
+  /** 1 for the request's own model (explicit/continuity); a slot's share of its lane position otherwise, 0 for a candidate reached only as a fallback. */
+  taskFit: number;
+  /** Whether the workspace policy, tier gate and US-only policy admit this candidate. */
+  policyAllowed: boolean;
+  budget: 'affordable' | 'unaffordable' | 'unconstrained';
+  /** `observedRoutePenalty` for the candidate's best route; 0 when unobserved or the flag is off. */
+  observedHealthPenalty: number;
+  /** Whether this candidate is the conversation's current model. */
+  continuity: boolean;
+  /** The profile lane the candidate was ranked under; `null` for an explicit or continuity pull outside the slot ladder. */
+  lane: RoutingProfile | null;
+}
+
+export interface RoutePreviewCandidate {
+  routeId: string;
+  modelKey: string;
+  providerId: string;
+  admitted: boolean;
+  score: RoutePreviewScoreFactors;
+  reasons: string[];
+}
+
+export interface RoutePreviewExcluded {
+  slotId?: string;
+  modelKey?: string;
+  reason: string;
+}
+
+export interface AutoRoutePreview {
+  selected: AutoRouteDecision;
+  candidates: readonly RoutePreviewCandidate[];
+  excluded: readonly RoutePreviewExcluded[];
+}
+
+const PREVIEW_PRIMARY_TASK_FIT = 1;
+const PREVIEW_NEUTRAL_TASK_FIT = 0;
+
+const POLICY_DENIAL_MARKERS = [
+  'is not allowed for tier',
+  'refused by workspace model policy',
+  'excluded by the US-only policy',
+] as const;
+
+/**
+ * Explain what `resolveAutoRoute` would decide, without deciding anything.
+ *
+ * `selected` is `resolveAutoRoute(request)` itself, called directly: the two
+ * can never disagree because they are not two computations kept in sync, they
+ * are one call. `candidates` and `excluded` are built by walking the SAME lane
+ * (`resolveRoutingLane`) over the SAME per-candidate evaluator
+ * (`evaluateEligibility`) `resolveAutoRoute` used to reach that answer, so a
+ * candidate's admission, route and reasons here are the exact values the real
+ * decision was computed from, not a re-derivation of them.
+ *
+ * Pure and read-only: no field on `AutoRoutingRequest` this function reads is
+ * ever written back, and every registry lookup it performs is the same static,
+ * in-memory table `resolveAutoRoute` already reads. No upstream provider is
+ * ever named or contacted.
+ */
+export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview {
+  const selected = resolveAutoRoute(request);
+  const policy = registry.policies.auto;
+  const requestedSelection = (request.selection ?? policy.defaultAlias).toLowerCase();
+
+  const capabilityAdmission = evaluateSessionCapabilityAdmission(request, requestedSelection);
+  if (capabilityAdmission) {
+    return {
+      selected,
+      candidates: [],
+      excluded: [{ reason: capabilityAdmission.reasons.join('; ') }],
+    };
+  }
+  const runtimeAdmission = applyRuntimeProfile(request, requestedSelection);
+  if ('unavailable' in runtimeAdmission) {
+    return {
+      selected,
+      candidates: [],
+      excluded: [{ reason: runtimeAdmission.unavailable.reasons.join('; ') }],
+    };
+  }
+  const effectiveRequest = runtimeAdmission.request;
+
+  const task = policy.tasks[effectiveRequest.taskType];
+  if (!task) {
+    return {
+      selected,
+      candidates: [],
+      excluded: [{ reason: `unknown routing task: ${effectiveRequest.taskType}` }],
+    };
+  }
+
+  const candidates: RoutePreviewCandidate[] = [];
+  const excluded: RoutePreviewExcluded[] = [];
+  const seen = new Set<string>();
+
+  const record = (
+    modelKey: string,
+    lane: RoutingProfile | null,
+    taskFit: number,
+    slotId?: string,
+  ): void => {
+    if (seen.has(modelKey)) return;
+    seen.add(modelKey);
+    const model = registry.models[modelKey];
+    if (!model) {
+      excluded.push({
+        ...(slotId !== undefined ? { slotId } : {}),
+        modelKey,
+        reason: `unknown model: ${modelKey}`,
+      });
+      return;
+    }
+    const eligibility = evaluateEligibility(modelKey, task, effectiveRequest);
+    const admitted = eligibility.route !== undefined;
+    const providerId = eligibility.route?.provider ?? model.identity.provider;
+    const routeId = eligibility.routeId ?? '';
+    const affordable = isAffordable(modelKey, effectiveRequest);
+    const budget: RoutePreviewScoreFactors['budget'] =
+      effectiveRequest.budgetRemainingCents === undefined
+        ? 'unconstrained'
+        : affordable
+          ? 'affordable'
+          : 'unaffordable';
+    const observedHealthPenalty =
+      eligibility.rankedRoutes[0]?.observedPenalty ?? NO_OBSERVED_PENALTY;
+    const reasons = [...eligibility.reasons];
+    if (admitted && budget === 'unaffordable') {
+      reasons.push(`model ${modelKey} exceeds the remaining usage budget`);
+    }
+    if (
+      selected.status === 'selected' &&
+      selected.modelKey === modelKey &&
+      selected.routeId === routeId
+    ) {
+      reasons.push(`selected via ${selected.reason}`);
+    } else if (admitted) {
+      reasons.push('admitted but not selected: a higher-ranked candidate was dispatched');
+    }
+    candidates.push({
+      routeId,
+      modelKey,
+      providerId,
+      admitted,
+      score: {
+        taskFit,
+        policyAllowed: !eligibility.reasons.some((entry) =>
+          POLICY_DENIAL_MARKERS.some((marker) => entry.includes(marker)),
+        ),
+        budget,
+        observedHealthPenalty,
+        continuity: modelKey === effectiveRequest.currentModelKey,
+        lane,
+      },
+      reasons,
+    });
+  };
+
+  const alias = policy.aliases[requestedSelection];
+  if (!alias) {
+    record(requestedSelection, null, PREVIEW_PRIMARY_TASK_FIT);
+    if (effectiveRequest.fallbackToAutoForCapabilityMismatch) {
+      const nested = previewAutoRoute({
+        ...effectiveRequest,
+        selection: policy.defaultAlias,
+        currentModelKey: null,
+        fallbackToAutoForCapabilityMismatch: false,
+      });
+      for (const candidate of nested.candidates) {
+        if (!seen.has(candidate.modelKey)) {
+          seen.add(candidate.modelKey);
+          candidates.push(candidate);
+        }
+      }
+      excluded.push(...nested.excluded);
+    }
+    return { selected, candidates, excluded };
+  }
+
+  const lane = resolveRoutingLane(effectiveRequest, task, alias);
+  const { effectiveProfile, allowedSlots, tierSlotOrder, orderedSlots, tier } = lane;
+
+  if (effectiveRequest.currentModelKey) {
+    record(effectiveRequest.currentModelKey, effectiveProfile, PREVIEW_PRIMARY_TASK_FIT);
+  }
+
+  orderedSlots.forEach((slotId, index) => {
+    if (!allowedSlots.has(slotId)) {
+      excluded.push({ slotId, reason: `routing slot ${slotId} is not allowed for tier ${tier}` });
+      return;
+    }
+    const slot = policy.slots[slotId];
+    const modelKey = slot?.modelKey;
+    if (!modelKey) {
+      excluded.push({ slotId, reason: `routing slot ${slotId} is missing` });
+      return;
+    }
+    const taskFit = (orderedSlots.length - index) / orderedSlots.length;
+    if (slot.canary) record(slot.canary.modelKey, effectiveProfile, taskFit, slotId);
+    record(modelKey, effectiveProfile, taskFit, slotId);
+  });
+
+  if (allowedSlots.has(policy.fallbackSlot)) {
+    const fallbackSlot = policy.slots[policy.fallbackSlot];
+    if (fallbackSlot?.modelKey) {
+      if (fallbackSlot.canary) {
+        record(
+          fallbackSlot.canary.modelKey,
+          effectiveProfile,
+          PREVIEW_NEUTRAL_TASK_FIT,
+          policy.fallbackSlot,
+        );
+      }
+      record(
+        fallbackSlot.modelKey,
+        effectiveProfile,
+        PREVIEW_NEUTRAL_TASK_FIT,
+        policy.fallbackSlot,
+      );
+    }
+  }
+
+  for (const slotId of fallbackCandidateSlots(policy, task, orderedSlots, tierSlotOrder)) {
+    if (!allowedSlots.has(slotId)) continue;
+    const modelKey = policy.slots[slotId]?.modelKey;
+    if (modelKey) record(modelKey, effectiveProfile, PREVIEW_NEUTRAL_TASK_FIT, slotId);
+  }
+
+  return { selected, candidates, excluded };
 }

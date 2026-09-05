@@ -36,7 +36,11 @@ Web, Desktop, services, provider packages, and shared chat/runtime surfaces.
 
 - `src/index.ts` - public export surface.
 - `src/auto.ts` - pure registry-backed route resolver for Auto aliases and
-  explicit canonical model selections.
+  explicit canonical model selections. `previewAutoRoute` explains a decision
+  (every ranked candidate, its admission, score factors and reasons) with zero
+  upstream calls; it calls `resolveAutoRoute` for `selected` and shares its
+  ranking helpers for `candidates`, so the preview can never name a different
+  winner than the real decision would reach.
 - `src/classify.ts` - local task classifier and conversation-pivot logic.
 - `src/model-switch-cache.ts` - pure cache-reset warning policy for model changes.
 - `src/pricing.ts` - compatibility pricing and lifecycle helpers.
