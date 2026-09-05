@@ -31,6 +31,7 @@ vi.mock('@/lib/model-tiers', () => ({
 const mockResolveProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
+  listAvailableManagedProviderIds: () => new Set<string>(),
 }));
 
 vi.mock('./request-processor', () => ({

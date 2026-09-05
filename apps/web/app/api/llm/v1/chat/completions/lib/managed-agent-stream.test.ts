@@ -71,6 +71,9 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   ),
   reserveManagedUsageRequest: vi.fn(),
   resolveManagedQuotaRecovery: vi.fn(() => null),
+  UPGRADE_HREF: '/pricing',
+  finalizeManagedUsageRequest: vi.fn(),
+  markManagedUsageProviderStarted: vi.fn(),
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({

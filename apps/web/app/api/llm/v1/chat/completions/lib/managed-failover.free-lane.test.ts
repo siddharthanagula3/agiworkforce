@@ -20,6 +20,7 @@ vi.mock('@/lib/model-tiers', () => ({
 const mockResolveProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
+  listAvailableManagedProviderIds: () => new Set<string>(),
 }));
 
 // Made to say yes on purpose: the point of these tests is that the free lane
@@ -27,6 +28,10 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 const mockCanFailoverToOpenRouter = vi.fn();
 vi.mock('@/lib/services/aggregator-routing', () => ({
   canFailoverToOpenRouter: (...args: unknown[]) => mockCanFailoverToOpenRouter(...args),
+  dispatchProviderForRoute: vi.fn(),
+  isManagedOpenRouterRoute: vi.fn(() => false),
+  openRouterSlugFor: vi.fn(),
+  validateRouteSelection: vi.fn(),
 }));
 
 vi.mock('./request-processor', () => ({

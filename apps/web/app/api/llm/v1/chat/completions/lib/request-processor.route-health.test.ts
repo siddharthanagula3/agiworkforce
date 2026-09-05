@@ -19,6 +19,7 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getRouteHealthSnapshot: (routeIds: readonly string[], nowMs: number) =>
     mockGetRouteHealthSnapshot(routeIds, nowMs),
   getServedRouteAffinity: vi.fn(async () => null),
+  getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
 import { resolveRouteHealthRuntimeState, resolveWebCloudModelRoute } from './request-processor';

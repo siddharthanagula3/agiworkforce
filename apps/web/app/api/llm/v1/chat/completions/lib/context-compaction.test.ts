@@ -31,6 +31,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
     (provider: string, chunk: { message?: string }) =>
       new Error(`${provider}: ${chunk?.message ?? 'error'}`),
   ),
+  buildProtocolRouteAdapter: vi.fn(),
 }));
 vi.mock('./adapter-response', () => ({
   drainToLlmResponse: vi.fn(),
