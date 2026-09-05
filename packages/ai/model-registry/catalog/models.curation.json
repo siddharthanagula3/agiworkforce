@@ -198,7 +198,7 @@
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
-      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash\u2192dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old\u2192new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 \u2192 glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
+      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
       "date": "2026-06-20",
@@ -1327,7 +1327,7 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "April 2026"
+      "releasedOverride": "April 22, 2026"
     },
     "gemini-3.1-pro-preview": {
       "id": "gemini-3.1-pro-preview",
@@ -1351,7 +1351,7 @@
           "outputCost": 18
         }
       ],
-      "pricingNote": "Base rate (\u2264200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
+      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1367,7 +1367,8 @@
       },
       "tierPolicy": {
         "minTier": "pro"
-      }
+      },
+      "releasedOverride": "February 19, 2026"
     },
     "gemini-3.5-flash-lite": {
       "id": "gemini-3.5-flash-lite",
@@ -1400,7 +1401,8 @@
       },
       "tierPolicy": {
         "minTier": "free"
-      }
+      },
+      "releasedOverride": "July 21, 2026"
     },
     "gemini-3.1-flash-lite": {
       "id": "gemini-3.1-flash-lite",
@@ -2182,7 +2184,8 @@
       "reasoning": {
         "capable": false,
         "control": "none"
-      }
+      },
+      "releasedOverride": "April 21, 2026"
     },
     "gpt-4o-mini-tts": {
       "id": "gpt-4o-mini-tts",
@@ -2266,7 +2269,8 @@
       },
       "tierPolicy": {
         "minTier": "basic"
-      }
+      },
+      "releasedOverride": "September 2, 2026"
     },
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
@@ -3163,7 +3167,7 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "June 2026"
+      "releasedOverride": "June 30, 2026"
     },
     "gemini-3.5-live-translate-preview": {
       "id": "gemini-3.5-live-translate-preview",
