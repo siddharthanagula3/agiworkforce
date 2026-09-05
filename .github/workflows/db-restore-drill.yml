@@ -23,7 +23,7 @@ jobs:
         env:
           POSTGRES_DB: agiworkforce_drill
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: changeme
         ports:
           - 5432:5432
         options: >-
@@ -64,7 +64,7 @@ jobs:
 
       - name: Apply canonical Postgres migrations
         env:
-          AGI_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_drill
+          AGI_DATABASE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_drill
         run: pnpm db:migrate -- apply --target ci
 
       # No seed script exists yet for the core tables the drill checks; the
@@ -72,6 +72,6 @@ jobs:
       # against a real postgres:17 server with an empty-but-migrated schema.
       - name: Run the logical restore drill
         env:
-          AGI_RESTORE_DRILL_SOURCE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_drill
-          AGI_RESTORE_DRILL_TARGET_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+          AGI_RESTORE_DRILL_SOURCE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_drill
+          AGI_RESTORE_DRILL_TARGET_ADMIN_URL: postgres://postgres:changeme@localhost:5432/postgres
         run: node scripts/db-restore-drill-logical.mjs

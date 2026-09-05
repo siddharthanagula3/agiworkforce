@@ -23,8 +23,8 @@ import {
   redactConnectionSummary,
 } from './lib/restore-drill-core.mjs';
 
-const SOURCE_URL = 'postgresql://sourceuser:sourcepass@source.example.com:5432/agiworkforce_dev';
-const TARGET_ADMIN_URL = 'postgresql://targetuser:targetpass@target.example.com:5433/postgres';
+const SOURCE_URL = 'postgresql://sourceuser:PLACEHOLDER@source.example.com:5432/agiworkforce_dev';
+const TARGET_ADMIN_URL = 'postgresql://targetuser:PLACEHOLDER@target.example.com:5433/postgres';
 
 function makeFakeClient(queryImpl, calls) {
   return {
@@ -125,12 +125,12 @@ test('pgConnectionParams and withDatabase parse and rewrite a connection string'
   assert.equal(params.host, 'source.example.com');
   assert.equal(params.port, '5432');
   assert.equal(params.user, 'sourceuser');
-  assert.equal(params.password, 'sourcepass');
+  assert.equal(params.password, 'PLACEHOLDER');
   assert.equal(params.database, 'agiworkforce_dev');
 
   const rewritten = withDatabase(TARGET_ADMIN_URL, 'agi_restore_drill_scratch');
   assert.match(rewritten, /\/agi_restore_drill_scratch$/);
-  assert.match(rewritten, /^postgresql:\/\/targetuser:targetpass@target\.example\.com:5433\//);
+  assert.match(rewritten, /^postgresql:\/\/targetuser:PLACEHOLDER@target\.example\.com:5433\//);
 });
 
 test('redactConnectionSummary never carries user or password', () => {
@@ -142,7 +142,7 @@ test('redactConnectionSummary never carries user or password', () => {
   });
   const serialized = JSON.stringify(summary);
   assert.ok(!serialized.includes('sourceuser'));
-  assert.ok(!serialized.includes('sourcepass'));
+  assert.ok(!serialized.includes('PLACEHOLDER'));
 });
 
 test('buildPgDumpInvocation and buildPgRestoreInvocation carry credentials only in env, never in args', () => {
@@ -163,8 +163,8 @@ test('buildPgDumpInvocation and buildPgRestoreInvocation carry credentials only 
     '/tmp/scratch.dump',
   ]);
   assert.equal(dump.env.PGHOST, 'source.example.com');
-  assert.equal(dump.env.PGPASSWORD, 'sourcepass');
-  assert.ok(!dump.args.some((arg) => arg.includes('sourcepass')));
+  assert.equal(dump.env.PGPASSWORD, 'PLACEHOLDER');
+  assert.ok(!dump.args.some((arg) => arg.includes('PLACEHOLDER')));
 
   const restoreParams = { ...pgConnectionParams(TARGET_ADMIN_URL), database: 'scratch_db' };
   const restore = buildPgRestoreInvocation({
@@ -181,8 +181,8 @@ test('buildPgDumpInvocation and buildPgRestoreInvocation carry credentials only 
     'scratch_db',
     '/tmp/scratch.dump',
   ]);
-  assert.equal(restore.env.PGPASSWORD, 'targetpass');
-  assert.ok(!restore.args.some((arg) => arg.includes('targetpass')));
+  assert.equal(restore.env.PGPASSWORD, 'PLACEHOLDER');
+  assert.ok(!restore.args.some((arg) => arg.includes('PLACEHOLDER')));
 });
 
 test('checkTablesPresent and compareCounts flag missing tables and count mismatches', async () => {
