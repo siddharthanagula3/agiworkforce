@@ -132,11 +132,12 @@ export interface RealtimeAdapter {
 }
 
 /**
- * Database providers selectable by the runtime factory. Raw Postgres has a
- * skeleton adapter exported for migration work, but it is not production
- * selectable until implemented.
+ * Database providers selectable by the runtime factory. `neon` speaks the Neon
+ * serverless WebSocket protocol and runs on edge runtimes; `postgres` speaks
+ * plain TCP through `pg` and reaches any Postgres host. Both implement the same
+ * contract, so the host swap is provider selection plus credentials.
  */
-export type DatabaseProvider = 'neon';
+export type DatabaseProvider = 'neon' | 'postgres';
 
 export type AuthProvider = 'auth0' | 'clerk' | 'cognito';
 

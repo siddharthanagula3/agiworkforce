@@ -8,8 +8,8 @@
  * `create*Client()` functions, which read either an explicit config
  * argument or the process environment, and return the right adapter.
  *
- * Switching database providers becomes a one-line env change, but the current
- * product default is Neon for database and Clerk for auth:
+ * Switching database host is provider selection plus credentials, no code
+ * change. The current product default is Neon for database and Clerk for auth:
  *
  * ```bash
  * AGI_DATABASE_PROVIDER=neon
@@ -17,16 +17,31 @@
  * AGI_AUTH_PROVIDER=clerk
  * ```
  *
+ * Any other Postgres host, self-hosted, RDS, Cloud SQL, or a local server,
+ * takes the same two vars against the plain-TCP driver:
+ *
+ * ```bash
+ * AGI_DATABASE_PROVIDER=postgres
+ * AGI_DATABASE_URL=postgresql://user:pwd@host:5432/db?sslmode=require
+ * ```
+ *
  * ## Env vars consumed
  *
- * | Env var                            | Default       | Used by      |
- * |------------------------------------|---------------|--------------|
- * | `AGI_DATABASE_PROVIDER`            | `neon`        | DB factory   |
- * | `AGI_AUTH_PROVIDER`                | `clerk`       | Auth factory |
- * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
- * | `AGI_DATABASE_URL` / `DATABASE_URL`|, | Neon DB      |
- * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`|, | Clerk auth   |
- * | `CLERK_AUTHORIZED_PARTIES`          | app origin    | Clerk auth   |
+ * | Env var                             | Default       | Used by            |
+ * |-------------------------------------|---------------|--------------------|
+ * | `AGI_DATABASE_PROVIDER`             | `neon`        | DB factory         |
+ * | `AGI_AUTH_PROVIDER`                 | `clerk`       | Auth factory       |
+ * | `AGI_REALTIME_PROVIDER`             | explicit only | Realtime           |
+ * | `AGI_DATABASE_URL` / `DATABASE_URL` | required      | Neon and Postgres  |
+ * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`| required      | Clerk auth         |
+ * | `CLERK_AUTHORIZED_PARTIES`          | app origin    | Clerk auth         |
+ *
+ * ## Database providers
+ *
+ * | Provider   | Driver                     | Transport       | Edge runtimes |
+ * |------------|----------------------------|-----------------|---------------|
+ * | `neon`     | `@neondatabase/serverless` | WebSocket, HTTP | yes           |
+ * | `postgres` | `pg`                       | TCP             | no            |
  *
  * Defaults are fail-closed for anything that is not implemented on the
  * Clerk + Neon platform boundary.
@@ -44,6 +59,7 @@ import {
 } from './types';
 import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
+import { PostgresDatabaseAdapter, type PostgresDatabaseAdapterConfig } from './adapters/postgres';
 
 function readEnv(name: string): string | undefined {
   if (typeof process === 'undefined' || !process.env) return undefined;
@@ -73,7 +89,8 @@ function readRequiredEnvProvider<T extends string>(name: string, allowed: readon
   throw new DataLayerConfigError(`Env var ${name}="${raw}" is not one of: ${allowed.join(', ')}`);
 }
 
-const DATABASE_PROVIDERS = ['neon'] as const;
+const DATABASE_PROVIDERS = ['neon', 'postgres'] as const;
+const DEFAULT_DATABASE_PROVIDER: DatabaseProvider = 'neon';
 
 export interface CreateDatabaseClientOptions {
   provider?: DatabaseProvider;
@@ -103,40 +120,49 @@ export interface CreateDatabaseClientOptions {
  */
 export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): DatabaseAdapter {
   const provider = selectDatabaseProvider(opts.provider ?? readEnv('AGI_DATABASE_PROVIDER'));
+  const cfg = databaseConnectionConfig(provider, opts);
 
   switch (provider) {
-    case 'neon': {
-      const connectionString =
-        opts.connectionString ?? readEnv('AGI_DATABASE_URL') ?? readEnv('DATABASE_URL');
-      if (!connectionString) {
-        throw new DataLayerConfigError(
-          'Neon adapter requires AGI_DATABASE_URL (or DATABASE_URL), a postgres:// connection string.',
-        );
-      }
-      const cfg: NeonDatabaseAdapterConfig = { connectionString };
-      if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
-      if (opts.connectionTimeoutMs !== undefined)
-        cfg.connectionTimeoutMs = opts.connectionTimeoutMs;
-      if (opts.statementTimeoutMs !== undefined) cfg.statementTimeoutMs = opts.statementTimeoutMs;
-      if (opts.queryTimeoutMs !== undefined) cfg.queryTimeoutMs = opts.queryTimeoutMs;
-      if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
-      if (opts.onConnectionError !== undefined) cfg.onConnectionError = opts.onConnectionError;
-      if (opts.unsafeAllowUnverifiedJwtSubject === true) {
-        cfg.unsafeAllowUnverifiedJwtSubject = true;
-      }
+    case 'neon':
       return new NeonDatabaseAdapter(cfg);
-    }
+    case 'postgres':
+      return new PostgresDatabaseAdapter(cfg);
   }
 }
 
+function databaseConnectionConfig(
+  provider: DatabaseProvider,
+  opts: CreateDatabaseClientOptions,
+): NeonDatabaseAdapterConfig & PostgresDatabaseAdapterConfig {
+  const connectionString =
+    opts.connectionString ?? readEnv('AGI_DATABASE_URL') ?? readEnv('DATABASE_URL');
+  if (!connectionString) {
+    throw new DataLayerConfigError(
+      `The ${provider} adapter requires AGI_DATABASE_URL (or DATABASE_URL), ` +
+        'a postgres:// connection string.',
+    );
+  }
+  const cfg: NeonDatabaseAdapterConfig & PostgresDatabaseAdapterConfig = { connectionString };
+  if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
+  if (opts.connectionTimeoutMs !== undefined) cfg.connectionTimeoutMs = opts.connectionTimeoutMs;
+  if (opts.statementTimeoutMs !== undefined) cfg.statementTimeoutMs = opts.statementTimeoutMs;
+  if (opts.queryTimeoutMs !== undefined) cfg.queryTimeoutMs = opts.queryTimeoutMs;
+  if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
+  if (opts.onConnectionError !== undefined) cfg.onConnectionError = opts.onConnectionError;
+  if (opts.unsafeAllowUnverifiedJwtSubject === true) {
+    cfg.unsafeAllowUnverifiedJwtSubject = true;
+  }
+  return cfg;
+}
+
 function selectDatabaseProvider(raw: string | undefined): DatabaseProvider {
-  if (!raw) return 'neon';
+  if (!raw) return DEFAULT_DATABASE_PROVIDER;
   if ((DATABASE_PROVIDERS as readonly string[]).includes(raw)) {
     return raw as DatabaseProvider;
   }
   throw new DataLayerConfigError(
-    `Database provider "${raw}" is not selectable in production. ` +
-      'Only neon is currently implemented; raw postgres remains a migration skeleton.',
+    `Database provider "${raw}" is not selectable. ` +
+      `Supported providers: ${DATABASE_PROVIDERS.join(', ')}.`,
   );
 }
 
