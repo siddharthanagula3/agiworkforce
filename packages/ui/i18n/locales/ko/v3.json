@@ -377,7 +377,18 @@
       "constraintsLabel": "제약",
       "constraintsPlaceholder": "경계, 피해야 할 것, 우선할 출처…",
       "deliverableLabel": "산출물",
-      "deliverablePlaceholder": "기대하는 구체적 결과물(파일, 표, 요약 등)"
+      "deliverablePlaceholder": "기대하는 구체적 결과물(파일, 표, 요약 등)",
+      "palette": {
+        "label": "AGI Work 도구",
+        "searchPlaceholder": "플러그인, 폴더, 스킬 검색",
+        "searchLabel": "AGI Work 팔레트 검색",
+        "connectorsHeading": "연결된 앱",
+        "connectorsLoading": "연결된 앱 불러오는 중",
+        "skillsHeading": "스킬",
+        "foldersHeading": "폴더",
+        "pluginsHeading": "플러그인",
+        "noMatches": "일치 항목 없음"
+      }
     }
   },
   "time": {

@@ -377,7 +377,18 @@
       "constraintsLabel": "القيود",
       "constraintsPlaceholder": "الحدود، ما يجب تجنّبه، المصادر المفضّلة…",
       "deliverableLabel": "المُخرَج",
-      "deliverablePlaceholder": "الناتج الملموس الذي تتوقعه (ملف، جدول، ملخّص…)"
+      "deliverablePlaceholder": "الناتج الملموس الذي تتوقعه (ملف، جدول، ملخّص…)",
+      "palette": {
+        "label": "أدوات AGI Work",
+        "searchPlaceholder": "ابحث في الإضافات والمجلدات والمهارات",
+        "searchLabel": "البحث في لوحة AGI Work",
+        "connectorsHeading": "التطبيقات المتصلة",
+        "connectorsLoading": "جارٍ تحميل التطبيقات المتصلة",
+        "skillsHeading": "المهارات",
+        "foldersHeading": "المجلدات",
+        "pluginsHeading": "الإضافات",
+        "noMatches": "لا توجد نتائج"
+      }
     }
   },
   "time": {

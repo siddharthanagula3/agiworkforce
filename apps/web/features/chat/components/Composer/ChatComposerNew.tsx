@@ -205,6 +205,7 @@ const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 // so the store selector returns a stable reference and cannot loop under
 // useSyncExternalStore (mirrors EMPTY_MESSAGES in the chat store).
 const EMPTY_DISABLED_CONNECTOR_IDS: string[] = [];
+const EMPTY_PALETTE_FOLDERS: ComposerProjectPicker['projects'] = [];
 
 export interface ComposerSendMeta {
   /** Active mode at send time. 'agiwork' = project-scoped work chat. */
@@ -624,6 +625,7 @@ const ChatComposerNewComponent = ({
     connectedIds: connectedConnectorIds,
     sources: connectorSources,
     customNames: connectorCustomNames,
+    loading: connectorsLoading,
   } = useConnectors();
   // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
   // actually applied (it was previously never read by any composer code).
@@ -795,6 +797,7 @@ const ChatComposerNewComponent = ({
             name: label,
             iconBg: known?.iconBg ?? CONNECTOR_MARK_FALLBACK_BG,
             iconText: label.slice(0, 1).toUpperCase(),
+            ...(known ? { description: known.capabilitySummary } : {}),
           };
         })
         .sort((a, b) => a.label.localeCompare(b.label)),
@@ -3294,6 +3297,7 @@ const ChatComposerNewComponent = ({
                     open={showOverflowMenu}
                     onRequestClose={() => setShowOverflowMenu(false)}
                     closeMenu={closeMenu}
+                    workPalette={workScopeBarVisible}
                     onAddFiles={() => {
                       fileInputRef.current?.click();
                       closeMenu();
@@ -3330,6 +3334,7 @@ const ChatComposerNewComponent = ({
                     onOpenSettings={openSettings}
                     connectorsSubmenuOpen={connectorsSubmenuOpen}
                     onToggleConnectorsSubmenu={() => setConnectorsSubmenuOpen((open) => !open)}
+                    connectorsLoading={connectorsLoading}
                     connectors={connectedConnectorOptions}
                     disabledConnectorIds={disabledConnectorIds}
                     onSetConnectorEnabled={setConnectorEnabled}
@@ -3396,6 +3401,10 @@ const ChatComposerNewComponent = ({
                       closeMenu();
                     }}
                     sendPreviewPresentation={sendPreviewPresentation}
+                    skills={availableSkills}
+                    onSelectSkill={handleSkillSelect}
+                    folders={projectPicker?.projects ?? EMPTY_PALETTE_FOLDERS}
+                    onSelectFolder={handlePickProject}
                   />
                 </div>
 

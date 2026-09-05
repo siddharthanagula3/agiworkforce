@@ -377,7 +377,18 @@
       "constraintsLabel": "Vincoli",
       "constraintsPlaceholder": "Limiti, cose da evitare, fonti da preferire…",
       "deliverableLabel": "Risultato",
-      "deliverablePlaceholder": "Il risultato concreto che ti aspetti (un file, una tabella, un riepilogo…)"
+      "deliverablePlaceholder": "Il risultato concreto che ti aspetti (un file, una tabella, un riepilogo…)",
+      "palette": {
+        "label": "Strumenti AGI Work",
+        "searchPlaceholder": "Cerca plugin, cartelle e competenze",
+        "searchLabel": "Cerca nella palette AGI Work",
+        "connectorsHeading": "App connesse",
+        "connectorsLoading": "Caricamento delle app connesse",
+        "skillsHeading": "Competenze",
+        "foldersHeading": "Cartelle",
+        "pluginsHeading": "Plugin",
+        "noMatches": "Nessun risultato"
+      }
     }
   },
   "time": {

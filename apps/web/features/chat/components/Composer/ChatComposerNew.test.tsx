@@ -1011,7 +1011,7 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByRole('button', { name: /scope/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /scope/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /scope/i }));
 
     expect(document.querySelectorAll('input[type="text"]').length).toBeGreaterThan(0);
   });
