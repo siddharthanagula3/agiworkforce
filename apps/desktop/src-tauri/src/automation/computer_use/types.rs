@@ -510,10 +510,6 @@ pub struct ComputerUseTask {
     #[serde(default = "default_max_actions")]
     pub max_actions: u32,
 
-    /// Whether to pause for confirmation before destructive actions.
-    #[serde(default)]
-    pub require_confirmation: bool,
-
     /// Application that should be focused for this task.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_application: Option<String>,
@@ -543,7 +539,6 @@ impl Default for ComputerUseTask {
             explicit_steps: Vec::new(),
             timeout_ms: default_task_timeout(),
             max_actions: default_max_actions(),
-            require_confirmation: false,
             target_application: None,
             success_indicators: Vec::new(),
             context: None,

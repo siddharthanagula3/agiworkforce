@@ -13,6 +13,8 @@ use agiworkforce_protocol::tool_primitive::{
     ToolActionClass, ToolApprovalReason, ToolApprovalRequest, ToolPermissionDecision,
 };
 
+use crate::sys::commands::tool_confirmation::is_tool_remember_eligible;
+
 use super::safety::{SafetyDecision, SafetyReason};
 use super::types::ComputerUseAction;
 
@@ -21,10 +23,6 @@ const UNNAMED_ACTION_TOOL: &str = "computer_use_action";
 const ACTION_TAG_FIELD: &str = "action";
 const MEDIUM_RISK_FLOOR: u8 = 4;
 const HIGH_RISK_FLOOR: u8 = 7;
-
-/// A computer-use action drives whatever application is in front of it, so no
-/// grant given for one call may answer for the next.
-const COMPUTER_USE_IS_REMEMBERABLE: bool = false;
 
 impl SafetyReason {
     pub fn contract_reason(&self) -> ToolApprovalReason {
@@ -123,11 +121,11 @@ pub fn approval_request(
     unattended: bool,
 ) -> ToolApprovalRequest {
     let class = action_class(action);
+    let tool = action_tool_name(action);
 
     ToolApprovalRequest {
         request_id,
         call_id,
-        tool: action_tool_name(action),
         action_class: class,
         arguments: serde_json::to_value(action).unwrap_or_else(|_| serde_json::json!({})),
         reason: decision.contract_reason(),
@@ -135,7 +133,8 @@ pub fn approval_request(
         reversible: matches!(class, ToolActionClass::Read),
         undo_hint: None,
         unattended,
-        rememberable: COMPUTER_USE_IS_REMEMBERABLE,
+        rememberable: is_tool_remember_eligible(&tool),
+        tool,
     }
 }
 
@@ -343,7 +342,7 @@ mod contract_mapping_tests {
     }
 
     #[test]
-    fn the_request_names_the_action_and_never_offers_a_standing_grant() {
+    fn the_request_names_the_action_and_answers_the_standing_grant_rule() {
         let action = ComputerUseAction::Click {
             x: 10,
             y: 20,
@@ -360,7 +359,10 @@ mod contract_mapping_tests {
 
         assert_eq!(request.tool, "computer_use_click");
         assert_eq!(request.action_class, ToolActionClass::Execute);
-        assert!(!request.rememberable);
+        assert_eq!(
+            request.rememberable,
+            is_tool_remember_eligible(&request.tool)
+        );
         assert!(!request.reversible);
         assert_eq!(request.reason, ToolApprovalReason::UserRequiresApproval);
         assert_eq!(

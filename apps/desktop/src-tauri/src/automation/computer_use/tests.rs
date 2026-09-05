@@ -132,7 +132,7 @@ mod types_tests {
         assert!(task.description.is_empty());
         assert_eq!(task.timeout_ms, 300_000); // 5 minutes
         assert_eq!(task.max_actions, 100);
-        assert!(!task.require_confirmation);
+        assert!(task.success_indicators.is_empty());
     }
 }
 

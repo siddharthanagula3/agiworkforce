@@ -18,7 +18,11 @@ import {
   createManagedCloudRequestContext,
   type ManagedCloudRequestContext,
 } from '../../services/managedCloudRequestContext';
-import { formatOpaCompletionReason, useComputerUseStore } from '../../stores/computerUseStore';
+import {
+  formatOpaCompletionReason,
+  useComputerUseStore,
+  type PausedConfirmation,
+} from '../../stores/computerUseStore';
 import { useVoiceInputStore } from '../../stores/settingsStore';
 import { toProviderLanguage } from '../../lib/voiceLanguage';
 import { onGlobalVoiceHotkey } from '../../lib/tauri-electron/voice-hotkey';
@@ -37,6 +41,8 @@ export interface CloudVoiceControllerResult {
   controller: ComposerVoiceController;
   pendingAction: string | null;
   pendingApproval: ToolApprovalRequest | null;
+  pausedConfirmation: PausedConfirmation | null;
+  isResolvingConfirmation: boolean;
   error: string | null;
   isDesktopActionActive: boolean;
   isStopping: boolean;
@@ -47,6 +53,8 @@ export interface CloudVoiceControllerResult {
   dismissComputerUseConsent: () => void;
   useActionAsText: () => void;
   cancelAction: () => Promise<void>;
+  approvePausedStep: (rememberForSession: boolean) => Promise<void>;
+  denyPausedStep: () => Promise<void>;
 }
 
 export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerResult {
@@ -65,6 +73,8 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   const cancellingOpaExecutionId = useComputerUseStore((state) => state.cancellingOpaExecutionId);
   const computerUseError = useComputerUseStore((state) => state.error);
   const pendingApproval = useComputerUseStore((state) => state.pendingApproval);
+  const pausedConfirmation = useComputerUseStore((state) => state.pausedConfirmation);
+  const isResolvingConfirmation = useComputerUseStore((state) => state.isResolvingConfirmation);
   const voiceLanguage = useVoiceInputStore((state) => state.voiceLanguage);
 
   const releaseBoundarySubscription = useCallback(() => {
@@ -409,6 +419,16 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     setWorkflowState('idle');
   }, [cancellingOpaExecutionId, closeVoiceBoundary, stopDesktopAction]);
 
+  // The pause lives in the native task, not in this hook: answering it neither
+  // starts nor stops the run, it releases the step the run is already holding.
+  const approvePausedStep = useCallback(async (rememberForSession: boolean) => {
+    await useComputerUseStore.getState().resolveConfirmation(true, rememberForSession);
+  }, []);
+
+  const denyPausedStep = useCallback(async () => {
+    await useComputerUseStore.getState().resolveConfirmation(false);
+  }, []);
+
   const toggleRef = useRef(onToggle);
   useEffect(() => {
     toggleRef.current = onToggle;
@@ -437,6 +457,8 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     controller,
     pendingAction,
     pendingApproval,
+    pausedConfirmation,
+    isResolvingConfirmation,
     error: error ?? (cancellingOpaExecutionId === null ? null : computerUseError),
     isDesktopActionActive: opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null,
     isStopping: workflowState === 'stopping',
@@ -447,5 +469,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     dismissComputerUseConsent,
     useActionAsText,
     cancelAction,
+    approvePausedStep,
+    denyPausedStep,
   };
 }

@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
@@ -83,6 +84,10 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
 ];
 
 pub const FOLDER_ACCESS_TOOL_NAME: &str = "folder_access";
+
+const TOOL_CONFIRMATION_EVENT: &str = "tool:confirmation_required";
+const TOOL_CONFIRMATION_TIMEOUT_EVENT: &str = "tool:confirmation_timeout";
+const CONFIRMATION_CHANNEL_CLOSED: &str = "Confirmation channel closed unexpectedly";
 
 struct PendingConfirmation {
     sender: oneshot::Sender<ToolConfirmationResponse>,
@@ -772,6 +777,74 @@ impl ToolConfirmationState {
         request: &ToolConfirmationRequest,
     ) -> oneshot::Receiver<ToolConfirmationResponse> {
         self.register_pending_inner(request.request_id.clone(), Some(request.clone()))
+    }
+
+    /// Registers one confirmation, shows it on `surface`, and holds until it is
+    /// answered or the bound runs out.
+    ///
+    /// The wait belongs to the pending slot, not to any window: whatever the
+    /// surface did to raise itself, an answer that arrives later still lands,
+    /// and losing focus in between changes nothing. An unanswered request is an
+    /// error, never a silent approval, and its slot is released rather than
+    /// left to accumulate.
+    pub async fn await_confirmation(
+        &self,
+        request: ToolConfirmationRequest,
+        timeout_secs: u64,
+        surface: &dyn ConfirmationSurface,
+    ) -> Result<bool, String> {
+        let request_id = request.request_id.clone();
+        let tool_name = request.tool_name.clone();
+        let receiver = self.register_pending_request(&request);
+
+        if let Err(error) = surface.present(&request) {
+            self.cancel_pending(&request_id);
+            return Err(error);
+        }
+
+        info!(
+            "[ToolConfirmation] Waiting for user confirmation for '{}' (request_id: {})",
+            tool_name, request_id
+        );
+
+        match tokio::time::timeout(Duration::from_secs(timeout_secs), receiver).await {
+            Ok(Ok(response)) => {
+                if response.remember_choice {
+                    self.remember_choice(&tool_name, response.approved);
+                }
+
+                if response.approved {
+                    info!("[ToolConfirmation] Tool '{}' approved by user", tool_name);
+                } else {
+                    warn!(
+                        "[ToolConfirmation] Tool '{}' denied by user: {:?}",
+                        tool_name, response.reason
+                    );
+                }
+
+                Ok(response.approved)
+            }
+            Ok(Err(_)) => {
+                warn!(
+                    "[ToolConfirmation] Confirmation channel closed for '{}'",
+                    tool_name
+                );
+                self.cancel_pending(&request_id);
+                Err(String::from(CONFIRMATION_CHANNEL_CLOSED))
+            }
+            Err(_) => {
+                warn!(
+                    "[ToolConfirmation] Confirmation timeout for '{}' after {}s",
+                    tool_name, timeout_secs
+                );
+                self.cancel_pending(&request_id);
+                surface.expire(&request);
+                Err(format!(
+                    "User did not respond within {} seconds",
+                    timeout_secs
+                ))
+            }
+        }
     }
 
     fn register_pending_inner(
@@ -1736,7 +1809,34 @@ pub async fn request_tool_confirmation<R: tauri::Runtime>(
     request: ToolConfirmationRequest,
     timeout_secs: u64,
 ) -> Result<bool, String> {
-    let request_id = request.request_id.clone();
+    request_tool_confirmation_on_surface(
+        app_handle,
+        state,
+        request,
+        timeout_secs,
+        &ToolDialogSurface::new(app_handle),
+    )
+    .await
+}
+
+/// The same channel, rendered somewhere else.
+///
+/// A caller whose request is answered by its own dialog passes that surface
+/// here instead of opening a second channel: one pending map, one standing
+/// grant rule ([`NEVER_REMEMBERABLE`], session approvals, `auto_approve_all`),
+/// one timeout, and one [`respond_tool_confirmation`] that resolves it. Two
+/// channels would mean two Approve buttons for one decision, and a rule added
+/// to one of them would not reach the other.
+pub async fn request_tool_confirmation_on_surface<R>(
+    app_handle: &tauri::AppHandle<R>,
+    state: &ToolConfirmationState,
+    request: ToolConfirmationRequest,
+    timeout_secs: u64,
+    surface: &dyn ConfirmationSurface,
+) -> Result<bool, String>
+where
+    R: tauri::Runtime,
+{
     let tool_name = request.tool_name.clone();
 
     // Agent mode gate, block tools not permitted in the current mode
@@ -1769,69 +1869,49 @@ pub async fn request_tool_confirmation<R: tauri::Runtime>(
         return Ok(true);
     }
 
-    // Register the pending confirmation
-    let rx = state.register_pending_request(&request);
+    state
+        .await_confirmation(request, timeout_secs, surface)
+        .await
+}
 
-    // Create summary for frontend
-    let summary = ToolConfirmationSummary::from(&request);
+/// Where one pending confirmation is shown and how its expiry is reported.
+///
+/// The channel owns the pending slot, the standing-grant rule and the bound;
+/// a surface owns nothing but the rendering, which is what lets one decision
+/// be shown on the tool dialog or on the computer-use consent dialog without
+/// either one growing a second channel.
+pub trait ConfirmationSurface: Send + Sync {
+    fn present(&self, request: &ToolConfirmationRequest) -> Result<(), String>;
+    fn expire(&self, request: &ToolConfirmationRequest);
+}
 
-    // Emit the confirmation request event
-    if let Err(e) = app_handle.emit("tool:confirmation_required", &summary) {
-        state.cancel_pending(&request_id);
-        return Err(format!("Failed to emit confirmation event: {}", e));
+/// The tool dialog every non-computer-use confirmation is answered on.
+pub struct ToolDialogSurface<'a, R: tauri::Runtime> {
+    app_handle: &'a tauri::AppHandle<R>,
+}
+
+impl<'a, R: tauri::Runtime> ToolDialogSurface<'a, R> {
+    pub fn new(app_handle: &'a tauri::AppHandle<R>) -> Self {
+        Self { app_handle }
+    }
+}
+
+impl<R: tauri::Runtime> ConfirmationSurface for ToolDialogSurface<'_, R> {
+    fn present(&self, request: &ToolConfirmationRequest) -> Result<(), String> {
+        let summary = ToolConfirmationSummary::from(request);
+        self.app_handle
+            .emit(TOOL_CONFIRMATION_EVENT, &summary)
+            .map_err(|e| format!("Failed to emit confirmation event: {}", e))
     }
 
-    info!(
-        "[ToolConfirmation] Waiting for user confirmation for '{}' (request_id: {})",
-        tool_name, request_id
-    );
-
-    // Wait for response with timeout
-    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
-        Ok(Ok(response)) => {
-            // If user wants to remember the choice, store it
-            if response.remember_choice {
-                state.remember_choice(&tool_name, response.approved);
-            }
-
-            if response.approved {
-                info!("[ToolConfirmation] Tool '{}' approved by user", tool_name);
-            } else {
-                warn!(
-                    "[ToolConfirmation] Tool '{}' denied by user: {:?}",
-                    tool_name, response.reason
-                );
-            }
-
-            Ok(response.approved)
-        }
-        Ok(Err(_)) => {
-            warn!(
-                "[ToolConfirmation] Confirmation channel closed for '{}'",
-                tool_name
-            );
-            state.cancel_pending(&request_id);
-            Err("Confirmation channel closed unexpectedly".to_string())
-        }
-        Err(_) => {
-            warn!(
-                "[ToolConfirmation] Confirmation timeout for '{}' after {}s",
-                tool_name, timeout_secs
-            );
-            state.cancel_pending(&request_id);
-            // Emit timeout event so frontend can update UI
-            let _ = app_handle.emit(
-                "tool:confirmation_timeout",
-                serde_json::json!({
-                    "request_id": request_id,
-                    "tool_name": tool_name,
-                }),
-            );
-            Err(format!(
-                "User did not respond within {} seconds",
-                timeout_secs
-            ))
-        }
+    fn expire(&self, request: &ToolConfirmationRequest) {
+        let _ = self.app_handle.emit(
+            TOOL_CONFIRMATION_TIMEOUT_EVENT,
+            serde_json::json!({
+                "request_id": request.request_id,
+                "tool_name": request.tool_name,
+            }),
+        );
     }
 }
 

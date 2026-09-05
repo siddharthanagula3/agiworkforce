@@ -23,7 +23,7 @@ pub use accessibility::{
 };
 pub use dispatch::{DispatchError, TierDispatch};
 pub use dom::{BrowserTransportProbe, PageSnapshot};
-pub use intent::{ActionIntent, IntentOperation, TargetRole};
+pub use intent::{ActionIntent, IntentOperation, PlannedStepIntent, StepVerb, TargetRole};
 pub use matching::Match;
 pub use tiers::{ApiTier, BrowserTier, DesktopBrowserTransportProbe, UiTier};
 
