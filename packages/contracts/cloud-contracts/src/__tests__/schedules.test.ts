@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createManagedCloudSchedulesClient,
   ManagedCloudScheduleListResponseSchema,
+  ManagedCloudScheduleMutationSchema,
   ManagedCloudScheduleRunResponseSchema,
+  ManagedCloudScheduleTaskSchema,
   managedCloudSchedulePath,
   managedCloudScheduleRunsPath,
 } from '../schedules';
@@ -83,6 +85,43 @@ describe('managed cloud schedule wire contracts', () => {
     expect(managedCloudSchedulePath('schedule/1')).toBe('/api/schedules/schedule%2F1');
     expect(managedCloudScheduleRunsPath('schedule/1')).toBe('/api/schedules/schedule%2F1/runs');
   });
+
+  it('accepts a schedule with no project scope and one bound to a project', () => {
+    expect(ManagedCloudScheduleTaskSchema.parse(schedule).projectId).toBeUndefined();
+    expect(
+      ManagedCloudScheduleTaskSchema.parse({ ...schedule, projectId: 'project-1' }).projectId,
+    ).toBe('project-1');
+    expect(
+      ManagedCloudScheduleTaskSchema.parse({ ...schedule, projectId: null }).projectId,
+    ).toBeNull();
+  });
+
+  it('accepts a create/update mutation with an omitted, null or set project scope', () => {
+    const base = {
+      name: 'Morning brief',
+      description: null,
+      prompt: 'Summarize my priorities.',
+      model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
+      recurrence: 'weekly' as const,
+      cronExpression: null,
+      scheduledAt: null,
+      intervalMs: null,
+      timeOfDay: '09:00',
+      daysOfWeek: [1, 2, 3, 4, 5],
+      dayOfMonth: null,
+      timezone: 'America/Chicago',
+      isActive: true,
+      expiresAt: null,
+      maxExecutions: null,
+    };
+    expect(ManagedCloudScheduleMutationSchema.parse(base).projectId).toBeUndefined();
+    expect(
+      ManagedCloudScheduleMutationSchema.parse({ ...base, projectId: null }).projectId,
+    ).toBeNull();
+    expect(
+      ManagedCloudScheduleMutationSchema.parse({ ...base, projectId: 'project-1' }).projectId,
+    ).toBe('project-1');
+  });
 });
 
 describe('managed cloud schedules client', () => {
@@ -130,5 +169,28 @@ describe('managed cloud schedules client', () => {
 
     await expect(client.runNow('schedule-1', '   ')).rejects.toThrow(/idempotency key/i);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('carries a project scope through to the list request query string', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ schedules: [], pagination: { limit: 50, offset: 0 } })),
+    );
+    const client = createManagedCloudSchedulesClient({
+      baseUrl: 'https://agi.example/',
+      fetchImpl,
+    });
+
+    await client.listSchedules({ limit: 50, offset: 0, projectId: 'project-1' });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://agi.example/api/schedules?limit=50&offset=0&projectId=project-1',
+      expect.anything(),
+    );
+
+    await client.listSchedules({ limit: 50, offset: 0 });
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      'https://agi.example/api/schedules?limit=50&offset=0',
+      expect.anything(),
+    );
   });
 });
