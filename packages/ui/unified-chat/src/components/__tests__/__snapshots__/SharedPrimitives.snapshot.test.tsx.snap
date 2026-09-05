@@ -327,7 +327,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
 
 exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structure for a BYOK turn 1`] = `
 <div
-  class="flex flex-col gap-2 rounded-[var(--chat-radius-md)] border px-3 py-2 text-xs border-amber-500/30 bg-amber-500/5"
+  class="flex flex-col gap-0.5 rounded-[var(--chat-radius-md)] border px-3 py-1 text-xs border-amber-500/30 bg-amber-500/5"
   data-provider-mode="DirectByok"
   data-stays-local="false"
   data-testid="send-preview"
@@ -359,12 +359,12 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       />
     </svg>
     <span
-      class="font-medium text-[var(--chat-text-primary)]"
+      class="min-w-0 flex-1 truncate font-medium text-[var(--chat-text-primary)]"
     >
       Sent to api.anthropic.com
     </span>
     <span
-      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
     >
       <svg
         aria-hidden="true"
@@ -394,22 +394,42 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       BYOK
     </span>
     <span
-      class="ml-auto text-[12px] text-[var(--chat-text-muted)]"
+      class="ml-auto shrink-0 text-[12px] text-[var(--chat-text-muted)]"
     >
       Direct Model Fixture
     </span>
   </div>
-  <p
-    class="text-[12px] leading-relaxed text-[var(--chat-text-secondary)]"
+  <button
+    aria-controls="send-preview-details"
+    aria-expanded="false"
+    class="inline-flex items-center gap-1 self-start text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+    type="button"
   >
-    BYOK turn. The request, attachments, and system prompt go directly to api.anthropic.com via your API key. AGI does not receive a copy of the payload.
-  </p>
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-chevron-down h-3 w-3"
+      fill="none"
+      height="24"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+      />
+    </svg>
+    Show details
+  </button>
 </div>
 `;
 
 exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structure for a Local turn 1`] = `
 <div
-  class="flex flex-col gap-2 rounded-[var(--chat-radius-md)] border px-3 py-2 text-xs border-emerald-500/30 bg-emerald-500/5"
+  class="flex flex-col gap-0.5 rounded-[var(--chat-radius-md)] border px-3 py-1 text-xs border-emerald-500/30 bg-emerald-500/5"
   data-provider-mode="Local"
   data-stays-local="true"
   data-testid="send-preview"
@@ -444,12 +464,12 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       />
     </svg>
     <span
-      class="font-medium text-[var(--chat-text-primary)]"
+      class="min-w-0 flex-1 truncate font-medium text-[var(--chat-text-primary)]"
     >
       Stays on this device
     </span>
     <span
-      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
     >
       <svg
         aria-hidden="true"
@@ -479,16 +499,11 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       Local
     </span>
     <span
-      class="ml-auto text-[12px] text-[var(--chat-text-muted)]"
+      class="ml-auto shrink-0 text-[12px] text-[var(--chat-text-muted)]"
     >
       Local Model Fixture
     </span>
   </div>
-  <p
-    class="text-[12px] leading-relaxed text-[var(--chat-text-secondary)]"
-  >
-    Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.
-  </p>
   <button
     aria-controls="send-preview-details"
     aria-expanded="false"
