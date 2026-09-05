@@ -3,11 +3,16 @@ import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from './ProductFrame';
 import { Reveal } from './Reveal';
+import { ScrollDeck } from './motion/ScrollDeck';
+import { Stage } from './motion/Stage';
 
 const TICKER_REPEATS = 6;
 const TRUST_STAGGER_MS = 80;
 const CAP_STAGGER_MS = 60;
 const CAP_COLUMNS = 3;
+const HERO_DEPTH_PX = 28;
+const FRAME_DEPTH_PX = 12;
+const SURFACE_DECK_LABEL = 'The six surfaces';
 
 export interface FlagshipCta {
   href: string;
@@ -71,7 +76,9 @@ export function FlagshipHero({
             </div>
           )}
         </div>
-        <div className="agi-fl-hero-visual agi-fl-hero-frame--main">{visual}</div>
+        <Stage depthPx={HERO_DEPTH_PX}>
+          <div className="agi-fl-hero-visual agi-fl-hero-frame--main">{visual}</div>
+        </Stage>
       </div>
     </section>
   );
@@ -141,9 +148,11 @@ export function SurfaceIndex({
       </h2>
       <p className="agi-fl-section-lede">{lede}</p>
 
-      <ol className="agi-fl-surface-list">
-        {items.map((item) => (
-          <Reveal as="li" key={item.index} className="agi-fl-surface-row">
+      <ScrollDeck
+        label={SURFACE_DECK_LABEL}
+        items={items.map((item) => ({
+          id: item.index,
+          copy: (
             <div className="agi-fl-surface-copy">
               <span className="agi-fl-surface-num" aria-hidden="true">
                 {item.index}
@@ -165,21 +174,24 @@ export function SurfaceIndex({
                 <span className="agi-fl-surface-status">{item.status}</span>
               </p>
             </div>
-            {item.visual ? (
-              <div className="agi-fl-surface-visual">{item.visual}</div>
-            ) : item.frame ? (
+          ),
+          visual: (
+            <Stage depthPx={FRAME_DEPTH_PX}>
               <div className="agi-fl-surface-visual">
-                <ProductFrame
-                  variant={item.frame.variant}
-                  title={item.frame.title}
-                  badge={item.frame.badge}
-                  image={item.frame.image}
-                />
+                {item.visual ??
+                  (item.frame ? (
+                    <ProductFrame
+                      variant={item.frame.variant}
+                      title={item.frame.title}
+                      badge={item.frame.badge}
+                      image={item.frame.image}
+                    />
+                  ) : null)}
               </div>
-            ) : null}
-          </Reveal>
-        ))}
-      </ol>
+            </Stage>
+          ),
+        }))}
+      />
     </section>
   );
 }
@@ -307,7 +319,9 @@ export function DevBand({
           ))}
         </div>
       </div>
-      <Reveal className="agi-fl-devband-term">{visual}</Reveal>
+      <Reveal className="agi-fl-devband-term">
+        <Stage depthPx={FRAME_DEPTH_PX}>{visual}</Stage>
+      </Reveal>
     </section>
   );
 }

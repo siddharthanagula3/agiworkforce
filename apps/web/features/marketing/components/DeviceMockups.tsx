@@ -1,3 +1,4 @@
+import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
@@ -415,6 +416,24 @@ export function EditorWindow({
   );
 }
 
+const TERMINAL_TYPED_LABEL = 'AGI CLI welcome transcript';
+const TERMINAL_LINE_CLASSES: TypedLineClasses = {
+  line: 'agi-term-line',
+  kinds: { dim: 'agi-term-line--dim', ok: 'agi-term-ok' },
+};
+const TERMINAL_WELCOME = 'Welcome to AGI';
+const TERMINAL_MODEL_HINT = 'Choose Local, BYOK, or Cloud with /model.';
+const TERMINAL_COMMAND_HINT = 'Type / for commands · Shift+Tab to switch modes';
+
+function terminalLines(boundaryLabel: string): readonly TypedLine[] {
+  return [
+    { kind: 'out', text: TERMINAL_WELCOME },
+    { kind: 'ok', text: boundaryLabel },
+    { kind: 'dim', text: TERMINAL_MODEL_HINT },
+    { kind: 'dim', text: TERMINAL_COMMAND_HINT },
+  ];
+}
+
 export function TerminalWindow({
   title = 'agi · zsh',
   badge = 'sandboxed',
@@ -445,14 +464,11 @@ export function TerminalWindow({
             <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 0%
           </span>
         </p>
-        <p className="agi-term-line">Welcome to AGI</p>
-        <p className="agi-term-line agi-term-ok">{boundaryLabel}</p>
-        <p className="agi-term-line agi-term-line--dim">
-          Choose Local, BYOK, or Cloud with /model.
-        </p>
-        <p className="agi-term-line agi-term-line--dim">
-          Type / for commands · Shift+Tab to switch modes
-        </p>
+        <Typewriter
+          lines={terminalLines(boundaryLabel)}
+          label={TERMINAL_TYPED_LABEL}
+          classes={TERMINAL_LINE_CLASSES}
+        />
         <p className="agi-term-line">
           <span className="agi-term-prompt">›</span> Message AGI…
           <span className="agi-term-caret" />
