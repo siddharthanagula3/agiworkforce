@@ -70,6 +70,16 @@ import {
   type DatabaseConnectionErrorScope,
   DataLayerConfigError,
 } from '../types';
+import {
+  BEGIN_RLS_SCOPE_STATEMENT,
+  BEGIN_STATEMENT,
+  BIND_TENANT_SCOPE_STATEMENT,
+  COMMIT_STATEMENT,
+  NO_ORGANIZATION_SCOPE,
+  ROLLBACK_STATEMENT,
+  decodeJwtSub,
+  withStatementContext,
+} from './sql-session';
 
 export const MIGRATION_GUIDE = `
 1. Provision a Neon project. Create a database. Copy the connection string
@@ -96,22 +106,6 @@ export const MIGRATION_GUIDE = `
 
 Full guide: docs/product/definition.md and docs/architecture/overview.md.
 `.trim();
-
-/**
- * Postgres reports a failing statement by parameter index and character
- * offset alone, so an error like "could not determine data type of parameter
- * $4" names no query and no table. Attaching the statement (never the
- * parameter values, which carry user content) makes the offending SQL
- * identifiable from a log line.
- */
-function withStatementContext(error: unknown, sql: string): unknown {
-  if (!(error instanceof Error) || 'statement' in error) return error;
-  Object.defineProperty(error, 'statement', {
-    value: sql.replace(/\s+/g, ' ').trim().slice(0, 500),
-    enumerable: true,
-  });
-  return error;
-}
 
 type NeonModule = typeof import('@neondatabase/serverless');
 
@@ -247,64 +241,7 @@ async function loadNeon(connectionHost: string): Promise<NeonModule> {
   return loaded;
 }
 
-/**
- * Decode the `sub` claim from a JWT WITHOUT verifying its signature.
- *
- * @internal SECURITY: this trusts an UNVERIFIED token. An attacker who can
- * reach a caller that forwards a self-minted JWT here controls the `sub`
- * that drives RLS, i.e. impersonation. It is ONLY safe when the caller has
- * already verified the signature (e.g. via {@link ClerkAuthAdapter.verifyJwt}
- * / Clerk `verifyToken`) BEFORE handing the token to `withUser`. Because
- * that precondition is invisible from here, `withUser` is default-deny: it
- * refuses to call this unless the adapter was explicitly constructed with
- * `unsafeAllowUnverifiedJwtSubject: true`. Do not export this helper.
- *
- * Throws if the JWT is malformed (wrong segment count, non-JSON middle,
- * missing/non-string `sub`). Throwing surfaces operator config bugs early
- * rather than silently dropping RLS context.
- */
-function decodeJwtSub(jwt: string): string {
-  const parts = jwt.split('.');
-  if (parts.length !== 3) {
-    throw new DataLayerConfigError(
-      `Neon withUser: expected a 3-segment JWT, got ${parts.length}-segment token.`,
-    );
-  }
-  const payloadSegment = parts[1];
-  if (!payloadSegment) {
-    throw new DataLayerConfigError('Neon withUser: empty JWT payload segment.');
-  }
-  const b64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
-  let json: string;
-  try {
-    if (typeof globalThis.atob === 'function') {
-      json = globalThis.atob(padded);
-    } else {
-      json = Buffer.from(padded, 'base64').toString('utf8');
-    }
-  } catch (e) {
-    throw new DataLayerConfigError(
-      `Neon withUser: failed to base64-decode JWT payload: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (e) {
-    throw new DataLayerConfigError(
-      `Neon withUser: JWT payload is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    throw new DataLayerConfigError('Neon withUser: JWT payload is not an object.');
-  }
-  const sub = (parsed as Record<string, unknown>)['sub'];
-  if (typeof sub !== 'string' || sub.length === 0) {
-    throw new DataLayerConfigError('Neon withUser: JWT payload has no string `sub` claim.');
-  }
-  return sub;
-}
+const NEON_ADAPTER_NAME = 'Neon';
 
 const SECURE_SSL_MODES = new Set(['require', 'verify-ca', 'verify-full']);
 const NEON_APEX_HOST = 'neon.tech';
@@ -475,15 +412,14 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
 
   private async beginRlsScope(client: PoolClient): Promise<void> {
     if (this.boundSub === null) {
-      await client.query('BEGIN');
+      await client.query(BEGIN_STATEMENT);
       return;
     }
-    await client.query('BEGIN; SET LOCAL ROLE app_rls');
-    await client.query(
-      "SELECT set_config('request.jwt.claim.sub', $1, true), " +
-        "set_config('request.jwt.claim.org_id', $2, true)",
-      [this.boundSub, this.boundOrgId ?? ''],
-    );
+    await client.query(BEGIN_RLS_SCOPE_STATEMENT);
+    await client.query(BIND_TENANT_SCOPE_STATEMENT, [
+      this.boundSub,
+      this.boundOrgId ?? NO_ORGANIZATION_SCOPE,
+    ]);
   }
 
   /**
@@ -507,11 +443,11 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     try {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
-      await client.query('COMMIT');
+      await client.query(COMMIT_STATEMENT);
       return result.rows as T[];
     } catch (err) {
       try {
-        await client.query('ROLLBACK');
+        await client.query(ROLLBACK_STATEMENT);
       } catch {
         // best-effort rollback; surface the original error
       }
@@ -535,11 +471,11 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     try {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
-      await client.query('COMMIT');
+      await client.query(COMMIT_STATEMENT);
       return result.rowCount ?? 0;
     } catch (err) {
       try {
-        await client.query('ROLLBACK');
+        await client.query(ROLLBACK_STATEMENT);
       } catch {
         // best-effort rollback; surface the original error
       }
@@ -556,11 +492,11 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       await this.beginRlsScope(client);
       const tx = new NeonTransactionAdapter(client);
       const result = await fn(tx);
-      await client.query('COMMIT');
+      await client.query(COMMIT_STATEMENT);
       return result;
     } catch (err) {
       try {
-        await client.query('ROLLBACK');
+        await client.query(ROLLBACK_STATEMENT);
       } catch {
         // best-effort rollback; surface the original error
       }
@@ -604,7 +540,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
           'auth() directly and must not use this path.',
       );
     }
-    const sub = decodeJwtSub(jwt);
+    const sub = decodeJwtSub(jwt, NEON_ADAPTER_NAME);
     const next = new NeonDatabaseAdapter({
       ...this.config,
       poolPromise: this.poolPromise,
