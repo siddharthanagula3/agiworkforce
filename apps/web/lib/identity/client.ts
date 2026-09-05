@@ -64,7 +64,7 @@ export function useCurrentUser(): IdentityCurrentUserState {
     return {
       id: user.id,
       email: optional(user.primaryEmailAddress?.emailAddress),
-      emails: user.emailAddresses.map((address) => address.emailAddress).filter(Boolean),
+      emails: (user.emailAddresses ?? []).map((address) => address.emailAddress).filter(Boolean),
       firstName: optional(user.firstName),
       lastName: optional(user.lastName),
       fullName: optional(user.fullName),
