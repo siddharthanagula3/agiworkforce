@@ -96,7 +96,7 @@ in. Whether anything is ever sent to it is instead gated at runtime by
 [`errorReportingConsent.ts`](src/features/observability/errorReportingConsent.ts),
 default off, and by the presence of a configured DSN
 ([`errorReporting.ts`](src/features/observability/errorReporting.ts)). Every
-payload is scrubbed by [`@agiworkforce/observability`](../../packages/platform/observability)
+payload is scrubbed by [`@agiworkforce/observability`](../../../packages/platform/observability)
 before it reaches this host: message text, file paths, and URLs never leave
 the browser, only the error's type name and bare function names from its
 stack.
