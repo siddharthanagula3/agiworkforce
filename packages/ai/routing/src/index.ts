@@ -41,9 +41,16 @@ export {
   observedHealthRankingEnabled,
   observedRouteHealthFromSnapshots,
   observedRoutePenalty,
+  previewAutoRoute,
   resolveAutoRoute,
   CANARY_ENV,
   OBSERVED_HEALTH_ENV,
+} from './auto';
+export type {
+  AutoRoutePreview,
+  RoutePreviewCandidate,
+  RoutePreviewExcluded,
+  RoutePreviewScoreFactors,
 } from './auto';
 export { getAutoCapabilityEnvelope } from './auto-capability-envelope';
 export { resolveFreeAutoRoute } from './free-auto';
