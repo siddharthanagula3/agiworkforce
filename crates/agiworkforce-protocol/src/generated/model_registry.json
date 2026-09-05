@@ -1442,6 +1442,48 @@
         "cacheWrite1hPerMillion": 20
       }
     },
+    "vercel_gateway/claude-fable-5-1": {
+      "modelKey": "claude-fable-5-1",
+      "provider": "vercel_gateway",
+      "providerModelId": "anthropic/claude-fable-5.1",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 0.25,
+        "cacheWritePerMillion": 12.5
+      }
+    },
+    "cheaperinference_anthropic/claude-fable-5-1": {
+      "modelKey": "claude-fable-5-1",
+      "provider": "cheaperinference_anthropic",
+      "providerModelId": "claude-fable-5.1",
+      "harnessId": "cheaperinference-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 7,
+        "outputPerMillion": 35,
+        "cacheReadPerMillion": 0.175,
+        "cacheWritePerMillion": 8.75
+      }
+    },
     "anthropic/claude-opus-5": {
       "modelKey": "claude-opus-5",
       "provider": "anthropic",
