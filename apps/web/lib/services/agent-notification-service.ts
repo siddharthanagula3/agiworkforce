@@ -1,7 +1,7 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { sendPushToUser } from './push-notification-service';
 
 /**
@@ -50,9 +50,9 @@ const MOBILE_ROUTE: Record<AgentRunNotificationEvent, string> = {
   failed: '/(app)/agents',
 };
 
-async function loadAgentPushPreference(userId: string): Promise<boolean> {
+async function loadAgentPushPreference(db: DatabaseAdapter, userId: string): Promise<boolean> {
   try {
-    const [row] = await getNeonDb().query<{ notifications: unknown }>(
+    const [row] = await db.query<{ notifications: unknown }>(
       `select coalesce(us.settings -> 'notifications', '{}'::jsonb) as notifications
          from public.profiles as p
          left join public.user_settings as us on us.user_id = p.id
@@ -112,14 +112,17 @@ function describeAgentRunEvent(notice: AgentRunNotice): { title: string; body: s
   }
 }
 
-export async function notifyAgentRunEvent(notice: AgentRunNotice): Promise<{ pushed: boolean }> {
+export async function notifyAgentRunEvent(
+  db: DatabaseAdapter,
+  notice: AgentRunNotice,
+): Promise<{ pushed: boolean }> {
   const none = { pushed: false };
   try {
     // `AGENT_PUSH_PREFERENCE_KEY` is the mobile app's own switch and governs
     // only the mobile transport. A browser is registered from the web settings
     // toggle and turned off from the same place, so it carries its own consent
     // and is not silenced by a preference set on a phone.
-    const toExpo = await loadAgentPushPreference(notice.userId);
+    const toExpo = await loadAgentPushPreference(db, notice.userId);
 
     const { title, body } = describeAgentRunEvent(notice);
     const result = await sendPushToUser(

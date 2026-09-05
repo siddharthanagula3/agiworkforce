@@ -3,19 +3,15 @@ import { NextRequest } from 'next/server';
 import { ManagedCloudReflectRecapSchema } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
-const { mockGetClerkAuthUser, mockLoadRecap, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
-  mockGetClerkAuthUser: vi.fn(),
+const { mockGetUserScopedDb, mockLoadRecap, scopedDb } = vi.hoisted(() => ({
+  mockGetUserScopedDb: vi.fn(),
   mockLoadRecap: vi.fn(),
-  mockResolveActiveOrganizationId: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/services/reflect-service', () => ({ loadManagedReflectRecap: mockLoadRecap }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
-}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -49,8 +45,11 @@ const recap = ManagedCloudReflectRecapSchema.parse({
 describe('GET /api/reflect', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'owner-1' });
-    mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: 'owner-1',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+    });
     mockLoadRecap.mockResolvedValue({ kind: 'recap', recap });
   });
 
@@ -58,6 +57,7 @@ describe('GET /api/reflect', () => {
     const response = await GET(request('?range=30d&timezone=America%2FChicago'));
     expect(response.status).toBe(200);
     expect(mockLoadRecap).toHaveBeenCalledWith({
+      db: scopedDb,
       userId: 'owner-1',
       organizationId: '11111111-1111-4111-8111-111111111111',
       range: '30d',
@@ -88,7 +88,7 @@ describe('GET /api/reflect', () => {
   });
 
   it('returns 401 before loading recap data when there is no session', async () => {
-    mockGetClerkAuthUser.mockRejectedValue(createError.unauthorized());
+    mockGetUserScopedDb.mockRejectedValue(createError.unauthorized());
     const response = await GET(request('?range=30d&timezone=UTC'));
     expect(response.status).toBe(401);
     expect(mockLoadRecap).not.toHaveBeenCalled();

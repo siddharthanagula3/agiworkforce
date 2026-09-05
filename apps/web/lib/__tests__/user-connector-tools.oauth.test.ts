@@ -4,9 +4,14 @@ import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 vi.mock('server-only', () => ({}));
 
 const mockNeonQuery = vi.fn();
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...a: unknown[]) => mockNeonQuery(...a) }),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const adapter = {
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: async () => 0,
+    transaction: async (callback: (tx: unknown) => unknown) => callback(adapter),
+  };
+  return { getNeonDb: () => adapter };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

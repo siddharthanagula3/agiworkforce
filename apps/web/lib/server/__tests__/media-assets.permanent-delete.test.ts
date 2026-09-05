@@ -12,7 +12,7 @@ const { deleteStoredMedia, query, transaction, resolveActiveOrganizationId } = v
   };
 });
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query, transaction }) }));
+const callerDb = { query, transaction } as never;
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMedia: (...args: unknown[]) => deleteStoredMedia(...args),
 }));
@@ -31,7 +31,7 @@ describe('permanentlyDeleteMediaAsset', () => {
       .mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin' }])
       .mockResolvedValueOnce([{ id: 'asset-1' }]);
 
-    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1')).resolves.toBe(true);
+    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).resolves.toBe(true);
 
     const [selectSql, selectParams] = query.mock.calls[0] as [string, unknown[]];
     expect(selectSql).toMatch(
@@ -46,7 +46,7 @@ describe('permanentlyDeleteMediaAsset', () => {
   it('does not touch storage when the asset is live, foreign, or absent', async () => {
     query.mockResolvedValueOnce([]);
 
-    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1')).resolves.toBe(false);
+    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).resolves.toBe(false);
     expect(deleteStoredMedia).not.toHaveBeenCalled();
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0]?.[1]).toEqual(['asset-1', 'owner', 'org-1']);
@@ -56,7 +56,7 @@ describe('permanentlyDeleteMediaAsset', () => {
     query.mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin' }]);
     deleteStoredMedia.mockRejectedValueOnce(new Error('storage unavailable'));
 
-    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1')).rejects.toThrow(
+    await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).rejects.toThrow(
       'storage unavailable',
     );
     expect(query).toHaveBeenCalledTimes(1);

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
@@ -49,7 +48,7 @@ export interface InsertMediaAssetParams {
   conversationId?: string;
 }
 
-type MediaAssetQueryClient = Pick<ReturnType<typeof getNeonDb>, 'query'>;
+type MediaAssetQueryClient = Pick<DatabaseAdapter, 'query'>;
 
 const REQUIRED_MEDIA_ASSET_COLUMNS = [
   ['id', 'uuid', 'NO', 'required'],
@@ -72,9 +71,7 @@ const REQUIRED_MEDIA_ASSET_COLUMNS = [
   ['deleted_at', 'timestamptz', 'YES', 'forbidden'],
 ] as const;
 
-export async function isMediaAssetStoreReady(
-  db: MediaAssetQueryClient = getNeonDb(),
-): Promise<boolean> {
+export async function isMediaAssetStoreReady(db: MediaAssetQueryClient): Promise<boolean> {
   try {
     const [readiness] = await db.query<{ ready: boolean }>(
       `select
@@ -202,7 +199,7 @@ export interface UpsertVideoMediaAssetParams {
 
 export async function upsertVideoMediaAsset(
   p: UpsertVideoMediaAssetParams,
-  db: MediaAssetQueryClient = getNeonDb(),
+  db: MediaAssetQueryClient,
 ): Promise<string> {
   const rows = await db.query<{ id: string }>(
     `insert into public.media_assets (
@@ -249,7 +246,7 @@ export async function upsertVideoMediaAsset(
 export async function deleteVideoMediaAsset(
   id: string,
   userId: string,
-  db: MediaAssetQueryClient = getNeonDb(),
+  db: MediaAssetQueryClient,
 ): Promise<boolean> {
   const rows = await db.query<{ id: string }>(
     `delete from public.media_assets
@@ -285,7 +282,7 @@ function mapRow(row: Record<string, unknown>): MediaAsset {
 
 export async function insertMediaAsset(
   p: InsertMediaAssetParams,
-  db: MediaAssetQueryClient = getNeonDb(),
+  db: MediaAssetQueryClient,
 ): Promise<string | null> {
   try {
     return await insertMediaAssetRow(db, p, p.organizationId);
@@ -303,7 +300,7 @@ export async function insertMediaAsset(
 
 export async function insertMediaAssetsAtomically(
   assets: readonly InsertMediaAssetParams[],
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<string[] | null> {
   if (assets.length === 0) return [];
   try {
@@ -331,7 +328,7 @@ export async function insertMediaAssetsAtomically(
 export async function listMediaAssets(
   userId: string,
   opts?: { kind?: MediaKind; limit?: number },
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<MediaAsset[]> {
   const limit = Math.min(Math.max(opts?.limit ?? 60, 1), 200);
   try {
@@ -406,7 +403,7 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
 export async function listLibraryAssets(
   userId: string,
   opts: ListLibraryAssetsOptions = {},
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<LibraryAssetRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 24, 1), 200);
   const offset = Math.max(opts.offset ?? 0, 0);
@@ -476,7 +473,7 @@ export interface MediaAssetForServing {
 
 export async function getMediaAssetById(
   id: string,
-  db: MediaAssetQueryClient = getNeonDb(),
+  db: MediaAssetQueryClient,
 ): Promise<MediaAssetForServing | null> {
   try {
     const rows = await db.query<Record<string, unknown>>(
@@ -510,7 +507,7 @@ export async function getMediaAssetById(
 export async function getActiveWorkspaceMediaAssetById(
   userId: string,
   id: string,
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<MediaAssetForServing | null> {
   try {
     const organizationId = await resolveActiveOrganizationId(db, userId);
@@ -548,7 +545,7 @@ export async function getMediaAssetByStoragePathname(
   userId: string,
   storagePathname: string,
   organizationId: string | null,
-  db: MediaAssetQueryClient = getNeonDb(),
+  db: MediaAssetQueryClient,
 ): Promise<MediaAssetForServing | null> {
   try {
     const rows = await db.query<Record<string, unknown>>(
@@ -584,7 +581,7 @@ export async function getMediaAssetByStoragePathname(
 export async function softDeleteMediaAsset(
   userId: string,
   id: string,
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<boolean> {
   try {
     const organizationId = await resolveActiveOrganizationId(db, userId);
@@ -607,7 +604,7 @@ export async function softDeleteMediaAsset(
 export async function restoreMediaAsset(
   userId: string,
   id: string,
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<boolean> {
   try {
     const organizationId = await resolveActiveOrganizationId(db, userId);
@@ -631,7 +628,7 @@ export async function restoreMediaAsset(
 export async function permanentlyDeleteMediaAsset(
   userId: string,
   id: string,
-  db: DatabaseAdapter = getNeonDb(),
+  db: DatabaseAdapter,
 ): Promise<boolean> {
   try {
     return await db.transaction(async (tx) => {

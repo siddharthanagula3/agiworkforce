@@ -1,7 +1,7 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { sendPushToUser } from './push-notification-service';
 import { sendScheduleCompletionEmail } from './notification-email-service';
 
@@ -9,10 +9,11 @@ export const SCHEDULE_PUSH_PREFERENCE_KEY = 'mobilePushScheduleDone';
 export const SCHEDULE_EMAIL_PREFERENCE_KEY = 'emailScheduleDone';
 
 async function loadSchedulePreferences(
+  db: DatabaseAdapter,
   userId: string,
 ): Promise<{ push: boolean; email: boolean; email_address: string | null }> {
   try {
-    const [row] = await getNeonDb().query<{ notifications: unknown; email: string | null }>(
+    const [row] = await db.query<{ notifications: unknown; email: string | null }>(
       `select coalesce(us.settings -> 'notifications', '{}'::jsonb) as notifications,
               p.email as email
          from public.profiles as p
@@ -51,13 +52,14 @@ export interface ScheduleCompletionNotice {
 }
 
 export async function notifyScheduleCompleted(
+  db: DatabaseAdapter,
   notice: ScheduleCompletionNotice,
 ): Promise<{ pushed: boolean; emailed: boolean }> {
   const none = { pushed: false, emailed: false };
   try {
     if (notice.status === 'cancelled') return none;
 
-    const preferences = await loadSchedulePreferences(notice.userId);
+    const preferences = await loadSchedulePreferences(db, notice.userId);
     if (!preferences.push && !preferences.email) return none;
 
     const succeeded = notice.status === 'success';

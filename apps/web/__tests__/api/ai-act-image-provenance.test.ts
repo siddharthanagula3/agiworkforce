@@ -190,7 +190,11 @@ describe('Article 50(2), generated image provenance', () => {
     expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
     expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
     expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
-    expect(rlsMocks.getUserScopedDb).not.toHaveBeenCalled();
+    // The scope is resolved once for the entitlement read, so the guarantee
+    // here is that nothing is catalogued or reserved, not that no connection
+    // was opened.
+    expect(assetMocks.ready).not.toHaveBeenCalled();
+    expect(assetMocks.insertMany).not.toHaveBeenCalled();
     expect(providerCalls()).toEqual([]);
   });
 

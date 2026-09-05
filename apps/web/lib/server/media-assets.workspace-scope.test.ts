@@ -7,9 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveActiveOrganizationId: vi.fn(),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: mocks.query }),
-}));
+const callerDb = { query: mocks.query } as never;
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
@@ -66,13 +64,16 @@ describe('media asset active-workspace scoping', () => {
     mocks.query.mockResolvedValue([{ id: ASSET_ID }]);
 
     await expect(
-      insertMediaAsset({
-        userId: USER_ID,
-        organizationId: ORGANIZATION_ID,
-        kind: 'file',
-        mimeType: 'application/pdf',
-        storageUrl: '/api/files/asset',
-      }),
+      insertMediaAsset(
+        {
+          userId: USER_ID,
+          organizationId: ORGANIZATION_ID,
+          kind: 'file',
+          mimeType: 'application/pdf',
+          storageUrl: '/api/files/asset',
+        },
+        callerDb,
+      ),
     ).resolves.toBe(ASSET_ID);
 
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
@@ -85,20 +86,23 @@ describe('media asset active-workspace scoping', () => {
     mocks.query.mockResolvedValue([{ id: ASSET_ID }]);
 
     await expect(
-      upsertVideoMediaAsset({
-        id: ASSET_ID,
-        userId: USER_ID,
-        organizationId: ORGANIZATION_ID,
-        mimeType: 'video/mp4',
-        storageUrl: '/api/files/asset',
-        storagePathname: 'media/video/asset.mp4',
-        byteSize: 12,
-        prompt: 'fixture prompt',
-        provider: 'fixture-provider',
-        model: 'fixture-model',
-        sourceSurface: 'web',
-        metadata: {},
-      }),
+      upsertVideoMediaAsset(
+        {
+          id: ASSET_ID,
+          userId: USER_ID,
+          organizationId: ORGANIZATION_ID,
+          mimeType: 'video/mp4',
+          storageUrl: '/api/files/asset',
+          storagePathname: 'media/video/asset.mp4',
+          byteSize: 12,
+          prompt: 'fixture prompt',
+          provider: 'fixture-provider',
+          model: 'fixture-model',
+          sourceSurface: 'web',
+          metadata: {},
+        },
+        callerDb,
+      ),
     ).resolves.toBe(ASSET_ID);
 
     expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
@@ -108,7 +112,7 @@ describe('media asset active-workspace scoping', () => {
   it('uses the durable job organization when compensating a video asset', async () => {
     mocks.query.mockResolvedValue([{ id: ASSET_ID }]);
 
-    await expect(deleteVideoMediaAsset(ASSET_ID, USER_ID)).resolves.toBe(true);
+    await expect(deleteVideoMediaAsset(ASSET_ID, USER_ID, callerDb)).resolves.toBe(true);
 
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('from public.video_generation_jobs job');
@@ -118,7 +122,7 @@ describe('media asset active-workspace scoping', () => {
   });
 
   it('uses one indistinguishable miss for foreign and inactive-workspace reads', async () => {
-    await expect(getActiveWorkspaceMediaAssetById(USER_ID, ASSET_ID)).resolves.toBeNull();
+    await expect(getActiveWorkspaceMediaAssetById(USER_ID, ASSET_ID, callerDb)).resolves.toBeNull();
 
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('user_id = $2');
@@ -131,12 +135,12 @@ describe('media asset active-workspace scoping', () => {
     mocks.query.mockResolvedValue([assetRow()]);
 
     await expect(
-      getMediaAssetByStoragePathname(USER_ID, 'media/file/asset.pdf', null),
+      getMediaAssetByStoragePathname(USER_ID, 'media/file/asset.pdf', null, callerDb),
     ).resolves.toMatchObject({ id: ASSET_ID });
     expect(mocks.query.mock.calls[0]?.[1]).toEqual([USER_ID, 'media/file/asset.pdf', null]);
 
     mocks.query.mockClear();
-    await expect(listMediaAssets(USER_ID)).resolves.toHaveLength(1);
+    await expect(listMediaAssets(USER_ID, {}, callerDb)).resolves.toHaveLength(1);
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('organization_id is not distinct from $2::uuid');
     expect(params).toEqual([USER_ID, null]);
@@ -145,7 +149,7 @@ describe('media asset active-workspace scoping', () => {
   it('cannot soft-delete an identically owned asset outside the active workspace', async () => {
     mocks.query.mockResolvedValue([]);
 
-    await expect(softDeleteMediaAsset(USER_ID, ASSET_ID)).resolves.toBe(false);
+    await expect(softDeleteMediaAsset(USER_ID, ASSET_ID, callerDb)).resolves.toBe(false);
 
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('organization_id is not distinct from $3::uuid');
