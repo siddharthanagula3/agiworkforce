@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { ChromeWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   Button,
   ButtonRow,
@@ -34,23 +35,7 @@ export default function ChromeExtensionPage() {
             { href: '/download', label: 'Get notified' },
             { href: '/agent-permissions', label: 'Read the permission list', variant: 'secondary' },
           ]}
-          visual={
-            <div className="agi-lp-console" aria-label="AGI in Chrome destinations">
-              <div className="agi-lp-console-bar">
-                <span>AGI in Chrome &middot; destinations</span>
-              </div>
-              <div className="agi-lp-console-body">
-                <Ledger
-                  caption="Where the extension can send data"
-                  rows={[
-                    { label: 'Chat', value: 'api.agiworkforce.com' },
-                    { label: 'Desktop bridge', value: 'localhost:8787, optional' },
-                    { label: 'Computer use', value: 'Managed Cloud gateway, with screenshots' },
-                  ]}
-                />
-              </div>
-            </div>
-          }
+          visual={<ChromeWindow />}
         />
 
         <section className="agi-lp-section" aria-labelledby="agi-chrome-status-title">

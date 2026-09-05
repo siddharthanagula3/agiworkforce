@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { EditorWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   Button,
   ButtonRow,
@@ -74,21 +75,7 @@ export default function VscodeExtensionPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-console" aria-label="VS Code, @agi chat participant">
-                <div className="agi-lp-console-bar">
-                  <span>VS Code &middot; @agi chat</span>
-                </div>
-                <div className="agi-lp-console-body">
-                  <Ledger
-                    caption="A sample of the @agi slash commands"
-                    rows={SLASH.slice(0, 4).map((s) => ({ label: s.cmd, value: s.desc }))}
-                  />
-                </div>
-                <p className="agi-lp-console-note">
-                  Every command rewrites the prompt around your selection.{' '}
-                  <span>Full list below.</span>
-                </p>
-              </div>
+              <EditorWindow />
             </div>
           </div>
         </section>
