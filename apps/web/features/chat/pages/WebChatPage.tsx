@@ -120,6 +120,10 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@agiworkforce/ui';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
+import {
+  isWebSettingsSection,
+  SETTINGS_DEEP_LINK_QUERY_KEY,
+} from '@features/settings/lib/web-settings-sections';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
@@ -758,6 +762,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
   const openSearchParam = searchParams?.get('search') ?? null;
   const starterPromptParam = searchParams?.get('starterPrompt') ?? null;
+  const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
@@ -1022,6 +1027,15 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/chat'), { scroll: false });
   }, [openSearchParam, searchParams, router, pathname]);
+
+  useEffect(() => {
+    if (!settingsSectionParam || !isWebSettingsSection(settingsSectionParam)) return;
+    openSettings(settingsSectionParam);
+    const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
+    next.delete(SETTINGS_DEEP_LINK_QUERY_KEY);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/chat'), { scroll: false });
+  }, [settingsSectionParam, searchParams, openSettings, router, pathname]);
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
   // regardless of which component dispatches them.
