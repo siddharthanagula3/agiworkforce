@@ -3,10 +3,16 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use agiworkforce_protocol::tool_primitive::{
+    ToolErrorClass, ToolResult as ContractToolResult, ToolResultStatus,
+};
 use anyhow::Result;
 use dialoguer::Confirm;
 use serde::Deserialize;
 use serde_json::Value;
+
+#[cfg(test)]
+use agiworkforce_protocol::tool_primitive::{ToolActionClass, ToolPermissionDecision};
 
 use crate::agent::ToolCall;
 use crate::tui::approval_broker::ApprovalRequestKind;
@@ -64,6 +70,89 @@ impl ToolResult {
         let output = self.output.trim_start();
         output.starts_with("<web_fetch_result untrusted=\"true\"")
             || output.starts_with("<skill_result untrusted=\"true\"")
+    }
+
+    /// This result expressed as the cross-surface tool primitive (decision
+    /// D-P0-5, `agiworkforce_protocol::tool_primitive`).
+    ///
+    /// The CLI records a failure as one boolean and a message, so every
+    /// failure lands in the contract's `internal` class. Classifying them
+    /// properly means widening this struct, which is a change to the CLI's own
+    /// executors and not part of adopting the contract.
+    #[allow(dead_code)]
+    pub fn to_contract(&self, call_id: String) -> ContractToolResult {
+        ContractToolResult {
+            call_id,
+            tool: self.tool_name.clone(),
+            status: if self.success {
+                ToolResultStatus::Ok
+            } else {
+                ToolResultStatus::Error
+            },
+            error_class: (!self.success).then_some(ToolErrorClass::Internal),
+            message: (!self.success).then(|| self.output.clone()),
+            artifacts: Vec::new(),
+            cost: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod contract_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_result_carries_no_error_class_or_message() {
+        let contract = ToolResult {
+            tool_name: String::from("read_file"),
+            success: true,
+            output: String::from("contents"),
+        }
+        .to_contract(String::from("call-1"));
+        assert_eq!(contract.status, ToolResultStatus::Ok);
+        assert!(contract.error_class.is_none());
+        assert!(contract.message.is_none());
+        assert_eq!(contract.tool, "read_file");
+    }
+
+    #[test]
+    fn a_failed_result_carries_the_output_as_the_message() {
+        let contract = ToolResult {
+            tool_name: String::from("run_command"),
+            success: false,
+            output: String::from("exit status 1"),
+        }
+        .to_contract(String::from("call-2"));
+        assert_eq!(contract.status, ToolResultStatus::Error);
+        assert_eq!(contract.error_class, Some(ToolErrorClass::Internal));
+        assert_eq!(contract.message.as_deref(), Some("exit status 1"));
+    }
+
+    #[test]
+    fn every_read_only_registry_tool_declares_the_read_class() {
+        let registry = build_read_only_registry();
+        assert!(!registry.is_empty());
+        for name in registry.names() {
+            let tool = registry.get(name).expect("registered tool");
+            assert!(tool.read_only(), "{name}");
+            assert_eq!(tool.contract_action_class(), ToolActionClass::Read, "{name}");
+        }
+    }
+
+    #[test]
+    fn the_shared_shell_policy_verdict_maps_onto_the_contract() {
+        assert_eq!(
+            ToolPermissionDecision::from(agiworkforce_execpolicy::Decision::Allow),
+            ToolPermissionDecision::Allow
+        );
+        assert_eq!(
+            ToolPermissionDecision::from(agiworkforce_execpolicy::Decision::Prompt),
+            ToolPermissionDecision::Ask
+        );
+        assert_eq!(
+            ToolPermissionDecision::from(agiworkforce_execpolicy::Decision::Forbidden),
+            ToolPermissionDecision::Deny
+        );
     }
 }
 

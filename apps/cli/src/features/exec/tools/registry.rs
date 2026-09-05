@@ -13,6 +13,7 @@
 
 use std::collections::HashMap;
 
+use agiworkforce_protocol::tool_primitive::ToolActionClass;
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -26,6 +27,22 @@ pub trait Tool: Send + Sync {
 
     /// Read-only tools never mutate the workspace and can be auto-approved.
     fn read_only(&self) -> bool;
+
+    /// This tool's class in the cross-surface tool primitive (decision
+    /// D-P0-5, `agiworkforce_protocol::tool_primitive`).
+    ///
+    /// The registry only knows whether a tool reads, so a mutating tool takes
+    /// the same conservative `write` default an undeclared tool gets on the
+    /// web. A tool that deletes, executes caller-supplied code, or publishes
+    /// outside the workspace overrides this; it must not be inferred from the
+    /// one flag the trait has.
+    fn contract_action_class(&self) -> ToolActionClass {
+        if self.read_only() {
+            ToolActionClass::Read
+        } else {
+            ToolActionClass::Write
+        }
+    }
 
     /// Execute the tool. `quiet` suppresses status chrome (batch/sub-agent use).
     async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult>;
