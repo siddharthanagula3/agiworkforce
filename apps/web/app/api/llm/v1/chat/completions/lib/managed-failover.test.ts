@@ -266,6 +266,29 @@ describe('rotation eligibility (gateway parity)', () => {
     expect(attempt?.model).toBe('candidate-b');
     expect(attempt?.provider).toBe('anthropic');
   });
+
+  it('rotates a Google request whose only tool is native search across providers on a 429', () => {
+    const processed = makeProcessed({ provider: 'google' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [{ google_search: {} }];
+
+    const attempt = makePlan(processed).next(httpError(429, 'rate limit exceeded'));
+
+    expect(attempt?.model).toBe('candidate-a');
+    expect(attempt?.provider).toBe('openai');
+  });
+
+  it('still pins to the same provider when native search rides alongside a function tool', () => {
+    const processed = makeProcessed({ provider: 'google' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { google_search: {} },
+      { type: 'function', function: { name: 'get_weather', parameters: {} } },
+    ];
+
+    const attempt = makePlan(processed).next(httpError(429, 'rate limit exceeded'));
+
+    expect(attempt?.model).toBe('candidate-b');
+    expect(attempt?.provider).toBe('google');
+  });
 });
 
 describe('per-attempt admission re-check', () => {

@@ -30,9 +30,13 @@ import 'server-only';
  * option), and a refusal falls through to the candidate rotation.
  *
  * Deliberately NARROWER than the gateway in one dimension: requests carrying
- * tools (provider-native tool definitions ride `llmRequest.tools` in the
- * provider's own wire shape) may rotate only within the same provider. A
- * different provider could not consume those definitions safely.
+ * function tools (provider-native tool definitions ride `llmRequest.tools` in
+ * the provider's own wire shape) may rotate only within the same provider. A
+ * different provider could not consume those definitions safely. A request
+ * whose only tools are provider-native search markers is exempt: those carry
+ * no state to lose (`appendWebSearchTool` reconstructs whichever shape the
+ * new provider needs, or the Perplexity fallback if none), so it may rotate
+ * across providers like any other availability failure.
  *
  * Billing: rotation happens INSIDE one managed-usage lifecycle, the single
  * reservation taken by the request processor spans all attempts, and
@@ -51,6 +55,7 @@ import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
 import { nextFreeLaneRoute } from '@/lib/services/free-lane/plan';
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
+import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
@@ -146,7 +151,9 @@ export interface FailoverAttempt {
 }
 
 function requestCarriesTools(processed: ProcessedRequest): boolean {
-  return Array.isArray(processed.llmRequest.tools) && processed.llmRequest.tools.length > 0;
+  const tools = processed.llmRequest.tools;
+  if (!Array.isArray(tools) || tools.length === 0) return false;
+  return tools.some((tool) => nativeSearchToolName(tool) === '');
 }
 
 export function buildFailoverAttemptView(
