@@ -339,11 +339,11 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={activeSubMenu === 'model' ? 'Filter models…' : 'Type a command or search…'}
+            placeholder={activeSubMenu === 'model' ? 'Filter models…' : 'Search chats and actions'}
             name="command-palette-search"
             autoComplete="off"
             spellCheck={false}
-            className="flex-1 rounded-sm bg-transparent text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-sm outline-none"
             aria-label="Command palette search"
             role="combobox"
             aria-expanded={open}
@@ -354,19 +354,14 @@ export function CommandPalette({ open, onOpenChange }: Props) {
               filtered[selectedIndex] ? optionElementId(filtered[selectedIndex].id) : undefined
             }
           />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-              aria-label="Clear search"
-              type="button"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          <kbd className="text-[12px] text-foreground bg-muted border border-border rounded px-1.5 py-0.5 hidden sm:block">
-            ESC
-          </kbd>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
+            aria-label="Close"
+            type="button"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Command list */}
@@ -381,7 +376,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           ) : (
             Object.entries(groups).map(([group, items]) => (
               <div key={group}>
-                <p className="px-4 py-1.5 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-4 py-1.5 text-[12px] font-semibold text-muted-foreground">
                   {group}
                 </p>
                 {items.map((cmd) => {
@@ -425,25 +420,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
               </div>
             ))
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-2">
-          <div className="flex items-center gap-3 text-[12px] text-foreground">
-            <span>
-              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">↑↓</kbd>{' '}
-              navigate
-            </span>
-            <span>
-              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">↵</kbd>{' '}
-              select
-            </span>
-            <span>
-              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">esc</kbd>{' '}
-              {activeSubMenu ? 'back' : 'close'}
-            </span>
-          </div>
-          <span className="text-[12px] text-foreground">{filtered.length} results</span>
         </div>
       </DialogContent>
     </Dialog>
