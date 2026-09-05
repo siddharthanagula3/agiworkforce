@@ -45,12 +45,16 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
     amountMinor: 20_000,
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: dbMocks.query,
-    execute: dbMocks.execute,
-    transaction: dbMocks.transaction,
-  }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: dbMocks.query,
+      execute: dbMocks.execute,
+      transaction: dbMocks.transaction,
+    },
+    userId: 'user_123',
+    organizationId: null,
+  })),
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
@@ -69,6 +73,7 @@ vi.mock('stripe', () => ({
 }));
 
 import { POST } from './route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 function makeRequest(plan: 'pro' | 'max_15x' = 'max_15x') {
   return new NextRequest('https://agiworkforce.com/api/checkout', {
@@ -99,16 +104,13 @@ describe('POST /api/checkout', () => {
     });
   });
 
-  it('reads and writes the profile row through the claimed user scope, never the bare pool', async () => {
+  it('reads and writes the profile row on the caller connection, never the bare pool', async () => {
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(200);
-    expect(dbMocks.transaction).toHaveBeenCalled();
-    expect(dbMocks.execute).toHaveBeenCalledWith('set local role app_rls');
-    expect(dbMocks.query).toHaveBeenCalledWith(
-      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
-      ['user_123', ''],
-    );
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
     expect(dbMocks.query).toHaveBeenCalledWith(
       'select stripe_customer_id from profiles where id = $1 limit 1',
       ['user_123'],

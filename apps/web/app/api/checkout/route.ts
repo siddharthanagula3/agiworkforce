@@ -2,8 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getOptionalEnv } from '@shared/utils/env';
@@ -14,7 +13,6 @@ import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
@@ -24,6 +22,8 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
+
+const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
 const CHECKOUT_ENABLED_RAW = process.env['STRIPE_CHECKOUT_ENABLED']?.trim().toLowerCase();
 const CHECKOUT_ENABLED =
@@ -62,7 +62,7 @@ async function findLiveStripeSubscription(
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const returnOrigin = resolveCheckoutReturnOrigin(request);
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, CHECKOUT_SCOPE);
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
@@ -93,8 +93,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     logger.warn({ error: err, userId }, 'Could not fetch email from Clerk; proceeding without it');
   }
 
-  const db = getNeonDb();
-  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
   const user = { id: userId, email: userEmail };
 
   let rawBody: unknown;
@@ -163,7 +161,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
   try {
-    profileRows = await scopedDb.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+    profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
       'select stripe_customer_id from profiles where id = $1 limit 1',
       [user.id],
     );
@@ -190,7 +188,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       );
 
       try {
-        await scopedDb.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
           customer.id,
           user.id,
         ]);

@@ -23,11 +23,7 @@
     },
     {
       "path": "apps/web/app/api/billing/top-up/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/checkout/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the only owner-pool call is the workspace policy gate, which reads the organization admin policy, billing contract and funding-membership rows a member scoped connection cannot see and whose read failure fails the gate open; the storage probe, the subscription read and every other statement run on the caller connection"
     },
     {
       "path": "apps/web/app/api/claim-offer/route.ts",
@@ -96,10 +92,6 @@
     {
       "path": "apps/web/app/api/mobile/push-token/route.ts",
       "reason": "the client-supplied device id may already be held by another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the token clear are caller-scoped"
-    },
-    {
-      "path": "apps/web/app/api/portal/route.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/app/api/share/[token]/route.ts",
