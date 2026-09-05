@@ -47,7 +47,7 @@
     },
     {
       "path": "apps/web/app/api/claim-offer/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "a beta invite belongs to nobody until it is redeemed, and claim_beta_invite locks the invite row, spends a use and writes the redemption the claimant does not own yet; only the subscription read-back is caller-scoped"
     },
     {
       "path": "apps/web/app/api/control-plane/status/route.ts",
@@ -83,11 +83,11 @@
     },
     {
       "path": "apps/web/app/api/feedback/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
     },
     {
       "path": "apps/web/app/api/github/oauth/callback/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the installation_id conflict target may hold an unverified row belonging to another account, and claiming it once ownership is proven is the point of the flow, so the upsert cannot be constrained to rows the caller can already see"
     },
     {
       "path": "apps/web/app/api/github/webhook/route.ts",
@@ -103,15 +103,15 @@
     },
     {
       "path": "apps/web/app/api/me/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the profiles upsert already runs under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
       "path": "apps/web/app/api/mobile/content-report/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "trust-and-safety reporting is reachable from Local mode with no cloud account, so user_id is nullable by design, and the client_report_id conflict target must dedupe across every reporter"
     },
     {
       "path": "apps/web/app/api/mobile/feedback/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
     },
     {
       "path": "apps/web/app/api/mobile/iap/google-notifications/route.ts",
@@ -135,7 +135,7 @@
     },
     {
       "path": "apps/web/app/api/user/export/route.ts",
-      "reason": "pending scoped migration"
+      "reason": "the whole GDPR export already runs under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
       "path": "apps/web/app/api/waitlist/cloud-managed/route.ts",
