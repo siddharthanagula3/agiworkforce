@@ -1,16 +1,21 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { MAP_SEARCH_MAX_ZOOM, MAP_SEARCH_MIN_ZOOM } from '@agiworkforce/types';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getSecurityHeaders, handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import {
+  MAP_TILE_MIN_ZOOM,
+  mapTileProvider,
+  parseMapTileStyle,
+  upstreamTileUrl,
+} from '@/lib/maps/map-tile-provider';
+import { MAP_TILE_STYLE_PARAM } from '@/lib/maps/map-tile-url';
 import { withRateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
-const TILE_ORIGIN = 'https://tile.openstreetmap.org';
 const TILE_FETCH_TIMEOUT_MS = 5_000;
 const TILE_MAX_BYTES = 512 * 1024;
 
@@ -37,9 +42,10 @@ async function handleGetTile(
 
   await getClerkAuthUser(request);
 
+  const provider = mapTileProvider();
   const { z, x, y } = await context.params;
-  const zoom = parseIndex(z, MAP_SEARCH_MAX_ZOOM);
-  if (zoom === null || zoom < MAP_SEARCH_MIN_ZOOM) {
+  const zoom = parseIndex(z, provider.maxZoom);
+  if (zoom === null || zoom < MAP_TILE_MIN_ZOOM) {
     return NextResponse.json({ error: 'Unsupported tile zoom.' }, { status: 400 });
   }
   const maxIndex = 2 ** zoom - 1;
@@ -52,7 +58,8 @@ async function handleGetTile(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TILE_FETCH_TIMEOUT_MS);
   try {
-    const upstream = await fetch(`${TILE_ORIGIN}/${zoom}/${tileX}/${tileY}.png`, {
+    const style = parseMapTileStyle(request.nextUrl.searchParams.get(MAP_TILE_STYLE_PARAM));
+    const upstream = await fetch(upstreamTileUrl(provider, zoom, tileX, tileY, style), {
       signal: controller.signal,
       headers: { 'User-Agent': tileUserAgent(), Accept: 'image/png,image/*' },
       next: { revalidate: 604_800 },

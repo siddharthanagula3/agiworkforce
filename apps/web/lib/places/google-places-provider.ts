@@ -22,14 +22,22 @@ import {
 } from '@/lib/places/places-config';
 import {
   placesError,
+  type PlacesPhotoOutcome,
+  type PlacesPhotoRequest,
   type PlacesProvider,
   type PlacesSearchOutcome,
   type PlacesSearchQuery,
 } from '@/lib/places/places-provider';
 
 const GOOGLE_PLACES_PROVIDER_ID = 'google_places';
-const GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
+const GOOGLE_PLACES_API_ORIGIN = 'https://places.googleapis.com';
+const GOOGLE_PLACES_TEXT_SEARCH_URL = `${GOOGLE_PLACES_API_ORIGIN}/v1/places:searchText`;
 const GOOGLE_PLACES_ATTRIBUTION = 'Powered by Google';
+const GOOGLE_PLACES_TERMS_URL = 'https://www.google.com/help/terms_maps/';
+const GOOGLE_PLACES_MEDIA_PATH_SUFFIX = '/media';
+const GOOGLE_PLACES_PHOTO_REFERENCE_RE =
+  /^places\/[A-Za-z0-9_-]{1,256}\/photos\/[A-Za-z0-9_-]{1,384}$/u;
+const GOOGLE_PLACES_PHOTO_MAX_BYTES = 4 * 1024 * 1024;
 
 const API_KEY_HEADER = 'X-Goog-Api-Key';
 const FIELD_MASK_HEADER = 'X-Goog-FieldMask';
@@ -224,10 +232,64 @@ export function createGooglePlacesProvider(
 ): PlacesProvider {
   const resolveKey = (): string | undefined => overrides.apiKey ?? placesApiKey();
 
+  const fetchPhoto = async (request: PlacesPhotoRequest): Promise<PlacesPhotoOutcome> => {
+    const apiKey = resolveKey();
+    if (!apiKey) return { ok: false, errorCode: 'not_configured' };
+    if (!GOOGLE_PLACES_PHOTO_REFERENCE_RE.test(request.reference)) {
+      return { ok: false, errorCode: 'invalid_tool_input' };
+    }
+
+    const mediaUrl = new URL(
+      `${GOOGLE_PLACES_API_ORIGIN}/v1/${request.reference}${GOOGLE_PLACES_MEDIA_PATH_SUFFIX}`,
+    );
+    mediaUrl.searchParams.set('maxWidthPx', String(request.maxWidthPx));
+
+    try {
+      validateEgressUrl(mediaUrl.toString());
+      await assertResolvedPublicHostname(mediaUrl.toString());
+    } catch (guardErr) {
+      if (guardErr instanceof EgressPolicyError) return { ok: false, errorCode: 'upstream_error' };
+      throw guardErr;
+    }
+
+    const controller = new AbortController();
+    const deadline = setTimeout(
+      () => controller.abort(),
+      overrides.timeoutMs ?? PLACES_SEARCH_TIMEOUT_MS,
+    );
+    const cancel = (): void => controller.abort();
+    request.signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
+      const response = await fetchImpl(mediaUrl.toString(), {
+        signal: controller.signal,
+        headers: { [API_KEY_HEADER]: apiKey, Accept: 'image/*' },
+      });
+      if (!response.ok) return { ok: false, errorCode: 'upstream_error' };
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.startsWith('image/')) return { ok: false, errorCode: 'upstream_error' };
+
+      const body = await response.arrayBuffer();
+      if (body.byteLength > GOOGLE_PLACES_PHOTO_MAX_BYTES) {
+        return { ok: false, errorCode: 'upstream_error' };
+      }
+      return { ok: true, body, contentType };
+    } catch {
+      if (request.signal?.aborted) return { ok: false, errorCode: 'cancelled' };
+      return { ok: false, errorCode: controller.signal.aborted ? 'timeout' : 'upstream_error' };
+    } finally {
+      clearTimeout(deadline);
+      request.signal?.removeEventListener('abort', cancel);
+    }
+  };
+
   return {
     id: GOOGLE_PLACES_PROVIDER_ID,
     attribution: GOOGLE_PLACES_ATTRIBUTION,
+    termsUrl: GOOGLE_PLACES_TERMS_URL,
     configured: () => resolveKey() !== undefined,
+    photo: fetchPhoto,
     async search(request: PlacesSearchQuery): Promise<PlacesSearchOutcome> {
       if (request.signal?.aborted) {
         return placesError(GOOGLE_PLACES_PROVIDER_ID, 'cancelled', 'The request was cancelled.');
@@ -350,6 +412,7 @@ export function createGooglePlacesProvider(
           ok: true,
           providerId: GOOGLE_PLACES_PROVIDER_ID,
           attribution: GOOGLE_PLACES_ATTRIBUTION,
+          termsUrl: GOOGLE_PLACES_TERMS_URL,
           places,
           billableCalls: 1,
         };

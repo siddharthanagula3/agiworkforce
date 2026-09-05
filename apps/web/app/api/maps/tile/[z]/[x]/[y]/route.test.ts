@@ -52,9 +52,22 @@ describe('GET /api/maps/tile/[z]/[x]/[y]', () => {
     expect((init.headers as Record<string, string>)['User-Agent']).toContain('AGIWorkforce');
   });
 
+  it('follows the configured tile endpoint instead of the development default', async () => {
+    vi.stubEnv('AGI_MAP_TILE_URL_TEMPLATE', 'https://tiles.example.com/v1/{z}/{x}/{y}@2x.png');
+    mocks.fetch.mockResolvedValue(
+      new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } }),
+    );
+
+    const response = await GET(request(), params('5', '7', '12'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetch.mock.calls[0]?.[0]).toBe('https://tiles.example.com/v1/5/7/12@2x.png');
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     ['zoom below the served range', '1', '0', '0'],
-    ['zoom above the served range', '18', '0', '0'],
+    ['zoom above the served range', '20', '0', '0'],
     ['tile index outside the grid for its zoom', '2', '4', '0'],
     ['non-numeric index', '5', '7abc', '12'],
     ['negative index', '5', '-1', '12'],
