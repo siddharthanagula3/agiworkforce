@@ -74,9 +74,11 @@ const EMPTY_NAV_IDS: string[] = [];
 
 interface WebAppShellProps {
   children: React.ReactNode;
+  /** Rendered inside the narrow-viewport header, after the wordmark. */
+  narrowHeaderSlot?: React.ReactNode;
 }
 
-export function WebAppShell({ children }: WebAppShellProps) {
+export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
@@ -476,6 +478,9 @@ export function WebAppShell({ children }: WebAppShellProps) {
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
             <SidebarWordmark />
+            {/* A surface with its own left column puts its title and drawer
+                trigger here rather than stacking a second bar underneath. */}
+            {narrowHeaderSlot}
           </header>
         )}
 
