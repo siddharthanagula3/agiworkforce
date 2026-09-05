@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseClient,
   createAuthClient,
-  createStorageClient,
   createRealtimeClient,
   DataLayerConfigError,
   NotImplementedError,
@@ -15,7 +14,6 @@ const SAVED_ENV: Record<string, string | undefined> = {};
 const ENV_KEYS = [
   'AGI_DATABASE_PROVIDER',
   'AGI_AUTH_PROVIDER',
-  'AGI_STORAGE_PROVIDER',
   'AGI_REALTIME_PROVIDER',
   'AGI_DATABASE_URL',
   'DATABASE_URL',
@@ -144,27 +142,6 @@ describe('createAuthClient', () => {
   it('throws when a removed legacy auth provider is configured', () => {
     process.env['AGI_AUTH_PROVIDER'] = 'legacy-auth';
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
-  });
-});
-
-describe('createStorageClient', () => {
-  it('throws when no storage provider is configured', () => {
-    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
-  });
-
-  it('throws when a removed legacy storage provider is configured', () => {
-    process.env['AGI_STORAGE_PROVIDER'] = 'legacy-storage';
-    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
-  });
-
-  it('throws on unimplemented providers (s3)', () => {
-    process.env['AGI_STORAGE_PROVIDER'] = 's3';
-    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
-  });
-
-  it('throws on unimplemented providers (r2)', () => {
-    process.env['AGI_STORAGE_PROVIDER'] = 'r2';
-    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
   });
 });
 

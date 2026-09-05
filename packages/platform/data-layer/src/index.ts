@@ -11,26 +11,17 @@ export type {
   RealtimeAdapter,
   RealtimeProvider,
   RefreshedTokens,
-  StorageAdapter,
-  StoragePutResult,
-  StorageProvider,
   VerifiedJwt,
 } from './types';
 
 export { DataLayerConfigError, NotImplementedError } from './types';
 
-export {
-  createAuthClient,
-  createDatabaseClient,
-  createRealtimeClient,
-  createStorageClient,
-} from './factory';
+export { createAuthClient, createDatabaseClient, createRealtimeClient } from './factory';
 
 export type {
   CreateAuthClientOptions,
   CreateDatabaseClientOptions,
   CreateRealtimeClientOptions,
-  CreateStorageClientOptions,
 } from './factory';
 
 export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
