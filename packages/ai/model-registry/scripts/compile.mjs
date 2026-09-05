@@ -156,6 +156,11 @@ async function formatJson(obj, filepath) {
   return prettier.format(JSON.stringify(obj), { ...cfg, parser: 'json', filepath });
 }
 
+async function formatTypescript(source, filepath) {
+  const cfg = (await prettier.resolveConfig(filepath)) ?? {};
+  return prettier.format(source, { ...cfg, parser: 'typescript', filepath });
+}
+
 async function writeJson(file, obj) {
   fs.writeFileSync(file, await formatJson(obj, file));
 }
@@ -1691,7 +1696,7 @@ async function buildNormalizedArtifacts(catalog, familyCatalog) {
   return {
     registry,
     json: await formatJson(registry, REGISTRY_JSON),
-    typescript: TYPESCRIPT_REGISTRY_MODULE,
+    typescript: await formatTypescript(TYPESCRIPT_REGISTRY_MODULE, REGISTRY_TS),
     rustJson: await formatJson(registry, RUST_REGISTRY_JSON),
     rustModule: RUST_REGISTRY_MODULE_SOURCE,
     skillSpectorProviderYamls: Object.fromEntries(
