@@ -1,31 +1,25 @@
 import {
   MODEL_FAMILY_REGISTRY,
+  MODEL_PRICE_BAND_SCALE,
   PLAN_LABEL,
   getDefaultAutoRoutingProfile,
   getMinimumRequiredTier,
   getModelFamilySlot,
   getModelFamilySlotForModel,
   getModelMetadataById,
+  getModelPriceBand as getRegistryModelPriceBand,
   getModelReasoning,
   isAutoModeModelId,
-  listCanonicalModels,
+  listChatModels,
   normalizeUIPlanTier,
   type ModelCapabilities,
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { listProfileModelOrder, resolveTierMaximumProfile } from '@agiworkforce/routing';
 
-export const MODEL_PICKER_PRICE_BAND_SCALE = 4;
+export const MODEL_PICKER_PRICE_BAND_SCALE = MODEL_PRICE_BAND_SCALE;
 export const MODEL_PICKER_RECOMMENDED_LIMIT = 4;
 export const MODEL_PICKER_FAVOURITES_LIMIT = 3;
-
-export const MODEL_PICKER_CHAT_MODEL_TYPES = [
-  'chat',
-  'code',
-  'reasoning',
-  'multimodal',
-  'search',
-] as const;
 
 export const MODEL_PICKER_CAPABILITY_KEYS = [
   'vision',
@@ -38,6 +32,18 @@ export const MODEL_PICKER_CAPABILITY_KEYS = [
 ] as const satisfies readonly (keyof ModelCapabilities)[];
 
 export type ModelPickerCapabilityKey = (typeof MODEL_PICKER_CAPABILITY_KEYS)[number];
+
+export const MODEL_PICKER_FILTER_CAPABILITIES = [
+  'imageInput',
+  'reasoning',
+  'functionCalling',
+  'imageOutput',
+  'videoOutput',
+  'audioInput',
+  'audioOutput',
+] as const;
+
+export type ModelPickerFilterCapability = (typeof MODEL_PICKER_FILTER_CAPABILITIES)[number];
 
 export const MODEL_PICKER_GUIDANCE = {
   reasoning: 'For your hardest problems',
@@ -89,6 +95,7 @@ export interface ModelPickerPlanHeader {
 
 export interface ModelPickerShortList {
   auto: ModelPickerAutoRow | null;
+  current: ModelPickerRowModel | null;
   recommended: readonly ModelPickerRowModel[];
   favourites: readonly ModelPickerRowModel[];
   favouritesOverflow: number;
@@ -102,54 +109,19 @@ export interface ModelPickerShortListInput {
   planTier: string | null;
   favouriteModelIds: readonly string[];
   conversationModelId: string | null;
+  selectedModelId: string;
   admitsModel: (modelId: string) => boolean;
   lockOverrides?: ReadonlyMap<string, ModelPickerLock>;
   autoGuidance: string;
   autoContinuityGuidance: (displayName: string) => string;
 }
 
-function blendedCost(modelId: string): number | null {
-  const metadata = getModelMetadataById(modelId);
-  if (!metadata) return null;
-  const input = metadata.inputCost;
-  const output = metadata.outputCost;
-  if (!Number.isFinite(input) || !Number.isFinite(output)) return null;
-  return input + output;
-}
-
-export function resolveModelPriceBands(
-  modelIds: readonly string[],
-): ReadonlyMap<string, ModelPickerPriceBand> {
-  const costs = new Map<string, number>();
-  for (const modelId of modelIds) {
-    const cost = blendedCost(modelId);
-    if (cost === null) continue;
-    costs.set(modelId, cost);
-  }
-  const ladder = [...new Set(costs.values())].sort((left, right) => left - right);
-  const bands = new Map<string, ModelPickerPriceBand>();
-  if (ladder.length === 0) return bands;
-  for (const [modelId, cost] of costs) {
-    const rank = ladder.indexOf(cost);
-    const filled = Math.min(
-      MODEL_PICKER_PRICE_BAND_SCALE,
-      1 + Math.floor((rank / ladder.length) * MODEL_PICKER_PRICE_BAND_SCALE),
-    );
-    bands.set(modelId, { filled, scale: MODEL_PICKER_PRICE_BAND_SCALE });
-  }
-  return bands;
-}
-
 export function listPickerChatModels(): readonly ModelMetadata[] {
-  const types = new Set<string>(MODEL_PICKER_CHAT_MODEL_TYPES);
-  return listCanonicalModels().filter((model) => types.has(model.modelType));
+  return listChatModels();
 }
-
-let registryPriceBands: ReadonlyMap<string, ModelPickerPriceBand> | null = null;
 
 export function getModelPriceBand(modelId: string): ModelPickerPriceBand | null {
-  registryPriceBands ??= resolveModelPriceBands(listPickerChatModels().map((model) => model.id));
-  return registryPriceBands.get(modelId) ?? null;
+  return getRegistryModelPriceBand(modelId);
 }
 
 export function resolveModelCapabilityKeys(modelId: string): readonly ModelPickerCapabilityKey[] {
@@ -264,7 +236,17 @@ export function buildModelPickerShortList(input: ModelPickerShortListInput): Mod
       ? (selectable.find((model) => model.id === input.conversationModelId) ?? null)
       : null;
 
+  const shown = new Set<string>([
+    ...recommended.map((row) => row.id),
+    ...favouriteRows.slice(0, MODEL_PICKER_FAVOURITES_LIMIT).map((row) => row.id),
+  ]);
+  const current =
+    !isAutoModeModelId(input.selectedModelId) && !shown.has(input.selectedModelId)
+      ? (rowsById.get(input.selectedModelId) ?? null)
+      : null;
+
   return {
+    current,
     auto: autoProfile
       ? {
           id: autoProfile.id,

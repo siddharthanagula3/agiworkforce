@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 vi.mock('@shared/stores/model-store', () => ({
@@ -49,6 +49,43 @@ vi.mock('@shared/stores/model-store', () => ({
       requiresEnvironment: 'e2b' as const,
     },
   ],
+}));
+
+const CATALOGUE_ENTRIES = vi.hoisted(() => [
+  {
+    id: 'hypothetical-e2b-model',
+    displayName: 'E2B Sandbox Model',
+    provider: 'anthropic',
+    family: null,
+    isRouter: false,
+    releasedOn: null,
+    stage: null,
+    openWeight: false,
+    contextTokens: null,
+    maxOutputTokens: null,
+    inputPerMillion: 0,
+    outputPerMillion: 0,
+    priceBand: null,
+    capabilities: {},
+    admitted: true,
+    minimumPlanLabel: null,
+    availability: 'live',
+    requiresEnvironment: 'e2b' as const,
+  },
+]);
+
+vi.mock('@features/chat/lib/use-model-catalogue', () => ({
+  useModelCatalogue: () => ({
+    status: 'ready',
+    entries: CATALOGUE_ENTRIES,
+    providers: [{ key: 'anthropic', admittedCount: 1, totalCount: 1 }],
+    count: CATALOGUE_ENTRIES.length,
+    planLabel: 'Max 15x',
+  }),
+}));
+
+vi.mock('@features/chat/lib/use-model-favourites', () => ({
+  useModelFavourites: () => ({ favouriteModelIds: [], toggleFavourite: vi.fn() }),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -173,30 +210,29 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
     expect(gptRow.getAttribute('aria-label')).toBe('Standard Model');
   });
 
-  it('(b) env-gated model is locked and carries the evaluateModelEnvironment reason', () => {
+  it('(b) env-gated model is locked in the catalogue and carries the environment reason', () => {
     render(<ComposerFooter />);
+    fireEvent.click(screen.getByRole('button', { name: /All models/i }));
 
-    const envLockedRow = screen.getByRole('button', {
+    const envLockedRow = screen.getByRole('option', {
       name: /e2b sandbox model.*requires managed compute/i,
     });
     expect(envLockedRow).toBeInTheDocument();
     expect(envLockedRow).toBeDisabled();
   });
 
-  it('(b) env-gated model shows "Beta" badge, not "Pro" or "Upgrade"', () => {
+  it('(b) env-gated model shows "Beta", not a plan name', () => {
     render(<ComposerFooter />);
+    fireEvent.click(screen.getByRole('button', { name: /All models/i }));
 
     expect(screen.getByText('Beta')).toBeInTheDocument();
-
-    expect(screen.queryByText(/^(Upgrade|Pro)$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/and above$/)).not.toBeInTheDocument();
   });
 
-  it('(b) env-gated model row uses native disabled semantics (not an upgrade path)', () => {
+  it('(b) env-gated row uses native disabled semantics, not an upgrade path', () => {
     render(<ComposerFooter />);
+    fireEvent.click(screen.getByRole('button', { name: /All models/i }));
 
-    const envLockedRow = screen.getByRole('button', {
-      name: /e2b sandbox model/i,
-    });
-    expect(envLockedRow).toBeDisabled();
+    expect(screen.getByRole('option', { name: /e2b sandbox model/i })).toBeDisabled();
   });
 });
