@@ -9,6 +9,7 @@ import {
   type Context,
 } from '@opentelemetry/api';
 import { ATTR_EXCEPTION_MESSAGE, ATTR_EXCEPTION_TYPE } from '@opentelemetry/semantic-conventions';
+import { scrubAttributes, scrubText } from '@agiworkforce/observability';
 
 import { newSpanId, newTraceId, type TraceContext } from './trace-context';
 
@@ -77,11 +78,16 @@ export function startBridgedSpan(
       ? (spanContext.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
       : (parent?.sampled ?? true),
     setAttributes(attributes) {
-      span.setAttributes(attributes);
+      span.setAttributes(scrubAttributes(attributes));
     },
     setError(type, message) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message });
-      span.setAttributes({ [ATTR_EXCEPTION_TYPE]: type, [ATTR_EXCEPTION_MESSAGE]: message });
+      const scrubbedType = scrubText(type);
+      const scrubbedMessage = scrubText(message);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: scrubbedMessage });
+      span.setAttributes({
+        [ATTR_EXCEPTION_TYPE]: scrubbedType,
+        [ATTR_EXCEPTION_MESSAGE]: scrubbedMessage,
+      });
     },
     end() {
       span.end();
@@ -95,5 +101,5 @@ export function startBridgedSpan(
 export function recordSpanEvent(name: string, attributes: Attributes): void {
   const span = trace.getActiveSpan();
   if (!span?.isRecording()) return;
-  span.addEvent(name, attributes);
+  span.addEvent(name, scrubAttributes(attributes));
 }

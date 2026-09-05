@@ -14,6 +14,8 @@ export { ERROR_REPORTING_MAX_BREADCRUMBS_DEFAULT } from './types';
 
 export { scrubErrorPayload } from './scrub';
 
+export { scrubAttributes, scrubText, type ScrubbedAttributeValue } from './text-scrub';
+
 export { createErrorReportingClient } from './client';
 
 export {
