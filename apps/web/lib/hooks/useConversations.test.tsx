@@ -489,3 +489,64 @@ describe('useProjectConversations', () => {
     expect(result.current.hasMore).toBe(false);
   });
 });
+
+describe('useConversations list rate limiting', () => {
+  const RATE_LIMITED = () =>
+    new Response(JSON.stringify({ error: { message: 'Too many requests.' } }), { status: 429 });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    useChatStore.setState({ conversations: [], activeConversationId: null, error: null });
+    authMocks.getToken.mockResolvedValue('token');
+  });
+
+  it('keeps the sidebar quiet while a retry is pending, then recovers', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(RATE_LIMITED())
+      .mockImplementation(async () => conversationListResponse([WIRE_CONVERSATION]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        await result.current.fetchConversations();
+      });
+      expect(result.current.listError).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+
+      await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+      expect(result.current.listError).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('surfaces a failure the retries cannot fix', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ error: { message: 'Server exploded.' } }), { status: 500 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        await result.current.fetchConversations();
+      });
+
+      await waitFor(() => expect(result.current.listError).toBe('Server exploded.'));
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+});

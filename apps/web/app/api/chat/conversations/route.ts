@@ -22,7 +22,7 @@ function parsePositiveInt(raw: string | null, fallback: number, max?: number): n
 }
 
 async function handleGetConversations(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation-list');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
