@@ -121,6 +121,8 @@ function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentatio
 }
 
 export function ProjectHeader({ presentation, className, compact = false }: ProjectHeaderProps) {
+  if (compact && !presentation.description) return null;
+
   return (
     <div
       data-testid="project-header"
@@ -167,24 +169,17 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {compact && presentation.importedFromLabel ? (
-          <span
-            data-testid="project-header-imported-from"
-            className={cn(
-              'rounded-full border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
-              'border-violet-500/40 bg-violet-500/10 text-violet-300',
-            )}
-          >
-            {presentation.importedFromLabel}
-          </span>
-        ) : null}
-        <PrivacyChip presentation={presentation} />
-        <ProviderChip presentation={presentation} />
-      </div>
+      {!compact && (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PrivacyChip presentation={presentation} />
+            <ProviderChip presentation={presentation} />
+          </div>
 
-      <MetaRow presentation={presentation} />
-      <SurfaceChips presentation={presentation} />
+          <MetaRow presentation={presentation} />
+          <SurfaceChips presentation={presentation} />
+        </>
+      )}
     </div>
   );
 }

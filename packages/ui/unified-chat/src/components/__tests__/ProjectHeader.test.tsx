@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
@@ -132,16 +131,24 @@ describe('ProjectHeader', () => {
     expect(screen.queryByTestId('project-header-surface-chips')).toBeNull();
   });
 
-  it('keeps trust and provenance context without repeating host-owned identity in compact mode', () => {
+  it('renders only the description in compact mode, without host identity or provenance chips', () => {
     render(<ProjectHeader compact presentation={buildPresentation({ importedFrom: 'manual' })} />);
 
     expect(screen.queryByRole('heading', { name: 'On-device research' })).toBeNull();
     expect(screen.queryByText('On-device research')).toBeNull();
     expect(screen.getByText('Stays on this Mac.')).toBeDefined();
-    expect(screen.getByTestId('project-header-imported-from').textContent).toContain(
-      'Created in AGI',
+    expect(screen.queryByTestId('project-header-imported-from')).toBeNull();
+    expect(screen.queryByTestId('project-header-privacy-chip')).toBeNull();
+    expect(screen.queryByTestId('project-header-provider-chip')).toBeNull();
+    expect(screen.queryByTestId('project-header-meta-row')).toBeNull();
+    expect(screen.queryByTestId('project-header-surface-chips')).toBeNull();
+  });
+
+  it('renders nothing in compact mode for a project with no description, not an empty bordered box', () => {
+    const { container } = render(
+      <ProjectHeader compact presentation={buildPresentation({ description: undefined })} />,
     );
-    expect(screen.getByTestId('project-header-privacy-chip')).toBeDefined();
-    expect(screen.getByTestId('project-header-provider-chip')).toBeDefined();
+
+    expect(container.firstChild).toBeNull();
   });
 });
