@@ -18,7 +18,8 @@
     "check:no-hex-web": "node scripts/check-no-hex-colors.mjs",
     "build:support-corpus": "node scripts/build-support-corpus.mjs",
     "check:support-corpus": "node scripts/build-support-corpus.mjs --check",
-    "analyze": "ANALYZE=true pnpm build:next-only"
+    "analyze": "ANALYZE=true pnpm build:next-only",
+    "verify:object-storage": "tsx scripts/verify-object-storage.ts"
   },
   "dependencies": {
     "@agiworkforce/apply-patch": "workspace:*",
@@ -99,6 +100,7 @@
     "jspdf": "^4.1.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.44",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
     "mammoth": "^1.12.0",
     "mermaid": "^11.15.0",
@@ -141,6 +143,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/leaflet": "^1.9.20",
     "@types/node": "^24.13.3",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.14",
