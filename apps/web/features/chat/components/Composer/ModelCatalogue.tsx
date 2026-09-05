@@ -19,13 +19,6 @@ const MODEL_CARD_BACK_LABEL = 'Back to the model list';
 const EMPTY_LIST_TEXT = 'No models match';
 const NOT_PUBLISHED_TEXT = 'Not published';
 
-/**
- * The repository-wide field rule in globals.css paints an inset foreground ring
- * on any focused input. A search field inside a menu reads as an alert with it,
- * and the rows carry the focus affordance instead, so this one field opts out.
- * An inline style is the only reliable override; the utility loses on order.
- */
-const QUIET_FOCUS_STYLE = { boxShadow: 'none' } as const;
 const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
 
@@ -308,8 +301,7 @@ export function ModelCatalogue({
         </button>
         <input
           autoFocus
-          style={QUIET_FOCUS_STYLE}
-          className="h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="chat-quiet-field h-7 w-full text-sm placeholder:text-muted-foreground"
           name="model-catalogue-search"
           autoComplete="off"
           placeholder="Search models"
