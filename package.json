@@ -88,7 +88,8 @@
       "markdown-it": ">=14.2.0",
       "mermaid": ">=11.16.1",
       "@humanfs/node": ">=0.16.8",
-      "fflate": ">=0.8.3"
+      "fflate": ">=0.8.3",
+      "@opentelemetry/propagator-jaeger": ">=2.9.0"
     },
     "patchedDependencies": {
       "next-themes@0.4.6": "patches/next-themes@0.4.6.patch"
