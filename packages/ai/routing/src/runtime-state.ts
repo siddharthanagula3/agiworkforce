@@ -176,12 +176,13 @@ export type RouteOutcomeClass =
    */
   | 'credential_rejected'
   /**
-   * The provider rejected this SPECIFIC model: it does not exist, the tier
-   * cannot reach it, or the request overflowed its context window. Recorded
-   * against the `route` (model lockout) scope, distinct from
-   * `unsupported_capability`, which is a route honestly declining a request
-   * shape it was never asked to serve and must never count against it.
+   * The credential is valid and the account behind it has no money left.
+   * Recorded against the CREDENTIAL scope like `credential_rejected`, and kept
+   * separate from it because the repair differs: a rejected key is replaced, an
+   * unfunded one is funded, and only the second is worth telling an operator
+   * about as a billing state rather than a configuration mistake.
    */
+  | 'credential_unfunded'
   | 'model_rejected';
 
 export interface RouteOutcome {
@@ -197,6 +198,15 @@ export interface RouteHealthSnapshot {
   cooldownUntilMs?: number;
   consecutiveFailures: number;
   sampleCount: number;
+  /**
+   * The newest observation in the window says this credential's account is out
+   * of funds. Only the credential scope ever sets it. Distinct from
+   * `available`: the breaker cooldown answers "should this route rest a
+   * moment", while this answers "will anything on this credential serve at all
+   * until someone pays", which is why a caller may skip an unfunded credential
+   * even while its cooldown has elapsed.
+   */
+  unfunded?: boolean;
   successRate?: number;
   rateLimitRate?: number;
   serverErrorRate?: number;
