@@ -1,0 +1,48 @@
+{
+  "places": [
+    {
+      "id": "ChIJ_recorded_saint_frank",
+      "displayName": { "text": "Saint Frank Coffee", "languageCode": "en" },
+      "formattedAddress": "2340 Polk St, San Francisco, CA 94109, USA",
+      "location": { "latitude": 37.7975, "longitude": -122.4223 },
+      "rating": 4.5,
+      "userRatingCount": 1180,
+      "primaryTypeDisplayName": { "text": "Coffee shop", "languageCode": "en" },
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "currentOpeningHours": {
+        "openNow": true,
+        "weekdayDescriptions": ["Monday: 7:00 AM - 6:00 PM", "Tuesday: 7:00 AM - 6:00 PM"]
+      },
+      "regularOpeningHours": {
+        "weekdayDescriptions": ["Monday: 7:00 AM - 6:00 PM", "Tuesday: 7:00 AM - 6:00 PM"]
+      },
+      "nationalPhoneNumber": "(415) 926-5019",
+      "websiteUri": "https://www.saintfrankcoffee.com/",
+      "googleMapsUri": "https://maps.google.com/?cid=1",
+      "photos": [
+        {
+          "name": "places/ChIJ_recorded_saint_frank/photos/recorded-photo-1",
+          "widthPx": 4032,
+          "heightPx": 3024,
+          "authorAttributions": [{ "displayName": "A Google User" }]
+        }
+      ]
+    },
+    {
+      "id": "ChIJ_recorded_blue_bottle",
+      "displayName": { "text": "Blue Bottle Coffee", "languageCode": "en" },
+      "formattedAddress": "66 Mint St, San Francisco, CA 94103, USA",
+      "location": { "latitude": 37.7823, "longitude": -122.4076 },
+      "rating": 4.2,
+      "userRatingCount": 76,
+      "primaryTypeDisplayName": { "text": "Cafe", "languageCode": "en" },
+      "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+      "currentOpeningHours": { "openNow": false },
+      "googleMapsUri": "https://maps.google.com/?cid=2"
+    },
+    {
+      "displayName": { "text": "A place with no id", "languageCode": "en" },
+      "formattedAddress": "Nowhere"
+    }
+  ]
+}

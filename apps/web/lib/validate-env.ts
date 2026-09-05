@@ -116,6 +116,13 @@ export function validateRequiredEnvVars(): ValidationResult {
     }
   }
 
+  if (!process.env['GOOGLE_PLACES_API_KEY']) {
+    warnings.push(
+      'Optional places provider key not set: GOOGLE_PLACES_API_KEY (the search_places tool is ' +
+        'not offered, and place questions are answered without live place data)',
+    );
+  }
+
   return {
     valid: errors.length === 0,
     errors,
