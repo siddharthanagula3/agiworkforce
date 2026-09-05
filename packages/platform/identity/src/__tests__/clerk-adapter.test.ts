@@ -23,6 +23,9 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 const { ClerkIdentityProvider, clerkFrontendApiOrigin } = await import('../adapters/clerk');
+type ClerkVerifyToken = NonNullable<
+  ConstructorParameters<typeof ClerkIdentityProvider>[0]
+>['verifyToken'];
 const { IdentityConfigError } = await import('../types');
 
 const SECRET = 'sk_test_secret';
@@ -31,8 +34,7 @@ const PARTIES = ['https://app.test'];
 function providerWith(verify: (token: string, options: unknown) => Promise<unknown>) {
   return new ClerkIdentityProvider({
     secretKey: SECRET,
-    loadBackend: async () =>
-      ({ verifyToken: verify }) as unknown as typeof import('@clerk/backend'),
+    verifyToken: verify as unknown as ClerkVerifyToken,
   });
 }
 
@@ -101,9 +103,9 @@ describe('verifySessionToken', () => {
   it('returns null when no secret key is configured', async () => {
     const provider = new ClerkIdentityProvider({
       secretKey: '',
-      loadBackend: async () => {
-        throw new Error('must not load');
-      },
+      verifyToken: (() => {
+        throw new Error('must not verify');
+      }) as unknown as ClerkVerifyToken,
     });
     await expect(
       provider.verifySessionToken('token', { authorizedParties: PARTIES }),

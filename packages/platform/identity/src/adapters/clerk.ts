@@ -8,6 +8,7 @@
  * when they stand the provider in. `check:boundaries` is what keeps the import
  * honest instead: the SDK is reachable from this adapter and nowhere else.
  */
+import { verifyToken as clerkVerifyToken } from '@clerk/backend';
 import * as clerkServer from '@clerk/nextjs/server';
 
 import { APP_URL_ENV, resolveDeploymentOrigin } from '../deployment-origin';
@@ -54,14 +55,13 @@ type ClerkClient = Awaited<ReturnType<typeof clerkServer.clerkClient>>;
 type ClerkUser = Awaited<ReturnType<ClerkClient['users']['getUser']>>;
 type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
 type ClerkSessionActivity = NonNullable<ClerkSession['latestActivity']>;
-type ClerkBackendModule = typeof import('@clerk/backend');
 
 export interface ClerkIdentityConfig {
   secretKey?: string | undefined;
   publishableKey?: string | undefined;
   authorizedParties?: readonly string[] | undefined;
   appUrl?: string | undefined;
-  loadBackend?: () => Promise<ClerkBackendModule>;
+  verifyToken?: typeof clerkVerifyToken;
 }
 
 function optional(value: string | null | undefined): string | null {
@@ -220,25 +220,29 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
       );
     }
 
+    // The verifier is imported statically and resolved before the try, so only
+    // the verification itself can be swallowed as "not a valid token". Loading
+    // it lazily inside the try turned an unresolvable module into a silent 401
+    // on every bearer request.
+    const verify = this.config.verifyToken ?? clerkVerifyToken;
+
+    let claims: Record<string, unknown>;
     try {
-      const { verifyToken } = await (this.config.loadBackend ?? (() => import('@clerk/backend')))();
-      const claims = (await verifyToken(token, { secretKey, authorizedParties })) as Record<
-        string,
-        unknown
-      >;
-      const subject = readStringClaim(claims, 'sub');
-      if (!subject) return null;
-      return {
-        subject,
-        sessionId: readStringClaim(claims, 'sid'),
-        organizationId: readStringClaim(claims, 'org_id'),
-        organizationRole: readStringClaim(claims, 'org_role'),
-        email: readStringClaim(claims, 'email'),
-        raw: claims,
-      };
+      claims = (await verify(token, { secretKey, authorizedParties })) as Record<string, unknown>;
     } catch {
       return null;
     }
+
+    const subject = readStringClaim(claims, 'sub');
+    if (!subject) return null;
+    return {
+      subject,
+      sessionId: readStringClaim(claims, 'sid'),
+      organizationId: readStringClaim(claims, 'org_id'),
+      organizationRole: readStringClaim(claims, 'org_role'),
+      email: readStringClaim(claims, 'email'),
+      raw: claims,
+    };
   }
 
   async currentRequestAuth(): Promise<IdentityRequestAuth> {
