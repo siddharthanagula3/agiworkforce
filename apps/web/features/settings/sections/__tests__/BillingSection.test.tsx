@@ -247,6 +247,15 @@ describe('BillingSection', () => {
     await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(10));
   });
 
+  it('renders the usage top-up block as a section label, not a bordered card', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    const label = screen.getByText('Usage top-up');
+    expect(label.closest('section')).toBeNull();
+  });
+
   it('disables top-up checkout below the minimum', () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
     render(<BillingSection />);
