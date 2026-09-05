@@ -38,6 +38,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 vi.mock('@/lib/e2b/gate', () => ({
   e2bCutoverEnabled: () => e2bMocks.cutover,
   e2bExecutionEnabled: () => e2bMocks.cutover,
+  e2bProvisioningReady: () => e2bMocks.cutover,
 }));
 vi.mock('@/lib/server/code-execution-policy', () => ({
   isCloudCodeExecutionEnabled: async () => true,
