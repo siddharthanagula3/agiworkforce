@@ -199,3 +199,15 @@
   padding-block: 0;
   border-top: 0;
 }
+
+@container (max-width: 520px) {
+  [data-design='agi'] .agi-web-composer-main {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .agi-web-count,
+  .agi-web-composer-foot .agi-web-meter {
+    display: none;
+  }
+}
