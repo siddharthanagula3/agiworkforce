@@ -9,7 +9,7 @@ import { AgiWorkGoalSchema } from './agiwork-plan';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
-import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/execution-tools';
+import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -21,6 +21,15 @@ import {
   type RequiredSearchEnforcement,
   type WebSearchRequirement,
 } from '@/lib/web-search/required-search';
+import { hasExplicitCodeExecutionIntent as hasExplicitCodeExecutionRequest } from '@/lib/code-execution/explicit-execution-intent';
+import {
+  EXECUTION_PLAN_GATED_SYSTEM_NOTICE,
+  REQUIRED_EXECUTION_SYSTEM_NUDGE,
+  resolveCodeExecutionRequirement,
+  resolveRequiredExecutionEnforcement,
+  type CodeExecutionRequirement,
+  type RequiredExecutionEnforcement,
+} from '@/lib/code-execution/required-execution';
 import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -467,6 +476,7 @@ export function applyImplicitManagedToolIntent(
   }
 
   const hasExplicitCodeExecutionIntent =
+    hasExplicitCodeExecutionRequest(context.prompt) ||
     (RE_CODE_EXECUTION_ACTION.test(context.prompt) &&
       RE_CODE_EXECUTION_SUBJECT.test(context.prompt)) ||
     (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
@@ -773,6 +783,13 @@ export type ProcessedRequest = {
   searchRequirement?: WebSearchRequirement;
   searchEnforcement?: RequiredSearchEnforcement;
   /**
+   * Whether this turn must run code, and how that was put to the model. Carried
+   * so the tool loop can report adherence against the same decision the request
+   * was built from rather than re-deriving one.
+   */
+  executionRequirement?: CodeExecutionRequirement;
+  executionEnforcement?: RequiredExecutionEnforcement;
+  /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
    * places step so the model still writes the answer.
@@ -849,42 +866,6 @@ function modelSupportsEffort(provider: string, model: string): boolean {
     return Boolean(request?.effortPath || request?.responsesEffortPath);
   }
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
-}
-
-/**
- * Whether this model accepts a FORCED `tool_choice`. Some reasoning models reason on
- * every turn and reject `'required'` or a named function with HTTP 400
- * ("Thinking mode does not support this tool_choice"), which reaches the user
- * as an empty assistant turn. The catalog records the constraint per model, so
- * a new model inherits the right behavior without editing this route.
- */
-function modelAcceptsForcedToolChoice(model: string | undefined): boolean {
-  if (!model) return true;
-  return getModelMetadataById(model)?.providerCompatibility?.forcedToolChoice !== false;
-}
-
-export function resolveInitialManagedCodeToolChoice(input: {
-  requestedToolChoice: ChatCompletionRequest['tool_choice'];
-  codeExecution: boolean | undefined;
-  stream: boolean | undefined;
-  provider: string;
-  model?: string;
-  e2bEnabled: boolean;
-  toolsCapable: boolean;
-}): ChatCompletionRequest['tool_choice'] {
-  if (input.requestedToolChoice !== undefined) return input.requestedToolChoice;
-  if (
-    input.codeExecution === true &&
-    input.stream === true &&
-    input.e2bEnabled &&
-    input.toolsCapable &&
-    input.provider.toLowerCase() !== 'anthropic' &&
-    modelAcceptsForcedToolChoice(input.model) &&
-    providerRoutesToE2B(input.provider)
-  ) {
-    return 'required';
-  }
-  return undefined;
 }
 
 export function resolveRequestEffort(
@@ -3550,15 +3531,30 @@ export async function processRequest(
     });
   }
 
-  const managedCodeToolChoice = resolveInitialManagedCodeToolChoice({
-    requestedToolChoice: chatRequest.tool_choice,
-    codeExecution: chatRequest.code_execution,
-    stream: chatRequest.stream,
-    provider: providerLower,
-    model: chatRequest.model,
-    e2bEnabled: e2bProvisioningReady(),
-    toolsCapable: resolvedModelCaps?.tools ?? true,
+  const executionRequirement = resolveCodeExecutionRequirement({
+    codeExecutionEnabled: chatRequest.code_execution,
+    userMessage: lastUserText,
   });
+  const executionEnforcement = resolveRequiredExecutionEnforcement({
+    required: executionRequirement.required,
+    requestedToolChoice: chatRequest.tool_choice,
+    stream: chatRequest.stream,
+    model: chatRequest.model,
+    tools: resolvedTools,
+    planTier: subscription.plan_tier,
+  });
+  if (executionEnforcement.mode === 'nudge' || executionEnforcement.mode === 'plan-gated') {
+    internalMessages.unshift({
+      role: 'system',
+      content:
+        executionEnforcement.mode === 'plan-gated'
+          ? EXECUTION_PLAN_GATED_SYSTEM_NOTICE
+          : REQUIRED_EXECUTION_SYSTEM_NUDGE,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  }
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -3567,7 +3563,7 @@ export async function processRequest(
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
     tool_choice:
-      managedCodeToolChoice ??
+      executionEnforcement.toolChoice ??
       placesEnforcement.toolChoice ??
       searchEnforcement.toolChoice ??
       chatRequest.tool_choice,
@@ -3652,6 +3648,8 @@ export async function processRequest(
     resolvedTaskType,
     searchRequirement,
     searchEnforcement,
+    executionRequirement,
+    executionEnforcement,
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,
