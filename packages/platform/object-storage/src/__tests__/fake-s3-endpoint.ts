@@ -62,7 +62,7 @@ function bodyOf(data: Uint8Array): {
 
 export interface FakeS3Endpoint {
   client: S3Client;
-  sent: unknown[];
+  sent: string[];
 }
 
 /**
@@ -75,16 +75,15 @@ export function createFakeS3Endpoint(
   timeouts = { connectionTimeoutMs: 1_000, requestTimeoutMs: 5_000 },
 ): FakeS3Endpoint {
   const objects = new Map<string, StoredObject>();
-  const sent: unknown[] = [];
+  const sent: string[] = [];
   const client = createS3Client(config, timeouts);
 
   const address = (bucket: string | undefined, key: string | undefined): string =>
     `${bucket ?? ''}${KEY_SEPARATOR}${key ?? ''}`;
 
   async function handle(command: unknown): Promise<unknown> {
-    sent.push(command);
-
     if (command instanceof PutObjectCommand) {
+      sent.push(`put ${command.input.Bucket}/${command.input.Key} ${command.input.ContentType}`);
       const data = await collect(command.input.Body);
       objects.set(address(command.input.Bucket, command.input.Key), {
         data,
@@ -95,6 +94,7 @@ export function createFakeS3Endpoint(
     }
 
     if (command instanceof GetObjectCommand) {
+      sent.push(`get ${command.input.Bucket}/${command.input.Key}`);
       const stored = objects.get(address(command.input.Bucket, command.input.Key));
       if (!stored) throw missing('NoSuchKey');
       const range = command.input.Range;
@@ -119,6 +119,7 @@ export function createFakeS3Endpoint(
     }
 
     if (command instanceof HeadObjectCommand) {
+      sent.push(`head ${command.input.Bucket}/${command.input.Key}`);
       const stored = objects.get(address(command.input.Bucket, command.input.Key));
       if (!stored) throw missing('NotFound');
       return {
@@ -129,11 +130,13 @@ export function createFakeS3Endpoint(
     }
 
     if (command instanceof DeleteObjectCommand) {
+      sent.push(`delete ${command.input.Bucket}/${command.input.Key}`);
       objects.delete(address(command.input.Bucket, command.input.Key));
       return {};
     }
 
     if (command instanceof CopyObjectCommand) {
+      sent.push(`copy ${command.input.Bucket}/${command.input.Key}`);
       const source = (command.input.CopySource ?? '')
         .split(KEY_SEPARATOR)
         .map(decodeURIComponent)
