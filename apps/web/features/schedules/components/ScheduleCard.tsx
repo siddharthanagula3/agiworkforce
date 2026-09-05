@@ -2,6 +2,7 @@
 
 import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
 import { CalendarClock, FolderOpen, History, Pencil, Play, Trash2, X } from 'lucide-react';
+import { describeCronCadence } from '@/lib/schedules/schedule-time';
 import type { ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
@@ -50,7 +51,9 @@ function scheduleTiming(schedule: ScheduleTask): string {
     if (minutes % 60 === 0) return `Every ${minutes / 60} hour${minutes === 60 ? '' : 's'}`;
     return `Every ${minutes} minute${minutes === 1 ? '' : 's'}`;
   }
-  if (recurrence === 'custom') return schedule.cronExpression ?? 'Invalid cron';
+  if (recurrence === 'custom') {
+    return schedule.cronExpression ? describeCronCadence(schedule.cronExpression) : 'Invalid cron';
+  }
   if (recurrence === 'weekly') {
     const days = Array.isArray(metadata['daysOfWeek'])
       ? metadata['daysOfWeek']
@@ -95,6 +98,10 @@ export function ScheduleCard({
   const canEdit = supported && !terminal && !operation;
   const canToggle = !terminal && (!schedule.isEnabled ? supported : true) && !operation;
   const headingId = `schedule-title-${schedule.id}`;
+  const rawCron =
+    taskRecurrence(schedule) === 'custom' && schedule.cronExpression
+      ? schedule.cronExpression
+      : null;
 
   return (
     <Card
@@ -143,7 +150,9 @@ export function ScheduleCard({
             <dl className="grid gap-x-6 gap-y-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0">
                 <dt className="font-medium text-foreground/70">Timing</dt>
-                <dd className="break-words font-mono">{scheduleTiming(schedule)}</dd>
+                <dd className="break-words font-mono" title={rawCron ?? undefined}>
+                  {scheduleTiming(schedule)}
+                </dd>
               </div>
               <div className="min-w-0">
                 <dt className="font-medium text-foreground/70">Time Zone</dt>
