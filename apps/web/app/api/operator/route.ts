@@ -21,6 +21,7 @@ import {
   resetAllUsersUsage,
   grantBonusCredits,
 } from '@/features/admin/services/operator-metrics';
+import { readOperatorCosts } from '@/features/admin/services/operator-cost-metrics';
 import { getRequestIdentity } from '@/lib/server/identity';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
     if (view === 'users') {
       return NextResponse.json({ users: await readRecentUsers(100) });
+    }
+    if (view === 'costs') {
+      return NextResponse.json({ costs: await readOperatorCosts() });
     }
     return NextResponse.json({ overview: await readOperatorOverview() });
   } catch (error) {
