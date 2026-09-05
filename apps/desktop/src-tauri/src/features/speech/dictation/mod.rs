@@ -1,5 +1,5 @@
 //! AGI Dictation, system dictation lifecycle (plan:
-//! `docs/plans/desktop-system-dictation.md`, flaw:
+//! `docs/specs/desktop-global-voice/spec.md`, flaw:
 //! `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`).
 //!
 //! Phase-1 modules only: the lifecycle coordinator and the stoppable global
@@ -7,11 +7,13 @@
 //! personalization, and the remaining plan stages land behind this module as
 //! they are proven.
 
+pub mod accelerator;
 pub mod capture;
 pub mod coordinator;
 pub mod hotkey;
 pub mod transcription;
 
+pub use accelerator::{ChordParseError, ChordTracker, HotkeyChord};
 pub use capture::{
     list_input_devices, start_capture, BoundedSampleSink, CaptureHandle, InputDeviceInfo,
     MAX_CAPTURE_SECONDS,

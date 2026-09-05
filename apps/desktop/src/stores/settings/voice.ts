@@ -72,6 +72,8 @@ import type {
   TtsConfig,
 } from '@/api/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
+import { AUTO_DETECT_LANGUAGE, toProviderLanguage } from '@/lib/voiceLanguage';
+import { DEFAULT_GLOBAL_VOICE_ACCELERATOR } from '@/lib/globalVoiceShortcut';
 
 export type {
   VoiceCapabilities,
@@ -726,7 +728,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         startGlobalPtt: async () => {
           if (!voiceIsTauri) return;
           try {
-            await voiceStartGlobalPtt();
+            await voiceStartGlobalPtt(DEFAULT_GLOBAL_VOICE_ACCELERATOR);
             set({ globalPttActive: true });
           } catch (e) {
             set({ error: String(e) });
@@ -1060,7 +1062,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         voiceProvider: 'local_whisper',
         inputDeviceId: null,
         inputDeviceLabel: null,
-        voiceLanguage: 'en',
+        voiceLanguage: AUTO_DETECT_LANGUAGE,
         postProcessingMode: 'ai',
         _mediaStream: null,
         _recorder: null,
@@ -1181,7 +1183,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               audioData,
               format,
               voiceProvider,
-              voiceLanguage,
+              toProviderLanguage(voiceLanguage),
             );
             const rawText = result?.text?.trim() ?? '';
             if (!rawText) {

@@ -1,6 +1,6 @@
 //! Native microphone capture for AGI Dictation.
 //!
-//! Plan stage 3 (`docs/plans/desktop-system-dictation.md`): device
+//! Plan stage 3 (`docs/specs/desktop-global-voice/spec.md`): device
 //! enumeration/selection, sample-format dispatch, bounded buffering, and
 //! device-change recovery, extracted from `sys/commands/voice.rs` so the
 //! capture mechanics live in the dictation module and the Tauri commands stay
