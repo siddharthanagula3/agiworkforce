@@ -483,6 +483,30 @@ type SlashCommandOutcome =
       enableThinking?: boolean;
     };
 
+/**
+ * Plugins' own mark: a block grid plus a connection point, distinct from the
+ * generic `Globe` glyph `Web search` uses. Shared by the + menu's Plugins row
+ * and the AGI Work bar's Plugins entry so neither falls back to a mismatched
+ * icon when the account has no connected connectors to show instead.
+ */
+function PluginsGlyph({ className }: { className: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="5" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+      <path d="M11.5 9v6M9 11.5h6" />
+    </svg>
+  );
+}
+
 /** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
   icon: Icon,
@@ -3026,7 +3050,7 @@ const ChatComposerNewComponent = ({
       <div
         id="chat-composer"
         className={cn(
-          'relative rounded-2xl border bg-[var(--chat-input-bg)] backdrop-blur-sm transition-all duration-200',
+          'relative z-10 rounded-2xl border bg-[var(--chat-input-bg)] backdrop-blur-sm transition-all duration-200',
           isFocused
             ? 'border-[var(--chat-accent-primary)]/40 shadow-md ring-2 ring-[var(--chat-accent-primary)]/30'
             : 'border-[var(--chat-border-strong)] shadow-none',
@@ -3735,19 +3759,7 @@ const ChatComposerNewComponent = ({
                           // read as disabled. Matches its siblings now.
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                         >
-                          <svg
-                            className="h-4 w-4"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            aria-hidden="true"
-                          >
-                            <rect x="2" y="2" width="5" height="5" rx="1" />
-                            <rect x="9" y="2" width="5" height="5" rx="1" />
-                            <rect x="2" y="9" width="5" height="5" rx="1" />
-                            <path d="M11.5 9v6M9 11.5h6" />
-                          </svg>
+                          <PluginsGlyph className="h-4 w-4" />
                           <span className="flex-1 text-left">Plugins</span>
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
@@ -4524,7 +4536,9 @@ const ChatComposerNewComponent = ({
                       ))}
                   </span>
                 )}
-                {!connectedConnectorOptions.length && <Globe className={WORK_BAR_GLYPH_CLASS} />}
+                {!connectedConnectorOptions.length && (
+                  <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
+                )}
                 {WORK_BAR_LABELS.plugins}
               </button>
 
