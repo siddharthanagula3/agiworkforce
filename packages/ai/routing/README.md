@@ -61,15 +61,38 @@ Web, Desktop, services, provider packages, and shared chat/runtime surfaces.
 
 ## Environment / Secrets
 
-No secrets belong in this package.
+Every environment variable this package reads is operator-only, server-side,
+and safe to leave unset: each one falls back to a documented default in code,
+and an unparseable value keeps that default rather than disabling the thing it
+tunes. `apps/web/.env.example` carries the same list with its defaults.
 
-`AGI_ROUTING_TASK_FAMILY_STAGE` is the only environment variable this package
-reads. It is an operator-only server flag, **off unless set to exactly `1`**,
-and it gates the task-family ordering stage. Off is the honest default: turning
-it on changes which model a request lands on, and the shadow-mode evidence that
-would justify that change (a CPST baseline per family, a measured router
-decision latency, a written list of shadow/live disagreements) does not exist
-yet. See `docs/architecture/execution-plan-contract.md` Section 5.
+Three are boolean stage flags, **off unless set to exactly `1`**:
+
+- `AGI_ROUTING_TASK_FAMILY_STAGE` gates the task-family ordering stage. Off is
+  the honest default: turning it on changes which model a request lands on, and
+  the shadow-mode evidence that would justify that change (a CPST baseline per
+  family, a measured router decision latency, a written list of shadow/live
+  disagreements) does not exist yet. See
+  `docs/architecture/execution-plan-contract.md` Section 5.
+- `AGI_ROUTING_OBSERVED_HEALTH` gates observed-health ranking, which reorders
+  already-admitted routes by measured failure rate and time to first token.
+- `AGI_ROUTING_CANARY` gates shadow mirroring and canary serving.
+
+The rest are windows and thresholds for `route-health-store.ts` and
+`capability-health.ts`, one group per scope, all documented at their
+definitions:
+
+- Provider breaker: `AGI_ROUTE_HEALTH_WINDOW_MS`,
+  `AGI_ROUTE_HEALTH_TRIP_WINDOW_MS`, and the five
+  `AGI_ROUTE_BREAKER_*` thresholds.
+- Model lockout: `AGI_MODEL_LOCKOUT_WINDOW_MS`,
+  `AGI_MODEL_LOCKOUT_TRIP_WINDOW_MS`, and the five other
+  `AGI_MODEL_LOCKOUT_*` thresholds.
+- Credential cooldown: the seven `AGI_CREDENTIAL_COOLDOWN_*` values.
+- Capability health: `AGI_CAPABILITY_HEALTH_WINDOW_MS` and
+  `AGI_CAPABILITY_HEALTH_MISS_THRESHOLD`.
+
+Nothing here reads a secret, and no secrets belong in this package.
 
 ## Security, Privacy, Data Boundaries
 
@@ -103,6 +126,27 @@ the parked routes move to the end of the plan; the decision then carries
 `reason: 'health_fallback'`. If every candidate is parked the first parked
 model is still selected rather than stranding the request. Without live state
 the walk is unchanged, which is why the fixture never sets it.
+
+`capability-health.ts` learns something the compiled catalog cannot: whether a
+route still HONOURS a capability it declares. The catalog flag is set at compile
+time and the liveness probe (`scripts/probe-models.mjs`) sends no tools, so a
+model that quietly stops honouring tool calls degraded every session until a
+person edited the catalog. The serving path now records one observation per
+finished turn against the route it served, honoured or missed, in its own
+keyspace over the same `KeyValueStore` port the route health store uses;
+`AGI_CAPABILITY_HEALTH_WINDOW_MS` and `AGI_CAPABILITY_HEALTH_MISS_THRESHOLD`
+tune it, and a route is suspect only while the misses in the window have reached
+the threshold and its most recent turn is still a miss, so one honoured turn
+brings it back. Only model facts count: a required tool the model never called,
+and tool arguments that are not JSON. A sandbox that would not start, our own
+per-turn tool budgets, and a repeated search query are ours, not the model's,
+and are excluded by name. This is a ranking input and never an admission one:
+the declared flag still decides what may serve a request, a suspect route is
+still selected when it is the only one, and the observation is kept out of the
+`route` scope precisely so it cannot park anything or dilute the outcome rates
+every non-tool request reads. `scripts/probe-models.mjs --tools` is the cheap
+second signal, asking each answering route one trivial tool and reporting
+whether it was honoured; it writes the probe file only, never the store.
 
 Model continuity (`currentModelKey` and `previousTaskType`) is implemented
 here and in Rust but deliberately not wired from the web request processor:
