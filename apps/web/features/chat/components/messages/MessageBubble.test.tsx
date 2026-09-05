@@ -1812,4 +1812,61 @@ describe('MessageBubble', () => {
       expect(noSourcesNotice()).not.toBeInTheDocument();
     });
   });
+
+  describe('search-not-invoked notice', () => {
+    const notInvokedNotice = () => screen.queryByText(/the answer used the model's own knowledge/i);
+
+    it('names the real failure when a required search never ran', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'From what I recall, the headline was about the merger.',
+            metadata: { webSearchRequested: true },
+          })}
+        />,
+      );
+      expect(notInvokedNotice()).toBeInTheDocument();
+      expect(
+        screen.queryByText(/web search didn't return results for this turn/i),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers a one-click resend that requires the search', async () => {
+      const onRegenerate = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'From what I recall, the headline was about the merger.',
+            metadata: { webSearchRequested: true },
+          })}
+          onRegenerate={onRegenerate}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole('button', { name: /send this turn again with a web search required/i }),
+      );
+      expect(onRegenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet once the search actually ran', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Per Reuters, the headline was about the merger.',
+            metadata: {
+              webSearchRequested: true,
+              tools: [{ name: 'web_search', status: 'completed' }],
+              searchResults: [{ url: 'https://example.com', title: 'Example' }],
+            } as never,
+          })}
+        />,
+      );
+      expect(notInvokedNotice()).not.toBeInTheDocument();
+    });
+  });
 });
