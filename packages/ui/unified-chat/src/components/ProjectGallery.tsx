@@ -37,6 +37,7 @@ const EMOJI_OPTIONS: readonly string[] = [
 export interface ProjectGalleryProps {
   onSelect?: (project: Project) => void;
   onCreate?: (input: ProjectGalleryCreateInput) => Promise<Project> | Project;
+  onShareProject?: (project: Project) => void;
   onEditProject?: (project: Project) => void;
   onArchiveProject?: (project: Project) => void;
   onDeleteProject?: (project: Project) => void;
@@ -64,6 +65,7 @@ function generateLocalId(): string {
 export function ProjectGallery({
   onSelect,
   onCreate,
+  onShareProject,
   onEditProject,
   onArchiveProject,
   onDeleteProject,
@@ -393,6 +395,7 @@ export function ProjectGallery({
                 project={project}
                 active={project.id === activeProjectId}
                 onSelect={handleSelect}
+                onShare={onShareProject}
                 onEdit={onEditProject}
                 onArchive={onArchiveProject ? handleArchive : undefined}
                 onDelete={onDeleteProject ? handleDelete : undefined}
