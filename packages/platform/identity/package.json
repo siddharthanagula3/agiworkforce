@@ -1,0 +1,43 @@
+{
+  "name": "@agiworkforce/identity",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/session-cookie.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@clerk/backend": ">=3.0.0",
+    "@clerk/nextjs": ">=7.0.0",
+    "next": ">=15.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@clerk/backend": {
+      "optional": true
+    },
+    "@clerk/nextjs": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@clerk/backend": "^3.4.13",
+    "@clerk/nextjs": "^7.4.1",
+    "next": "^16.3.0",
+    "vitest": "^4.1.8"
+  }
+}

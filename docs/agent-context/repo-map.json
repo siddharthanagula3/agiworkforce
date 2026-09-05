@@ -921,6 +921,21 @@
       "evidence": ["packages/platform/data-layer/src/factory.ts"]
     },
     {
+      "path": "packages/platform/identity",
+      "kind": "package",
+      "canonicalOwner": "Backend and data",
+      "consumers": ["apps/web"],
+      "deployability": "server-library",
+      "trustBoundary": "session verification, request identity and provider account reads behind the identity port",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/identity/src/factory.ts",
+        "packages/platform/identity/src/adapters/clerk.ts",
+        "apps/web/lib/server/identity.ts"
+      ]
+    },
+    {
       "path": "packages/platform/key-value",
       "kind": "package",
       "canonicalOwner": "Backend and data",
