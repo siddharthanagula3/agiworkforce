@@ -373,8 +373,8 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: REASONING_BALANCED_MODEL_ID,
-      provider: 'qwen',
     });
+    expect(getModelMetadataById(REASONING_BALANCED_MODEL_ID)?.provider).toBe('qwen');
   });
 
   it('routes image generation by intrinsic output capability', () => {
