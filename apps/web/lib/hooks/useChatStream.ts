@@ -73,7 +73,7 @@ import {
   interactiveCardNeedsResume,
   type InteractiveCardResponseRequest,
 } from '@/app/api/interactive-cards/response-contract';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
@@ -2487,6 +2487,7 @@ export function useChatStream(): UseChatStreamReturn {
         if (!token) throw new Error('Not authenticated');
         return token;
       };
+      void getCsrfToken().catch(() => undefined);
 
       // Regenerate answers a user message that is already here, so this send
       // creates no user message at all: the new answer becomes a sibling of the
