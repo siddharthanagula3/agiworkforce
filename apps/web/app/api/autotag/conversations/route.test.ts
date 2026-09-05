@@ -42,6 +42,14 @@ describe('GET /api/autotag/conversations workspace boundary', () => {
     await expect(response.json()).resolves.toEqual({ conversationIds: ['conversation-1'] });
   });
 
+  it('compares the uuid tag key against the uuid conversation id, not text', async () => {
+    await GET(new NextRequest('http://localhost/api/autotag/conversations?tag=coding'));
+
+    const [sql] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on c.id = ct.conversation_id');
+    expect(sql).not.toContain('c.id::text');
+  });
+
   it('reads through the rls scoped handle, never the schema owner', async () => {
     await GET(new NextRequest('http://localhost/api/autotag/conversations?tag=coding'));
 
