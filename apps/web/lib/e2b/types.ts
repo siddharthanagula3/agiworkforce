@@ -6,6 +6,8 @@ export interface ExecutionResult {
   error?: string;
   pngResults?: string[];
   outputs?: NotebookCellOutput[];
+  /** The call never ran because the capability was not available for the turn. */
+  unavailable?: boolean;
 }
 
 export interface SandboxFileEntry {

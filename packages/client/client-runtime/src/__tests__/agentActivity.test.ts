@@ -630,3 +630,71 @@ describe('tool failure summaries', () => {
     );
   });
 });
+
+describe('unavailable tool notices', () => {
+  function endWithError(output: string) {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'tool-execution-start',
+        toolCallId: 'call-unavailable',
+        name: 'execute_code',
+        category: 'code',
+        input: {},
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'tool-execution-end',
+        toolCallId: 'call-unavailable',
+        name: 'execute_code',
+        output,
+        isError: true,
+        elapsedMs: 5,
+      }),
+    );
+    const entry = state.entries.find(isToolEntry);
+    if (!entry) throw new Error('no tool entry');
+    return entry;
+  }
+
+  it('reads the cause the harness named back into the notice', () => {
+    const entry = endWithError(
+      'Code execution is unavailable for this request: no sandbox was available for this ' +
+        'account right now. Do not call an execution tool again on this turn; answer without ' +
+        'running code and tell the user why.',
+    );
+    expect(entry.unavailable).toBe(true);
+    expect(entry.summary).toBe(
+      'Code execution was not available: no sandbox was available for this account right now.',
+    );
+  });
+
+  it('falls back to the generic notice when no cause is named', () => {
+    const entry = endWithError('Code execution is unavailable for this request.');
+    expect(entry.unavailable).toBe(true);
+    expect(entry.summary).toContain('Code execution was not available for this request');
+  });
+
+  it('names the account setting when cloud code execution is turned off', () => {
+    const entry = endWithError(
+      'Cloud code execution is turned off for this account. Tell the user it is off.',
+    );
+    expect(entry.unavailable).toBe(true);
+    expect(entry.summary).toBe(
+      'Code execution was not available: it is turned off for this account.',
+    );
+  });
+
+  it('names the tool that was not offered', () => {
+    const entry = endWithError('Tool write_file is not available.');
+    expect(entry.unavailable).toBe(true);
+    expect(entry.summary).toBe('write_file was not available for this request.');
+  });
+
+  it('leaves a genuine tool failure styled as a failure', () => {
+    const entry = endWithError('TypeError: x is not a function');
+    expect(entry.unavailable).toBe(false);
+  });
+});

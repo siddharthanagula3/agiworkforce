@@ -297,20 +297,37 @@ function humanizeToolFailureSummary(raw: string | undefined, input: unknown): st
  * apps/web/lib/e2b/execution-tools.ts and
  * apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts.
  */
-const TOOL_UNAVAILABLE_BY_POLICY_PATTERNS: RegExp[] = [
-  /^Code execution is unavailable for this request\.$/,
-  /^Cloud code execution is turned off for this account\./,
-  /^Tool [\w.-]+ is not available\.$/,
-];
-
-function isToolUnavailableByPolicy(raw: string | undefined): boolean {
-  if (!raw) return false;
-  const trimmed = raw.trim();
-  return TOOL_UNAVAILABLE_BY_POLICY_PATTERNS.some((pattern) => pattern.test(trimmed));
-}
+const CODE_EXECUTION_UNAVAILABLE_PATTERN =
+  /^Code execution is unavailable for this request(?::\s*([^.]+))?\./;
+const CLOUD_CODE_EXECUTION_OFF_PATTERN = /^Cloud code execution is turned off for this account\./;
+const TOOL_NOT_AVAILABLE_PATTERN = /^Tool ([\w.-]+) is not available\.$/;
 
 const CODE_EXECUTION_UNAVAILABLE_NOTICE =
   'Code execution was not available for this request, so the answer was written without running code.';
+const CLOUD_CODE_EXECUTION_OFF_NOTICE =
+  'Code execution was not available: it is turned off for this account.';
+
+/**
+ * The notice for a call that never ran because the capability was not available
+ * for the turn, as distinct from a call that ran and errored. The cause the
+ * harness names travels in the tool result text, so it is read back here rather
+ * than flattened into one sentence that tells the user nothing.
+ */
+function toolUnavailableNotice(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  const codeExecution = CODE_EXECUTION_UNAVAILABLE_PATTERN.exec(trimmed);
+  if (codeExecution) {
+    const cause = codeExecution[1]?.trim();
+    return cause
+      ? `Code execution was not available: ${cause}.`
+      : CODE_EXECUTION_UNAVAILABLE_NOTICE;
+  }
+  if (CLOUD_CODE_EXECUTION_OFF_PATTERN.test(trimmed)) return CLOUD_CODE_EXECUTION_OFF_NOTICE;
+  const namedTool = TOOL_NOT_AVAILABLE_PATTERN.exec(trimmed);
+  if (namedTool) return `${namedTool[1]} was not available for this request.`;
+  return undefined;
+}
 
 function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
   if (reason === 'error') return 'failed';
@@ -509,8 +526,8 @@ function applyAgentEvent(
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
       const rawFailure = event.isError ? stringifyError(event.output) : undefined;
-      const unavailable = event.isError && isToolUnavailableByPolicy(rawFailure);
-      const failureSummary = unavailable ? CODE_EXECUTION_UNAVAILABLE_NOTICE : undefined;
+      const failureSummary = event.isError ? toolUnavailableNotice(rawFailure) : undefined;
+      const unavailable = failureSummary !== undefined;
       if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,

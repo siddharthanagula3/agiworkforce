@@ -7,6 +7,7 @@
  * Pure logic (no `server-only`), unit tested against a mocked {@link E2BExecutor}.
  */
 import type { E2BExecutor, ExecutionResult } from './types';
+import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
 import { MAX_EXECUTION_OUTPUT_BYTES } from './types';
 
 export const EXECUTE_CODE_TOOL = 'execute_code';
@@ -268,12 +269,14 @@ export async function routeExecutionTool(
   name: string,
   rawArgs: Record<string, unknown>,
   workspaceRoot?: string,
+  unavailableCause?: E2BUnavailableCause | null,
 ): Promise<ExecutionResult> {
   if (!executor) {
     return {
       ok: false,
       output: '',
-      error: 'Code execution is unavailable for this request.',
+      error: codeExecutionUnavailableMessage(unavailableCause ?? null),
+      unavailable: true,
     };
   }
   if (!isExecutionTool(name)) {
