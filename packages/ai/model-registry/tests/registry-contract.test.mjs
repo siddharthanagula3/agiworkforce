@@ -328,3 +328,20 @@ test('keeps compatibility quality tiers inside the canonical model taxonomy', ()
     );
   }
 });
+
+test('every benchmark score names the source it was read from', () => {
+  const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+  const scores = Object.entries(registry.benchmarks).flatMap(([modelKey, entries]) =>
+    Object.entries(entries).map(([name, score]) => [`${modelKey}.${name}`, score]),
+  );
+  assert.ok(scores.length > 0, 'the catalog must carry at least one benchmark score');
+  for (const [label, score] of scores) {
+    assert.equal(typeof score.value, 'number', `${label} must carry a numeric value`);
+    assert.ok(score.source, `${label} must name a source`);
+    assert.ok(
+      ['verified', 'aggregated', 'unknown'].includes(score.confidence),
+      `${label} confidence ${String(score.confidence)} is not a known value`,
+    );
+    assert.ok('version' in score && 'date' in score, `${label} must state version and date`);
+  }
+});

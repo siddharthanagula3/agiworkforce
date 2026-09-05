@@ -94,7 +94,10 @@
     "benchmarks": {
       "type": "object",
       "additionalProperties": {
-        "type": "object"
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/benchmarkScore"
+        }
       }
     },
     "evidence": {
@@ -586,6 +589,30 @@
         },
         "note": {
           "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "benchmarkScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One benchmark result and where it came from. version and date are null when the source publishes none; an unsourced score is refused at compile.",
+      "required": ["value", "source", "version", "date", "confidence"],
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "confidence": {
+          "enum": ["verified", "aggregated", "unknown"]
         }
       }
     },
