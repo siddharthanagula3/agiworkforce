@@ -41,7 +41,7 @@ export function VoiceSection() {
           Voice
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Composer dictation, the only voice surface that runs on web.
+          Dictate into the composer with the microphone button.
         </p>
       </div>
 
