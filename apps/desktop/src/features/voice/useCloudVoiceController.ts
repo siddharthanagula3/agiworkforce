@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  type ToolApprovalRequest,
+} from '@agiworkforce/types';
 import {
   useChatStore as useSharedChatStore,
   type ComposerVoiceController,
@@ -32,6 +36,7 @@ function insertVoiceTextIntoDraft(text: string): void {
 export interface CloudVoiceControllerResult {
   controller: ComposerVoiceController;
   pendingAction: string | null;
+  pendingApproval: ToolApprovalRequest | null;
   error: string | null;
   isDesktopActionActive: boolean;
   isStopping: boolean;
@@ -59,6 +64,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   const consentAccepted = useComputerUseStore((state) => state.consentAccepted);
   const cancellingOpaExecutionId = useComputerUseStore((state) => state.cancellingOpaExecutionId);
   const computerUseError = useComputerUseStore((state) => state.error);
+  const pendingApproval = useComputerUseStore((state) => state.pendingApproval);
   const voiceLanguage = useVoiceInputStore((state) => state.voiceLanguage);
 
   const releaseBoundarySubscription = useCallback(() => {
@@ -116,6 +122,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
 
   const resetVoiceSession = useCallback(() => {
     workflowGenerationRef.current += 1;
+    useComputerUseStore.getState().clearPendingApproval();
     void stopDesktopAction();
     releaseBoundarySubscription();
     requestContextRef.current = null;
@@ -294,6 +301,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
         throw new Error('Desktop control has not been turned on for this device.');
       }
       setError(null);
+      computerUse.clearPendingApproval();
       setWorkflowState('executing');
 
       const model = getRoutingSlotModel('computer_use');
@@ -428,6 +436,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   return {
     controller,
     pendingAction,
+    pendingApproval,
     error: error ?? (cancellingOpaExecutionId === null ? null : computerUseError),
     isDesktopActionActive: opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null,
     isStopping: workflowState === 'stopping',

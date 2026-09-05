@@ -254,3 +254,46 @@ pub fn emit_approval_request(app_handle: &AppHandle, approval: ApprovalRequestPa
         );
     }
 }
+
+/// The routing record for one computer-use action: which tier took it, and the
+/// typed reason every earlier tier gave for declining. It rides the
+/// `computer_use:` stream the session already emits so a run has one timeline.
+pub fn emit_action_routed(
+    app_handle: &AppHandle,
+    session_id: &str,
+    decision: &crate::automation::action_router::RoutingDecision,
+) {
+    if let Err(e) = app_handle.emit(
+        "computer_use:action_routed",
+        serde_json::json!({ "sessionId": session_id, "decision": decision }),
+    ) {
+        tracing::error!("[Events] Failed to emit action routing event: {}", e);
+    } else {
+        tracing::info!(
+            "[Events] Action routed to {:?}, declined by {}",
+            decision.selected,
+            decision.declined.len()
+        );
+    }
+}
+
+/// A computer-use action the harness refused or wants confirmed, expressed as
+/// the cross-surface approval request every other desktop surface reads.
+pub fn emit_computer_use_approval(
+    app_handle: &AppHandle,
+    session_id: &str,
+    request: &agiworkforce_protocol::tool_primitive::ToolApprovalRequest,
+) {
+    if let Err(e) = app_handle.emit(
+        "computer_use:approval_required",
+        serde_json::json!({ "sessionId": session_id, "approval": request }),
+    ) {
+        tracing::error!("[Events] Failed to emit computer-use approval event: {}", e);
+    } else {
+        tracing::info!(
+            "[Events] Computer-use approval required for {}: {:?}",
+            request.tool,
+            request.reason
+        );
+    }
+}

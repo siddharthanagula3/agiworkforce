@@ -841,6 +841,7 @@ export function DesktopShellV3({
                   ? 'A previous desktop-control action still needs to be confirmed stopped.'
                   : null)
               }
+              approval={cloudVoice.pendingApproval}
               error={cloudVoice.error}
               isExecuting={cloudVoice.isDesktopActionActive}
               isStopping={cloudVoice.isStopping}

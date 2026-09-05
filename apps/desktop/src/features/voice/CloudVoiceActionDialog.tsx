@@ -1,8 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { Loader2, Mic2 } from 'lucide-react';
+import type { ToolApprovalRequest } from '@agiworkforce/types';
+import { Loader2, Mic2, ShieldAlert } from 'lucide-react';
+
+import {
+  describeApprovalReason,
+  describeApprovalRisk,
+  isApprovalAnswerable,
+} from '../../lib/toolApprovalCopy';
 
 export interface CloudVoiceActionDialogProps {
   action: string | null;
+  approval?: ToolApprovalRequest | null;
   error: string | null;
   isExecuting: boolean;
   isStopping: boolean;
@@ -15,6 +23,7 @@ export interface CloudVoiceActionDialogProps {
 
 export function CloudVoiceActionDialog({
   action,
+  approval = null,
   error,
   isExecuting,
   isStopping,
@@ -32,6 +41,7 @@ export function CloudVoiceActionDialog({
   onCancelRef.current = onCancel;
   isStoppingRef.current = isStopping;
   const isOpen = Boolean(action);
+  const refusedByHarness = approval !== null && !isApprovalAnswerable(approval);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -132,6 +142,22 @@ export function CloudVoiceActionDialog({
           {action}
         </div>
 
+        {approval && (
+          <div
+            role="status"
+            className="mb-4 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-[var(--chat-text-primary)]">
+              <ShieldAlert aria-hidden="true" size={14} />
+              <span>{describeApprovalRisk(approval)}</span>
+              <span className="text-[var(--chat-text-muted)]">{approval.tool}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-[var(--chat-text-secondary)]">
+              {describeApprovalReason(approval)}
+            </p>
+          </div>
+        )}
+
         <p className="text-xs leading-5 text-[var(--chat-text-muted)]">
           {isRecovery
             ? "This recovery view does not reveal the previous account's instruction. Retry Stop to release desktop control safely."
@@ -168,7 +194,7 @@ export function CloudVoiceActionDialog({
                 ref={approveButtonRef}
                 type="button"
                 onClick={onApprove}
-                disabled={isExecuting || isStopping}
+                disabled={isExecuting || isStopping || refusedByHarness}
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
               >
                 {(isExecuting || isStopping) && (
