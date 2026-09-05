@@ -1,4 +1,3 @@
-
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,7 +33,8 @@ describe('Electron Cloud sign-in shell', () => {
   it('shows only Cloud sign-in claims and controls', () => {
     render(<AuthPage />);
 
-    expect(screen.getByText('Sign in right here to continue to AGI Cloud.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
     expect(screen.queryByText(/Local Mode/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /use local mode/i })).not.toBeInTheDocument();
   });
