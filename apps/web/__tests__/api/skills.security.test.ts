@@ -158,6 +158,32 @@ describe('skills API security contract', () => {
     expect(await response.text()).toContain('name: literature-review');
   });
 
+  it('serves the browse catalog without any repository development skill', async () => {
+    const response = await listSkills(request('/api/skills?catalog=all'));
+    const json = (await response.json()) as { skills: Array<{ name: string }> };
+    const names = json.skills.map((skill) => skill.name);
+
+    expect(response.status).toBe(200);
+    for (const developerSkill of ['agiworkforce-design', 'model-orchestration', 'antislop']) {
+      expect(names).not.toContain(developerSkill);
+    }
+    expect(names).toContain('code-review');
+  });
+
+  it('refuses a developer skill body and download to an end user', async () => {
+    await expect(
+      getSkillBody(request('/api/skills/agiworkforce-design'), {
+        params: Promise.resolve({ name: 'agiworkforce-design' }),
+      }),
+    ).rejects.toThrow('not found');
+
+    await expect(
+      downloadSkill(request('/api/skills/agiworkforce-design/download'), {
+        params: Promise.resolve({ name: 'agiworkforce-design' }),
+      }),
+    ).rejects.toThrow('not found');
+  });
+
   it('requires auth before downloading a bundled skill', async () => {
     const { getClerkAuthUser } = await import('@/lib/api-auth');
     vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));

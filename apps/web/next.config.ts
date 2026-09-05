@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/**': [
       '../../.agents/skills/**',
+      '../../skills-lock.json',
       '../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**',
     ],
   },

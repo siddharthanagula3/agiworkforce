@@ -14,6 +14,8 @@ const DEFAULT_ROOTS = ['.agents/skills'];
 const DEFAULT_REFERENCE_TREES = ['packages/tools/skills/reference-bundles'];
 const UNDECLARED_SOURCE = 'UNKNOWN, declare the upstream repo or URL before merging';
 const KNOWN_SOURCE_TYPES = new Set(['github', 'url', 'first-party']);
+const UNDECLARED_AUDIENCE = 'UNKNOWN, declare product or developer before merging';
+const KNOWN_AUDIENCES = new Set(['product', 'developer']);
 
 function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -160,6 +162,12 @@ function verify() {
     ) {
       failures.push(`Skill "${id}" has no declared upstream source.`);
     }
+    if (!KNOWN_AUDIENCES.has(entry.audience)) {
+      failures.push(
+        `Skill "${id}" has audience "${entry.audience ?? 'none'}"; expected one of ${[...KNOWN_AUDIENCES].join(', ')}. ` +
+          'Product skills reach the in-product Skills catalog, developer skills stay in the repository, so an unclassified skill must not ship.',
+      );
+    }
     if (entry.computedHash !== skill.hash) {
       failures.push(
         `Integrity mismatch for skill "${id}" at ${skill.path}:\n  locked:   ${entry.computedHash}\n  on disk:  ${skill.hash}`,
@@ -204,6 +212,7 @@ function regenerate() {
           ? prior.source
           : UNDECLARED_SOURCE,
       sourceType: KNOWN_SOURCE_TYPES.has(prior?.sourceType) ? prior.sourceType : 'unknown',
+      audience: KNOWN_AUDIENCES.has(prior?.audience) ? prior.audience : UNDECLARED_AUDIENCE,
       declaredVersion: skill.version,
       computedHash: skill.hash,
     };
