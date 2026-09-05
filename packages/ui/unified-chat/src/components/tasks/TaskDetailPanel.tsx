@@ -24,6 +24,10 @@ import { useEffect, useRef, useState, type ComponentType, type RefObject } from 
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
+  AGIWORK_GOAL_PROGRESS_ID,
+  AGIWORK_PLAN_PROGRESS_ID_PREFIX,
+} from '../../lib/agi-work-progress';
+import {
   applyAgentActivityEvent,
   type AgentActivityArtifactEntry,
   type AgentActivityContextEntry,
@@ -160,9 +164,6 @@ export function projectTaskJournal(events: AgentEventEnvelope[]): AgentActivityS
     undefined,
   );
 }
-
-const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
-const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
 
 function isSafeGeneratedFilePath(uri: string): boolean {
   return /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/.test(uri);
