@@ -31,19 +31,29 @@ vi.mock('workflow', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   getCloudAgentExecutionUsage: mocks.usage,
+  OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS: 30,
+  claimCloudAgentExecutionOperation: vi.fn(),
+  completeCloudAgentExecutionOperation: vi.fn(),
+  failCloudAgentExecutionOperation: vi.fn(),
+  fingerprintCloudAgentOperation: vi.fn(),
+  renewCloudAgentExecutionOperationLease: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   finalizeObservedManagedUsage: mocks.finalize,
   calculateObservedProviderUsageCostDollars: () => 0.0042,
+  createObservedProviderUsage: vi.fn(),
+  mergeObservedProviderUsage: vi.fn(),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: mocks.settleFreeTrial,
+  applyFreeTrialProviderBudget: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({
   recordManagedAutoMemoryTurn: mocks.autoMemory,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvent: vi.fn(),
+  appendCloudAgentEvents: vi.fn(),
   completeCloudAgentApprovalCheckpoint: mocks.completeCheckpoint,
   getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(),

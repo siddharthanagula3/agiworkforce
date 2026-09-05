@@ -13,6 +13,9 @@ vi.mock('workflow/api', () => ({ start: mocks.start }));
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   attachVideoGenerationWorkflow: (...args: unknown[]) => mocks.attach(...args),
   getVideoGenerationJob: (...args: unknown[]) => mocks.get(...args),
+  getVideoGenerationJobForSystem: vi.fn(),
+  reconcileVideoGenerationBillingSettlement: vi.fn(),
+  recoverVideoProviderTaskAttachment: vi.fn(),
 }));
 vi.mock('./video-generation-workflow', () => ({
   videoGenerationWorkflow: vi.fn(),

@@ -44,6 +44,7 @@ vi.mock('workflow', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
   runToolLoop: mocks.runToolLoop,
+  mapWithConcurrency: vi.fn(),
 }));
 vi.mock('./cloud-agent-operation-executor', () => ({
   executeCloudAgentOperation: mocks.executeOperation,
@@ -54,12 +55,20 @@ vi.mock('./cloud-agent-workflow-stream', () => ({
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvent: mocks.appendEvent,
+  appendCloudAgentEvents: vi.fn(),
   getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(async () => false),
   saveCloudAgentApprovalCheckpoint: vi.fn(),
   saveCloudAgentInputCheckpoint: vi.fn(),
+  completeCloudAgentApprovalCheckpoint: vi.fn(),
+  readCloudAgentRunAssistantText: vi.fn(),
+  recordCloudAgentRunSettledUsage: vi.fn(),
+  transitionCloudAgentRun: vi.fn(),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
+vi.mock('@/lib/user-connector-tools', () => ({
+  makeUserConnectorExecutor: vi.fn(),
+  withUserConnectorMcpHandle: vi.fn(),
+}));
 
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 // The REAL free-tier budget, not a stand-in. `tool-loop.ts` cannot be edited or
