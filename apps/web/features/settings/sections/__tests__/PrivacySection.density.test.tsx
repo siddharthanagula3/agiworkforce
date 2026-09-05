@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
@@ -7,8 +8,22 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
-  Switch: ({ checked }: { checked?: boolean }) =>
-    React.createElement('button', { role: 'switch', 'aria-checked': Boolean(checked) }),
+  Switch: ({
+    checked,
+    onCheckedChange,
+    'aria-label': ariaLabel,
+  }: {
+    checked?: boolean;
+    onCheckedChange?: (next: boolean) => void;
+    'aria-label'?: string;
+  }) =>
+    React.createElement('button', {
+      type: 'button',
+      role: 'switch',
+      'aria-checked': Boolean(checked),
+      'aria-label': ariaLabel,
+      onClick: () => onCheckedChange?.(!checked),
+    }),
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
 }));
 
@@ -41,13 +56,31 @@ vi.mock('../../services/conversation-data-service', () => ({
 import { PrivacySection } from '../PrivacySection';
 
 describe('PrivacySection row density', () => {
-  it('renders no prose card and no lingering loading text once settings resolve', async () => {
+  it('renders no prose card and no lingering loading or saved text when nothing changed', async () => {
     render(<PrivacySection />);
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
-    expect(screen.queryByText(/loading account settings/i)).toBeNull();
+    await waitFor(() => expect(screen.queryByText(/loading account settings/i)).toBeNull());
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('Saved')).toBeNull();
     expect(screen.queryByText(/local-first/i)).toBeNull();
     expect(screen.queryByText('Synced to your account')).toBeNull();
     expect(document.querySelector('[class*="rounded-lg border"]')).toBeNull();
+  });
+
+  it('shows a saved state only after an actual change', async () => {
+    render(<PrivacySection />);
+    await waitFor(() => expect(screen.queryByText(/loading account settings/i)).toBeNull());
+    expect(screen.queryByRole('status')).toBeNull();
+
+    await userEvent.click(screen.getByRole('switch', { name: /Share crash and usage telemetry/i }));
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
+  });
+
+  it('never names the telemetry vendor or implementation detail in the toggle copy', () => {
+    render(<PrivacySection />);
+    expect(screen.queryByText(/sentry/i)).toBeNull();
+    expect(screen.queryByText(/beforeSend/i)).toBeNull();
+    expect(screen.getByText(/message content is never included/i)).toBeInTheDocument();
   });
 });
