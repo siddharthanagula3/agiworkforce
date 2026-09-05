@@ -2,14 +2,19 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 
-Neon is the only backup this application has: there is no separate `pg_dump`
-schedule, and until this document existed no restore had ever been exercised
-end to end. `docs/security/key-rotation.md:169-179` already describes what a
-restore needs from the encryption key ring; this document describes the
-restore itself, and `scripts/db-restore-drill.mjs` is the drill that proves it
-still works.
+Neon's point-in-time branch is the recovery mechanism today; there is no
+separate `pg_dump` schedule, and until this document existed no restore had
+ever been exercised end to end. `docs/security/key-rotation.md:169-179`
+already describes what a restore needs from the encryption key ring; this
+document describes the restore itself. Two drills prove it works:
+`scripts/db-restore-drill.mjs` exercises Neon's own branch-from-timestamp API
+and only ever runs against Neon, and `scripts/db-restore-drill-logical.mjs`
+exercises the host-neutral path (`pg_dump` / `pg_restore`) that has to work
+regardless of which Postgres host is behind `AGI_DATABASE_URL`. The Neon drill
+proves Neon recovery; the logical drill proves the database is not welded to
+Neon.
 
 ## What Neon actually retains
 
@@ -120,22 +125,119 @@ permanently unreadable. Read `docs/security/key-rotation.md`'s "Accepted
 risk: no KMS, no escrow" section before promoting a restore that crosses a
 rotation boundary.
 
+## The host-neutral drill: proving a Postgres host swap is real
+
+The Neon drill above proves Neon's own point-in-time recovery works. It
+proves nothing about what happens the day this application moves off Neon,
+because it only ever speaks Neon's branch API. `scripts/db-restore-drill-logical.mjs`
+is the drill for that day: it speaks plain Postgres wire protocol through
+`pg_dump` and `pg_restore`, so it runs unchanged against Neon, a self-hosted
+server, RDS, or the Homebrew Postgres this project uses for local
+development.
+
+It dumps the source database in custom format with `--no-owner
+--no-privileges`, creates a scratch database on the target server, restores
+into it, then checks the target against the source: every table in
+`scripts/lib/restore-drill-core.mjs`'s `CORE_TABLES` is present, its row count
+matches the source exactly, and the migration ledger
+(`public.schema_migrations`, the table `scripts/lib/neon-migrations.mjs`'s
+runner writes to) has the same row count on both sides. It prints a pass or
+fail summary, host and database names only, and always drops the scratch
+database on exit, including when a step fails partway through.
+
+`CORE_TABLES` and the count and presence checks live in
+`scripts/lib/restore-drill-core.mjs` so the Neon drill and this one check the
+same tables the same way instead of drifting apart. Adding a table to the
+core set updates both drills from one place.
+
+### Configuration
+
+Four environment variables, none of them read from a checked-in file:
+
+| Variable                             | Meaning                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGI_RESTORE_DRILL_SOURCE_URL`       | Postgres connection string to dump from. Required.                                                                                                                             |
+| `AGI_RESTORE_DRILL_TARGET_ADMIN_URL` | Connection string to an existing maintenance database (for example `postgres`) on the target server, used to create and drop the scratch database. Required.                   |
+| `AGI_RESTORE_DRILL_SCRATCH_PREFIX`   | Prefix for the disposable scratch database name. Optional, defaults to `agi_restore_drill`.                                                                                    |
+| `AGI_RESTORE_DRILL_PG_BIN_DIR`       | Directory holding `pg_dump` and `pg_restore`. Optional, defaults to whatever `PATH` resolves; on a Homebrew Postgres 17 install that is `/opt/homebrew/opt/postgresql@17/bin`. |
+
+The script never prints a connection string, a username, or a password. It
+prints only the source and target host and database names, and the scratch
+database it created and dropped.
+
+Source and target may point at the same server with a distinct scratch
+database name, which is how the drill runs locally and in CI. Run it against
+the Homebrew Postgres this project uses for local development:
+
+```bash
+AGI_RESTORE_DRILL_SOURCE_URL="postgresql://neondb_owner:localdev@127.0.0.1:5432/agiworkforce_dev" \
+AGI_RESTORE_DRILL_TARGET_ADMIN_URL="postgresql://neondb_owner:localdev@127.0.0.1:5432/postgres" \
+AGI_RESTORE_DRILL_PG_BIN_DIR="/opt/homebrew/opt/postgresql@17/bin" \
+  node scripts/db-restore-drill-logical.mjs
+```
+
+### CI
+
+`.github/workflows/db-restore-drill.yml` runs the logical drill weekly
+(Monday 05:13 UTC) and on demand through `workflow_dispatch`, against a fresh
+`postgres:17` service container: it applies every migration under
+`apps/web/db/neon` through `pnpm db:migrate -- apply --target ci`, then runs
+the drill with that same container as both source and target. It does not
+touch the Neon drill's triggers or the Neon drill itself. No seed script for
+the core tables exists yet, so the CI run proves the mechanism (dump, create,
+restore, presence, count and ledger comparison, drop) against an
+empty-but-migrated schema; row counts on both sides are 0 and still have to
+match, which they do. Seeding the CI schema with representative rows is open
+work, not a gap in the drill itself.
+
+## One-day host-swap procedure
+
+The P0 architecture mandate's target is a Postgres host swap provable by a
+real rehearsal, not a diagram. Today that rehearsal is this drill; the swap
+itself has one piece still open, noted below.
+
+1. **Pick the target host** and provision a database on it with the same
+   encoding and extensions the current schema expects (`apps/web/db/neon`'s
+   migrations are the source of truth for what those are).
+2. **Add an adapter, if the target is not Neon.** The application's DB client
+   (`apps/web/lib/server/neon-db.ts`) already goes through
+   `createDatabaseClient({ provider })` in `@agiworkforce/data-layer`, but
+   `DatabaseProvider` (`packages/platform/data-layer/src/types.ts`) currently
+   has one member, `'neon'`. A non-Neon target needs a second provider
+   implementation registered there before traffic can move; this drill
+   validates the data, not that abstraction.
+3. **Rotate credentials** for the new host and store them the way
+   `docs/security/key-rotation.md`'s custody inventory expects; never reuse a
+   Neon-scoped credential against a different host.
+4. **Run this drill against the new host** with `AGI_RESTORE_DRILL_SOURCE_URL`
+   pointed at the current production database and `AGI_RESTORE_DRILL_TARGET_ADMIN_URL`
+   at the new host's maintenance database. A pass proves the schema, the core
+   tables, and the migration ledger transfer cleanly; run it more than once if
+   the first attempt required schema changes.
+5. **Cut over** by pointing `AGI_DATABASE_URL` (and `AGI_DATABASE_PROVIDER`,
+   once step 2 lands) at the new host in one environment at a time, starting
+   with a preview deployment, the same escalation `scripts/verify-deployment.mjs`
+   already checks in the Neon recovery procedure above.
+
 ## Restore drill log
 
-Run the drill in `--keep` mode, do the verification step, then delete the
-branch and record the outcome here. An empty log means the procedure above
-has never been exercised against a real Neon branch.
+Run the Neon drill in `--keep` mode, do the verification step, then delete
+the branch; run the logical drill directly, it always cleans up its own
+scratch database. Record every real run here.
 
-| Date       | Recovery point | Verification result | Operator |
-| ---------- | -------------- | ------------------- | -------- |
-| _unfilled_ |                |                     |          |
+| Date       | Drill   | Recovery point / source → target                                            | Result                                                                       | Operator               |
+| ---------- | ------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------- |
+| _unfilled_ | Neon    |                                                                             |                                                                              |                        |
+| 2026-09-05 | Logical | local Postgres 17, `agiworkforce_dev` → scratch database on the same server | PASS, 1457 ms, all `CORE_TABLES` and the migration ledger (168 rows) matched | Claude Code (Sonnet 5) |
 
-`BLOCKED_BY_HUMAN`: no drill has been run. `NEON_API_KEY` and
+`BLOCKED_BY_HUMAN`: the Neon drill has never been run. `NEON_API_KEY` and
 `NEON_PROJECT_ID` are not currently provisioned in any environment this
 repository controls, so `scripts/db-restore-drill.mjs` cannot run until an
 operator creates a scoped Neon API key and records where it lives, the same
 way `docs/security/tauri-updater-key-custody.md`'s custody inventory tracks
-the updater signing key.
+the updater signing key. The logical drill has no such blocker: it ran
+against local Postgres 17 the same day this section was written, and runs
+weekly in CI against a disposable `postgres:17` container.
 
 ## Open gaps
 
@@ -146,9 +248,15 @@ the updater signing key.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.
+- `DatabaseProvider` in `packages/platform/data-layer/src/types.ts` has one
+  member, `'neon'`. The logical drill proves the data transfers; it does not
+  by itself prove the application can run against a second host, because
+  nothing in `@agiworkforce/data-layer` implements one yet.
 
 Related: `docs/security/key-rotation.md` for what a restore does to encrypted
 columns, `docs/runbooks/incident-response.md` for what paged this in the first
 place, `apps/web/db/neon/verify/README.md` for standing up a throwaway
-Postgres to test migration SQL directly. That is a different tool for a
-different question: it never talks to Neon's API.
+Postgres to test migration SQL directly (a different tool for a different
+question, it never talks to Neon's API), `scripts/lib/restore-drill-core.mjs`
+for the table list and checks both drills share, and
+`scripts/db-restore-drill-logical.mjs` for the host-neutral drill itself.
