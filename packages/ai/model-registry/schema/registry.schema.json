@@ -14,6 +14,7 @@
     "runtimeProfiles",
     "capabilities",
     "capabilityClasses",
+    "governance",
     "pricing",
     "limits",
     "benchmarks",
@@ -71,6 +72,12 @@
     },
     "capabilityClasses": {
       "$ref": "#/definitions/capabilityClasses"
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/providerGovernance"
+      }
     },
     "pricing": {
       "type": "object",
@@ -311,7 +318,7 @@
       ]
     },
     "routeDataRetention": {
-      "enum": ["zero_retention", "provider_default"]
+      "enum": ["zero_retention", "provider_default", "conditional", "unknown"]
     },
     "harnessProtocol": {
       "enum": [
@@ -540,6 +547,45 @@
         },
         "promptCaching": {
           "type": "boolean"
+        }
+      }
+    },
+    "providerGovernance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One provider's published data-governance terms. Every field is required; unknown is an explicit unknown, never a guess. source and verifiedOn are required as soon as any field carries a verified answer.",
+      "required": [
+        "dataRetentionClass",
+        "zeroDataRetentionAvailability",
+        "trainsOnInputs",
+        "residencyRegions"
+      ],
+      "properties": {
+        "dataRetentionClass": {
+          "enum": ["zero_retention", "provider_default", "conditional", "unknown"]
+        },
+        "zeroDataRetentionAvailability": {
+          "enum": ["default", "on_request", "per_request_setting", "unavailable", "unknown"]
+        },
+        "trainsOnInputs": {
+          "enum": ["never", "opt_in", "opt_out", "varies_by_route", "unknown"]
+        },
+        "residencyRegions": {
+          "type": ["array", "null"],
+          "uniqueItems": true,
+          "description": "Regions the provider offers for processing. null records an unverified fact.",
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "verifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        },
+        "note": {
+          "$ref": "#/definitions/nonEmptyString"
         }
       }
     },
