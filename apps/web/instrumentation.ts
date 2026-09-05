@@ -9,8 +9,18 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { commonInitOptions, isSentryConfigured, type TenantTaggedEvent } from './lib/sentry-shared';
+import {
+  commonInitOptions,
+  isSentryConfigured,
+  type CommonInitOptions,
+  type TenantTaggedEvent,
+} from './lib/sentry-shared';
 import { getTenantScope } from './lib/observability/trace-context';
+import { resolveOtelExportConfig } from './lib/observability/otel-config';
+import type { SentryTracingClient } from './lib/observability/otel-sdk';
+
+const NODE_RUNTIME = 'nodejs';
+const EDGE_RUNTIME = 'edge';
 
 function tagRequestOrganization(event: TenantTaggedEvent): void {
   const { organizationId } = getTenantScope();
@@ -19,7 +29,7 @@ function tagRequestOrganization(event: TenantTaggedEvent): void {
 }
 
 export async function register() {
-  if (process.env['NEXT_RUNTIME'] === 'nodejs') {
+  if (process.env['NEXT_RUNTIME'] === NODE_RUNTIME) {
     try {
       const { validateEnvironment, logValidationResults } = await import('./lib/validate-env');
       const result = validateEnvironment();
@@ -53,11 +63,23 @@ export async function register() {
     }
   }
 
-  if (
-    isSentryConfigured() &&
-    (process.env['NEXT_RUNTIME'] === 'nodejs' || process.env['NEXT_RUNTIME'] === 'edge')
-  ) {
-    Sentry.init(commonInitOptions({ tenantTagHook: tagRequestOrganization }));
+  const runtime = process.env['NEXT_RUNTIME'];
+  const otelConfig = runtime === NODE_RUNTIME ? resolveOtelExportConfig(process.env) : null;
+
+  let sentryClient: SentryTracingClient | undefined;
+  if (isSentryConfigured() && (runtime === NODE_RUNTIME || runtime === EDGE_RUNTIME)) {
+    const options: CommonInitOptions = { tenantTagHook: tagRequestOrganization };
+    if (otelConfig) {
+      options.skipOpenTelemetrySetup = true;
+      if (otelConfig.sampleRatio !== null) options.tracesSampleRate = otelConfig.sampleRatio;
+    }
+    sentryClient = Sentry.init(commonInitOptions(options)) as SentryTracingClient | undefined;
+  }
+
+  if (otelConfig) {
+    const { startOtelSdk } = await import('./lib/observability/otel-sdk');
+    startOtelSdk(otelConfig, sentryClient);
+    if (sentryClient) Sentry.validateOpenTelemetrySetup();
   }
 }
 

@@ -93,6 +93,11 @@ export const contracts = {
       'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
       'AGI_RATE_LIMIT_SCALE',
       'PAGER_WEBHOOK_URL',
+      'AGI_OTEL_EXPORTER_ENDPOINT',
+      'AGI_OTEL_SERVICE_NAME',
+      'AGI_OTEL_HEADERS',
+      'AGI_OTEL_SAMPLE_RATIO',
+      'OTEL_SERVICE_NAME',
     ],
     urlKeys: ['NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SANDBOX_ORIGIN'],
   },
@@ -180,9 +185,11 @@ const platformProvidedKeys = new Set([
   'PATHEXT',
   'SHELL',
   'TERM',
+  'VERCEL',
   'VERCEL_DEPLOYMENT_ID',
   'VERCEL_ENV',
   'VERCEL_GIT_COMMIT_SHA',
+  'VERCEL_REGION',
   'GITHUB_SHA',
 ]);
 
