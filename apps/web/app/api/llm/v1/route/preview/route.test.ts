@@ -54,6 +54,8 @@ const affinityMocks = vi.hoisted(() => ({
   getServedRouteAffinity: vi.fn(async (): Promise<ServedRouteAffinityLike | null> => null),
 }));
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: vi.fn(async () => ({})),
+  providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   getServedRouteAffinity: affinityMocks.getServedRouteAffinity,
   getRouteHealthSnapshot: vi.fn(async () => ({})),
 }));

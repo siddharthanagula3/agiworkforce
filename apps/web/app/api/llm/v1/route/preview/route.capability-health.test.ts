@@ -30,6 +30,8 @@ vi.mock('@/lib/services/organization-policy-gate', () => ({
 }));
 
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: vi.fn(async () => ({})),
+  providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   getServedRouteAffinity: vi.fn(async () => null),
   getRouteHealthSnapshot: vi.fn(async () => ({})),
 }));

@@ -262,6 +262,17 @@ export interface ObservedRouteHealth {
    * list only sinks it below a peer that can still do the job.
    */
   unhonouredCapabilities?: readonly IntrinsicCapability[];
+  /**
+   * The credential this route dispatches on has no money left, from the
+   * credential scope of the route health store.
+   *
+   * Unlike everything else on this record it does not rank, it parks: a route
+   * whose account is empty is treated exactly as an open breaker is, so the
+   * resolver walks to a funded slot first and only serves from this one if
+   * nothing else is dispatchable. The state is per credential, and the surface
+   * that owns the store fans it out to that provider's routes.
+   */
+  credentialUnfunded?: boolean;
 }
 
 export interface AutoFallbackRoute {
@@ -694,6 +705,7 @@ function observedBand(value: number | undefined, width: number, maximum: number)
  */
 export function observedRouteHealthFromSnapshots(
   snapshots: Readonly<Record<string, RouteHealthSnapshot>> | undefined,
+  unfundedRouteIds?: ReadonlySet<string>,
 ): Readonly<Record<string, ObservedRouteHealth>> {
   const observed: Record<string, ObservedRouteHealth> = {};
   for (const [routeId, snapshot] of Object.entries(snapshots ?? {})) {
@@ -702,6 +714,13 @@ export function observedRouteHealthFromSnapshots(
       ...(snapshot.successRate !== undefined ? { failureRate: 1 - snapshot.successRate } : {}),
       ...(snapshot.ttftP50Ms !== undefined ? { latencyP50Ms: snapshot.ttftP50Ms } : {}),
     };
+  }
+  // Added after the sample-count filter above, and to routes that filter
+  // dropped: an unfunded account is a fact about the credential, not a
+  // measurement of the route, so a route that has never been tried on that
+  // credential is exactly as unable to serve as one with a long history.
+  for (const routeId of unfundedRouteIds ?? []) {
+    observed[routeId] = { ...observed[routeId], credentialUnfunded: true };
   }
   return observed;
 }
@@ -799,6 +818,20 @@ function routeIsHealthy(
   const state = request.runtimeState;
   if (!state) return true;
   return effectiveRouteHealth(state, routeId, route.provider).available;
+}
+
+/**
+ * Deliberately NOT part of `routeHasCredential`, which answers whether the
+ * surface holds a key for this provider at all. The key here is present and
+ * valid, the account behind it is empty, and the two want different repairs.
+ *
+ * Independent of `enableObservedHealthRanking` for the same reason
+ * `unhonouredCapabilityPenalty` is: the flag guards bands that reorder healthy
+ * routes on measurement noise, while this is a recorded fact about whether the
+ * route can serve at all.
+ */
+function routeCredentialIsUnfunded(routeId: string, request: AutoRoutingRequest): boolean {
+  return request.observedRouteHealth?.[routeId]?.credentialUnfunded === true;
 }
 
 function routeHasCredential(route: RegistryRoute, request: AutoRoutingRequest): boolean {
@@ -1022,7 +1055,8 @@ function evaluateEligibility(
       routeId,
       route,
       expectedCents: routeExpectedCents(routeId, route, request),
-      healthy: routeIsHealthy(routeId, route, request),
+      healthy:
+        routeIsHealthy(routeId, route, request) && !routeCredentialIsUnfunded(routeId, request),
       hasCredential: routeHasCredential(route, request),
       observedPenalty: observedRoutePenalty(
         request.observedRouteHealth?.[routeId],
