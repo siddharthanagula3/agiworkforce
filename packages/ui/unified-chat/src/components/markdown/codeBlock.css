@@ -1,33 +1,47 @@
+.code-block-container {
+  border-radius: var(--chat-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--chat-code-border);
+}
+
+.code-block-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 8px 0 16px;
+  background-color: var(--chat-code-header-bg);
+  border-bottom: 1px solid var(--chat-code-border);
+}
+
+.code-block-lang-label {
+  color: var(--chat-code-lang-label);
+  font-family: var(--chat-font-mono);
+  font-size: 12px;
+  text-transform: lowercase;
+}
+
+.code-block-body {
+  background-color: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.code-block-body pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.code-block-body code {
+  font-size: 13px;
+  line-height: 20px;
+}
+
 @layer base {
-  :where(.code-block-container) {
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--chat-code-border);
-  }
-
-  :where(.code-block-header-bar) {
-    background-color: var(--chat-code-header-bg);
-    border-bottom: 1px solid var(--chat-code-border);
-  }
-
-  :where(.code-block-lang-label) {
-    color: var(--chat-code-lang-label);
-    font-family: var(--chat-font-mono);
-    font-size: 12px;
-    text-transform: lowercase;
-  }
-
-  :where(.code-block-body) {
-    background-color: var(--chat-code-bg);
-    color: var(--chat-code-text);
-  }
-
-  :where(.code-block-body) :where(pre) {
-    margin: 0;
-    padding: 1rem;
-    overflow-x: auto;
-  }
-
   :where(.shiki-token) {
     color: var(--shiki-light);
     background-color: var(--shiki-light-bg, transparent);
