@@ -103,9 +103,9 @@ describe('ProductFrame façade', () => {
     const desktop = render(
       <ProductFrame variant="desktop" title="AGI Desktop" badge="BYOK" routeMode="byok" />,
     );
-    expect(desktop.container.textContent).toContain('What can I help with, BYOK?');
-    expect(desktop.container.textContent).toContain('Select provider model');
-    expect(desktop.container.textContent).not.toContain('What can I help with, Local?');
+    expect(desktop.container.textContent).toContain('Served by BYOK · your provider');
+    expect(desktop.container.textContent).toContain('billed to your key');
+    expect(desktop.container.textContent).not.toContain('Served by Local');
 
     const terminal = render(
       <ProductFrame variant="terminal" title="agi · zsh" badge="BYOK" routeMode="byok" />,
@@ -129,8 +129,8 @@ describe('one canonical look per surface, everywhere', () => {
     const frame = render(<ProductFrame variant="phone" title="AGI Mobile" badge="Local" />);
     for (const target of [mockup, frame]) {
       const html = target.container.innerHTML;
-      expect(html).toContain('How can I help you tonight?');
-      expect(html).toContain("What's on your mind?");
+      expect(html).toContain('From your memory');
+      expect(html).toContain('Message AGI…');
       expect(html).toContain('AGI Standard');
       expect(target.container.querySelector('[data-geometry="270x585"]')).not.toBeNull();
     }
@@ -168,9 +168,9 @@ describe('previously clipped strings render in full', () => {
   it('web window renders the full composer strings', () => {
     const { container } = render(<WebWindow />);
     const html = container.innerHTML;
-    expect(html).toContain('Ask me anything…');
-    expect(html).toContain('Auto (Best Value)');
+    expect(html).toContain('Ask a follow-up…');
+    expect(html).toContain('Searched the web');
     expect(html).toContain('Enter to send · Shift+Enter for newline');
-    expect(html).toContain('0 / 128,000');
+    expect(html).toContain('3,740 / 128,000');
   });
 });
