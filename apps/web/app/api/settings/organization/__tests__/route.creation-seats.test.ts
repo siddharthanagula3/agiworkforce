@@ -19,7 +19,10 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'team-owner' })),
 }));
-vi.mock('@shared/utils/env', () => ({ requireEnv: vi.fn(() => 'sk_test_dummy') }));
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/utils/env')>()),
+  requireEnv: vi.fn(() => 'sk_test_dummy'),
+}));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   getTeamAdminAccess: (...args: unknown[]) => mockTeamAccess(...args),
   requireTeamAdminAccess: (...args: unknown[]) => mockTeamAccess(...args),

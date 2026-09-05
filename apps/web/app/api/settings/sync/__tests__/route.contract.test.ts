@@ -32,6 +32,8 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: mockInvalidateActiveOrganizationCache,
+  getCachedActiveOrganizationId: vi.fn(),
+  setCachedActiveOrganizationId: vi.fn(),
 }));
 
 import { GET, POST } from '../route';

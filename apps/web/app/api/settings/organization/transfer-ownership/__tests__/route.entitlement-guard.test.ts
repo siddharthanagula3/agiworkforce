@@ -21,12 +21,19 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: vi.fn(async () => undefined),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'current-owner' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({ requireTeamAdminAccess }));
-vi.mock('@/lib/services/org-entitlements', () => ({ resolveUserPersonalPlanTier }));
+vi.mock('@/lib/services/org-entitlements', () => ({
+  resolveUserPersonalPlanTier,
+  resolveOrganizationEntitlementPlan: vi.fn(),
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockQuery(...args),
