@@ -10,11 +10,9 @@ import {
 import {
   MODEL_PICKER_FAVOURITES_LIMIT,
   MODEL_PICKER_GUIDANCE,
-  MODEL_PICKER_PRICE_BAND_SCALE,
   MODEL_PICKER_RECOMMENDED_LIMIT,
   buildModelPickerShortList,
   getModelPriceBand,
-  resolveModelPriceBands,
   resolvePlanLockLabel,
   type ModelPickerShortListInput,
   type ModelPickerSourceModel,
@@ -50,6 +48,7 @@ function build(overrides: Partial<ModelPickerShortListInput> = {}) {
     planTier: 'max',
     favouriteModelIds: [],
     conversationModelId: null,
+    selectedModelId: '',
     admitsModel: () => true,
     autoGuidance: AUTO_GUIDANCE,
     autoContinuityGuidance,
@@ -142,7 +141,7 @@ describe('buildModelPickerShortList', () => {
 
   it('drops a model no plan admits from both layers rather than labelling it', () => {
     const unlockable = listCanonicalModels().find(
-      (model) => getMinimumRequiredTier(model.id) === null,
+      (model) => getMinimumRequiredTier(model.id) === null && !familyActiveIds.includes(model.id),
     );
     expect(unlockable).toBeDefined();
     const shortList = build({
@@ -172,47 +171,26 @@ describe('buildModelPickerShortList', () => {
     expect(wide).toEqual(getModelPriceBand(target.id));
   });
 
+  it('surfaces the selected model as its own row when the cap would hide it', () => {
+    const beyondCap = familySources[MODEL_PICKER_RECOMMENDED_LIMIT + 1];
+    expect(beyondCap).toBeDefined();
+    const shortList = build({ selectedModelId: beyondCap!.id });
+    expect(shortList.recommended.map((row) => row.id)).not.toContain(beyondCap!.id);
+    expect(shortList.current?.id).toBe(beyondCap!.id);
+  });
+
+  it('leaves current empty when the selected model is already on the short list', () => {
+    const shown = build().recommended[0]!;
+    expect(build({ selectedModelId: shown.id }).current).toBeNull();
+    expect(build({ selectedModelId: autoSource.id }).current).toBeNull();
+  });
+
   it('reads capability glyphs off the registry entry', () => {
     const shortList = build();
     for (const row of shortList.recommended) {
       const capabilities = getModelMetadataById(row.id)!.capabilities;
       for (const key of row.capabilityKeys) expect(capabilities[key]).toBe(true);
     }
-  });
-});
-
-describe('resolveModelPriceBands', () => {
-  it('stays inside the scale and puts the cheapest model below the dearest', () => {
-    const ids = familySources.map((model) => model.id);
-    const bands = resolveModelPriceBands(ids);
-    expect(bands.size).toBeGreaterThan(0);
-    for (const band of bands.values()) {
-      expect(band.scale).toBe(MODEL_PICKER_PRICE_BAND_SCALE);
-      expect(band.filled).toBeGreaterThanOrEqual(1);
-      expect(band.filled).toBeLessThanOrEqual(MODEL_PICKER_PRICE_BAND_SCALE);
-    }
-    const priced = ids
-      .map((id) => ({
-        id,
-        cost: getModelMetadataById(id)!.inputCost + getModelMetadataById(id)!.outputCost,
-      }))
-      .sort((left, right) => left.cost - right.cost);
-    const cheapest = priced[0]!;
-    const dearest = priced[priced.length - 1]!;
-    expect(bands.get(cheapest.id)!.filled).toBeLessThanOrEqual(bands.get(dearest.id)!.filled);
-  });
-
-  it('gives models of equal price the same band', () => {
-    const byCost = new Map<number, string[]>();
-    for (const model of listCanonicalModels()) {
-      const cost = model.inputCost + model.outputCost;
-      byCost.set(cost, [...(byCost.get(cost) ?? []), model.id]);
-    }
-    const shared = [...byCost.values()].find((ids) => ids.length > 1);
-    expect(shared).toBeDefined();
-    const bands = resolveModelPriceBands(listCanonicalModels().map((model) => model.id));
-    const filled = shared!.map((id) => bands.get(id)!.filled);
-    expect(new Set(filled).size).toBe(1);
   });
 });
 

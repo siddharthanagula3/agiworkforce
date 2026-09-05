@@ -179,6 +179,43 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('../StyleSelector', () => ({ StyleSelector: () => <div /> }));
+const CATALOGUE_ENTRIES = vi.hoisted(() => [
+  {
+    id: 'future-preview-model',
+    displayName: 'Future Preview Model',
+    provider: 'openai',
+    family: null,
+    isRouter: false,
+    releasedOn: null,
+    stage: null,
+    openWeight: false,
+    contextTokens: null,
+    maxOutputTokens: null,
+    inputPerMillion: 0,
+    outputPerMillion: 0,
+    priceBand: null,
+    capabilities: {},
+    admitted: true,
+    minimumPlanLabel: null,
+    availability: 'coming_soon',
+    requiresEnvironment: null,
+  },
+]);
+
+vi.mock('@features/chat/lib/use-model-catalogue', () => ({
+  useModelCatalogue: () => ({
+    status: 'ready',
+    entries: CATALOGUE_ENTRIES,
+    providers: [{ key: 'openai', admittedCount: 1, totalCount: 1 }],
+    count: CATALOGUE_ENTRIES.length,
+    planLabel: 'Max 15x',
+  }),
+}));
+
+vi.mock('@features/chat/lib/use-model-favourites', () => ({
+  useModelFavourites: () => ({ favouriteModelIds: [], toggleFavourite: vi.fn() }),
+}));
+
 vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, conversations: [], messages: [] }),
@@ -405,8 +442,8 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
     fireEvent.click(screen.getByRole('button', { name: /all models/i }));
-    const row = screen.getByRole('button', {
-      name: /future preview model.*not yet available/i,
+    const row = screen.getByRole('option', {
+      name: /future preview model.*coming soon/i,
     });
     expect(row).toBeDisabled();
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
