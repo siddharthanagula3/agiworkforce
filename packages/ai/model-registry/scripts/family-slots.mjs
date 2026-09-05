@@ -17,10 +17,16 @@ import {
   buildPromotion,
   evaluateFamily,
 } from './families.mjs';
+import { LIFECYCLE_STAGE, stageAtOrAfter, stageTransitionRejection } from './lifecycle-stages.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(SCRIPT_DIR, '..');
 const CATALOG_FILE = path.join(FAMILY_CATALOG_DIR, FAMILY_CATALOG_FILE);
+const CURATION_FILE = path.join(FAMILY_CATALOG_DIR, 'models.curation.json');
+const RETIRED_FILE = path.join(FAMILY_CATALOG_DIR, 'retired-models.json');
+const PROBES_FILE = path.join(FAMILY_CATALOG_DIR, 'probes.json');
+const ANSWERED_PROBE_OUTCOME = 'answered';
+const EVALUATION_FLOOR_STAGE = LIFECYCLE_STAGE.evaluated;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -102,28 +108,71 @@ function verifyRegistry() {
   return runGate('registrySuite', process.execPath, ['--test', ...testFiles()]);
 }
 
-async function writeCatalog(catalog) {
-  const config = (await prettier.resolveConfig(CATALOG_FILE)) ?? {};
-  const text = await prettier.format(JSON.stringify(catalog), {
-    ...config,
-    parser: 'json',
-    filepath: CATALOG_FILE,
-  });
-  fs.writeFileSync(CATALOG_FILE, text);
+function readJson(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-async function commitCatalog(nextCatalog, previousText) {
-  await writeCatalog(nextCatalog);
+async function writeJson(file, value) {
+  const config = (await prettier.resolveConfig(file)) ?? {};
+  fs.writeFileSync(
+    file,
+    await prettier.format(JSON.stringify(value), { ...config, parser: 'json', filepath: file }),
+  );
+}
+
+/**
+ * Every authored file this tool touches moves together or not at all. A
+ * lifecycle stage that advanced while the slot it justifies was reverted would
+ * be a claim about a promotion that did not happen.
+ */
+async function commitEdits(edits) {
+  const previous = edits.map(({ file }) => [file, fs.readFileSync(file, 'utf8')]);
+  for (const { file, value } of edits) await writeJson(file, value);
   const verdict = verifyRegistry();
   if (!verdict.passed) {
-    fs.writeFileSync(CATALOG_FILE, previousText);
+    for (const [file, text] of previous) fs.writeFileSync(file, text);
     execFileSync(process.execPath, ['scripts/compile.mjs'], { cwd: PACKAGE_ROOT, stdio: 'pipe' });
-    console.error('[families] ✗ gate failed; family catalog reverted and registry regenerated.');
+    console.error('[families] ✗ gate failed; authored catalog reverted and registry regenerated.');
     console.error(verdict.detail);
     process.exitCode = 1;
     return false;
   }
   return true;
+}
+
+/**
+ * A promotion claims two things about a model: that it was measured, and that
+ * it answers. Both are recorded elsewhere, so both are checked here rather than
+ * assumed. Evaluation is the stage floor, sourced scores being what the stage
+ * stands for; the probe record is the second, because a model can be scored on
+ * a page and still be unreachable from this account.
+ */
+export function lifecycleRefusals(modelKey, curation, probeFile, target) {
+  const model = curation.models[modelKey];
+  if (!model) return [`${modelKey} is not in the curation catalog`];
+  const stage = model.lifecycle?.stage;
+  const refusals = [];
+  if (!stageAtOrAfter(stage, EVALUATION_FLOOR_STAGE)) {
+    refusals.push(
+      `${modelKey} is at lifecycle stage ${stage} and has not passed ${EVALUATION_FLOOR_STAGE}`,
+    );
+  }
+  const transition = stageTransitionRejection(modelKey, stage, target);
+  if (transition) refusals.push(transition);
+  if (probeFile?.probes?.[modelKey]?.outcome !== ANSWERED_PROBE_OUTCOME) {
+    refusals.push(
+      `${modelKey} has no answered probe in ${path.relative(PACKAGE_ROOT, PROBES_FILE)}; run \`pnpm probe:models\` first`,
+    );
+  }
+  return refusals;
+}
+
+function readProbeFile() {
+  return fs.existsSync(PROBES_FILE) ? readJson(PROBES_FILE) : { probes: {} };
+}
+
+export function stagedModel(model, stage, stagedOn, source) {
+  return { ...model, lifecycle: { stage, stagedOn, source } };
 }
 
 function evaluateAll() {
@@ -164,8 +213,19 @@ async function promote(args) {
     return;
   }
 
-  const previousText = fs.readFileSync(CATALOG_FILE, 'utf8');
+  const curation = readJson(CURATION_FILE);
+  const probeFile = readProbeFile();
+  const refusals = targets.flatMap((decision) =>
+    lifecycleRefusals(decision.promotable.modelKey, curation, probeFile, LIFECYCLE_STAGE.promoted),
+  );
+  if (refusals.length > 0) {
+    for (const refusal of refusals) console.error(`[families] ✗ ${refusal}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const next = { ...familyCatalog, families: { ...familyCatalog.families } };
+  const nextCuration = { ...curation, models: { ...curation.models } };
   for (const decision of targets) {
     const family = next.families[decision.familyId];
     const promotion = buildPromotion(
@@ -177,6 +237,12 @@ async function promote(args) {
       now,
     );
     next.families[decision.familyId] = applyPromotion(family, promotion, familyCatalog.policy);
+    nextCuration.models[promotion.modelKey] = stagedModel(
+      nextCuration.models[promotion.modelKey],
+      LIFECYCLE_STAGE.promoted,
+      now,
+      `${path.relative(PACKAGE_ROOT, CATALOG_FILE)}#${decision.familyId}`,
+    );
     console.log(
       `[families] ${apply ? 'promote' : 'would promote'} ${decision.familyId}: ${family.active.modelKey} → ${promotion.modelKey}`,
     );
@@ -185,7 +251,12 @@ async function promote(args) {
     console.log('[families] dry run, pass --apply to write and verify');
     return;
   }
-  if (await commitCatalog(next, previousText)) {
+  if (
+    await commitEdits([
+      { file: CATALOG_FILE, value: next },
+      { file: CURATION_FILE, value: nextCuration },
+    ])
+  ) {
     console.log(`[families] ✓ ${targets.length} promotion(s) applied and verified`);
   }
 }
@@ -211,7 +282,6 @@ async function rollback(args) {
     process.exitCode = 1;
     return;
   }
-  const previousText = fs.readFileSync(CATALOG_FILE, 'utf8');
   const rolled = applyRollback(
     family,
     reason ?? `rollback from ${family.active.modelKey} to ${family.previous.modelKey}`,
@@ -226,7 +296,7 @@ async function rollback(args) {
     return;
   }
   const next = { ...familyCatalog, families: { ...familyCatalog.families, [only]: rolled } };
-  if (await commitCatalog(next, previousText)) {
+  if (await commitEdits([{ file: CATALOG_FILE, value: next }])) {
     console.log(`[families] ✓ ${only} rolled back and verified`);
   }
 }
@@ -241,7 +311,75 @@ function status() {
   }
 }
 
-const COMMANDS = { evaluate, promote, rollback, status };
+/**
+ * Retirement in two deliberate moves. `--model <key>` deprecates: the model
+ * stays in the catalog, still resolvable, and announces that it is going away.
+ * `--remove` then takes it out of the roster and into retired-models.json,
+ * which is what makes reintroducing the id fail. A model may not skip the
+ * announcement: the transition table refuses removal from any other stage.
+ */
+async function retire(args) {
+  const modelKey = argValue(args, '--model');
+  const remove = args.includes('--remove');
+  const apply = args.includes('--apply');
+  const now = today();
+  if (!modelKey) {
+    console.error('[families] retire requires --model <modelKey>');
+    process.exitCode = 1;
+    return;
+  }
+
+  const curation = readJson(CURATION_FILE);
+  const model = curation.models[modelKey];
+  const target = remove ? LIFECYCLE_STAGE.removed : LIFECYCLE_STAGE.deprecated;
+  if (!model) {
+    console.error(`[families] unknown model ${modelKey}`);
+    process.exitCode = 1;
+    return;
+  }
+  const refusal = stageTransitionRejection(modelKey, model.lifecycle?.stage, target);
+  if (refusal) {
+    console.error(`[families] ✗ ${refusal}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(
+    `[families] ${apply ? 'retire' : 'would retire'} ${modelKey}: ${model.lifecycle?.stage} → ${target}`,
+  );
+  if (!apply) {
+    console.log('[families] dry run, pass --apply to write and verify');
+    return;
+  }
+
+  const edits = [];
+  if (remove) {
+    const nextModels = { ...curation.models };
+    delete nextModels[modelKey];
+    const retired = readJson(RETIRED_FILE);
+    const retiredIds = [...new Set([...retired.retiredModelIds, modelKey])];
+    edits.push({ file: CURATION_FILE, value: { ...curation, models: nextModels } });
+    edits.push({ file: RETIRED_FILE, value: { ...retired, retiredModelIds: retiredIds } });
+  } else {
+    const source = `${path.relative(PACKAGE_ROOT, CURATION_FILE)}#${modelKey}.deprecation_date`;
+    const deprecated = stagedModel(
+      { ...model, deprecated: true, deprecation_date: model.deprecation_date ?? now },
+      target,
+      now,
+      source,
+    );
+    edits.push({
+      file: CURATION_FILE,
+      value: { ...curation, models: { ...curation.models, [modelKey]: deprecated } },
+    });
+  }
+
+  if (await commitEdits(edits)) {
+    console.log(`[families] ✓ ${modelKey} is ${target} and verified`);
+  }
+}
+
+const COMMANDS = { evaluate, promote, rollback, retire, status };
 
 async function main() {
   const args = process.argv.slice(2);
