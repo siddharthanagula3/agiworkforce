@@ -18,6 +18,16 @@ vi.mock('@/lib/server/neon-db', () => ({
     query: (...args: unknown[]) => mocks.query(...args),
   })),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.query(...args),
+    },
+    userId: 'user-1',
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -31,7 +41,7 @@ vi.mock('@/lib/github-app', () => ({
 }));
 
 import { GET } from './route';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { IpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 describe('GitHub installation listing ownership proof', () => {
@@ -137,7 +147,7 @@ describe('GitHub installation listing ownership proof', () => {
   });
 
   it('surfaces an ip allow list denial as a 403 instead of a bare unauthorized', async () => {
-    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new IpNotAllowedError('network not allowed'));
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(new IpNotAllowedError('network not allowed'));
 
     const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
 

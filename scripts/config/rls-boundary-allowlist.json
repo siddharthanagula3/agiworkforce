@@ -50,14 +50,6 @@
       "reason": "pending scoped migration"
     },
     {
-      "path": "apps/web/app/api/connectors/custom/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/connectors/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/app/api/control-plane/status/route.ts",
       "reason": "pending scoped migration"
     },
@@ -91,10 +83,6 @@
     },
     {
       "path": "apps/web/app/api/feedback/route.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/app/api/github/installations/route.ts",
       "reason": "pending scoped migration"
     },
     {

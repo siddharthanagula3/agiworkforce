@@ -1,16 +1,19 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { GitHubInstallationRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
+
+const GITHUB_SCOPE = { resolveOrganization: false } as const;
+
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -41,8 +44,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   let userId: string;
+  let db: ScopedDb;
   try {
-    ({ userId } = await getClerkAuthUser(request));
+    ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -53,8 +57,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isGitHubInstallationLinkingAvailable()) {
     return NextResponse.json({ installations: [] });
   }
-
-  const db = getNeonDb();
 
   let installations: GitHubInstallationRow[];
   try {
@@ -102,16 +104,15 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   if (csrfError) return csrfError as NextResponse;
 
   let userId: string;
+  let db: ScopedDb;
   try {
-    ({ userId } = await getClerkAuthUser(request));
+    ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const db = getNeonDb();
 
   let installationId: number;
   try {
