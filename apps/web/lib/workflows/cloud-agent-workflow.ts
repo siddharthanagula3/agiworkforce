@@ -179,6 +179,7 @@ const CollectedProviderLineSchema = z
     reasoningDelta: z.string().optional(),
     serverToolStart: ServerToolStartSignalSchema.optional(),
     serverToolResults: z.array(ServerToolResultSignalSchema).optional(),
+    searchActivity: z.boolean().optional(),
   })
   .strict();
 const collectedProviderLineSchemaCoversLine: SameKeys<

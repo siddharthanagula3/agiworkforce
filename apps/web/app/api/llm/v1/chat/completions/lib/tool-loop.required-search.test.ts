@@ -155,8 +155,8 @@ describe('runToolLoop, required web search', () => {
 
     const requests = stepRequests();
     expect(requests).toHaveLength(2);
-    expect(requests[0]?.tool_choice).toEqual(SEARCH_TOOL_CHOICE);
-    expect(requests[1]?.tool_choice).toBe('auto');
+    expect(requests[0]?.['tool_choice']).toEqual(SEARCH_TOOL_CHOICE);
+    expect(requests[1]?.['tool_choice']).toBe('auto');
   });
 
   it('discards a memory answer and asks once more when search can only be requested', async () => {
@@ -177,7 +177,7 @@ describe('runToolLoop, required web search', () => {
     expect(output).not.toContain('From what I recall');
     expect(output).toContain('Per Reuters');
 
-    const retryMessages = stepRequests()[1]?.messages as Array<{ content: string }>;
+    const retryMessages = stepRequests()[1]?.['messages'] as Array<{ content: string }>;
     expect(retryMessages.at(-1)?.content).toBe(REQUIRED_SEARCH_RETRY_DIRECTIVE);
   });
 
