@@ -1,5 +1,6 @@
 import { Header } from '@shared/components/layout/Header';
 import './legacy-landing.css';
+import './motion/motion.css';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { HeroAppWindow } from '@/features/marketing/components/HeroAppWindow';
 import { MobileHeroVisual } from '@/features/marketing/components/MobileHeroVisual';
