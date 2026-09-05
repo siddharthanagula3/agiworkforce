@@ -8,6 +8,7 @@ import {
   listCanonicalModels,
   modelsCatalogJson as modelsData,
   type ModelMetadata,
+  type ModelCapabilities as CatalogModelCapabilities,
 } from '@agiworkforce/types';
 import {
   getProviderAvailabilityMap,
@@ -16,16 +17,17 @@ import {
 
 export const runtime = 'nodejs';
 
-interface ModelCapabilities {
-  vision: boolean;
-  tools: boolean;
-  streaming: boolean;
-  thinking: boolean;
-  imageGen: boolean;
-  videoGen: boolean;
-  codeExecution: boolean;
-  search: boolean;
-}
+type ModelCapabilities = Pick<
+  CatalogModelCapabilities,
+  | 'vision'
+  | 'tools'
+  | 'streaming'
+  | 'thinking'
+  | 'imageGen'
+  | 'videoGen'
+  | 'codeExecution'
+  | 'search'
+>;
 
 interface ModelInputTokenPricingTier {
   thresholdTokens: number;

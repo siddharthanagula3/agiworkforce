@@ -31,22 +31,10 @@ import {
   providerLabels,
   type ModelReasoning,
   type ModelAvailability,
+  type ModelCapabilities,
 } from '@agiworkforce/types';
 
-export interface ModelCapabilities {
-  streaming: boolean;
-  tools: boolean;
-  vision: boolean;
-  json: boolean;
-  thinking: boolean;
-  computerUse: boolean;
-  agentic: boolean;
-  imageGen: boolean;
-  videoGen: boolean;
-  search: boolean;
-  research: boolean;
-  codeExecution: boolean;
-}
+export type { ModelCapabilities };
 
 export interface ModelMetadata {
   id: string;
