@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ToolApprovalRequest } from '@agiworkforce/types';
-import { Loader2, Mic2, ShieldAlert } from 'lucide-react';
+import { Loader2, Mic2, PauseCircle, ShieldAlert } from 'lucide-react';
 
 import {
   describeApprovalReason,
@@ -11,6 +11,9 @@ import {
 export interface CloudVoiceActionDialogProps {
   action: string | null;
   approval?: ToolApprovalRequest | null;
+  /** Set while the task has stopped on one step and is holding for an answer. */
+  isPaused?: boolean;
+  isResolvingConfirmation?: boolean;
   error: string | null;
   isExecuting: boolean;
   isStopping: boolean;
@@ -19,11 +22,15 @@ export interface CloudVoiceActionDialogProps {
   onApprove: () => void;
   onUseAsText: () => void;
   onCancel: () => void | Promise<void>;
+  onApproveStep?: (rememberForSession: boolean) => void;
+  onDenyStep?: () => void;
 }
 
 export function CloudVoiceActionDialog({
   action,
   approval = null,
+  isPaused = false,
+  isResolvingConfirmation = false,
   error,
   isExecuting,
   isStopping,
@@ -32,16 +39,22 @@ export function CloudVoiceActionDialog({
   onApprove,
   onUseAsText,
   onCancel,
+  onApproveStep,
+  onDenyStep,
 }: CloudVoiceActionDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const approveButtonRef = useRef<HTMLButtonElement>(null);
   const onCancelRef = useRef(onCancel);
   const isStoppingRef = useRef(isStopping);
+  const [rememberForSession, setRememberForSession] = useState(false);
+  const rememberFieldId = useId();
   onCancelRef.current = onCancel;
   isStoppingRef.current = isStopping;
-  const isOpen = Boolean(action);
+  const isOpen = Boolean(action) || isPaused;
   const refusedByHarness = approval !== null && !isApprovalAnswerable(approval);
+  const stepApproval = isPaused && approval !== null ? approval : null;
+  const canRememberStep = stepApproval?.rememberable === true;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -98,7 +111,7 @@ export function CloudVoiceActionDialog({
     };
   }, [isExecuting, isOpen, isRecovery]);
 
-  if (!action) return null;
+  if (!isOpen) return null;
 
   return (
     <div
@@ -125,22 +138,30 @@ export function CloudVoiceActionDialog({
           </div>
           <div className="min-w-0 flex-1">
             <h2 id="cloud-voice-action-title" className="text-base font-semibold">
-              {isRecovery ? 'Stop previous desktop action' : 'Review voice action'}
+              {stepApproval
+                ? 'Confirm this step'
+                : isRecovery
+                  ? 'Stop previous desktop action'
+                  : 'Review voice action'}
             </h2>
             <p
               id="cloud-voice-action-description"
               className="mt-1 text-sm text-[var(--chat-text-secondary)]"
             >
-              {isRecovery
-                ? 'Native desktop control has not confirmed shutdown. New actions remain blocked until Stop is acknowledged.'
-                : 'AGI understood this as a request to control your desktop. Nothing runs until you approve it.'}
+              {stepApproval
+                ? 'Desktop control paused on this step and is holding until you answer. Nothing else runs meanwhile.'
+                : isRecovery
+                  ? 'Native desktop control has not confirmed shutdown. New actions remain blocked until Stop is acknowledged.'
+                  : 'AGI understood this as a request to control your desktop. Nothing runs until you approve it.'}
             </p>
           </div>
         </div>
 
-        <div className="my-4 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3 text-sm leading-6">
-          {action}
-        </div>
+        {action && (
+          <div className="my-4 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3 text-sm leading-6">
+            {action}
+          </div>
+        )}
 
         {approval && (
           <div
@@ -148,7 +169,11 @@ export function CloudVoiceActionDialog({
             className="mb-4 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3"
           >
             <div className="flex items-center gap-2 text-xs font-medium text-[var(--chat-text-primary)]">
-              <ShieldAlert aria-hidden="true" size={14} />
+              {stepApproval ? (
+                <PauseCircle aria-hidden="true" size={14} />
+              ) : (
+                <ShieldAlert aria-hidden="true" size={14} />
+              )}
               <span>{describeApprovalRisk(approval)}</span>
               <span className="text-[var(--chat-text-muted)]">{approval.tool}</span>
             </div>
@@ -158,59 +183,124 @@ export function CloudVoiceActionDialog({
           </div>
         )}
 
-        <p className="text-xs leading-5 text-[var(--chat-text-muted)]">
-          {isRecovery
-            ? "This recovery view does not reveal the previous account's instruction. Retry Stop to release desktop control safely."
-            : 'Running allows AGI to capture the screen and interact with apps for this task. Sensitive or destructive steps remain subject to native safety checks.'}
-        </p>
+        {stepApproval && (
+          <>
+            <p className="text-xs leading-5 text-[var(--chat-text-muted)]">
+              Approving runs only this step and lets the task carry on. Denying ends the task
+              without running it, and so does leaving it unanswered.
+            </p>
+            {canRememberStep && (
+              <label
+                htmlFor={rememberFieldId}
+                className="mt-3 flex items-center gap-2 text-xs text-[var(--chat-text-secondary)]"
+              >
+                <input
+                  id={rememberFieldId}
+                  type="checkbox"
+                  checked={rememberForSession}
+                  disabled={isResolvingConfirmation}
+                  onChange={(event) => setRememberForSession(event.target.checked)}
+                />
+                Do not ask again for this action while this session lasts
+              </label>
+            )}
+            {error && (
+              <p
+                role="alert"
+                className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500"
+              >
+                {error}
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                ref={cancelButtonRef}
+                type="button"
+                onClick={() => onDenyStep?.()}
+                disabled={isResolvingConfirmation}
+                className="rounded-lg px-3 py-2 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] disabled:opacity-50"
+              >
+                Deny
+              </button>
+              <button
+                ref={approveButtonRef}
+                type="button"
+                onClick={() => onApproveStep?.(canRememberStep && rememberForSession)}
+                disabled={isResolvingConfirmation}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {isResolvingConfirmation && (
+                  <Loader2 aria-hidden="true" size={15} className="animate-spin" />
+                )}
+                Approve
+              </button>
+            </div>
+          </>
+        )}
 
-        {error && (
+        {!stepApproval && (
+          <p className="text-xs leading-5 text-[var(--chat-text-muted)]">
+            {isRecovery
+              ? "This recovery view does not reveal the previous account's instruction. Retry Stop to release desktop control safely."
+              : 'Running allows AGI to capture the screen and interact with apps for this task. Sensitive or destructive steps remain subject to native safety checks.'}
+          </p>
+        )}
+
+        {error && !stepApproval && (
           <p role="alert" className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500">
             {error}
           </p>
         )}
 
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            ref={cancelButtonRef}
-            type="button"
-            onClick={() => void onCancel()}
-            disabled={isStopping}
-            className="rounded-lg px-3 py-2 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
-          >
-            {isStopping ? 'Stopping…' : isRecovery ? 'Retry Stop' : isExecuting ? 'Stop' : 'Cancel'}
-          </button>
-          {!isRecovery && (
-            <>
-              <button
-                type="button"
-                onClick={onUseAsText}
-                disabled={isExecuting || isStopping}
-                className="rounded-lg border border-[var(--chat-border)] px-3 py-2 text-sm hover:bg-[var(--chat-surface-hover)] disabled:opacity-50"
-              >
-                Use as text
-              </button>
-              <button
-                ref={approveButtonRef}
-                type="button"
-                onClick={onApprove}
-                disabled={isExecuting || isStopping || refusedByHarness}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-              >
-                {(isExecuting || isStopping) && (
-                  <Loader2 aria-hidden="true" size={15} className="animate-spin" />
-                )}
-                {isStopping
-                  ? 'Waiting for desktop control to stop…'
+        {!stepApproval && (
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button
+              ref={cancelButtonRef}
+              type="button"
+              onClick={() => void onCancel()}
+              disabled={isStopping}
+              className="rounded-lg px-3 py-2 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              {isStopping
+                ? 'Stopping…'
+                : isRecovery
+                  ? 'Retry Stop'
                   : isExecuting
-                    ? 'Running action…'
-                    : requiresComputerUseConsent
-                      ? 'Enable desktop control and run'
-                      : 'Run this action'}
-              </button>
-            </>
-          )}
-        </div>
+                    ? 'Stop'
+                    : 'Cancel'}
+            </button>
+            {!isRecovery && (
+              <>
+                <button
+                  type="button"
+                  onClick={onUseAsText}
+                  disabled={isExecuting || isStopping}
+                  className="rounded-lg border border-[var(--chat-border)] px-3 py-2 text-sm hover:bg-[var(--chat-surface-hover)] disabled:opacity-50"
+                >
+                  Use as text
+                </button>
+                <button
+                  ref={approveButtonRef}
+                  type="button"
+                  onClick={onApprove}
+                  disabled={isExecuting || isStopping || refusedByHarness}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+                >
+                  {(isExecuting || isStopping) && (
+                    <Loader2 aria-hidden="true" size={15} className="animate-spin" />
+                  )}
+                  {isStopping
+                    ? 'Waiting for desktop control to stop…'
+                    : isExecuting
+                      ? 'Running action…'
+                      : requiresComputerUseConsent
+                        ? 'Enable desktop control and run'
+                        : 'Run this action'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -12,18 +12,22 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Upper bound on how long the OPA loop will sit paused waiting for a user
-/// confirmation that currently has no channel to arrive on.
-const CONFIRMATION_WAIT_TIMEOUT: Duration = Duration::from_secs(300);
-
-/// The loop plans and acts without a human in the turn, which is what makes an
-/// escalation deny rather than wait.
+/// A block the loop raises with no one in the turn is unattended. A pause the
+/// loop opens for an answer is not, and carries its own value.
 const OPA_RUN_IS_UNATTENDED: bool = true;
 const ROUTED_ACTIONS_EXECUTED: u32 = 1;
+const MAX_ROUTED_RESULT_CHARS: usize = 400;
+const ROUTED_STEP_SEPARATOR: &str = " via ";
+const ROUTED_RESULT_SEPARATOR: &str = ": ";
+const UNAVAILABLE_STEP_SEPARATOR: &str = ": ";
+const WARNING_SEPARATOR: &str = ", ";
+const MAX_STEPS_PER_ITERATION: usize = 5;
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 
+use super::confirmation::{self, ConfirmationOutcome};
+use super::step_routing::{self, PlannedStep, StepExecution};
 use crate::automation::action_router::{
     ActionIntent, ActionRouter, DispatchError, RoutedCall, TierDispatch,
 };
@@ -185,7 +189,18 @@ enum RoutedOutcome {
     Visual,
 }
 
+/// What the router settled for one step inside the loop.
+enum StepOutcome {
+    Handled { summary: String },
+    Refused { reason: String },
+    Raw,
+    Unavailable { detail: String },
+}
+
 /// Reason why the OPA loop completed.
+///
+/// A refusal the user gave and one the harness gave are different records: the
+/// first names a step a person declined, the second a rule no answer lifts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CompletionReason {
@@ -196,6 +211,8 @@ pub enum CompletionReason {
     UserCancelled,
     SafetyBlocked { reason: String },
     NotMakingProgress,
+    ConfirmationDenied { tool: String },
+    ConfirmationTimedOut { tool: String, seconds: u64 },
 }
 
 /// The Computer Use Agent that drives autonomous task execution.
@@ -293,15 +310,84 @@ impl ComputerUseAgent {
         let decision = router.route(ActionIntent::from_task(task)).await;
 
         if let Some(app) = self.app_handle.as_ref() {
-            crate::ui::events::emit_action_routed(app, &session.id, &decision);
+            crate::ui::events::emit_action_routed(app, &session.id, None, &decision);
         }
 
         let (Some(call), Some(automation)) = (decision.call.as_ref(), automation) else {
             return RoutedOutcome::Visual;
         };
 
-        self.dispatch_routed_call(call, automation, task, &session.id)
+        match self
+            .dispatch_routed_call(call, automation, task, &session.id)
             .await
+        {
+            Ok(_) => RoutedOutcome::Completed,
+            Err(DispatchError::Denied(reason)) => RoutedOutcome::Refused { reason },
+            Err(DispatchError::Failed(_)) => RoutedOutcome::Visual,
+        }
+    }
+
+    /// Asks the router which driver takes one planned step before the pointer
+    /// does. The visual loop is the step's fallback, not the task's: a step the
+    /// tiers can take is recorded on the same routing stream a top-level action
+    /// is, carrying the index of the step it settled.
+    async fn route_step(
+        &self,
+        step: &PlannedStep,
+        step_index: u32,
+        task: &ComputerUseTask,
+        session_id: &str,
+    ) -> StepOutcome {
+        let Some(intent) = step.intent() else {
+            return StepOutcome::Raw;
+        };
+
+        let automation = self.automation_service();
+        let router = ActionRouter::for_desktop(automation.clone(), self.app_handle.clone());
+        let decision = router.route(intent.clone()).await;
+
+        if let Some(app) = self.app_handle.as_ref() {
+            crate::ui::events::emit_action_routed(app, session_id, Some(step_index), &decision);
+        }
+
+        let declined = || StepOutcome::Unavailable {
+            detail: step_routing::decline_summary(&decision),
+        };
+
+        let call = match step_routing::step_execution(step, &decision) {
+            StepExecution::Drive(call) => call,
+            StepExecution::Raw => return StepOutcome::Raw,
+            StepExecution::Unavailable => return declined(),
+        };
+
+        let Some(automation) = automation else {
+            return match step.raw() {
+                Some(_) => StepOutcome::Raw,
+                None => declined(),
+            };
+        };
+
+        match self
+            .dispatch_routed_call(call, automation, task, session_id)
+            .await
+        {
+            Ok(result) => StepOutcome::Handled {
+                summary: routed_step_summary(&step.label(), &call.driver, &result),
+            },
+            Err(DispatchError::Denied(reason)) => StepOutcome::Refused { reason },
+            Err(DispatchError::Failed(detail)) => {
+                tracing::warn!(
+                    "Routed step '{}' failed on {}, falling back: {}",
+                    call.tool,
+                    call.driver,
+                    detail
+                );
+                match step.raw() {
+                    Some(_) => StepOutcome::Raw,
+                    None => StepOutcome::Unavailable { detail },
+                }
+            }
+        }
     }
 
     async fn dispatch_routed_call(
@@ -310,7 +396,7 @@ impl ComputerUseAgent {
         automation: Arc<AutomationService>,
         task: &ComputerUseTask,
         session_id: &str,
-    ) -> RoutedOutcome {
+    ) -> Result<serde_json::Value, DispatchError> {
         let dispatch = TierDispatch::new(
             self.app_handle.clone(),
             automation,
@@ -318,19 +404,48 @@ impl ComputerUseAgent {
             self.config.trust_mode,
         );
 
-        match dispatch.run(call, session_id, &task.description).await {
-            Ok(_) => RoutedOutcome::Completed,
-            Err(DispatchError::Denied(reason)) => RoutedOutcome::Refused { reason },
-            Err(DispatchError::Failed(detail)) => {
-                tracing::warn!(
-                    "Routed {:?} call '{}' failed, falling through to the visual loop: {}",
-                    call.tier,
-                    call.tool,
-                    detail
-                );
-                RoutedOutcome::Visual
-            }
+        let outcome = dispatch.run(call, session_id, &task.description).await;
+
+        if let Err(DispatchError::Failed(detail)) = &outcome {
+            tracing::warn!(
+                "Routed {:?} call '{}' failed: {}",
+                call.tier,
+                call.tool,
+                detail
+            );
         }
+
+        outcome
+    }
+
+    /// Holds the step until the user answers.
+    ///
+    /// The pause is owned by the confirmation channel, not by this loop and not
+    /// by the window: it survives the app losing focus, and an answer given on
+    /// whichever surface raised the request resumes this same step through
+    /// whichever driver the router picks for it. Without an app handle there is
+    /// nobody to ask, so the step is denied rather than run.
+    async fn confirm_step(
+        &self,
+        session: &mut ComputerUseSession,
+        step_index: u32,
+        action: &ComputerUseAction,
+        decision: &SafetyDecision,
+    ) -> ConfirmationOutcome {
+        let Some(app) = self.app_handle.as_ref() else {
+            tracing::warn!("A confirmation-gated step cannot be asked about with no window");
+            return ConfirmationOutcome::Denied;
+        };
+
+        session.pause(decision.warnings.join(WARNING_SEPARATOR), action.clone());
+        let outcome =
+            confirmation::confirm_step(app, &session.id, step_index, action, decision).await;
+
+        if outcome.is_approved() {
+            session.resume();
+        }
+
+        outcome
     }
 
     fn emit_safety_approval(
@@ -479,8 +594,10 @@ impl ComputerUseAgent {
                 state.making_progress = true;
             }
 
-            // ACT: Execute planned actions
-            for action in plan.actions {
+            // ACT: take each planned step, cheapest driver first
+            for (index, step) in plan.steps.iter().enumerate() {
+                let step_index = index as u32;
+
                 // Per-app permission check: consult `WindowCoordinator::
                 // get_active_window` and the app_permissions registry. Refuses
                 // any action targeting an app on the always-blocked list
@@ -489,7 +606,13 @@ impl ComputerUseAgent {
                 if let Some(reason) = self.safety_layer.check_app_permission().await {
                     tracing::warn!("Action blocked by per-app permission: {:?}", reason);
                     let refusal = describe_safety_block(&reason);
-                    self.emit_safety_approval(&session.id, &action, &SafetyDecision::block(reason));
+                    if let Some(action) = step.raw() {
+                        self.emit_safety_approval(
+                            &session.id,
+                            action,
+                            &SafetyDecision::block(reason),
+                        );
+                    }
                     return self.complete_task(
                         &mut session,
                         state,
@@ -497,102 +620,106 @@ impl ComputerUseAgent {
                     );
                 }
 
-                // Safety check
-                let decision = self.safety_layer.evaluate_action(&action);
+                // The safety layer judges the raw form, because that is the
+                // shape it computes risk from. A block stops the step whichever
+                // driver would have taken it; a confirmation waits until the
+                // driver is known, so that one step never asks twice.
+                let mut safety = None;
+                if let Some(action) = step.raw() {
+                    let decision = self.safety_layer.evaluate_action(action);
 
-                if !decision.allowed {
-                    if let Some(reason) = decision.reason.as_ref() {
+                    if !decision.allowed {
+                        let Some(reason) = decision.reason.as_ref() else {
+                            continue;
+                        };
                         tracing::warn!("Action blocked by safety: {:?}", reason);
                         let refusal = describe_safety_block(reason);
-                        self.emit_safety_approval(&session.id, &action, &decision);
+                        self.emit_safety_approval(&session.id, action, &decision);
                         return self.complete_task(
                             &mut session,
                             state,
                             CompletionReason::SafetyBlocked { reason: refusal },
                         );
                     }
-                    continue;
+
+                    safety = Some(decision);
                 }
 
-                // Handle confirmation requirement. FAIL CLOSED: the pause/resume flow
-                // below is an unwired stub (no resume command exists and the wait loop
-                // has no timeout). A destructive action the safety layer flags for
-                // confirmation must NOT auto-execute, the previous gate
-                // (`&& task.require_confirmation`, always false) let it run with no
-                // confirmation at all. Unless the caller explicitly opts into the
-                // pause flow (require_confirmation=true) AND drives resume, block it.
-                if decision.requires_confirmation && !task.require_confirmation {
-                    tracing::warn!(
-                        "Destructive action requires confirmation but no HITL is available; blocking: {:?}",
-                        decision.warnings
-                    );
-                    self.emit_safety_approval(&session.id, &action, &decision);
+                if session.is_cancelled() {
                     return self.complete_task(
                         &mut session,
                         state,
-                        CompletionReason::SafetyBlocked {
-                            reason: format!(
-                                "Action requires user confirmation which is not available: {}",
-                                decision.warnings.join(", ")
-                            ),
-                        },
+                        CompletionReason::UserCancelled,
                     );
                 }
 
-                if decision.requires_confirmation && task.require_confirmation {
-                    session.pause(decision.warnings.join(", "), action.clone());
+                match self.route_step(step, step_index, &task, &session.id).await {
+                    StepOutcome::Handled { summary } => {
+                        state.actions_executed += 1;
+                        state.consecutive_failures = 0;
+                        state.last_action = Some(summary);
+                        sleep(self.config.action_delay).await;
+                        continue;
+                    }
+                    StepOutcome::Refused { reason } => {
+                        return self.complete_task(
+                            &mut session,
+                            state,
+                            CompletionReason::SafetyBlocked { reason },
+                        );
+                    }
+                    StepOutcome::Unavailable { detail } => {
+                        tracing::warn!("No driver took step {}: {}", step_index, detail);
+                        state.consecutive_failures += 1;
+                        state.last_action = Some(unavailable_step_summary(&step.label(), &detail));
+                        sleep(self.config.action_delay).await;
+                        continue;
+                    }
+                    StepOutcome::Raw => {}
+                }
 
-                    // BOUNDED wait. There is still no resume channel: `session`
-                    // is owned by this loop and `is_paused` is a plain bool, so
-                    // nothing outside can clear it, a caller that sets
-                    // `require_confirmation: true` would otherwise spin here
-                    // forever, holding the automation session open.
-                    //
-                    // Nothing sets that flag today (it defaults to false and has
-                    // no assignment in Rust or TS), so this branch is currently
-                    // unreachable; the fail-closed block above handles every real
-                    // confirmation case. The timeout exists so the hang cannot
-                    // appear the moment someone does set it.
-                    //
-                    // Real human-in-the-loop confirmation needs a shared signal
-                    // threaded into this loop, see docs/decisions/wire-or-cut.md.
-                    let waited_from = Instant::now();
-                    while session.is_paused()
-                        && !session.is_cancelled()
-                        && waited_from.elapsed() < CONFIRMATION_WAIT_TIMEOUT
+                let Some(action) = step.raw() else {
+                    continue;
+                };
+
+                // A step no driver below vision would take is about to move the
+                // real pointer, so this is where a flagged one stops and asks.
+                // A tier that took it cleared the tool guard instead, which is
+                // the same channel and the same standing-grant rule.
+                if let Some(decision) = safety.filter(|decision| decision.requires_confirmation) {
+                    match self
+                        .confirm_step(&mut session, step_index, action, &decision)
+                        .await
                     {
-                        sleep(Duration::from_millis(100)).await;
-                    }
-
-                    if session.is_cancelled() {
-                        return self.complete_task(
-                            &mut session,
-                            state,
-                            CompletionReason::UserCancelled,
-                        );
-                    }
-
-                    if session.is_paused() {
-                        tracing::warn!(
-                            "Confirmation wait timed out after {:?} with no resume channel; blocking the action.",
-                            CONFIRMATION_WAIT_TIMEOUT
-                        );
-                        return self.complete_task(
-                            &mut session,
-                            state,
-                            CompletionReason::SafetyBlocked {
-                                reason: "Timed out waiting for user confirmation".to_string(),
-                            },
-                        );
+                        ConfirmationOutcome::Approved => {}
+                        ConfirmationOutcome::Denied => {
+                            return self.complete_task(
+                                &mut session,
+                                state,
+                                CompletionReason::ConfirmationDenied {
+                                    tool: approval::action_tool_name(action),
+                                },
+                            );
+                        }
+                        ConfirmationOutcome::Expired => {
+                            return self.complete_task(
+                                &mut session,
+                                state,
+                                CompletionReason::ConfirmationTimedOut {
+                                    tool: approval::action_tool_name(action),
+                                    seconds: confirmation::CONFIRMATION_TIMEOUT_SECS,
+                                },
+                            );
+                        }
                     }
                 }
 
                 // Capture before screenshot
-                let before = session.capture_before(&action)?;
+                let before = session.capture_before(action)?;
 
                 // Execute the action
                 let action_start = Instant::now();
-                let result = self.execute_action(&action).await;
+                let result = self.execute_action(action).await;
                 let duration_ms = action_start.elapsed().as_millis() as u64;
 
                 // Record the action
@@ -653,7 +780,7 @@ impl ComputerUseAgent {
             .await
             .context("Planning LLM call failed")?;
 
-        self.parse_action_plan(&response)
+        self.parse_action_plan(&response, task.target_application.as_deref())
     }
 
     /// Creates the planning prompt for the LLM.
@@ -713,6 +840,18 @@ Available actions:
 - {{"action": "wait", "condition": {{"type": "duration", "ms": 1000}}}}
 - {{"action": "focus_window", "title": "Application Name"}}
 - {{"action": "zoom", "region": {{"left": 100, "top": 200, "width": 50, "height": 30}}, "zoom_level": 4.0}}
+- {{"action": "read", "target": "the Total label"}}
+- {{"action": "navigate", "url": "https://example.com/pricing"}}
+
+Name the control a step addresses whenever you can read its label, by adding
+"target" to a click, type or scroll step: "target": "the Send button",
+"target": "the Search field", "target": "the Notifications switch". Add "value"
+to a click on a list or dropdown to pick one entry: "value": "French".
+A named control is acted on directly through the application, which is exact
+and needs no coordinates; keep the coordinates in the same step, they are used
+when the control cannot be reached that way. Use "read" only to read a named
+value back, and "navigate" only for a page in a browser this app is connected
+to; neither has a pointer fallback.
 
 Use the zoom action when:
 - An element is too small to identify accurately
@@ -839,7 +978,7 @@ Only include actions you're confident will make progress."#,
     }
 
     /// Parses the action plan from LLM response.
-    fn parse_action_plan(&self, response: &str) -> Result<ActionPlan> {
+    fn parse_action_plan(&self, response: &str, application: Option<&str>) -> Result<ActionPlan> {
         // Extract JSON from response
         let json_str = if let Some(start) = response.find('{') {
             if let Some(end) = response.rfind('}') {
@@ -869,22 +1008,48 @@ Only include actions you're confident will make progress."#,
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        let actions = if let Some(actions_arr) = parsed.get("actions").and_then(|v| v.as_array()) {
-            actions_arr
-                .iter()
-                .filter_map(|a| self.parse_action(a).ok())
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        // Limit actions per iteration
-        let actions = actions.into_iter().take(5).collect();
+        let steps = parsed
+            .get("actions")
+            .and_then(|v| v.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| self.parse_step(entry, application))
+                    .take(MAX_STEPS_PER_ITERATION)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Ok(ActionPlan {
             task_complete,
             making_progress,
-            actions,
+            steps,
+        })
+    }
+
+    /// Reads one plan entry as the step the loop will take.
+    ///
+    /// A step that names the control it addresses can be offered to the tiers
+    /// below vision; one that does not can only be driven as raw input. The two
+    /// verbs the raw vocabulary cannot express carry no fallback, so an entry
+    /// naming one that resolves to nothing is dropped rather than turned into a
+    /// pointer movement the planner did not ask for.
+    fn parse_step(
+        &self,
+        entry: &serde_json::Value,
+        application: Option<&str>,
+    ) -> Option<PlannedStep> {
+        let intent = step_routing::step_intent(entry, application);
+
+        if step_routing::is_routed_only(entry) {
+            return intent.map(|intent| PlannedStep::Routed { intent });
+        }
+
+        let action = self.parse_action(entry).ok()?;
+
+        Some(match intent {
+            Some(intent) => PlannedStep::Targeted { intent, action },
+            None => PlannedStep::Direct { action },
         })
     }
 
@@ -1375,7 +1540,28 @@ Only include actions you're confident will make progress."#,
 struct ActionPlan {
     task_complete: bool,
     making_progress: bool,
-    actions: Vec<ComputerUseAction>,
+    steps: Vec<PlannedStep>,
+}
+
+/// What the loop records for a step a driver took, so the next plan is told
+/// which step ran, on what, and what it read back.
+fn routed_step_summary(label: &str, driver: &str, result: &serde_json::Value) -> String {
+    let rendered = match result {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::String(text) => text.clone(),
+        other => other.to_string(),
+    };
+
+    if rendered.is_empty() {
+        return format!("{label}{ROUTED_STEP_SEPARATOR}{driver}");
+    }
+
+    let truncated: String = rendered.chars().take(MAX_ROUTED_RESULT_CHARS).collect();
+    format!("{label}{ROUTED_STEP_SEPARATOR}{driver}{ROUTED_RESULT_SEPARATOR}{truncated}")
+}
+
+fn unavailable_step_summary(label: &str, detail: &str) -> String {
+    format!("{label}{UNAVAILABLE_STEP_SEPARATOR}{detail}")
 }
 
 fn translate_capture_coordinate(coord: Coordinate, display: &ScreenInfo) -> Coordinate {

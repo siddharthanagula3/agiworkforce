@@ -842,6 +842,8 @@ export function DesktopShellV3({
                   : null)
               }
               approval={cloudVoice.pendingApproval}
+              isPaused={cloudVoice.pausedConfirmation !== null}
+              isResolvingConfirmation={cloudVoice.isResolvingConfirmation}
               error={cloudVoice.error}
               isExecuting={cloudVoice.isDesktopActionActive}
               isStopping={cloudVoice.isStopping}
@@ -850,6 +852,8 @@ export function DesktopShellV3({
               onApprove={() => void cloudVoice.approveAction()}
               onUseAsText={cloudVoice.useActionAsText}
               onCancel={cloudVoice.cancelAction}
+              onApproveStep={(remember) => void cloudVoice.approvePausedStep(remember)}
+              onDenyStep={() => void cloudVoice.denyPausedStep()}
             />
             <ComputerUseConsentDialog
               open={cloudVoice.consentPromptOpen}

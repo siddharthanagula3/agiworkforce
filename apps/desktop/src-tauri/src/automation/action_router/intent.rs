@@ -215,11 +215,99 @@ impl ActionIntent {
         }
     }
 
+    /// The intent a planner step addresses, or `None` when the step names no
+    /// control a driver can resolve.
+    ///
+    /// A step already states its operation, so nothing here is inferred from
+    /// wording: the lexical parse is reused for the target phrase alone, to
+    /// read off the role noun the step named and drop it from the label the
+    /// platform matches on. A step is one operation by construction, so it
+    /// never carries the multi-clause decline an utterance can.
+    pub fn from_planned_step(step: PlannedStepIntent<'_>) -> Option<Self> {
+        let (target_phrase, target_role) = match step.verb {
+            StepVerb::Navigate => (None, None),
+            StepVerb::FocusWindow => (
+                Some(non_empty(step.target?)?.to_string()),
+                Some(TargetRole::Window),
+            ),
+            _ => {
+                let (phrase, role) = target_phrase(step.target?);
+                (Some(phrase?), role)
+            }
+        };
+
+        let operation = match step.verb {
+            StepVerb::Activate if target_role == Some(TargetRole::Checkbox) => {
+                IntentOperation::Toggle
+            }
+            StepVerb::Activate if step.value.is_some() => IntentOperation::SelectOption,
+            StepVerb::Activate => IntentOperation::Invoke,
+            StepVerb::EnterText => IntentOperation::EnterText,
+            StepVerb::Scroll => IntentOperation::Scroll,
+            StepVerb::FocusWindow => IntentOperation::Focus,
+            StepVerb::Read => IntentOperation::Read,
+            StepVerb::Navigate => IntentOperation::Navigate,
+        };
+
+        let web_url = match step.verb {
+            StepVerb::Navigate => Some(non_empty(step.url?)?.to_string()),
+            _ => step.url.and_then(non_empty).map(str::to_string),
+        };
+
+        if operation == IntentOperation::EnterText && step.value.is_none() {
+            return None;
+        }
+
+        Some(Self {
+            utterance: step.label.to_string(),
+            operation,
+            web_url,
+            application: step.application.and_then(non_empty).map(str::to_string),
+            target_phrase,
+            target_role,
+            value: step.value.and_then(non_empty).map(str::to_string),
+            clauses: SINGLE_OPERATION_CLAUSES,
+        })
+    }
+
     /// A tier below the visual loop drives one existing tool per action, so an
     /// utterance carrying several operations has to fall through rather than
     /// run its first clause and report the whole task done.
     pub fn is_single_operation(&self) -> bool {
         self.clauses == SINGLE_OPERATION_CLAUSES
+    }
+}
+
+/// The operation a planner step states, as opposed to one parsed out of an
+/// utterance. `Activate` covers the three verbs a press resolves to once the
+/// role the step named is known: an invoke, a toggle of a checkbox, or a
+/// selection out of a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepVerb {
+    Activate,
+    EnterText,
+    Scroll,
+    FocusWindow,
+    Read,
+    Navigate,
+}
+
+pub struct PlannedStepIntent<'a> {
+    pub verb: StepVerb,
+    pub target: Option<&'a str>,
+    pub value: Option<&'a str>,
+    pub url: Option<&'a str>,
+    pub application: Option<&'a str>,
+    pub label: &'a str,
+}
+
+fn non_empty(raw: &str) -> Option<&str> {
+    let trimmed = raw.trim();
+
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
     }
 }
 
