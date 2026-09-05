@@ -9,6 +9,18 @@ interface DeviceAuthorizationHttpResponse {
 
 let apiBaseUrlOverride: string | null = null;
 
+function describeFetchError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    const code = 'code' in cause && typeof cause.code === 'string' ? cause.code : null;
+    return code
+      ? `${error.message} (${code}: ${cause.message})`
+      : `${error.message} (${cause.message})`;
+  }
+  return error.message;
+}
+
 async function resolveApiBase(): Promise<string> {
   if (apiBaseUrlOverride) return apiBaseUrlOverride;
   const stored = await getSecret('api_base_url');
@@ -37,7 +49,9 @@ async function executeDeviceAuthorizationRequest(
       signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
-    throw new Error(`Could not reach the AGI account service: ${String(error)}`);
+    throw new Error(
+      `Could not reach the AGI account service at ${base}: ${describeFetchError(error)}`,
+    );
   }
   return { status: response.status, body: await response.text() };
 }
