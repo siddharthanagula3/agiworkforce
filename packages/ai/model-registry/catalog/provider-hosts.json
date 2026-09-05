@@ -1,0 +1,141 @@
+{
+  "$schema": "../schema/registry.schema.json",
+  "schemaVersion": 1,
+  "hosts": [
+    {
+      "match": "host",
+      "pattern": "api.anthropic.com",
+      "endpointClass": "anthropic-public",
+      "longTtlPromptCache": true
+    },
+    {
+      "match": "host",
+      "pattern": "aiplatform.googleapis.com",
+      "endpointClass": "google-vertex",
+      "longTtlPromptCache": true
+    },
+    {
+      "match": "hostSuffix",
+      "pattern": "-aiplatform.googleapis.com",
+      "endpointClass": "google-vertex",
+      "longTtlPromptCache": true,
+      "hostPattern": "^[a-z0-9]{1,32}(?:-[a-z0-9]{1,32}){0,4}-aiplatform\\.googleapis\\.com$"
+    },
+    {
+      "match": "host",
+      "pattern": "llm.chutes.ai",
+      "endpointClass": "chutes-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.deepseek.com",
+      "endpointClass": "deepseek-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.groq.com",
+      "endpointClass": "groq-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.mistral.ai",
+      "endpointClass": "mistral-public",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.openai.com",
+      "endpointClass": "openai-public",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "chatgpt.com",
+      "endpointClass": "openai-codex",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "generativelanguage.googleapis.com",
+      "endpointClass": "google-generative-ai",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.x.ai",
+      "endpointClass": "xai-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.grok.x.ai",
+      "endpointClass": "xai-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "host",
+      "pattern": "api.z.ai",
+      "endpointClass": "zai-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "hostSuffix",
+      "pattern": ".githubcopilot.com",
+      "endpointClass": "github-copilot-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "domain",
+      "pattern": "openrouter.ai",
+      "endpointClass": "openrouter",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "domain",
+      "pattern": "opencode.ai",
+      "endpointClass": "opencode-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://api.moonshot.ai/v1",
+      "endpointClass": "moonshot-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://api.moonshot.cn/v1",
+      "endpointClass": "moonshot-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://coding-intl.dashscope.aliyuncs.com/v1",
+      "endpointClass": "modelstudio-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://coding.dashscope.aliyuncs.com/v1",
+      "endpointClass": "modelstudio-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "endpointClass": "modelstudio-native",
+      "longTtlPromptCache": false
+    },
+    {
+      "match": "baseUrl",
+      "pattern": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      "endpointClass": "modelstudio-native",
+      "longTtlPromptCache": false
+    }
+  ],
+  "localHosts": ["localhost", "127.0.0.1", "::1", "[::1]"],
+  "localHostSuffixes": [".localhost", ".local", ".internal"]
+}
