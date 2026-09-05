@@ -1,3 +1,9 @@
+/**
+ * Neither handle names a provider. `createDatabaseClient` resolves it from
+ * AGI_DATABASE_PROVIDER, so pointing the app at a different Postgres host is
+ * provider selection plus credentials rather than a code change. Pinning the
+ * provider here would silently defeat that env var.
+ */
 import 'server-only';
 
 import { createDatabaseClient } from '@agiworkforce/data-layer';
@@ -11,7 +17,6 @@ let webhookDb: DatabaseAdapter | null = null;
 export function getNeonDb(): DatabaseAdapter {
   if (!db) {
     db = createDatabaseClient({
-      provider: 'neon',
       applicationName: 'agi-web',
       onConnectionError: reportDatabaseConnectionError,
       ...SERVICE_POOL_TUNING,
@@ -36,7 +41,6 @@ export function getNeonDb(): DatabaseAdapter {
 export function getStripeWebhookDb(): DatabaseAdapter {
   if (!webhookDb) {
     webhookDb = createDatabaseClient({
-      provider: 'neon',
       applicationName: 'agi-web-stripe-webhook',
       onConnectionError: reportDatabaseConnectionError,
       ...WEBHOOK_POOL_TUNING,

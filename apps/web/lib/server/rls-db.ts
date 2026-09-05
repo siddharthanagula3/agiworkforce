@@ -23,7 +23,6 @@ let rlsDb: DatabaseAdapter | null = null;
 function getRlsCapableDb(): DatabaseAdapter {
   if (!rlsDb) {
     rlsDb = createDatabaseClient({
-      provider: 'neon',
       applicationName: 'agi-web-rls',
       unsafeAllowUnverifiedJwtSubject: true,
       onConnectionError: reportDatabaseConnectionError,
