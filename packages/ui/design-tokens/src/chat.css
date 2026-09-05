@@ -88,6 +88,17 @@
        panels it lands on. Text is the dominant use by 25 call sites to 3, so
        it gets the role rather than the fill being bent to serve both. */
     --chat-destructive-text: #b91c1c;
+    /* The glyph drawn ON the destructive fill, which the muted microphone in
+       voice mode is the first control to need. --chat-accent-on-secondary is
+       also white and would look interchangeable here; it is named for the
+       secondary accent and would follow that accent if it ever moved. */
+    --chat-destructive-on-fill: #ffffff;
+    /* Voice orb. Canvas gradient stops, read through getComputedStyle rather
+       than var(), so they are decorative fills with no text drawn on them. */
+    --chat-voice-orb-core: #8f97ee;
+    --chat-voice-orb-rim: #f3f4fd;
+    --chat-voice-orb-band: rgba(255, 255, 255, 0.55);
+    --chat-voice-orb-halo: rgba(143, 151, 238, 0.16);
     --chat-info: #2563eb;
     --chat-success: #16a34a;
     --chat-warning: #d97706;
@@ -145,6 +156,11 @@
     --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-destructive: #ef4444;
     --chat-destructive-text: #f87171;
+    --chat-destructive-on-fill: #ffffff;
+    --chat-voice-orb-core: #7e88e6;
+    --chat-voice-orb-rim: #eceefb;
+    --chat-voice-orb-band: rgba(255, 255, 255, 0.42);
+    --chat-voice-orb-halo: rgba(126, 136, 230, 0.22);
     --chat-info: #3b82f6;
     --chat-success: #22c55e;
     --chat-warning: #f59e0b;
