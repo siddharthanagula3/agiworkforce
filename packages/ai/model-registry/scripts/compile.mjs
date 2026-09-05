@@ -33,6 +33,7 @@ const MODEL_ROUTES_JSON = path.join(CATALOG_DIR, 'model-routes.json');
 const PROVIDER_GOVERNANCE_JSON = path.join(CATALOG_DIR, 'provider-governance.json');
 const RETIRED_MODELS_JSON = path.join(CATALOG_DIR, 'retired-models.json');
 const PROVIDER_HOSTS_JSON = path.join(CATALOG_DIR, 'provider-hosts.json');
+const PROVIDER_DEFAULTS_JSON = path.join(CATALOG_DIR, 'provider-defaults.json');
 const ROUTING_POLICIES_JSON = path.join(CATALOG_DIR, 'routing-policies.json');
 const REGISTRY_SCHEMA_JSON = path.join(REGISTRY_DIR, 'schema', 'registry.schema.json');
 const GENERATED_DIR = path.join(REGISTRY_DIR, 'generated');
@@ -146,6 +147,7 @@ const TOP_LEVEL_ORDER = [
   'providers',
   'models',
   'tierAllowedModels',
+  'providerDefaults',
   'providersInOrder',
 ];
 
@@ -317,9 +319,9 @@ function resolveSyncedFields(cur, up) {
   });
 }
 
-const FAMILY_RESOLVED_TOP_LEVEL_KEYS = ['providers', 'tierAllowedModels'];
+const FAMILY_RESOLVED_TOP_LEVEL_KEYS = ['providers', 'tierAllowedModels', 'providerDefaults'];
 
-function buildCatalog(curation, synced, familyCatalog) {
+function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
   const models = {};
   for (const [id, cur] of Object.entries(curation.models)) {
     const up = synced.models[id] ?? {};
@@ -332,6 +334,7 @@ function buildCatalog(curation, synced, familyCatalog) {
     );
     models[id] = orderKeys(merged);
   }
+  const source = { ...curation, providerDefaults: compatProviderDefaults(defaultsCatalog) };
   const catalog = {};
   for (const key of TOP_LEVEL_ORDER) {
     if (key === 'models') {
@@ -339,8 +342,8 @@ function buildCatalog(curation, synced, familyCatalog) {
       continue;
     }
     catalog[key] = FAMILY_RESOLVED_TOP_LEVEL_KEYS.includes(key)
-      ? resolveFamilyRefsDeep(curation[key], familyCatalog)
-      : curation[key];
+      ? resolveFamilyRefsDeep(source[key], familyCatalog)
+      : source[key];
   }
   assert.equal(
     collectFamilyRefs(catalog.models, familyCatalog.policy).size,
@@ -528,6 +531,84 @@ const ENDPOINT_CLASSES = new Set([
   'google-vertex',
 ]);
 const BASE_URL_MATCH = 'baseUrl';
+
+const PROVIDER_DEFAULT_FIELDS = ['modelKey', 'source', 'verifiedOn', 'note'];
+
+function compatProviderDefaults(defaultsCatalog) {
+  return Object.fromEntries(
+    Object.entries(defaultsCatalog.defaults).map(([providerId, byCapability]) => [
+      providerId,
+      Object.fromEntries(
+        Object.entries(byCapability).map(([capability, entry]) => [capability, entry.modelKey]),
+      ),
+    ]),
+  );
+}
+
+function normalizeProviderDefaults(defaultsCatalog, catalog, capabilities) {
+  const defaults = {};
+  for (const [providerId, byCapability] of Object.entries(defaultsCatalog.defaults)) {
+    assert.ok(
+      catalog.providers[providerId],
+      `Provider default ${providerId} is not a catalog provider`,
+    );
+    defaults[providerId] = {};
+    for (const [capability, entry] of Object.entries(byCapability)) {
+      const label = `Provider default ${providerId}.${capability}`;
+      const unsupported = Object.keys(entry).filter(
+        (key) => !PROVIDER_DEFAULT_FIELDS.includes(key),
+      );
+      assert.deepEqual(unsupported, [], `${label} has unsupported keys: ${unsupported.join(', ')}`);
+      assert.ok(
+        CAPABILITY_NAMES.includes(capability),
+        `${label} names ${capability}, which is not a registry capability`,
+      );
+      const resolved = catalog.providerDefaults?.[providerId]?.[capability];
+      assert.ok(resolved, `${label} did not resolve to a model key`);
+      const model = catalog.models[resolved];
+      assert.ok(model, `${label} resolves to ${resolved}, which is not a catalog model`);
+      assert.equal(
+        model.provider,
+        providerId,
+        `${label} resolves to ${resolved}, which belongs to ${model.provider}`,
+      );
+      assert.notEqual(model.deprecated, true, `${label} resolves to the deprecated ${resolved}`);
+      assert.equal(
+        capabilities[resolved]?.[capability],
+        true,
+        `${label} resolves to ${resolved}, which does not offer ${capability}`,
+      );
+      assert.ok(
+        typeof entry.source === 'string' && entry.source.length > 0,
+        `${label} must name what grounds the choice`,
+      );
+      assert.ok(
+        typeof entry.verifiedOn === 'string' && ISO_DATE_PATTERN.test(entry.verifiedOn),
+        `${label} must carry the day the choice was made`,
+      );
+      defaults[providerId][capability] = defined({ ...entry, modelKey: resolved });
+    }
+  }
+  return defaults;
+}
+
+function assertAmbiguousCapabilitiesAreResolved(defaultsCatalog, catalog, capabilities, defaults) {
+  for (const capability of defaultsCatalog.requiredDefaultCapabilities) {
+    const activeByProvider = {};
+    for (const [modelKey, model] of Object.entries(catalog.models)) {
+      if (capabilities[modelKey]?.[capability] !== true) continue;
+      if (model.deprecated === true) continue;
+      (activeByProvider[model.provider] ??= []).push(modelKey);
+    }
+    for (const [providerId, modelKeys] of Object.entries(activeByProvider)) {
+      if (modelKeys.length < 2) continue;
+      assert.ok(
+        defaults[providerId]?.[capability],
+        `Provider ${providerId} serves ${modelKeys.length} active ${capability} models (${modelKeys.sort().join(', ')}) and must declare which one is its default`,
+      );
+    }
+  }
+}
 
 function normalizeProviderHosts(hostCatalog) {
   const seen = new Set();
@@ -1605,6 +1686,7 @@ function buildNormalizedRegistry(
   governanceCatalog,
   benchmarkSource,
   hostCatalog,
+  defaultsCatalog,
 ) {
   const governance = normalizeProviderGovernance(governanceCatalog);
   const endpointHosts = normalizeProviderHosts(hostCatalog);
@@ -1728,6 +1810,9 @@ function buildNormalizedRegistry(
     benchmarks[modelKey] = normalizeBenchmarks(modelKey, model.benchmarks, benchmarkSource);
   }
 
+  const providerDefaults = normalizeProviderDefaults(defaultsCatalog, catalog, capabilities);
+  assertAmbiguousCapabilitiesAreResolved(defaultsCatalog, catalog, capabilities, providerDefaults);
+
   const evidence = (catalog.verificationLog ?? []).map((entry, index) => ({
     id: `verification/${entry.date ?? 'unknown'}/${index + 1}`,
     ...entry,
@@ -1761,6 +1846,7 @@ function buildNormalizedRegistry(
     capabilities,
     capabilityClasses: CAPABILITY_CLASSES,
     governance,
+    providerDefaults,
     endpointHosts,
     pricing,
     limits,
@@ -1837,6 +1923,7 @@ async function buildNormalizedArtifacts(catalog, familyCatalog, syncedSnapshot) 
     governanceCatalog,
     syncedSnapshot.source,
     readJson(PROVIDER_HOSTS_JSON),
+    readJson(PROVIDER_DEFAULTS_JSON),
   );
   const schema = readJson(REGISTRY_SCHEMA_JSON);
   const validate = new Ajv({ allErrors: true, strict: true }).compile(schema);
@@ -1887,7 +1974,7 @@ async function generate() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
-  const catalog = buildCatalog(curation, synced, familyCatalog);
+  const catalog = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   await writeJson(MODELS_JSON, catalog);
   const artifacts = await buildNormalizedArtifacts(catalog, familyCatalog, synced);
   ensureGeneratedDirectories();
@@ -1911,7 +1998,7 @@ async function check() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
-  const built = buildCatalog(curation, synced, familyCatalog);
+  const built = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   const regenerated = await formatJson(built, MODELS_JSON);
   const committed = fs.readFileSync(MODELS_JSON, 'utf8');
 
@@ -2036,7 +2123,7 @@ export function loadFamilySnapshot() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
-  const catalog = buildCatalog(curation, synced, familyCatalog);
+  const catalog = buildCatalog(curation, synced, familyCatalog, readJson(PROVIDER_DEFAULTS_JSON));
   const registry = buildNormalizedRegistry(
     catalog,
     readJson(HARNESSES_JSON),
@@ -2046,6 +2133,7 @@ export function loadFamilySnapshot() {
     readJson(PROVIDER_GOVERNANCE_JSON),
     synced.source,
     readJson(PROVIDER_HOSTS_JSON),
+    readJson(PROVIDER_DEFAULTS_JSON),
   );
   return {
     familyCatalog,

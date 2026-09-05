@@ -20,6 +20,15 @@ fn resolve_image_model(provider: &str, requested_model: Option<&str>) -> Result<
                 .values()
                 .find(|entry| entry.api_model_id.as_deref() == Some(requested))
         })
+    } else if let Some(declared) =
+        models_config::get_provider_default_model(provider, models_config::IMAGE_OUTPUT_CAPABILITY)
+    {
+        let canonical = models_config::get_canonicalized_id(declared);
+        models.get(&canonical).or_else(|| {
+            models
+                .values()
+                .find(|entry| entry.api_model_id.as_deref() == Some(declared))
+        })
     } else {
         let mut candidates = models
             .values()
@@ -35,7 +44,7 @@ fn resolve_image_model(provider: &str, requested_model: Option<&str>) -> Result<
             [] => None,
             _ => {
                 return Err(APIError::APIError(format!(
-                    "No unique catalog image model is configured for provider {provider}; select an explicit catalog model"
+                    "Provider {provider} serves several active catalog image models and the catalog declares no default for it"
                 )))
             }
         }
@@ -456,19 +465,73 @@ mod tests {
         for provider in ["openai", "google"] {
             let resolved = resolve_image_model(provider, None)
                 .unwrap_or_else(|error| panic!("{provider} catalog default failed: {error}"));
+            let declared = models_config::get_provider_default_model(
+                provider,
+                models_config::IMAGE_OUTPUT_CAPABILITY,
+            )
+            .expect("provider must declare its default image model");
             let entry = models_config::get_all_model_entries()
-                .values()
-                .find(|entry| {
-                    entry.provider == provider
-                        && entry.capabilities.image_gen
-                        && entry.deprecated != Some(true)
-                })
-                .expect("provider must expose an active catalog image model");
+                .get(&models_config::get_canonicalized_id(declared))
+                .expect("the declared default must be a catalog model");
+            assert!(entry.capabilities.image_gen && entry.deprecated != Some(true));
             assert_eq!(
                 resolved,
                 entry.api_model_id.as_deref().unwrap_or(entry.id.as_str())
             );
         }
+    }
+
+    #[test]
+    fn every_provider_with_several_image_models_declares_a_default() {
+        let mut active: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for entry in models_config::get_all_model_entries().values() {
+            if entry.capabilities.image_gen && entry.deprecated != Some(true) {
+                *active.entry(entry.provider.as_str()).or_default() += 1;
+            }
+        }
+        for (provider, count) in active {
+            if count < 2 {
+                continue;
+            }
+            assert!(
+                models_config::get_provider_default_model(
+                    provider,
+                    models_config::IMAGE_OUTPUT_CAPABILITY
+                )
+                .is_some(),
+                "provider {provider} serves {count} active image models and declares no default"
+            );
+        }
+    }
+
+    #[test]
+    fn a_single_active_image_model_still_resolves_without_a_declared_default() {
+        let single = models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| entry.capabilities.image_gen && entry.deprecated != Some(true))
+            .fold(
+                std::collections::HashMap::<String, Vec<&str>>::new(),
+                |mut counts, entry| {
+                    counts
+                        .entry(entry.provider.clone())
+                        .or_default()
+                        .push(entry.id.as_str());
+                    counts
+                },
+            )
+            .into_iter()
+            .find(|(provider, ids)| {
+                ids.len() == 1
+                    && models_config::get_provider_default_model(
+                        provider,
+                        models_config::IMAGE_OUTPUT_CAPABILITY,
+                    )
+                    .is_none()
+            });
+        let Some((provider, _)) = single else {
+            return;
+        };
+        assert!(resolve_image_model(&provider, None).is_ok());
     }
 
     #[test]
