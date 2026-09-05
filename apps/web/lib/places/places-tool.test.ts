@@ -34,6 +34,7 @@ function stubProvider(
     id: 'stub_places',
     attribution: 'Powered by the stub',
     configured: () => true,
+    photo: async () => ({ ok: false, errorCode: 'not_configured' }),
     search: async (request) => {
       captured.push(request);
       return {

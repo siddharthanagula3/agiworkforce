@@ -65,5 +65,6 @@ export interface PlacesSearchPayload {
   timeZone?: string;
   providerId: string;
   attribution: string;
+  termsUrl?: string;
   places: PlaceRecord[];
 }

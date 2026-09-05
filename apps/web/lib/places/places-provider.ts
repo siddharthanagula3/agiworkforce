@@ -28,6 +28,7 @@ export type PlacesSearchOutcome =
       ok: true;
       providerId: string;
       attribution: string;
+      termsUrl?: string;
       places: PlaceRecord[];
       billableCalls: number;
     }
@@ -39,11 +40,28 @@ export type PlacesSearchOutcome =
       billableCalls: number;
     };
 
+export interface PlacesPhotoRequest {
+  reference: string;
+  maxWidthPx: number;
+  signal?: AbortSignal;
+}
+
+export type PlacesPhotoOutcome =
+  | { ok: true; body: ArrayBuffer; contentType: string }
+  | { ok: false; errorCode: PlacesErrorCode };
+
 export interface PlacesProvider {
   readonly id: string;
   readonly attribution: string;
+  readonly termsUrl?: string;
   configured(): boolean;
   search(request: PlacesSearchQuery): Promise<PlacesSearchOutcome>;
+  /**
+   * A place photo is behind the provider's key, so the browser can never fetch
+   * one directly. Returning bytes rather than a URL keeps the key, the vendor
+   * host and the redirect chain on this side of the port.
+   */
+  photo(request: PlacesPhotoRequest): Promise<PlacesPhotoOutcome>;
 }
 
 export function placesError(
