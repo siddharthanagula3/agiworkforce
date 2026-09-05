@@ -1,4 +1,5 @@
 import { act, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelMetadataById, listCanonicalModels } from '@agiworkforce/types';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
@@ -203,19 +204,25 @@ describe('lane transparency reaches the transcript', () => {
     expect(toChatMessage(stored, CONVERSATION.id).metadata?.['routeLane']).toBe('free');
   });
 
-  it('says the free pool answered, under the model that answered', () => {
+  it('says the free pool answered, under the model that answered', async () => {
+    const user = userEvent.setup();
     render(<MessageBubble message={bubbleMessage('free')} />);
 
+    await user.click(screen.getByLabelText('More message actions'));
     expect(screen.getByText(`${POOL_MODEL_NAME} · via free pool`)).toBeInTheDocument();
   });
 
-  it('reads exactly as before for a managed turn and an unlabelled one', () => {
+  it('reads exactly as before for a managed turn and an unlabelled one', async () => {
+    const user = userEvent.setup();
     const { unmount } = render(<MessageBubble message={bubbleMessage('managed')} />);
+    await user.click(screen.getByLabelText('More message actions'));
     expect(screen.getByText(POOL_MODEL_NAME)).toBeInTheDocument();
     expect(screen.queryByText(/via free pool/)).toBeNull();
+    await user.keyboard('{Escape}');
     unmount();
 
     render(<MessageBubble message={bubbleMessage()} />);
+    await user.click(screen.getByLabelText('More message actions'));
     expect(screen.getByText(POOL_MODEL_NAME)).toBeInTheDocument();
     expect(screen.queryByText(/via free pool/)).toBeNull();
   });

@@ -649,6 +649,7 @@ describe('the two emitters of the --chat-* contract agree', () => {
     '--chat-radius-lg': agiChatCssVars.light['--chat-radius-lg'],
     '--chat-radius-xl': agiChatCssVars.light['--chat-radius-xl'],
     '--chat-radius-2xl': agiChatCssVars.light['--chat-radius-2xl'],
+    '--chat-user-bubble-radius': agiChatCssVars.light['--chat-user-bubble-radius'],
   };
 
   for (const [name, fromTs] of Object.entries(sharedRadiusTokens)) {
