@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   loadSeed: vi.fn(),
   complete: vi.fn(),
   skip: vi.fn(),
-  clerkUser: { firstName: 'Ada', fullName: 'Ada Lovelace' } as {
+  identityUser: { firstName: 'Ada', fullName: 'Ada Lovelace' } as {
     firstName?: string;
     fullName?: string;
   } | null,
@@ -20,8 +20,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ user: mocks.clerkUser }),
+vi.mock('@/lib/identity/client', () => ({
+  useCurrentUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.identityUser }),
 }));
 
 vi.mock('../lib/onboarding-preferences', () => ({
@@ -33,7 +33,7 @@ vi.mock('../lib/onboarding-preferences', () => ({
 describe('OnboardingWizard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.clerkUser = { firstName: 'Ada', fullName: 'Ada Lovelace' };
+    mocks.identityUser = { firstName: 'Ada', fullName: 'Ada Lovelace' };
     mocks.loadSeed.mockResolvedValue({ preferredName: '', workDescription: '' });
     mocks.complete.mockResolvedValue(undefined);
     mocks.skip.mockResolvedValue(undefined);

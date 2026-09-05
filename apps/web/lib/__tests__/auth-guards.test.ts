@@ -15,10 +15,8 @@ vi.mock('../api-auth', () => ({
 }));
 
 const mockGetUser = vi.fn();
-vi.mock('@clerk/nextjs/server', () => ({
-  clerkClient: async () => ({
-    users: { getUser: (...args: unknown[]) => mockGetUser(...args) },
-  }),
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityUser: (...args: unknown[]) => mockGetUser(...args),
 }));
 
 import { requireAdmin, requirePlatformAdmin, requireRole } from '../auth-guards';
@@ -40,10 +38,24 @@ function makeAuthResult(userId = 'user_1'): AuthResult {
   return { userId, email: 'test@example.com' };
 }
 
-function makeClerkUser(role?: string) {
+function makeIdentityUser(role?: string) {
   return {
     id: 'user_1',
+    primaryEmail: null,
+    primaryEmailVerification: 'unknown' as const,
+    emails: [],
+    firstName: null,
+    lastName: null,
+    fullName: null,
+    username: null,
+    imageUrl: null,
     publicMetadata: role ? { role } : {},
+    privateMetadata: {},
+    banned: false,
+    locked: false,
+    twoFactorEnabled: false,
+    createdAt: null,
+    lastSignInAt: null,
   };
 }
 
@@ -71,7 +83,7 @@ describe('requireAdmin', () => {
 
   it('throws 403 when user has no role at all', async () => {
     mockedGetClerkAuthUser.mockResolvedValueOnce(makeAuthResult());
-    mockGetUser.mockResolvedValueOnce(makeClerkUser());
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser());
     const err = await requireAdmin(makeReq()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);
@@ -79,7 +91,7 @@ describe('requireAdmin', () => {
 
   it('throws 403 when role is "user"', async () => {
     mockedGetClerkAuthUser.mockResolvedValueOnce(makeAuthResult());
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('user'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('user'));
     const err = await requireAdmin(makeReq()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);
@@ -88,14 +100,14 @@ describe('requireAdmin', () => {
   it('returns authResult when role is "admin"', async () => {
     const authResult = makeAuthResult();
     mockedGetClerkAuthUser.mockResolvedValueOnce(authResult);
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('admin'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('admin'));
     await expect(requireAdmin(makeReq())).resolves.toEqual(authResult);
   });
 
   it('returns authResult when role is "owner" (admin-equivalent)', async () => {
     const authResult = makeAuthResult();
     mockedGetClerkAuthUser.mockResolvedValueOnce(authResult);
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('owner'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('owner'));
     await expect(requireAdmin(makeReq())).resolves.toEqual(authResult);
   });
 
@@ -139,7 +151,7 @@ describe('requirePlatformAdmin', () => {
   it('throws 404 for an org admin/owner who is not on the allowlist', async () => {
     process.env[PLATFORM_ADMIN_ENV_VAR] = 'user_operator';
     mockedGetClerkAuthUser.mockResolvedValueOnce(makeAuthResult());
-    mockGetUser.mockResolvedValue(makeClerkUser('owner'));
+    mockGetUser.mockResolvedValue(makeIdentityUser('owner'));
     const err = await requirePlatformAdmin(makeReq()).catch((e: unknown) => e);
     expect((err as AppError).statusCode).toBe(404);
     expect(mockGetUser).not.toHaveBeenCalled();
@@ -216,27 +228,27 @@ describe('requireRole', () => {
   it('admin role accepted for "admin"', async () => {
     const authResult = makeAuthResult();
     mockedGetClerkAuthUser.mockResolvedValueOnce(authResult);
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('admin'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('admin'));
     await expect(requireRole(makeReq(), 'admin')).resolves.toEqual(authResult);
   });
 
   it('owner role accepted in place of "admin"', async () => {
     const authResult = makeAuthResult();
     mockedGetClerkAuthUser.mockResolvedValueOnce(authResult);
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('owner'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('owner'));
     await expect(requireRole(makeReq(), 'admin')).resolves.toEqual(authResult);
   });
 
   it('exact match required for non-admin roles', async () => {
     const authResult = makeAuthResult();
     mockedGetClerkAuthUser.mockResolvedValueOnce(authResult);
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('editor'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('editor'));
     await expect(requireRole(makeReq(), 'editor')).resolves.toEqual(authResult);
   });
 
   it('rejects mismatched role with 403', async () => {
     mockedGetClerkAuthUser.mockResolvedValueOnce(makeAuthResult());
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('viewer'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('viewer'));
     const err = await requireRole(makeReq(), 'editor').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);
@@ -244,7 +256,7 @@ describe('requireRole', () => {
 
   it('owner is not accepted for non-admin role requests (strict match)', async () => {
     mockedGetClerkAuthUser.mockResolvedValueOnce(makeAuthResult());
-    mockGetUser.mockResolvedValueOnce(makeClerkUser('owner'));
+    mockGetUser.mockResolvedValueOnce(makeIdentityUser('owner'));
     const err = await requireRole(makeReq(), 'editor').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter",
+  "description": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter. The host app supplies the provider SDK from its own dependencies; see the note in src/adapters/clerk.ts for why this package must not declare it.",
   "exports": {
     ".": "./src/index.ts",
     "./browser": "./src/session-cookie.ts",
@@ -18,18 +18,6 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "dependencies": {},
-  "peerDependencies": {
-    "@clerk/backend": ">=3.0.0",
-    "@clerk/nextjs": ">=7.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@clerk/backend": {
-      "optional": true
-    },
-    "@clerk/nextjs": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "vitest": "^4.1.8"
   }

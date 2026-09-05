@@ -153,14 +153,17 @@ describe('resolveSupportAccountContext', () => {
   });
 
   describe('email verification', () => {
-    it('reports verified when Clerk says so', async () => {
+    it('reports verified when the provider says so', async () => {
       const context = await resolveSupportAccountContext(callerDb, USER);
       expect(context.email).toEqual({ present: true, verified: 'verified' });
     });
 
     it('reports unverified only on an explicit unverified status', async () => {
       mocks.getUser.mockResolvedValue({
-        primaryEmailAddress: { verification: { status: 'unverified' } },
+        primaryEmailAddress: {
+          emailAddress: 'someone@example.com',
+          verification: { status: 'unverified' },
+        },
       });
       const context = await resolveSupportAccountContext(callerDb, USER);
       expect(context.email.verified).toBe('unverified');
