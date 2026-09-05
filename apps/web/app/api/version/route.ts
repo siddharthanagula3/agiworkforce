@@ -2,28 +2,19 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 
+import { deployEnvironment, deployRegion, deploymentId, releaseSha } from '@/lib/server/hosting';
+
 export const dynamic = 'force-dynamic';
 
-const SHA_PATTERN = /^[0-9a-f]{7,40}$/;
-
-function deployedCommit(): string {
-  const candidates = [
-    process.env['AGI_RELEASE_SHA'],
-    process.env['VERCEL_GIT_COMMIT_SHA'],
-    process.env['GITHUB_SHA'],
-  ];
-  const sha = candidates
-    .map((value) => value?.trim().toLowerCase() ?? '')
-    .find((value) => SHA_PATTERN.test(value));
-  return sha ?? 'unknown';
-}
+const UNKNOWN_VALUE = 'unknown';
 
 export function GET() {
   return NextResponse.json(
     {
-      commit: deployedCommit(),
-      environment: process.env['VERCEL_ENV'] ?? 'unknown',
-      deploymentId: process.env['VERCEL_DEPLOYMENT_ID'] ?? null,
+      commit: releaseSha() ?? UNKNOWN_VALUE,
+      environment: deployEnvironment() ?? UNKNOWN_VALUE,
+      deploymentId: deploymentId() ?? null,
+      region: deployRegion() ?? null,
     },
     { headers: { 'cache-control': 'no-store' } },
   );
