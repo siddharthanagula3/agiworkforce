@@ -841,7 +841,7 @@ function SidebarItemsRow() {
               onClick={() => setNavItemVisible(destination.id, !visible)}
               className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
                 visible
-                  ? 'border-transparent bg-primary text-primary-foreground'
+                  ? 'border-transparent bg-accent text-accent-foreground ring-1 ring-inset ring-primary'
                   : 'border-border text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -878,7 +878,7 @@ function MotionRow() {
             onClick={() => setMotion(option.value)}
             className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
               motion === option.value
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-accent text-accent-foreground ring-1 ring-inset ring-primary'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
