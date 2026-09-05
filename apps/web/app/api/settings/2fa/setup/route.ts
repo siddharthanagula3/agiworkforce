@@ -3,10 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { logger } from '@/lib/logger';
 import {
   generateTOTPSecret,
@@ -23,9 +24,8 @@ async function handleSetup2FA(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, '2fa-setup');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId, email } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
-
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { email } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);
   const [existing] = await db.query<{ enabled: boolean }>(
     `select enabled from user_two_factor where user_id = $1 limit 1`,
     [userId],
