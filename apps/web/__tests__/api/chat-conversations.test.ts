@@ -41,6 +41,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
 import { GET, POST } from '@/app/api/chat/conversations/route';
