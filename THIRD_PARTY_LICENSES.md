@@ -193,6 +193,14 @@ SOFTWARE.
 - **Imported into**: `.agents/skills/<name>/` for each of the 50 skill directories listed above, unchanged from their upstream directory name (no collision with an existing skill)
 - **Adoption**: Vendored 49 of the 50 skill directories as published (`skills/ad-creative` was dropped: the supply-chain vetter rejects its reference files, which carry shell download commands against third-party generation APIs), marked `audience: product` in `skills-lock.json` because each is a marketing task an end user of this product would ask for (positioning, copywriting, SEO, email sequences, landing pages, launch plans, pricing pages, ads, analytics, and related growth work), so the vendored bundle reaches the in-product Skills catalog rather than staying repository-only tooling. Every `SKILL.md` already carried a real per-skill semantic version under a nested `metadata.version` key that this repository's minimal frontmatter parser does not read; a top-level `version` frontmatter field was added to each, set to that same existing value (matching the `agent-skills` (Vercel Labs) precedent above) rather than the fetched commit sha, so the lock file's `declaredVersion` reflects the skill's own release history instead of one shared repository-wide value. No other frontmatter or body text was changed; every vendored file was run through this repository's own `prettier --write` before hashing so the lock's `computedHash` matches what `lint-staged` produces at commit time, and the tables and code fences prettier reformatted carry no wording changes. Each skill also ships an upstream `evals/` directory (static prompt/expected-output JSON fixtures, not executable) and some ship `references/` markdown and, for `directory-submissions`, one static template file (`references/submission-tracker-template.csv`); both were vendored as published. Every `SKILL.md` and reference file across the 49 vendored skills was checked for shell/download instructions and for prompt-injection example phrasing before vendoring; none were found; one file (`skills/ads/references/audit-guardrails.md`) explicitly warns the agent to treat fetched pages as data and never follow embedded directives, which is a defensive pattern and not an instruction to exclude. Skills reference a `tools/` integrations registry from the upstream repository root (for example `../../tools/integrations/ga4.md`) that was not vendored because it is outside `skills/`; those relative links do not resolve inside this repository, matching how other vendored skill bundles' repository-root cross-references are left unresolved rather than rewritten. Locked in `skills-lock.json`.
 
+## OmniRoute
+
+- **Upstream**: [diegosouzapw/OmniRoute](https://github.com/diegosouzapw/OmniRoute)
+- **License**: MIT
+- **Copyright**: Copyright (c) 2026 diegosouzapw
+- **Imported into**: `packages/ai/routing/src/breaker-profiles.ts`
+- **Adoption**: Numeric threshold pattern only, no upstream source file copied. `DEFAULT_BREAKER_PROFILES` reproduces the shape of OmniRoute's `open-sse/config/constants.ts` `PROVIDER_PROFILES` (three credential-class breaker profiles: static API key, OAuth/session token, local runtime), read from a local read-only clone, not the npm registry. Selection logic (`resolveCredentialClass`, `credentialClassForProvider`) is freshly written against this repository's own `RoutingTrustMode` registry field rather than ported.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
@@ -215,6 +223,7 @@ denylist. Add a port block here before merging any adapted third-party code.
 | liteparse    | Apache-2.0        | On-device document parsing                          |
 | VoxCPM       | Apache-2.0        | Text-to-speech                                      |
 | supervision  | MIT               | Vision utilities (pair with a permissive VLM)       |
+| OmniRoute    | MIT               | Resilience/routing patterns (data shape only)       |
 
 ### Runtime-fetched data sources (never ported, never vendored)
 
