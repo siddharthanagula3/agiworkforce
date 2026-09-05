@@ -594,13 +594,26 @@ export interface TierAllowedModels {
   flagship_additions: string[];
 }
 
+export type ProviderCapabilityDefaults = Record<
+  string,
+  Partial<Record<ModelCapabilityName, string>>
+>;
+
 export interface ModelsCatalog {
   version: number | string;
   lastUpdated: string;
   providers: Record<string, ProviderConfig>;
   models: Record<string, ModelMetadata>;
   tierAllowedModels: TierAllowedModels;
+  providerDefaults: ProviderCapabilityDefaults;
   providersInOrder: string[];
+}
+
+export function getProviderDefaultModelId(
+  provider: string,
+  capability: ModelCapabilityName,
+): string | null {
+  return modelsCatalog.providerDefaults?.[provider]?.[capability] ?? null;
 }
 
 type TierKey = keyof TierAllowedModels;

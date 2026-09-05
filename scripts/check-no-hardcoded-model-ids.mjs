@@ -32,6 +32,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   LOCAL_MODEL_CATALOG_PATH,
   SPEECH_ARTIFACT_REGISTRY_PATH,
   'packages/ai/model-registry/catalog/harnesses.json',
+  'packages/ai/model-registry/catalog/provider-defaults.json',
   'packages/ai/model-registry/catalog/model-families.json',
   'packages/ai/model-registry/catalog/routing-policies.json',
   'packages/ai/model-registry/generated/registry.json',

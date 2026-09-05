@@ -39,6 +39,7 @@ import {
   canUseBillingPlanCapability,
   getModelMetadataById,
   getModelsForProvider,
+  getProviderDefaultModelId,
   isExecutableImageModel,
   type ExecutableImageModel,
   type ModelMetadata,
@@ -213,6 +214,20 @@ function resolveRequestedCatalogModel<T extends ModelMetadata>(
   return canonicalModelId ? models.find((model) => model.id === canonicalModelId) : undefined;
 }
 
+const GOOGLE_PROVIDER_ID = 'google';
+const OPENAI_PROVIDER_ID = 'openai';
+const IMAGE_OUTPUT_CAPABILITY = 'imageOutput';
+
+function resolveDeclaredProviderDefault(
+  models: ExecutableImageModel[],
+  provider: string,
+): ExecutableImageModel | null {
+  const declared = getProviderDefaultModelId(provider, IMAGE_OUTPUT_CAPABILITY);
+  const declaredModel = declared ? models.find((model) => model.id === declared) : undefined;
+  if (declaredModel) return declaredModel;
+  return models.length === 1 ? (models[0] ?? null) : null;
+}
+
 function resolveGoogleImageModel(requestedModelId?: string): ExecutableImageModel | null {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
@@ -222,9 +237,7 @@ function resolveGoogleImageModel(requestedModelId?: string): ExecutableImageMode
   const requested = resolveRequestedCatalogModel(googleImageModels, requestedModelId);
   if (requested) return requested;
 
-  return (
-    googleImageModels.find((model) => model.imageApi === 'gemini') ?? googleImageModels[0] ?? null
-  );
+  return resolveDeclaredProviderDefault(googleImageModels, GOOGLE_PROVIDER_ID);
 }
 
 function resolveOpenAIImageModel(requestedModelId?: string): ExecutableImageModel | null {
@@ -236,9 +249,7 @@ function resolveOpenAIImageModel(requestedModelId?: string): ExecutableImageMode
   const requested = resolveRequestedCatalogModel(openaiImageModels, requestedModelId);
   if (requested) return requested;
 
-  return (
-    openaiImageModels.find((model) => model.imageApi === 'openai') ?? openaiImageModels[0] ?? null
-  );
+  return resolveDeclaredProviderDefault(openaiImageModels, OPENAI_PROVIDER_ID);
 }
 
 function resolveImageCatalogModel(
