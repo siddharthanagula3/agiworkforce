@@ -62,10 +62,6 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   isModelAllowedForTier: () => true,
 }));
 
-vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
-  BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
-}));
-
 vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));
