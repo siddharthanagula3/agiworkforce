@@ -4,6 +4,7 @@ import {
   buildRouteHealthSnapshot,
   createRouteHealthStore,
   DEFAULT_ROUTE_HEALTH_CONFIG,
+  isCredentialUnfunded,
   isRouteBreakerOpen,
   isRouteHealthDegraded,
   resolveCredentialCooldownConfig,
@@ -362,6 +363,42 @@ describe('store over the key-value port', () => {
     const providers = await health.snapshots('provider', [CREDENTIAL_ID], NOW + 2);
     expect(credentials[CREDENTIAL_ID]?.available).toBe(false);
     expect(providers[CREDENTIAL_ID]?.available).toBe(true);
+  });
+
+  it('records an unfunded account in the credential scope and reports it as unfunded', async () => {
+    const { health } = store();
+    await health.recordOutcome('credential', CREDENTIAL_ID, { class: 'credential_unfunded' }, NOW);
+
+    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW + 1);
+    const routes = await health.snapshots('route', [ROUTE_ID], NOW + 1);
+
+    expect(isCredentialUnfunded(credentials[CREDENTIAL_ID])).toBe(true);
+    expect(isCredentialUnfunded(routes[ROUTE_ID])).toBe(false);
+  });
+
+  it('clears the unfunded state once the observation ages out of the window', async () => {
+    const { health } = store();
+    const stale = NOW - resolveCredentialCooldownConfig({}).observationWindowMs * 2;
+    await health.recordOutcome(
+      'credential',
+      CREDENTIAL_ID,
+      { class: 'credential_unfunded' },
+      stale,
+    );
+
+    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW);
+
+    expect(isCredentialUnfunded(credentials[CREDENTIAL_ID])).toBe(false);
+  });
+
+  it('stops reporting unfunded once a newer observation says something else', async () => {
+    const { health } = store();
+    await health.recordOutcome('credential', CREDENTIAL_ID, { class: 'credential_unfunded' }, NOW);
+    await health.recordOutcome('credential', CREDENTIAL_ID, { class: 'success' }, NOW + 1);
+
+    const credentials = await health.snapshots('credential', [CREDENTIAL_ID], NOW + 2);
+
+    expect(isCredentialUnfunded(credentials[CREDENTIAL_ID])).toBe(false);
   });
 
   it('applies a per-id config override for the same scope', async () => {

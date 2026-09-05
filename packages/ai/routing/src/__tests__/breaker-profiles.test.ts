@@ -10,6 +10,7 @@ import {
   resilienceScopeForCategory,
   resolveCredentialClass,
   routeHealthConfigFromBreakerProfile,
+  routeOutcomeClassForCategory,
   trustModesForProvider,
 } from '../breaker-profiles';
 
@@ -143,15 +144,37 @@ describe('classifying an error category into a resilience scope', () => {
     expect(resilienceScopeForCategory('auth')).toBe('credential');
   });
 
+  it('sends an unfunded account to the credential cooldown, not to the route', () => {
+    expect(resilienceScopeForCategory('billing_exhausted')).toBe('credential');
+  });
+
   it('sends model-specific rejections to the model lockout', () => {
     expect(resilienceScopeForCategory('invalid_model')).toBe('model');
     expect(resilienceScopeForCategory('context_overflow')).toBe('model');
   });
 
   it('leaves every other category unscoped rather than guessing', () => {
-    expect(resilienceScopeForCategory('billing_exhausted')).toBeNull();
     expect(resilienceScopeForCategory('safety')).toBeNull();
     expect(resilienceScopeForCategory('aborted')).toBeNull();
     expect(resilienceScopeForCategory('quota_exhausted')).toBeNull();
+  });
+});
+
+describe('classifying an error category into an outcome class', () => {
+  it('gives an unfunded account its own class, not the scope default', () => {
+    expect(routeOutcomeClassForCategory('billing_exhausted')).toBe('credential_unfunded');
+    expect(routeOutcomeClassForCategory('rate_limit')).toBe('rate_limit');
+  });
+
+  it('falls back to the class the scope records under', () => {
+    expect(routeOutcomeClassForCategory('server_error')).toBe('server_error');
+    expect(routeOutcomeClassForCategory('api_timeout')).toBe('server_error');
+    expect(routeOutcomeClassForCategory('auth')).toBe('rate_limit');
+    expect(routeOutcomeClassForCategory('invalid_model')).toBe('model_rejected');
+  });
+
+  it('returns nothing for a category no scope claims, so nothing is recorded', () => {
+    expect(routeOutcomeClassForCategory('safety')).toBeNull();
+    expect(routeOutcomeClassForCategory('aborted')).toBeNull();
   });
 });

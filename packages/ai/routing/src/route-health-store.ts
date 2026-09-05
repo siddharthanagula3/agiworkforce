@@ -155,6 +155,7 @@ const OUTCOME_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'stream_corruption',
   'unsupported_capability',
   'credential_rejected',
+  'credential_unfunded',
   'model_rejected',
 ]);
 
@@ -169,8 +170,11 @@ const FAILURE_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'timeout',
   'stream_corruption',
   'credential_rejected',
+  'credential_unfunded',
   'model_rejected',
 ]);
+
+const UNFUNDED_CLASS: RouteOutcomeClass = 'credential_unfunded';
 
 export interface RouteHealthConfig {
   observationWindowMs: number;
@@ -478,6 +482,7 @@ function countByClass(events: readonly RouteOutcomeEvent[]): Record<RouteOutcome
     stream_corruption: 0,
     unsupported_capability: 0,
     credential_rejected: 0,
+    credential_unfunded: 0,
     model_rejected: 0,
   };
   for (const event of events) counts[event.class] += 1;
@@ -524,6 +529,16 @@ export function routeBreakerState(snapshot: RouteHealthSnapshot | undefined): Ro
 
 export function isRouteBreakerOpen(snapshot: RouteHealthSnapshot | undefined): boolean {
   return routeBreakerState(snapshot) === 'open';
+}
+
+/**
+ * Deliberately independent of `routeBreakerState`. An unfunded credential is
+ * unselectable while the state stands, even in `half_open`: probing a route to
+ * discover the account still has no money spends a real user's turn on a
+ * question the operator already has the answer to.
+ */
+export function isCredentialUnfunded(snapshot: RouteHealthSnapshot | undefined): boolean {
+  return snapshot?.unfunded === true;
 }
 
 export function routeBreakerStateWithDegradeBand(
@@ -577,6 +592,7 @@ export function buildRouteHealthSnapshot(
     available,
     halfOpen,
     ...(cooldownUntilMs !== undefined ? { cooldownUntilMs } : {}),
+    ...(lastEvent.class === UNFUNDED_CLASS ? { unfunded: true } : {}),
     consecutiveFailures,
     sampleCount,
     successRate: counts.success / sampleCount,
@@ -609,17 +625,7 @@ export interface RouteHealthStoreFailureEvent {
 
 export interface RouteHealthStoreOptions {
   store: RouteHealthKeyValueStore | null;
-  /** Per-scope defaults. A scope missing here falls back to its own built-in default. */
   configs?: Partial<Record<RouteHealthScope, RouteHealthConfig>>;
-  /**
-   * Per-id override, consulted before `configs`.
-   *
-   * A provider breaker's threshold depends on which credential class governs
-   * that ONE provider (`breaker-profiles.ts`), not on the scope as a whole, so
-   * the store needs a per-id hook rather than a single config per scope.
-   * Returning `undefined` falls through to `configs[scope]` and then the
-   * scope's built-in default.
-   */
   configFor?: (scope: RouteHealthScope, id: string) => RouteHealthConfig | undefined;
   /** Returns `null` when the read outlived the caller's request-path budget. */
   boundedRead?: <T>(read: Promise<T>) => Promise<T | null>;

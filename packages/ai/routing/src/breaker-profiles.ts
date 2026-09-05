@@ -1,7 +1,7 @@
 import { modelRegistry } from '@agiworkforce/model-registry';
 
 import type { RouteHealthConfig } from './route-health-store';
-import type { RouteHealthSnapshot } from './runtime-state';
+import type { RouteHealthSnapshot, RouteOutcomeClass } from './runtime-state';
 import { routeBreakerStateWithDegradeBand, type RouteBreakerState } from './route-health-store';
 import type { RoutingTrustMode } from './auto';
 
@@ -140,7 +140,17 @@ const PROVIDER_BREAKER_CATEGORIES: ReadonlySet<string> = new Set([
   'api_timeout',
 ]);
 
-const CREDENTIAL_COOLDOWN_CATEGORIES: ReadonlySet<string> = new Set(['rate_limit', 'auth']);
+/**
+ * `billing_exhausted` belongs here for the same reason `auth` does: every route
+ * on the provider answers to the one credential, so an account with no money
+ * left is a credential fact, not a route fact. It is observed rather than
+ * admitted against, which is what lets it age out of the window on its own.
+ */
+const CREDENTIAL_COOLDOWN_CATEGORIES: ReadonlySet<string> = new Set([
+  'rate_limit',
+  'auth',
+  'billing_exhausted',
+]);
 
 const MODEL_LOCKOUT_CATEGORIES: ReadonlySet<string> = new Set([
   'invalid_model',
@@ -152,4 +162,29 @@ export function resilienceScopeForCategory(category: string): ResilienceScope | 
   if (CREDENTIAL_COOLDOWN_CATEGORIES.has(category)) return 'credential';
   if (MODEL_LOCKOUT_CATEGORIES.has(category)) return 'model';
   return null;
+}
+
+const OUTCOME_CLASS_BY_CATEGORY: Readonly<Record<string, RouteOutcomeClass>> = {
+  billing_exhausted: 'credential_unfunded',
+};
+
+const OUTCOME_CLASS_BY_SCOPE: Readonly<Record<ResilienceScope, RouteOutcomeClass>> = {
+  provider: 'server_error',
+  credential: 'rate_limit',
+  model: 'model_rejected',
+};
+
+/**
+ * The class an observation is recorded under, so a caller writing route health
+ * does not have to keep its own table beside this one.
+ *
+ * Category first, scope second: most categories only need to say which breaker
+ * they feed, but one that has its own operator-visible meaning names its class
+ * directly rather than being flattened into the scope's default.
+ */
+export function routeOutcomeClassForCategory(category: string): RouteOutcomeClass | null {
+  const byCategory = OUTCOME_CLASS_BY_CATEGORY[category];
+  if (byCategory) return byCategory;
+  const scope = resilienceScopeForCategory(category);
+  return scope ? OUTCOME_CLASS_BY_SCOPE[scope] : null;
 }
