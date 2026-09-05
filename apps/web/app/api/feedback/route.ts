@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
@@ -24,8 +23,9 @@ const FeedbackSchema = z.object({
       user_agent: z.string().trim().max(500),
       page_path: z.string().trim().max(2_000).optional(),
       conversation_id: z.string().trim().max(200).optional(),
-      feedback_context: z.enum(['safety_refusal', 'response_rating']).optional(),
+      feedback_context: z.enum(['safety_refusal', 'response_rating', 'task_feedback']).optional(),
       message_id: z.string().trim().max(200).optional(),
+      run_id: z.string().trim().max(200).optional(),
       finish_reason: z.enum(['refusal', 'content_filter']).optional(),
       rating: z.enum(['up', 'down']).optional(),
     })
@@ -46,6 +46,18 @@ const FeedbackSchema = z.object({
             code: 'custom',
             path: ['message_id'],
             message: 'message_id is required for a response rating',
+          });
+        }
+        return;
+      }
+      // An AGI Work report that cannot name its run is untriageable: the whole
+      // point of the control is that the task, not the message, is the subject.
+      if (metadata.feedback_context === 'task_feedback') {
+        if (!metadata.run_id) {
+          context.addIssue({
+            code: 'custom',
+            path: ['run_id'],
+            message: 'run_id is required for task feedback',
           });
         }
         return;
@@ -107,6 +119,8 @@ async function handleSubmitFeedback(request: NextRequest) {
           ...(metadata.conversation_id ? { conversation_id: metadata.conversation_id } : {}),
           ...(metadata.feedback_context ? { feedback_context: metadata.feedback_context } : {}),
           ...(metadata.message_id ? { message_id: metadata.message_id } : {}),
+          ...(metadata.run_id ? { run_id: metadata.run_id } : {}),
+          ...(metadata.rating ? { rating: metadata.rating } : {}),
           ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
           ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
           ...(safeLogs ? { logs: safeLogs } : {}),
