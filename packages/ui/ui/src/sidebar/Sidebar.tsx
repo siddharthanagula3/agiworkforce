@@ -809,9 +809,6 @@ export function Sidebar(props: SidebarProps) {
                         {group === 'yesterday' && <Clock className="h-3 w-3" />}
                         {t(`sidebar.temporal.${group}`, TEMPORAL_LABELS[group])}
                       </span>
-                      <span className="ml-auto text-[hsl(var(--muted-foreground))]">
-                        ({convs.length})
-                      </span>
                     </button>
                     {isExpanded && (
                       <div className="mt-1 space-y-1">{convs.map(renderSessionRow)}</div>
