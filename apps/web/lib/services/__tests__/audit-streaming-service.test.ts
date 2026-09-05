@@ -11,12 +11,22 @@ vi.mock('@/lib/egress-policy', () => ({
   pinnedPublicFetch: vi.fn(),
 }));
 
-const { mockGetSharedRedisClient } = vi.hoisted(() => ({
-  mockGetSharedRedisClient: vi.fn(() => null as unknown),
+const { mockGetKeyValueStore } = vi.hoisted(() => ({
+  mockGetKeyValueStore: vi.fn(() => null as unknown),
 }));
-vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mockGetSharedRedisClient }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mockGetKeyValueStore }));
 
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+function asKeyValueStore(client: unknown): KeyValueStore {
+  return createUpstashKeyValueStore(client as UpstashRedisLike);
+}
+
 import {
   AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY,
   AUDIT_STREAM_BATCH,
@@ -94,7 +104,7 @@ function harness({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertPublic.mockResolvedValue(undefined);
-  mockGetSharedRedisClient.mockReturnValue(null);
+  mockGetKeyValueStore.mockReturnValue(null);
 });
 
 describe('signing', () => {
@@ -169,7 +179,7 @@ describe('audit stream active-org redis marker', () => {
 
   it('marks the organization active in redis when enabling a destination', async () => {
     const redis = redisMock();
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     const h = upsertHarness();
 
     await upsertAuditDestination(h.db, ORG, {
@@ -184,7 +194,7 @@ describe('audit stream active-org redis marker', () => {
 
   it('clears the organization from redis when disabling a destination', async () => {
     const redis = redisMock();
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     const h = upsertHarness();
 
     await upsertAuditDestination(h.db, ORG, {
@@ -199,7 +209,7 @@ describe('audit stream active-org redis marker', () => {
 
   it('clears the organization from redis on delete', async () => {
     const redis = redisMock();
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
     const query = vi.fn(async () => [{ organization_id: ORG }]);
     const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
 
@@ -210,7 +220,7 @@ describe('audit stream active-org redis marker', () => {
   });
 
   it('does not block the save when redis is unavailable', async () => {
-    mockGetSharedRedisClient.mockReturnValue(null);
+    mockGetKeyValueStore.mockReturnValue(null);
     const h = upsertHarness();
 
     await expect(
@@ -225,7 +235,7 @@ describe('audit stream active-org redis marker', () => {
   it('reports true when the active set is non-empty', async () => {
     const redis = redisMock();
     redis.scard.mockResolvedValue(2);
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     await expect(hasActiveAuditStreamDestinations()).resolves.toBe(true);
   });
@@ -233,13 +243,13 @@ describe('audit stream active-org redis marker', () => {
   it('reports false when the active set is empty', async () => {
     const redis = redisMock();
     redis.scard.mockResolvedValue(0);
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     await expect(hasActiveAuditStreamDestinations()).resolves.toBe(false);
   });
 
   it('reports null when redis is unavailable, so the caller falls through to Postgres', async () => {
-    mockGetSharedRedisClient.mockReturnValue(null);
+    mockGetKeyValueStore.mockReturnValue(null);
 
     await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
   });
@@ -247,7 +257,7 @@ describe('audit stream active-org redis marker', () => {
   it('reports null instead of throwing when redis errors', async () => {
     const redis = redisMock();
     redis.scard.mockRejectedValue(new Error('redis down'));
-    mockGetSharedRedisClient.mockReturnValue(redis);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
     await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
   });

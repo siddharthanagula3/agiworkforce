@@ -39,7 +39,6 @@ export interface NodeRedisLike {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ...args: Array<string | number>): Promise<string | null>;
   del(...keys: string[]): Promise<number>;
-  incr(key: string): Promise<number>;
   incrby(key: string, amount: number): Promise<number>;
   expire(key: string, ttlSeconds: number): Promise<number>;
   hset(key: string, fields: Record<string, string>): Promise<number>;
@@ -126,8 +125,7 @@ class NodeRedisKeyValueStore implements KeyValueStore {
   }
 
   async increment(key: string, amount: number = SINGLE_INCREMENT): Promise<number> {
-    const client = await this.client();
-    return amount === SINGLE_INCREMENT ? client.incr(key) : client.incrby(key, amount);
+    return (await this.client()).incrby(key, amount);
   }
 
   async expire(key: string, ttlSeconds: number): Promise<void> {
@@ -196,8 +194,7 @@ class NodeRedisKeyValueStore implements KeyValueStore {
         return batch;
       },
       increment: (key, amount = SINGLE_INCREMENT) => {
-        if (amount === SINGLE_INCREMENT) queue('incr', [key]);
-        else queue('incrby', [key, amount]);
+        queue('incrby', [key, amount]);
         return batch;
       },
       expire: (key, ttlSeconds) => {

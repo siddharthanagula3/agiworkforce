@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const mocks = vi.hoisted(() => ({ getSharedRedisClient: vi.fn() }));
-vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mocks.getSharedRedisClient }));
+const mocks = vi.hoisted(() => ({ getKeyValueStore: vi.fn() }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   persistActiveWorkspaceSelection,
@@ -13,6 +18,10 @@ import {
   resolveOrganizationMembershipId,
   touchesActiveOrganizationNamespace,
 } from '../active-workspace-service';
+
+function asKeyValueStore(client: unknown): KeyValueStore {
+  return createUpstashKeyValueStore(client as UpstashRedisLike);
+}
 
 function fakeCacheRedis() {
   const store = new Map<string, unknown>();
@@ -153,7 +162,7 @@ describe('active workspace persistence, warm Redis cache', () => {
   it('resolves the active organization from Postgres once across two consecutive calls', async () => {
     const h = harness();
     h.query.mockResolvedValue([{ organization_id: ORGANIZATION_ID }]);
-    mocks.getSharedRedisClient.mockReturnValue(fakeCacheRedis());
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeCacheRedis()));
 
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
@@ -164,7 +173,7 @@ describe('active workspace persistence, warm Redis cache', () => {
   it('refreshes the cache immediately when the selection is written', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
-    mocks.getSharedRedisClient.mockReturnValue(fakeCacheRedis());
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeCacheRedis()));
 
     await persistActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID);
     h.query.mockClear();

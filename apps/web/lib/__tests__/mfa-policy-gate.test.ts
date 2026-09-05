@@ -22,12 +22,20 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveMfaPolicy: mocks.resolveMfaPolicy,
 }));
-vi.mock('@/lib/rate-limit', () => ({
-  getSharedRedisClient: vi.fn(() => mocks.redisClient),
+vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueStore: vi.fn(() =>
+    mocks.redisClient ? createUpstashKeyValueStore(mocks.redisClient as UpstashRedisLike) : null,
+  ),
 }));
 vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(async () => ({ users: { getUser: mocks.getUser } })),
 }));
+
+import {
+  createUpstashKeyValueStore,
+  type KeyValueStore,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
 
 const { assertMfaPolicy, isMfaRequiredError } = await import('../mfa-policy-gate');
 

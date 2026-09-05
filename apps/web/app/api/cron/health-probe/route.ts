@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { runHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
@@ -17,17 +17,18 @@ const PAGER_TIMEOUT_MS = 5_000;
 const FAILURE_STREAK_REDIS_KEY = 'agi-health-probe:consecutive-failures';
 const FAILURE_STREAK_TTL_SECONDS = 1_800;
 const CONSECUTIVE_FAILURES_BEFORE_PAGE = 2;
+const HEALTHY_FAILURE_STREAK = 0;
 
 async function recordFailureStreak(healthy: boolean): Promise<number | null> {
-  const redis = getSharedRedisClient();
-  if (!redis) return null;
+  const store = getKeyValueStore();
+  if (!store) return null;
   try {
     if (healthy) {
-      await redis.del(FAILURE_STREAK_REDIS_KEY);
-      return 0;
+      await store.delete(FAILURE_STREAK_REDIS_KEY);
+      return HEALTHY_FAILURE_STREAK;
     }
-    const streak = await redis.incr(FAILURE_STREAK_REDIS_KEY);
-    await redis.expire(FAILURE_STREAK_REDIS_KEY, FAILURE_STREAK_TTL_SECONDS);
+    const streak = await store.increment(FAILURE_STREAK_REDIS_KEY);
+    await store.expire(FAILURE_STREAK_REDIS_KEY, FAILURE_STREAK_TTL_SECONDS);
     return streak;
   } catch (error) {
     logger.error({ error }, 'Health probe failure-streak tracking failed');

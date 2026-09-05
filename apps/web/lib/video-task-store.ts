@@ -1,13 +1,7 @@
 import 'server-only';
 
-import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
-
-const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
-const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
-const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
-
-const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
+import { getKeyValueStore } from '@/lib/server/key-value';
 
 const TTL_SECONDS = 6 * 60 * 60;
 const TTL_MS = TTL_SECONDS * 1000;
@@ -42,9 +36,14 @@ export async function storeVideoTask(
   pruneLocal(now);
   localStore.set(taskId, { userId, ...(model ? { model } : {}), expiresAt: now + TTL_MS });
 
-  if (!redis) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   try {
-    await redis.set(taskKey(taskId), { userId, ...(model ? { model } : {}) }, { ex: TTL_SECONDS });
+    await store.set(
+      taskKey(taskId),
+      { userId, ...(model ? { model } : {}) },
+      { ttlSeconds: TTL_SECONDS },
+    );
   } catch (err) {
     logger.error(
       { err, taskId, userId },
@@ -62,9 +61,10 @@ export async function getVideoTask(taskId: string): Promise<VideoTaskRecord | un
     localStore.delete(taskId);
   }
 
-  if (!redis) return undefined;
+  const store = getKeyValueStore();
+  if (!store) return undefined;
   try {
-    const stored = await redis.get<VideoTaskRecord | string>(taskKey(taskId));
+    const stored = await store.get<VideoTaskRecord | string>(taskKey(taskId));
     if (!stored) return undefined;
     if (typeof stored === 'string') return { userId: stored };
     return stored.userId ? stored : undefined;

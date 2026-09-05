@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { getSharedRedisClient } from '@/lib/rate-limit';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import type { ManagedComputeAccessDecision } from '@/lib/services/managed-compute-access';
 
 const CACHE_KEY_PREFIX = 'provider-proxy:gate:v1';
@@ -32,10 +32,10 @@ function cacheKey(sessionId: string): string {
 export async function readCachedProviderProxyAccess(
   sessionId: string,
 ): Promise<ManagedComputeAccessDecision | null> {
-  const redis = getSharedRedisClient();
-  if (redis) {
+  const store = getKeyValueStore();
+  if (store) {
     try {
-      return (await redis.get<ManagedComputeAccessDecision>(cacheKey(sessionId))) ?? null;
+      return (await store.get<ManagedComputeAccessDecision>(cacheKey(sessionId))) ?? null;
     } catch (err) {
       logger.warn({ err, sessionId }, '[e2b] provider-proxy gate cache read failed');
       return null;
@@ -54,10 +54,10 @@ export async function writeCachedProviderProxyAccess(
   sessionId: string,
   decision: ManagedComputeAccessDecision,
 ): Promise<void> {
-  const redis = getSharedRedisClient();
-  if (redis) {
+  const store = getKeyValueStore();
+  if (store) {
     try {
-      await redis.set(cacheKey(sessionId), decision, { ex: CACHE_TTL_SECONDS });
+      await store.set(cacheKey(sessionId), decision, { ttlSeconds: CACHE_TTL_SECONDS });
       return;
     } catch (err) {
       logger.warn({ err, sessionId }, '[e2b] provider-proxy gate cache write failed');
@@ -68,10 +68,10 @@ export async function writeCachedProviderProxyAccess(
 
 export async function invalidateCachedProviderProxyAccess(sessionId: string): Promise<void> {
   memoryCache.delete(sessionId);
-  const redis = getSharedRedisClient();
-  if (!redis) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   try {
-    await redis.del(cacheKey(sessionId));
+    await store.delete(cacheKey(sessionId));
   } catch (err) {
     logger.warn({ err, sessionId }, '[e2b] provider-proxy gate cache invalidation failed');
   }

@@ -1,14 +1,8 @@
 import 'server-only';
 
-import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
-
-const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
-const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
-const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
-
-const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
 
 export interface StoredContext {
   id: string;
@@ -116,9 +110,10 @@ function scopeLog(scope: E2BSessionScope): Record<string, string | undefined> {
 }
 
 export async function getE2BSession(scope: E2BSessionScope): Promise<E2BSession | null> {
-  if (!redis) return null;
+  const store = getKeyValueStore();
+  if (!store) return null;
   try {
-    const value = await redis.get<E2BSession>(sessionKey(scope));
+    const value = await store.get<E2BSession>(sessionKey(scope));
     return value ?? null;
   } catch (err) {
     logger.warn(
@@ -130,18 +125,20 @@ export async function getE2BSession(scope: E2BSessionScope): Promise<E2BSession 
 }
 
 export async function saveE2BSession(scope: E2BSessionScope, session: E2BSession): Promise<void> {
-  if (!redis) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   try {
-    await redis.set(sessionKey(scope), session, { ex: SESSION_TTL_SECONDS });
+    await store.set(sessionKey(scope), session, { ttlSeconds: SESSION_TTL_SECONDS });
   } catch (err) {
     logger.warn({ err, ...scopeLog(scope) }, '[e2b] session-store save failed');
   }
 }
 
 export async function deleteE2BSession(scope: E2BSessionScope): Promise<void> {
-  if (!redis) return;
+  const store = getKeyValueStore();
+  if (!store) return;
   try {
-    await redis.del(sessionKey(scope));
+    await store.delete(sessionKey(scope));
   } catch (err) {
     logger.warn({ err, ...scopeLog(scope) }, '[e2b] session-store delete failed');
   }
@@ -155,6 +152,7 @@ export interface E2BCachePurgeResult {
 
 const GLOB_METACHARACTERS = /[*?[\]\\^]/u;
 const SCAN_PAGE = 500;
+const SCAN_START_CURSOR = '0';
 
 function userScopedKeyPatterns(owner: string): string[] {
   return [
@@ -165,7 +163,8 @@ function userScopedKeyPatterns(owner: string): string[] {
 }
 
 export async function deleteE2BSessionsForUser(userId: string): Promise<E2BCachePurgeResult> {
-  if (!redis) return { deleted: 0, failed: 0, reachable: false };
+  const store = getKeyValueStore();
+  if (!store) return { deleted: 0, failed: 0, reachable: false };
 
   const owner = encodeKeyPart(userId);
   if (GLOB_METACHARACTERS.test(owner)) {
@@ -179,16 +178,16 @@ export async function deleteE2BSessionsForUser(userId: string): Promise<E2BCache
   let deleted = 0;
   let failed = 0;
   for (const match of userScopedKeyPatterns(owner)) {
-    let cursor = '0';
+    let cursor = SCAN_START_CURSOR;
     try {
       do {
-        const [next, keys] = await redis.scan(cursor, { match, count: SCAN_PAGE });
-        cursor = String(next);
-        if (keys.length > 0) {
-          await redis.del(...keys);
-          deleted += keys.length;
+        const page = await store.scan(cursor, { match, count: SCAN_PAGE });
+        cursor = page.cursor;
+        if (page.keys.length > 0) {
+          await store.delete(...page.keys);
+          deleted += page.keys.length;
         }
-      } while (cursor !== '0');
+      } while (cursor !== SCAN_START_CURSOR);
     } catch (err) {
       failed += 1;
       logger.error({ err, userId, match }, '[e2b] sandbox cache purge failed for a key pattern');
@@ -214,7 +213,8 @@ export async function withUserSandboxLock<T>(
   scope: Pick<E2BSessionScope, 'tenantId' | 'userId'>,
   critical: () => Promise<T>,
 ): Promise<{ locked: boolean; result?: T }> {
-  if (!redis) return { locked: true, result: await critical() };
+  const store = getKeyValueStore();
+  if (!store) return { locked: true, result: await critical() };
 
   const key = sandboxLockKey(scope.tenantId, scope.userId);
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -223,7 +223,10 @@ export async function withUserSandboxLock<T>(
   let held = false;
   try {
     while (Date.now() < deadline) {
-      const acquired = await redis.set(key, token, { nx: true, px: SANDBOX_LOCK_TTL_MS });
+      const acquired = await store.set(key, token, {
+        onlyIfAbsent: true,
+        ttlMilliseconds: SANDBOX_LOCK_TTL_MS,
+      });
       if (acquired) {
         held = true;
         break;
@@ -247,8 +250,8 @@ export async function withUserSandboxLock<T>(
     return { locked: true, result: await critical() };
   } finally {
     try {
-      const current = await redis.get<string>(key);
-      if (current === token) await redis.del(key);
+      const current = await store.get<string>(key);
+      if (current === token) await store.delete(key);
     } catch (err) {
       logger.warn({ err, userId: scope.userId }, '[e2b] sandbox lock release failed');
     }

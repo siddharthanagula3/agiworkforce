@@ -46,7 +46,6 @@ type UpstashScoreBound = number | typeof POSITIVE_SCORE_BOUND | typeof NEGATIVE_
 interface UpstashPipelineLike {
   get(key: string): unknown;
   set(key: string, value: unknown, options?: UpstashSetOptions): unknown;
-  incr(key: string): unknown;
   incrby(key: string, amount: number): unknown;
   expire(key: string, ttlSeconds: number): unknown;
   pexpire(key: string, ttlMilliseconds: number): unknown;
@@ -72,7 +71,6 @@ export interface UpstashRedisLike {
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown, options?: UpstashSetOptions): Promise<unknown>;
   del(...keys: string[]): Promise<number>;
-  incr(key: string): Promise<number>;
   incrby(key: string, amount: number): Promise<number>;
   expire(key: string, ttlSeconds: number): Promise<unknown>;
   hset(key: string, fields: KeyValueHashFields): Promise<unknown>;
@@ -152,7 +150,7 @@ class UpstashKeyValueStore implements KeyValueStore {
   }
 
   increment(key: string, amount: number = SINGLE_INCREMENT): Promise<number> {
-    return amount === SINGLE_INCREMENT ? this.client.incr(key) : this.client.incrby(key, amount);
+    return this.client.incrby(key, amount);
   }
 
   async expire(key: string, ttlSeconds: number): Promise<void> {
@@ -214,8 +212,7 @@ class UpstashKeyValueStore implements KeyValueStore {
         return batch;
       },
       increment: (key, amount = SINGLE_INCREMENT) => {
-        if (amount === SINGLE_INCREMENT) pipeline.incr(key);
-        else pipeline.incrby(key, amount);
+        pipeline.incrby(key, amount);
         return batch;
       },
       expire: (key, ttlSeconds) => {

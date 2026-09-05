@@ -8,7 +8,7 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: vi.fn(() => null) }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: vi.fn(() => null) }));
 
 import { GET } from './route';
 
