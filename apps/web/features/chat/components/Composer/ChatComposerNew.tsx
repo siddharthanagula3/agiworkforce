@@ -185,6 +185,19 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
   agiwork: 'Describe a multi-step task and what it should deliver',
 };
 
+/**
+ * While a response runs the field is for the next turn, not for a rule about
+ * when it will be sent. The queueing behaviour is unchanged; the chip on the
+ * send control is what says a message is waiting.
+ */
+const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
+
+/**
+ * The chip on the send control already says a message is waiting, so this row
+ * only has to name which message and keep its Edit and Cancel reachable.
+ */
+const QUEUED_ROW_LEAD = 'Queued';
+
 const WORK_BAR_LABELS = {
   project: 'Project',
   files: 'Files',
@@ -2791,9 +2804,9 @@ const ChatComposerNewComponent = ({
             >
               <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">
-                {index === 0
-                  ? 'Queued · sends when the current response finishes: '
-                  : `Queued ${index + 1} of ${queuedFollowUps.length}: `}
+                {queuedFollowUps.length > 1
+                  ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
+                  : `${QUEUED_ROW_LEAD}: `}
                 {queued.preview}
                 {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry.
                     they are editable while it waits (the "+" menu stays open during
@@ -3220,7 +3233,7 @@ const ChatComposerNewComponent = ({
                 onSlashMenuKey={(key) => slashMenuRef.current?.handleKey(key) ?? false}
                 placeholder={
                   isTurnActive && !imageMode && !videoMode
-                    ? 'Reply: sends when the current response finishes'
+                    ? TURN_ACTIVE_PLACEHOLDER
                     : imageMode
                       ? 'Describe or edit an image'
                       : videoMode
@@ -3887,6 +3900,7 @@ const ChatComposerNewComponent = ({
                   mode={sendButtonMode}
                   isSending={isSendPending}
                   hasContent={hasContent}
+                  queuedCount={queuedFollowUps.length}
                   disabled={
                     composerDisabled ||
                     (sendButtonMode !== 'stop' &&
