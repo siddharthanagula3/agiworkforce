@@ -46,6 +46,12 @@ const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
   'zinc',
 ]);
 
+const ACCENT_HEX_STOPS = PROJECT_ACCENT_REGISTRY.map((accent) => accent.hex);
+const CUSTOM_SWATCH_GRADIENT = `conic-gradient(from 0deg, ${[
+  ...ACCENT_HEX_STOPS,
+  ...ACCENT_HEX_STOPS.slice(0, 1),
+].join(', ')})`;
+
 function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
   if (!value) return null;
   return VALID_ACCENT_COLORS.has(value as ProjectAccentColor)
@@ -683,8 +689,7 @@ export default function ProjectDetailPage() {
                         borderRadius: '50%',
                         cursor: 'pointer',
                         border: '2px dashed var(--agi-rule-strong)',
-                        background:
-                          'conic-gradient(from 0deg, #f43f5e, #f59e0b, #10b981, #0ea5e9, #8b5cf6, #f43f5e)',
+                        background: CUSTOM_SWATCH_GRADIENT,
                       }}
                     >
                       <input
@@ -834,14 +839,11 @@ export default function ProjectDetailPage() {
           {projectConversations.length >= MAX_CONVERSATIONS_WARN && (
             <div
               role="alert"
+              className="rounded-lg border border-warning/30 bg-warning/10 text-warning"
               style={{
                 marginBottom: 16,
                 padding: '8px 12px',
-                borderRadius: 8,
-                background: 'rgba(200,137,42,0.1)',
-                border: '1px solid rgba(200,137,42,0.3)',
                 fontSize: 12,
-                color: 'var(--agi-amber)',
                 lineHeight: 1.5,
                 flexShrink: 0,
               }}
