@@ -106,6 +106,8 @@ export interface ManagedCloudChatClient {
 
 const DEFAULT_SAVE_ATTEMPTS = 3;
 const DEFAULT_SAVE_RETRY_DELAY_MS = 350;
+const RATE_LIMITED_STATUS = 429;
+const SERVER_ERROR_STATUS_FLOOR = 500;
 
 export class ManagedCloudChatHttpError extends Error {
   constructor(
@@ -384,8 +386,14 @@ export function createManagedCloudChatClient(
         } catch (error) {
           lastError = error;
           const status = error instanceof ManagedCloudChatHttpError ? error.status : null;
+          // A shared per-minute limiter is the common reason a turn fails to
+          // save, and it clears on its own, so it retries like a 5xx rather
+          // than losing the turn on the first refusal.
           const retryable =
-            !(error instanceof ManagedCloudChatContractError) && (status === null || status >= 500);
+            !(error instanceof ManagedCloudChatContractError) &&
+            (status === null ||
+              status >= SERVER_ERROR_STATUS_FLOOR ||
+              status === RATE_LIMITED_STATUS);
           if (!retryable || attempt >= attempts) throw error;
           await delay(retryDelayMs * attempt, options.signal);
         }

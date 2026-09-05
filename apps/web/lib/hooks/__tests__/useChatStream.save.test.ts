@@ -50,12 +50,25 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     expect(saved).toEqual({ id: sent.id });
   });
 
-  it('surfaces a 429 (rate-limited persist = turn not saved) by throwing, without retrying', async () => {
+  it('retries a rate-limited persist and recovers when the limiter clears', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, { error: 'rate limited' }))
+      .mockResolvedValueOnce(jsonResponse(200, { message: { id: 'server-id-8' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
+
+    expect(saved).toEqual({ id: 'server-id-8' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('THROWS after exhausting retries on a persistent rate limit', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(429, { error: 'rate limited' }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/429/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('retries a transient 500 and recovers when a later attempt succeeds', async () => {
@@ -109,18 +122,18 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
   });
 });
 
-describe('notifyPersistenceFailure surfaces loss to the user', () => {
+describe('notifyPersistenceFailure logs rather than interrupts', () => {
   beforeEach(() => toastError.mockReset());
 
-  it('shows an assistant-specific toast', () => {
-    notifyPersistenceFailure('assistant', new Error('x'));
-    expect(toastError).toHaveBeenCalledTimes(1);
-    expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save this response/i);
-  });
-
-  it('shows a user-specific toast', () => {
-    notifyPersistenceFailure('user', new Error('x'));
-    expect(toastError).toHaveBeenCalledTimes(1);
-    expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save your message/i);
+  it('never toasts a failure the user cannot act on', () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      notifyPersistenceFailure('assistant', new Error('x'));
+      notifyPersistenceFailure('user', new Error('x'));
+      expect(toastError).not.toHaveBeenCalled();
+      expect(errorLog).toHaveBeenCalledTimes(2);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 });
