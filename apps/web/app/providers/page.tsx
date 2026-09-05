@@ -76,8 +76,7 @@ export default function ProvidersPage() {
             <div className="agi-lp-hero-copy">
               <Eyebrow>Provider catalog</Eyebrow>
               <h1 className="agi-ds-h1" id="agi-providers-title">
-                Every provider here comes out of{' '}
-                <em className="agi-ds-accent">the catalog the apps compile in.</em>
+                Every provider, from the one catalogue the apps compile in.
               </h1>
               <Prose size="lg">
                 A cloud provider needs a key you own; a local runtime needs a URL for a server you
