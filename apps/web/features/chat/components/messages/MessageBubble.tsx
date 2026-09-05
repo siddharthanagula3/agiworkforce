@@ -1413,21 +1413,34 @@ const MessageBubbleComponent = function MessageBubble({
     );
   }, [canonicalActivity, message.metadata?.tools]);
 
-  const showNoSearchResultsNotice = useMemo(() => {
-    if (isUser || message.isStreaming) return false;
-    if (message.metadata?.webSearchRequested !== true) return false;
-    if (!turnAttemptedSearch) return false;
-    if (producedNoVisibleOutput) return false;
-    if (hasStreamError({ metadata: message.metadata })) return false;
-    return searchSources.length === 0;
+  const turnRanAnyTool = useMemo(() => {
+    if (canonicalActivity?.entries.some((entry) => entry.kind === 'tool')) return true;
+    return (message.metadata?.tools?.length ?? 0) > 0;
+  }, [canonicalActivity, message.metadata?.tools]);
+
+  // Two different failures wearing one label. A search that ran and found
+  // nothing is the model's honest limit. A search that never ran is the model
+  // deciding it already knew, which reads to the user as search being broken.
+  // Naming which one happened is what makes the retry make sense. A turn that
+  // reached for some other tool answered with work, not recollection, so it
+  // gets neither notice.
+  const searchNotice = useMemo<'no-results' | 'not-invoked' | null>(() => {
+    if (isUser || message.isStreaming) return null;
+    if (message.metadata?.webSearchRequested !== true) return null;
+    if (producedNoVisibleOutput) return null;
+    if (hasStreamError({ metadata: message.metadata })) return null;
+    if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
+    return searchSources.length === 0 ? 'no-results' : null;
   }, [
     isUser,
     message.isStreaming,
     message.metadata,
     turnAttemptedSearch,
+    turnRanAnyTool,
     producedNoVisibleOutput,
     searchSources,
   ]);
+  const showNoSearchResultsNotice = searchNotice === 'no-results';
 
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
   useEffect(() => {
@@ -2282,17 +2295,24 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {showNoSearchResultsNotice && (
+          {searchNotice && (
             <div className="mt-2">
               <TranscriptNotice
                 tone="neutral"
                 icon={CircleAlert}
-                message="Web search didn't return results for this turn, so the answer relies on the model's own knowledge."
+                message={
+                  searchNotice === 'no-results'
+                    ? "Web search didn't return results for this turn, so the answer relies on the model's own knowledge."
+                    : "The answer used the model's own knowledge. Ask to search the web for current sources."
+                }
                 action={
                   onRegenerate
                     ? {
-                        label: 'Retry',
-                        ariaLabel: 'Retry this response with web search',
+                        label: searchNotice === 'no-results' ? 'Retry' : 'Search the web',
+                        ariaLabel:
+                          searchNotice === 'no-results'
+                            ? 'Retry this response with web search'
+                            : 'Send this turn again with a web search required',
                         icon: RefreshCw,
                         onClick: () => onRegenerate(message.id),
                       }
