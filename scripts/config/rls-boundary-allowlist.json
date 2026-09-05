@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "path": "apps/web/app/api/admin/takedown/route.ts",
+      "reason": "platform-admin route gated by requirePlatformAdmin, deliberately cross-user by design"
+    },
+    {
+      "path": "apps/web/app/api/auth/device/approve/route.ts",
+      "reason": "RFC 8628 device flow, the pending row is resolved by user_code before any account is attached, there is no owner to constrain by until approval"
+    },
+    {
+      "path": "apps/web/app/api/auth/device/code/route.ts",
+      "reason": "RFC 8628 device flow, the pending row is resolved and expired by user_code before any account is attached, user_id is null until approval"
+    },
+    {
+      "path": "apps/web/app/api/auth/device/refresh/route.ts",
+      "reason": "refresh-token reuse detection revokes the whole family_id, the credential is the subject and constraining by user would defeat the revocation"
+    },
+    {
+      "path": "apps/web/app/api/auth/device/token/route.ts",
+      "reason": "RFC 8628 device flow, the row is resolved by device_id and user_code, not the caller, until the poll succeeds and a developer token is minted"
+    },
+    {
+      "path": "apps/web/app/api/autotag/batch/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/autotag/classify/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/autotag/conversations/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/billing/top-up/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/checkout/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/claim-offer/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/connectors/custom/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/connectors/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/control-plane/status/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/copyright-notice/route.ts",
+      "reason": "public unauthenticated DMCA-style intake, the reporter has no account to scope by"
+    },
+    {
+      "path": "apps/web/app/api/cron/purge-deleted-media/route.ts",
+      "reason": "cron route gated by verifyCronRequest against CRON_SECRET, platform-scoped by design"
+    },
+    {
+      "path": "apps/web/app/api/cron/reset-credits/route.ts",
+      "reason": "cron route gated by verifyCronRequest against CRON_SECRET, sweeps every subscription due for reset"
+    },
+    {
+      "path": "apps/web/app/api/device/approve/route.ts",
+      "reason": "QR device-pairing flow, the pending row is resolved by its pairing code, not the approving session, until the pairing completes"
+    },
+    {
+      "path": "apps/web/app/api/device/link/route.ts",
+      "reason": "QR device-pairing flow, mints a pending pairing row with no device attached yet, there is no second party to constrain by"
+    },
+    {
+      "path": "apps/web/app/api/device/poll/route.ts",
+      "reason": "QR device-pairing flow, the row is resolved by device_id shared with the CLI flow, not by a caller session"
+    },
+    {
+      "path": "apps/web/app/api/download-beta/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/feedback/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/github/installations/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/github/oauth/callback/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/github/webhook/route.ts",
+      "reason": "GitHub webhook verified by HMAC signature, resolves its own installation subject from the signed payload"
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/me/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/mobile/agent-status/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/mobile/content-report/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/mobile/feedback/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/mobile/iap/google-notifications/route.ts",
+      "reason": "Google Play Pub/Sub notification verified by OIDC token, resolves its own subject from the provider payload"
+    },
+    {
+      "path": "apps/web/app/api/mobile/push-token/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/portal/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/projects/[id]/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/projects/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/search/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/2fa/backup-codes/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/2fa/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/2fa/setup/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/2fa/validate/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/2fa/verify/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/activity/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/audit-logs/actions/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/settings/audit-logs/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/share/[token]/route.ts",
+      "reason": "reading a shared conversation by its unguessable token is the feature, a public share link has no viewer subject to constrain by"
+    },
+    {
+      "path": "apps/web/app/api/share/route.ts",
+      "reason": "the GET reads a share by its unguessable token with no viewer subject, the POST insert already carries the authenticated user_id"
+    },
+    {
+      "path": "apps/web/app/api/upgrade/preview/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/upgrade/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/user/export/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/api/waitlist/cloud-managed/route.ts",
+      "reason": "waitlist rows are captured before any account exists, there is no owner to constrain by"
+    },
+    {
+      "path": "apps/web/app/api/waitlist/public/route.ts",
+      "reason": "waitlist rows are captured before any account exists, there is no owner to constrain by"
+    },
+    {
+      "path": "apps/web/app/api/waitlist/route.ts",
+      "reason": "waitlist rows are captured before any account exists, there is no owner to constrain by"
+    },
+    {
+      "path": "apps/web/app/api/web-push/route.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/app/share/[token]/page.tsx",
+      "reason": "reading a share by its unguessable token is the feature, same as the api/share/[token] route it renders"
+    },
+    {
+      "path": "apps/web/features/admin/services/operator-metrics.ts",
+      "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
+    },
+    {
+      "path": "apps/web/lib/connectors/mcp-state-store.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/github-app.ts",
+      "reason": "shared by the GitHub webhook, verified by HMAC signature with no Clerk session, and the OAuth install routes, so not every caller has a session to bind"
+    },
+    {
+      "path": "apps/web/lib/security-audit.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/account-erasure.ts",
+      "reason": "account erasure engine deletes across every user-owned table by the target userId the caller already resolved, not a session token RLS can bind"
+    },
+    {
+      "path": "apps/web/lib/server/anonymous-erasure.ts",
+      "reason": "erases pre-account rows by email hash for subjects who never created an account, there is no Clerk user to bind RLS to"
+    },
+    {
+      "path": "apps/web/lib/server/code-execution-policy.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/content-report-triage.ts",
+      "reason": "moderation triage queue reached only from the admin content-reports route, reading every reporter is the purpose"
+    },
+    {
+      "path": "apps/web/lib/server/developer-token.ts",
+      "reason": "revocation targets the row resolved from the presented token signature and family id, the credential is the subject"
+    },
+    {
+      "path": "apps/web/lib/server/device-signin-policy.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/media-assets.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/neon-chat.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/organization-erasure.ts",
+      "reason": "organization erasure engine deletes across every org-owned table by the target organizationId, triggered only by the deletion cron"
+    },
+    {
+      "path": "apps/web/lib/server/rolling-usage.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/security-log-retention.ts",
+      "reason": "retention sweep over the whole audit log triggered by cron or admin, deletes by age not by subject"
+    },
+    {
+      "path": "apps/web/lib/server/spendable-credits.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/server/user-identity.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/agent-notification-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/api-key-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/billing-invoice-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/credit-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/free-trial-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/org-entitlements.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/org-sharing-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/plugin-installation-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/push-notification-service.ts",
+      "reason": "invalidateTokens clears exact push tokens the provider reported unregistered, a device credential is not a user, every other export already carries user_id"
+    },
+    {
+      "path": "apps/web/lib/services/reflect-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/route-cache-observability-service.ts",
+      "reason": "reached only from the platform-admin observability routes, deliberately cross-tenant aggregate reads"
+    },
+    {
+      "path": "apps/web/lib/services/schedule-notification-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/schedule-service.ts",
+      "reason": "scheduler worker writes back to the task id it claimed from the due-set in the same transaction, there is no request subject to constrain by"
+    },
+    {
+      "path": "apps/web/lib/services/security-monitoring-service.ts",
+      "reason": "platform abuse detection reached only from the admin security route, per-user counts cannot detect an attacker spraying accounts from one IP"
+    },
+    {
+      "path": "apps/web/lib/services/subscription-service.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/services/web-push-service.ts",
+      "reason": "the matched word is a local variable holding push-subscription objects, not the billing subscriptions table, every statement already carries user_id"
+    },
+    {
+      "path": "apps/web/lib/support/account/context-resolver.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/support/actions/executors/regenerate-api-key.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/support/actions/executors/revoke-connector.ts",
+      "reason": "pending scoped migration"
+    },
+    {
+      "path": "apps/web/lib/support/handoff/store.ts",
+      "reason": "a handoff session is owned by an anonymous visitor and read by the staff console, agent_user_id is staff not a customer, spans every visitor by design"
+    },
+    {
+      "path": "apps/web/lib/user-connector-tools.ts",
+      "reason": "pending scoped migration"
+    }
+  ]
+}
