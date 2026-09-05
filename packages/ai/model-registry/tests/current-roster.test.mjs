@@ -228,11 +228,12 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     return { openWeight, license, commercialRestrictions };
   };
 
-  const verifiedOpenWeightKeys = [
-    ...registry.providerModelKeys.deepseek,
-    ...registry.providerModelKeys.zhipu,
-  ];
-  for (const modelKey of verifiedOpenWeightKeys) {
+  const authoredOpenness = (modelKey) => {
+    const { openWeight, license, commercialRestrictions } = curation.models[modelKey];
+    return { openWeight, license, commercialRestrictions };
+  };
+
+  for (const modelKey of registry.providerModelKeys.deepseek) {
     assert.deepEqual(openness(modelKey), {
       openWeight: true,
       license: 'MIT',
@@ -240,16 +241,22 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     });
   }
 
-  const unknownLicenseKeys = [
-    ...registry.providerModelKeys.moonshot,
-    ...registry.providerModelKeys.minimax,
-  ];
-  for (const modelKey of unknownLicenseKeys) {
-    assert.deepEqual(openness(modelKey), {
-      openWeight: true,
-      license: undefined,
-      commercialRestrictions: undefined,
-    });
+  const openWeightProviders = ['deepseek', 'zhipu', 'moonshot', 'minimax'];
+  for (const providerId of openWeightProviders) {
+    for (const modelKey of registry.providerModelKeys[providerId]) {
+      const authored = authoredOpenness(modelKey);
+      assert.equal(authored.openWeight, true, `${modelKey} must be authored as open weight`);
+      assert.equal(authored.commercialRestrictions, undefined);
+      assert.deepEqual(
+        openness(modelKey),
+        authored,
+        `${modelKey} must publish exactly the openness the catalog authored, never an inferred one`,
+      );
+      if (authored.license !== undefined) {
+        assert.equal(typeof authored.license, 'string');
+        assert.ok(authored.license.length > 0, `${modelKey} license must not be empty`);
+      }
+    }
   }
 
   const proprietaryKeys = ['openai', 'anthropic', 'google', 'xai'].map(

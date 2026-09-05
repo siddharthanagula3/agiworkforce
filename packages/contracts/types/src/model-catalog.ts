@@ -73,6 +73,7 @@ export interface VideoTokenPricingFormula {
   pixelsPerToken: number;
   usdPerToken: number;
   usdPerTokenWithoutAudio?: number;
+  usdPerTokenWithVideoInput?: number;
 }
 
 export interface VideoGenerationMetadata {

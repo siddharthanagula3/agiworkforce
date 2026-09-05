@@ -714,6 +714,7 @@ function normalizeVideoGeneration(modelKey, video) {
       'pixelsPerToken',
       'usdPerToken',
       'usdPerTokenWithoutAudio',
+      'usdPerTokenWithVideoInput',
     ];
     assert.equal(
       Object.keys(video.pricing).filter((key) => !pricingKeys.includes(key)).length,
@@ -727,7 +728,7 @@ function normalizeVideoGeneration(modelKey, video) {
         `${label}.pricing.${field} must be a positive integer`,
       );
     }
-    for (const field of ['usdPerToken', 'usdPerTokenWithoutAudio']) {
+    for (const field of ['usdPerToken', 'usdPerTokenWithoutAudio', 'usdPerTokenWithVideoInput']) {
       if (video.pricing[field] === undefined) continue;
       assert.ok(
         Number.isFinite(video.pricing[field]) && video.pricing[field] > 0,

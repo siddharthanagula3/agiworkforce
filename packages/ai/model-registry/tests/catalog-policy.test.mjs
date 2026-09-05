@@ -181,20 +181,25 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
 
   const plus = curation.models[qwenProvider.defaultModel];
   assert.deepEqual(plus.costOverride, {
-    inputCost: 0.276,
-    outputCost: 1.101,
-    cached_input: 0.0552,
-    cached_write: 0.345,
+    inputCost: 0.4,
+    outputCost: 1.6,
+    cached_input: 0.08,
+    cached_write: 0.5,
   });
   assert.deepEqual(plus.inputTokenPricingTiers, [
     {
       thresholdTokens: 256_000,
-      inputCost: 0.826,
-      cached_input: 0.1652,
-      cached_write: 1.0325,
-      outputCost: 3.301,
+      inputCost: 1.2,
+      cached_input: 0.24,
+      cached_write: 1.5,
+      outputCost: 4.8,
     },
   ]);
+  assert.match(plus.pricingNote, /dashscope-intl\.aliyuncs\.com/u);
+  assert.deepEqual(qwenProvider.defaultPricing, {
+    inputPerMillion: 0.4,
+    outputPerMillion: 1.6,
+  });
 
   assert.deepEqual(curation.models[anthropicDefaultModelKey].costOverride, {
     inputCost: 2,
@@ -218,7 +223,7 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   assert.ok(authored.name.length > 0);
   assert.equal(authored.provider, 'runway');
   assert.equal(authored.modelType, 'video');
-  assert.deepEqual(authored.inputModalities, ['text']);
+  assert.deepEqual(authored.inputModalities, ['text', 'image']);
   assert.equal(authored.releasedOverride, 'December 2025');
 
   assert.equal(authored.videoPerSecondCost, 0.12);
@@ -226,6 +231,11 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   assert.match(authored.pricingNote, /1280:720/u);
   assert.match(authored.pricingNote, /720:1280/u);
   assert.match(authored.pricingNote, /2-10 seconds/u);
+  assert.match(authored.pricingNote, /prores and png_sequence add 5 credits/u);
+  assert.deepEqual(authored.videoGeneration.durationSecs, [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(authored.videoGeneration.supportsAudio, false);
+  assert.equal(authored.videoGeneration.supportsSeed, true);
+  assert.equal(authored.videoGeneration.outputSizes.length, 6);
 
   assert.equal(authored.contextOverride, undefined);
   assert.equal(authored.availability, 'unavailable');
@@ -243,7 +253,7 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   assert.deepEqual(registry.pricing[modelKey].videoPerSecondByResolution, { '720p': 0.12 });
   assert.equal(registry.limits[modelKey].contextTokens, undefined);
   assert.equal(registry.capabilities[modelKey].textInput, true);
-  assert.equal(registry.capabilities[modelKey].imageInput, false);
+  assert.equal(registry.capabilities[modelKey].imageInput, true);
   assert.equal(registry.capabilities[modelKey].videoOutput, true);
 });
 
