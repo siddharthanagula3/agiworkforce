@@ -24,7 +24,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, user: { fullName: 'Demo', firstName: 'Demo' } }),
 }));
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
   refreshProfileConsumers: vi.fn(),
   saveDisplayName: vi.fn(),
@@ -46,7 +47,8 @@ vi.mock('@shared/stores/thinking-store', () => ({
       setEffort: mocks.setEffort,
     }),
 }));
-vi.mock('@shared/config/llm', () => ({
+vi.mock('@shared/config/llm', async (importOriginal) => ({
+  ...(await importOriginal()),
   getModelReasoning: () => ({ supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'] }),
   splitEffortsByEntitlement: () => ({
     allowed: ['low', 'medium', 'high'],
@@ -85,7 +87,9 @@ vi.mock('@/lib/hooks/useTTS', () => ({
     isSpeaking: false,
   }),
 }));
-vi.mock('@/features/settings/components/LanguageSelector', () => ({ LanguageSelector: () => null }));
+vi.mock('@/features/settings/components/LanguageSelector', () => ({
+  LanguageSelector: () => null,
+}));
 vi.mock('@/features/settings/components/CustomCommandsSettings', () => ({
   CustomCommandsSettings: () => null,
 }));

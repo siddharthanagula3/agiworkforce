@@ -22,7 +22,8 @@ vi.mock('@shared/stores/authentication-store', () => ({
     selector({ user: { id: 'user-1' }, logout: mockLogout }),
 }));
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: mockAddCsrfHeaders,
 }));
 
@@ -34,7 +35,8 @@ vi.mock('../components/Settings/ApiKeys', () => ({
 // AccountSection.delete.test.tsx for the real useDeleteAccount integration,
 // including a QueryClientProvider). Stub the hook here so mounting
 // AccountSection doesn't require a QueryClient just to render session rows.
-vi.mock('../hooks/use-settings-queries', () => ({
+vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal()),
   useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
     mutate: vi.fn(),

@@ -41,7 +41,8 @@ vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, user: { fullName: 'Demo User', firstName: 'Demo' } }),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchStoredPreferenceNamespace: mocks.fetchPreferences,
   refreshProfileConsumers: vi.fn(),
   saveDisplayName: vi.fn(),

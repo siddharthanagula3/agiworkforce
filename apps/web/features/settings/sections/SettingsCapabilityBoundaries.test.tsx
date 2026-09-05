@@ -22,7 +22,8 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   saveDisplayName: vi.fn(async () => {}),
 }));
 
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal()),
   useUserSettings: () => ({ data: null, isLoading: false }),
   useUpdateSettings: () => ({ mutate: vi.fn(), isPending: false }),
   useChangePassword: () => ({ mutate: vi.fn(), isPending: false }),
