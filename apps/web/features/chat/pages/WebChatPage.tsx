@@ -4647,13 +4647,17 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]">
           <div
             className={cn(
-              'relative flex h-11 shrink-0 items-center justify-between px-4',
+              'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
               isEmptyChat
                 ? 'border-b border-transparent'
                 : 'border-b border-[var(--chat-border-subtle)]',
             )}
           >
-            <div className="flex shrink-0 items-center gap-1">
+            {/* Title left, actions right, the arrangement both leaders use. The
+                chevron menu carries the row actions (rename, move, share,
+                print, export, branch, delete); Share keeps its own control in
+                the trailing cluster beside the drawer toggles. */}
+            <div className="flex min-w-0 flex-1 items-center gap-1">
               {isNarrowViewport && (
                 <Button
                   ref={mobileNavTriggerRef}
@@ -4663,66 +4667,51 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   aria-label={t('chat:openNavigation')}
                   aria-expanded={mobileNavOpen}
                   aria-controls={MOBILE_NAV_DRAWER_ID}
-                  className="-ml-1 h-8 w-8 p-0"
+                  className="-ml-1 h-8 w-8 shrink-0 p-0"
                 >
                   <Menu className="h-5 w-5" aria-hidden="true" />
                 </Button>
               )}
-              {hasMessages && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShareDialogOpen(true)}
-                  className="hidden gap-1.5 sm:inline-flex"
-                  aria-label={t('chat:shareConversation')}
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden text-xs sm:inline">{t('common:share')}</span>
-                </Button>
-              )}
+              {hasMessages &&
+                activeConversationTitle &&
+                activeConversationTitle !== NEW_CHAT_TITLE &&
+                displayedConversationId && (
+                  <ConversationTitleMenu
+                    title={activeConversationTitle}
+                    projects={sidebarProjects}
+                    onRename={(next) => handleRenameSession(displayedConversationId, next)}
+                    onMoveToProject={(projectId) =>
+                      handleMoveToProjectSession(displayedConversationId, projectId)
+                    }
+                    onDelete={() => void handleDeleteSession(displayedConversationId)}
+                    // Ctrl+P alone could never work here: the transcript is
+                    // virtualized, so the browser would print only the rows in
+                    // the DOM and the result would look complete.
+                    onPrint={() => void printConversation()}
+                    onExport={() => setExportDialogOpen(true)}
+                    onShare={() => setShareDialogOpen(true)}
+                    // Conversation-level fork. The branch API and its hook were
+                    // already live for per-message branching; only this entry
+                    // point was missing. Branching from the LAST message
+                    // duplicates the whole thread.
+                    onFork={
+                      displayedMessages.length > 0
+                        ? () => {
+                            const last = displayedMessages[displayedMessages.length - 1];
+                            if (last?.id) void createBranch(last.id);
+                          }
+                        : undefined
+                    }
+                  />
+                )}
             </div>
 
-            {/* Conversation title - centered in header when in an active chat.
-                A dropdown trigger (chevron) exposes Rename / Move to project /
-                Delete; Rename swaps the title for an inline input. */}
-            {activeConversationTitle &&
-              activeConversationTitle !== NEW_CHAT_TITLE &&
-              displayedConversationId && (
-                <ConversationTitleMenu
-                  title={activeConversationTitle}
-                  projects={sidebarProjects}
-                  onRename={(next) => handleRenameSession(displayedConversationId, next)}
-                  onMoveToProject={(projectId) =>
-                    handleMoveToProjectSession(displayedConversationId, projectId)
-                  }
-                  onDelete={() => void handleDeleteSession(displayedConversationId)}
-                  // Ctrl+P alone could never work here: the transcript is
-                  // virtualized, so the browser would print only the rows in
-                  // the DOM and the result would look complete.
-                  onPrint={() => void printConversation()}
-                  onExport={() => setExportDialogOpen(true)}
-                  onShare={() => setShareDialogOpen(true)}
-                  // Conversation-level fork. The branch API and its hook were
-                  // already live for per-message branching; only this entry
-                  // point was missing. Branching from the LAST message
-                  // duplicates the whole thread.
-                  onFork={
-                    displayedMessages.length > 0
-                      ? () => {
-                          const last = displayedMessages[displayedMessages.length - 1];
-                          if (last?.id) void createBranch(last.id);
-                        }
-                      : undefined
-                  }
-                />
-              )}
-
             {/*
-              Four fixed controls and a fixed left group left the conversation
-              title 24px of a 255px name at 320px - one character and an
-              ellipsis. The panel toggles collapse behind one control on a
-              phone; they keep their own state and labels, so nothing is lost
-              but the width.
+              Four fixed controls beside the title left it 24px of a 255px name
+              at 320px - one character and an ellipsis. The panel toggles
+              collapse behind one control on a phone, and Share keeps its home
+              in the title menu; they keep their own state and labels, so
+              nothing is lost but the width.
             */}
             <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
               {hasMessages && (
@@ -4756,6 +4745,18 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
               {hasMessages && (
                 <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
+              )}
+              {hasMessages && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShareDialogOpen(true)}
+                  className="gap-1.5"
+                  aria-label={t('chat:shareConversation')}
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="text-xs">{t('common:share')}</span>
+                </Button>
               )}
               {hasMessages && showWorkSession && (
                 <WorkSessionToggleButton
