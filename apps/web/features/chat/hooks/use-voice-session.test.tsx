@@ -28,7 +28,7 @@ import {
   UTTERANCE_CANCEL_WINDOW_MS,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
-} from '@features/chat/lib/voice-session-machine';
+} from '@agiworkforce/unified-chat';
 
 const UTTERANCE = 'book the flight for tuesday';
 

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { VoiceOrb } from './VoiceOrb';
-import { ORB_STATE, VOICE_SESSION_STATUS } from '@features/chat/lib/voice-session-machine';
+import { ORB_STATE, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 
 function fakeGradient(): CanvasGradient {
   return { addColorStop: vi.fn() } as unknown as CanvasGradient;

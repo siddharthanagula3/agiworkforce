@@ -24,7 +24,7 @@ import {
   VOICE_LANGUAGE_AUTO,
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
-import { VOICE_SESSION_STATUS } from '@features/chat/lib/voice-session-machine';
+import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { VoiceOrb } from './VoiceOrb';
 
 const LABEL = {

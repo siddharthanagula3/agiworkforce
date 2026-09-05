@@ -10,7 +10,7 @@ import {
   useVoiceSessionStore,
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
-import { VOICE_SESSION_STATUS } from '@features/chat/lib/voice-session-machine';
+import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
 import { VoiceOrb } from './VoiceOrb';
