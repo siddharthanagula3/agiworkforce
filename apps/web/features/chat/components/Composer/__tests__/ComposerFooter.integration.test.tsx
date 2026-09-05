@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
@@ -113,15 +113,17 @@ describe('ComposerFooter · model selector integration', () => {
     expect(screen.queryByRole('button', { name: /change model/i })).not.toBeInTheDocument();
   });
 
-  it('renders grouped model options (a More models section) when the selector is opened', async () => {
+  it('renders grouped model options (an All models section) when the selector is opened', async () => {
     render(<ComposerFooter />);
     await userEvent.click(screen.getByRole('button', { name: /change model/i }));
-    expect(await screen.findByText('More models')).toBeInTheDocument();
+    expect(await screen.findByText('All models')).toBeInTheDocument();
   });
 
-  it('uses the visible Models heading as the selector dialog name', () => {
+  it('names the selector dialog without rendering a visible heading', () => {
     render(<ComposerFooter />);
-    expect(screen.getByRole('dialog', { name: 'Models' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: 'Models' });
+    expect(dialog).toHaveAttribute('aria-label', 'Models');
+    expect(within(dialog).queryByRole('heading')).not.toBeInTheDocument();
   });
 
   it('shows a saving state and keeps the prior model when durable persistence fails', async () => {

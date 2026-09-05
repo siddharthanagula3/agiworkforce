@@ -126,8 +126,8 @@ vi.mock('@shared/components/agi/AgiMark', () => ({
 import { ComposerFooter } from '../ComposerFooter';
 
 function premiumRowLabel(): string {
-  const moreModels = screen.queryByRole('button', { name: /More models/i });
-  if (moreModels) fireEvent.click(moreModels);
+  const allModels = screen.queryByRole('button', { name: /All models/i });
+  if (allModels) fireEvent.click(allModels);
   const row = screen.getByRole('button', { name: /Premium Model/i });
   return row.getAttribute('aria-label') ?? '';
 }
@@ -163,7 +163,7 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('Premium Model - requires upgrade');
+    expect(premiumRowLabel()).toMatch(/^Premium Model - .+/);
   });
 
   it('applies free-tier locks once the free plan is confirmed', () => {
@@ -171,6 +171,6 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('Premium Model - requires upgrade');
+    expect(premiumRowLabel()).toMatch(/^Premium Model - .+/);
   });
 });

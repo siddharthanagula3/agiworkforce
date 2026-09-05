@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import React from 'react';
 
 const sel = vi.hoisted(() => ({ id: 'fixture-six-level' }));
@@ -181,9 +181,10 @@ vi.mock('@shared/stores/thinking-store', () => ({
 vi.mock('../StyleSelector', () => ({ StyleSelector: () => <div /> }));
 vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ activeConversationId: null, messages: [] }),
+    selector({ activeConversationId: null, conversations: [], messages: [] }),
 }));
-vi.mock('@agiworkforce/routing', () => ({
+vi.mock('@agiworkforce/routing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
   assessModelSwitchCache: () => ({ warn: false, resetsCache: false }),
 }));
 
@@ -316,7 +317,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(slider).toHaveAttribute('aria-valuetext', 'Minimal');
   });
 
-  it('keeps the effort row before the model list, with the slider collapsed until asked', () => {
+  it('keeps the effort row after the model list and above All models, slider collapsed', () => {
     sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'medium';
     render(<ComposerFooter />);
@@ -326,8 +327,14 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
       name: 'Four-Level Secondary Fixture',
     });
     expect(
-      effortRow().compareDocumentPosition(firstModelRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+      firstModelRow.compareDocumentPosition(effortRow()) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    const allModels = screen.queryByRole('button', { name: /All models/i });
+    if (allModels) {
+      expect(
+        effortRow().compareDocumentPosition(allModels) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
 
     expandEffort();
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
@@ -335,7 +342,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
       effortRow().compareDocumentPosition(slider) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      slider.compareDocumentPosition(firstModelRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+      firstModelRow.compareDocumentPosition(slider) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     fireEvent.change(slider, { target: { value: '3' } });
@@ -360,7 +367,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     const row = screen.getByRole('button', { name: 'Six-Level Fixture' });
     expect(row).not.toBeDisabled();
     expect(row).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+    expect(within(row).queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
   it('trims the slider to the entitled levels and names the gated ones for an unentitled tier', () => {
@@ -397,7 +404,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
   it('keeps a synthetic future preview non-selectable and non-focusable', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
-    fireEvent.click(screen.getByRole('button', { name: /more models/i }));
+    fireEvent.click(screen.getByRole('button', { name: /all models/i }));
     const row = screen.getByRole('button', {
       name: /future preview model.*not yet available/i,
     });

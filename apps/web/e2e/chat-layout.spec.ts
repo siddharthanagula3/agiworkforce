@@ -80,15 +80,15 @@ test.describe('chat surface layout', () => {
     expect(Math.abs(edges.composer!.right - edges.message!.right)).toBeLessThanOrEqual(1);
   });
 
-  // Expanding "More models" made the popover taller than the space above its
+  // Expanding "All models" made the popover taller than the space above its
   // trigger, and it rendered 45px above the viewport with the search field
   // half cut off and no way to scroll it back.
   test('the model picker stays inside the viewport when its roster expands', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto('/chat');
     await page.getByRole('button', { name: 'Change model' }).click();
-    const moreModels = page.getByRole('button', { name: /More models/ });
-    if (await moreModels.count()) await moreModels.first().click();
+    const allModels = page.getByRole('button', { name: /All models/ });
+    if (await allModels.count()) await allModels.first().click();
 
     const box = await page.evaluate(() => {
       const content = document.querySelector('[data-radix-popper-content-wrapper]')
