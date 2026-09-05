@@ -1,3 +1,4 @@
+pub mod action_router;
 pub mod browser;
 pub mod codegen;
 pub mod computer_use;

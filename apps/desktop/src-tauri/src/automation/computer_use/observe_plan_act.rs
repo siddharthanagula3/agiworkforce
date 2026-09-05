@@ -15,21 +15,31 @@ use std::time::{Duration, Instant};
 /// Upper bound on how long the OPA loop will sit paused waiting for a user
 /// confirmation that currently has no channel to arrive on.
 const CONFIRMATION_WAIT_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// The loop plans and acts without a human in the turn, which is what makes an
+/// escalation deny rather than wait.
+const OPA_RUN_IS_UNATTENDED: bool = true;
+const ROUTED_ACTIONS_EXECUTED: u32 = 1;
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 
+use crate::automation::action_router::{
+    ActionIntent, ActionRouter, DispatchError, RoutedCall, TierDispatch,
+};
 use crate::automation::input::{
     KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
 };
 use crate::automation::screen::{capture_primary_screen, list_displays, ScreenInfo};
+use crate::automation::AutomationService;
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 
 use super::app_permissions::AppPermissionManager;
-use super::safety::{ComputerUseSafetyLayer, SafetyConfig};
+use super::approval;
+use super::safety::{ComputerUseSafetyLayer, SafetyConfig, SafetyDecision, SafetyReason};
 use super::session::{ComputerUseSession, SessionConfig};
 use super::types::{
     ComputerUseAction, ComputerUseTask, Coordinate, ElementBounds, HotkeyModifier, MouseButton,
@@ -154,6 +164,27 @@ pub struct OpaLoopResult {
     pub outcome: TaskOutcome,
 }
 
+/// The refusal the user reads. `SafetyReason` is a tagged record built for the
+/// approval contract, not a sentence, so the app-permission cases render
+/// through the safety layer's own wording and the rest through the tag.
+fn describe_safety_block(reason: &SafetyReason) -> String {
+    match reason {
+        SafetyReason::AppDenied { .. }
+        | SafetyReason::AppHardBlocked { .. }
+        | SafetyReason::AppRequiresApproval { .. } => {
+            super::safety::describe_app_permission_block(reason)
+        }
+        other => serde_json::to_string(other).unwrap_or_else(|_| format!("{other:?}")),
+    }
+}
+
+/// What the router settled for one task before the loop runs.
+enum RoutedOutcome {
+    Completed,
+    Refused { reason: String },
+    Visual,
+}
+
 /// Reason why the OPA loop completed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -238,6 +269,90 @@ impl ComputerUseAgent {
         self
     }
 
+    fn automation_service(&self) -> Option<Arc<AutomationService>> {
+        use tauri::Manager;
+
+        self.app_handle
+            .as_ref()?
+            .try_state::<Option<Arc<AutomationService>>>()
+            .and_then(|state| state.inner().clone())
+    }
+
+    /// Asks the router which executor drives this task before the loop starts,
+    /// so vision is reached only after the cheaper tiers have declined. A tier
+    /// that accepted and then failed hands the task on; a tier whose call the
+    /// user or the tool guard refused ends it, because the next tier would run
+    /// the same action through a driver that never asked.
+    async fn route_task(
+        &self,
+        task: &ComputerUseTask,
+        session: &ComputerUseSession,
+    ) -> RoutedOutcome {
+        let automation = self.automation_service();
+        let router = ActionRouter::for_desktop(automation.clone(), self.app_handle.clone());
+        let decision = router.route(ActionIntent::from_task(task)).await;
+
+        if let Some(app) = self.app_handle.as_ref() {
+            crate::ui::events::emit_action_routed(app, &session.id, &decision);
+        }
+
+        let (Some(call), Some(automation)) = (decision.call.as_ref(), automation) else {
+            return RoutedOutcome::Visual;
+        };
+
+        self.dispatch_routed_call(call, automation, task, &session.id)
+            .await
+    }
+
+    async fn dispatch_routed_call(
+        &self,
+        call: &RoutedCall,
+        automation: Arc<AutomationService>,
+        task: &ComputerUseTask,
+        session_id: &str,
+    ) -> RoutedOutcome {
+        let dispatch = TierDispatch::new(
+            self.app_handle.clone(),
+            automation,
+            Arc::clone(&self.llm_router),
+            self.config.trust_mode,
+        );
+
+        match dispatch.run(call, session_id, &task.description).await {
+            Ok(_) => RoutedOutcome::Completed,
+            Err(DispatchError::Denied(reason)) => RoutedOutcome::Refused { reason },
+            Err(DispatchError::Failed(detail)) => {
+                tracing::warn!(
+                    "Routed {:?} call '{}' failed, falling through to the visual loop: {}",
+                    call.tier,
+                    call.tool,
+                    detail
+                );
+                RoutedOutcome::Visual
+            }
+        }
+    }
+
+    fn emit_safety_approval(
+        &self,
+        session_id: &str,
+        action: &ComputerUseAction,
+        decision: &SafetyDecision,
+    ) {
+        let Some(app) = self.app_handle.as_ref() else {
+            return;
+        };
+
+        let request = approval::approval_request(
+            uuid::Uuid::new_v4().to_string(),
+            session_id.to_string(),
+            action,
+            decision,
+            OPA_RUN_IS_UNATTENDED,
+        );
+        crate::ui::events::emit_computer_use_approval(app, session_id, &request);
+    }
+
     /// Executes a task using the Observe-Plan-Act loop.
     pub async fn execute_task(&self, task: ComputerUseTask) -> Result<OpaLoopResult> {
         let start = Instant::now();
@@ -259,6 +374,22 @@ impl ComputerUseAgent {
                     activation.error
                 );
             }
+        }
+
+        match self.route_task(&task, &session).await {
+            RoutedOutcome::Completed => {
+                state.actions_executed = ROUTED_ACTIONS_EXECUTED;
+                state.task_complete = true;
+                return self.complete_task(&mut session, state, CompletionReason::TaskComplete);
+            }
+            RoutedOutcome::Refused { reason } => {
+                return self.complete_task(
+                    &mut session,
+                    state,
+                    CompletionReason::SafetyBlocked { reason },
+                );
+            }
+            RoutedOutcome::Visual => {}
         }
 
         // Main OPA loop
@@ -357,13 +488,12 @@ impl ComputerUseAgent {
                 // denied. Apps not yet decided trigger an approval request.
                 if let Some(reason) = self.safety_layer.check_app_permission().await {
                     tracing::warn!("Action blocked by per-app permission: {:?}", reason);
+                    let refusal = describe_safety_block(&reason);
+                    self.emit_safety_approval(&session.id, &action, &SafetyDecision::block(reason));
                     return self.complete_task(
                         &mut session,
                         state,
-                        CompletionReason::SafetyBlocked {
-                            reason: serde_json::to_string(&reason)
-                                .unwrap_or_else(|_| format!("{reason:?}")),
-                        },
+                        CompletionReason::SafetyBlocked { reason: refusal },
                     );
                 }
 
@@ -371,15 +501,14 @@ impl ComputerUseAgent {
                 let decision = self.safety_layer.evaluate_action(&action);
 
                 if !decision.allowed {
-                    if let Some(reason) = decision.reason {
+                    if let Some(reason) = decision.reason.as_ref() {
                         tracing::warn!("Action blocked by safety: {:?}", reason);
+                        let refusal = describe_safety_block(reason);
+                        self.emit_safety_approval(&session.id, &action, &decision);
                         return self.complete_task(
                             &mut session,
                             state,
-                            CompletionReason::SafetyBlocked {
-                                reason: serde_json::to_string(&reason)
-                                    .unwrap_or_else(|_| format!("{reason:?}")),
-                            },
+                            CompletionReason::SafetyBlocked { reason: refusal },
                         );
                     }
                     continue;
@@ -397,6 +526,7 @@ impl ComputerUseAgent {
                         "Destructive action requires confirmation but no HITL is available; blocking: {:?}",
                         decision.warnings
                     );
+                    self.emit_safety_approval(&session.id, &action, &decision);
                     return self.complete_task(
                         &mut session,
                         state,

@@ -102,6 +102,8 @@ export const TOOL_APPROVAL_REASONS = listing<ToolApprovalReason>()([
   'lethal_trifecta',
   'never_rememberable',
   'risk_tier',
+  'policy_hard_block',
+  'harness_limit',
 ]);
 
 export const TOOL_APPROVAL_OUTCOMES = listing<ToolApprovalOutcome>()([

@@ -1,4 +1,5 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
+import type { ToolApprovalRequest } from '@agiworkforce/types';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -84,6 +85,20 @@ export type OpaCompletionReason =
   | { type: 'user_cancelled' }
   | { type: 'safety_blocked'; reason: string }
   | { type: 'not_making_progress' };
+
+export type ExecutorTier = 'api' | 'ui' | 'browser' | 'visual';
+
+export interface TierAssessment {
+  tier: ExecutorTier;
+  decline: { decline: string } & Record<string, unknown>;
+}
+
+export interface ActionRoutingRecord {
+  sessionId: string;
+  selected: ExecutorTier;
+  tool: string | null;
+  declined: TierAssessment[];
+}
 
 export interface OpaTaskResult {
   success: boolean;
@@ -175,6 +190,8 @@ interface ComputerUseState {
   activeOpaExecutionId: string | null;
   cancellingOpaExecutionId: string | null;
   lastOpaResult: OpaTaskResult | null;
+  lastRouting: ActionRoutingRecord | null;
+  pendingApproval: ToolApprovalRequest | null;
 
   computerUseEnabled: boolean;
   consentAccepted: boolean;
@@ -189,6 +206,7 @@ interface ComputerUseState {
   setComputerUseEnabled: (enabled: boolean) => void;
   setConsentAccepted: (accepted: boolean) => void;
   revokeDesktopConsent: () => Promise<void>;
+  clearPendingApproval: () => void;
 
   click: (x: number, y: number) => Promise<void>;
   moveMouse: (x: number, y: number) => Promise<void>;
@@ -236,6 +254,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
       activeOpaExecutionId: null,
       cancellingOpaExecutionId: null,
       lastOpaResult: null,
+      lastRouting: null,
+      pendingApproval: null,
 
       computerUseEnabled: false,
       consentAccepted: false,
@@ -252,6 +272,9 @@ export const useComputerUseStore = create<ComputerUseState>()(
         );
       },
       setConsentAccepted: (accepted: boolean) => set({ consentAccepted: accepted }),
+
+      clearPendingApproval: () =>
+        set({ pendingApproval: null }, undefined, 'computerUse/clearPendingApproval'),
 
       revokeDesktopConsent: async () => {
         try {
@@ -377,6 +400,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
             isExecutingOpa: false,
             activeOpaExecutionId: null,
             lastOpaResult: null,
+            lastRouting: null,
+            pendingApproval: null,
           },
           undefined,
           'computerUse/reset',
@@ -726,6 +751,12 @@ export const useComputerUseStore = create<ComputerUseState>()(
   ),
 );
 
+interface RoutingDecisionPayload {
+  selected: ExecutorTier;
+  call: { tool: string } | null;
+  declined: TierAssessment[];
+}
+
 export function subscribeToComputerUseEvents(): () => void {
   const unlisteners: Promise<UnlistenFn>[] = [];
 
@@ -751,6 +782,32 @@ export function subscribeToComputerUseEvents(): () => void {
         currentScreenshot: event.payload.screenshot.imageBase64,
       });
     }),
+  );
+
+  unlisteners.push(
+    listen<{ sessionId: string; decision: RoutingDecisionPayload }>(
+      'computer_use:action_routed',
+      (event) => {
+        const { sessionId, decision } = event.payload;
+        useComputerUseStore.setState({
+          lastRouting: {
+            sessionId,
+            selected: decision.selected,
+            tool: decision.call?.tool ?? null,
+            declined: decision.declined,
+          },
+        });
+      },
+    ),
+  );
+
+  unlisteners.push(
+    listen<{ sessionId: string; approval: ToolApprovalRequest }>(
+      'computer_use:approval_required',
+      (event) => {
+        useComputerUseStore.setState({ pendingApproval: event.payload.approval });
+      },
+    ),
   );
 
   unlisteners.push(
@@ -791,6 +848,8 @@ export const selectComputerUseError = (state: ComputerUseState) => state.error;
 export const selectSessions = (state: ComputerUseState) => state.sessions;
 export const selectIsExecutingOpa = (state: ComputerUseState) => state.isExecutingOpa;
 export const selectLastOpaResult = (state: ComputerUseState) => state.lastOpaResult;
+export const selectLastRouting = (state: ComputerUseState) => state.lastRouting;
+export const selectPendingApproval = (state: ComputerUseState) => state.pendingApproval;
 export const selectLastClickPosition = (state: ComputerUseState) => {
   for (let i = state.actionLog.length - 1; i >= 0; i--) {
     const action = state.actionLog[i];
