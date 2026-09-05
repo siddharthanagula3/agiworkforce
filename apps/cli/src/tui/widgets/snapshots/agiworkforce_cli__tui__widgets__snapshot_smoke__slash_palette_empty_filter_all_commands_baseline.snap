@@ -5,10 +5,10 @@ expression: rendered
 ┌─ Commands ─────────────────────────────────────────────────┐
 │   /                                                        │
 │ ────────────────────────────────────────────────────────── │
-│ ❯ /plan, Switch to plan mode                              │
-│   /model, Choose model and reasoning effort               │
-│   /resume, Resume a saved chat                            │
-│   /theme, Choose a syntax highlighting theme              │
+│ ❯ /plan, Switch to plan mode                               │
+│   /model, Choose model and reasoning effort                │
+│   /resume, Resume a saved chat                             │
+│   /theme, Choose a syntax highlighting theme               │
 │                                                            │
 │  Type to filter   ↑↓ navigate   Enter select   Esc cancel  │
 └────────────────────────────────────────────────────────────┘

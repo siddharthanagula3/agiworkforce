@@ -394,12 +394,22 @@ mod tests {
         )]);
         let text = popup.render();
         for line in text.lines() {
-            assert!(
-                crate::tui::display_width(line) <= 62,
-                "CJK row overflows the popup box: {line:?}"
+            assert_eq!(
+                crate::tui::display_width(line),
+                POPUP_OUTER_WIDTH,
+                "CJK row breaks the popup box: {line:?}"
             );
         }
-        assert!(text.lines().any(|line| line.ends_with("…│")));
+        // A double-width alphabet cannot always land on the last content column,
+        // so the ellipsis is the last thing before the pad, not before the border.
+        let cjk_row = text
+            .lines()
+            .find(|line| line.contains('…'))
+            .expect("the overlong cjk description must be ellipsized");
+        assert!(
+            cjk_row.trim_end_matches('│').trim_end().ends_with('…'),
+            "the ellipsis must be the last content column: {cjk_row:?}"
+        );
     }
 
     /// Total columns of a rendered row: the two corner/border glyphs plus the
