@@ -145,7 +145,7 @@ import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
 import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
-import type { InteractiveCard } from '@agiworkforce/types';
+import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { SourcesControl } from '../research/ResearchPanel';
@@ -1277,6 +1277,16 @@ const MessageBubbleComponent = function MessageBubble({
     return closeUnterminatedFence(withoutCitationTail);
   }, [message.content, artifacts, streamingBlock, message.metadata?.research, isUser]);
 
+  const interactiveCards = message.metadata?.interactiveCards;
+  const leadingInteractiveCards = useMemo(
+    () => (interactiveCards ?? []).filter((card) => interactiveCardRendersBeforeProse(card.kind)),
+    [interactiveCards],
+  );
+  const trailingInteractiveCards = useMemo(
+    () => (interactiveCards ?? []).filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
+    [interactiveCards],
+  );
+
   /**
    * Rich format cards (recipe / comparison / steps / calculation) for assistant
    * prose that has a clear structure.
@@ -1700,6 +1710,13 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {/* A places search runs before the model writes a word, so its map
+              leads the turn; every other card follows the prose that motivated
+              it. */}
+          {!isUser && leadingInteractiveCards.length > 0 ? (
+            <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
+          ) : null}
+
           <div className="relative">
             <div
               ref={userContentRef}
@@ -1793,8 +1810,8 @@ const MessageBubbleComponent = function MessageBubble({
               before the artifact chip, matching where the model emitted them.
               A card that fails to render its kind still renders its authored
               fallback, so this block never leaves a gap in the answer. */}
-          {!isUser && message.metadata?.interactiveCards?.length ? (
-            <InteractiveCardBlock cards={message.metadata.interactiveCards} />
+          {!isUser && trailingInteractiveCards.length > 0 ? (
+            <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
           {/* Compact chip while an artifact block streams into the panel, the raw
