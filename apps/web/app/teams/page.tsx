@@ -55,7 +55,7 @@ export default function TeamsPage() {
         <PageHero
           id="agi-teams-title"
           eyebrow="AGI for teams"
-          title="Give a teammate a seat and a role, and the workspace console decides what that role can reach."
+          title="Seats, roles, and a console that decides what each role can reach."
           lede={`Seats are the unit you buy, from ${MIN_PURCHASABLE_SEATS} up, and every active member and every pending invitation holds one. Roles run owner, admin, member and viewer, and only the first two administer anything. The console at /workspace is where they set who belongs, what is shared with them, and which models and integrations the workspace approves.`}
           ctas={[
             { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
