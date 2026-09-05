@@ -26,6 +26,14 @@ vi.mock('@/lib/server/neon-db', () => ({
     dispose: vi.fn(),
   })),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+    userId: await mockGetClerkAuthUser().then((auth: { userId: string }) => auth.userId),
+    organizationId: await mockResolveActiveOrganizationId(),
+  })),
+}));
+
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
