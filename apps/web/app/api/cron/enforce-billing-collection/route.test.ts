@@ -10,6 +10,7 @@ vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
 
 vi.mock('@/lib/support/handoff/config', () => ({
   getHandoffConfig: vi.fn(() => ({ fromEmail: 'billing@agiworkforce.com' })),
+  isValidEmail: vi.fn(() => true),
 }));
 
 const sendTransactionalEmail = vi.hoisted(() => vi.fn());
