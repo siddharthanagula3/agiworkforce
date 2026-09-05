@@ -21134,9 +21134,8 @@
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
-      "baseUrl": "https://api.cheaperinference.com/v1",
-      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
-      "hostPolicy": "registry_declared"
+      "hostPolicy": "registry_declared",
+      "gatewayId": "cheaperinference"
     },
     "cheaperinference-anthropic/messages": {
       "provider": "cheaperinference_anthropic",
@@ -21145,9 +21144,8 @@
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
-      "baseUrl": "https://api.cheaperinference.com",
-      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
-      "hostPolicy": "registry_declared"
+      "hostPolicy": "registry_declared",
+      "gatewayId": "cheaperinference_anthropic"
     },
     "deepseek-anthropic/messages": {
       "provider": "deepseek_anthropic",
@@ -21183,6 +21181,28 @@
       "hostPolicy": "registry_declared"
     }
   },
+  "gateways": {
+    "cheaperinference": {
+      "id": "cheaperinference",
+      "displayName": "Cheaper Inference",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_CHEAPERINFERENCE_BASE_URL",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "extraHeaderEnvs": {},
+      "host": "api.cheaperinference.com",
+      "governanceReviewedOn": "2026-09-05"
+    },
+    "cheaperinference_anthropic": {
+      "id": "cheaperinference_anthropic",
+      "displayName": "Cheaper Inference (Anthropic Messages dialect)",
+      "protocol": "anthropic_messages",
+      "baseUrlEnv": "AGI_CHEAPERINFERENCE_ANTHROPIC_BASE_URL",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "extraHeaderEnvs": {},
+      "host": "api.cheaperinference.com",
+      "governanceReviewedOn": "2026-09-05"
+    }
+  },
   "runtimeProfiles": {
     "web/cloud-chat": {
       "family": "consumer",
@@ -21212,6 +21232,8 @@
         "groq/chat-completions",
         "minimax/chat-completions",
         "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -21247,6 +21269,8 @@
         "groq/chat-completions",
         "minimax/chat-completions",
         "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -21316,6 +21340,8 @@
         "groq/chat-completions",
         "minimax/chat-completions",
         "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -21379,7 +21405,9 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
-        "open-router/chat-completions-managed"
+        "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages"
       ]
     },
     "cli/local-chat": {
@@ -21438,7 +21466,9 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
-        "open-router/chat-completions-managed"
+        "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages"
       ]
     },
     "vscode/local-chat": {
@@ -21471,7 +21501,9 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
-        "open-router/chat-completions-managed"
+        "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages"
       ]
     },
     "chrome/browser-task": {

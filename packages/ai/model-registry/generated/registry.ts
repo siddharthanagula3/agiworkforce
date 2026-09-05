@@ -149,6 +149,7 @@ interface HarnessRecord {
   hostPolicy: HarnessHostPolicy;
   baseUrl?: string;
   apiKeyEnv?: string;
+  gatewayId?: string;
 }
 
 export interface ProtocolHarness {
@@ -214,12 +215,98 @@ export function listProtocolRoutes(): ProtocolRoute[] {
   });
 }
 
+export type GatewayProtocol = 'openai_chat_completions' | 'openai_responses' | 'anthropic_messages';
+
+export interface GatewayRecord {
+  id: string;
+  displayName: string;
+  protocol: GatewayProtocol;
+  baseUrlEnv: string;
+  apiKeyEnv: string;
+  extraHeaderEnvs?: Readonly<Record<string, string>>;
+  host: string;
+  governanceReviewedOn?: string;
+}
+
+export interface GatewayHarness {
+  harnessId: string;
+  provider: string;
+  apiFamily: string;
+  protocol: Exclude<HarnessProtocol, 'provider_native'>;
+  hostPolicy: HarnessHostPolicy;
+  trustModes: readonly string[];
+  gateway: GatewayRecord;
+}
+
+export interface GatewayRoute extends GatewayHarness {
+  routeId: string;
+  modelKey: string;
+  providerModelId: string;
+  cacheClass: RouteCacheClass;
+  commercialStatus: RouteCommercialStatus;
+}
+
+const gatewayRecords = registry.gateways as unknown as Readonly<Record<string, GatewayRecord>>;
+
+export function getGatewayDefinition(gatewayId: string): GatewayRecord | null {
+  return gatewayRecords[gatewayId] ?? null;
+}
+
+export function getGatewayHarness(harnessId: string): GatewayHarness | null {
+  const harness = harnessRecords[harnessId];
+  if (!harness || harness.protocol === PROVIDER_NATIVE_PROTOCOL || !harness.gatewayId) return null;
+  const gateway = gatewayRecords[harness.gatewayId];
+  if (!gateway) return null;
+  return {
+    harnessId,
+    provider: harness.provider,
+    apiFamily: harness.apiFamily,
+    protocol: harness.protocol,
+    hostPolicy: harness.hostPolicy,
+    trustModes: harness.trustModes,
+    gateway,
+  };
+}
+
+export function listGatewayRoutes(): GatewayRoute[] {
+  return Object.entries(routeRecords).flatMap(([routeId, route]) => {
+    const harness = getGatewayHarness(route.harnessId);
+    if (!harness) return [];
+    return [
+      {
+        ...harness,
+        routeId,
+        modelKey: route.modelKey,
+        provider: route.provider,
+        providerModelId: route.providerModelId,
+        cacheClass: route.cacheClass,
+        commercialStatus: route.commercialStatus,
+        trustModes: route.trustModes,
+      },
+    ];
+  });
+}
+
+export const GATEWAY_BACKED_HARNESS_IDS: readonly string[] = Object.entries(harnessRecords)
+  .filter(([, harness]) => harness.gatewayId !== undefined)
+  .map(([harnessId]) => harnessId);
+
+export const REGISTRY_HARNESS_IDS: readonly string[] = Object.keys(harnessRecords);
+
 export const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [
-  ...new Set(
-    Object.values(harnessRecords)
+  ...new Set([
+    ...Object.values(harnessRecords)
       .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)
       .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),
-  ),
+    ...Object.values(harnessRecords)
+      .filter(
+        (harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.gatewayId,
+      )
+      .flatMap((harness) => {
+        const gateway = gatewayRecords[harness.gatewayId as string];
+        return gateway?.governanceReviewedOn ? [gateway.host.toLowerCase()] : [];
+      }),
+  ]),
 ];
 
 export type EndpointHostMatch = 'host' | 'hostSuffix' | 'domain' | 'baseUrl';

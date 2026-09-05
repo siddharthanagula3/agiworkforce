@@ -23,13 +23,16 @@ export interface GatewayGovernanceStub {
   note?: string;
 }
 
-export interface GatewayDefinition {
+export interface GatewayEndpointDefinition {
   id: string;
   displayName: string;
   protocol: GatewayProtocol;
   baseUrlEnv: string;
   apiKeyEnv: string;
-  extraHeaderEnvs?: Record<string, string>;
+  extraHeaderEnvs?: Readonly<Record<string, string>>;
+}
+
+export interface GatewayDefinition extends GatewayEndpointDefinition {
   modelsSource: GatewayModelsSource;
   pricingSource: GatewayPricingSource;
   host: string;
@@ -56,7 +59,7 @@ function requireEnv(
 }
 
 function resolveExtraHeaders(
-  gateway: GatewayDefinition,
+  gateway: GatewayEndpointDefinition,
   env: GatewayEnvSource,
 ): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -68,7 +71,7 @@ function resolveExtraHeaders(
 }
 
 export function createGatewayAdapter(
-  gateway: GatewayDefinition,
+  gateway: GatewayEndpointDefinition,
   env: GatewayEnvSource,
 ): ProviderAdapter {
   const baseUrl = requireEnv(env, gateway.baseUrlEnv, gateway.id, 'a base URL');

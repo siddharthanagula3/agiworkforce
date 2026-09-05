@@ -279,9 +279,8 @@
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
-      "baseUrl": "https://api.cheaperinference.com/v1",
-      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
-      "hostPolicy": "registry_declared"
+      "hostPolicy": "registry_declared",
+      "gatewayId": "cheaperinference"
     },
     "cheaperinference-anthropic/messages": {
       "provider": "cheaperinference_anthropic",
@@ -290,9 +289,8 @@
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
-      "baseUrl": "https://api.cheaperinference.com",
-      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
-      "hostPolicy": "registry_declared"
+      "hostPolicy": "registry_declared",
+      "gatewayId": "cheaperinference_anthropic"
     },
     "deepseek-anthropic/messages": {
       "provider": "deepseek_anthropic",
@@ -343,7 +341,9 @@
       "perplexity/chat-completions",
       "groq/chat-completions",
       "minimax/chat-completions",
-      "open-router/chat-completions-managed"
+      "open-router/chat-completions-managed",
+      "cheaperinference/chat-completions",
+      "cheaperinference-anthropic/messages"
     ],
     "byok-text": [
       "openai/responses",

@@ -55,6 +55,7 @@ import {
   listAvailableManagedProviderIds,
   resolveProviderFromModel,
 } from '@/lib/services/provider-adapter-service';
+import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
@@ -1485,12 +1486,14 @@ export function buildWebCloudAutoRoutingRequest(
    */
   organizationPolicy?: ModelAccessPolicy | null,
 ): AutoRoutingRequest {
+  const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
     selection: model,
     taskType,
     subscriptionTier,
     trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     runtimeProfileId: 'web/cloud-chat',
+    ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
       ? { budgetRemainingCents: usage.budgetRemainingCents }

@@ -1,7 +1,12 @@
 export {
+  GATEWAY_BACKED_HARNESS_IDS,
+  getGatewayDefinition,
+  getGatewayHarness,
   getProtocolHarness,
+  listGatewayRoutes,
   listProtocolRoutes,
   REGISTRY_DECLARED_PROVIDER_HOSTS,
+  REGISTRY_HARNESS_IDS,
   REGISTRY_ENDPOINT_HOST_RULES,
   REGISTRY_LOCAL_ENDPOINT_HOSTS,
   REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES,
@@ -9,6 +14,10 @@ export {
 export type {
   EndpointHostMatch,
   EndpointHostRule,
+  GatewayHarness,
+  GatewayProtocol,
+  GatewayRecord,
+  GatewayRoute,
   HarnessHostPolicy,
   HarnessProtocol,
   ProtocolHarness,

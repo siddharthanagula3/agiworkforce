@@ -26,6 +26,7 @@ import {
   stageAtOrBefore,
 } from './lifecycle-stages.mjs';
 import { mergeOpenRouterSyncedCatalog } from './openrouter-synced-catalog.mjs';
+import { validateGatewaysCatalog } from './validate-gateways.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
@@ -41,6 +42,7 @@ const PROVIDER_GOVERNANCE_JSON = path.join(CATALOG_DIR, 'provider-governance.jso
 const PROVIDER_COMPUTE_PRICING_JSON = path.join(CATALOG_DIR, 'provider-compute-pricing.json');
 const RETIRED_MODELS_JSON = path.join(CATALOG_DIR, 'retired-models.json');
 const PROVIDER_HOSTS_JSON = path.join(CATALOG_DIR, 'provider-hosts.json');
+const GATEWAYS_JSON = path.join(CATALOG_DIR, 'gateways.json');
 const PROVIDER_DEFAULTS_JSON = path.join(CATALOG_DIR, 'provider-defaults.json');
 const ROUTING_POLICIES_JSON = path.join(CATALOG_DIR, 'routing-policies.json');
 const REGISTRY_SCHEMA_JSON = path.join(REGISTRY_DIR, 'schema', 'registry.schema.json');
@@ -561,7 +563,24 @@ const HARNESS_FIELDS = [
   'baseUrl',
   'apiKeyEnv',
   'hostPolicy',
+  'gatewayId',
 ];
+const GATEWAY_PROTOCOL_HARNESS_PROTOCOL = {
+  openai_chat_completions: 'openai_chat',
+  openai_responses: 'openai_responses',
+  anthropic_messages: 'anthropic_messages',
+};
+const GATEWAY_FIELDS = [
+  'id',
+  'displayName',
+  'protocol',
+  'baseUrlEnv',
+  'apiKeyEnv',
+  'extraHeaderEnvs',
+  'host',
+];
+const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const HTTPS_URL_PREFIX = 'https://';
 const HTTPS_URL_PROTOCOL = 'https:';
 const API_KEY_ENV_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
 
@@ -1759,7 +1778,48 @@ function validateAutoTaskFamilies(autoPolicy, capabilities) {
   }
 }
 
-function normalizeHarnesses(harnessCatalog) {
+function gatewayGovernanceReviewedOn(governance) {
+  const source = governance?.source;
+  const verifiedOn = governance?.verifiedOn;
+  if (typeof source !== 'string' || !source.startsWith(HTTPS_URL_PREFIX)) return undefined;
+  if (typeof verifiedOn !== 'string' || !ISO_DAY_PATTERN.test(verifiedOn)) return undefined;
+  return verifiedOn;
+}
+
+function normalizeGateways(gatewayCatalog, harnessCatalog) {
+  const referenced = new Set(
+    Object.values(harnessCatalog.harnesses)
+      .map((harness) => harness.gatewayId)
+      .filter((gatewayId) => gatewayId !== undefined),
+  );
+  const normalized = {};
+  for (const gatewayId of [...referenced].sort()) {
+    const gateway = gatewayCatalog.gateways[gatewayId];
+    assert.ok(gateway, `Harness catalog references unknown gateway ${gatewayId}`);
+    assert.ok(
+      GATEWAY_PROTOCOL_HARNESS_PROTOCOL[gateway.protocol],
+      `Gateway ${gatewayId} protocol ${gateway.protocol} maps to no harness wire protocol`,
+    );
+    for (const field of ['baseUrlEnv', 'apiKeyEnv']) {
+      assert.ok(
+        API_KEY_ENV_PATTERN.test(gateway[field] ?? ''),
+        `Gateway ${gatewayId} ${field} must name an environment variable, never a value`,
+      );
+    }
+    normalized[gatewayId] = defined({
+      ...Object.fromEntries(
+        GATEWAY_FIELDS.filter((field) => gateway[field] !== undefined).map((field) => [
+          field,
+          gateway[field],
+        ]),
+      ),
+      governanceReviewedOn: gatewayGovernanceReviewedOn(gateway.governance),
+    });
+  }
+  return normalized;
+}
+
+function normalizeHarnesses(harnessCatalog, gatewayCatalog) {
   const normalized = {};
   for (const [harnessId, harness] of Object.entries(harnessCatalog.harnesses)) {
     const unknown = Object.keys(harness).filter((key) => !HARNESS_FIELDS.includes(key));
@@ -1789,10 +1849,28 @@ function normalizeHarnesses(harnessCatalog) {
         undefined,
         `Harness ${harnessId} declares an apiKeyEnv without naming the wire protocol it speaks`,
       );
+    } else if (harness.gatewayId !== undefined) {
+      const gateway = gatewayCatalog.gateways[harness.gatewayId];
+      assert.ok(gateway, `Harness ${harnessId} references unknown gateway ${harness.gatewayId}`);
+      assert.equal(
+        harness.baseUrl,
+        undefined,
+        `Harness ${harnessId} names a gateway and must take its base URL from the definition, not a literal`,
+      );
+      assert.equal(
+        harness.apiKeyEnv,
+        undefined,
+        `Harness ${harnessId} names a gateway and must take its credential from the definition, not a literal`,
+      );
+      assert.equal(
+        protocol,
+        GATEWAY_PROTOCOL_HARNESS_PROTOCOL[gateway.protocol],
+        `Harness ${harnessId} protocol ${protocol} does not speak gateway ${harness.gatewayId}'s ${gateway.protocol}`,
+      );
     } else {
       assert.ok(
         typeof harness.baseUrl === 'string' && harness.baseUrl.length > 0,
-        `Harness ${harnessId} declares protocol ${protocol} without a baseUrl to dispatch to`,
+        `Harness ${harnessId} declares protocol ${protocol} without a baseUrl or gatewayId to dispatch to`,
       );
       assert.equal(
         new URL(harness.baseUrl).protocol,
@@ -1804,8 +1882,15 @@ function normalizeHarnesses(harnessCatalog) {
         `Harness ${harnessId} declares protocol ${protocol} without an apiKeyEnv naming its credential`,
       );
     }
+    assert.equal(
+      harness.gatewayId !== undefined && protocol === HARNESS_PROTOCOL.providerNative,
+      false,
+      `Harness ${harnessId} names a gateway without naming the wire protocol it speaks`,
+    );
     assert.ok(
-      hostPolicy === HARNESS_HOST_POLICY.allowlistOnly || harness.baseUrl !== undefined,
+      hostPolicy === HARNESS_HOST_POLICY.allowlistOnly ||
+        harness.baseUrl !== undefined ||
+        harness.gatewayId !== undefined,
       `Harness ${harnessId} declares hostPolicy ${hostPolicy} with no baseUrl host to admit`,
     );
     normalized[harnessId] = defined({ ...harness, protocol, hostPolicy });
@@ -1894,6 +1979,7 @@ function buildNormalizedRegistry(
   hostCatalog,
   defaultsCatalog,
   computePricingCatalog,
+  gatewayCatalog,
 ) {
   const governance = normalizeProviderGovernance(governanceCatalog);
   const computePricing = normalizeProviderComputePricing(computePricingCatalog);
@@ -2050,7 +2136,8 @@ function buildNormalizedRegistry(
     models,
     providerModelKeys,
     routes,
-    harnesses: normalizeHarnesses(harnessCatalog),
+    harnesses: normalizeHarnesses(harnessCatalog, gatewayCatalog),
+    gateways: normalizeGateways(gatewayCatalog, harnessCatalog),
     runtimeProfiles,
     capabilities,
     capabilityClasses: CAPABILITY_CLASSES,
@@ -2070,7 +2157,7 @@ function buildNormalizedRegistry(
   };
 }
 
-const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\n\nexport type RouteCacheClass =\n  | 'provider_implicit_prompt_cache'\n  | 'provider_explicit_prompt_cache'\n  | 'gateway_prompt_cache'\n  | 'gateway_response_cache'\n  | 'no_provider_cache';\n\nexport type RouteCommercialStatus =\n  | 'agi_direct'\n  | 'customer_byok'\n  | 'authorized_marketplace'\n  | 'free_commercial'\n  | 'experimental_only'\n  | 'blocked';\n\nexport type RouteDataRetention =\n  | 'zero_retention'\n  | 'provider_default'\n  | 'conditional'\n  | 'unknown';\n\ninterface RoutePricingRecord {\n  currency: string;\n  unit: string;\n  inputPerMillion?: number;\n  outputPerMillion?: number;\n  cacheReadPerMillion?: number;\n  cacheWritePerMillion?: number;\n  cacheWrite1hPerMillion?: number;\n}\n\ninterface RouteRecord {\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  trustModes: readonly string[];\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  pricing: RoutePricingRecord;\n}\n\nexport interface RoutePriceSheet {\n  routeId: string;\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  currency: string;\n  unit: string;\n  inputPerMillion: number | null;\n  outputPerMillion: number | null;\n  cacheReadPerMillion: number | null;\n  cacheWritePerMillion: number | null;\n  cacheWrite1hPerMillion: number | null;\n}\n\nconst routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;\n\nfunction toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {\n  const { pricing } = route;\n  return {\n    routeId,\n    modelKey: route.modelKey,\n    provider: route.provider,\n    providerModelId: route.providerModelId,\n    harnessId: route.harnessId,\n    isDefault: route.isDefault,\n    cacheClass: route.cacheClass,\n    commercialStatus: route.commercialStatus,\n    dataRetention: route.dataRetention,\n    currency: pricing.currency,\n    unit: pricing.unit,\n    inputPerMillion: pricing.inputPerMillion ?? null,\n    outputPerMillion: pricing.outputPerMillion ?? null,\n    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,\n    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,\n    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,\n  };\n}\n\nexport function getRoutePricing(routeId: string): RoutePriceSheet | null {\n  const route = routeRecords[routeId];\n  return route ? toPriceSheet(routeId, route) : null;\n}\n\nexport function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {\n  return Object.entries(routeRecords)\n    .filter(([, route]) => route.modelKey === modelKey)\n    .map(([routeId, route]) => toPriceSheet(routeId, route));\n}\n\nexport type CacheTokenBillingClass = 'additional_to_input' | 'included_in_input' | 'unknown';\n\ninterface ProviderGovernanceRecord {\n  cacheTokenBillingClass?: CacheTokenBillingClass;\n}\n\nconst governanceRecords = registry.governance as unknown as Readonly<\n  Record<string, ProviderGovernanceRecord>\n>;\n\nexport function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {\n  return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';\n}\n\nexport type ComputePricingUnit = 'usd_per_vcpu_second';\n\nexport interface ProviderComputePricing {\n  unit: ComputePricingUnit;\n  ratePerUnit: number;\n}\n\nconst computePricingRecords = registry.computePricing as unknown as Readonly<\n  Record<string, ProviderComputePricing>\n>;\n\nexport function getProviderComputePricing(providerId: string): ProviderComputePricing | null {\n  return computePricingRecords[providerId] ?? null;\n}\nexport type HarnessProtocol =\n  | 'openai_chat'\n  | 'openai_responses'\n  | 'anthropic_messages'\n  | 'gemini_native'\n  | 'provider_native';\n\nexport type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';\n\ninterface HarnessRecord {\n  provider: string;\n  apiFamily: string;\n  adapter: string;\n  trustModes: readonly string[];\n  protocol: HarnessProtocol;\n  hostPolicy: HarnessHostPolicy;\n  baseUrl?: string;\n  apiKeyEnv?: string;\n}\n\nexport interface ProtocolHarness {\n  harnessId: string;\n  provider: string;\n  apiFamily: string;\n  protocol: Exclude<HarnessProtocol, 'provider_native'>;\n  baseUrl: string;\n  apiKeyEnv: string;\n  hostPolicy: HarnessHostPolicy;\n  trustModes: readonly string[];\n}\n\nexport interface ProtocolRoute extends ProtocolHarness {\n  routeId: string;\n  modelKey: string;\n  providerModelId: string;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n}\n\nconst PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;\nconst REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;\n\nconst harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;\n\nfunction toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {\n  const { protocol, baseUrl, apiKeyEnv } = harness;\n  if (protocol === PROVIDER_NATIVE_PROTOCOL || !baseUrl || !apiKeyEnv) return null;\n  return {\n    harnessId,\n    provider: harness.provider,\n    apiFamily: harness.apiFamily,\n    protocol,\n    baseUrl,\n    apiKeyEnv,\n    hostPolicy: harness.hostPolicy,\n    trustModes: harness.trustModes,\n  };\n}\n\nexport function getProtocolHarness(harnessId: string): ProtocolHarness | null {\n  const harness = harnessRecords[harnessId];\n  return harness ? toProtocolHarness(harnessId, harness) : null;\n}\n\nexport function listProtocolRoutes(): ProtocolRoute[] {\n  return Object.entries(routeRecords).flatMap(([routeId, route]) => {\n    const harness = getProtocolHarness(route.harnessId);\n    if (!harness) return [];\n    return [\n      {\n        ...harness,\n        routeId,\n        modelKey: route.modelKey,\n        provider: route.provider,\n        providerModelId: route.providerModelId,\n        cacheClass: route.cacheClass,\n        commercialStatus: route.commercialStatus,\n        trustModes: route.trustModes,\n      },\n    ];\n  });\n}\n\nexport const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [\n  ...new Set(\n    Object.values(harnessRecords)\n      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)\n      .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),\n  ),\n];\n\nexport type EndpointHostMatch = 'host' | 'hostSuffix' | 'domain' | 'baseUrl';\n\nexport interface EndpointHostRule {\n  match: EndpointHostMatch;\n  pattern: string;\n  endpointClass: string;\n  longTtlPromptCache: boolean;\n  hostPattern?: string;\n}\n\ninterface EndpointHostRecords {\n  rules: readonly EndpointHostRule[];\n  localHosts: readonly string[];\n  localHostSuffixes: readonly string[];\n}\n\nconst endpointHostRecords = registry.endpointHosts as unknown as EndpointHostRecords;\n\nexport const REGISTRY_ENDPOINT_HOST_RULES: readonly EndpointHostRule[] = endpointHostRecords.rules;\n\nexport const REGISTRY_LOCAL_ENDPOINT_HOSTS: readonly string[] = endpointHostRecords.localHosts;\n\nexport const REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES: readonly string[] =\n  endpointHostRecords.localHostSuffixes;\n\nexport const INTRINSIC_CAPABILITY_NAMES = ${JSON.stringify(INTRINSIC_CAPABILITY_NAMES)} as const;\n\nexport const ROUTE_DEPENDENT_CAPABILITY_NAMES = ${JSON.stringify(ROUTE_DEPENDENT_CAPABILITY_NAMES)} as const;\n\nexport type IntrinsicCapabilityName = (typeof INTRINSIC_CAPABILITY_NAMES)[number];\n\nexport type RouteDependentCapabilityName = (typeof ROUTE_DEPENDENT_CAPABILITY_NAMES)[number];\n\nexport type ModelCapabilityName = IntrinsicCapabilityName | RouteDependentCapabilityName;\n\nexport type ModelCapabilityValue = boolean | null;\n\nexport type NormalizedModelCapabilities = Readonly<Record<ModelCapabilityName, ModelCapabilityValue>>;\n\n\nexport default registry;\n`;
+const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\n\nexport type RouteCacheClass =\n  | 'provider_implicit_prompt_cache'\n  | 'provider_explicit_prompt_cache'\n  | 'gateway_prompt_cache'\n  | 'gateway_response_cache'\n  | 'no_provider_cache';\n\nexport type RouteCommercialStatus =\n  | 'agi_direct'\n  | 'customer_byok'\n  | 'authorized_marketplace'\n  | 'free_commercial'\n  | 'experimental_only'\n  | 'blocked';\n\nexport type RouteDataRetention =\n  | 'zero_retention'\n  | 'provider_default'\n  | 'conditional'\n  | 'unknown';\n\ninterface RoutePricingRecord {\n  currency: string;\n  unit: string;\n  inputPerMillion?: number;\n  outputPerMillion?: number;\n  cacheReadPerMillion?: number;\n  cacheWritePerMillion?: number;\n  cacheWrite1hPerMillion?: number;\n}\n\ninterface RouteRecord {\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  trustModes: readonly string[];\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  pricing: RoutePricingRecord;\n}\n\nexport interface RoutePriceSheet {\n  routeId: string;\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  dataRetention: RouteDataRetention;\n  currency: string;\n  unit: string;\n  inputPerMillion: number | null;\n  outputPerMillion: number | null;\n  cacheReadPerMillion: number | null;\n  cacheWritePerMillion: number | null;\n  cacheWrite1hPerMillion: number | null;\n}\n\nconst routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;\n\nfunction toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {\n  const { pricing } = route;\n  return {\n    routeId,\n    modelKey: route.modelKey,\n    provider: route.provider,\n    providerModelId: route.providerModelId,\n    harnessId: route.harnessId,\n    isDefault: route.isDefault,\n    cacheClass: route.cacheClass,\n    commercialStatus: route.commercialStatus,\n    dataRetention: route.dataRetention,\n    currency: pricing.currency,\n    unit: pricing.unit,\n    inputPerMillion: pricing.inputPerMillion ?? null,\n    outputPerMillion: pricing.outputPerMillion ?? null,\n    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,\n    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,\n    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,\n  };\n}\n\nexport function getRoutePricing(routeId: string): RoutePriceSheet | null {\n  const route = routeRecords[routeId];\n  return route ? toPriceSheet(routeId, route) : null;\n}\n\nexport function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {\n  return Object.entries(routeRecords)\n    .filter(([, route]) => route.modelKey === modelKey)\n    .map(([routeId, route]) => toPriceSheet(routeId, route));\n}\n\nexport type CacheTokenBillingClass = 'additional_to_input' | 'included_in_input' | 'unknown';\n\ninterface ProviderGovernanceRecord {\n  cacheTokenBillingClass?: CacheTokenBillingClass;\n}\n\nconst governanceRecords = registry.governance as unknown as Readonly<\n  Record<string, ProviderGovernanceRecord>\n>;\n\nexport function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {\n  return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';\n}\n\nexport type ComputePricingUnit = 'usd_per_vcpu_second';\n\nexport interface ProviderComputePricing {\n  unit: ComputePricingUnit;\n  ratePerUnit: number;\n}\n\nconst computePricingRecords = registry.computePricing as unknown as Readonly<\n  Record<string, ProviderComputePricing>\n>;\n\nexport function getProviderComputePricing(providerId: string): ProviderComputePricing | null {\n  return computePricingRecords[providerId] ?? null;\n}\nexport type HarnessProtocol =\n  | 'openai_chat'\n  | 'openai_responses'\n  | 'anthropic_messages'\n  | 'gemini_native'\n  | 'provider_native';\n\nexport type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';\n\ninterface HarnessRecord {\n  provider: string;\n  apiFamily: string;\n  adapter: string;\n  trustModes: readonly string[];\n  protocol: HarnessProtocol;\n  hostPolicy: HarnessHostPolicy;\n  baseUrl?: string;\n  apiKeyEnv?: string;\n  gatewayId?: string;\n}\n\nexport interface ProtocolHarness {\n  harnessId: string;\n  provider: string;\n  apiFamily: string;\n  protocol: Exclude<HarnessProtocol, 'provider_native'>;\n  baseUrl: string;\n  apiKeyEnv: string;\n  hostPolicy: HarnessHostPolicy;\n  trustModes: readonly string[];\n}\n\nexport interface ProtocolRoute extends ProtocolHarness {\n  routeId: string;\n  modelKey: string;\n  providerModelId: string;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n}\n\nconst PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;\nconst REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;\n\nconst harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;\n\nfunction toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {\n  const { protocol, baseUrl, apiKeyEnv } = harness;\n  if (protocol === PROVIDER_NATIVE_PROTOCOL || !baseUrl || !apiKeyEnv) return null;\n  return {\n    harnessId,\n    provider: harness.provider,\n    apiFamily: harness.apiFamily,\n    protocol,\n    baseUrl,\n    apiKeyEnv,\n    hostPolicy: harness.hostPolicy,\n    trustModes: harness.trustModes,\n  };\n}\n\nexport function getProtocolHarness(harnessId: string): ProtocolHarness | null {\n  const harness = harnessRecords[harnessId];\n  return harness ? toProtocolHarness(harnessId, harness) : null;\n}\n\nexport function listProtocolRoutes(): ProtocolRoute[] {\n  return Object.entries(routeRecords).flatMap(([routeId, route]) => {\n    const harness = getProtocolHarness(route.harnessId);\n    if (!harness) return [];\n    return [\n      {\n        ...harness,\n        routeId,\n        modelKey: route.modelKey,\n        provider: route.provider,\n        providerModelId: route.providerModelId,\n        cacheClass: route.cacheClass,\n        commercialStatus: route.commercialStatus,\n        trustModes: route.trustModes,\n      },\n    ];\n  });\n}\n\nexport type GatewayProtocol =\n  | 'openai_chat_completions'\n  | 'openai_responses'\n  | 'anthropic_messages';\n\nexport interface GatewayRecord {\n  id: string;\n  displayName: string;\n  protocol: GatewayProtocol;\n  baseUrlEnv: string;\n  apiKeyEnv: string;\n  extraHeaderEnvs?: Readonly<Record<string, string>>;\n  host: string;\n  governanceReviewedOn?: string;\n}\n\nexport interface GatewayHarness {\n  harnessId: string;\n  provider: string;\n  apiFamily: string;\n  protocol: Exclude<HarnessProtocol, 'provider_native'>;\n  hostPolicy: HarnessHostPolicy;\n  trustModes: readonly string[];\n  gateway: GatewayRecord;\n}\n\nexport interface GatewayRoute extends GatewayHarness {\n  routeId: string;\n  modelKey: string;\n  providerModelId: string;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n}\n\nconst gatewayRecords = registry.gateways as unknown as Readonly<Record<string, GatewayRecord>>;\n\nexport function getGatewayDefinition(gatewayId: string): GatewayRecord | null {\n  return gatewayRecords[gatewayId] ?? null;\n}\n\nexport function getGatewayHarness(harnessId: string): GatewayHarness | null {\n  const harness = harnessRecords[harnessId];\n  if (!harness || harness.protocol === PROVIDER_NATIVE_PROTOCOL || !harness.gatewayId) return null;\n  const gateway = gatewayRecords[harness.gatewayId];\n  if (!gateway) return null;\n  return {\n    harnessId,\n    provider: harness.provider,\n    apiFamily: harness.apiFamily,\n    protocol: harness.protocol,\n    hostPolicy: harness.hostPolicy,\n    trustModes: harness.trustModes,\n    gateway,\n  };\n}\n\nexport function listGatewayRoutes(): GatewayRoute[] {\n  return Object.entries(routeRecords).flatMap(([routeId, route]) => {\n    const harness = getGatewayHarness(route.harnessId);\n    if (!harness) return [];\n    return [\n      {\n        ...harness,\n        routeId,\n        modelKey: route.modelKey,\n        provider: route.provider,\n        providerModelId: route.providerModelId,\n        cacheClass: route.cacheClass,\n        commercialStatus: route.commercialStatus,\n        trustModes: route.trustModes,\n      },\n    ];\n  });\n}\n\nexport const GATEWAY_BACKED_HARNESS_IDS: readonly string[] = Object.entries(harnessRecords)\n  .filter(([, harness]) => harness.gatewayId !== undefined)\n  .map(([harnessId]) => harnessId);\n\nexport const REGISTRY_HARNESS_IDS: readonly string[] = Object.keys(harnessRecords);\n\nexport const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [\n  ...new Set([\n    ...Object.values(harnessRecords)\n      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)\n      .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),\n    ...Object.values(harnessRecords)\n      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.gatewayId)\n      .flatMap((harness) => {\n        const gateway = gatewayRecords[harness.gatewayId as string];\n        return gateway?.governanceReviewedOn ? [gateway.host.toLowerCase()] : [];\n      }),\n  ]),\n];\n\nexport type EndpointHostMatch = 'host' | 'hostSuffix' | 'domain' | 'baseUrl';\n\nexport interface EndpointHostRule {\n  match: EndpointHostMatch;\n  pattern: string;\n  endpointClass: string;\n  longTtlPromptCache: boolean;\n  hostPattern?: string;\n}\n\ninterface EndpointHostRecords {\n  rules: readonly EndpointHostRule[];\n  localHosts: readonly string[];\n  localHostSuffixes: readonly string[];\n}\n\nconst endpointHostRecords = registry.endpointHosts as unknown as EndpointHostRecords;\n\nexport const REGISTRY_ENDPOINT_HOST_RULES: readonly EndpointHostRule[] = endpointHostRecords.rules;\n\nexport const REGISTRY_LOCAL_ENDPOINT_HOSTS: readonly string[] = endpointHostRecords.localHosts;\n\nexport const REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES: readonly string[] =\n  endpointHostRecords.localHostSuffixes;\n\nexport const INTRINSIC_CAPABILITY_NAMES = ${JSON.stringify(INTRINSIC_CAPABILITY_NAMES)} as const;\n\nexport const ROUTE_DEPENDENT_CAPABILITY_NAMES = ${JSON.stringify(ROUTE_DEPENDENT_CAPABILITY_NAMES)} as const;\n\nexport type IntrinsicCapabilityName = (typeof INTRINSIC_CAPABILITY_NAMES)[number];\n\nexport type RouteDependentCapabilityName = (typeof ROUTE_DEPENDENT_CAPABILITY_NAMES)[number];\n\nexport type ModelCapabilityName = IntrinsicCapabilityName | RouteDependentCapabilityName;\n\nexport type ModelCapabilityValue = boolean | null;\n\nexport type NormalizedModelCapabilities = Readonly<Record<ModelCapabilityName, ModelCapabilityValue>>;\n\n\nexport default registry;\n`;
 const RUST_REGISTRY_MODULE_SOURCE = `// This file is generated by @agiworkforce/model-registry.\npub const MODEL_REGISTRY_JSON: &str = include_str!("model_registry.json");\n`;
 
 function yamlSingleQuoted(value) {
@@ -2117,6 +2204,9 @@ async function buildNormalizedArtifacts(catalog, familyCatalog, syncedSnapshot) 
   const routingPolicies = readJson(ROUTING_POLICIES_JSON);
   const governanceCatalog = readJson(PROVIDER_GOVERNANCE_JSON);
   const computePricingCatalog = readJson(PROVIDER_COMPUTE_PRICING_JSON);
+  const gatewayCatalog = readJson(GATEWAYS_JSON);
+  const gatewayErrors = validateGatewaysCatalog(gatewayCatalog);
+  assert.deepEqual(gatewayErrors, [], `gateways.json is invalid:\n${gatewayErrors.join('\n')}`);
   assert.equal(routingPolicies.schemaVersion, 1, 'Unsupported routing policy schema version');
   assert.equal(modelRouteCatalog.schemaVersion, 1, 'Unsupported model route schema version');
   assert.equal(familyCatalog.schemaVersion, 1, 'Unsupported model family schema version');
@@ -2141,6 +2231,7 @@ async function buildNormalizedArtifacts(catalog, familyCatalog, syncedSnapshot) 
     readJson(PROVIDER_HOSTS_JSON),
     readJson(PROVIDER_DEFAULTS_JSON),
     computePricingCatalog,
+    gatewayCatalog,
   );
   const schema = readJson(REGISTRY_SCHEMA_JSON);
   const validate = new Ajv({ allErrors: true, strict: true }).compile(schema);
