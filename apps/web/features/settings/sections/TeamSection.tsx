@@ -479,8 +479,8 @@ export function TeamSection() {
             padding: '12px 14px',
           }}
         >
-          Workspace administration is paused because the account no longer has an active Team or
-          Enterprise entitlement.
+          This workspace is on the {titleCase(access.plan)} plan. Workspace administration needs a
+          Team or Enterprise workspace plan.
         </div>
       ) : null}
 
