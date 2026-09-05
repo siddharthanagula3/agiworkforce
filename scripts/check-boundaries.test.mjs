@@ -211,20 +211,19 @@ test('ignores an identity SDK import outside apps/web, where the adapter lives',
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}${result.stdout}`);
 });
 
-test('the real identity allowlist names only the provider ui mounts, the client roots and enterprise sso', () => {
+test('the real identity allowlist names only the provider ui mount, the auth adapter, the client roots and enterprise sso', () => {
   const allowlist = JSON.parse(
     spawnSync('cat', [path.join(REPO_ROOT, 'scripts/config/identity-sdk-allowlist.json')]).stdout,
   );
   const allowlistedPaths = new Set(allowlist.entries.map((entry) => entry.path));
   for (const seeded of [
     'apps/web/app/layout.tsx',
-    'apps/web/app/login/page.tsx',
-    'apps/web/app/signup/page.tsx',
+    'apps/web/features/auth/identityAuthAdapter.tsx',
     'apps/web/lib/identity/client.ts',
     'apps/web/lib/identity/token.ts',
     'apps/web/lib/server/sso/clerk-enterprise-connections.ts',
   ]) {
     assert.ok(allowlistedPaths.has(seeded), `expected ${seeded} in the seeded allowlist`);
   }
-  assert.equal(allowlistedPaths.size, 6, 'the identity allowlist should not grow silently');
+  assert.equal(allowlistedPaths.size, 5, 'the identity allowlist should not grow silently');
 });
