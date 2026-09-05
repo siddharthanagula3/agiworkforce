@@ -1444,15 +1444,6 @@ const AUTO_ROUTE_UNAVAILABLE_MESSAGE =
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 
-/**
- * The `AutoRoutingRequest` a Managed Web Cloud chat turn builds for a given
- * selection, task, tier, route-health/continuity state and workspace policy.
- *
- * Extracted from `resolveWebCloudModelRoute` so a caller that wants an
- * EXPLANATION of the decision (`previewAutoRoute`, over `/route/preview`) can
- * build the identical input the completions path dispatches with, rather than
- * a second, hand-assembled request that could quietly drift from it.
- */
 export function buildWebCloudAutoRoutingRequest(
   model: string,
   subscriptionTier: string | undefined,
