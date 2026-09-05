@@ -1873,7 +1873,7 @@
       "capabilities": {
         "streaming": false,
         "tools": false,
-        "vision": false,
+        "vision": true,
         "json": false,
         "thinking": false,
         "computerUse": false,
@@ -1923,7 +1923,7 @@
       "capabilities": {
         "streaming": false,
         "tools": false,
-        "vision": false,
+        "vision": true,
         "json": false,
         "thinking": false,
         "computerUse": false,
@@ -3084,6 +3084,7 @@
       "name": "OpenRouter Auto",
       "provider": "open_router",
       "modelType": "chat",
+      "outputModalities": ["text", "image"],
       "contextWindow": 2000000,
       "inputCost": 0,
       "outputCost": 0,
@@ -3121,6 +3122,7 @@
       "name": "OpenRouter Auto (Beta)",
       "provider": "open_router",
       "modelType": "chat",
+      "outputModalities": ["text", "image"],
       "variantPartner": "openrouter-auto",
       "contextWindow": 2000000,
       "inputCost": 0,

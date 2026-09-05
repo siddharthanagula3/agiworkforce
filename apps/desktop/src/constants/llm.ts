@@ -21,26 +21,14 @@ import {
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
   type EnvironmentAvailability,
+  type ModelCapabilities,
   type ModelEnvironment,
 } from '@agiworkforce/types';
 
 export type { EnvironmentAvailability, ModelEnvironment };
 export { evaluateModelEnvironment };
 
-export interface ModelCapabilities {
-  streaming: boolean;
-  tools: boolean;
-  vision: boolean;
-  json: boolean;
-  thinking: boolean;
-  computerUse: boolean;
-  agentic: boolean;
-  imageGen: boolean;
-  videoGen: boolean;
-  search: boolean;
-  research: boolean;
-  codeExecution: boolean;
-}
+export type { ModelCapabilities };
 
 export interface ModelMetadata {
   id: string;

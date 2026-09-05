@@ -11,14 +11,18 @@
         "openRouterSlug": "openai/gpt-5.6-sol",
         "kind": "reasoning",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["gpt-5.6", "openai/gpt-5.6-sol"],
+        "family": "gpt-frontier"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 9, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-09",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -31,14 +35,18 @@
         "openRouterSlug": "openai/gpt-5.6-terra",
         "kind": "reasoning",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["openai/gpt-5.6-terra"],
+        "family": "gpt-balanced"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 9, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-09",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -51,14 +59,18 @@
         "openRouterSlug": "openai/gpt-5.6-luna",
         "kind": "reasoning",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["openai/gpt-5.6-luna"],
+        "family": "gpt-fast"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 9, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-09",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -72,14 +84,18 @@
         "kind": "reasoning",
         "familyPartner": "claude-sonnet-5",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-fable-5.1"],
+        "family": "claude-fable"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "September 1, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-09-01",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -93,14 +109,18 @@
         "kind": "reasoning",
         "familyPartner": "claude-sonnet-5",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-opus-5"],
+        "family": "claude-opus"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 24, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-24",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -114,14 +134,24 @@
         "kind": "code",
         "familyPartner": "claude-opus-5",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [
+          "anthropic/claude-sonnet-5",
+          "codestral-2508",
+          "mistral-large-3",
+          "mistral-medium-3.5",
+          "mistral-small-4"
+        ],
+        "family": "claude-sonnet"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "June 30, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-06-30",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -135,14 +165,18 @@
         "kind": "chat",
         "familyPartner": "claude-sonnet-5",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-haiku-4.5", "claude-haiku-4-5-20251001"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-10-15",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -154,14 +188,18 @@
         "providerModelId": "gemini-embedding-2",
         "kind": "embedding",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [],
+        "family": "gemini-embedding"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "April 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -175,14 +213,18 @@
         "kind": "reasoning",
         "familyPartner": "gemini-3.5-flash-lite",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["google/gemini-3.1-pro-preview"],
+        "family": "gemini-pro"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "February 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -196,14 +238,28 @@
         "kind": "multimodal",
         "familyPartner": "gemini-3.1-pro-preview",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [
+          "google/gemini-3.5-flash-lite",
+          "google/gemma-4-26b-a4b-it:free",
+          "groq-llama-3.1-8b",
+          "groq-llama-3.3-70b",
+          "nvidia/llama-3.3-70b-instruct",
+          "nvidia/nemotron-3-nano-30b-a3b",
+          "nvidia/nemotron-3-super-120b-a12b",
+          "nvidia/nemotron-3-super-120b-a12b:free",
+          "nvidia/nemotron-3-ultra-550b-a55b"
+        ],
+        "family": "gemini-flash-lite"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -217,14 +273,18 @@
         "kind": "multimodal",
         "familyPartner": "gemini-3.5-flash-lite",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["google/gemini-3.1-flash-lite"],
+        "family": "gemini-flash-lite"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "May 7, 2026",
         "deprecationDate": "2027-05-07",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-05-07",
+        "deprecatedOn": "2027-05-07"
       },
       "evidenceRefs": []
     },
@@ -236,14 +296,18 @@
         "providerModelId": "gemini-3.1-flash-image",
         "kind": "image",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [],
+        "family": "gemini-flash-image"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -257,14 +321,18 @@
         "kind": "image",
         "familyPartner": "gemini-3.1-flash-image",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["google/gemini-3-pro-image"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "May 28, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-05-28",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -278,14 +346,18 @@
         "kind": "image",
         "familyPartner": "gemini-3.1-flash-image",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["google/gemini-3.1-flash-lite-image"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "June 30, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-06-30",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -299,14 +371,18 @@
         "kind": "code",
         "familyPartner": "deepseek-v4-pro",
         "openWeight": true,
-        "license": "MIT"
+        "license": "MIT",
+        "aliases": ["deepseek/deepseek-v4-flash-0731"],
+        "family": "deepseek-flash"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 31, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-31",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -320,14 +396,18 @@
         "kind": "reasoning",
         "familyPartner": "deepseek-v4-flash",
         "openWeight": true,
-        "license": "MIT"
+        "license": "MIT",
+        "aliases": ["deepseek/deepseek-v4-pro-0813"],
+        "family": "deepseek-pro"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 13, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-13",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -341,14 +421,18 @@
         "kind": "code",
         "familyPartner": "deepseek-v4-flash",
         "openWeight": true,
-        "license": "MIT"
+        "license": "MIT",
+        "aliases": ["deepseek/deepseek-v4-flash-vision-exp"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 21, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-21",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -359,14 +443,18 @@
         "provider": "qwen",
         "providerModelId": "qwen3.5-flash",
         "openRouterSlug": "qwen/qwen3.5-flash-02-23",
-        "kind": "multimodal"
+        "kind": "multimodal",
+        "aliases": ["qwen/qwen3.5-flash-02-23", "qwen3.5-flash"],
+        "family": "qwen-flash"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "February 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -377,14 +465,18 @@
         "provider": "qwen",
         "providerModelId": "qwen3.8-flash",
         "openRouterSlug": "qwen/qwen3.8-flash",
-        "kind": "multimodal"
+        "kind": "multimodal",
+        "aliases": ["qwen/qwen3.8-flash", "qwen3.8-flash"],
+        "family": "qwen-flash"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -397,14 +489,18 @@
         "openRouterSlug": "perplexity/sonar",
         "kind": "search",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["perplexity/sonar"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "January 2025",
         "deprecationDate": "2026-09-27",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": "2026-09-27"
       },
       "evidenceRefs": []
     },
@@ -417,13 +513,17 @@
         "openRouterSlug": "perplexity/sonar-reasoning-pro",
         "kind": "search",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["perplexity/sonar-reasoning-pro"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "deprecationDate": "2026-09-27",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": "2026-09-27"
       },
       "evidenceRefs": []
     },
@@ -436,14 +536,18 @@
         "openRouterSlug": "perplexity/sonar-pro",
         "kind": "search",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["perplexity/sonar-pro"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "January 2025",
         "deprecationDate": "2026-09-27",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": "2026-09-27"
       },
       "evidenceRefs": []
     },
@@ -456,13 +560,17 @@
         "openRouterSlug": "perplexity/sonar-deep-research",
         "kind": "search",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["perplexity/sonar-deep-research"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "deprecationDate": "2026-09-27",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": "2026-09-27"
       },
       "evidenceRefs": []
     },
@@ -472,7 +580,9 @@
         "displayName": "Runway Gen-4.5",
         "provider": "runway",
         "providerModelId": "gen4.5",
-        "kind": "video"
+        "kind": "video",
+        "aliases": ["gen4.5"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
@@ -480,7 +590,9 @@
         "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
         "released": "December 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -492,14 +604,18 @@
         "providerModelId": "bytedance/seedance-2.5",
         "kind": "video",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["bytedance/seedance-2.5"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 7, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-07",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -509,14 +625,18 @@
         "displayName": "GPT Image 2",
         "provider": "openai",
         "providerModelId": "gpt-image-2",
-        "kind": "image"
+        "kind": "image",
+        "aliases": [],
+        "family": "gpt-image"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "April 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -526,14 +646,18 @@
         "displayName": "GPT-4o Mini TTS",
         "provider": "openai",
         "providerModelId": "gpt-4o-mini-tts",
-        "kind": "tts"
+        "kind": "tts",
+        "aliases": [],
+        "family": "tts-fast"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 20, 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-03-20",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -547,14 +671,18 @@
         "kind": "multimodal",
         "familyPartner": "gemini-3.1-pro-preview",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["gemini-3.5-flash", "google/gemini-3.8-flash"],
+        "family": "gemini-flash"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "September 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -568,14 +696,18 @@
         "kind": "multimodal",
         "familyPartner": "gemini-3.8-flash",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["google/gemini-3.6-flash"],
+        "family": "gemini-flash"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 21, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-21",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -588,14 +720,18 @@
         "openRouterSlug": "z-ai/glm-5.3",
         "kind": "reasoning",
         "openWeight": true,
-        "license": "GLM-5.3 License"
+        "license": "GLM-5.3 License",
+        "aliases": ["z-ai/glm-5.3"],
+        "family": "glm"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 18, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-18",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -609,14 +745,18 @@
         "kind": "multimodal",
         "familyPartner": "glm-5.3",
         "openWeight": true,
-        "license": "MIT"
+        "license": "MIT",
+        "aliases": ["z-ai/glm-5.3-flash"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 26, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-26",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -627,14 +767,25 @@
         "provider": "qwen",
         "providerModelId": "qwen3.7-plus",
         "openRouterSlug": "qwen/qwen3.7-plus",
-        "kind": "multimodal"
+        "kind": "multimodal",
+        "aliases": [
+          "qwen-coder-flash",
+          "qwen-coder-plus",
+          "qwen-max",
+          "qwen-turbo",
+          "qwen/qwen3.7-plus",
+          "qwen3.7-plus"
+        ],
+        "family": "qwen-plus"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "May 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -647,14 +798,18 @@
         "openRouterSlug": "moonshotai/kimi-k3",
         "kind": "multimodal",
         "openWeight": true,
-        "license": "Kimi K3 License"
+        "license": "Kimi K3 License",
+        "aliases": ["moonshotai/kimi-k3"],
+        "family": "kimi"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "July 16, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-16",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -668,13 +823,17 @@
         "kind": "code",
         "familyPartner": "kimi-k3",
         "openWeight": true,
-        "license": "Modified MIT License"
+        "license": "Modified MIT License",
+        "aliases": ["moonshotai/kimi-k2.7-code"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -688,14 +847,18 @@
         "kind": "multimodal",
         "familyPartner": "kimi-k3",
         "openWeight": true,
-        "license": "Modified MIT License"
+        "license": "Modified MIT License",
+        "aliases": ["moonshotai/kimi-k2.6"],
+        "family": "kimi"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "April 20, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-04-20",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -708,14 +871,18 @@
         "openRouterSlug": "x-ai/grok-4.6",
         "kind": "reasoning",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["x-ai/grok-4.6"],
+        "family": "grok"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 12, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-08-12",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -725,14 +892,18 @@
         "displayName": "Veo 3.1",
         "provider": "google",
         "providerModelId": "veo-3.1-generate-preview",
-        "kind": "video"
+        "kind": "video",
+        "aliases": ["veo-3.1-generate-preview"],
+        "family": "veo"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-10-15",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -742,14 +913,18 @@
         "displayName": "Veo 3.1 Fast",
         "provider": "google",
         "providerModelId": "veo-3.1-fast-generate-preview",
-        "kind": "video"
+        "kind": "video",
+        "aliases": ["veo-3.1-fast-generate-preview"],
+        "family": "veo-fast"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-10-15",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -759,14 +934,18 @@
         "displayName": "GPT-4o Transcribe",
         "provider": "openai",
         "providerModelId": "gpt-4o-transcribe",
-        "kind": "stt"
+        "kind": "stt",
+        "aliases": [],
+        "family": "transcribe-balanced"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 20, 2025",
         "deprecationDate": "2027-02-26",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-03-20",
+        "deprecatedOn": "2027-02-26"
       },
       "evidenceRefs": []
     },
@@ -776,14 +955,18 @@
         "displayName": "GPT-4o Mini Transcribe",
         "provider": "openai",
         "providerModelId": "gpt-4o-mini-transcribe",
-        "kind": "stt"
+        "kind": "stt",
+        "aliases": [],
+        "family": "transcribe-fast"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 20, 2025",
         "deprecationDate": "2027-02-26",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-03-20",
+        "deprecatedOn": "2027-02-26"
       },
       "evidenceRefs": []
     },
@@ -795,14 +978,18 @@
         "providerModelId": "MiniMax-M3",
         "openRouterSlug": "minimax/minimax-m3",
         "kind": "reasoning",
-        "openWeight": true
+        "openWeight": true,
+        "aliases": ["MiniMax-M3", "minimax/minimax-m3"],
+        "family": "minimax"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "June 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -815,14 +1002,18 @@
         "openRouterSlug": "minimax/minimax-m2.7",
         "kind": "reasoning",
         "familyPartner": "minimax-m3",
-        "openWeight": true
+        "openWeight": true,
+        "aliases": ["MiniMax-M2.7", "minimax/minimax-m2.7"],
+        "family": "minimax"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 18, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-03-18",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -832,14 +1023,18 @@
         "displayName": "Veo 3.1 Lite",
         "provider": "google",
         "providerModelId": "veo-3.1-lite-generate-preview",
-        "kind": "video"
+        "kind": "video",
+        "aliases": ["veo-3.1-lite-generate-preview"],
+        "family": "veo-lite"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "March 31, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-03-31",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -849,14 +1044,18 @@
         "displayName": "Gemini Omni Flash",
         "provider": "google",
         "providerModelId": "gemini-omni-flash-preview",
-        "kind": "video"
+        "kind": "video",
+        "aliases": [],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "June 2026",
         "deprecationDate": "2026-09-30",
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": "2026-09-30"
       },
       "evidenceRefs": []
     },
@@ -866,14 +1065,18 @@
         "displayName": "Gemini 3.5 Live Translate",
         "provider": "google",
         "providerModelId": "gemini-3.5-live-translate-preview",
-        "kind": "tts"
+        "kind": "tts",
+        "aliases": [],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "June 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -885,14 +1088,18 @@
         "providerModelId": "gemini-3.1-flash-live-preview",
         "kind": "multimodal",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "March 11, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-03-11",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -904,14 +1111,18 @@
         "providerModelId": "gemini-3.1-flash-tts-preview",
         "kind": "tts",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": [],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "April 13, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-04-13",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -924,14 +1135,18 @@
         "openRouterSlug": "openrouter/auto",
         "kind": "chat",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["openrouter/auto"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "November 8, 2023",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2023-11-08",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -945,14 +1160,18 @@
         "kind": "chat",
         "familyPartner": "openrouter-auto",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["openrouter/auto-beta"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "July 17, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-07-17",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -965,14 +1184,18 @@
         "openRouterSlug": "openrouter/free",
         "kind": "chat",
         "openWeight": false,
-        "license": "proprietary"
+        "license": "proprietary",
+        "aliases": ["openrouter/free"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "February 1, 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2026-02-01",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -984,14 +1207,18 @@
         "providerModelId": "openai/gpt-oss-120b",
         "kind": "reasoning",
         "openWeight": true,
-        "license": "Apache-2.0"
+        "license": "Apache-2.0",
+        "aliases": ["openai/gpt-oss-120b"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -1003,14 +1230,18 @@
         "providerModelId": "openai/gpt-oss-20b",
         "kind": "reasoning",
         "openWeight": true,
-        "license": "Apache-2.0"
+        "license": "Apache-2.0",
+        "aliases": ["openai/gpt-oss-20b"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
         "released": "August 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -1024,14 +1255,18 @@
         "kind": "reasoning",
         "familyPartner": "gpt-oss-20b",
         "openWeight": true,
-        "license": "Apache-2.0"
+        "license": "Apache-2.0",
+        "aliases": ["openai/gpt-oss-safeguard-20b"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "October 29, 2025",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": "2025-10-29",
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -1045,14 +1280,18 @@
         "kind": "reasoning",
         "familyPartner": "qwen-3.8-27b",
         "openWeight": true,
-        "license": "Apache-2.0"
+        "license": "Apache-2.0",
+        "aliases": ["qwen/qwen3.6-27b"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "April 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     },
@@ -1066,14 +1305,18 @@
         "kind": "reasoning",
         "familyPartner": "qwen-3.6-27b",
         "openWeight": true,
-        "license": "Apache-2.0"
+        "license": "Apache-2.0",
+        "aliases": ["qwen/qwen3.8-27b"],
+        "family": null
       },
       "lifecycle": {
         "status": "active",
         "availability": "preview",
         "released": "August 2026",
         "deprecationDate": null,
-        "deprecated": false
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null
       },
       "evidenceRefs": []
     }
@@ -4174,7 +4417,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "gpt-5.6-terra": {
       "textInput": true,
@@ -4188,7 +4441,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "gpt-5.6-luna": {
       "textInput": true,
@@ -4202,7 +4465,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "claude-fable-5-1": {
       "textInput": true,
@@ -4216,7 +4489,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "claude-opus-5": {
       "textInput": true,
@@ -4230,7 +4513,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "claude-sonnet-5": {
       "textInput": true,
@@ -4244,7 +4537,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "claude-haiku-4-5": {
       "textInput": true,
@@ -4258,7 +4561,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-embedding-2": {
       "textInput": true,
@@ -4272,7 +4585,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.1-pro-preview": {
       "textInput": true,
@@ -4286,7 +4609,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-3.5-flash-lite": {
       "textInput": true,
@@ -4300,7 +4633,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-3.1-flash-lite": {
       "textInput": true,
@@ -4314,7 +4657,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-3.1-flash-image": {
       "textInput": true,
@@ -4328,7 +4681,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3-pro-image": {
       "textInput": true,
@@ -4342,7 +4705,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.1-flash-lite-image": {
       "textInput": true,
@@ -4356,7 +4729,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "deepseek-v4-flash": {
       "textInput": true,
@@ -4370,7 +4753,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "deepseek-v4-pro": {
       "textInput": true,
@@ -4384,7 +4777,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": true,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "deepseek-v4-flash-vision-exp": {
       "textInput": true,
@@ -4398,7 +4801,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "qwen-3.5-flash": {
       "textInput": true,
@@ -4412,7 +4825,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "qwen-3.8-flash": {
       "textInput": true,
@@ -4426,7 +4849,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "sonar": {
       "textInput": true,
@@ -4440,7 +4873,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "sonar-reasoning-pro": {
       "textInput": true,
@@ -4454,7 +4897,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": false,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "sonar-pro": {
       "textInput": true,
@@ -4468,7 +4921,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "sonar-deep-research": {
       "textInput": true,
@@ -4482,7 +4945,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": false,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "runway-gen-4": {
       "textInput": true,
@@ -4496,7 +4969,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "seedance-2.5": {
       "textInput": true,
@@ -4510,7 +4993,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gpt-image-2": {
       "textInput": true,
@@ -4524,7 +5017,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "gpt-4o-mini-tts": {
       "textInput": true,
@@ -4538,7 +5041,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.8-flash": {
       "textInput": true,
@@ -4552,7 +5065,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-3.6-flash": {
       "textInput": true,
@@ -4566,7 +5089,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "glm-5.3": {
       "textInput": true,
@@ -4580,7 +5113,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "glm-5.3-flash": {
       "textInput": true,
@@ -4594,7 +5137,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "qwen-3.7-plus": {
       "textInput": true,
@@ -4608,7 +5161,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "kimi-k3": {
       "textInput": true,
@@ -4622,7 +5185,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "kimi-k2.7-code": {
       "textInput": true,
@@ -4636,7 +5209,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "kimi-k2.6": {
       "textInput": true,
@@ -4650,7 +5233,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "grok-4.6": {
       "textInput": true,
@@ -4664,7 +5257,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
     },
     "veo-3.1": {
       "textInput": true,
@@ -4678,7 +5281,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "veo-3.1-fast": {
       "textInput": true,
@@ -4692,7 +5305,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gpt-4o-transcribe": {
       "textInput": false,
@@ -4706,7 +5329,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gpt-4o-mini-transcribe": {
       "textInput": false,
@@ -4720,7 +5353,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "minimax-m3": {
       "textInput": true,
@@ -4734,7 +5377,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "minimax-m2.7": {
       "textInput": true,
@@ -4748,7 +5401,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "veo-3.1-lite": {
       "textInput": true,
@@ -4762,7 +5425,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-omni-flash-preview": {
       "textInput": true,
@@ -4776,7 +5449,17 @@
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.5-live-translate-preview": {
       "textInput": true,
@@ -4790,7 +5473,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.1-flash-live-preview": {
       "textInput": true,
@@ -4804,7 +5497,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gemini-3.1-flash-tts-preview": {
       "textInput": true,
@@ -4818,7 +5521,17 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
-      "reasoning": false
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "openrouter-auto": {
       "textInput": true,
@@ -4826,13 +5539,23 @@
       "audioInput": false,
       "videoInput": false,
       "textOutput": true,
-      "imageOutput": false,
+      "imageOutput": true,
       "audioOutput": false,
       "videoOutput": false,
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "openrouter-auto-beta": {
       "textInput": true,
@@ -4840,13 +5563,23 @@
       "audioInput": false,
       "videoInput": false,
       "textOutput": true,
-      "imageOutput": false,
+      "imageOutput": true,
       "audioOutput": false,
       "videoOutput": false,
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "openrouter-free": {
       "textInput": true,
@@ -4860,7 +5593,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "gpt-oss-120b": {
       "textInput": true,
@@ -4874,7 +5617,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "gpt-oss-20b": {
       "textInput": true,
@@ -4888,7 +5641,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "gpt-oss-safeguard-20b": {
       "textInput": true,
@@ -4902,7 +5665,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "qwen-3.6-27b": {
       "textInput": true,
@@ -4916,7 +5689,17 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
     "qwen-3.8-27b": {
       "textInput": true,
@@ -4930,8 +5713,46 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": true
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     }
+  },
+  "capabilityClasses": {
+    "intrinsic": [
+      "textInput",
+      "imageInput",
+      "audioInput",
+      "videoInput",
+      "textOutput",
+      "imageOutput",
+      "audioOutput",
+      "videoOutput",
+      "streaming",
+      "structuredOutput",
+      "functionCalling",
+      "reasoning",
+      "imageEditing",
+      "realtime",
+      "reranking",
+      "toolSchemaSupport"
+    ],
+    "routeDependent": [
+      "computerUse",
+      "agentic",
+      "webSearch",
+      "deepResearch",
+      "codeExecution",
+      "promptCaching"
+    ]
   },
   "pricing": {
     "gpt-5.6-sol": {

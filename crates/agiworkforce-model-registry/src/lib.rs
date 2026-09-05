@@ -89,6 +89,10 @@ pub enum IntrinsicCapability {
     StructuredOutput,
     FunctionCalling,
     Reasoning,
+    ImageEditing,
+    Realtime,
+    Reranking,
+    ToolSchemaSupport,
 }
 
 impl IntrinsicCapability {
@@ -106,6 +110,10 @@ impl IntrinsicCapability {
             Self::StructuredOutput => "structuredOutput",
             Self::FunctionCalling => "functionCalling",
             Self::Reasoning => "reasoning",
+            Self::ImageEditing => "imageEditing",
+            Self::Realtime => "realtime",
+            Self::Reranking => "reranking",
+            Self::ToolSchemaSupport => "toolSchemaSupport",
         }
     }
 }
@@ -265,7 +273,7 @@ struct Registry {
     harnesses: HashMap<String, RegistryHarness>,
     #[serde(rename = "runtimeProfiles")]
     runtime_profiles: HashMap<String, RegistryRuntimeProfile>,
-    capabilities: HashMap<String, HashMap<String, bool>>,
+    capabilities: HashMap<String, HashMap<String, Option<bool>>>,
     limits: HashMap<String, RegistryLimits>,
     policies: RegistryPolicies,
 }
@@ -835,7 +843,7 @@ fn evaluate_eligibility<'a>(
         )
         .collect::<HashSet<_>>();
     for capability in required {
-        if capabilities.and_then(|values| values.get(capability)) != Some(&true) {
+        if capabilities.and_then(|values| values.get(capability)) != Some(&Some(true)) {
             reasons.push(format!(
                 "model {model_key} lacks intrinsic capability {capability}"
             ));

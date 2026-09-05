@@ -193,4 +193,44 @@ export const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [
   ),
 ];
 
+export const INTRINSIC_CAPABILITY_NAMES = [
+  'textInput',
+  'imageInput',
+  'audioInput',
+  'videoInput',
+  'textOutput',
+  'imageOutput',
+  'audioOutput',
+  'videoOutput',
+  'streaming',
+  'structuredOutput',
+  'functionCalling',
+  'reasoning',
+  'imageEditing',
+  'realtime',
+  'reranking',
+  'toolSchemaSupport',
+] as const;
+
+export const ROUTE_DEPENDENT_CAPABILITY_NAMES = [
+  'computerUse',
+  'agentic',
+  'webSearch',
+  'deepResearch',
+  'codeExecution',
+  'promptCaching',
+] as const;
+
+export type IntrinsicCapabilityName = (typeof INTRINSIC_CAPABILITY_NAMES)[number];
+
+export type RouteDependentCapabilityName = (typeof ROUTE_DEPENDENT_CAPABILITY_NAMES)[number];
+
+export type ModelCapabilityName = IntrinsicCapabilityName | RouteDependentCapabilityName;
+
+export type ModelCapabilityValue = boolean | null;
+
+export type NormalizedModelCapabilities = Readonly<
+  Record<ModelCapabilityName, ModelCapabilityValue>
+>;
+
 export default registry;
