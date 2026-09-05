@@ -65,7 +65,11 @@ export {
   type ValidateBaseUrlResult,
 } from './base-url';
 
-export { CredentialFailoverState } from './failover';
+export {
+  CredentialFailoverState,
+  isCredentialFailureCategory,
+  type CredentialFailoverStateOptions,
+} from './failover';
 
 export {
   repairMessageHistory,

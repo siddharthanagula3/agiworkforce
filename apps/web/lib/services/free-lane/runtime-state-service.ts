@@ -670,12 +670,23 @@ export function resetRouteHealthSnapshotCache(): void {
   routeHealthStoreInstance = null;
 }
 
+/**
+ * A success is forwarded to the route's CREDENTIAL as well.
+ *
+ * That is what closes a credential breaker: the key demonstrably works, so a
+ * cooldown opened by earlier refusals must not keep a live provider parked. A
+ * route FAILURE is deliberately not forwarded, one model returning a 500 says
+ * nothing about the account's key.
+ */
 export async function recordRouteOutcome(
   routeId: string,
   outcome: RouteOutcome,
   nowMs: number = Date.now(),
 ): Promise<void> {
-  await routeHealthStore().recordOutcome('route', routeId, outcome, nowMs);
+  const store = routeHealthStore();
+  await store.recordOutcome('route', routeId, outcome, nowMs);
+  if (outcome.class !== 'success') return;
+  await store.recordOutcome('credential', providerOfRouteId(routeId), { class: 'success' }, nowMs);
 }
 
 /**

@@ -92,6 +92,7 @@ const OUTCOME_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'timeout',
   'stream_corruption',
   'unsupported_capability',
+  'credential_rejected',
 ]);
 
 /**
@@ -104,6 +105,7 @@ const FAILURE_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'server_error',
   'timeout',
   'stream_corruption',
+  'credential_rejected',
 ]);
 
 export interface RouteHealthConfig {
@@ -329,6 +331,7 @@ function countByClass(events: readonly RouteOutcomeEvent[]): Record<RouteOutcome
     timeout: 0,
     stream_corruption: 0,
     unsupported_capability: 0,
+    credential_rejected: 0,
   };
   for (const event of events) counts[event.class] += 1;
   return counts;
