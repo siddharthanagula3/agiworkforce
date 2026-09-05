@@ -20,6 +20,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
@@ -853,14 +854,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const activeStatuses = ['active', 'trialing'];
-  if (!activeStatuses.includes(subscription.status)) {
+  const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
+    (await callerScope()).db,
+    userId,
+    subscription,
+  );
+  if (!subscriptionAccess.allowed) {
     return NextResponse.json(
       {
         error: {
-          message: `Your subscription is ${subscription.status}. Please update your payment method.`,
+          message: subscriptionAccess.reason,
           type: 'invalid_request_error',
-          code: 'subscription_inactive',
+          code: subscriptionAccess.code,
         },
       },
       {

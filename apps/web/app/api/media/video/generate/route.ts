@@ -30,6 +30,7 @@ import {
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import {
   buildManagedComputeGateResponse,
@@ -750,14 +751,18 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const activeStatuses = new Set(['active', 'trialing']);
-  if (!activeStatuses.has(subscription.status)) {
+  const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
+    (await callerScope()).db,
+    userId,
+    subscription,
+  );
+  if (!subscriptionAccess.allowed) {
     return NextResponse.json(
       {
         error: {
-          message: `Your subscription is ${subscription.status}. Please update your payment method.`,
+          message: subscriptionAccess.reason,
           type: 'invalid_request_error',
-          code: 'subscription_inactive',
+          code: subscriptionAccess.code,
           current_plan: subscription.plan_tier?.toLowerCase() || 'free',
           required_plans: ['max_15x', 'enterprise'],
         },
