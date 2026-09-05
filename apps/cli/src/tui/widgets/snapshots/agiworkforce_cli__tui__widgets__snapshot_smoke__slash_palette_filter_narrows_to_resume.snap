@@ -5,7 +5,7 @@ expression: rendered
 ┌─ Commands ─────────────────────────────────────────────────┐
 │   /resu                                                    │
 │ ────────────────────────────────────────────────────────── │
-│ ❯ /resume, Continue a previous session                    │
+│ ❯ /resume, Continue a previous session                     │
 │                                                            │
 │  Type to filter   ↑↓ navigate   Enter select   Esc cancel  │
 └────────────────────────────────────────────────────────────┘
