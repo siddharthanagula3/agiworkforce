@@ -14,16 +14,15 @@ function handlers() {
   };
 }
 
-function renderRecording(overrides: Partial<Parameters<typeof DictationStrip>[0]> = {}) {
+function renderRecording({ reducedMotion = false }: { reducedMotion?: boolean } = {}) {
   const spies = handlers();
   render(
     <DictationStrip
       status={DICTATION_STATUS.recording}
       bars={WAVEFORM.bars}
       error={null}
-      reducedMotion={false}
+      reducedMotion={reducedMotion}
       {...spies}
-      {...overrides}
     />,
   );
   return spies;
