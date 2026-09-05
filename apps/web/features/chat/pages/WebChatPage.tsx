@@ -134,6 +134,7 @@ import {
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
+import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
   hasWorkSession,
@@ -4373,6 +4374,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     !displayedConversationId ||
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
 
+  const turnFailureNotice = resolveTurnFailureNotice({
+    error: chatError,
+    transcriptMounted: !isConversationTranscriptPending && !isEmptyChat,
+    paywallOwnsTurn: showsInlinePaywall,
+  });
+
   // Count distinct research sources across all messages for the toggle badge.
   // Metadata may contain a flat result list or a legacy SearchResponse object.
   const researchSourceCount = useMemo(() => {
@@ -4760,14 +4767,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             </div>
           </div>
 
-          {chatError && !showsInlinePaywall && (
+          {turnFailureNotice.placement === 'banner' && (
             <div
               role="alert"
               aria-live="polite"
               className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
             >
               <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
-                {chatError}
+                {turnFailureNotice.message}
               </span>
               {(retryableTurnId || retryableCardResumeMessageId) && (
                 <button
@@ -4922,6 +4929,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         onPaywallDismiss={handlePaywallDismiss}
                         onRegenerateWithModel={handleRegenerateWithModel}
                         regenerateModelOptions={regenerateModelOptions}
+                        turnError={
+                          turnFailureNotice.placement === 'inline'
+                            ? turnFailureNotice.message
+                            : null
+                        }
                       />
                     </InteractiveCardResumeProvider>
                   </MessageInlineEditProvider>
