@@ -1,4 +1,3 @@
-
 import { invoke } from '../lib/tauri-mock';
 
 export interface VoiceTranscription {
@@ -348,9 +347,9 @@ export async function voicePttKeyUp(): Promise<number | null> {
   }
 }
 
-export async function voiceStartGlobalPtt(): Promise<void> {
+export async function voiceStartGlobalPtt(accelerator: string): Promise<void> {
   try {
-    await invoke('voice_start_global_ptt');
+    await invoke('voice_start_global_ptt', { accelerator });
   } catch (e) {
     throw new Error(`voiceStartGlobalPtt failed: ${e}`);
   }

@@ -1,6 +1,6 @@
 //! One owner for the AGI Dictation lifecycle.
 //!
-//! Phase 1 of `docs/plans/desktop-system-dictation.md`: a single state machine
+//! Phase 1 of `docs/specs/desktop-global-voice/spec.md`: a single state machine
 //! (`idle -> capturing -> transcribing -> injecting -> idle`) that both entry
 //! paths must route through, the in-app hotkey (webview capture) and the
 //! global OS hotkey hook. The coordinator owns admission, session identity,
@@ -31,7 +31,7 @@ pub const DICTATION_EVENT_VERSION: u32 = 1;
 /// `voice_get_capabilities` and for global-source admission below.
 ///
 /// Stays `false` until the signed-build release gates in
-/// `docs/plans/desktop-system-dictation.md` pass; do not flip it from UI or
+/// `docs/specs/desktop-global-voice/spec.md` pass; do not flip it from UI or
 /// settings code.
 pub const fn system_dictation_available() -> bool {
     false

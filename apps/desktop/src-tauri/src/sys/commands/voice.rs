@@ -269,7 +269,7 @@ pub struct VoiceCapabilities {
     pub local_tts_voice: Option<String>,
     /// Capability probe for system-wide (outside-the-app) dictation.
     /// Sourced from the dictation coordinator's single truth; stays `false`
-    /// until the release gates in `docs/plans/desktop-system-dictation.md`
+    /// until the release gates in `docs/specs/desktop-global-voice/spec.md`
     /// pass (`DESKTOP-SYSTEM-DICTATION-UNWIRED-01`). The settings UI must
     /// present the global control as unavailable while this is false.
     pub system_dictation_available: bool,
