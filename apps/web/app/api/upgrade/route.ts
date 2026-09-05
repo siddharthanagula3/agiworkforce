@@ -2,8 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -14,7 +13,6 @@ import { resolvePlanTier } from '@/lib/price-tier-mapping';
 import { UpgradeApplyRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
@@ -34,7 +32,7 @@ import {
 } from '@/lib/server/subscription-billing-owner';
 
 async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -57,8 +55,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   const { plan: targetPlan, billingInterval, previewToken } = parsed.data;
   const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
-  const db = getNeonDb();
-  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
   const stripe = getStripeClient();
 
   type SubRow = Pick<
@@ -114,7 +110,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   if (!isStripeCustomerId(stripeCustomerId)) {
     let profileRows: Array<Pick<SubscriptionRow, 'stripe_customer_id'>>;
     try {
-      profileRows = await scopedDb.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
+      profileRows = await db.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
         'select stripe_customer_id from profiles where id = $1 limit 1',
         [userId],
       );
