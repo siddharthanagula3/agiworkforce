@@ -1,10 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
+import path from 'path';
 import { installSseChatMock, type SseChatMock } from './lib/sse-chat-mock';
+import { signIn } from './qa-capability-harness';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 const SHOT_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/20ebdda6-913a-420e-93f7-a9d2e8b09fbe/scratchpad/product-audit';
+  process.env['AGI_E2E_SHOT_DIR'] ??
+  path.join(__dirname, '..', 'test-results', 'chat-run-recovery');
 const VIEWPORT = { width: 1280, height: 800 };
 const SETTLE_MS = 900;
 const PROMPT = 'Population of the five largest US cities';
@@ -28,20 +30,6 @@ const TURN_FAILED_LEAD = 'Response failed';
 const THEME_STORAGE_KEY = 'theme';
 const THEMES = ['dark', 'light'] as const;
 type CaptureTheme = (typeof THEMES)[number];
-
-async function mintSignInTicket(): Promise<string> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) throw new Error('CLERK_SECRET_KEY missing from process.env');
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('sign_in_tokens returned no token');
-  return json.token;
-}
 
 async function applyTheme(page: Page, theme: CaptureTheme): Promise<void> {
   await page.addInitScript(
@@ -68,28 +56,6 @@ async function shoot(page: Page, name: string): Promise<void> {
     }
   }, THEME_STORAGE_KEY);
   await page.screenshot({ path: `${SHOT_DIR}/slice-a-${name}-${theme}.png` });
-}
-
-async function signIn(page: Page): Promise<void> {
-  const ticket = await mintSignInTicket();
-  await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-    { timeout: 30_000 },
-  );
-  await page.evaluate(async (t) => {
-    const clerk = (
-      window as unknown as {
-        Clerk: {
-          client: { signIn: { create: (o: unknown) => Promise<{ createdSessionId?: string }> } };
-          setActive: (o: unknown) => Promise<void>;
-        };
-      }
-    ).Clerk;
-    const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-    if (res.createdSessionId) await clerk.setActive({ session: res.createdSessionId });
-  }, ticket);
-  await page.waitForTimeout(1500);
 }
 
 function agentEvent(sequence: number, event: Record<string, unknown>): Record<string, unknown> {
