@@ -52,6 +52,11 @@ import {
   type WorkflowTerminalOutcome,
 } from './steps/settle-workflow-invocation';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { mapClassifiedUpstreamError } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
+import { classifyError } from '@agiworkforce/provider-runtime';
+
+const CLOUD_AGENT_WORKFLOW_FAILED_MESSAGE = 'The durable agent workflow failed.';
+const CLOUD_AGENT_WORKFLOW_FAILED_CODE = 'cloud_agent_workflow_failed';
 
 const ProviderCallObservationSchema = z
   .object({
@@ -100,6 +105,7 @@ const PendingToolCallSchema = z
     id: z.string().min(1),
     qualifiedName: z.string().min(1),
     args: z.record(z.string(), z.unknown()),
+    argsMalformed: z.literal(true).optional(),
   })
   .strict();
 const pendingToolCallSchemaCoversPendingToolCall: SameKeys<
@@ -453,9 +459,16 @@ export async function executeCloudAgentWorkflowInvocation(
   return { kind: 'terminal', outcome };
 }
 
+/**
+ * `code` carries the reason taxonomy the transcript's failure row reads to pick
+ * its copy and decide whether "Switch model" is worth offering. Optional so the
+ * generic workflow code stays the default for a failure that is not an upstream
+ * refusal at all.
+ */
 export async function failCloudAgentWorkflow(
   rawInput: CloudAgentWorkflowInput,
   message: string,
+  code?: string,
 ): Promise<void> {
   'use step';
 
@@ -478,8 +491,8 @@ export async function failCloudAgentWorkflow(
   const events = [
     emitter.emitWithEnvelope({
       type: 'error',
-      message: message || 'The durable agent workflow failed.',
-      code: 'cloud_agent_workflow_failed',
+      message: message || CLOUD_AGENT_WORKFLOW_FAILED_MESSAGE,
+      code: code || CLOUD_AGENT_WORKFLOW_FAILED_CODE,
       retryable: false,
     }),
     emitter.emitWithEnvelope({
@@ -529,8 +542,8 @@ export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Pro
       return;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await failCloudAgentWorkflow(input, message);
+    const failure = describeCloudAgentWorkflowFailure(error, input.processed.provider);
+    await failCloudAgentWorkflow(input, failure.message, failure.code);
     await closeCloudAgentWorkflowStream();
     throw error;
   }
