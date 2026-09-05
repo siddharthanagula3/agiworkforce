@@ -1,3 +1,13 @@
+/**
+ * The provider SDK is resolved from the host application's dependencies rather
+ * than declared here, and that is deliberate. This repository installs peer
+ * dependencies automatically, so declaring these would give this package its
+ * own copy of the SDK under a different peer resolution: two provider
+ * singletons in one process, a second copy of the framework's types that broke
+ * the host's typecheck, and a module identity the host's tests cannot intercept
+ * when they stand the provider in. `check:boundaries` is what keeps the import
+ * honest instead: the SDK is reachable from this adapter and nowhere else.
+ */
 import * as clerkServer from '@clerk/nextjs/server';
 
 import { APP_URL_ENV, resolveDeploymentOrigin } from '../deployment-origin';
@@ -102,7 +112,9 @@ function toEmailVerification(primary: ClerkUser['primaryEmailAddress']): Identit
 }
 
 function toUser(user: ClerkUser): IdentityUser {
-  const emails = user.emailAddresses.map((address) => address.emailAddress).filter(Boolean);
+  // Defensive over provider data: a field the API stops returning must degrade
+  // the mapping, not throw inside whichever gate happens to be reading it.
+  const emails = (user.emailAddresses ?? []).map((address) => address.emailAddress).filter(Boolean);
   return {
     id: user.id,
     primaryEmail: optional(user.primaryEmailAddress?.emailAddress) ?? emails[0] ?? null,

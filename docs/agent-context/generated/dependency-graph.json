@@ -668,6 +668,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/identity"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/key-value"
       },
       {

@@ -16,8 +16,8 @@ const ArtifactSyncCursorRejectedError = vi.hoisted(
   () => class ArtifactSyncCursorRejectedError extends Error {},
 );
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => authState,
+vi.mock('@/lib/identity/client', () => ({
+  useSession: () => authState,
 }));
 
 vi.mock('../services/artifact-cloud-sync', () => ({
