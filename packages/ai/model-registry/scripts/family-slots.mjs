@@ -216,6 +216,7 @@ async function rollback(args) {
     family,
     reason ?? `rollback from ${family.active.modelKey} to ${family.previous.modelKey}`,
     today(),
+    familyCatalog.policy,
   );
   console.log(
     `[families] ${apply ? 'roll back' : 'would roll back'} ${only}: ${family.active.modelKey} → ${rolled.active.modelKey}`,
