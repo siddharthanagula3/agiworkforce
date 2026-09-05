@@ -377,7 +377,18 @@
       "constraintsLabel": "约束",
       "constraintsPlaceholder": "边界、需避免的内容、优先来源…",
       "deliverableLabel": "交付物",
-      "deliverablePlaceholder": "你期望的具体产出（文件、表格、摘要等）"
+      "deliverablePlaceholder": "你期望的具体产出（文件、表格、摘要等）",
+      "palette": {
+        "label": "AGI Work 工具",
+        "searchPlaceholder": "搜索插件、文件夹和技能",
+        "searchLabel": "搜索 AGI Work 面板",
+        "connectorsHeading": "已连接应用",
+        "connectorsLoading": "正在加载已连接应用",
+        "skillsHeading": "技能",
+        "foldersHeading": "文件夹",
+        "pluginsHeading": "插件",
+        "noMatches": "没有匹配项"
+      }
     }
   },
   "time": {

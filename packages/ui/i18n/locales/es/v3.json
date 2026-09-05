@@ -377,7 +377,18 @@
       "constraintsLabel": "Restricciones",
       "constraintsPlaceholder": "Límites, cosas a evitar, fuentes preferidas…",
       "deliverableLabel": "Entregable",
-      "deliverablePlaceholder": "El resultado concreto que esperas (un archivo, una tabla, un resumen…)"
+      "deliverablePlaceholder": "El resultado concreto que esperas (un archivo, una tabla, un resumen…)",
+      "palette": {
+        "label": "Herramientas de AGI Work",
+        "searchPlaceholder": "Buscar complementos, carpetas y habilidades",
+        "searchLabel": "Buscar en la paleta de AGI Work",
+        "connectorsHeading": "Aplicaciones conectadas",
+        "connectorsLoading": "Cargando aplicaciones conectadas",
+        "skillsHeading": "Habilidades",
+        "foldersHeading": "Carpetas",
+        "pluginsHeading": "Complementos",
+        "noMatches": "Sin coincidencias"
+      }
     }
   },
   "time": {

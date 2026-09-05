@@ -377,7 +377,18 @@
       "constraintsLabel": "制約",
       "constraintsPlaceholder": "範囲、避けるべきこと、優先する情報源…",
       "deliverableLabel": "成果物",
-      "deliverablePlaceholder": "期待する具体的な成果物（ファイル、表、要約など）"
+      "deliverablePlaceholder": "期待する具体的な成果物（ファイル、表、要約など）",
+      "palette": {
+        "label": "AGI Work ツール",
+        "searchPlaceholder": "プラグイン、フォルダー、スキルを検索",
+        "searchLabel": "AGI Work パレットを検索",
+        "connectorsHeading": "接続済みアプリ",
+        "connectorsLoading": "接続済みアプリを読み込み中",
+        "skillsHeading": "スキル",
+        "foldersHeading": "フォルダー",
+        "pluginsHeading": "プラグイン",
+        "noMatches": "一致なし"
+      }
     }
   },
   "time": {

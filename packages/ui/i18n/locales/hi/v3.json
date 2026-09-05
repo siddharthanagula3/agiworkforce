@@ -377,7 +377,18 @@
       "constraintsLabel": "बाधाएँ",
       "constraintsPlaceholder": "सीमाएँ, किनसे बचना है, पसंदीदा स्रोत…",
       "deliverableLabel": "डिलिवरेबल",
-      "deliverablePlaceholder": "आपको अपेक्षित ठोस परिणाम (एक फ़ाइल, एक तालिका, एक सारांश…)"
+      "deliverablePlaceholder": "आपको अपेक्षित ठोस परिणाम (एक फ़ाइल, एक तालिका, एक सारांश…)",
+      "palette": {
+        "label": "AGI Work टूल",
+        "searchPlaceholder": "प्लगइन, फ़ोल्डर और स्किल खोजें",
+        "searchLabel": "AGI Work पैलेट में खोजें",
+        "connectorsHeading": "जुड़े हुए ऐप",
+        "connectorsLoading": "जुड़े हुए ऐप लोड हो रहे हैं",
+        "skillsHeading": "स्किल",
+        "foldersHeading": "फ़ोल्डर",
+        "pluginsHeading": "प्लगइन",
+        "noMatches": "कोई मिलान नहीं"
+      }
     }
   },
   "time": {
