@@ -274,6 +274,26 @@ test('rejects injected code, test, fixture, snapshot, documentation, and comment
   assert.ok(violations.some((violation) => violation.file.endsWith('comment.ts')));
 });
 
+test('skips vendored third-party skills but still scans first-party skills', () => {
+  const sandbox = createSandbox();
+  const filePaths = writeFiles(sandbox, {
+    'skills-lock.json': JSON.stringify({
+      skills: {
+        vendored: { path: '.agents/skills/vendored', sourceType: 'github' },
+        own: { path: '.agents/skills/own', sourceType: 'first-party' },
+      },
+    }),
+    '.agents/skills/vendored/SKILL.md': `Upstream text naming ${canonicalId}\n`,
+    '.agents/skills/own/SKILL.md': `Our text naming ${canonicalId}\n`,
+  });
+  const { violations } = scanModelIdFiles({ repoRoot: sandbox, filePaths, tokens });
+
+  assert.deepEqual(
+    violations.map((violation) => violation.file),
+    ['.agents/skills/own/SKILL.md'],
+  );
+});
+
 test('rejects provider wire IDs and legacy model aliases outside the owner', () => {
   const sandbox = createSandbox();
   const filePaths = writeFiles(sandbox, {
