@@ -135,6 +135,7 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
     {
       name: 'agi-tool-permissions',
       version: 1,
+      migrate: (persisted) => persisted,
     },
   ),
 );

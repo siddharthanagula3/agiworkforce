@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -509,6 +508,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
       {
         name: 'agi-company-hub-store',
         version: 1,
+        migrate: (persisted) => persisted,
         partialize: (state) => ({
           sessions: state.sessions,
           activeSessionId: state.activeSessionId,

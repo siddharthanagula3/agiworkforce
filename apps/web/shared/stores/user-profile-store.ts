@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -116,6 +115,7 @@ export const useUserProfileStore = create<UserProfileStore>()(
       {
         name: 'agi-user-profile-store',
         version: 1,
+        migrate: (persisted) => persisted,
         partialize: (state) => ({
           user: state.user,
         }),
