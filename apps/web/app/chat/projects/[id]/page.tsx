@@ -615,7 +615,8 @@ export default function ProjectDetailPage() {
                   padding: '10px 16px',
                   background: 'transparent',
                   border: 'none',
-                  borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
+                  borderBottom:
+                    tab === t ? '2px solid hsl(var(--primary))' : '2px solid transparent',
                   color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
                   fontSize: 13,
                   fontWeight: tab === t ? 600 : 400,
