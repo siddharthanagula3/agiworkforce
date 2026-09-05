@@ -46,6 +46,13 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:1c14aa6fcbc26babdaee02a2aae846e5c8116896a5d1e355d5e28a8a8cfdfb37"
     },
+    "model-orchestration": {
+      "path": ".agents/skills/model-orchestration",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:05b4dd7ea6c0b4341ce0f114c12b2eb99afe81cd55700c2daa558b08dc5705db"
+    },
     "presentation-creation": {
       "path": ".agents/skills/presentation-creation",
       "source": "AGI Workforce repository",
