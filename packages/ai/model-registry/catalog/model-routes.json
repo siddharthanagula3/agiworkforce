@@ -790,6 +790,32 @@
             "cacheWritePerMillion": 12.5,
             "cacheWrite1hPerMillion": 20
           }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "anthropic/claude-fable-5.1",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 10,
+            "outputPerMillion": 50,
+            "cacheReadPerMillion": 0.25,
+            "cacheWritePerMillion": 12.5
+          }
+        },
+        {
+          "provider": "cheaperinference_anthropic",
+          "harnessId": "cheaperinference-anthropic/messages",
+          "upstreamModelId": "claude-fable-5.1",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 7,
+            "outputPerMillion": 35,
+            "cacheReadPerMillion": 0.175,
+            "cacheWritePerMillion": 8.75
+          }
         }
       ]
     },
