@@ -1,10 +1,9 @@
 import 'server-only';
 
-import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { getSharedRedisClient } from '@/lib/rate-limit';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 import {
   cachedRenderInput,
@@ -91,11 +90,9 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   }
 
   try {
-    const stripeKey = process.env['STRIPE_SECRET_KEY'];
+    const stripe = getStripeClientOrNull();
 
-    if (stripeKey) {
-      const stripe = new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS);
-
+    if (stripe) {
       await stripe.products.list({ limit: 1 });
 
       const configuredPriceIds = getConfiguredStripePriceIds();

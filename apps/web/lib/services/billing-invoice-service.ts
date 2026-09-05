@@ -1,9 +1,8 @@
 import 'server-only';
 
-import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 
 export interface BillingInvoiceRecord {
   id: string;
@@ -26,10 +25,7 @@ export interface BillingInvoiceRecord {
   }>;
 }
 
-const stripeSecretKey = process.env['STRIPE_SECRET_KEY'];
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, STRIPE_CLIENT_OPTIONS)
-  : null;
+const stripe = getStripeClientOrNull();
 
 export async function listUserBillingInvoices(userId: string): Promise<BillingInvoiceRecord[]> {
   if (!stripe) return [];

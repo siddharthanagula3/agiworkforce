@@ -15,7 +15,7 @@ import { UpgradeApplyRequestSchema, resolveCheckoutQuantity } from '@/lib/valida
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClient } from '@/lib/server/stripe-client';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
@@ -32,14 +32,6 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
-
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
 
 async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
@@ -67,7 +59,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
 
   const db = getNeonDb();
   const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
-  const stripe = getStripe();
+  const stripe = getStripeClient();
 
   type SubRow = Pick<
     SubscriptionRow,

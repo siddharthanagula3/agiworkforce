@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { z } from 'zod';
 import {
   MAX_TOP_UP_AMOUNT_USD,
@@ -9,7 +8,7 @@ import {
   topUpLedgerCentsForUsd,
   topUpUnitsForUsd,
 } from '@agiworkforce/types';
-import { getOptionalEnv, requireEnv } from '@shared/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -24,7 +23,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
+import { getStripeClient } from '@/lib/server/stripe-client';
 
 const TopUpRequestSchema = z
   .object({
@@ -32,17 +31,9 @@ const TopUpRequestSchema = z
   })
   .strict();
 
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
-
 async function resolveSubscriptionCurrency(subscriptionId: string): Promise<string> {
   try {
-    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    const subscription = await getStripeClient().subscriptions.retrieve(subscriptionId);
     return subscription.currency.trim().toLowerCase();
   } catch (error) {
     logger.warn(
@@ -156,7 +147,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     conversion: 'usd_1_to_units_50_v1',
   };
   const appUrl = resolveCheckoutReturnOrigin(request);
-  const session = await getStripe().checkout.sessions.create(
+  const session = await getStripeClient().checkout.sessions.create(
     {
       mode: 'payment',
       locale: 'auto',
