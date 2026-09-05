@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultModelFor, getEconomyFallbackModels } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+import {
+  GATEWAY_BACKED_HARNESS_IDS,
+  getDefaultModelFor,
+  getEconomyFallbackModels,
+} from '@agiworkforce/types';
 
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 
@@ -253,12 +258,38 @@ describe('workspace model policy is re-checked on every model this request can r
     });
   });
 
+  it('answers with the policy refusal, not route ineligibility, when the model also carries a route the runtime does not admit', async () => {
+    const baseline = await run('policy-precedence-baseline', PRO_CHAT_MODEL);
+    expect(baseline.ok).toBe(true);
+    if (!baseline.ok) return;
+
+    const gatewayBacked = new Set(GATEWAY_BACKED_HARNESS_IDS);
+    const unadmittedRoutes = getRoutePricingForModel(baseline.chatRequest.model).filter((route) =>
+      gatewayBacked.has(route.harnessId),
+    );
+    expect(
+      unadmittedRoutes.length,
+      'the fixture model must carry a gateway-backed route for this precedence to be testable',
+    ).toBeGreaterThan(0);
+
+    serveModelPolicy({ blockedModels: [baseline.chatRequest.model] });
+
+    const result = await run('policy-precedence-blocked', PRO_CHAT_MODEL);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(403);
+    await expect(result.response.json()).resolves.toMatchObject({
+      error: { code: 'model_blocked' },
+    });
+  });
+
   it('reads the policy once per request, and not at all for a personal-scope caller', async () => {
     serveModelPolicy({ blockedModels: ['some-other-model'] });
     const governed = await run('policy-read-once', 'auto');
     expect(governed.ok).toBe(true);
-    // One read for the primary gate, one snapshot reused by every candidate.
-    expect(policyReadCount()).toBe(2);
+    // One read, taken before routing so the resolver can refuse a governed
+    // candidate, and reused by the primary gate and every downgrade after it.
+    expect(policyReadCount()).toBe(1);
 
     mocks.scopedQuery.mockClear();
     mocks.organizationId.value = null;
