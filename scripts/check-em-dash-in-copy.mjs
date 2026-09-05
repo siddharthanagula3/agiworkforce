@@ -14,7 +14,20 @@ const EXCLUDE_EXACT = new Set([
   'scripts/lib/em-dash-in-copy.mjs',
   'scripts/check-em-dash-in-copy.test.mjs',
 ]);
-const EXCLUDE_PREFIX = ['apps/web/db/neon/'];
+
+function vendoredSkillPrefixes() {
+  try {
+    const lock = JSON.parse(fs.readFileSync(path.join(root, 'skills-lock.json'), 'utf8'));
+    const skills = lock.skills && typeof lock.skills === 'object' ? lock.skills : {};
+    return Object.values(skills)
+      .filter((skill) => skill?.sourceType && skill.sourceType !== 'first-party')
+      .map((skill) => `${skill.path}/`);
+  } catch {
+    return [];
+  }
+}
+
+const EXCLUDE_PREFIX = ['apps/web/db/neon/', ...vendoredSkillPrefixes()];
 const EXCLUDE_SUFFIX = ['pnpm-lock.yaml', 'Cargo.lock'];
 const EXCLUDE_BASENAME = new Set(['LICENSE', 'LICENSE.md', 'LICENSE.txt']);
 

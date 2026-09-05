@@ -119,6 +119,63 @@ SOFTWARE.
 - **Adoption**: Advisory cross-check data only. The file is fetched at runtime and never vendored, no upstream source code is ported, and nothing it reports is written to the catalog — a drift row is an instruction to open the provider's own pricing page and decide there.
 - **Notice**: litellm is split-licensed. Its root `LICENSE` reads "All content that resides under the `enterprise/` directory of this repository, if that directory exists, is licensed under the license defined in `enterprise/LICENSE`" and "Content outside of the above mentioned directories or restrictions above is available under the MIT license". `enterprise/` is a separate commercial licence (© 2024–present Berrie AI Inc.) that forbids distribution and sublicensing, and nothing from it is used here: `model_prices_and_context_window.json` sits at the repository root, outside that subtree, under the MIT grant. Because of the split, GitHub's licence detector reports the repository as `NOASSERTION`; the MIT classification above applies to the specific file consumed, not to the repository as a whole.
 
+## Anthropic frontend-design skill
+
+- **Upstream**: [anthropics/skills](https://github.com/anthropics/skills) @ `41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f` (`skills/frontend-design`)
+- **License**: Apache-2.0
+- **Copyright**: © 2026 Anthropic, PBC.
+- **Imported into**: `.agents/skills/frontend-design/`
+- **Adoption**: Vendored the skill directory as published (`SKILL.md` plus its per-skill `LICENSE.txt`). A top-level `version` frontmatter field (the fetched commit sha) was added because it was absent upstream and this repository's skill loader contract expects one; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## taste-skill
+
+- **Upstream**: [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) @ `ccbc15639c97057cbfcf32ecebc38ef716e4bb37` (`skills/taste-skill`, `skills/redesign-skill`)
+- **License**: MIT
+- **Copyright**: © 2026 Leonxlnx
+- **Imported into**: `.agents/skills/design-taste-frontend/` (from `skills/taste-skill`, frontmatter name `design-taste-frontend`), `.agents/skills/redesign-existing-projects/` (from `skills/redesign-skill`, frontmatter name `redesign-existing-projects`)
+- **Adoption**: Vendored both skill directories as published. Each directory is named for the skill's own frontmatter `name` field rather than its upstream folder name, matching this repository's convention of directory-name-as-skill-id. A top-level `version` frontmatter field (the fetched commit sha) was added to each; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## anti-slop
+
+- **Upstream**: [miqdadbadjuber/anti-slop](https://github.com/miqdadbadjuber/anti-slop) @ `dd43e13ff9b4c92222461df30270514278d5b70b` (`skills/antislop`, `skills/antislop-copywriting`, `skills/antislop-layoutmobile`, `skills/antislop-code`, `skills/antislop-ui`, `skills/antislop-human`)
+- **License**: MIT
+- **Copyright**: © 2026 Miqdad Badjuber
+- **Imported into**: `.agents/skills/antislop/`, `.agents/skills/antislop-copywriting/`, `.agents/skills/antislop-layoutmobile/`, `.agents/skills/antislop-code/`, `.agents/skills/antislop-ui/`, `.agents/skills/antislop-human/`
+- **Adoption**: Vendored all six skill directories as published. Each expects a project `DESIGN.md`; this repository provides one through the first-party `agiworkforce-design` skill. A top-level `version` frontmatter field (the fetched commit sha) was added to each; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## agent-skills (Vercel Labs)
+
+- **Upstream**: [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) @ `063bee94c3f4df8453406c830b0a7df0f2860278` (`skills/web-design-guidelines`, `skills/react-best-practices`, `skills/composition-patterns`)
+- **License**: MIT
+- **Copyright**: Not stated in the fetched commit; the repository carries no `LICENSE`, `NOTICE`, or copyright header anywhere in `package.json`, `README.md`, or `AGENTS.md`. Attributed here to Vercel Labs as the publishing organization named in the repository path.
+- **Imported into**: `.agents/skills/web-design-guidelines/`, `.agents/skills/vercel-react-best-practices/` (from `skills/react-best-practices`), `.agents/skills/vercel-composition-patterns/` (from `skills/composition-patterns`)
+- **Notice**: The fetched commit carries no root `LICENSE` file; the license is the repository's explicit grant stated in its `README.md` ("## License" → "MIT") and in the `license: MIT` frontmatter field of two of the three vendored `SKILL.md` files.
+- **Adoption**: Vendored the three skill directories as published, named for each skill's own frontmatter `name` field. A top-level `version` frontmatter field was added to each (`"1.0.0"`, matching the value each file already carried under a nested `metadata.version` key that this repository's minimal frontmatter parser does not read); the `composition-patterns` skill's folded multi-line `description:` block was reflowed to a single line because that parser does not support folded YAML scalars, with no wording changed. No other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## extract-design-system
+
+- **Upstream**: [arvindrk/extract-design-system](https://github.com/arvindrk/extract-design-system) @ `1873741ba8dea755e35e6e15134f7918cd58e036` (`skills/extract-design-system`)
+- **License**: MIT
+- **Copyright**: © 2026 Arvind
+- **Imported into**: `.agents/skills/extract-design-system/`
+- **Adoption**: Vendored the skill directory as published; the repository's standalone CLI was not vendored. A top-level `version` frontmatter field (the fetched commit sha) was added because it was absent upstream; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## Emil Kowalski design skills
+
+- **Upstream**: [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7` (`skills/emil-design-eng`, `skills/review-animations`, `skills/improve-animations`, `skills/find-animation-opportunities`, `skills/apple-design`, `skills/pick-ui-library`)
+- **License**: MIT
+- **Copyright**: © 2026 Emil Kowalski
+- **Imported into**: `.agents/skills/emil-design-eng/`, `.agents/skills/review-animations/`, `.agents/skills/improve-animations/`, `.agents/skills/find-animation-opportunities/`, `.agents/skills/apple-design/`, `.agents/skills/pick-ui-library/`
+- **Adoption**: Vendored all six skill directories as published. A top-level `version` frontmatter field (the fetched commit sha) was added to each; no other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
+## Microsoft frontend-design-review skill
+
+- **Upstream**: [microsoft/skills](https://github.com/microsoft/skills) @ `02e0b2f852b39ea00c43283f999b83fc12079273` (`.github/skills/frontend-design-review`)
+- **License**: MIT
+- **Copyright**: © Microsoft Corporation.
+- **Imported into**: `.agents/skills/ms-frontend-design-review/`
+- **Adoption**: Vendored the skill directory as published, under the directory name `ms-frontend-design-review` because this repository already has a first-party `frontend-design-review` skill; the frontmatter `name` field was changed from `frontend-design-review` to `ms-frontend-design-review` to match. A top-level `version` frontmatter field (the fetched commit sha) was added because it was absent upstream. The folded `description:` and literal `acknowledgments:` block-scalar frontmatter values were each reflowed to a single line because this repository's minimal frontmatter parser does not support folded or literal YAML block scalars; wording was not changed. No other frontmatter or body text was changed. Locked in `skills-lock.json`.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
