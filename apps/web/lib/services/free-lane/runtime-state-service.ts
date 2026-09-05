@@ -1,13 +1,15 @@
 import 'server-only';
 
 import {
+  createRouteHealthStore,
   emptyRuntimeState,
+  resolveRouteHealthConfig,
   type QuotaPool,
   type RouteCacheClass,
   type RouteHealth,
   type RouteHealthSnapshot,
+  type RouteHealthStore,
   type RouteOutcome,
-  type RouteOutcomeClass,
   type RouteUnavailabilityReason,
   type RoutingRuntimeState,
 } from '@agiworkforce/routing';
@@ -630,225 +632,31 @@ export function observeFreeLaneSettlement(input: {
   });
 }
 
-const ROUTE_HEALTH_EVENTS_KEY_PREFIX = 'agi-rhealth:events';
-const ROUTE_HEALTH_SHORT_WINDOW_MS = 5 * 60_000;
-const ROUTE_HEALTH_LONG_WINDOW_MS = 30 * 60_000;
-const ROUTE_HEALTH_EVENT_TTL_BUFFER_SECONDS = 60;
-const ROUTE_HEALTH_EVENT_TTL_SECONDS =
-  Math.ceil(ROUTE_HEALTH_LONG_WINDOW_MS / MS_PER_SECOND) + ROUTE_HEALTH_EVENT_TTL_BUFFER_SECONDS;
-const ROUTE_HEALTH_EVENTS_RANGE_MIN = 0;
-const ROUTE_HEALTH_EVENTS_RANGE_MAX = Number.POSITIVE_INFINITY;
-const ROUTE_HEALTH_CONSECUTIVE_FAILURE_THRESHOLD = 3;
-const ROUTE_HEALTH_FAILURE_RATIO_THRESHOLD = 0.5;
-const ROUTE_HEALTH_MIN_SAMPLES_FOR_RATIO_TRIP = 5;
-const ROUTE_HEALTH_COOLDOWN_BASE_MS = 30_000;
-const ROUTE_HEALTH_COOLDOWN_MAX_MS = 10 * 60_000;
-const ROUTE_HEALTH_COOLDOWN_BACKOFF_MULTIPLIER = 2;
-const ROUTE_HEALTH_TTFT_P50_FRACTION = 0.5;
-const ROUTE_HEALTH_TTFT_P95_FRACTION = 0.95;
-const ROUTE_ID_LIST_SEPARATOR = '\u0000';
+const ROUTE_HEALTH_SNAPSHOT_CACHE_KEY_SEPARATOR = '\u0000';
 
-const ROUTE_OUTCOME_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set([
-  'success',
-  'rate_limit',
-  'server_error',
-  'timeout',
-  'stream_corruption',
-  'unsupported_capability',
-]);
+let routeHealthStoreInstance: RouteHealthStore | null = null;
 
-const ROUTE_OUTCOME_FAILURE_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set([
-  'rate_limit',
-  'server_error',
-  'timeout',
-  'stream_corruption',
-]);
-
-interface RouteOutcomeEvent {
-  nowMs: number;
-  class: RouteOutcomeClass;
-  ttftMs?: number;
-  durationMs?: number;
-  outputTokens?: number;
-}
-
-function routeHealthEventsKey(routeId: string): string {
-  return [ROUTE_HEALTH_EVENTS_KEY_PREFIX, routeId].join(KEY_SEPARATOR);
-}
-
-function isRouteOutcomeClass(value: unknown): value is RouteOutcomeClass {
-  return typeof value === 'string' && ROUTE_OUTCOME_CLASSES.has(value as RouteOutcomeClass);
-}
-
-function isFailureOutcomeClass(value: RouteOutcomeClass): boolean {
-  return ROUTE_OUTCOME_FAILURE_CLASSES.has(value);
-}
-
-function safeJsonParse(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
-}
-
-const HEALTH_FIELD_EVENT_NOW = 'nowMs';
-const HEALTH_FIELD_EVENT_CLASS = 'class';
-const HEALTH_FIELD_EVENT_TTFT = 'ttftMs';
-const HEALTH_FIELD_EVENT_DURATION = 'durationMs';
-const HEALTH_FIELD_EVENT_OUTPUT_TOKENS = 'outputTokens';
-const HEALTH_FIELD_EVENT_NONCE = 'nonce';
-
-function parseRouteOutcomeEvent(raw: unknown): RouteOutcomeEvent | undefined {
-  const parsed = typeof raw === 'string' ? safeJsonParse(raw) : raw;
-  if (!parsed || typeof parsed !== 'object') return undefined;
-  const record = parsed as Record<string, unknown>;
-  const eventNowMs = toNumber(record[HEALTH_FIELD_EVENT_NOW]);
-  if (eventNowMs === undefined || !isRouteOutcomeClass(record[HEALTH_FIELD_EVENT_CLASS])) {
-    return undefined;
-  }
-  const ttftMs = toNumber(record[HEALTH_FIELD_EVENT_TTFT]);
-  const durationMs = toNumber(record[HEALTH_FIELD_EVENT_DURATION]);
-  const outputTokens = toNumber(record[HEALTH_FIELD_EVENT_OUTPUT_TOKENS]);
-  return {
-    nowMs: eventNowMs,
-    class: record[HEALTH_FIELD_EVENT_CLASS] as RouteOutcomeClass,
-    ...(ttftMs !== undefined ? { ttftMs } : {}),
-    ...(durationMs !== undefined ? { durationMs } : {}),
-    ...(outputTokens !== undefined ? { outputTokens } : {}),
-  };
-}
-
-function parseRouteOutcomeEvents(raw: unknown): RouteOutcomeEvent[] {
-  if (!Array.isArray(raw)) return [];
-  const events: RouteOutcomeEvent[] = [];
-  for (const item of raw) {
-    const event = parseRouteOutcomeEvent(item);
-    if (event) events.push(event);
-  }
-  return events.sort((a, b) => a.nowMs - b.nowMs);
-}
-
-function routeHealthBackoffMs(consecutiveFailures: number): number {
-  const exponent = Math.max(0, consecutiveFailures - ROUTE_HEALTH_CONSECUTIVE_FAILURE_THRESHOLD);
-  return Math.min(
-    ROUTE_HEALTH_COOLDOWN_MAX_MS,
-    ROUTE_HEALTH_COOLDOWN_BASE_MS * ROUTE_HEALTH_COOLDOWN_BACKOFF_MULTIPLIER ** exponent,
-  );
-}
-
-function consecutiveFailureStreak(events: readonly RouteOutcomeEvent[]): number {
-  let streak = 0;
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    if (!isFailureOutcomeClass(events[index]!.class)) break;
-    streak += 1;
-  }
-  return streak;
-}
-
-function failureRatio(events: readonly RouteOutcomeEvent[]): number {
-  if (events.length === 0) return 0;
-  const failures = events.filter((event) => isFailureOutcomeClass(event.class)).length;
-  return failures / events.length;
-}
-
-function countByClass(events: readonly RouteOutcomeEvent[]): Record<RouteOutcomeClass, number> {
-  const counts: Record<RouteOutcomeClass, number> = {
-    success: 0,
-    rate_limit: 0,
-    server_error: 0,
-    timeout: 0,
-    stream_corruption: 0,
-    unsupported_capability: 0,
-  };
-  for (const event of events) counts[event.class] += 1;
-  return counts;
-}
-
-function percentileOf(sortedAscending: readonly number[], fraction: number): number {
-  const rank = Math.max(1, Math.ceil(fraction * sortedAscending.length));
-  return sortedAscending[Math.min(sortedAscending.length, rank) - 1]!;
-}
-
-function throughputTokensPerSecond(events: readonly RouteOutcomeEvent[]): number | undefined {
-  let tokenSum = 0;
-  let durationSumMs = 0;
-  for (const event of events) {
-    if (
-      typeof event.outputTokens === 'number' &&
-      typeof event.durationMs === 'number' &&
-      event.durationMs > 0
-    ) {
-      tokenSum += event.outputTokens;
-      durationSumMs += event.durationMs;
-    }
-  }
-  return durationSumMs > 0 ? (tokenSum / durationSumMs) * MS_PER_SECOND : undefined;
-}
-
-function emptyRouteHealthSnapshot(): RouteHealthSnapshot {
-  return { available: true, halfOpen: false, consecutiveFailures: 0, sampleCount: 0 };
-}
-
-function healthyRouteHealthSnapshots(
-  routeIds: readonly string[],
-): Record<string, RouteHealthSnapshot> {
-  const snapshots: Record<string, RouteHealthSnapshot> = {};
-  for (const routeId of routeIds) snapshots[routeId] = emptyRouteHealthSnapshot();
-  return snapshots;
-}
-
-function buildRouteHealthSnapshot(
-  rawEvents: readonly RouteOutcomeEvent[],
-  nowMs: number,
-): RouteHealthSnapshot {
-  const events = rawEvents.filter((event) => event.class !== 'unsupported_capability');
-  if (events.length === 0) return emptyRouteHealthSnapshot();
-
-  const cooldownWindowEvents = events.filter(
-    (event) => event.nowMs >= nowMs - ROUTE_HEALTH_SHORT_WINDOW_MS,
-  );
-  const lastEvent = events[events.length - 1]!;
-  const consecutiveFailures = consecutiveFailureStreak(events);
-  const trippedByStreak = consecutiveFailures >= ROUTE_HEALTH_CONSECUTIVE_FAILURE_THRESHOLD;
-  const trippedByRatio =
-    cooldownWindowEvents.length >= ROUTE_HEALTH_MIN_SAMPLES_FOR_RATIO_TRIP &&
-    failureRatio(cooldownWindowEvents) >= ROUTE_HEALTH_FAILURE_RATIO_THRESHOLD;
-  const tripped = isFailureOutcomeClass(lastEvent.class) && (trippedByStreak || trippedByRatio);
-
-  const cooldownUntilMs = tripped
-    ? lastEvent.nowMs + routeHealthBackoffMs(consecutiveFailures)
-    : undefined;
-  const halfOpen = cooldownUntilMs !== undefined && nowMs >= cooldownUntilMs;
-  const available = cooldownUntilMs === undefined || nowMs >= cooldownUntilMs;
-
-  const counts = countByClass(events);
-  const sampleCount = events.length;
-  const ttftValues = events
-    .map((event) => event.ttftMs)
-    .filter((value): value is number => value !== undefined)
-    .sort((a, b) => a - b);
-  const throughput = throughputTokensPerSecond(events);
-
-  return {
-    available,
-    halfOpen,
-    ...(cooldownUntilMs !== undefined ? { cooldownUntilMs } : {}),
-    consecutiveFailures,
-    sampleCount,
-    successRate: counts.success / sampleCount,
-    rateLimitRate: counts.rate_limit / sampleCount,
-    serverErrorRate: counts.server_error / sampleCount,
-    timeoutRate: counts.timeout / sampleCount,
-    streamCorruptionRate: counts.stream_corruption / sampleCount,
-    ...(ttftValues.length > 0
-      ? {
-          ttftP50Ms: percentileOf(ttftValues, ROUTE_HEALTH_TTFT_P50_FRACTION),
-          ttftP95Ms: percentileOf(ttftValues, ROUTE_HEALTH_TTFT_P95_FRACTION),
-        }
-      : {}),
-    ...(throughput !== undefined ? { throughputTokensPerSecond: throughput } : {}),
-  };
+function routeHealthStore(): RouteHealthStore {
+  routeHealthStoreInstance ??= createRouteHealthStore({
+    store: getKeyValueStore(),
+    config: resolveRouteHealthConfig(),
+    boundedRead: async <T>(read: Promise<T>): Promise<T | null> => {
+      const result = await readRedisWithinBudget(read);
+      return wasRedisReadAbandoned(result) ? null : result;
+    },
+    onFailure: (event) => {
+      logger.error(
+        {
+          failure: event.failure,
+          scope: event.scope,
+          idCount: event.ids.length,
+          error: event.error,
+        },
+        '[route-health] store degraded; every route reads healthy',
+      );
+    },
+  });
+  return routeHealthStoreInstance;
 }
 
 let cachedRouteHealthSnapshots: {
@@ -859,6 +667,7 @@ let cachedRouteHealthSnapshots: {
 
 export function resetRouteHealthSnapshotCache(): void {
   cachedRouteHealthSnapshots = null;
+  routeHealthStoreInstance = null;
 }
 
 export async function recordRouteOutcome(
@@ -866,31 +675,29 @@ export async function recordRouteOutcome(
   outcome: RouteOutcome,
   nowMs: number = Date.now(),
 ): Promise<void> {
-  const store = getKeyValueStore();
-  if (!store) return;
-  const key = routeHealthEventsKey(routeId);
-  const member = JSON.stringify({
-    [HEALTH_FIELD_EVENT_NOW]: nowMs,
-    [HEALTH_FIELD_EVENT_CLASS]: outcome.class,
-    ...(outcome.ttftMs !== undefined ? { [HEALTH_FIELD_EVENT_TTFT]: outcome.ttftMs } : {}),
-    ...(outcome.durationMs !== undefined
-      ? { [HEALTH_FIELD_EVENT_DURATION]: outcome.durationMs }
-      : {}),
-    ...(outcome.outputTokens !== undefined
-      ? { [HEALTH_FIELD_EVENT_OUTPUT_TOKENS]: outcome.outputTokens }
-      : {}),
-    [HEALTH_FIELD_EVENT_NONCE]: Math.random().toString(36).slice(2),
-  });
-  try {
-    await store
-      .batch()
-      .sortedAdd(key, { score: nowMs, member })
-      .sortedRemoveByScore(key, ROUTE_HEALTH_EVENTS_RANGE_MIN, nowMs - ROUTE_HEALTH_LONG_WINDOW_MS)
-      .expire(key, ROUTE_HEALTH_EVENT_TTL_SECONDS)
-      .exec();
-  } catch (error) {
-    logger.error({ error, routeId }, '[route-health] outcome was not recorded');
-  }
+  await routeHealthStore().recordOutcome('route', routeId, outcome, nowMs);
+}
+
+/**
+ * Outcome memory for the CREDENTIAL rather than the route.
+ *
+ * A rejected or unfunded managed key answers for every route on its provider,
+ * so recording it per route makes the next request walk them one refusal at a
+ * time. This is the memory the failover loop consults before dispatch.
+ */
+export async function recordCredentialOutcome(
+  credentialId: string,
+  outcome: RouteOutcome,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  await routeHealthStore().recordOutcome('credential', credentialId, outcome, nowMs);
+}
+
+export async function getCredentialHealthSnapshot(
+  credentialIds: readonly string[],
+  nowMs: number = Date.now(),
+): Promise<Readonly<Record<string, RouteHealthSnapshot>>> {
+  return routeHealthStore().snapshots('credential', credentialIds, nowMs);
 }
 
 export async function getRouteHealthSnapshot(
@@ -899,7 +706,7 @@ export async function getRouteHealthSnapshot(
 ): Promise<Readonly<Record<string, RouteHealthSnapshot>>> {
   if (routeIds.length === 0) return {};
 
-  const cacheKey = [...routeIds].sort().join(ROUTE_ID_LIST_SEPARATOR);
+  const cacheKey = [...routeIds].sort().join(ROUTE_HEALTH_SNAPSHOT_CACHE_KEY_SEPARATOR);
   if (
     cachedRouteHealthSnapshots &&
     cachedRouteHealthSnapshots.key === cacheKey &&
@@ -908,46 +715,13 @@ export async function getRouteHealthSnapshot(
     return cachedRouteHealthSnapshots.snapshots;
   }
 
-  const store = getKeyValueStore();
-  if (!store) return healthyRouteHealthSnapshots(routeIds);
-
-  try {
-    const batch = store.batch();
-    for (const routeId of routeIds) {
-      batch.sortedRangeByScore(
-        routeHealthEventsKey(routeId),
-        nowMs - ROUTE_HEALTH_LONG_WINDOW_MS,
-        ROUTE_HEALTH_EVENTS_RANGE_MAX,
-      );
-    }
-    const read = await readRedisWithinBudget(batch.exec());
-    if (wasRedisReadAbandoned(read)) {
-      logger.error(
-        { routeCount: routeIds.length },
-        '[route-health] snapshot read outlived its budget; every route reads healthy',
-      );
-      return healthyRouteHealthSnapshots(routeIds);
-    }
-    const results = read as unknown[];
-
-    const snapshots: Record<string, RouteHealthSnapshot> = {};
-    routeIds.forEach((routeId, index) => {
-      snapshots[routeId] = buildRouteHealthSnapshot(parseRouteOutcomeEvents(results[index]), nowMs);
-    });
-
-    cachedRouteHealthSnapshots = {
-      key: cacheKey,
-      snapshots,
-      expiresAtMs: nowMs + SNAPSHOT_CACHE_TTL_MS,
-    };
-    return snapshots;
-  } catch (error) {
-    logger.error(
-      { error, routeCount: routeIds.length },
-      '[route-health] snapshot read failed; every route reads healthy',
-    );
-    return healthyRouteHealthSnapshots(routeIds);
-  }
+  const snapshots = await routeHealthStore().snapshots('route', routeIds, nowMs);
+  cachedRouteHealthSnapshots = {
+    key: cacheKey,
+    snapshots,
+    expiresAtMs: nowMs + SNAPSHOT_CACHE_TTL_MS,
+  };
+  return snapshots;
 }
 
 const ROUTE_AFFINITY_KEY_PREFIX = 'agi-raffinity';

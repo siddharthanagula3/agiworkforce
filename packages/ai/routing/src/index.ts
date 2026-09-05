@@ -63,6 +63,37 @@ export type {
   RouteUnavailabilityReason,
   RoutingRuntimeState,
 } from './runtime-state';
+export {
+  buildRouteHealthSnapshot,
+  createRouteHealthStore,
+  DEFAULT_ROUTE_HEALTH_CONFIG,
+  encodeRouteOutcomeEvent,
+  healthyRouteHealthSnapshot,
+  isRouteBreakerOpen,
+  parseRouteOutcomeEvents,
+  resolveRouteHealthConfig,
+  routeBreakerState,
+  routeHealthEventsKey,
+  ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV,
+  ROUTE_BREAKER_COOLDOWN_ENV,
+  ROUTE_BREAKER_FAILURE_RATE_ENV,
+  ROUTE_BREAKER_MAX_COOLDOWN_ENV,
+  ROUTE_BREAKER_MIN_SAMPLES_ENV,
+  ROUTE_HEALTH_TRIP_WINDOW_ENV,
+  ROUTE_HEALTH_WINDOW_ENV,
+} from './route-health-store';
+export type {
+  RouteBreakerState,
+  RouteHealthKeyValueBatch,
+  RouteHealthKeyValueStore,
+  RouteHealthConfig,
+  RouteHealthScope,
+  RouteHealthStore,
+  RouteHealthStoreFailure,
+  RouteHealthStoreFailureEvent,
+  RouteHealthStoreOptions,
+  RouteOutcomeEvent,
+} from './route-health-store';
 export type {
   AutoCapabilityEnvelope,
   AutoCapabilityEnvelopeRequest,
