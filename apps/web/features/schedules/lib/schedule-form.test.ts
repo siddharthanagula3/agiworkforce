@@ -114,6 +114,7 @@ describe('schedule form contract', () => {
         isActive: true,
         expiresAt: null,
         maxExecutions: 20,
+        projectId: null,
       },
     });
     expect(JSON.stringify(result)).not.toContain('notification');
@@ -253,7 +254,19 @@ describe('schedule form contract', () => {
       daysOfWeek: [1, 2, 3, 4, 5],
       timezone: 'America/Chicago',
       isActive: true,
+      projectId: null,
     });
+    expect(scheduleToDraft(task({ projectId: 'project-1' })).projectId).toBe('project-1');
+  });
+
+  it('carries a project scope from the draft through to the create/update payload', () => {
+    expect(
+      validateAndBuildScheduleRequest(
+        draft({ recurrence: 'custom', cronExpression: '30 9 * * *', projectId: 'project-1' }),
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toMatchObject({ ok: true, payload: { projectId: 'project-1' } });
+    expect(createInitialScheduleDraft().projectId).toBeNull();
   });
 
   it('formats persisted UTC timestamps back into the selected wall clock timezone', () => {

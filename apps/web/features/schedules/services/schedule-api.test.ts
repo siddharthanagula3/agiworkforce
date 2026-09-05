@@ -61,6 +61,7 @@ const payload: ScheduleMutation = {
   isActive: true,
   expiresAt: null,
   maxExecutions: null,
+  projectId: null,
 };
 
 function response(body: unknown, init: ResponseInit = {}) {
@@ -91,6 +92,18 @@ describe('schedule API client', () => {
       hasMore: false,
     });
     expect(fetchImpl).toHaveBeenCalledWith('/api/schedules?limit=20&offset=40', {
+      credentials: 'include',
+      signal: undefined,
+    });
+  });
+
+  it('scopes the list request to a project when one is given', async () => {
+    fetchImpl.mockResolvedValueOnce(
+      response({ schedules: [], pagination: { limit: 20, offset: 0 } }),
+    );
+
+    await api.listSchedules({ limit: 20, offset: 0, projectId: 'project-1' });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/schedules?limit=20&offset=0&projectId=project-1', {
       credentials: 'include',
       signal: undefined,
     });

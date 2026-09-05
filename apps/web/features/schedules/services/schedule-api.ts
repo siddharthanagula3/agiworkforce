@@ -33,6 +33,7 @@ interface ScheduleApiDependencies {
 interface PageInput {
   limit: number;
   offset: number;
+  projectId?: string | null;
   signal?: AbortSignal;
 }
 
@@ -135,9 +136,11 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
   }
 
   return {
-    async listSchedules({ limit, offset, signal }) {
+    async listSchedules({ limit, offset, projectId, signal }) {
+      const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (projectId) query.set('projectId', projectId);
       const body = await request(
-        `${MANAGED_CLOUD_SCHEDULES_PATH}?limit=${limit}&offset=${offset}`,
+        `${MANAGED_CLOUD_SCHEDULES_PATH}?${query.toString()}`,
         { credentials: 'include', signal },
         ManagedCloudScheduleListResponseSchema,
         'Schedules returned an invalid response.',

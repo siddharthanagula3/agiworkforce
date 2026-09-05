@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
-import { CalendarClock, History, Pencil, Play, Trash2, X } from 'lucide-react';
+import { CalendarClock, FolderOpen, History, Pencil, Play, Trash2, X } from 'lucide-react';
 import type { ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
@@ -18,6 +18,7 @@ interface ScheduleCardProps {
   schedule: ScheduleTask;
   operation: ScheduleOperation;
   error: string | null;
+  projectName?: string | null;
   /**
    * True while a run for this schedule is actually in flight, either a
    * manual "Run Now" the user just triggered, or a cron-triggered run the
@@ -76,6 +77,7 @@ export function ScheduleCard({
   schedule,
   operation,
   error,
+  projectName,
   isRunningNow,
   historyExpanded,
   history,
@@ -122,6 +124,12 @@ export function ScheduleCard({
                 {schedule.status}
               </Badge>
               <Badge variant="outline">{recurrenceLabel(taskRecurrence(schedule))}</Badge>
+              {projectName && (
+                <Badge variant="outline" className="gap-1">
+                  <FolderOpen className="h-3 w-3" aria-hidden="true" />
+                  {projectName}
+                </Badge>
+              )}
               {!supported && <Badge variant="destructive">Unsupported action type</Badge>}
             </div>
 
