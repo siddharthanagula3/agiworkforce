@@ -38,6 +38,7 @@ import {
   getPickerModelTier,
   evaluateModelEnvironment,
   getReasoningDepthIndicator,
+  isFreeBillingPlanTier,
   type ModelEnvironment,
   type EnvironmentAvailability,
 } from '@agiworkforce/types';
@@ -207,7 +208,7 @@ function isModelSelectableForTier(model: AIModel, tier: string | null): boolean 
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
   }
-  if (tier === 'free') return false;
+  if (isFreeBillingPlanTier(tier)) return false;
   return isModelAllowedForTier(model.id, tier);
 }
 

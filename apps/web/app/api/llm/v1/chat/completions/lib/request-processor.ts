@@ -83,6 +83,7 @@ import {
   getSlotForModel,
   normalizeModelId,
   canUseBillingPlanCapability,
+  isFreeBillingPlanTier,
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
@@ -1488,7 +1489,7 @@ export function resolveWebCloudModelRoute(
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
   const allowed = canAccessModel(model, subscriptionTier);
-  if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
+  if (!allowed && !isFreeBillingPlanTier(subscriptionTier.toLowerCase())) {
     logger.warn(
       { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
       'Model access denied - not in economy or tier requirements map',

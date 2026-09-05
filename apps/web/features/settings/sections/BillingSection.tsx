@@ -11,6 +11,10 @@ import {
   isBillingPlanTier,
   isContractPricedPlan,
   isPerSeatBillingPlan,
+  isFreeBillingPlanTier,
+  isProPlanTier,
+  isMaxPlanTier,
+  isMax15xPlanTier,
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
   TOP_UP_PRESET_AMOUNTS_USD,
@@ -189,7 +193,7 @@ const FREE_PLAN_FEATURES = [
 ];
 
 function PlanIcon({ tier }: { tier: string }) {
-  const isPaid = tier !== 'free';
+  const isPaid = !isFreeBillingPlanTier(tier);
   return (
     <div
       style={{
@@ -353,7 +357,7 @@ export function BillingSection() {
       ? `$${listPriceUsd}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
       : null;
 
-  const isFreeTier = tier === 'free';
+  const isFreeTier = isFreeBillingPlanTier(tier);
 
   // BIZ-044 (billing diagnostics): name the billing owner instead of assuming
   // Stripe. A store-owned row has no Stripe subscription and no Stripe card, so
@@ -534,10 +538,10 @@ export function BillingSection() {
     paymentMethods.items.find((pm) => pm.is_default)?.card ?? paymentMethods.items[0]?.card;
 
   function usageBadgeText(): string | null {
-    if (tier === 'pro') return managedUsageComparisonLabel('pro', 'basic', 'Basic');
-    if (tier === 'max') return managedUsageComparisonLabel('max', 'pro', 'Pro');
-    if (tier === 'max_15x') return managedUsageComparisonLabel('max_15x', 'pro', 'Pro');
-    if (tier === 'team') return managedUsageComparisonLabel('team', 'pro', 'Pro');
+    if (isProPlanTier(tier)) return managedUsageComparisonLabel('pro', 'basic', 'Basic');
+    if (isMaxPlanTier(tier)) return managedUsageComparisonLabel('max', 'pro', 'Pro');
+    if (isMax15xPlanTier(tier)) return managedUsageComparisonLabel('max_15x', 'pro', 'Pro');
+    if (isPerSeatBillingPlan(tier)) return managedUsageComparisonLabel('team', 'pro', 'Pro');
     return null;
   }
 

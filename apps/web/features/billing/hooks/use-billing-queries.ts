@@ -22,6 +22,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   normalizeUsagePercentage,
   normalizeBillingPlanTier,
+  isFreeBillingPlanTier,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
@@ -92,7 +93,7 @@ export function buildBillingInfoFromUsage(data: UsageApiResponse): BillingInfo {
     status: normalizeSubscriptionStatus(data.subscription_status),
     current_period_start: data.period_start,
     current_period_end: data.period_end,
-    price: plan === 'free' ? 0 : null,
+    price: isFreeBillingPlanTier(plan) ? 0 : null,
     currency: null,
     features: getBillingPlanDisplay(plan).features,
     stripeCustomerId: null,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { getNextUpgradeTier } from '@agiworkforce/types';
+import { getNextUpgradeTier, isFreeBillingPlanTier, isMax15xPlanTier } from '@agiworkforce/types';
 import { Progress, Spinner } from '@agiworkforce/ui';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
@@ -62,7 +62,7 @@ export function UpgradeChooser() {
   const currentPlan = billing?.plan;
   const hasActivePaidPlan =
     billing != null &&
-    billing.plan !== 'free' &&
+    !isFreeBillingPlanTier(billing.plan) &&
     ['active', 'trialing'].includes(billing.status ?? '');
   const ownerBlocked = hasActivePaidPlan && subscription?.subscription_source !== 'stripe';
 
@@ -80,7 +80,7 @@ export function UpgradeChooser() {
   const secondaryTiers: readonly SelectablePaidPlan[] =
     nextIndex === -1
       ? []
-      : WEB_PAID_PLAN_ORDER.slice(nextIndex + 1).filter((plan) => plan !== 'max_15x');
+      : WEB_PAID_PLAN_ORDER.slice(nextIndex + 1).filter((plan) => !isMax15xPlanTier(plan));
 
   const showProrationNote = ready && !ownerBlocked && nextTier !== null;
 

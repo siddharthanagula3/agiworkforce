@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import Stripe from 'stripe';
@@ -249,7 +250,7 @@ export class SubscriptionService {
     }
 
     const storedTier = await this.readStoredPlanTier(db, userId);
-    if (storedTier && storedTier !== 'free' && isValidPlanTier(storedTier)) {
+    if (storedTier && !isFreeBillingPlanTier(storedTier) && isValidPlanTier(storedTier)) {
       logger.error(
         { priceId, userId, storedTier },
         'Stripe price not found in tier mapping during self-heal sync; keeping the stored paid tier instead of downgrading to free',

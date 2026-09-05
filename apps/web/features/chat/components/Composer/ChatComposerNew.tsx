@@ -84,6 +84,7 @@ import {
   canUseBillingPlanCapability,
   getModels,
   isExecutableVideoModel,
+  isFreeBillingPlanTier,
   type CloudWorkMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
@@ -1078,7 +1079,7 @@ const ChatComposerNewComponent = ({
   const compatibleModels = getSelectableModels().filter(
     (model) =>
       model.capabilities.vision &&
-      (isFreeTrial || subscriptionTier === 'free'
+      (isFreeTrial || isFreeBillingPlanTier(subscriptionTier)
         ? FREE_TRIAL_MODELS.includes(model.id)
         : isModelAllowedForTier(model.id, subscriptionTier)),
   );

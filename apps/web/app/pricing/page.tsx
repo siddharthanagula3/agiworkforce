@@ -16,6 +16,11 @@ import {
   getModelMetadataById,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
+  isFreeBillingPlanTier,
+  isBasicPlanTier,
+  isProPlanTier,
+  isMaxPlanTier,
+  isMax15xPlanTier,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   PROVIDERS_IN_ORDER,
@@ -471,7 +476,7 @@ export default function PricingPage() {
   );
   const hasActivePaidPlan =
     billing != null &&
-    billing.plan !== 'free' &&
+    !isFreeBillingPlanTier(billing.plan) &&
     ['active', 'trialing'].includes(billing.status ?? '');
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
@@ -482,8 +487,13 @@ export default function PricingPage() {
     (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
 
   function selectedPriceEntry(plan: CheckoutPlan) {
-    const interval: BillingInterval =
-      plan === 'pro' ? (annual ? 'yearly' : 'monthly') : plan === 'team' ? teamInterval : 'monthly';
+    const interval: BillingInterval = isProPlanTier(plan)
+      ? annual
+        ? 'yearly'
+        : 'monthly'
+      : isPerSeatBillingPlan(plan)
+        ? teamInterval
+        : 'monthly';
     return localizedPlans?.[plan][interval];
   }
 
@@ -503,17 +513,17 @@ export default function PricingPage() {
     // A per-seat plan you already own is still actionable: the change on offer
     // is MORE SEATS, which goes through the same mid-cycle upgrade path. Showing
     // a disabled "Current plan" here would dead-end a growing team.
-    if (plan === 'team' && billing.plan === 'team') return 'upgrade';
+    if (isPerSeatBillingPlan(plan) && isPerSeatBillingPlan(billing.plan)) return 'upgrade';
     if (billing.plan === plan) return 'current';
 
     // Moving OFF a per-seat organization plan onto an individual plan is not an
     // upgrade in any direction, it would convert an org subscription into a
     // personal one and strand the other seats. Route it through billing.
-    if (billing.plan === 'team') return 'lower';
+    if (isPerSeatBillingPlan(billing.plan)) return 'lower';
 
     // Team has no rank on the individual ladder, but it IS reachable from any
     // individual plan: the upgrade route accepts pro/basic/max -> team.
-    if (plan === 'team') return 'upgrade';
+    if (isPerSeatBillingPlan(plan)) return 'upgrade';
 
     const currentIndex = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(
       billing.plan as SelfServeIndividualPlanTier,
@@ -607,8 +617,9 @@ export default function PricingPage() {
 
   async function handleUpgrade(plan: CheckoutPlan) {
     if (!user) {
-      const returnTo =
-        plan === 'team' ? `/pricing?seats=${teamSeats}#pricing-team-title` : '/pricing';
+      const returnTo = isPerSeatBillingPlan(plan)
+        ? `/pricing?seats=${teamSeats}#pricing-team-title`
+        : '/pricing';
       router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
       return;
     }
@@ -637,8 +648,8 @@ export default function PricingPage() {
       }
       // Team stays on the dialog: its price depends on a seat count and interval
       // chosen here, which /upgrade/[plan] has no picker for.
-      if (plan !== 'team') {
-        const yearly = plan === 'pro' && annual;
+      if (!isPerSeatBillingPlan(plan)) {
+        const yearly = isProPlanTier(plan) && annual;
         router.push(`/upgrade/${plan}${yearly ? '?interval=yearly' : ''}`);
         return;
       }
@@ -655,15 +666,15 @@ export default function PricingPage() {
     try {
       const userId = user.id;
       const userEmail = user.email || '';
-      if (plan === 'basic') {
+      if (isBasicPlanTier(plan)) {
         await upgradeToBasicPlan({ userId, userEmail });
-      } else if (plan === 'pro') {
+      } else if (isProPlanTier(plan)) {
         await upgradeToProPlan({ userId, userEmail, billingPeriod: annual ? 'yearly' : 'monthly' });
-      } else if (plan === 'max') {
+      } else if (isMaxPlanTier(plan)) {
         await upgradeToMaxPlan({ userId, userEmail });
-      } else if (plan === 'max_15x') {
+      } else if (isMax15xPlanTier(plan)) {
         await upgradeToMax15xPlan({ userId, userEmail });
-      } else if (plan === 'team') {
+      } else if (isPerSeatBillingPlan(plan)) {
         await upgradeToTeamPlan({
           seats: teamSeats,
           ...(teamInterval === 'yearly' ? { billingPeriod: 'yearly' } : {}),
@@ -1034,7 +1045,7 @@ export default function PricingPage() {
                   <div className="agi-ds-tier-cta-group">
                     {renderPlanAction(
                       'team',
-                      billing?.plan === 'team' ? t('changeSeatsCta') : t('teamCta'),
+                      isPerSeatBillingPlan(billing?.plan) ? t('changeSeatsCta') : t('teamCta'),
                     )}
                   </div>
                 </article>

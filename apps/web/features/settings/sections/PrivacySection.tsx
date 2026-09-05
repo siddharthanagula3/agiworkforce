@@ -7,6 +7,7 @@ import { Switch, useConfirm } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { setTelemetryConsentCache } from '@/lib/sentry-shared';
+import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -141,7 +142,8 @@ export function PrivacySection() {
    */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
-  const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
+  const hasHostedCloud =
+    subscription?.status === 'active' && !isFreeBillingPlanTier(subscription.tier);
   const conversations = useChatStore((state) => state.conversations);
   const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
   const updateConversationInStore = useChatStore((state) => state.updateConversation);
