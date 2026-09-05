@@ -1,6 +1,6 @@
 import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
 import Image from 'next/image';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 const LOCAL_RUNTIME_LABEL = `${(DESKTOP_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
@@ -17,12 +17,26 @@ export const DEVICE_GEOMETRY: Record<DeviceType, { width: number; height: number
   phone: { width: 270, height: 585 },
 };
 
+export type RouteMode = 'local' | 'byok' | 'managed';
+
 export interface DeviceWindowProps {
   title?: string;
   badge?: string;
   className?: string;
-  routeMode?: 'local' | 'byok' | 'managed';
+  routeMode?: RouteMode;
 }
+
+interface RouteReceipt {
+  lane: string;
+  provider: string;
+  cost: string;
+}
+
+const ROUTE_RECEIPTS: Record<RouteMode, RouteReceipt> = {
+  local: { lane: 'Local', provider: LOCAL_RUNTIME_LABEL, cost: '$0.00' },
+  byok: { lane: 'BYOK', provider: 'your provider', cost: 'billed to your key' },
+  managed: { lane: 'AGI Cloud', provider: 'Auto route', cost: '$0.004' },
+};
 
 function deviceStyle(type: DeviceType): CSSProperties {
   const { width, height } = DEVICE_GEOMETRY[type];
@@ -38,7 +52,7 @@ function DeviceRoot({
   type: DeviceType;
   label: string;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { width, height } = DEVICE_GEOMETRY[type];
   return (
@@ -68,10 +82,66 @@ function WindowBar({ title, badge }: { title: string; badge?: string }) {
   );
 }
 
+function Receipt({
+  route,
+  tokensIn,
+  tokensOut,
+  time,
+  compact = false,
+}: {
+  route: RouteReceipt;
+  tokensIn: string;
+  tokensOut: string;
+  time: string;
+  compact?: boolean;
+}) {
+  const detail = compact
+    ? `${route.lane} · ${route.provider} · ${time}`
+    : `Served by ${route.lane} · ${route.provider} · ${tokensIn} in · ${tokensOut} out · ${route.cost} · ${time}`;
+  return (
+    <p className="agi-mk-receipt">
+      <span className="agi-mk-dot" />
+      {detail}
+    </p>
+  );
+}
+
+function ToolRow({ state, label, meta }: { state: 'done' | 'wait'; label: string; meta: string }) {
+  return (
+    <p className="agi-mk-tool" data-state={state}>
+      <i>{state === 'done' ? '✓' : '●'}</i>
+      <span>{label}</span>
+      <span className="agi-mk-tool-meta">{meta}</span>
+    </p>
+  );
+}
+
+function ComposerBar({ ghost, model, extra }: { ghost: string; model: string; extra?: ReactNode }) {
+  return (
+    <div className="agi-mk-composer">
+      <div className="agi-mk-composer-row">
+        <span className="agi-mk-ghost">
+          {ghost}
+          <span className="agi-dev-caret" />
+        </span>
+        <span className="agi-dev-send">➤</span>
+      </div>
+      <div className="agi-mk-composer-row agi-mk-composer-foot">
+        <span className="agi-mk-seg">
+          <span data-on="true">Chat</span>
+          <span>AGI Work</span>
+        </span>
+        <span className="agi-mk-chip agi-mk-chip--model">{model} ▾</span>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
 function PageContextStrip() {
   return (
     <div className="agi-dev-pagestrip">
-      <span className="agi-dev-pagestrip-icon">📄</span>
+      <span className="agi-dev-pagestrip-icon">▤</span>
       <span className="agi-dev-pagestrip-text">
         <span className="agi-dev-pagestrip-title">Q3 Strategy Doc</span>
         <span className="agi-dev-pagestrip-meta">docs.google.com · 4,200 words selected</span>
@@ -85,7 +155,7 @@ function PanelComposer() {
   return (
     <div className="agi-dev-panelcomposer">
       <span className="agi-dev-panelcomposer-row">
-        <span className="agi-dev-panelcomposer-icon">📄</span>
+        <span className="agi-dev-panelcomposer-icon">▤</span>
         <span className="agi-dev-panelcomposer-ghost">
           <span className="agi-dev-type">Ask about this page…</span>
         </span>
@@ -105,25 +175,7 @@ export function DesktopWindow({
   className,
   routeMode = 'local',
 }: DeviceWindowProps) {
-  const routeCopy =
-    routeMode === 'byok'
-      ? {
-          mode: 'BYOK',
-          greeting: 'What can I help with, BYOK?',
-          model: 'Select provider model ▾',
-        }
-      : routeMode === 'managed'
-        ? {
-            mode: 'Managed Cloud',
-            greeting: 'What can I help with in Cloud?',
-            model: 'Select managed model ▾',
-          }
-        : {
-            mode: 'Local Mode',
-            greeting: 'What can I help with, Local?',
-            model: 'Select model ▾',
-          };
-
+  const route = ROUTE_RECEIPTS[routeMode];
   return (
     <DeviceRoot type="desktop" label={`${title} desktop app interface`} className={className}>
       <WindowBar title={title} badge={badge} />
@@ -134,25 +186,48 @@ export function DesktopWindow({
           <p className="agi-desk-item">
             ⌕ Search <span className="agi-desk-kbd">⌘K</span>
           </p>
-          <p className="agi-desk-item">▤ Projects</p>
-          <p className="agi-desk-item">◇ Artifacts</p>
-          <p className="agi-desk-item">↻ Scheduled</p>
+          <p className="agi-desk-item">
+            ▤ Projects <span className="agi-desk-count">3</span>
+          </p>
+          <p className="agi-desk-item">
+            ◇ Artifacts <span className="agi-desk-count">12</span>
+          </p>
+          <p className="agi-desk-item">
+            ↻ Scheduled <span className="agi-desk-count">2</span>
+          </p>
           <p className="agi-desk-item">
             ⌁ Dispatch <span className="agi-desk-beta">Beta</span>
           </p>
           <p className="agi-desk-group">Recents</p>
+          <p className="agi-desk-recent agi-desk-recent--on">Release note for 1.2.0</p>
           <p className="agi-desk-recent">Quarterly notes</p>
           <p className="agi-desk-recent">Rust build fix</p>
+          <p className="agi-desk-recent">Audit export</p>
           <p className="agi-desk-foot">→ Sign in · Cloud sync</p>
         </div>
-        <div className="agi-desk-main">
-          <span className="agi-desk-mode">{routeCopy.mode}</span>
-          <p className="agi-desk-greet">{routeCopy.greeting}</p>
-          <div className="agi-dev-composer">
-            <span className="agi-dev-ghost">How can I help you today?</span>
-            <span className="agi-dev-modelchip">{routeCopy.model}</span>
+        <div className="agi-mk-main">
+          <div className="agi-mk-thread">
+            <p className="agi-mk-user">Summarise the three open PRs and draft the release note.</p>
+            <div className="agi-mk-agi">
+              <ToolRow state="done" label="github · list pull requests" meta="3 results · 0.6 s" />
+              <ToolRow state="done" label="Read 3 diffs" meta="412 lines" />
+              <p>
+                Three PRs are ready: routing health scopes, the model catalogue, and the pre-push
+                worktree hook. The draft is below; writing it to the changelog needs your approval.
+              </p>
+              <div className="agi-mk-approval">
+                <span className="agi-mk-approval-head">Approval · write file</span>
+                <span className="agi-mk-approval-body">CHANGELOG.md · 14 lines added</span>
+                <span className="agi-mk-actions">
+                  <span className="agi-mk-btn agi-mk-btn--primary">Allow once</span>
+                  <span className="agi-mk-btn">Always</span>
+                  <span className="agi-mk-btn">Deny</span>
+                </span>
+              </div>
+              <Receipt route={route} tokensIn="2.1k" tokensOut="380" time="3.8 s" />
+            </div>
           </div>
-          <p className="agi-desk-hint">AI can make mistakes. Verify important information.</p>
+          <ComposerBar ghost="Message AGI…" model={`Auto · ${route.lane}`} />
         </div>
       </div>
     </DeviceRoot>
@@ -168,42 +243,64 @@ export function WebWindow({
     <DeviceRoot type="web" label="The AGI Web chat interface" className={className}>
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-web" aria-hidden="true">
-        <div className="agi-web-rail">
-          <span>›</span>
-          <span>+</span>
-          <span>⌕</span>
+        <div className="agi-desk-side">
+          <p className="agi-desk-brand">AGI</p>
+          <p className="agi-desk-new">+ New chat</p>
+          <p className="agi-desk-item">
+            ⌕ Search <span className="agi-desk-kbd">⌘K</span>
+          </p>
+          <p className="agi-desk-item">▤ Projects</p>
+          <p className="agi-desk-item">◇ Library</p>
+          <p className="agi-desk-group">Recents</p>
+          <p className="agi-desk-recent agi-desk-recent--on">EU AI Act duties</p>
+          <p className="agi-desk-recent">Onboarding email draft</p>
+          <p className="agi-desk-recent">Pricing page copy</p>
+          <p className="agi-desk-recent">Retention query</p>
         </div>
-        <div className="agi-web-canvas">
-          <p className="agi-web-greet">How can I help?</p>
-          <div className="agi-web-chips">
-            <span>Web</span>
-            <span>Academic</span>
-            <span>Code</span>
-            <span>Writing</span>
-            <span>Deep Research</span>
-            <span className="agi-web-chip--on">All</span>
-          </div>
-          <div className="agi-web-composer">
-            <div className="agi-web-composer-main">
-              <span className="agi-web-icon">⊕</span>
-              <span className="agi-web-icon">🎙</span>
-              <span className="agi-web-prompt">
-                <span className="agi-dev-type">Ask me anything…</span>
-                <span className="agi-dev-caret" />
+        <div className="agi-mk-main">
+          <div className="agi-mk-thread">
+            <p className="agi-mk-user">
+              Compare the EU AI Act duties for providers versus deployers.
+            </p>
+            <div className="agi-mk-agi">
+              <ToolRow state="done" label="Searched the web" meta="5 sources · 1.4 s" />
+              <div className="agi-mk-table">
+                <span className="agi-mk-table-h">Duty</span>
+                <span className="agi-mk-table-h">Provider</span>
+                <span className="agi-mk-table-h">Deployer</span>
+                <span>Risk management</span>
+                <span>Required</span>
+                <span>Not required</span>
+                <span>Human oversight</span>
+                <span>Design for it</span>
+                <span>Operate it</span>
+                <span>Logging</span>
+                <span>Enable it</span>
+                <span>Keep six months</span>
+              </div>
+              <span className="agi-mk-chips">
+                <span className="agi-mk-chip">eur-lex.europa.eu</span>
+                <span className="agi-mk-chip">digital-strategy.ec.europa.eu</span>
+                <span className="agi-mk-chip">+3 sources</span>
               </span>
-              <span className="agi-web-count">0 / 10000</span>
-              <span className="agi-web-model">
-                Auto (Best Value) <span className="agi-web-model-chevron">▾</span>
-              </span>
-              <span className="agi-dev-send agi-dev-send--lg">➤</span>
+              <Receipt
+                route={ROUTE_RECEIPTS.managed}
+                tokensIn="3.1k"
+                tokensOut="640"
+                time="6.2 s"
+              />
             </div>
-            <div className="agi-web-composer-foot">
-              <span>Enter to send · Shift+Enter for newline</span>
-              <span className="agi-web-meter">
-                <span className="agi-web-meter-bar" />0 / 128,000
-              </span>
-            </div>
           </div>
+          <ComposerBar
+            ghost="Ask a follow-up…"
+            model="Auto"
+            extra={
+              <span className="agi-mk-composer-meta">
+                <span>Enter to send · Shift+Enter for newline</span>
+                <span>3,740 / 128,000</span>
+              </span>
+            }
+          />
         </div>
       </div>
     </DeviceRoot>
@@ -221,7 +318,7 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
         </span>
         <span className="agi-cr-tabs">
           <span className="agi-cr-tab agi-cr-tab--on">
-            <span className="agi-cr-tab-icon">📄</span>
+            <span className="agi-cr-tab-icon">▤</span>
             <span className="agi-cr-tab-label">Q3 Strategy · Google Docs</span>
           </span>
           <span className="agi-cr-tab">
@@ -237,7 +334,7 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
         <span className="agi-cr-nav">›</span>
         <span className="agi-cr-nav">↺</span>
         <span className="agi-cr-url">
-          <span className="agi-cr-lock">🔒</span>
+          <span className="agi-cr-lock">●</span>
           docs.google.com/document/d/1xQ3Strategy…
         </span>
         <span className="agi-cr-ext">AGI</span>
@@ -245,7 +342,7 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
       <div className="agi-dev-body agi-cr-viewport" aria-hidden="true">
         <div className="agi-cr-page">
           <div className="agi-cr-doc-head">
-            <span className="agi-cr-doc-icon">📄</span>
+            <span className="agi-cr-doc-icon">▤</span>
             <span className="agi-cr-doc-title">Q3 Strategy Document</span>
           </div>
           <div className="agi-cr-doc">
@@ -280,11 +377,23 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
             <p className="agi-cr-msg agi-cr-msg--user">Summarise the key risks from this doc</p>
             <div className="agi-cr-msg agi-cr-msg--agi">
               <span className="agi-cr-agi-name">AGI</span>
-              <p>
-                Three risks stand out: market timing, dependency on a single cloud provider, and
-                regulatory uncertainty in the EU…
-              </p>
-              <p className="agi-cr-msg-fade">Paired with AGI Desktop · Local mode</p>
+              <p>Three risks stand out in the selected section:</p>
+              <ul className="agi-mk-list">
+                <li>
+                  Market timing <span className="agi-mk-cite">¶ 4</span>
+                </li>
+                <li>
+                  One cloud provider for everything <span className="agi-mk-cite">¶ 9</span>
+                </li>
+                <li>
+                  EU regulatory uncertainty <span className="agi-mk-cite">¶ 12</span>
+                </li>
+              </ul>
+              <span className="agi-mk-actions">
+                <span className="agi-mk-btn">Insert as comment</span>
+                <span className="agi-mk-btn">Copy</span>
+              </span>
+              <p className="agi-cr-msg-fade">Paired with AGI Desktop · Local mode · 1.9 s</p>
             </div>
           </div>
           <PanelComposer />
@@ -322,6 +431,104 @@ export function SidePanelCard({
   );
 }
 
+const EDITOR_LINES: ReadonlyArray<{ n: number; add?: boolean; code: ReactNode }> = [
+  {
+    n: 1,
+    code: (
+      <>
+        <em className="agi-ed-kw">import</em>{' '}
+        <span className="agi-ed-dim">
+          {'{'} processChat, ChatConfig {'}'}
+        </span>
+      </>
+    ),
+  },
+  {
+    n: 2,
+    code: (
+      <>
+        <em className="agi-ed-kw">from</em> <span className="agi-ed-fn">'@agi/sdk'</span>
+      </>
+    ),
+  },
+  { n: 3, code: <span className="agi-ed-dim">&nbsp;</span> },
+  {
+    n: 4,
+    code: (
+      <>
+        <em className="agi-ed-kw">export async function</em>{' '}
+        <span className="agi-ed-fn">runChat</span>
+        <span className="agi-ed-dim">(</span>
+      </>
+    ),
+  },
+  {
+    n: 5,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        config<span className="agi-ed-punc">:</span> <span className="agi-ed-type">ChatConfig</span>
+      </span>
+    ),
+  },
+  {
+    n: 6,
+    code: (
+      <span className="agi-ed-dim">
+        {')'} <span className="agi-ed-punc">:</span> <span className="agi-ed-type">Promise</span>
+        {'<string>'} {'{'}
+      </span>
+    ),
+  },
+  {
+    n: 7,
+    add: true,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        <em className="agi-ed-kw">try</em> {'{'}
+      </span>
+    ),
+  },
+  {
+    n: 8,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        &nbsp;&nbsp;<em className="agi-ed-kw">const</em> stream{' '}
+        <span className="agi-ed-punc">=</span> <span className="agi-ed-kw">await</span>{' '}
+        <span className="agi-ed-fn">processChat</span>(config)
+      </span>
+    ),
+  },
+  {
+    n: 9,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        &nbsp;&nbsp;<em className="agi-ed-kw">return</em> stream.text()
+      </span>
+    ),
+  },
+  {
+    n: 10,
+    add: true,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        {'}'} <em className="agi-ed-kw">catch</em> (error) {'{'}
+      </span>
+    ),
+  },
+  {
+    n: 11,
+    add: true,
+    code: (
+      <span className="agi-ed-dim agi-ed-indent">
+        &nbsp;&nbsp;<em className="agi-ed-kw">throw new</em>{' '}
+        <span className="agi-ed-type">ProviderError</span>(error)
+      </span>
+    ),
+  },
+  { n: 12, add: true, code: <span className="agi-ed-dim agi-ed-indent">{'}'}</span> },
+  { n: 13, code: <span className="agi-ed-dim">{'}'}</span> },
+];
+
 export function EditorWindow({
   title = 'workspace.ts · AGI in VS Code',
   badge = 'VS Code',
@@ -341,51 +548,12 @@ export function EditorWindow({
         </div>
         <div className="agi-ed-editor">
           <div className="agi-ed-code">
-            <span className="agi-ed-ln">1</span>
-            <span>
-              <em className="agi-ed-kw">import</em>{' '}
-              <span className="agi-ed-dim">
-                {'{'} processChat, ChatConfig {'}'}
+            {EDITOR_LINES.map((line) => (
+              <span key={line.n} className={line.add ? 'agi-ed-row agi-ed-row--add' : 'agi-ed-row'}>
+                <span className="agi-ed-ln">{line.add ? '+' : line.n}</span>
+                <span>{line.code}</span>
               </span>
-            </span>
-            <span className="agi-ed-ln">2</span>
-            <span>
-              <em className="agi-ed-kw">from</em> <span className="agi-ed-fn">'@agi/sdk'</span>
-            </span>
-            <span className="agi-ed-ln">3</span>
-            <span className="agi-ed-dim">&nbsp;</span>
-            <span className="agi-ed-ln">4</span>
-            <span>
-              <em className="agi-ed-kw">export async function</em>{' '}
-              <span className="agi-ed-fn">runChat</span>
-              <span className="agi-ed-dim">(</span>
-            </span>
-            <span className="agi-ed-ln">5</span>
-            <span className="agi-ed-dim agi-ed-indent">
-              config<span className="agi-ed-punc">:</span>{' '}
-              <span className="agi-ed-type">ChatConfig</span>
-            </span>
-            <span className="agi-ed-ln">6</span>
-            <span className="agi-ed-dim">
-              {')'} <span className="agi-ed-punc">:</span>{' '}
-              <span className="agi-ed-type">Promise</span>
-              {'<string>'} {'{'}
-            </span>
-            <span className="agi-ed-ln">7</span>
-            <span className="agi-ed-dim agi-ed-indent">
-              <em className="agi-ed-kw">const</em> stream <span className="agi-ed-punc">=</span>
-            </span>
-            <span className="agi-ed-ln">8</span>
-            <span className="agi-ed-dim agi-ed-indent">
-              &nbsp;&nbsp;<span className="agi-ed-kw">await</span>{' '}
-              <span className="agi-ed-fn">processChat</span>(config)
-            </span>
-            <span className="agi-ed-ln">9</span>
-            <span className="agi-ed-dim agi-ed-indent">
-              <em className="agi-ed-kw">return</em> stream.text()
-            </span>
-            <span className="agi-ed-ln">10</span>
-            <span className="agi-ed-dim">{'}'}</span>
+            ))}
           </div>
         </div>
         <div className="agi-ed-panel">
@@ -400,10 +568,24 @@ export function EditorWindow({
             </div>
             <div className="agi-ed-msg">
               <span className="agi-ed-avatar agi-ed-avatar--agi">A</span>
-              <p>
-                Streams a chat response from <code>processChat</code>. Add a <code>try/catch</code>{' '}
-                around the stream call. Want me to write it?
-              </p>
+              <div className="agi-mk-agi">
+                <p>
+                  Streams a chat response from <code>processChat</code>. I wrapped the stream in{' '}
+                  <code>try/catch</code> and rethrow as <code>ProviderError</code>, so the caller
+                  sees which provider failed.
+                </p>
+                <span className="agi-mk-actions">
+                  <span className="agi-mk-btn agi-mk-btn--primary">Apply +4</span>
+                  <span className="agi-mk-btn">Reject</span>
+                </span>
+                <Receipt
+                  route={ROUTE_RECEIPTS.local}
+                  tokensIn="1.4k"
+                  tokensOut="210"
+                  time="0.9 s"
+                  compact
+                />
+              </div>
             </div>
           </div>
           <div className="agi-ed-input">
@@ -416,21 +598,22 @@ export function EditorWindow({
   );
 }
 
-const TERMINAL_TYPED_LABEL = 'AGI CLI welcome transcript';
+const TERMINAL_TYPED_LABEL = 'AGI CLI session transcript';
 const TERMINAL_LINE_CLASSES: TypedLineClasses = {
   line: 'agi-term-line',
-  kinds: { dim: 'agi-term-line--dim', ok: 'agi-term-ok' },
+  kinds: { dim: 'agi-term-line--dim', ok: 'agi-term-ok', cmd: 'agi-term-cmd' },
 };
-const TERMINAL_WELCOME = 'Welcome to AGI';
-const TERMINAL_MODEL_HINT = 'Choose Local, BYOK, or Cloud with /model.';
-const TERMINAL_COMMAND_HINT = 'Type / for commands · Shift+Tab to switch modes';
 
 function terminalLines(boundaryLabel: string): readonly TypedLine[] {
   return [
-    { kind: 'out', text: TERMINAL_WELCOME },
     { kind: 'ok', text: boundaryLabel },
-    { kind: 'dim', text: TERMINAL_MODEL_HINT },
-    { kind: 'dim', text: TERMINAL_COMMAND_HINT },
+    { kind: 'cmd', text: '› fix the failing test in packages/ai/routing' },
+    { kind: 'dim', text: '  read   packages/ai/routing/src/auto.ts' },
+    { kind: 'dim', text: '  run    pnpm vitest auto.test.ts          1 failed' },
+    { kind: 'dim', text: '  edit   src/auto.ts                       +4 -1' },
+    { kind: 'dim', text: '  run    pnpm vitest auto.test.ts          12 passed' },
+    { kind: 'ok', text: '✓ fixed · the health scope read a stale snapshot' },
+    { kind: 'out', text: '  commit as fix(routing): read the live snapshot? [y/n]' },
   ];
 }
 
@@ -460,8 +643,8 @@ export function TerminalWindow({
             AGI · <span className="agi-term-ok">{routeLabel}</span> · {providerLabel}
           </span>
           <span className="agi-term-hud">
-            in 0 · out 0 ·{' '}
-            <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 0%
+            in 8.4k · out 1.2k ·{' '}
+            <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 12%
           </span>
         </p>
         <Typewriter
@@ -470,8 +653,7 @@ export function TerminalWindow({
           classes={TERMINAL_LINE_CLASSES}
         />
         <p className="agi-term-line">
-          <span className="agi-term-prompt">›</span> Message AGI…
-          <span className="agi-term-caret" />
+          <span className="agi-term-prompt">›</span> y<span className="agi-term-caret" />
         </p>
         <p className="agi-term-line agi-term-line--dim">
           Default · {footerMode} · effort:Medium · sandbox: seatbelt
@@ -532,27 +714,36 @@ export function PhoneDevice({
           <span className="agi-ph-name">AGI</span>
           <span className="agi-ph-navbtn">✎</span>
         </div>
-        <div className="agi-ph-main">
+        <div className="agi-ph-main agi-ph-main--thread">
           <div className="agi-ph-toggle">
             <span className="agi-ph-toggle-btn agi-ph-toggle-btn--on">⊞ Local</span>
             <span className="agi-ph-toggle-btn">☁ Cloud</span>
           </div>
-          <p className="agi-ph-greet">How can I help you tonight?</p>
-          <p className="agi-ph-sub">
-            Start privately on this device. Use the sidebar for recents and projects.
-          </p>
+          <div className="agi-mk-thread agi-mk-thread--phone">
+            <p className="agi-mk-user">What did we decide for the launch demo?</p>
+            <div className="agi-mk-agi">
+              <ToolRow state="done" label="Memory" meta="3 facts" />
+              <p>
+                From your memory: the demo runs on Desktop in Local mode, the deck lives in the
+                Investor project, and the dry run is Thursday at 4pm. Want a reminder?
+              </p>
+              <Receipt
+                route={ROUTE_RECEIPTS.local}
+                tokensIn="900"
+                tokensOut="120"
+                time="1.1 s"
+                compact
+              />
+            </div>
+          </div>
         </div>
         <div className="agi-ph-composer-wrap">
-          <div className="agi-ph-project">
-            <span>⊟ No project</span>
-            <span className="agi-ph-project-chevron">∨</span>
-          </div>
           <div className="agi-ph-composer">
-            <p className="agi-ph-ghost">What's on your mind?</p>
+            <p className="agi-ph-ghost">Message AGI…</p>
             <div className="agi-ph-composer-foot">
               <span className="agi-ph-attach">+</span>
               <span className="agi-ph-model">⊡ AGI Standard ∨</span>
-              <span className="agi-ph-mic">🎙</span>
+              <span className="agi-ph-mic">◉</span>
               <span className="agi-dev-send">➤</span>
             </div>
           </div>
