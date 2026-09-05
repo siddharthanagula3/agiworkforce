@@ -128,11 +128,10 @@
     "unstar": "إزالة النجمة",
     "untitled": "بدون عنوان",
     "untitledChat": "محادثة بدون عنوان",
-    "navLabel": "سجل الدردشة",
-    "toggleSidebar": "تبديل الشريط الجانبي",
-    "copyLink": "نسخ الرابط",
     "markUnread": "تحديد كغير مقروء",
-    "markRead": "تحديد كمقروء"
+    "markRead": "تحديد كمقروء",
+    "navLabel": "سجل الدردشة",
+    "toggleSidebar": "تبديل الشريط الجانبي"
   },
   "composer": {
     "addAttachment": "إضافة مرفق",
