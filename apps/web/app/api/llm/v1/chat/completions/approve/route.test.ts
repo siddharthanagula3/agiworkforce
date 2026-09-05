@@ -27,6 +27,7 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 const mockProcessRequest = vi.fn();
 vi.mock('../lib/request-processor', () => ({
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
+  toManagedSkillFromUserSkill: vi.fn(),
 }));
 
 const mockRunToolLoop = vi.fn();
