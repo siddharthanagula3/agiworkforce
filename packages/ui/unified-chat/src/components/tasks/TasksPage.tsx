@@ -328,10 +328,12 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       data-testid="tasks-view"
       className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 py-6"
     >
-      <header className="mb-4 flex flex-wrap items-center gap-2">
-        <ListChecks className="h-5 w-5 text-primary" />
-        <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium">Tasks</h1>
-        <span className="text-sm text-muted-foreground">, your Cloud work runs</span>
+      <header className="mb-4 flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <ListChecks className="h-5 w-5 text-primary" />
+          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Tasks</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">Your Cloud work runs</p>
       </header>
 
       <div className="mb-4 flex items-center gap-2">
