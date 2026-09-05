@@ -43,18 +43,21 @@ behaviour inspected by the lead, not tests.
 
 ## Dead or disconnected UI
 
-| Found                                              | State                                 |
-| -------------------------------------------------- | ------------------------------------- |
-| Cmd K did nothing on the chat page                 | fixed 6a49ffc35                       |
-| Stop lost the attempt and showed a toast           | fixed fce4fc435                       |
-| Sandbox refusal repeated three times per turn      | fixed 6329a6bd5                       |
-| Share project missing on the main chat page        | fix in flight (nav slice)             |
-| Chat row menu drawn at the viewport corner         | fix in flight, approved               |
-| Search notice blamed the tool on a code question   | fixed 33f517c90                       |
-| Code request answered without running code         | fixed 81be75123, live recheck pending |
-| Settings nav first row clipped under the search    | fixed 5e2136d6f                       |
-| Dev routes under /dev in the production route tree | to verify                             |
-| Operator, founder, local, waitlist, beta pages     | to verify                             |
+| Found                                                                | State                                         |
+| -------------------------------------------------------------------- | --------------------------------------------- |
+| Cmd K did nothing on the chat page                                   | fixed 6a49ffc35                               |
+| Stop lost the attempt and showed a toast                             | fixed fce4fc435                               |
+| Sandbox refusal repeated three times per turn                        | fixed 6329a6bd5                               |
+| Share project missing on the main chat page                          | fix in flight (nav slice)                     |
+| Chat row menu drawn at the viewport corner                           | fix in flight, approved                       |
+| Search notice blamed the tool on a code question                     | fixed 33f517c90                               |
+| Code request answered without running code                           | fixed 81be75123, live recheck pending         |
+| Settings nav first row clipped under the search                      | fixed 5e2136d6f                               |
+| Dev routes under /dev in the production route tree                   | to verify                                     |
+| Operator, founder, local, waitlist, beta pages                       | to verify                                     |
+| Three built admin APIs (observability, takedown, privacy) with no UI | found by recon; operator console slice queued |
+| COGS ledger written but never displayed                              | found by recon; operator console slice queued |
+| Admin console readiness ledger self attested for 3 of 5 rows         | found by recon; make live or remove           |
 
 ## Critical flows
 
