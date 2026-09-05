@@ -193,19 +193,22 @@ work, not a gap in the drill itself.
 ## One-day host-swap procedure
 
 The P0 architecture mandate's target is a Postgres host swap provable by a
-real rehearsal, not a diagram. Today that rehearsal is this drill; the swap
-itself has one piece still open, noted below.
+real rehearsal, not a diagram. The data half is this drill. The application
+half is the second adapter, which landed on 2026-09-05: the same contract
+suite in `packages/platform/data-layer/src/__tests__/adapter-contract.test.ts`
+runs against both providers, and the app itself was driven against local
+Postgres 17 over plain TCP with the tenant scope enforced.
 
 1. **Pick the target host** and provision a database on it with the same
    encoding and extensions the current schema expects (`apps/web/db/neon`'s
    migrations are the source of truth for what those are).
-2. **Add an adapter, if the target is not Neon.** The application's DB client
-   (`apps/web/lib/server/neon-db.ts`) already goes through
-   `createDatabaseClient({ provider })` in `@agiworkforce/data-layer`, but
-   `DatabaseProvider` (`packages/platform/data-layer/src/types.ts`) currently
-   has one member, `'neon'`. A non-Neon target needs a second provider
-   implementation registered there before traffic can move; this drill
-   validates the data, not that abstraction.
+2. **Choose the provider.** `AGI_DATABASE_PROVIDER` selects it and no code
+   changes. `neon` speaks the Neon serverless WebSocket protocol and is the
+   default; `postgres` speaks plain TCP through node-postgres and reaches any
+   other host. The application's DB handles name no provider, so setting the
+   variable is the whole change. A Postgres target that will serve an edge
+   runtime still needs the Neon driver, which is the one capability the plain
+   driver does not have.
 3. **Rotate credentials** for the new host and store them the way
    `docs/security/key-rotation.md`'s custody inventory expects; never reuse a
    Neon-scoped credential against a different host.
@@ -214,10 +217,18 @@ itself has one piece still open, noted below.
    at the new host's maintenance database. A pass proves the schema, the core
    tables, and the migration ledger transfer cleanly; run it more than once if
    the first attempt required schema changes.
-5. **Cut over** by pointing `AGI_DATABASE_URL` (and `AGI_DATABASE_PROVIDER`,
-   once step 2 lands) at the new host in one environment at a time, starting
-   with a preview deployment, the same escalation `scripts/verify-deployment.mjs`
-   already checks in the Neon recovery procedure above.
+5. **Rehearse the application against the new host** before any traffic moves.
+   Point `AGI_DATABASE_CONTRACT_TEST_URL` at it and run the adapter contract
+   suite, which proves query, transaction, rollback and tenant-scope behaviour
+   on that host. The suite refuses a non-loopback host by design, so a remote
+   rehearsal runs it through a local tunnel rather than by relaxing that check.
+6. **Cut over** by setting `AGI_DATABASE_PROVIDER` and `AGI_DATABASE_URL` for
+   the new host in one environment at a time, starting with a preview
+   deployment, the same escalation `scripts/verify-deployment.mjs` already
+   checks in the Neon recovery procedure above. Pool sizes in
+   `apps/web/lib/server/db-pool-tuning.ts` assume a pooled endpoint; a host
+   without one needs PgBouncer or RDS Proxy in front, because `pg` does not
+   multiplex.
 
 ## Restore drill log
 
@@ -248,10 +259,10 @@ weekly in CI against a disposable `postgres:17` container.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.
-- `DatabaseProvider` in `packages/platform/data-layer/src/types.ts` has one
-  member, `'neon'`. The logical drill proves the data transfers; it does not
-  by itself prove the application can run against a second host, because
-  nothing in `@agiworkforce/data-layer` implements one yet.
+- No production-shaped host other than Neon has been rehearsed. Both adapters
+  are proven against local Postgres 17 and the contract suite runs on every
+  host it is pointed at, but a managed host's TLS, pooling and connection
+  ceiling are unmeasured until a real target exists.
 
 Related: `docs/security/key-rotation.md` for what a restore does to encrypted
 columns, `docs/runbooks/incident-response.md` for what paged this in the first
