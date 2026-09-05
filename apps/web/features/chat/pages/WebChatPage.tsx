@@ -43,8 +43,10 @@ import {
   selectConversationMessages,
   selectIsConversationLoading,
   selectIsConversationStreaming,
+  selectIsAgiWorkConversation,
   PENDING_CONVERSATION_KEY,
   DEFAULT_COMPOSER_TOGGLES,
+  AGI_WORK_MODE,
   parkUnsentDraft,
 } from '@shared/stores/web-chat-store';
 import {
@@ -134,6 +136,8 @@ import {
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
+import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
+import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -1110,10 +1114,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       s.composerTogglesByConversation[displayedConversationId ?? PENDING_CONVERSATION_KEY] ??
       DEFAULT_COMPOSER_TOGGLES,
   );
+  const workModeByConversation = useChatStore((s) => s.workModeByConversation);
+  const isAgiWorkConversation = useChatStore(selectIsAgiWorkConversation(displayedConversationId));
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const sendPreviewToolNames = useMemo(() => {
     const names: string[] = [];
-    if (composerToggles?.workMode === 'agiwork') names.push('AGI Work');
+    if (composerToggles?.workMode === AGI_WORK_MODE) names.push(AGI_WORK_LABEL);
     if (composerToggles?.webSearchEnabled) names.push('Web search');
     if (composerToggles?.researchEnabled) names.push('Deep Research');
     if (composerToggles?.codeExecutionEnabled) names.push('Run code');
@@ -4405,9 +4411,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         archived: c.isArchived ?? false,
         projectId: c.projectId ?? undefined,
         messageCount: c.messageCount,
+        ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
+          ? { agiWork: true }
+          : {}),
         ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
       })),
-    [conversations, runningConversationIds],
+    [conversations, runningConversationIds, workModeByConversation],
   );
 
   // Top-level destinations stay visible in the production sidebar. The rail body
@@ -4542,6 +4551,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     setMobileNavOpen(false);
     openSettings('usage');
   }, [openSettings]);
+  const handleReviewApprovals = useCallback(() => {
+    openSettings('capabilities');
+  }, [openSettings]);
   const handleSidebarSelect = useCallback(
     (id: string) => {
       setMobileNavOpen(false);
@@ -4674,6 +4686,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 displayedConversationId && (
                   <ConversationTitleMenu
                     title={activeConversationTitle}
+                    agiWork={isAgiWorkConversation}
                     projects={sidebarProjects}
                     onRename={(next) => handleRenameSession(displayedConversationId, next)}
                     onMoveToProject={(projectId) =>
@@ -4853,6 +4866,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
                   {unavailableModelNotice}
+                  <AgiWorkAutonomyNotice
+                    active={composerToggles?.workMode === AGI_WORK_MODE}
+                    onReviewApprovals={handleReviewApprovals}
+                  />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -4943,6 +4960,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
                   {unavailableModelNotice}
+                  <AgiWorkAutonomyNotice
+                    active={composerToggles?.workMode === AGI_WORK_MODE}
+                    onReviewApprovals={handleReviewApprovals}
+                  />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
