@@ -74,3 +74,41 @@ describe('credential failover admission', () => {
     expect(state.blocksRoute('google')).toBe(false);
   });
 });
+
+describe('cross-request credential memory', () => {
+  it('skips a credential a shared breaker already holds open', () => {
+    const state = new CredentialFailoverState({ openCredentialIds: ['anthropic'] });
+
+    expect(state.blocksRoute('anthropic')).toBe(true);
+    expect(state.blocksRoute('openai')).toBe(false);
+    expect(state.rejectedProviders()).toEqual([]);
+    expect(state.parkedProviders()).toEqual(['anthropic']);
+  });
+
+  it('reports a rejection once so the caller can share it', () => {
+    const shared: string[] = [];
+    const state = new CredentialFailoverState({
+      onCredentialRejected: (credentialId) => shared.push(credentialId),
+    });
+
+    state.recordFailure('anthropic', 'auth');
+    state.recordFailure('anthropic', 'auth');
+    state.recordFailure('openai', 'server_overload');
+
+    expect(shared).toEqual(['anthropic']);
+  });
+
+  it('counts a credential rejected in this request as rejected, not merely parked', () => {
+    const state = new CredentialFailoverState({ openCredentialIds: ['anthropic'] });
+    state.recordFailure('anthropic', 'auth');
+
+    expect(state.rejectedProviders()).toEqual(['anthropic']);
+    expect(state.parkedProviders()).toEqual([]);
+  });
+
+  it('keeps the no-argument constructor callers already depend on', () => {
+    const state = new CredentialFailoverState();
+    expect(state.blocksRoute('anthropic')).toBe(false);
+    expect(state.parkedProviders()).toEqual([]);
+  });
+});

@@ -223,12 +223,34 @@ export function createFailoverPlan(
       code: string;
       retryAfterSeconds?: number;
     }) => void;
+    /**
+     * Credentials the shared breaker already holds open, read once before
+     * dispatch. Without it a key that has been dead since the last deploy is
+     * rediscovered by every request, one refusal per route on that provider.
+     */
+    openCredentialProviders?: readonly string[];
+    /**
+     * Called the first time this request rejects a credential, so the rejection
+     * outlives the request.
+     */
+    onCredentialRejected?: (provider: string) => void;
+    /**
+     * `true` when the route this candidate would dispatch on is in cooldown.
+     * Consulted before the attempt, never after: a parked route that is only
+     * discovered by failing on it is a breaker that does nothing.
+     */
+    isCandidateBreakerOpen?: (candidate: { modelKey: string; provider: string }) => boolean;
   },
 ): { next: (error: unknown, context?: FailoverStepContext) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
-  const credentialFailover = new CredentialFailoverState();
+  const credentialFailover = new CredentialFailoverState({
+    ...(options.openCredentialProviders
+      ? { openCredentialIds: options.openCredentialProviders }
+      : {}),
+    ...(options.onCredentialRejected ? { onCredentialRejected: options.onCredentialRejected } : {}),
+  });
   const freeLane = processed.freeLane;
   const freeLaneAttempted: string[] = freeLane ? [freeLane.dispatchedRouteId] : [];
   let latestView: ProcessedRequest = processed;
@@ -251,6 +273,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, model: candidate, provider },
           'Managed failover candidate skipped: provider credentials already rejected',
+        );
+        continue;
+      }
+      if (options.isCandidateBreakerOpen?.({ modelKey: candidate, provider })) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: route breaker is open',
         );
         continue;
       }
@@ -312,6 +341,15 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
           'Free-lane failover candidate skipped: provider credentials already rejected',
+        );
+        continue;
+      }
+      if (
+        options.isCandidateBreakerOpen?.({ modelKey: route.modelKey, provider: route.provider })
+      ) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: route breaker is open',
         );
         continue;
       }

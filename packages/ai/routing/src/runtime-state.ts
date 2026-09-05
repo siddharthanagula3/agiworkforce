@@ -168,7 +168,13 @@ export type RouteOutcomeClass =
   | 'server_error'
   | 'timeout'
   | 'stream_corruption'
-  | 'unsupported_capability';
+  | 'unsupported_capability'
+  /**
+   * The credential was refused. Recorded against the CREDENTIAL scope, never
+   * against a route: every route on that provider answers to the same key, and
+   * an unfunded or rejected key is an account fact rather than a route fact.
+   */
+  | 'credential_rejected';
 
 export interface RouteOutcome {
   class: RouteOutcomeClass;

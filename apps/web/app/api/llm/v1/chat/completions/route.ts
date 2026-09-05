@@ -13,6 +13,7 @@ import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import { observeFreeLaneAttemptFailure } from '@/lib/services/free-lane/runtime-state-service';
+import { resolveFailoverBreakerView } from './lib/route-breaker';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
@@ -338,6 +339,9 @@ async function dispatchChatCompletions(
 
   const processed = processResult;
 
+  // Read once, before any attempt: the rotation path consults it synchronously.
+  const breakers = await resolveFailoverBreakerView(processed);
+
   const secretHandling = await timePhase(CHAT_TURN_PHASE.secretGate, () =>
     applySecretHandlingToRequest(userId, request, processed),
   );
@@ -428,6 +432,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...breakers,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const researchGen = runResearchLoop(
@@ -777,6 +782,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...breakers,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const toolLoopGen = runToolLoop(processed, {
@@ -887,6 +893,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...breakers,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       let attemptProcessed: ProcessedRequest = processed;
@@ -974,6 +981,7 @@ async function dispatchChatCompletions(
       signal: request.signal,
       isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
       modelPolicy: processed.modelPolicy ?? null,
+      ...breakers,
       ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
     });
     let attemptProcessed: ProcessedRequest = processed;
