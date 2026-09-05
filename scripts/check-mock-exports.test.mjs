@@ -12,6 +12,7 @@ import {
   extractNamedExports,
   findMockFactoryCalls,
   findSubjectFiles,
+  findTransitiveImportFiles,
   resolveSpecifier,
   runMockExportsGuard,
 } from './check-mock-exports.mjs';
@@ -97,6 +98,84 @@ test('never flags an export the module under test never imports', () => {
 
   const findings = checkTestFile(sandbox, path.join(sandbox, 'src/consumer.test.ts'));
   assert.deepEqual(findings, []);
+});
+
+test('flags a vi.mock factory that omits a real export a transitive import uses', () => {
+  const sandbox = createSandbox();
+  writeFiles(sandbox, {
+    'src/mocked.ts': 'export function foo() {}\nexport function bar() {}\n',
+    'src/processor.ts':
+      "import { foo, bar } from './mocked';\nexport function process() { return foo() + bar(); }\n",
+    'src/subject.ts':
+      "import { process } from './processor';\nexport function use() { return process(); }\n",
+    'src/consumer.test.ts':
+      "import { describe, it, vi } from 'vitest';\n" +
+      "vi.mock('./mocked', () => ({\n  foo: () => 'stub-foo',\n}));\n" +
+      "import { use } from './subject';\n" +
+      "describe('consumer', () => { it('works', () => { use(); }); });\n",
+  });
+  initGitRepo(sandbox);
+
+  const findings = checkTestFile(sandbox, path.join(sandbox, 'src/consumer.test.ts'));
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].specifier, './mocked');
+  assert.deepEqual(findings[0].missing, ['bar']);
+  assert.ok(findings[0].requiredBy.has('src/processor.ts'));
+});
+
+test('never flags a transitively required export when the factory spreads importOriginal', () => {
+  const sandbox = createSandbox();
+  writeFiles(sandbox, {
+    'src/mocked.ts': 'export function foo() {}\nexport function bar() {}\n',
+    'src/processor.ts':
+      "import { foo, bar } from './mocked';\nexport function process() { return foo() + bar(); }\n",
+    'src/subject.ts':
+      "import { process } from './processor';\nexport function use() { return process(); }\n",
+    'src/consumer.test.ts':
+      "import { describe, it, vi } from 'vitest';\n" +
+      "vi.mock('./mocked', async (importOriginal) => ({\n" +
+      '  ...(await importOriginal()),\n' +
+      "  foo: () => 'stub-foo',\n" +
+      '}));\n' +
+      "import { use } from './subject';\n" +
+      "describe('consumer', () => { it('works', () => { use(); }); });\n",
+  });
+  initGitRepo(sandbox);
+
+  const findings = checkTestFile(sandbox, path.join(sandbox, 'src/consumer.test.ts'));
+  assert.deepEqual(findings, []);
+});
+
+test('never flags exports required only by an unrelated transitive module', () => {
+  const sandbox = createSandbox();
+  writeFiles(sandbox, {
+    'src/mocked.ts': 'export function foo() {}\nexport function bar() {}\n',
+    'src/other.ts': 'export function otherThing() {}\n',
+    'src/processor.ts':
+      "import { otherThing } from './other';\nexport function process() { return otherThing(); }\n",
+    'src/subject.ts':
+      "import { process } from './processor';\nimport { foo } from './mocked';\nexport function use() { return process() + foo(); }\n",
+    'src/consumer.test.ts':
+      "import { describe, it, vi } from 'vitest';\n" +
+      "vi.mock('./mocked', () => ({\n  foo: () => 'stub-foo',\n}));\n" +
+      "import { use } from './subject';\n" +
+      "describe('consumer', () => { it('works', () => { use(); }); });\n",
+  });
+  initGitRepo(sandbox);
+
+  const findings = checkTestFile(sandbox, path.join(sandbox, 'src/consumer.test.ts'));
+  assert.deepEqual(findings, []);
+});
+
+test('findTransitiveImportFiles resolves one level of a subject file own imports', () => {
+  const sandbox = createSandbox();
+  writeFiles(sandbox, {
+    'src/processor.ts': 'export function process() {}\n',
+    'src/subject.ts': "import { process } from './processor';\nexport function use() {}\n",
+  });
+  const subjectFile = path.join(sandbox, 'src/subject.ts');
+  const transitive = findTransitiveImportFiles(sandbox, [subjectFile]);
+  assert.deepEqual(transitive, [path.join(sandbox, 'src/processor.ts')]);
 });
 
 test('resolves a co-located subject by naming stem, not every file in the directory', () => {
