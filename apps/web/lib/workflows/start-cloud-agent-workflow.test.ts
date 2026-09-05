@@ -206,16 +206,23 @@ describe('runCloudAgentTurn transport selection', () => {
   });
 
   it('serves the turn inline when the durable stream never opens', async () => {
+    const cancel = vi.fn();
     workflowMocks.start.mockResolvedValue({
       runId: 'wrun_stalled',
       getReadable: () => new ReadableStream<Uint8Array>({ start() {} }),
-      cancel: vi.fn(),
+      cancel,
     });
     workflowMocks.attach.mockResolvedValue(undefined);
 
     const result = await runCloudAgentTurn(turnInput());
     expect(result.transport).toBe('inline');
     expect(result.degradedReason).toBe('workflow_stream_stalled');
+    // The stalled durable run is cancelled BEFORE the inline turn is built, or
+    // the same turn runs twice and settles twice.
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cancel.mock.invocationCallOrder[0]!).toBeLessThan(
+      workflowMocks.runToolLoop.mock.invocationCallOrder[0]!,
+    );
   }, 20_000);
 
   it('skips the platform entirely while the transport is cooling down', async () => {

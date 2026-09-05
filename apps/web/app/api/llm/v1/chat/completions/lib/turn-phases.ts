@@ -18,6 +18,7 @@ export const CHAT_TURN_PHASE = {
   agentRunStart: 'agent_run_start',
   durableStart: 'durable_start',
   durableFirstEvent: 'durable_first_event',
+  durableBudgetFallback: 'durable_budget_fallback',
   providerStream: 'provider_stream',
   bodyParse: 'body_parse',
   ownershipAndSafety: 'ownership_and_safety',
