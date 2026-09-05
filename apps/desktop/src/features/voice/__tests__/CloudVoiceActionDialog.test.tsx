@@ -122,4 +122,26 @@ describe('CloudVoiceActionDialog', () => {
       screen.getByText(/does not reveal the previous account's instruction/),
     ).toBeInTheDocument();
   });
+
+  it('renders the error banner from the shared destructive token, not a fixed colour', () => {
+    render(
+      <CloudVoiceActionDialog
+        action="Open Notes and create a launch checklist."
+        error="Desktop control could not complete this action."
+        isExecuting={false}
+        isStopping={false}
+        isRecovery={false}
+        requiresComputerUseConsent={false}
+        onApprove={vi.fn()}
+        onUseAsText={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Desktop control could not complete this action.');
+    expect(alert.className).toContain('var(--chat-destructive)');
+    expect(alert.className).toContain('var(--chat-destructive-text)');
+    expect(alert.className).not.toMatch(/red-\d/);
+  });
 });
