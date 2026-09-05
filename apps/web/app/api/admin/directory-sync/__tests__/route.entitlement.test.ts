@@ -18,6 +18,8 @@ vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(async () => undefined),
   getClientIp: vi.fn(() => '203.0.113.7'),
   recordAuditEvent: vi.fn(async () => undefined),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 const { mockGetClerkAuthUser } = vi.hoisted(() => ({
