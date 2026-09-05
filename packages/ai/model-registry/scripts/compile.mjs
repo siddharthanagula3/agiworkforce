@@ -892,6 +892,68 @@ function projectCompatCapabilities(normalized) {
   );
 }
 
+const BENCHMARK_CONFIDENCES = new Set(['verified', 'aggregated', 'unknown']);
+const AGGREGATED_BENCHMARK_CONFIDENCE = 'aggregated';
+const UNKNOWN_BENCHMARK_FIELD = null;
+const BENCHMARK_SCORE_FIELDS = ['value', 'source', 'version', 'date', 'confidence'];
+
+function normalizeBenchmarkScore(label, name, raw, aggregatorSource) {
+  if (typeof raw === 'number') {
+    assert.ok(
+      typeof aggregatorSource === 'string' && aggregatorSource.length > 0,
+      `${label} benchmark ${name} is a bare score with no snapshot source to attribute it to`,
+    );
+    return {
+      value: raw,
+      source: aggregatorSource,
+      version: UNKNOWN_BENCHMARK_FIELD,
+      date: UNKNOWN_BENCHMARK_FIELD,
+      confidence: AGGREGATED_BENCHMARK_CONFIDENCE,
+    };
+  }
+  assert.ok(
+    raw && typeof raw === 'object' && !Array.isArray(raw),
+    `${label} benchmark ${name} must be a score or a sourced score record`,
+  );
+  const unsupported = Object.keys(raw).filter((key) => !BENCHMARK_SCORE_FIELDS.includes(key));
+  assert.deepEqual(
+    unsupported,
+    [],
+    `${label} benchmark ${name} has unsupported keys: ${unsupported.join(', ')}`,
+  );
+  assert.ok(
+    typeof raw.value === 'number' && Number.isFinite(raw.value),
+    `${label} benchmark ${name} must carry a finite value`,
+  );
+  assert.ok(
+    typeof raw.source === 'string' && raw.source.length > 0,
+    `${label} benchmark ${name} must name the source it was read from`,
+  );
+  assert.ok(
+    BENCHMARK_CONFIDENCES.has(raw.confidence),
+    `${label} benchmark ${name} confidence ${String(raw.confidence)} is not a known value`,
+  );
+  return {
+    value: raw.value,
+    source: raw.source,
+    version: raw.version ?? UNKNOWN_BENCHMARK_FIELD,
+    date: assertIsoDateOrUnknown(
+      `${label} benchmark ${name} date`,
+      raw.date ?? UNKNOWN_BENCHMARK_FIELD,
+    ),
+    confidence: raw.confidence,
+  };
+}
+
+function normalizeBenchmarks(modelKey, benchmarks, aggregatorSource) {
+  return Object.fromEntries(
+    Object.entries(benchmarks ?? {}).map(([name, raw]) => [
+      name,
+      normalizeBenchmarkScore(modelKey, name, raw, aggregatorSource),
+    ]),
+  );
+}
+
 function positiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
@@ -1458,6 +1520,7 @@ function buildNormalizedRegistry(
   routingPolicies,
   familyCatalog,
   governanceCatalog,
+  benchmarkSource,
 ) {
   const governance = normalizeProviderGovernance(governanceCatalog);
   const models = {};
@@ -1577,7 +1640,7 @@ function buildNormalizedRegistry(
       [...CAPABILITY_NAMES].sort(),
       `${modelKey} must carry the whole capability vocabulary`,
     );
-    benchmarks[modelKey] = model.benchmarks ?? {};
+    benchmarks[modelKey] = normalizeBenchmarks(modelKey, model.benchmarks, benchmarkSource);
   }
 
   const evidence = (catalog.verificationLog ?? []).map((entry, index) => ({
@@ -1665,7 +1728,7 @@ function buildSkillSpectorProviderRegistry(catalog, providerId) {
   return `${lines.join('\n')}\n`;
 }
 
-async function buildNormalizedArtifacts(catalog, familyCatalog) {
+async function buildNormalizedArtifacts(catalog, familyCatalog, syncedSnapshot) {
   const harnessCatalog = readJson(HARNESSES_JSON);
   const modelRouteCatalog = readJson(MODEL_ROUTES_JSON);
   const routingPolicies = readJson(ROUTING_POLICIES_JSON);
@@ -1685,6 +1748,7 @@ async function buildNormalizedArtifacts(catalog, familyCatalog) {
     routingPolicies,
     familyCatalog,
     governanceCatalog,
+    syncedSnapshot.source,
   );
   const schema = readJson(REGISTRY_SCHEMA_JSON);
   const validate = new Ajv({ allErrors: true, strict: true }).compile(schema);
@@ -1737,7 +1801,7 @@ async function generate() {
   const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
   const catalog = buildCatalog(curation, synced, familyCatalog);
   await writeJson(MODELS_JSON, catalog);
-  const artifacts = await buildNormalizedArtifacts(catalog, familyCatalog);
+  const artifacts = await buildNormalizedArtifacts(catalog, familyCatalog, synced);
   ensureGeneratedDirectories();
   writeText(REGISTRY_JSON, artifacts.json);
   writeText(REGISTRY_TS, artifacts.typescript);
@@ -1777,7 +1841,7 @@ async function check() {
     process.exitCode = 1;
     return;
   }
-  const artifacts = await buildNormalizedArtifacts(built, familyCatalog);
+  const artifacts = await buildNormalizedArtifacts(built, familyCatalog, synced);
   const generatedOk = [
     checkGeneratedArtifact(REGISTRY_JSON, artifacts.json),
     checkGeneratedArtifact(REGISTRY_TS, artifacts.typescript),
@@ -1892,6 +1956,7 @@ export function loadFamilySnapshot() {
     readJson(ROUTING_POLICIES_JSON),
     familyCatalog,
     readJson(PROVIDER_GOVERNANCE_JSON),
+    synced.source,
   );
   return {
     familyCatalog,

@@ -35,7 +35,9 @@
  *    THIS task. This is the curator's own quality ladder, read back.
  *  - `requiredCapabilities`, `registry.capabilities[modelKey]`.
  *  - `minimumContextTokens`, `registry.limits[modelKey].contextTokens`.
- *  - `minimumBenchmarkScores`, `registry.benchmarks[modelKey]`.
+ *  - `minimumBenchmarkScores`, `registry.benchmarks[modelKey]`, read only when
+ *    the score names the source it came from. An unsourced score counts as no
+ *    score at all.
  *
  * **Benchmark coverage is thin and a floor that uses it fails closed.** At the
  * time of writing only 10 of 31 registry models carry any benchmark scores,
@@ -85,10 +87,23 @@ export interface TaskFamilyPolicyEntry {
   qualityFloor: TaskFamilyQualityFloor;
 }
 
+interface RegistryBenchmarkScore {
+  value: number;
+  source: string;
+  version: string | null;
+  date: string | null;
+  confidence: 'verified' | 'aggregated' | 'unknown';
+}
+
+function sourcedBenchmarkValue(score: RegistryBenchmarkScore | undefined): number | undefined {
+  if (!score || typeof score.source !== 'string' || score.source.length === 0) return undefined;
+  return Number.isFinite(score.value) ? score.value : undefined;
+}
+
 interface TaskFamilyRegistryView {
   capabilities: Record<string, Partial<Record<IntrinsicCapability, boolean>>>;
   limits: Record<string, { contextTokens?: number }>;
-  benchmarks: Record<string, Record<string, number>>;
+  benchmarks: Record<string, Record<string, RegistryBenchmarkScore>>;
   policies: { auto: { taskFamilies?: Record<string, TaskFamilyPolicyEntry> } };
 }
 
@@ -176,9 +191,9 @@ function evaluateFloor(
   }
 
   for (const [benchmark, minimum] of Object.entries(floor.minimumBenchmarkScores ?? {})) {
-    const score = registry.benchmarks[modelKey]?.[benchmark];
-    if (typeof score !== 'number') {
-      reasons.push(`model ${modelKey} has no recorded ${benchmark} score`);
+    const score = sourcedBenchmarkValue(registry.benchmarks[modelKey]?.[benchmark]);
+    if (score === undefined) {
+      reasons.push(`model ${modelKey} has no sourced ${benchmark} score`);
     } else if (score < minimum) {
       reasons.push(`model ${modelKey} ${benchmark} ${score} is below the ${minimum} floor`);
     }

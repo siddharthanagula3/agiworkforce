@@ -6659,26 +6659,167 @@
     "claude-haiku-4-5": {},
     "gemini-embedding-2": {},
     "gemini-3.1-pro-preview": {
-      "swebench": 74.2,
-      "humaneval": 93.5,
-      "mmlu": 89.5,
-      "gpqa": 91.9,
-      "aime": 95
+      "swebench": {
+        "value": 74.2,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "humaneval": {
+        "value": 93.5,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "mmlu": {
+        "value": 89.5,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "gpqa": {
+        "value": 91.9,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "aime": {
+        "value": 95,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
     },
     "gemini-3.5-flash-lite": {},
     "gemini-3.1-flash-lite": {},
     "gemini-3.1-flash-image": {},
     "gemini-3-pro-image": {},
     "gemini-3.1-flash-lite-image": {},
-    "deepseek-v4-flash": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
-    "deepseek-v4-pro": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
+    "deepseek-v4-flash": {
+      "swebench": {
+        "value": 75,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "humaneval": {
+        "value": 95,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "mmlu": {
+        "value": 87,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "gpqa": {
+        "value": 75,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "aime": {
+        "value": 85,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
+    "deepseek-v4-pro": {
+      "swebench": {
+        "value": 81,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "humaneval": {
+        "value": 96,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "mmlu": {
+        "value": 92,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "gpqa": {
+        "value": 87,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "aime": {
+        "value": 95,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
     "deepseek-v4-flash-vision-exp": {},
     "qwen-3.5-flash": {},
     "qwen-3.8-flash": {},
-    "sonar": { "mmlu": 75 },
-    "sonar-reasoning-pro": { "mmlu": 85, "gpqa": 62 },
-    "sonar-pro": { "mmlu": 88 },
-    "sonar-deep-research": { "mmlu": 88 },
+    "sonar": {
+      "mmlu": {
+        "value": 75,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
+    "sonar-reasoning-pro": {
+      "mmlu": {
+        "value": 85,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      },
+      "gpqa": {
+        "value": 62,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
+    "sonar-pro": {
+      "mmlu": {
+        "value": 88,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
+    "sonar-deep-research": {
+      "mmlu": {
+        "value": 88,
+        "source": "models.dev",
+        "version": null,
+        "date": null,
+        "confidence": "aggregated"
+      }
+    },
     "runway-gen-4": {},
     "seedance-2.5": {},
     "gpt-image-2": {},
