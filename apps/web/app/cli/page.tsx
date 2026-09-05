@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { TerminalWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   Button,
   ButtonRow,
@@ -44,19 +45,6 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'completion', desc: 'Generate a shell completion script' },
   { cmd: 'init', desc: 'Initialize ~/.agiworkforce/ and register the project' },
   { cmd: 'onboarding', desc: 'Re-run the first-run onboarding wizard' },
-];
-
-const HELP_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
-  { kind: 'cmd', text: 'agi --help' },
-  { kind: 'out', text: 'Multi-provider AI agent for your terminal.' },
-  { kind: 'dim', text: 'Usage: agi [OPTIONS] [PROMPT] [COMMAND]' },
-  { kind: 'dim', text: '  exec         Run non-interactively (alias: e)' },
-  { kind: 'dim', text: '  review       Non-interactive code review' },
-  { kind: 'dim', text: '  sandbox      Run commands inside a sandbox' },
-  { kind: 'dim', text: '  resume       Continue previous session' },
-  { kind: 'dim', text: '  models       Manage and inspect model configuration' },
-  { kind: 'dim', text: '  doctor       Run local preflight diagnostics' },
-  { kind: 'cmd', text: 'agi --json-events exec "Summarize this PR diff"' },
 ];
 
 const CAPABILITIES = [
@@ -128,13 +116,7 @@ export default function CliPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <pre className="agi-lp-terminal" aria-label="A real AGI CLI session">
-                {HELP_TRANSCRIPT.map((line, index) => (
-                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={index}>
-                    {line.text}
-                  </span>
-                ))}
-              </pre>
+              <TerminalWindow />
             </div>
           </div>
         </section>

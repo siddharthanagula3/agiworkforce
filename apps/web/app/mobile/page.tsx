@@ -1,12 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { PhoneDevice } from '@/features/marketing/components/DeviceMockups';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
   MarketingFooter,
-  ProductFrame,
   Prose,
   SurfaceStatus,
 } from '@/features/marketing/components/system';
@@ -18,14 +18,6 @@ export const metadata = buildMetadata({
     'AGI Mobile runs chat on-device by default, through the phone’s own model runtime or a downloaded build. Chats, memory, projects, and files stay on the phone unless you choose otherwise. Not on the App Store or Google Play yet.',
   path: '/mobile',
 });
-
-const MOBILE_SHOT = {
-  light: '/screenshots/mobile-light-v2.png',
-  dark: '/screenshots/mobile-dark-v2.png',
-  alt: 'AGI Mobile on a phone, in local mode',
-  width: 1206,
-  height: 2622,
-} as const;
 
 const RUNTIME_FACTS = [
   {
@@ -95,14 +87,7 @@ export default function MobilePage() {
             </div>
             <div className="agi-lp-hero-stage">
               <div className="agi-lp-phone">
-                <ProductFrame
-                  src={MOBILE_SHOT.dark}
-                  srcLight={MOBILE_SHOT.light}
-                  alt={MOBILE_SHOT.alt}
-                  width={MOBILE_SHOT.width}
-                  height={MOBILE_SHOT.height}
-                  priority
-                />
+                <PhoneDevice />
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { DesktopWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   Button,
   ButtonRow,
@@ -79,20 +80,7 @@ export default function DesktopPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-console" aria-label="AGI Desktop local runtime status">
-                <div className="agi-lp-console-bar">
-                  <span>AGI Desktop &middot; local runtimes</span>
-                </div>
-                <div className="agi-lp-console-body">
-                  <Ledger
-                    caption="Desktop local runtime endpoints"
-                    rows={[SPEC_ROWS[0], SPEC_ROWS[1], SPEC_ROWS[6], SPEC_ROWS[7], SPEC_ROWS[9]]}
-                  />
-                </div>
-                <p className="agi-lp-console-note">
-                  Full specification below. <span>Nothing here needs an account.</span>
-                </p>
-              </div>
+              <DesktopWindow />
             </div>
           </div>
         </section>
