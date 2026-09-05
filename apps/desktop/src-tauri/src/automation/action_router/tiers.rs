@@ -194,7 +194,11 @@ impl UiTier {
         Self { probe }
     }
 
-    fn resolve(&self, phrase: &str, resolved: Result<Match<String>>) -> Result<String, TierDecline> {
+    fn resolve(
+        &self,
+        phrase: &str,
+        resolved: Result<Match<String>>,
+    ) -> Result<String, TierDecline> {
         match resolved {
             Ok(Match::Found(token)) => Ok(token),
             Ok(Match::Ambiguous { candidates }) => Err(TierDecline::TargetAmbiguous {
@@ -308,13 +312,13 @@ impl BrowserTier {
             return Err(TierDecline::OutOfScope);
         };
 
-        let snapshot = self
-            .probe
-            .snapshot(tab_id)
-            .await
-            .map_err(|error| TierDecline::DriverUnavailable {
-                detail: error.to_string(),
-            })?;
+        let snapshot =
+            self.probe
+                .snapshot(tab_id)
+                .await
+                .map_err(|error| TierDecline::DriverUnavailable {
+                    detail: error.to_string(),
+                })?;
 
         match dom::locate(&snapshot, phrase, intent.target_role) {
             Match::Found(selector) => Ok(selector),
@@ -895,7 +899,8 @@ mod tests {
 
     #[tokio::test]
     async fn every_tier_declines_a_multi_operation_utterance() {
-        let intent = ActionIntent::parse(&format!("fetch {PUBLIC_DESTINATION} then click Send"), None);
+        let intent =
+            ActionIntent::parse(&format!("fetch {PUBLIC_DESTINATION} then click Send"), None);
 
         assert!(matches!(
             ApiTier.assess(&intent).await,
@@ -917,5 +922,4 @@ mod tests {
 
         assert_eq!(intent.target_role, Some(TargetRole::Button));
     }
-
 }

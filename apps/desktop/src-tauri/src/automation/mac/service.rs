@@ -7,12 +7,11 @@ use std::sync::Arc;
 
 use accessibility_sys::{
     kAXChildrenAttribute, kAXDescriptionAttribute, kAXFocusedAttribute, kAXIdentifierAttribute,
-    kAXPressAction,
-    kAXRaiseAction, kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute, kAXWindowsAttribute,
-    AXIsProcessTrusted, AXUIElementCopyAttributeValue, AXUIElementCopyAttributeValues,
-    AXUIElementCopyElementAtPosition, AXUIElementCreateApplication, AXUIElementCreateSystemWide,
-    AXUIElementGetAttributeValueCount, AXUIElementPerformAction, AXUIElementRef,
-    AXUIElementSetAttributeValue, AXValueGetValue,
+    kAXPressAction, kAXRaiseAction, kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute,
+    kAXWindowsAttribute, AXIsProcessTrusted, AXUIElementCopyAttributeValue,
+    AXUIElementCopyAttributeValues, AXUIElementCopyElementAtPosition, AXUIElementCreateApplication,
+    AXUIElementCreateSystemWide, AXUIElementGetAttributeValueCount, AXUIElementPerformAction,
+    AXUIElementRef, AXUIElementSetAttributeValue, AXValueGetValue,
 };
 use core_foundation::array::{CFArrayGetCount, CFArrayGetValueAtIndex};
 use core_foundation::base::{CFTypeRef, TCFType};
