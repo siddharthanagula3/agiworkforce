@@ -62,16 +62,18 @@ behaviour inspected by the lead, not tests.
 
 ## Critical flows
 
-| Flow                                    | Verified                   | Failed or open                                                                                                                         |
-| --------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Sign in, sign up, SSO callback          | 2026-09-05 web and desktop |                                                                                                                                        |
-| New chat with search and a table answer | 2026-09-05                 |                                                                                                                                        |
-| Code execution on explicit request      |                            | recheck at 21:46 failed one layer earlier: Auto picked a route whose provider account is unfunded, raw JSON shown (D-14 fix in flight) |
-| Stop and retry a turn                   | 2026-09-05 (spec)          |                                                                                                                                        |
-| Settings read and write                 | 2026-09-05 (captures)      | propagation of each setting into behaviour untested                                                                                    |
-| Projects, schedules, library            | 2026-09-05 (captures)      | viewer corrections pending                                                                                                             |
-| Desktop tray, chord, preset rebind      | 2026-09-05 live            | waves 2 to 5 pending founder sign in                                                                                                   |
-| Admin console                           |                            | never exercised with a workspace account                                                                                               |
+| Flow                                              | Verified                   | Failed or open                                                                                                                         |
+| ------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign in, sign up, SSO callback                    | 2026-09-05 web and desktop |                                                                                                                                        |
+| New chat with search and a table answer           | 2026-09-05                 |                                                                                                                                        |
+| Code execution on explicit request                |                            | recheck at 21:46 failed one layer earlier: Auto picked a route whose provider account is unfunded, raw JSON shown (D-14 fix in flight) |
+| Stop and retry a turn                             | 2026-09-05 (spec)          |                                                                                                                                        |
+| Settings read and write                           | 2026-09-05 (captures)      | propagation of each setting into behaviour untested                                                                                    |
+| Projects, schedules, library                      | 2026-09-05 (captures)      | viewer corrections pending                                                                                                             |
+| Desktop tray, chord, preset rebind                | 2026-09-05 live            | waves 2 to 5 pending founder sign in                                                                                                   |
+| Desktop computer use, local voice, OS permissions |                            | no transport from the shipped Electron build to the Rust layer (D-15 spike queued)                                                     |
+| Desktop dictation into another app                |                            | does not exist; system wide dictation fail closed by design record                                                                     |
+| Admin console                                     |                            | never exercised with a workspace account                                                                                               |
 
 ## Fixes completed today (by area)
 
