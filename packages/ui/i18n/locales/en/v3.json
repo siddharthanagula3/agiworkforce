@@ -377,7 +377,18 @@
       "constraintsLabel": "Constraints",
       "constraintsPlaceholder": "Boundaries, must-avoids, sources to prefer…",
       "deliverableLabel": "Deliverable",
-      "deliverablePlaceholder": "The concrete output you expect (a file, a table, a summary…)"
+      "deliverablePlaceholder": "The concrete output you expect (a file, a table, a summary…)",
+      "palette": {
+        "label": "AGI Work tools",
+        "searchPlaceholder": "Search plugins, folders and skills",
+        "searchLabel": "Search the AGI Work palette",
+        "connectorsHeading": "Connected apps",
+        "connectorsLoading": "Loading connected apps",
+        "skillsHeading": "Skills",
+        "foldersHeading": "Folders",
+        "pluginsHeading": "Plugins",
+        "noMatches": "No matches"
+      }
     }
   },
   "time": {

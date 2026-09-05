@@ -377,7 +377,18 @@
       "constraintsLabel": "Contraintes",
       "constraintsPlaceholder": "Limites, éléments à éviter, sources à privilégier…",
       "deliverableLabel": "Livrable",
-      "deliverablePlaceholder": "Le résultat concret attendu (un fichier, un tableau, un résumé…)"
+      "deliverablePlaceholder": "Le résultat concret attendu (un fichier, un tableau, un résumé…)",
+      "palette": {
+        "label": "Outils AGI Work",
+        "searchPlaceholder": "Rechercher plugins, dossiers et compétences",
+        "searchLabel": "Rechercher dans la palette AGI Work",
+        "connectorsHeading": "Applications connectées",
+        "connectorsLoading": "Chargement des applications connectées",
+        "skillsHeading": "Compétences",
+        "foldersHeading": "Dossiers",
+        "pluginsHeading": "Plugins",
+        "noMatches": "Aucun résultat"
+      }
     }
   },
   "time": {

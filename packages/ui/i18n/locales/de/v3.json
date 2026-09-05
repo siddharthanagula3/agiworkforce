@@ -377,7 +377,18 @@
       "constraintsLabel": "Einschränkungen",
       "constraintsPlaceholder": "Grenzen, zu Vermeidendes, bevorzugte Quellen…",
       "deliverableLabel": "Ergebnis",
-      "deliverablePlaceholder": "Das konkrete erwartete Ergebnis (eine Datei, eine Tabelle, eine Zusammenfassung…)"
+      "deliverablePlaceholder": "Das konkrete erwartete Ergebnis (eine Datei, eine Tabelle, eine Zusammenfassung…)",
+      "palette": {
+        "label": "AGI Work-Werkzeuge",
+        "searchPlaceholder": "Plugins, Ordner und Skills suchen",
+        "searchLabel": "In der AGI Work-Palette suchen",
+        "connectorsHeading": "Verbundene Apps",
+        "connectorsLoading": "Verbundene Apps werden geladen",
+        "skillsHeading": "Skills",
+        "foldersHeading": "Ordner",
+        "pluginsHeading": "Plugins",
+        "noMatches": "Keine Treffer"
+      }
     }
   },
   "time": {

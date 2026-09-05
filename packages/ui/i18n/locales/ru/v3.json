@@ -377,7 +377,18 @@
       "constraintsLabel": "Ограничения",
       "constraintsPlaceholder": "Границы, чего избегать, предпочтительные источники…",
       "deliverableLabel": "Результат",
-      "deliverablePlaceholder": "Конкретный ожидаемый результат (файл, таблица, сводка…)"
+      "deliverablePlaceholder": "Конкретный ожидаемый результат (файл, таблица, сводка…)",
+      "palette": {
+        "label": "Инструменты AGI Work",
+        "searchPlaceholder": "Поиск плагинов, папок и навыков",
+        "searchLabel": "Поиск по палитре AGI Work",
+        "connectorsHeading": "Подключённые приложения",
+        "connectorsLoading": "Загрузка подключённых приложений",
+        "skillsHeading": "Навыки",
+        "foldersHeading": "Папки",
+        "pluginsHeading": "Плагины",
+        "noMatches": "Совпадений нет"
+      }
     }
   },
   "time": {
