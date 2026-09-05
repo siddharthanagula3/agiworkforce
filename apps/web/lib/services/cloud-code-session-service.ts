@@ -347,7 +347,7 @@ export function validateCreateCloudCodeSession(
   }
   if (input.networkAccess === 'full' && input.fullNetworkAcknowledged !== true) {
     throw new CloudCodeValidationError(
-      'Full network access requires explicit acknowledgement of unrestricted egress',
+      'Full internet access requires explicit acknowledgement of unrestricted egress',
     );
   }
   const repositoryUrl = validateRepositoryUrl(input.repositoryUrl);
@@ -357,7 +357,7 @@ export function validateCreateCloudCodeSession(
   }
   if (repositoryUrl && input.networkAccess === 'none') {
     throw new CloudCodeValidationError(
-      'Repository setup requires Trusted hosts or Full network access',
+      'Repository setup requires Trusted hosts or Full internet access',
     );
   }
   let extraHosts: string[];

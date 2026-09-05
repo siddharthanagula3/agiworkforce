@@ -165,7 +165,7 @@ describe('cloud-code-session-service validation', () => {
         repositoryUrl: 'https://github.com/acme/widgets',
         networkAccess: 'none',
       }),
-    ).toThrow('Repository setup requires Trusted hosts or Full network access');
+    ).toThrow('Repository setup requires Trusted hosts or Full internet access');
   });
 
   it('enforces unrestricted-egress acknowledgement at the server boundary', () => {
@@ -175,7 +175,7 @@ describe('cloud-code-session-service validation', () => {
         title: 'Full network',
         networkAccess: 'full',
       }),
-    ).toThrow('Full network access requires explicit acknowledgement');
+    ).toThrow('Full internet access requires explicit acknowledgement');
 
     expect(
       validateCreateCloudCodeSession({
