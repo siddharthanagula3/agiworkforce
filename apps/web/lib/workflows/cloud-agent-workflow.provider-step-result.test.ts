@@ -106,6 +106,7 @@ describe('parseCloudAgentToolResult', () => {
     return {
       content: 'done',
       isError: false,
+      unavailable: false,
       source: { url: 'https://example.com', title: 'Example', snippet: 'a snippet' },
       sources: [{ url: 'https://example.com', title: 'Example', snippet: 'a snippet' }],
       pngResults: ['base64data'],

@@ -48,6 +48,7 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
+import type { E2BUnavailableCause } from './unavailability';
 import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
@@ -477,22 +478,29 @@ export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
   }
 }
 
-export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecutor | null> {
-  if (!e2bExecutionEnabled()) return null;
+export async function getE2BExecutor(
+  scope?: E2BSessionScope,
+  onUnavailable?: (cause: E2BUnavailableCause) => void,
+): Promise<E2BExecutor | null> {
+  const unavailable = (cause: E2BUnavailableCause): null => {
+    onUnavailable?.(cause);
+    return null;
+  };
+  if (!e2bExecutionEnabled()) return unavailable('not-configured');
 
   if (!sandboxComputeIsPriceable()) {
     logger.error(
       { env: E2B_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
       '[e2b] sandbox compute has no configured price; refusing to provision (fail-closed)',
     );
-    return null;
+    return unavailable('not-configured');
   }
 
   const conversationId = scope?.conversationId;
   const codeSessionId = scope?.resource?.kind === 'code_session' ? scope.resource.id : undefined;
 
   const Sandbox = await importSandbox();
-  if (!Sandbox) return null;
+  if (!Sandbox) return unavailable('not-configured');
   const SandboxCtor = Sandbox;
 
   type SandboxInstance = InstanceType<typeof Sandbox>;
@@ -504,7 +512,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   let planTtlMs = 0;
   if (scope) {
     planTier = await resolveScopePlanTier(scope);
-    if (planTier === null) return null;
+    if (planTier === null) return unavailable('no-capacity');
     const limits = resolveSandboxLimits(planTier);
     maxSandboxes = limits.maxSandboxes;
     planTtlMs = limits.ttlMs;
@@ -513,14 +521,14 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         { userId: scope.userId, planTier, ...scopeLog(scope) },
         '[e2b] plan does not include managed sandboxes; refusing (fail-closed)',
       );
-      return null;
+      return unavailable('no-capacity');
     }
     if (planTtlMs <= 0) {
       logger.warn(
         { userId: scope.userId, planTier, ...scopeLog(scope) },
         '[e2b] plan grants no managed sandbox lifetime; refusing (fail-closed)',
       );
-      return null;
+      return unavailable('no-capacity');
     }
   }
 
@@ -545,7 +553,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       { ...scopeLog(scope), template },
       '[e2b] refusing widened egress: a managed credential would enter the sandbox unproxied (fail-closed)',
     );
-    return null;
+    return unavailable('policy');
   }
   const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
   const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;
@@ -571,6 +579,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         return sandbox as SandboxInstance;
       } catch (err) {
         logger.warn({ err, template }, '[e2b] sandbox create failed; fail-closed');
+        onUnavailable?.('no-capacity');
         return null;
       }
     };
@@ -586,6 +595,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
             { userId: scope.userId, live, limit, planTier, ...scopeLog(scope) },
             '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
           );
+          onUnavailable?.('no-capacity');
           return null;
         }
       } catch (err) {
@@ -593,6 +603,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
           { err, userId: scope.userId, planTier },
           '[e2b] sandbox quota check failed; refusing new sandbox (fail-closed)',
         );
+        onUnavailable?.('no-capacity');
         return null;
       }
       return create();
@@ -603,6 +614,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         { userId: scope.userId, ...scopeLog(scope) },
         '[e2b] could not serialise sandbox creation; refusing (fail-closed)',
       );
+      onUnavailable?.('no-capacity');
       return null;
     }
     return guarded.result ?? null;
@@ -646,6 +658,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         { err, userId: scope.userId, codeSessionId, networkAccess: scope.networkAccess },
         '[e2b] code-session network policy could not be enforced; refusing executor',
       );
+      onUnavailable?.('policy');
       try {
         await Sandbox.pause(sandboxId);
       } catch {
