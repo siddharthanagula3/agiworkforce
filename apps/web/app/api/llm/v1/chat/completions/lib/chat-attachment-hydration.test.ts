@@ -8,10 +8,14 @@ import {
 const mocks = vi.hoisted(() => ({
   getMediaAssetById: vi.fn(),
   readStoredMedia: vi.fn(),
+  deleteStoredMedia: vi.fn(),
 }));
 
 vi.mock('@/lib/server/media-assets', () => ({ getMediaAssetById: mocks.getMediaAssetById }));
-vi.mock('@/lib/server/media-storage', () => ({ readStoredMedia: mocks.readStoredMedia }));
+vi.mock('@/lib/server/media-storage', () => ({
+  readStoredMedia: mocks.readStoredMedia,
+  deleteStoredMedia: mocks.deleteStoredMedia,
+}));
 
 type TestPart = {
   type: string;

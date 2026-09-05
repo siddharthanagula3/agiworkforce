@@ -35,11 +35,27 @@ vi.mock('./adapter-providers', () => ({
       wireMode: 'legacy-web',
     },
   },
+  resolveWireMode: vi.fn(),
 }));
 
 const mockStartProviderStream = vi.fn(async (..._args: unknown[]) => (async function* () {})());
 vi.mock('./adapter-factory', () => ({
   startProviderStream: (...args: unknown[]) => mockStartProviderStream(...args),
+  buildAnthropicAdapter: vi.fn(),
+  buildDeepSeekAdapter: vi.fn(),
+  buildGoogleAdapter: vi.fn(),
+  buildGroqAdapter: vi.fn(),
+  buildMinimaxAdapter: vi.fn(),
+  buildMoonshotAdapter: vi.fn(),
+  buildNvidiaNimAdapter: vi.fn(),
+  buildOpenAIAdapter: vi.fn(),
+  buildOpenRouterAdapter: vi.fn(),
+  buildPerplexityAdapter: vi.fn(),
+  buildQwenAdapter: vi.fn(),
+  buildVercelGatewayAdapter: vi.fn(),
+  buildWorkersAiAdapter: vi.fn(),
+  buildXAIAdapter: vi.fn(),
+  buildZhipuAdapter: vi.fn(),
 }));
 
 import { buildToolLoopStream } from './tool-loop-anthropic';
