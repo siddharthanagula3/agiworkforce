@@ -1702,6 +1702,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-shadow-lift: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
   --agi-header-sheen: rgba(255, 255, 255, 0.6);
   --agi-code-bg: rgba(15, 23, 42, 0.05);
+  --agi-code-function: #245b96;
+  --agi-code-type: #176555;
   --agi-selection-bg: rgba(14, 165, 233, 0.25);
   --agi-selection-text: #0f172a;
   --agi-lane-local: #0e6f47;
