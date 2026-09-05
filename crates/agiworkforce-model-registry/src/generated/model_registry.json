@@ -7068,32 +7068,6 @@
       },
       "evidenceRefs": []
     },
-    "or-openai-gpt-oss-120b": {
-      "identity": {
-        "key": "or-openai-gpt-oss-120b",
-        "displayName": "OpenAI: gpt-oss-120b",
-        "provider": "open_router",
-        "providerModelId": "openai/gpt-oss-120b",
-        "openRouterSlug": "openai/gpt-oss-120b",
-        "kind": "chat",
-        "openWeight": true,
-        "aliases": ["openai/gpt-oss-120b"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2025-08-05",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2025-08-05",
-        "deprecatedOn": null,
-        "stage": "discovered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
-      },
-      "evidenceRefs": []
-    },
     "or-openai-gpt-oss-120b-batch": {
       "identity": {
         "key": "or-openai-gpt-oss-120b-batch",
@@ -7104,32 +7078,6 @@
         "kind": "chat",
         "openWeight": true,
         "aliases": ["openai/gpt-oss-120b", "openai/gpt-oss-120b:batch"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2025-08-05",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2025-08-05",
-        "deprecatedOn": null,
-        "stage": "discovered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
-      },
-      "evidenceRefs": []
-    },
-    "or-openai-gpt-oss-20b": {
-      "identity": {
-        "key": "or-openai-gpt-oss-20b",
-        "displayName": "OpenAI: gpt-oss-20b",
-        "provider": "open_router",
-        "providerModelId": "openai/gpt-oss-20b",
-        "openRouterSlug": "openai/gpt-oss-20b",
-        "kind": "chat",
-        "openWeight": true,
-        "aliases": ["openai/gpt-oss-20b"],
         "family": null
       },
       "lifecycle": {
@@ -7165,32 +7113,6 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-08-05",
-        "deprecatedOn": null,
-        "stage": "discovered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
-      },
-      "evidenceRefs": []
-    },
-    "or-openai-gpt-oss-safeguard-20b": {
-      "identity": {
-        "key": "or-openai-gpt-oss-safeguard-20b",
-        "displayName": "OpenAI: gpt-oss-safeguard-20b",
-        "provider": "open_router",
-        "providerModelId": "openai/gpt-oss-safeguard-20b",
-        "openRouterSlug": "openai/gpt-oss-safeguard-20b",
-        "kind": "chat",
-        "openWeight": true,
-        "aliases": ["openai/gpt-oss-safeguard-20b"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2025-10-29",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2025-10-29",
         "deprecatedOn": null,
         "stage": "discovered",
         "stagedOn": "2026-09-05",
@@ -8445,32 +8367,6 @@
       },
       "evidenceRefs": []
     },
-    "or-qwen-qwen3-6-27b": {
-      "identity": {
-        "key": "or-qwen-qwen3-6-27b",
-        "displayName": "Qwen: Qwen3.6 27B",
-        "provider": "open_router",
-        "providerModelId": "qwen/qwen3.6-27b",
-        "openRouterSlug": "qwen/qwen3.6-27b-20260422",
-        "kind": "chat",
-        "openWeight": true,
-        "aliases": ["qwen/qwen3.6-27b", "qwen/qwen3.6-27b-20260422"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2026-04-27",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-04-27",
-        "deprecatedOn": null,
-        "stage": "discovered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
-      },
-      "evidenceRefs": []
-    },
     "or-qwen-qwen3-6-35b-a3b": {
       "identity": {
         "key": "or-qwen-qwen3-6-35b-a3b",
@@ -8704,32 +8600,6 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-12",
-        "deprecatedOn": null,
-        "stage": "discovered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
-      },
-      "evidenceRefs": []
-    },
-    "or-qwen-qwen3-8-27b": {
-      "identity": {
-        "key": "or-qwen-qwen3-8-27b",
-        "displayName": "Qwen: Qwen3.8 27B",
-        "provider": "open_router",
-        "providerModelId": "qwen/qwen3.8-27b",
-        "openRouterSlug": "qwen/qwen3.8-27b-20260814",
-        "kind": "chat",
-        "openWeight": true,
-        "aliases": ["qwen/qwen3.8-27b", "qwen/qwen3.8-27b-20260814"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2026-08-14",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-08-14",
         "deprecatedOn": null,
         "stage": "discovered",
         "stagedOn": "2026-09-05",
@@ -11043,11 +10913,8 @@
       "or-openai-gpt-chat-latest",
       "or-openai-gpt-latest",
       "or-openai-gpt-mini-latest",
-      "or-openai-gpt-oss-120b",
       "or-openai-gpt-oss-120b-batch",
-      "or-openai-gpt-oss-20b",
       "or-openai-gpt-oss-20b-batch",
-      "or-openai-gpt-oss-safeguard-20b",
       "or-openai-o1",
       "or-openai-o1-pro",
       "or-openai-o3",
@@ -11095,7 +10962,6 @@
       "or-qwen-qwen3-5-flash-02-23",
       "or-qwen-qwen3-5-plus-02-15",
       "or-qwen-qwen3-5-plus-20260420",
-      "or-qwen-qwen3-6-27b",
       "or-qwen-qwen3-6-35b-a3b",
       "or-qwen-qwen3-6-flash",
       "or-qwen-qwen3-6-max-preview",
@@ -11105,7 +10971,6 @@
       "or-qwen-qwen3-7-plus",
       "or-qwen-qwen3-8-2-4t-a95b",
       "or-qwen-qwen3-8-2-4t-a95b-batch",
-      "or-qwen-qwen3-8-27b",
       "or-qwen-qwen3-8-flash",
       "or-qwen-qwen3-8-max-0902",
       "or-qwen-qwen3-8b",
@@ -17905,25 +17770,6 @@
         "cacheReadPerMillion": 0.075
       }
     },
-    "open_router/or-openai-gpt-oss-120b": {
-      "modelKey": "or-openai-gpt-oss-120b",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.037,
-        "outputPerMillion": 0.17
-      }
-    },
     "open_router/or-openai-gpt-oss-120b-batch": {
       "modelKey": "or-openai-gpt-oss-120b-batch",
       "provider": "open_router",
@@ -17943,26 +17789,6 @@
         "outputPerMillion": 0.6
       }
     },
-    "open_router/or-openai-gpt-oss-20b": {
-      "modelKey": "or-openai-gpt-oss-20b",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.03,
-        "outputPerMillion": 0.13,
-        "cacheReadPerMillion": 0.03
-      }
-    },
     "open_router/or-openai-gpt-oss-20b-batch": {
       "modelKey": "or-openai-gpt-oss-20b-batch",
       "provider": "open_router",
@@ -17980,26 +17806,6 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.05,
         "outputPerMillion": 0.2
-      }
-    },
-    "open_router/or-openai-gpt-oss-safeguard-20b": {
-      "modelKey": "or-openai-gpt-oss-safeguard-20b",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-oss-safeguard-20b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.075,
-        "outputPerMillion": 0.3,
-        "cacheReadPerMillion": 0.0375
       }
     },
     "open_router/or-openai-o1": {
@@ -18935,26 +18741,6 @@
         ]
       }
     },
-    "open_router/or-qwen-qwen3-6-27b": {
-      "modelKey": "or-qwen-qwen3-6-27b",
-      "provider": "open_router",
-      "providerModelId": "qwen/qwen3.6-27b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.3,
-        "outputPerMillion": 2,
-        "cacheReadPerMillion": 0.03
-      }
-    },
     "open_router/or-qwen-qwen3-6-35b-a3b": {
       "modelKey": "or-qwen-qwen3-6-35b-a3b",
       "provider": "open_router",
@@ -19185,26 +18971,6 @@
         "inputPerMillion": 2,
         "outputPerMillion": 6,
         "cacheReadPerMillion": 0.25
-      }
-    },
-    "open_router/or-qwen-qwen3-8-27b": {
-      "modelKey": "or-qwen-qwen3-8-27b",
-      "provider": "open_router",
-      "providerModelId": "qwen/qwen3.8-27b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.42,
-        "outputPerMillion": 3,
-        "cacheReadPerMillion": 0.085
       }
     },
     "open_router/or-qwen-qwen3-8-flash": {
@@ -27829,30 +27595,6 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "or-openai-gpt-oss-120b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "or-openai-gpt-oss-120b-batch": {
       "textInput": true,
       "imageInput": false,
@@ -27877,30 +27619,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "or-openai-gpt-oss-20b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "or-openai-gpt-oss-20b-batch": {
       "textInput": true,
       "imageInput": false,
@@ -27924,30 +27642,6 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
-    },
-    "or-openai-gpt-oss-safeguard-20b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
     },
     "or-openai-o1": {
       "textInput": true,
@@ -29077,30 +28771,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "or-qwen-qwen3-6-27b": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "or-qwen-qwen3-6-35b-a3b": {
       "textInput": true,
       "imageInput": true,
@@ -29298,30 +28968,6 @@
       "imageInput": false,
       "audioInput": false,
       "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "or-qwen-qwen3-8-27b": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
@@ -33725,37 +33371,17 @@
       "outputPerMillion": 4.5,
       "cacheReadPerMillion": 0.075
     },
-    "or-openai-gpt-oss-120b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.037,
-      "outputPerMillion": 0.17
-    },
     "or-openai-gpt-oss-120b-batch": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.15,
       "outputPerMillion": 0.6
     },
-    "or-openai-gpt-oss-20b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.03,
-      "outputPerMillion": 0.13,
-      "cacheReadPerMillion": 0.03
-    },
     "or-openai-gpt-oss-20b-batch": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.05,
       "outputPerMillion": 0.2
-    },
-    "or-openai-gpt-oss-safeguard-20b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.075,
-      "outputPerMillion": 0.3,
-      "cacheReadPerMillion": 0.0375
     },
     "or-openai-o1": {
       "currency": "USD",
@@ -34079,13 +33705,6 @@
         }
       ]
     },
-    "or-qwen-qwen3-6-27b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.3,
-      "outputPerMillion": 2,
-      "cacheReadPerMillion": 0.03
-    },
     "or-qwen-qwen3-6-35b-a3b": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -34200,13 +33819,6 @@
       "inputPerMillion": 2,
       "outputPerMillion": 6,
       "cacheReadPerMillion": 0.25
-    },
-    "or-qwen-qwen3-8-27b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.42,
-      "outputPerMillion": 3,
-      "cacheReadPerMillion": 0.085
     },
     "or-qwen-qwen3-8-flash": {
       "currency": "USD",
@@ -35365,11 +34977,8 @@
     "or-openai-gpt-chat-latest": { "contextTokens": 400000, "maxOutputTokens": 128000 },
     "or-openai-gpt-latest": { "contextTokens": 1050000, "maxOutputTokens": 128000 },
     "or-openai-gpt-mini-latest": { "contextTokens": 400000, "maxOutputTokens": 128000 },
-    "or-openai-gpt-oss-120b": { "contextTokens": 131072, "maxOutputTokens": 117964 },
     "or-openai-gpt-oss-120b-batch": { "contextTokens": 131072, "maxOutputTokens": 117964 },
-    "or-openai-gpt-oss-20b": { "contextTokens": 131072, "maxOutputTokens": 117964 },
     "or-openai-gpt-oss-20b-batch": { "contextTokens": 131072, "maxOutputTokens": 117964 },
-    "or-openai-gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "or-openai-o1": { "contextTokens": 200000, "maxOutputTokens": 100000 },
     "or-openai-o1-pro": { "contextTokens": 200000, "maxOutputTokens": 100000 },
     "or-openai-o3": { "contextTokens": 200000, "maxOutputTokens": 100000 },
@@ -35417,7 +35026,6 @@
     "or-qwen-qwen3-5-flash-02-23": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-02-15": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-20260420": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
-    "or-qwen-qwen3-6-27b": { "contextTokens": 262144, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-35b-a3b": { "contextTokens": 262144, "maxOutputTokens": 235929 },
     "or-qwen-qwen3-6-flash": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-max-preview": { "contextTokens": 262144, "maxOutputTokens": 65536 },
@@ -35427,7 +35035,6 @@
     "or-qwen-qwen3-7-plus": { "contextTokens": 1000000, "maxOutputTokens": 131072 },
     "or-qwen-qwen3-8-2-4t-a95b": { "contextTokens": 1048576, "maxOutputTokens": 262144 },
     "or-qwen-qwen3-8-2-4t-a95b-batch": { "contextTokens": 1010000, "maxOutputTokens": 909000 },
-    "or-qwen-qwen3-8-27b": { "contextTokens": 1000000, "maxOutputTokens": 131072 },
     "or-qwen-qwen3-8-flash": { "contextTokens": 1000000, "maxOutputTokens": 131072 },
     "or-qwen-qwen3-8-max-0902": { "contextTokens": 1000000, "maxOutputTokens": 131072 },
     "or-qwen-qwen3-8b": { "contextTokens": 131072, "maxOutputTokens": 8192 },
@@ -35924,11 +35531,8 @@
     "or-openai-gpt-chat-latest": {},
     "or-openai-gpt-latest": {},
     "or-openai-gpt-mini-latest": {},
-    "or-openai-gpt-oss-120b": {},
     "or-openai-gpt-oss-120b-batch": {},
-    "or-openai-gpt-oss-20b": {},
     "or-openai-gpt-oss-20b-batch": {},
-    "or-openai-gpt-oss-safeguard-20b": {},
     "or-openai-o1": {},
     "or-openai-o1-pro": {},
     "or-openai-o3": {},
@@ -35976,7 +35580,6 @@
     "or-qwen-qwen3-5-flash-02-23": {},
     "or-qwen-qwen3-5-plus-02-15": {},
     "or-qwen-qwen3-5-plus-20260420": {},
-    "or-qwen-qwen3-6-27b": {},
     "or-qwen-qwen3-6-35b-a3b": {},
     "or-qwen-qwen3-6-flash": {},
     "or-qwen-qwen3-6-max-preview": {},
@@ -35986,7 +35589,6 @@
     "or-qwen-qwen3-7-plus": {},
     "or-qwen-qwen3-8-2-4t-a95b": {},
     "or-qwen-qwen3-8-2-4t-a95b-batch": {},
-    "or-qwen-qwen3-8-27b": {},
     "or-qwen-qwen3-8-flash": {},
     "or-qwen-qwen3-8-max-0902": {},
     "or-qwen-qwen3-8b": {},
