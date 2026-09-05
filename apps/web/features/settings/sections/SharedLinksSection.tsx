@@ -113,7 +113,7 @@ export function SharedLinksSection() {
         </SettingsSectionLink>
         <h1
           style={{
-            fontFamily: 'var(--serif)',
+            fontFamily: 'var(--sans)',
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',

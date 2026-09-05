@@ -498,7 +498,7 @@ export function LibraryView({
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6" data-testid="library-view">
       {confirmDeleteDialog}
       <header className="flex flex-col gap-1">
-        <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium text-[var(--chat-text-primary)]">
+        <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium text-[var(--chat-text-primary)]">
           Library
         </h1>
         <p className="text-sm text-[var(--chat-text-muted)]">
