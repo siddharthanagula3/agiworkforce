@@ -127,7 +127,9 @@
     "unpinProject": "Открепить проект",
     "unstar": "Убрать звезду",
     "untitled": "Без названия",
-    "untitledChat": "Чат без названия"
+    "untitledChat": "Чат без названия",
+    "navLabel": "История чатов",
+    "toggleSidebar": "Показать или скрыть боковую панель"
   },
   "composer": {
     "addAttachment": "Добавить вложение",

@@ -127,7 +127,9 @@
     "unpinProject": "プロジェクトのピン留めを解除",
     "unstar": "スターを外す",
     "untitled": "無題",
-    "untitledChat": "無題のチャット"
+    "untitledChat": "無題のチャット",
+    "navLabel": "チャット履歴",
+    "toggleSidebar": "サイドバーを切り替え"
   },
   "composer": {
     "addAttachment": "添付ファイルを追加",

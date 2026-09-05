@@ -127,7 +127,9 @@
     "unpinProject": "Rimuovi il fissaggio del progetto",
     "unstar": "Rimuovi contrassegno",
     "untitled": "Senza titolo",
-    "untitledChat": "Chat senza titolo"
+    "untitledChat": "Chat senza titolo",
+    "navLabel": "Cronologia chat",
+    "toggleSidebar": "Mostra o nascondi la barra laterale"
   },
   "composer": {
     "addAttachment": "Aggiungi allegato",
