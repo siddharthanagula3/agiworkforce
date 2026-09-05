@@ -87,10 +87,22 @@ const EMPTY_HISTORY: ScheduleHistoryState = {
   loadingMore: false,
 };
 
+export interface ScheduleProjectOption {
+  id: string;
+  name: string;
+}
+
+export interface ScheduleProjectScope {
+  projectId: string;
+  projectName: string;
+}
+
 interface SchedulesPageProps {
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
+  scope?: ScheduleProjectScope | null;
+  projects?: ScheduleProjectOption[];
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -119,6 +131,8 @@ export function SchedulesPage({
   api = scheduleApi,
   now = () => new Date(),
   createIdempotencyKey = defaultIdempotencyKey,
+  scope = null,
+  projects = [],
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -144,7 +158,13 @@ export function SchedulesPage({
   const [actionMessage, setActionMessage] = useState('');
   const manualRunKeys = useRef<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
+  const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
   const [runningScheduleIds, setRunningScheduleIds] = useState<Set<string>>(new Set());
+
+  const projectNameById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
+  );
 
   const draftDirty = dialogOpen && JSON.stringify(draft) !== initialDraftRef.current;
 
@@ -161,6 +181,7 @@ export function SchedulesPage({
         const result = await api.listSchedules({
           limit: SCHEDULE_PAGE_SIZE,
           offset,
+          projectId: scope?.projectId,
           signal: options.signal,
         });
         setSchedules((current) =>
@@ -181,7 +202,7 @@ export function SchedulesPage({
         if (append) setLoadingMoreSchedules(false);
       }
     },
-    [api],
+    [api, scope?.projectId],
   );
 
   useEffect(() => {
@@ -264,7 +285,11 @@ export function SchedulesPage({
   const openCreateFromTemplate = (template: ScheduleTemplate) => {
     // Templates seed the draft and nothing else: no schedule exists until the
     // user submits the dialog, so a mis-tapped card costs a dismissal.
-    const nextDraft = { ...createInitialScheduleDraft(), ...template.draft };
+    const nextDraft = {
+      ...createInitialScheduleDraft(),
+      ...template.draft,
+      projectId: scope?.projectId ?? null,
+    };
     setEditing(null);
     setDraft(nextDraft);
     initialDraftRef.current = JSON.stringify(nextDraft);
@@ -274,7 +299,7 @@ export function SchedulesPage({
   };
 
   const openCreate = () => {
-    const nextDraft = createInitialScheduleDraft();
+    const nextDraft = { ...createInitialScheduleDraft(), projectId: scope?.projectId ?? null };
     setEditing(null);
     setDraft(nextDraft);
     initialDraftRef.current = JSON.stringify(nextDraft);
@@ -495,43 +520,88 @@ export function SchedulesPage({
     return counts;
   }, [sortedSchedules]);
 
+  const projectFilters = useMemo(() => {
+    if (scope) return [];
+    const seen = new Set<string>();
+    const filters: Array<{ id: string; label: string }> = [];
+    for (const schedule of sortedSchedules) {
+      const projectId = schedule.projectId;
+      if (!projectId || seen.has(projectId)) continue;
+      seen.add(projectId);
+      filters.push({ id: projectId, label: projectNameById.get(projectId) ?? 'Unknown project' });
+    }
+    return filters;
+  }, [sortedSchedules, scope, projectNameById]);
+
   const filteredSchedules = useMemo(
     () =>
-      statusFilter === 'all'
-        ? sortedSchedules
-        : sortedSchedules.filter((schedule) => schedule.status === statusFilter),
-    [sortedSchedules, statusFilter],
+      sortedSchedules
+        .filter((schedule) => statusFilter === 'all' || schedule.status === statusFilter)
+        .filter((schedule) => projectFilter === 'all' || schedule.projectId === projectFilter),
+    [sortedSchedules, statusFilter, projectFilter],
   );
 
   const statusFilterLabel =
     STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? 'All';
+  const projectFilterLabel =
+    projectFilter === 'all'
+      ? 'All'
+      : (projectFilters.find((filter) => filter.id === projectFilter)?.label ?? 'All');
+
+  const Root = scope ? 'section' : 'main';
 
   return (
-    <main className="min-h-full bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12">
-        <header className="flex flex-col gap-5 border-b border-border/70 pb-7 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-3xl space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <CalendarClock className="h-4 w-4" aria-hidden="true" />
-              Managed Cloud
+    <Root className={scope ? undefined : 'min-h-full bg-background text-foreground'}>
+      <div
+        className={
+          scope
+            ? 'flex w-full flex-col gap-6'
+            : 'mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12'
+        }
+      >
+        <header
+          className={
+            scope
+              ? 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'
+              : 'flex flex-col gap-5 border-b border-border/70 pb-7 sm:flex-row sm:items-end sm:justify-between'
+          }
+        >
+          {scope ? (
+            <div className="space-y-1">
+              <h2 className="text-lg font-medium text-foreground">Scheduled</h2>
+              <p className="text-sm text-muted-foreground">
+                Recurring tasks that run with {scope.projectName}&rsquo;s instructions and files in
+                scope.
+              </p>
             </div>
-            <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
-              Schedules
-            </h1>
-            <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Run self-contained text tasks at a future time or on a recurring schedule. Times stay
-              anchored to the IANA time zone you choose, including daylight-saving changes.
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border px-2.5 py-1">Text Output</span>
-              <span className="rounded-full border border-border px-2.5 py-1">Managed Models</span>
-              <span className="rounded-full border border-border px-2.5 py-1">No Chat Memory</span>
-              <span className="rounded-full border border-border px-2.5 py-1">No Tools</span>
+          ) : (
+            <div className="max-w-3xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                Managed Cloud
+              </div>
+              <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
+                Schedules
+              </h1>
+              <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+                Run self-contained text tasks at a future time or on a recurring schedule. Times
+                stay anchored to the IANA time zone you choose, including daylight-saving changes.
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border border-border px-2.5 py-1">Text Output</span>
+                <span className="rounded-full border border-border px-2.5 py-1">
+                  Managed Models
+                </span>
+                <span className="rounded-full border border-border px-2.5 py-1">
+                  No Chat Memory
+                </span>
+                <span className="rounded-full border border-border px-2.5 py-1">No Tools</span>
+              </div>
             </div>
-          </div>
+          )}
           <Button type="button" onClick={openCreate} className="shrink-0">
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            Create Schedule
+            {scope ? 'New task in this project' : 'Create Schedule'}
           </Button>
         </header>
 
@@ -573,12 +643,14 @@ export function SchedulesPage({
         {listStatus === 'success' && sortedSchedules.length === 0 && (
           <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
             <CalendarClock className="mx-auto h-9 w-9 text-muted-foreground" aria-hidden="true" />
-            <h2 className="mt-4 text-xl font-semibold">No schedules yet</h2>
+            <h2 className="mt-4 text-xl font-semibold">
+              {scope ? 'No scheduled tasks in this project yet' : 'No schedules yet'}
+            </h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
               Create a self-contained Managed Cloud text task and choose exactly when it can run.
             </p>
             <Button type="button" className="mt-5" onClick={openCreate}>
-              Create Your First Schedule
+              {scope ? 'Create Your First Scheduled Task' : 'Create Your First Schedule'}
             </Button>
 
             {/*
@@ -641,6 +713,42 @@ export function SchedulesPage({
           </div>
         )}
 
+        {listStatus === 'success' && projectFilters.length > 0 && (
+          <div
+            role="group"
+            aria-label="Filter schedules by project"
+            className="flex flex-wrap items-center gap-2"
+          >
+            <button
+              type="button"
+              aria-pressed={projectFilter === 'all'}
+              onClick={() => setProjectFilter('all')}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                projectFilter === 'all'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              All Projects
+            </button>
+            {projectFilters.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                aria-pressed={projectFilter === filter.id}
+                onClick={() => setProjectFilter(filter.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  projectFilter === filter.id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {listStatus === 'success' && sortedSchedules.length > 0 && (
           <section aria-label="Your Schedules" className="space-y-4">
             {listError && (
@@ -651,14 +759,18 @@ export function SchedulesPage({
             {filteredSchedules.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
                 <p className="text-sm text-muted-foreground">
-                  No {statusFilterLabel.toLowerCase()} schedules.
+                  No {statusFilter === 'all' ? '' : `${statusFilterLabel.toLowerCase()} `}
+                  schedules{projectFilter === 'all' ? '' : ` in ${projectFilterLabel}`}.
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="mt-4"
-                  onClick={() => setStatusFilter('all')}
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setProjectFilter('all');
+                  }}
                 >
                   Show All Schedules
                 </Button>
@@ -667,6 +779,11 @@ export function SchedulesPage({
               filteredSchedules.map((schedule) => (
                 <ScheduleCard
                   key={schedule.id}
+                  projectName={
+                    scope || !schedule.projectId
+                      ? null
+                      : (projectNameById.get(schedule.projectId) ?? null)
+                  }
                   schedule={schedule}
                   operation={operations[schedule.id] ?? null}
                   error={rowErrors[schedule.id] ?? null}
@@ -809,7 +926,7 @@ export function SchedulesPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </Root>
   );
 }
 

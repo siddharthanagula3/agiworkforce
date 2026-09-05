@@ -43,6 +43,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   isActive: true,
   expiresLocal: '',
   maxExecutions: '',
+  projectId: null,
 };
 
 export function createInitialScheduleDraft(): ScheduleDraft {
@@ -222,6 +223,7 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     isActive: task.isEnabled,
     expiresLocal: isoToZonedLocalInput(task.expiresAt, task.timezone),
     maxExecutions: task.maxExecutions === null ? '' : String(task.maxExecutions),
+    projectId: task.projectId ?? null,
   };
 }
 
@@ -412,6 +414,7 @@ export function validateAndBuildScheduleRequest(
       isActive: draft.isActive,
       expiresAt,
       maxExecutions,
+      projectId: draft.projectId,
     },
   };
 }

@@ -585,4 +585,60 @@ describe('SchedulesPage', () => {
     expect(screen.getByRole('button', { name: 'View History for Finished brief' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Delete Finished brief' })).toBeEnabled();
   });
+
+  it('shows which project a schedule belongs to and can filter the list by it', async () => {
+    const scoped = { ...schedule, id: 'schedule-2', name: 'Launch brief', projectId: 'project-1' };
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule, scoped])) });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} projects={[{ id: 'project-1', name: 'Marketing launch' }]} />);
+    await screen.findByRole('heading', { name: 'Launch brief' });
+
+    const card = screen.getByRole('article', { name: 'Launch brief' });
+    expect(within(card).getByText('Marketing launch')).toBeInTheDocument();
+
+    const filters = screen.getByRole('group', { name: 'Filter schedules by project' });
+    await user.click(within(filters).getByRole('button', { name: 'Marketing launch' }));
+
+    expect(screen.getByRole('heading', { name: 'Launch brief' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: schedule.name })).not.toBeInTheDocument();
+
+    await user.click(within(filters).getByRole('button', { name: 'All Projects' }));
+    expect(screen.getByRole('heading', { name: schedule.name })).toBeInTheDocument();
+  });
+
+  it('scopes the list request and locks a new task to the current project', async () => {
+    const listSchedules = vi.fn(async () => page());
+    const createSchedule = vi.fn<ScheduleApi['createSchedule']>(async (input) => ({
+      ...schedule,
+      id: 'schedule-3',
+      name: input.name,
+      projectId: input.projectId ?? null,
+    }));
+    const api = createApi({ listSchedules, createSchedule });
+    const user = userEvent.setup();
+
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        scope={{ projectId: 'project-1', projectName: 'Marketing launch' }}
+      />,
+    );
+
+    expect(await screen.findByText(/No scheduled tasks in this project yet/)).toBeInTheDocument();
+    expect(listSchedules).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1' }));
+
+    await user.click(screen.getByRole('button', { name: 'New task in this project' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    await user.type(within(dialog).getByLabelText('Schedule Name'), 'Weekly digest');
+    await user.type(within(dialog).getByLabelText('Task Instructions'), 'Summarize this project.');
+    fireEvent.change(within(dialog).getByLabelText('Run At'), {
+      target: { value: '2026-07-16T09:00' },
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Create Schedule' }));
+
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
+    expect(createSchedule.mock.calls[0]?.[0]).toMatchObject({ projectId: 'project-1' });
+  });
 });

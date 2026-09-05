@@ -37,6 +37,7 @@ export interface ScheduleDraft {
   isActive: boolean;
   expiresLocal: string;
   maxExecutions: string;
+  projectId: string | null;
 }
 
 export interface ScheduleMutation {
@@ -55,6 +56,7 @@ export interface ScheduleMutation {
   isActive: boolean;
   expiresAt: string | null;
   maxExecutions: number | null;
+  projectId: string | null;
 }
 
 export type ScheduleFormErrors = Partial<Record<keyof ScheduleDraft | 'form', string>>;
