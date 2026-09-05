@@ -185,7 +185,7 @@ export function ScheduleForm({
               value={draft.model}
               onChange={(event) => set({ model: event.target.value })}
               aria-invalid={Boolean(errors.model)}
-              aria-describedby={describedBy('model', errors)}
+              aria-describedby={describedBy('model', errors, 'schedule-model-helper')}
             >
               {AVAILABLE_MODELS.map((model) => (
                 <option key={model.value} value={model.value}>
@@ -193,6 +193,9 @@ export function ScheduleForm({
                 </option>
               ))}
             </select>
+            <p id="schedule-model-helper" className="text-xs text-muted-foreground">
+              Limited to the models Managed Cloud runs schedules on.
+            </p>
             <FieldError field="model" errors={errors} />
           </div>
 

@@ -575,28 +575,13 @@ export function SchedulesPage({
               </p>
             </div>
           ) : (
-            <div className="max-w-3xl space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                <CalendarClock className="h-4 w-4" aria-hidden="true" />
-                Managed Cloud
-              </div>
+            <div className="max-w-3xl space-y-1">
               <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
                 Schedules
               </h1>
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Run self-contained text tasks at a future time or on a recurring schedule. Times
-                stay anchored to the IANA time zone you choose, including daylight-saving changes.
+                Run a task once at a future time or on a recurring schedule.
               </p>
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border border-border px-2.5 py-1">Text Output</span>
-                <span className="rounded-full border border-border px-2.5 py-1">
-                  Managed Models
-                </span>
-                <span className="rounded-full border border-border px-2.5 py-1">
-                  No Chat Memory
-                </span>
-                <span className="rounded-full border border-border px-2.5 py-1">No Tools</span>
-              </div>
             </div>
           )}
           <Button type="button" onClick={openCreate} className="shrink-0">
