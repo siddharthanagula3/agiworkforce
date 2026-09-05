@@ -23,6 +23,8 @@ import { createWebCloudPublisher } from './publishArtifactClient';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
 import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
+import { useUIStore } from '@shared/stores/layout-store';
+import { TASK_DOCK_ARTIFACTS_LABEL, TASK_DOCK_LABEL } from '../../lib/agi-work';
 
 function ArtifactTab({
   artifact,
@@ -47,6 +49,34 @@ function ArtifactTab({
       <FileCode className="h-3 w-3 shrink-0" />
       <span className="max-w-[120px] truncate">{artifact.title}</span>
     </button>
+  );
+}
+
+/**
+ * The task dock and this panel share one right slot, so an artifact opening
+ * over a running task must leave a way back to it rather than replacing it.
+ */
+function SlotTabs({ onShowTaskDock }: { onShowTaskDock: () => void }) {
+  return (
+    <div className="flex items-center gap-1 border-b border-border/20 px-3 py-2" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={false}
+        onClick={onShowTaskDock}
+        className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none"
+      >
+        {TASK_DOCK_LABEL}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected
+        className="rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary"
+      >
+        {TASK_DOCK_ARTIFACTS_LABEL}
+      </button>
+    </div>
   );
 }
 
@@ -189,6 +219,7 @@ export function ArtifactsPanel() {
     setPanelOpen,
   } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const taskDockOpen = useUIStore((s) => s.taskDockOpen);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
   // re-exported through `useArtifact`) with no caller for the setter and a
   const panelWidth = useChatUIStore((s) => s.artifactPanelWidth);
@@ -479,6 +510,8 @@ export function ArtifactsPanel() {
             )}
           </div>
         </div>
+
+        {taskDockOpen && <SlotTabs onShowTaskDock={() => setPanelOpen(false)} />}
 
         <ArtifactPrivacyNotice />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
@@ -10,87 +10,62 @@ import {
   FileOutput,
   FileText,
   FolderOpen,
-  Loader2,
+  Globe,
   PanelRight,
-  Play,
+  Puzzle,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import type {
-  AgentActivityEntry,
-  AgentActivityRunStatus,
-  AgentActivityStepStatus,
-} from '@agiworkforce/client-runtime';
+import { agiWorkPlanSentence, buildAgentActivitySummary } from '@agiworkforce/unified-chat';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { useProjectStore } from '@features/projects';
+import { useArtifactsStore } from '../../stores/artifacts-store';
+import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
 import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
-import { humanizeToolName } from '../messages/ToolTimeline';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  AGI_WORK_LABEL,
+  TASK_DOCK_ARTIFACTS_LABEL,
+  TASK_DOCK_CONTEXT_EMPTY,
+  TASK_DOCK_CONTEXT_LABEL,
+  TASK_DOCK_DOWNLOAD_ACTION,
+  TASK_DOCK_FALLBACK_TITLE,
+  TASK_DOCK_LABEL,
+  TASK_DOCK_OPEN_ACTION,
+  TASK_DOCK_OUTPUTS_EMPTY,
+  TASK_DOCK_OUTPUTS_LABEL,
+  TASK_DOCK_PANEL_LABEL,
+  TASK_DOCK_SOURCES_EMPTY,
+  TASK_DOCK_SOURCES_LABEL,
+  TASK_DOCK_STEPS_LABEL,
+} from '../../lib/agi-work';
+import {
+  buildTaskDockSummary,
+  type TaskDockContextItem,
+  type TaskDockOutput,
+  type TaskDockStepStatus,
+  type TaskDockSummary,
+} from './taskDockSummary';
 
-type ProgressStatus =
-  | AgentActivityRunStatus
-  | AgentActivityStepStatus
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'awaiting-approval';
-
-export interface WorkSessionProgressItem {
-  id: string;
-  label: string;
-  detail?: string;
-  status: ProgressStatus;
-}
-
-export interface WorkSessionOutput {
-  id: string;
-  name: string;
-  mimeType?: string;
-  byteCount?: number;
-  uri?: string;
-  artifactId?: string;
-  artifactContent?: string;
-  artifactLanguage?: string;
-  artifactType?: string;
-}
-
-export interface WorkSessionContextItem {
-  id: string;
-  label: string;
-  detail?: string;
-  kind: 'attachment' | 'path' | 'context';
-}
-
-export interface WorkSessionSummary {
-  status: AgentActivityRunStatus | 'idle';
-  /**
-   * The run's own goal, used as the panel heading. Every session used to be
-   * headed with the literal string "AGI Work session" (agentic-modes-gap-04),
-   * so a user with several sessions could not tell them apart. This is the same
-   * `agiwork:goal` progress entry TaskDetailPanel already renders as "Goal".
-   * no second title source, and no title where the run never declared a goal.
-   */
-  title: string | null;
-  progress: WorkSessionProgressItem[];
-  outputs: WorkSessionOutput[];
-  context: WorkSessionContextItem[];
-}
-
-/** Mirrors AGIWORK_GOAL_PROGRESS_ID; the constant itself lives behind `server-only`. */
-const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
-
-export const WORK_SESSION_FALLBACK_TITLE = 'AGI Work session';
+const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
+const RUN_TICK_INTERVAL_MS = 1_000;
+const BYTES_PER_KILOBYTE = 1_024;
+const BYTES_PER_MEGABYTE = 1_048_576;
+const DETAIL_SEPARATOR = ' · ';
+const ARTIFACT_OUTPUT_DETAIL = 'Artifact';
+const CLOSE_ACTION_LABEL = `Close ${TASK_DOCK_PANEL_LABEL}`;
+const OPEN_ACTION_LABEL = `Open ${TASK_DOCK_PANEL_LABEL}`;
 
 interface WorkSessionPanelProps {
   messages: Message[];
   open: boolean;
   onClose: () => void;
+  agiWork?: boolean;
 }
 
 interface WorkSessionToggleButtonProps {
@@ -99,229 +74,7 @@ interface WorkSessionToggleButtonProps {
   onToggle: () => void;
 }
 
-const PATH_KEYS = new Set(['path', 'file', 'filePath', 'filepath', 'directory', 'folder', 'cwd']);
-
-export function hasWorkSession(
-  messages: Message[],
-  activeWorkMode: CloudWorkMode | undefined,
-): boolean {
-  return (
-    activeWorkMode === 'agiwork' ||
-    messages.some(
-      (message) =>
-        message.metadata?.sendReplay?.workMode === 'agiwork' ||
-        message.metadata?.agentActivity !== undefined,
-    )
-  );
-}
-
-function addOutput(outputs: Map<string, WorkSessionOutput>, output: WorkSessionOutput) {
-  const existingWithUri = output.uri
-    ? Array.from(outputs.values()).find((candidate) => candidate.uri === output.uri)
-    : undefined;
-  if (existingWithUri) {
-    outputs.set(existingWithUri.id, {
-      ...existingWithUri,
-      ...output,
-      id: existingWithUri.id,
-      artifactId: output.artifactId ?? existingWithUri.artifactId,
-    });
-    return;
-  }
-
-  const existing = outputs.get(output.id);
-  outputs.set(output.id, existing ? { ...existing, ...output } : output);
-}
-
-function outputFromArtifact(artifact: Artifact): WorkSessionOutput {
-  const generatedFile = artifact.generatedFile;
-  return {
-    id: generatedFile ? `file:${generatedFile.id}` : `artifact:${artifact.id}`,
-    name: generatedFile?.fileName ?? artifact.title ?? 'Untitled artifact',
-    mimeType: generatedFile?.mimeType,
-    byteCount: generatedFile?.byteCount,
-    uri: generatedFile?.uri,
-    artifactId: artifact.id,
-    artifactContent: artifact.content,
-    artifactLanguage: artifact.language,
-    artifactType: artifact.type,
-  };
-}
-
-function statusFromLegacy(status: string): ProgressStatus {
-  if (status === 'awaiting_approval') return 'awaiting-approval';
-  if (
-    status === 'pending' ||
-    status === 'running' ||
-    status === 'completed' ||
-    status === 'failed' ||
-    status === 'cancelled'
-  ) {
-    return status;
-  }
-  return 'pending';
-}
-
-function progressFromActivity(
-  messageId: string,
-  entry: AgentActivityEntry,
-): WorkSessionProgressItem | null {
-  if (entry.kind === 'progress') {
-    return {
-      id: `${messageId}:${entry.id}`,
-      label: entry.summary,
-      detail: entry.detail,
-      status: entry.status,
-    };
-  }
-  if (entry.kind === 'tool') {
-    return {
-      id: `${messageId}:${entry.id}`,
-      label: entry.summary || humanizeToolName(entry.name),
-      detail: entry.error === entry.summary ? undefined : entry.error,
-      status: entry.status,
-    };
-  }
-  if (entry.kind === 'error') {
-    return {
-      id: `${messageId}:${entry.id}`,
-      label: entry.message,
-      detail: entry.code,
-      status: 'failed',
-    };
-  }
-  return null;
-}
-
-function extractPaths(input: unknown): string[] {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return [];
-  const paths: string[] = [];
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (!PATH_KEYS.has(key) || typeof value !== 'string' || !value.trim()) continue;
-    paths.push(value.trim());
-  }
-  return paths;
-}
-
-export function buildWorkSessionSummary(
-  messages: Message[],
-  artifacts: Artifact[],
-): WorkSessionSummary {
-  const progress: WorkSessionProgressItem[] = [];
-  const outputs = new Map<string, WorkSessionOutput>();
-  const context = new Map<string, WorkSessionContextItem>();
-  let status: WorkSessionSummary['status'] = 'idle';
-  let title: string | null = null;
-
-  for (const artifact of artifacts) {
-    addOutput(outputs, outputFromArtifact(artifact));
-  }
-
-  for (const message of messages) {
-    for (const attachment of [
-      ...(message.attachments ?? []),
-      ...(message.metadata?.attachments ?? []),
-    ]) {
-      const key = attachment.assetId ?? attachment.id;
-      context.set(`attachment:${key}`, {
-        id: `attachment:${key}`,
-        label: attachment.name,
-        detail: attachment.mimeType ?? attachment.type,
-        kind: 'attachment',
-      });
-    }
-
-    const activity = message.metadata?.agentActivity;
-    if (activity) {
-      status = activity.status;
-      for (const entry of activity.entries) {
-        if (entry.kind === 'progress' && entry.progressId === AGIWORK_GOAL_PROGRESS_ID) {
-          if (entry.summary.trim()) title = entry.summary.trim();
-        }
-        const progressItem = progressFromActivity(message.id, entry);
-        if (progressItem) progress.push(progressItem);
-
-        if (entry.kind === 'artifact') {
-          addOutput(outputs, {
-            id: `activity:${message.id}:${entry.artifactId}`,
-            name: entry.name,
-            mimeType: entry.mimeType,
-            byteCount: entry.sizeBytes,
-            uri: entry.uri,
-            artifactId: entry.artifactId,
-          });
-        } else if (entry.kind === 'context') {
-          context.set(`activity:${message.id}:${entry.id}`, {
-            id: `activity:${message.id}:${entry.id}`,
-            label: entry.summary,
-            detail:
-              entry.beforeTokens !== undefined && entry.afterTokens !== undefined
-                ? `${entry.beforeTokens.toLocaleString()} → ${entry.afterTokens.toLocaleString()} tokens`
-                : undefined,
-            kind: 'context',
-          });
-        } else if (entry.kind === 'tool') {
-          for (const path of extractPaths(entry.input)) {
-            context.set(`path:${path}`, {
-              id: `path:${path}`,
-              label: path,
-              detail: 'Referenced by task',
-              kind: 'path',
-            });
-          }
-        }
-      }
-    } else {
-      for (const tool of message.metadata?.tools ?? []) {
-        progress.push({
-          id: `${message.id}:legacy:${tool.toolCallId ?? tool.id ?? tool.name}`,
-          label: humanizeToolName(tool.name, tool.args, tool.parameters),
-          detail: tool.error,
-          status: statusFromLegacy(tool.status),
-        });
-        for (const path of extractPaths(tool.parameters ?? tool.rawArgs)) {
-          context.set(`path:${path}`, {
-            id: `path:${path}`,
-            label: path,
-            detail: 'Referenced by task',
-            kind: 'path',
-          });
-        }
-      }
-    }
-
-    for (const file of message.metadata?.generatedFiles ?? []) {
-      addOutput(outputs, {
-        id: `file:${file.id}`,
-        name: file.fileName,
-        mimeType: file.mimeType,
-        byteCount: file.byteCount,
-        uri: file.uri,
-      });
-    }
-
-    const file = message.metadata?.generatedFile;
-    if (file) {
-      addOutput(outputs, {
-        id: `file:${file.id}`,
-        name: file.fileName,
-        mimeType: file.mimeType,
-        byteCount: file.byteCount,
-        uri: file.uri,
-      });
-    }
-  }
-
-  return {
-    status,
-    title,
-    progress,
-    outputs: Array.from(outputs.values()),
-    context: Array.from(context.values()),
-  };
-}
-
-function statusLabel(status: WorkSessionSummary['status']): string {
+function statusLabel(status: TaskDockSummary['status']): string {
   switch (status) {
     case 'running':
       return 'Running';
@@ -342,67 +95,118 @@ function statusLabel(status: WorkSessionSummary['status']): string {
   }
 }
 
-function StatusIcon({ status }: { status: ProgressStatus }) {
+function StatusIcon({ status }: { status: TaskDockStepStatus }) {
   if (status === 'completed') {
-    return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />;
+    return <CheckCircle2 className="h-3.5 w-3.5 text-success-text" aria-hidden="true" />;
   }
   if (status === 'running') {
-    return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />;
+    return (
+      <span
+        className="block h-2.5 w-2.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+    );
   }
   if (status === 'failed' || status === 'cancelled') {
     return <CircleAlert className="h-3.5 w-3.5 text-danger" aria-hidden="true" />;
   }
-  if (status === 'partial') {
-    // Not a success tick: some of the work under this run did not land.
+  if (status === 'partial' || status === 'awaiting-approval' || status === 'paused') {
     return <CircleAlert className="h-3.5 w-3.5 text-warning-text" aria-hidden="true" />;
-  }
-  if (status === 'awaiting-approval' || status === 'paused') {
-    return <CircleAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />;
   }
   return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
 }
 
 function byteLabel(byteCount: number | undefined): string | undefined {
   if (byteCount === undefined) return undefined;
-  if (byteCount < 1_024) return `${byteCount} B`;
-  if (byteCount < 1_048_576) return `${(byteCount / 1_024).toFixed(1)} KB`;
-  return `${(byteCount / 1_048_576).toFixed(1)} MB`;
+  if (byteCount < BYTES_PER_KILOBYTE) return `${byteCount} B`;
+  if (byteCount < BYTES_PER_MEGABYTE) return `${(byteCount / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
+  return `${(byteCount / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
 }
 
-function SectionHeader({
+function DockSection({
   icon: Icon,
   label,
   count,
+  emptyCopy,
+  children,
 }: {
   icon: typeof FileOutput;
   label: string;
   count: number;
+  emptyCopy: string;
+  children: React.ReactNode;
 }) {
   return (
-    <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
-      <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-      <span>{label}</span>
-      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
-        {count}
-      </span>
-      <ChevronRight
-        className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90"
-        aria-hidden="true"
-      />
-    </summary>
+    <details className="group border-b border-border/20" open>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
+        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span>{label}</span>
+        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
+          {count}
+        </span>
+        <ChevronRight
+          className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          aria-hidden="true"
+        />
+      </summary>
+      {count === 0 ? (
+        <p className="px-4 pb-4 text-xs text-muted-foreground">{emptyCopy}</p>
+      ) : (
+        children
+      )}
+    </details>
   );
 }
 
-function EmptySection({ children }: { children: string }) {
-  return <p className="px-4 pb-4 text-xs text-muted-foreground">{children}</p>;
+/**
+ * A connector has no logo we hold, so its row carries the initial of the name
+ * the run reported, the way both leaders mark a connector in this list. Every
+ * other kind has a real glyph.
+ */
+function ContextMark({ item }: { item: TaskDockContextItem }) {
+  const className = 'h-3.5 w-3.5 text-muted-foreground';
+  if (item.kind === 'connector') {
+    return <span className="text-[12px] font-semibold text-muted-foreground">{item.mark}</span>;
+  }
+  if (item.kind === 'skill') return <Sparkles className={className} aria-hidden="true" />;
+  if (item.kind === 'project') return <Puzzle className={className} aria-hidden="true" />;
+  if (item.kind === 'attachment') return <FileText className={className} aria-hidden="true" />;
+  return <FolderOpen className={className} aria-hidden="true" />;
 }
 
-function useWorkSessionSummary(messages: Message[]): WorkSessionSummary {
+function SourceFavicon({ faviconUrl, host }: { faviconUrl?: string; host: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!faviconUrl || failed) {
+    return <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
+  }
+  return (
+    <img
+      src={faviconUrl}
+      alt=""
+      title={host}
+      className="h-4 w-4 rounded-sm"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function useTaskDockSummary(messages: Message[]): TaskDockSummary {
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const artifacts = useArtifactsStore((state) =>
     activeConversationId ? state.getConversationArtifacts(activeConversationId) : [],
   );
-  return useMemo(() => buildWorkSessionSummary(messages, artifacts), [artifacts, messages]);
+  const projectId = useChatStore(
+    (state) =>
+      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
+        ?.projectId ?? null,
+  );
+  const projectName = useProjectStore(
+    (state) => state.projects.find((project) => project.id === projectId)?.name ?? null,
+  );
+  return useMemo(
+    () => buildTaskDockSummary({ messages, artifacts, projectName }),
+    [artifacts, messages, projectName],
+  );
 }
 
 export function WorkSessionToggleButton({
@@ -410,40 +214,162 @@ export function WorkSessionToggleButton({
   open,
   onToggle,
 }: WorkSessionToggleButtonProps) {
-  const summary = useWorkSessionSummary(messages);
+  const summary = useTaskDockSummary(messages);
+  const badgeCount = summary.outputs.length + summary.sources.length;
 
   return (
     <button
       type="button"
       onClick={onToggle}
       className={cn(
-        'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+        'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors motion-reduce:transition-none',
         open
           ? 'bg-primary/15 text-primary'
           : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
-      aria-label={open ? 'Close AGI Work session panel' : 'Open AGI Work session panel'}
-      title="AGI Work session"
+      aria-label={open ? CLOSE_ACTION_LABEL : OPEN_ACTION_LABEL}
+      title={TASK_DOCK_PANEL_LABEL}
     >
       <PanelRight className="h-4 w-4" aria-hidden="true" />
-      {summary.outputs.length > 0 && !open && (
+      {badgeCount > 0 && !open && (
         <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
-          {summary.outputs.length > 99 ? '99+' : summary.outputs.length}
+          {badgeCount > 99 ? '99+' : badgeCount}
         </span>
       )}
     </button>
   );
 }
 
-export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelProps) {
-  const summary = useWorkSessionSummary(messages);
+function TaskDockProgressHeader({
+  summary,
+  agiWork,
+}: {
+  summary: TaskDockSummary;
+  agiWork: boolean;
+}) {
+  const [stepsOpen, setStepsOpen] = useState(false);
+  const activity = summary.activity;
+  const isRunning = summary.status === 'running';
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const id = setInterval(() => setNowMs(Date.now()), RUN_TICK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
+  const workMode = summary.workMode ?? (agiWork ? AGI_WORK_MODE : undefined);
+  const progressLine = activity
+    ? buildAgentActivitySummary(activity, nowMs, workMode)
+    : statusLabel(summary.status);
+  const planSentence = activity ? agiWorkPlanSentence(activity.entries) : undefined;
+  const completed = summary.steps.filter((step) => step.status === 'completed').length;
+
+  return (
+    <div className="border-b border-border/30 px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setStepsOpen((value) => !value)}
+        aria-expanded={stepsOpen}
+        disabled={summary.steps.length === 0}
+        className="flex w-full min-w-0 items-center gap-2 rounded-md text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:text-muted-foreground motion-reduce:transition-none"
+      >
+        <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
+        <span className="min-w-0 flex-1 truncate" role="status" aria-live="polite">
+          {progressLine}
+        </span>
+        {summary.steps.length > 0 && (
+          <>
+            <span className="shrink-0 text-[12px]">
+              {completed}/{summary.steps.length}
+            </span>
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+                stepsOpen && 'rotate-90',
+              )}
+              aria-hidden="true"
+            />
+          </>
+        )}
+      </button>
+
+      {planSentence && (
+        <p data-testid="task-dock-plan-sentence" className="mt-1 text-xs text-foreground">
+          {planSentence}
+        </p>
+      )}
+
+      {stepsOpen && summary.steps.length > 0 && (
+        <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2 space-y-2">
+          {summary.steps.map((step) => (
+            <li key={step.id} className="flex items-start gap-2">
+              <span className="mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                <StatusIcon status={step.status} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs leading-relaxed text-foreground">{step.label}</p>
+                {step.detail && (
+                  <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                    {step.detail}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function SlotTabs({ onShowArtifacts }: { onShowArtifacts: () => void }) {
+  return (
+    <div className="flex items-center gap-1 border-b border-border/20 px-3 py-2" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        aria-selected
+        className="rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary"
+      >
+        {TASK_DOCK_LABEL}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={false}
+        onClick={onShowArtifacts}
+        className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none"
+      >
+        {TASK_DOCK_ARTIFACTS_LABEL}
+      </button>
+    </div>
+  );
+}
+
+export function WorkSessionPanel({
+  messages,
+  open,
+  onClose,
+  agiWork = false,
+}: WorkSessionPanelProps) {
+  const summary = useTaskDockSummary(messages);
   const selectArtifact = useArtifactsStore((state) => state.selectArtifact);
   const setArtifactPanelOpen = useArtifactsStore((state) => state.setPanelOpen);
   const knownArtifacts = useArtifactsStore((state) => state.artifacts);
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const conversationArtifacts = useArtifactsStore((state) =>
+    activeConversationId ? state.getConversationArtifacts(activeConversationId) : [],
+  );
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const layout = useOverlayLayout();
+  const isModalOverlay = layout === 'mobile' && open;
+
+  useOverlayDialog(panelRef, isModalOverlay, onClose);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isModalOverlay) return;
     const previousFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -455,25 +381,29 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
       window.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus();
     };
-  }, [onClose, open]);
+  }, [isModalOverlay, onClose, open]);
 
-  if (!open) return null;
+  const showArtifacts = useCallback(() => {
+    const first = conversationArtifacts[0];
+    if (first) selectArtifact(first.id);
+    setArtifactPanelOpen(true);
+  }, [conversationArtifacts, selectArtifact, setArtifactPanelOpen]);
 
-  const openOutput = (output: WorkSessionOutput) => {
-    const artifactAvailable =
-      output.artifactId && knownArtifacts.some((artifact) => artifact.id === output.artifactId);
-    if (output.artifactId && artifactAvailable) {
-      onClose();
-      selectArtifact(output.artifactId);
-      setArtifactPanelOpen(true);
-      return;
-    }
-    if (output.uri) {
-      window.open(output.uri, '_blank', 'noopener,noreferrer');
-    }
-  };
+  const openOutput = useCallback(
+    (output: TaskDockOutput) => {
+      const artifactAvailable =
+        output.artifactId && knownArtifacts.some((artifact) => artifact.id === output.artifactId);
+      if (output.artifactId && artifactAvailable) {
+        selectArtifact(output.artifactId);
+        setArtifactPanelOpen(true);
+        return;
+      }
+      if (output.uri) window.open(output.uri, '_blank', 'noopener,noreferrer');
+    },
+    [knownArtifacts, selectArtifact, setArtifactPanelOpen],
+  );
 
-  const downloadOutput = async (output: WorkSessionOutput) => {
+  const downloadOutput = useCallback(async (output: TaskDockOutput) => {
     try {
       if (output.uri) {
         await downloadGeneratedFile(output.uri, output.name, output.mimeType);
@@ -492,11 +422,11 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
     } catch (error) {
       toast.error(toUserMessage(error, 'Could not download this output'));
     }
-  };
+  }, []);
 
-  const completed = summary.progress.filter((item) => item.status === 'completed').length;
-  const progressPercent =
-    summary.progress.length === 0 ? 0 : Math.round((completed / summary.progress.length) * 100);
+  if (!open) return null;
+
+  const sourceCount = summary.sources.reduce((total, group) => total + group.sources.length, 0);
 
   return (
     <>
@@ -506,181 +436,171 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
         aria-hidden="true"
       />
       <aside
+        ref={panelRef}
+        role={isModalOverlay ? 'dialog' : undefined}
+        aria-modal={isModalOverlay ? true : undefined}
+        tabIndex={isModalOverlay ? -1 : undefined}
         className={cn(
-          'fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-border/30 bg-card/95 backdrop-blur-xl',
-          'animate-in slide-in-from-right duration-300',
+          'fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-border/30 bg-card/95 outline-none backdrop-blur-xl',
+          'animate-in slide-in-from-right duration-300 motion-reduce:animate-none',
           'sm:relative sm:inset-auto sm:z-auto sm:w-[380px] sm:min-w-[280px] sm:shrink',
         )}
-        aria-label="AGI Work session panel"
+        aria-label={TASK_DOCK_PANEL_LABEL}
       >
-        <div className="border-b border-border/30 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <PanelRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h2
-                  className="truncate text-sm font-semibold text-foreground"
-                  title={summary.title ?? undefined}
-                >
-                  {summary.title ?? WORK_SESSION_FALLBACK_TITLE}
-                </h2>
-              </div>
-              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
-                {statusLabel(summary.status)}
-              </p>
-            </div>
-            <Button
-              ref={closeButtonRef}
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="h-8 w-8 p-0"
-              aria-label="Close AGI Work session panel"
+        <div className="flex items-center gap-2 border-b border-border/30 px-4 py-3">
+          <PanelRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <h2
+              className="truncate text-sm font-semibold text-foreground"
+              title={summary.title ?? undefined}
             >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </Button>
+              {summary.title ?? TASK_DOCK_FALLBACK_TITLE}
+            </h2>
+            <p className="text-[12px] text-muted-foreground">{AGI_WORK_LABEL}</p>
           </div>
-
-          <div className="mt-3">
-            <div className="mb-1 flex items-center justify-between text-[12px] text-muted-foreground">
-              <span>Task progress</span>
-              <span>
-                {completed}/{summary.progress.length} complete
-              </span>
-            </div>
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-label="Task progress"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progressPercent}
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
+          <Button
+            ref={closeButtonRef}
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-8 w-8 shrink-0 p-0"
+            aria-label={CLOSE_ACTION_LABEL}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </Button>
         </div>
 
+        {conversationArtifacts.length > 0 && <SlotTabs onShowArtifacts={showArtifacts} />}
+
+        <TaskDockProgressHeader summary={summary} agiWork={agiWork} />
+
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-          <details className="group border-b border-border/20" open>
-            <SectionHeader icon={Play} label="Progress" count={summary.progress.length} />
-            {summary.progress.length === 0 ? (
-              <EmptySection>Task steps will appear here as the agent works.</EmptySection>
-            ) : (
-              <ol className="space-y-2 px-4 pb-4">
-                {summary.progress.map((item) => (
-                  <li key={item.id} className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0">
-                      <StatusIcon status={item.status} />
-                    </span>
+          <DockSection
+            icon={Globe}
+            label={TASK_DOCK_SOURCES_LABEL}
+            count={sourceCount}
+            emptyCopy={TASK_DOCK_SOURCES_EMPTY}
+          >
+            <div className="space-y-3 px-3 pb-4">
+              {summary.sources.map((group) => (
+                <div key={group.id}>
+                  <p className="truncate px-1 pb-1 text-[12px] text-muted-foreground">
+                    {group.label}
+                  </p>
+                  <ul className="space-y-1">
+                    {group.sources.map((source) => (
+                      <li key={source.id}>
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-2 rounded-lg p-2 no-underline transition-colors hover:bg-muted/40 motion-reduce:transition-none"
+                        >
+                          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                            <SourceFavicon
+                              {...(source.faviconUrl ? { faviconUrl: source.faviconUrl } : {})}
+                              host={source.host}
+                            />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="line-clamp-2 block text-xs font-medium leading-snug text-foreground">
+                              {source.title}
+                            </span>
+                            <span className="block truncate text-[12px] text-muted-foreground">
+                              {source.host}
+                            </span>
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </DockSection>
+
+          <DockSection
+            icon={FileOutput}
+            label={TASK_DOCK_OUTPUTS_LABEL}
+            count={summary.outputs.length}
+            emptyCopy={TASK_DOCK_OUTPUTS_EMPTY}
+          >
+            <ul className="space-y-2 px-3 pb-4">
+              {summary.outputs.map((output) => (
+                <li
+                  key={output.id}
+                  className="rounded-lg border border-border/40 bg-muted/15 p-2.5"
+                >
+                  <div className="flex items-start gap-2">
+                    <FileText
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs leading-relaxed text-foreground">{item.label}</p>
-                      {item.detail && (
-                        <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
-                          {item.detail}
-                        </p>
-                      )}
+                      <p className="truncate text-xs font-medium text-foreground">{output.name}</p>
+                      <p className="truncate text-[12px] text-muted-foreground">
+                        {[output.mimeType, byteLabel(output.byteCount)]
+                          .filter(Boolean)
+                          .join(DETAIL_SEPARATOR) || ARTIFACT_OUTPUT_DETAIL}
+                      </p>
                     </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </details>
-
-          <details className="group border-b border-border/20" open>
-            <SectionHeader icon={FileOutput} label="Outputs" count={summary.outputs.length} />
-            {summary.outputs.length === 0 ? (
-              <EmptySection>Generated files and artifacts will appear here.</EmptySection>
-            ) : (
-              <ul className="space-y-2 px-3 pb-4">
-                {summary.outputs.map((output) => (
-                  <li
-                    key={output.id}
-                    className="rounded-lg border border-border/40 bg-muted/15 p-2.5"
-                  >
-                    <div className="flex items-start gap-2">
-                      <FileText
-                        className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-foreground">
-                          {output.name}
-                        </p>
-                        <p className="truncate text-[12px] text-muted-foreground">
-                          {[output.mimeType, byteLabel(output.byteCount)]
-                            .filter(Boolean)
-                            .join(' · ') || 'Artifact'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex justify-end gap-1">
-                      {(output.artifactId || output.uri) && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-[12px]"
-                          onClick={() => openOutput(output)}
-                          aria-label={`Open ${output.name}`}
-                        >
-                          Open
-                        </Button>
-                      )}
-                      {(output.uri || output.artifactContent !== undefined) && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 gap-1 px-2 text-[12px]"
-                          onClick={() => void downloadOutput(output)}
-                          aria-label={`Download ${output.name}`}
-                        >
-                          <Download className="h-3 w-3" aria-hidden="true" />
-                          Download
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </details>
-
-          <details className="group" open>
-            <SectionHeader icon={FolderOpen} label="Context" count={summary.context.length} />
-            {summary.context.length === 0 ? (
-              <EmptySection>
-                Input files, folders, and context events will appear here.
-              </EmptySection>
-            ) : (
-              <ul className="space-y-2 px-4 pb-4">
-                {summary.context.map((item) => (
-                  <li key={item.id} className="flex items-start gap-2">
-                    {item.kind === 'attachment' ? (
-                      <FileText
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <FolderOpen
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
+                  </div>
+                  <div className="mt-2 flex justify-end gap-1">
+                    {(output.artifactId || output.uri) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[12px]"
+                        onClick={() => openOutput(output)}
+                        aria-label={`${TASK_DOCK_OPEN_ACTION} ${output.name}`}
+                      >
+                        {TASK_DOCK_OPEN_ACTION}
+                      </Button>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="break-words text-xs text-foreground">{item.label}</p>
-                      {item.detail && (
-                        <p className="text-[12px] text-muted-foreground">{item.detail}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </details>
+                    {(output.uri || output.artifactContent !== undefined) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-[12px]"
+                        onClick={() => void downloadOutput(output)}
+                        aria-label={`${TASK_DOCK_DOWNLOAD_ACTION} ${output.name}`}
+                      >
+                        <Download className="h-3 w-3" aria-hidden="true" />
+                        {TASK_DOCK_DOWNLOAD_ACTION}
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </DockSection>
+
+          <DockSection
+            icon={FolderOpen}
+            label={TASK_DOCK_CONTEXT_LABEL}
+            count={summary.context.length}
+            emptyCopy={TASK_DOCK_CONTEXT_EMPTY}
+          >
+            <ul className="space-y-2 px-4 pb-4">
+              {summary.context.map((item) => (
+                <li key={item.id} className="flex items-start gap-2">
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted"
+                    aria-hidden="true"
+                  >
+                    <ContextMark item={item} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-xs text-foreground">{item.label}</p>
+                    {item.detail && (
+                      <p className="text-[12px] text-muted-foreground">{item.detail}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </DockSection>
         </div>
       </aside>
     </>

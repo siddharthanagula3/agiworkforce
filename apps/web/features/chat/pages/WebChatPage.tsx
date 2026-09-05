@@ -75,7 +75,7 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
-  getAutoRoutingProfiles,
+  getAutoRoutingProfileTiers,
   getBillingPlanPricing,
   summarizeSendPreview,
   type BillingPlanTier,
@@ -90,6 +90,7 @@ import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
+import { useStore as useZustandStore } from 'zustand';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
@@ -151,10 +152,10 @@ import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
-  hasWorkSession,
   WorkSessionPanel,
   WorkSessionToggleButton,
 } from '../components/work-session/WorkSessionPanel';
+import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskDockSummary';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import type { ResearchPlanDecision } from '../components/research/ResearchActivity';
@@ -766,7 +767,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
-  const [workSessionPanelOpen, setWorkSessionPanelOpen] = useState(false);
+  const workSessionPanelOpen = useUIStore((state) => state.taskDockOpen);
+  const setWorkSessionPanelOpen = useUIStore((state) => state.setTaskDockOpen);
+  const openedTaskDockRunKey = useUIStore((state) => state.taskDockRunKey);
+  const setOpenedTaskDockRunKey = useUIStore((state) => state.setTaskDockRunKey);
+  // The task dock and the artifacts panel share the right slot, so this page
+  // needs the artifact panel's own flag. Subscribed on the vanilla store with a
+  // selector: `useArtifactsStore` re-renders this page on every artifact write.
+  const artifactPanelOpen = useZustandStore(_sharedArtifactStore, (state) => state.panelOpen);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -4370,7 +4378,24 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const showWorkSession = hasWorkSession(displayedMessages, composerToggles?.workMode);
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
-  }, [showWorkSession]);
+  }, [showWorkSession, setWorkSessionPanelOpen]);
+  // The dock opens itself for each AGI Work run, keyed by the run's own turn, so
+  // a dock the user closed stays closed until the next task starts.
+  const activeRunKey = useMemo(
+    () => taskDockRunKey(displayedConversationId, displayedMessages),
+    [displayedConversationId, displayedMessages],
+  );
+  useEffect(() => {
+    if (!isAgiWorkConversation || !activeRunKey || openedTaskDockRunKey === activeRunKey) return;
+    setOpenedTaskDockRunKey(activeRunKey);
+    setWorkSessionPanelOpen(true);
+  }, [
+    activeRunKey,
+    isAgiWorkConversation,
+    openedTaskDockRunKey,
+    setOpenedTaskDockRunKey,
+    setWorkSessionPanelOpen,
+  ]);
   // A URL-owned conversation must show its transcript skeleton from the FIRST
   // paint. Clerk and useConversations start their async work in effects, so the
   // hook loading flag alone has a one-render false-empty gap that flashes the
@@ -4428,7 +4453,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const handleVoiceIntelligenceChange = useCallback(
     (intelligence: VoiceIntelligence) => {
-      const profile = getAutoRoutingProfiles().find((entry) => entry.profile === intelligence);
+      const profile = getAutoRoutingProfileTiers().find((entry) => entry.profile === intelligence);
       if (profile) void handleConversationModelChange(profile.id);
     },
     [handleConversationModelChange],
@@ -4811,7 +4836,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     <WorkSessionToggleButton
                       messages={displayedMessages}
                       open={workSessionPanelOpen}
-                      onToggle={() => setWorkSessionPanelOpen((open) => !open)}
+                      onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
                     />
                   )}
                   <ResearchToggleButton count={researchSourceCount} />
@@ -4840,7 +4865,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 <WorkSessionToggleButton
                   messages={displayedMessages}
                   open={workSessionPanelOpen}
-                  onToggle={() => setWorkSessionPanelOpen((open) => !open)}
+                  onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
                 />
               )}
               <ResearchToggleButton count={researchSourceCount} />
@@ -4931,7 +4956,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             <div className="min-h-0 flex-1 overflow-hidden">
               {/* Empty state: greeting banner + centered composer. */}
               <div className="flex h-full w-full flex-col items-center justify-center gap-6">
-                <GreetingBanner />
+                {!voiceModeActive && <GreetingBanner />}
                 <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
                   {unavailableModelNotice}
@@ -5086,8 +5111,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         {showWorkSession && (
           <WorkSessionPanel
             messages={displayedMessages}
-            open={workSessionPanelOpen}
+            open={workSessionPanelOpen && !artifactPanelOpen}
             onClose={() => setWorkSessionPanelOpen(false)}
+            agiWork={isAgiWorkConversation}
           />
         )}
         {voiceModeActive && (

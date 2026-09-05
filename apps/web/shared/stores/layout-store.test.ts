@@ -18,6 +18,23 @@ describe('Layout Store', () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(false);
   });
 
+  it('opens the task dock for a run and keeps it closed once the user closes it', () => {
+    const runKey = 'conv-1:turn-1';
+    useUIStore.getState().setTaskDockRunKey(runKey);
+    useUIStore.getState().setTaskDockOpen(true);
+    expect(useUIStore.getState().taskDockOpen).toBe(true);
+    expect(useUIStore.getState().taskDockRunKey).toBe(runKey);
+
+    useUIStore.getState().setTaskDockOpen(false);
+    expect(useUIStore.getState().taskDockOpen).toBe(false);
+    expect(useUIStore.getState().taskDockRunKey).toBe(runKey);
+  });
+
+  it('starts with the task dock closed and no run recorded', () => {
+    expect(useUIStore.getState().taskDockOpen).toBe(false);
+    expect(useUIStore.getState().taskDockRunKey).toBeNull();
+  });
+
   it('reset returns the store to its initial state on sign-out', () => {
     useUIStore.getState().setSidebarCollapsed(true);
     useUIStore.getState().reset();
@@ -30,7 +47,11 @@ describe('Layout Store', () => {
       'dismissAgiWorkAutonomyNotice',
       'reset',
       'setSidebarCollapsed',
+      'setTaskDockOpen',
+      'setTaskDockRunKey',
       'sidebarCollapsed',
+      'taskDockOpen',
+      'taskDockRunKey',
     ]);
   });
 });
@@ -61,7 +82,11 @@ describe('Layout Store, persisted v1 blobs', () => {
       'dismissAgiWorkAutonomyNotice',
       'reset',
       'setSidebarCollapsed',
+      'setTaskDockOpen',
+      'setTaskDockRunKey',
       'sidebarCollapsed',
+      'taskDockOpen',
+      'taskDockRunKey',
     ]);
     // The autonomy disclosure is owed once per session, so a persisted blob
     // must never come back with it already dismissed.
