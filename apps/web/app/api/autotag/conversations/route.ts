@@ -35,10 +35,10 @@ async function handleGetConversationsByTag(request: NextRequest) {
 
   const rows = await db
     .query<{ conversation_id: string }>(
-      `select ct.conversation_id
+      `select ct.conversation_id::text as conversation_id
          from conversation_tags ct
          join public.web_conversations c
-           on c.id::text = ct.conversation_id
+           on c.id = ct.conversation_id
           and c.user_id = $1
           and c.organization_id is not distinct from $3::uuid
           and c.deleted_at is null

@@ -49,6 +49,20 @@ describe('POST /api/autotag/batch workspace boundary', () => {
     });
   });
 
+  it('compares the uuid tag key against the uuid conversation id, not text', async () => {
+    await POST(
+      new NextRequest('http://localhost/api/autotag/batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ conversationIds: ['conversation-1'] }),
+      }),
+    );
+
+    const [sql] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on c.id = ct.conversation_id');
+    expect(sql).not.toContain('c.id::text');
+  });
+
   it('reads through the rls scoped handle, never the schema owner', async () => {
     await POST(
       new NextRequest('http://localhost/api/autotag/batch', {
