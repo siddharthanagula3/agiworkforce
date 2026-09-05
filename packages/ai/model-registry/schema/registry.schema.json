@@ -15,6 +15,7 @@
     "capabilities",
     "capabilityClasses",
     "governance",
+    "providerDefaults",
     "endpointHosts",
     "pricing",
     "limits",
@@ -78,6 +79,12 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/providerGovernance"
+      }
+    },
+    "providerDefaults": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/providerDefaults"
       }
     },
     "endpointHosts": {
@@ -555,6 +562,32 @@
         "promptCaching": {
           "type": "boolean"
         }
+      }
+    },
+    "providerDefaultEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The model a provider serves for one capability when the caller names none. Authored against a family slot so a promotion never reaches this record.",
+      "required": ["modelKey", "source", "verifiedOn"],
+      "properties": {
+        "modelKey": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "verifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        },
+        "note": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "providerDefaults": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/providerDefaultEntry"
       }
     },
     "providerGovernance": {

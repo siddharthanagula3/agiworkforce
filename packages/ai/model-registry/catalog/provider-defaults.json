@@ -1,0 +1,31 @@
+{
+  "$schema": "../schema/registry.schema.json",
+  "schemaVersion": 1,
+  "requiredDefaultCapabilities": ["imageOutput"],
+  "defaults": {
+    "openai": {
+      "imageOutput": {
+        "modelKey": "family:openai/gpt-image",
+        "source": "packages/ai/model-registry/catalog/model-families.json#openai/gpt-image",
+        "verifiedOn": "2026-09-05",
+        "note": "The provider's only active image family, so the slot's active model is the default by construction. Following the slot rather than naming a generation keeps a promotion from reaching this record."
+      }
+    },
+    "google": {
+      "imageOutput": {
+        "modelKey": "family:google/gemini-flash-image",
+        "source": "packages/ai/model-registry/catalog/model-families.json#google/gemini-flash-image",
+        "verifiedOn": "2026-09-05",
+        "note": "Three active image families sit at the fast, balanced and best tiers. The balanced slot is the default: the fast tier trades quality a caller did not ask to give up, and the best tier costs twice as much per image. A caller wanting either names it explicitly."
+      }
+    },
+    "open_router": {
+      "imageOutput": {
+        "modelKey": "openrouter-auto",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#openrouter-auto",
+        "verifiedOn": "2026-09-05",
+        "note": "Both aggregator routes can land on an image model. This one is the live route; the other is the preview and carries availability preview, so it is never the default. The key names no generation, so a catalog refresh does not reach this record."
+      }
+    }
+  }
+}

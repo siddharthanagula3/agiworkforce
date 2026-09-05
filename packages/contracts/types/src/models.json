@@ -3466,6 +3466,11 @@
     ],
     "flagship_additions": ["gpt-5.6-sol", "claude-fable-5-1", "claude-opus-5", "grok-4.6"]
   },
+  "providerDefaults": {
+    "openai": { "imageOutput": "gpt-image-2" },
+    "google": { "imageOutput": "gemini-3.1-flash-image" },
+    "open_router": { "imageOutput": "openrouter-auto" }
+  },
   "providersInOrder": [
     "managed_cloud",
     "openai",
