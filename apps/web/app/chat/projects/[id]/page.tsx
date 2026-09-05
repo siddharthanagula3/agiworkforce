@@ -783,7 +783,14 @@ export default function ProjectDetailPage() {
             ) : tab === 'sources' ? (
               <SourcesPanel projectId={project.id} />
             ) : (
-              <SchedulesPage scope={{ projectId: project.id, projectName: project.name }} />
+              <SchedulesPage
+                scope={{ projectId: project.id, projectName: project.name }}
+                onOpenChat={(schedule) =>
+                  router.push(
+                    `/chat?projectId=${encodeURIComponent(project.id)}&starterPrompt=${encodeURIComponent(schedule.prompt ?? schedule.name)}`,
+                  )
+                }
+              />
             )}
           </div>
         </div>

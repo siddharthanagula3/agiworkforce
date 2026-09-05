@@ -1,8 +1,22 @@
 'use client';
 
-import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
-import { CalendarClock, FolderOpen, History, Pencil, Play, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Badge, Button, Card, CardContent, Switch, useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  Bell,
+  CalendarClock,
+  FolderOpen,
+  History,
+  MoreHorizontal,
+  Pause,
+  Pencil,
+  Play,
+  Share2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { describeCronCadence } from '@/lib/schedules/schedule-time';
+import { cn } from '@shared/utils/cn';
 import type { ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
@@ -33,6 +47,9 @@ interface ScheduleCardProps {
   onRunNow: (schedule: ScheduleTask) => void;
   onEdit: (schedule: ScheduleTask) => void;
   onDelete: (schedule: ScheduleTask) => void;
+  onShare: (schedule: ScheduleTask) => void;
+  onOpenNotificationSettings: (schedule: ScheduleTask) => void;
+  onViewResult: (schedule: ScheduleTask) => void;
   onToggleHistory: (schedule: ScheduleTask) => void;
   onRetryHistory: (schedule: ScheduleTask) => void;
   onLoadMoreHistory: (schedule: ScheduleTask) => void;
@@ -88,6 +105,9 @@ export function ScheduleCard({
   onRunNow,
   onEdit,
   onDelete,
+  onShare,
+  onOpenNotificationSettings,
+  onViewResult,
   onToggleHistory,
   onRetryHistory,
   onLoadMoreHistory,
@@ -102,6 +122,30 @@ export function ScheduleCard({
     taskRecurrence(schedule) === 'custom' && schedule.cronExpression
       ? schedule.cronExpression
       : null;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useMenuKeyboard({
+    open: menuOpen,
+    onClose: closeMenu,
+    panelRef: menuPanelRef,
+    triggerRef: menuTriggerRef,
+  });
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) closeMenu();
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [menuOpen, closeMenu]);
+
+  const menuItemCls =
+    'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-foreground hover:bg-accent transition-colors disabled:pointer-events-none disabled:opacity-50';
 
   return (
     <Card
@@ -214,17 +258,6 @@ export function ScheduleCard({
               type="button"
               variant="outline"
               size="icon"
-              onClick={() => onRunNow(schedule)}
-              disabled={!canRun}
-              aria-label={`Run ${schedule.name} Now`}
-              title="Run Now"
-            >
-              <Play className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
               onClick={() => onToggleHistory(schedule)}
               aria-expanded={historyExpanded}
               aria-controls={`schedule-history-${schedule.id}`}
@@ -247,15 +280,100 @@ export function ScheduleCard({
             <Button
               type="button"
               variant="outline"
-              size="icon"
-              onClick={() => onDelete(schedule)}
-              disabled={operation !== null}
-              aria-label={`Delete ${schedule.name}`}
-              title="Delete Schedule"
-              className="text-danger hover:bg-destructive/10 hover:text-danger"
+              size="sm"
+              onClick={() => onViewResult(schedule)}
+              disabled={schedule.executionCount === 0}
+              aria-label={`View latest result for ${schedule.name}`}
             >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Latest result
             </Button>
+            <div ref={menuRef} className="relative">
+              <Button
+                ref={menuTriggerRef}
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={`More actions for ${schedule.name}`}
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {menuOpen && (
+                <div
+                  ref={menuPanelRef}
+                  role="menu"
+                  aria-label={`Actions for ${schedule.name}`}
+                  className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={menuItemCls}
+                    disabled={!canRun}
+                    onClick={() => {
+                      closeMenu();
+                      onRunNow(schedule);
+                    }}
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    Run now
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={menuItemCls}
+                    onClick={() => {
+                      closeMenu();
+                      onShare(schedule);
+                    }}
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    Share
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={menuItemCls}
+                    disabled={!canToggle}
+                    onClick={() => {
+                      closeMenu();
+                      onToggleEnabled(schedule);
+                    }}
+                  >
+                    <Pause className="h-4 w-4" aria-hidden="true" />
+                    {schedule.isEnabled ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={menuItemCls}
+                    onClick={() => {
+                      closeMenu();
+                      onOpenNotificationSettings(schedule);
+                    }}
+                  >
+                    <Bell className="h-4 w-4" aria-hidden="true" />
+                    Notification settings
+                  </button>
+                  <div role="separator" className="my-1 h-px bg-border" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cn(menuItemCls, 'text-danger hover:text-danger')}
+                    disabled={operation !== null}
+                    onClick={() => {
+                      closeMenu();
+                      onDelete(schedule);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
             {operation && <span className="sr-only">Schedule action in progress…</span>}
           </div>
         </div>
