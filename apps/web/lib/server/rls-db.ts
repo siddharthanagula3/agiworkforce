@@ -5,7 +5,7 @@ import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
-import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -98,7 +98,10 @@ export async function getUserScopedDb(
   if (userId) {
     const token = await getToken();
     if (token) {
-      await assertAccountActive(userId);
+      // The workspace mfa gate and ip allow list live in getClerkAuthUser, so a
+      // cookie session that skipped it here reached the database with neither
+      // policy applied while the same route on a bearer token was refused.
+      await getClerkAuthUser(request, options);
       const organizationId = resolveOrganization
         ? await resolveRequestOrganizationId(request, userId)
         : null;
