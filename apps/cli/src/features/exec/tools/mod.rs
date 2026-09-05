@@ -135,7 +135,11 @@ mod contract_mapping_tests {
         for name in registry.names() {
             let tool = registry.get(name).expect("registered tool");
             assert!(tool.read_only(), "{name}");
-            assert_eq!(tool.contract_action_class(), ToolActionClass::Read, "{name}");
+            assert_eq!(
+                tool.contract_action_class(),
+                ToolActionClass::Read,
+                "{name}"
+            );
         }
     }
 
