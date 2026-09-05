@@ -250,9 +250,13 @@ function regressionThresholdsGate(candidate, family, snapshot, policy) {
   const candidateBenchmarks = snapshot.benchmarks[candidate.modelKey] ?? {};
   const shared = Object.keys(activeBenchmarks).filter((key) => key in candidateBenchmarks);
   for (const key of shared) {
-    const from = activeBenchmarks[key];
-    const to = candidateBenchmarks[key];
-    if (Number.isFinite(from) && Number.isFinite(to) && to < from * limits.minBenchmarkRatio) {
+    const from = sourcedBenchmarkValue(activeBenchmarks[key]);
+    const to = sourcedBenchmarkValue(candidateBenchmarks[key]);
+    if (from === null || to === null) {
+      failures.push(`benchmark ${key} carries no source on one of the two models`);
+      continue;
+    }
+    if (to < from * limits.minBenchmarkRatio) {
       failures.push(`benchmark ${key} fell from ${from} to ${to}`);
     }
   }
@@ -263,6 +267,12 @@ function regressionThresholdsGate(candidate, family, snapshot, policy) {
       ? `${shared.length} shared benchmarks held`
       : 'no shared benchmarks published';
   return gate('regressionThresholds', true, note);
+}
+
+export function sourcedBenchmarkValue(score) {
+  if (!score || typeof score !== 'object') return null;
+  if (typeof score.source !== 'string' || score.source.length === 0) return null;
+  return Number.isFinite(score.value) ? score.value : null;
 }
 
 export function evaluateCandidate(candidate, familyId, family, snapshot, policy) {
