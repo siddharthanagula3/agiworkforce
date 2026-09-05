@@ -35,7 +35,9 @@
     "google/gemma-4-26b-a4b-it:free",
     "gemini-3.5-flash",
     "gemini-3.7-flash",
-    "glm-5.2"
+    "glm-5.2",
+    "claude-fable-5",
+    "grok-4.5"
   ],
   "guardedNonCanonicalModelIds": [
     "all-MiniLM-L6-v2",

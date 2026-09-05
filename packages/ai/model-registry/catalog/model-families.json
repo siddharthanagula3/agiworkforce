@@ -430,7 +430,7 @@
       "tier": "frontier",
       "modelType": "reasoning",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^claude-fable-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "apiModelIdPattern": "^claude-fable-(?<generation>\\d+(?:[.-]\\d+)*)$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -443,6 +443,54 @@
       "minContextTokens": 1000000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "claude-fable-5-1",
+        "generation": "5-1",
+        "lifecycle": "stable",
+        "promotedAt": "2026-09-05",
+        "promotionReason": "automatic family upgrade from claude-fable-5 to claude-fable-5-1",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on anthropic",
+            "familyIdentity": "matches claude-fable at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 10,
+          "outputPerMillion": 50,
+          "cacheReadPerMillion": 0.25,
+          "cacheWritePerMillion": 12.5,
+          "cacheWrite1hPerMillion": 20
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-06"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "claude-fable-5",
         "generation": "5",
         "lifecycle": "stable",
@@ -482,9 +530,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-09-05",
+          "from": "claude-fable-5",
+          "to": "claude-fable-5-1",
+          "reason": "automatic family upgrade from claude-fable-5 to claude-fable-5-1"
+        }
+      ]
     },
     "anthropic/claude-opus": {
       "provider": "anthropic",
@@ -492,7 +546,7 @@
       "tier": "frontier",
       "modelType": "reasoning",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^claude-opus-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "apiModelIdPattern": "^claude-opus-(?<generation>\\d+(?:[.-]\\d+)*)$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -554,7 +608,7 @@
       "tier": "balanced",
       "modelType": "code",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^claude-sonnet-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "apiModelIdPattern": "^claude-sonnet-(?<generation>\\d+(?:[.-]\\d+)*)$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -1435,6 +1489,50 @@
       "minContextTokens": 500000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "grok-4.6",
+        "generation": "4.6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-09-05",
+        "promotionReason": "automatic family upgrade from grok-4.5 to grok-4.6",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on xai",
+            "familyIdentity": "matches grok at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 6,
+          "cacheReadPerMillion": 0.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 500000,
+          "knowledgeCutoff": "2026-02-01"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "grok-4.5",
         "generation": "4.5",
         "lifecycle": "stable",
@@ -1476,9 +1574,15 @@
           "aime": 82
         }
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-09-05",
+          "from": "grok-4.5",
+          "to": "grok-4.6",
+          "reason": "automatic family upgrade from grok-4.5 to grok-4.6"
+        }
+      ]
     },
     "zhipu/glm": {
       "provider": "zhipu",

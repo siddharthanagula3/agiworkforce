@@ -126,13 +126,17 @@ test('permanently excludes unsupported providers and retired models from authore
 });
 
 test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices', () => {
+  const internationalEndpoint = /dashscope-intl\.aliyuncs\.com/u;
   const qwenProviderEntry = Object.entries(curation.providers).find(([, provider]) => {
     const fastModel = curation.models[provider.taskRouting?.fast_completion];
     const defaultModel = curation.models[provider.defaultModel];
     return (
-      fastModel?.inputTokenPricingTiers?.length === 2 &&
-      defaultModel?.inputTokenPricingTiers?.length === 1 &&
-      fastModel.provider === defaultModel.provider
+      fastModel !== undefined &&
+      defaultModel !== undefined &&
+      fastModel !== defaultModel &&
+      fastModel.provider === defaultModel.provider &&
+      defaultModel.inputTokenPricingTiers?.length === 1 &&
+      internationalEndpoint.test(defaultModel.pricingNote ?? '')
     );
   });
   assert.ok(qwenProviderEntry, 'Expected one provider with the verified Qwen tier shapes');
@@ -157,27 +161,17 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
 
   const flash = curation.models[qwenProvider.taskRouting.fast_completion];
   assert.deepEqual(flash.costOverride, {
-    inputCost: 0.029,
-    outputCost: 0.287,
-    cached_input: 0.0058,
-    cached_write: 0.03625,
+    inputCost: 0.1,
+    outputCost: 0.4,
+    cached_input: 0.02,
+    cached_write: 0.125,
   });
-  assert.deepEqual(flash.inputTokenPricingTiers, [
-    {
-      thresholdTokens: 128_000,
-      inputCost: 0.115,
-      cached_input: 0.023,
-      cached_write: 0.14375,
-      outputCost: 1.147,
-    },
-    {
-      thresholdTokens: 256_000,
-      inputCost: 0.172,
-      cached_input: 0.0344,
-      cached_write: 0.215,
-      outputCost: 1.72,
-    },
-  ]);
+  assert.equal(
+    flash.inputTokenPricingTiers,
+    undefined,
+    'the International Qwen Flash row is a single band from zero to the full window',
+  );
+  assert.match(flash.pricingNote, internationalEndpoint);
 
   const plus = curation.models[qwenProvider.defaultModel];
   assert.deepEqual(plus.costOverride, {

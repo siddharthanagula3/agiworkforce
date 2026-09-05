@@ -173,49 +173,6 @@
         }
       ]
     },
-    "claude-fable-5": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "anthropic/claude-fable-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 10,
-            "outputPerMillion": 50,
-            "cacheReadPerMillion": 1,
-            "cacheWritePerMillion": 12.5
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "anthropic/claude-fable-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 10,
-            "outputPerMillion": 50,
-            "cacheReadPerMillion": 1,
-            "cacheWritePerMillion": 12.5
-          }
-        },
-        {
-          "provider": "cheaperinference_anthropic",
-          "harnessId": "cheaperinference-anthropic/messages",
-          "upstreamModelId": "claude-fable-5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 7,
-            "outputPerMillion": 35,
-            "cacheReadPerMillion": 0.7,
-            "cacheWritePerMillion": 8.75
-          }
-        }
-      ]
-    },
     "claude-opus-5": {
       "additionalRoutes": [
         {
@@ -715,49 +672,6 @@
         }
       ]
     },
-    "grok-4.5": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "x-ai/grok-4.5",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 6,
-            "cacheReadPerMillion": 0.3,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "spacexai/grok-4.5",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 6,
-            "cacheReadPerMillion": 0.3,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "cheaperinference",
-          "harnessId": "cheaperinference/chat-completions",
-          "upstreamModelId": "grok-4.5",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 1.4,
-            "outputPerMillion": 4.2,
-            "cacheReadPerMillion": 0.21,
-            "cacheWritePerMillion": 1.4
-          }
-        }
-      ]
-    },
     "minimax-m3": {
       "additionalRoutes": [
         {
@@ -857,6 +771,71 @@
             "outputPerMillion": 0.2,
             "cacheReadPerMillion": 0,
             "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "claude-fable-5-1": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "anthropic/claude-fable-5.1",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 10,
+            "outputPerMillion": 50,
+            "cacheReadPerMillion": 0.25,
+            "cacheWritePerMillion": 12.5,
+            "cacheWrite1hPerMillion": 20
+          }
+        }
+      ]
+    },
+    "grok-4.6": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "x-ai/grok-4.6",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "spacexai/grok-4.6",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "qwen-3.8-flash": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions-managed",
+          "upstreamModelId": "qwen/qwen3.8-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.47,
+            "cacheReadPerMillion": 0.016,
+            "cacheWritePerMillion": 0.2
           }
         }
       ]
