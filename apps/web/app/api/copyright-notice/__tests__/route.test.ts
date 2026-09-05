@@ -27,6 +27,8 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
 vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: mocks.logSecurityEvent,
   getClientIp: () => '203.0.113.9',
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 const { db } = vi.hoisted(() => ({ db: { current: null as unknown } }));

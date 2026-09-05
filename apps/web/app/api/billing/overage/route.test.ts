@@ -16,7 +16,11 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockAudit }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: mockAudit,
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 
 import { GET, PUT } from './route';
 

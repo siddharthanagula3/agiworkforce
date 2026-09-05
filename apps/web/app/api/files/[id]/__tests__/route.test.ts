@@ -37,6 +37,7 @@ vi.mock('@/lib/server/media-storage', () => ({
   readStoredMedia: mockGetObject,
   streamStoredMedia: mockStreamObject,
   isMediaStorageConfigured: mockIsConfigured,
+  deleteStoredMedia: vi.fn(),
 }));
 
 import { GET } from '../route';

@@ -21,7 +21,10 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/server/rls-db', () => ({
   getCurrentUserRlsDb: async () => ({ db: mocks.scopedDb, userId: 'user-1' }),
