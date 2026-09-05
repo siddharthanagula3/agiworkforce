@@ -2347,9 +2347,9 @@
       ],
       "sources": ["docs/work/audit-remediation-ledger.md", "phase4-capability-audit.md"],
       "verification": {
-        "date": "2026-08-17",
-        "method": "code-inspection",
-        "finding": "ChatComposerNew.tsx:3849-3863 now renders a standing 'Web search on/off' indicator (resolves the on-screen-indicator clause), but the code comment says the manual toggle was intentionally removed, and no filters/vertical result cards exist."
+        "date": "2026-09-05",
+        "method": "founder-review",
+        "finding": "The standing composer glyph was removed on founder direction (2026-09-05): neither leader shows a search indicator on the composer face and the founder could not tell what the dot meant. Search reachability stays in the plus menu status row, the activity label reads Searching the web during a run, and an explicit request forces search. Filters and vertical cards remain open."
       },
       "verified_against_code": true
     },

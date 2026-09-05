@@ -178,9 +178,6 @@ vi.mock('@shared/stores/thinking-store', () => ({
     }),
 }));
 
-vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
-  BudgetTrackerDisplay: () => <div />,
-}));
 vi.mock('../StyleSelector', () => ({ StyleSelector: () => <div /> }));
 vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
