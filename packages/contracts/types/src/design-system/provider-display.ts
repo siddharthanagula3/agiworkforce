@@ -1,4 +1,3 @@
-
 /**
  * Display-tier provider identity used by all 6 surfaces in model pickers and UI surfaces.
  *
@@ -25,6 +24,7 @@ export type ProviderId =
   | 'perplexity'
   | 'qwen'
   | 'moonshot'
+  | 'minimax'
   | 'zhipu'
   | 'ollama'
   | 'lmstudio'
@@ -102,6 +102,14 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
     label: 'Moonshot',
     icon: 'providers/moonshot.svg',
     brandColor: '#16A34A',
+    isLocal: false,
+    supportsEffort: false,
+  },
+  minimax: {
+    id: 'minimax',
+    label: 'MiniMax',
+    icon: 'providers/minimax.svg',
+    brandColor: '#E73562',
     isLocal: false,
     supportsEffort: false,
   },
