@@ -261,11 +261,16 @@ pub fn emit_approval_request(app_handle: &AppHandle, approval: ApprovalRequestPa
 pub fn emit_action_routed(
     app_handle: &AppHandle,
     session_id: &str,
+    step_index: Option<u32>,
     decision: &crate::automation::action_router::RoutingDecision,
 ) {
     if let Err(e) = app_handle.emit(
         "computer_use:action_routed",
-        serde_json::json!({ "sessionId": session_id, "decision": decision }),
+        serde_json::json!({
+            "sessionId": session_id,
+            "stepIndex": step_index,
+            "decision": decision,
+        }),
     ) {
         tracing::error!("[Events] Failed to emit action routing event: {}", e);
     } else {

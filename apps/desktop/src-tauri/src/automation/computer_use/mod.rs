@@ -38,10 +38,12 @@ mod action_executor;
 pub mod anthropic_agent;
 mod app_permissions;
 pub mod approval;
+pub mod confirmation;
 pub mod consent;
 mod observe_plan_act;
 mod safety;
 mod session;
+mod step_routing;
 mod types;
 mod visual_reasoner;
 mod window_manager;
@@ -57,8 +59,11 @@ pub use app_permissions::{
     ALWAYS_BLOCKED_BUNDLE_IDS, ALWAYS_BLOCKED_URL_HOSTS,
 };
 pub use approval::{action_class, action_tool_name, approval_request};
+pub use confirmation::{ConfirmationOutcome, CONFIRMATION_TIMEOUT_SECS};
 pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
-pub use observe_plan_act::{ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult};
+pub use observe_plan_act::{
+    CompletionReason, ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult,
+};
 pub use safety::{
     ComputerUseSafetyLayer, PromptInjectionDetector, SafetyConfig, SafetyDecision, SafetyReason,
 };

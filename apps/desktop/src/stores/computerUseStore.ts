@@ -84,7 +84,9 @@ export type OpaCompletionReason =
   | { type: 'too_many_failures'; failures: number }
   | { type: 'user_cancelled' }
   | { type: 'safety_blocked'; reason: string }
-  | { type: 'not_making_progress' };
+  | { type: 'not_making_progress' }
+  | { type: 'confirmation_denied'; tool: string }
+  | { type: 'confirmation_timed_out'; tool: string; seconds: number };
 
 export type ExecutorTier = 'api' | 'ui' | 'browser' | 'visual';
 
@@ -95,11 +97,25 @@ export interface TierAssessment {
 
 export interface ActionRoutingRecord {
   sessionId: string;
+  stepIndex: number | null;
   selected: ExecutorTier;
   driver: string;
   tool: string | null;
   declined: TierAssessment[];
 }
+
+/**
+ * A step the task has stopped on. It holds until the request is answered, so
+ * it outlives a blur, a re-render and a surface change; only an answer, an
+ * expiry or a cancelled task clears it.
+ */
+export interface PausedConfirmation {
+  sessionId: string;
+  stepIndex: number;
+  approval: ToolApprovalRequest;
+}
+
+export type ConfirmationOutcome = 'approved' | 'denied' | 'expired';
 
 export interface OpaTaskResult {
   success: boolean;
@@ -142,6 +158,25 @@ export function parseOpaTaskResult(value: unknown): OpaTaskResult {
       }
       parsedReason = { type: reason['type'], reason: reason['reason'] };
       break;
+    case 'confirmation_denied':
+      if (typeof reason['tool'] !== 'string' || reason['tool'].trim() === '') {
+        throw new Error('Native desktop control returned an invalid declined tool.');
+      }
+      parsedReason = { type: reason['type'], tool: reason['tool'] };
+      break;
+    case 'confirmation_timed_out':
+      if (typeof reason['tool'] !== 'string' || reason['tool'].trim() === '') {
+        throw new Error('Native desktop control returned an invalid declined tool.');
+      }
+      if (!Number.isInteger(reason['seconds']) || Number(reason['seconds']) <= 0) {
+        throw new Error('Native desktop control returned an invalid confirmation bound.');
+      }
+      parsedReason = {
+        type: reason['type'],
+        tool: reason['tool'],
+        seconds: Number(reason['seconds']),
+      };
+      break;
     default:
       throw new Error(
         `Native desktop control returned unknown completion reason '${reason['type']}'.`,
@@ -175,6 +210,10 @@ export function formatOpaCompletionReason(reason: OpaCompletionReason): string {
       return `Desktop control was blocked by a safety check: ${reason.reason}`;
     case 'not_making_progress':
       return 'Desktop control stopped because it was not making progress.';
+    case 'confirmation_denied':
+      return 'You declined this step, so desktop control stopped without running it.';
+    case 'confirmation_timed_out':
+      return `This step was not confirmed within ${reason.seconds} seconds, so desktop control stopped without running it.`;
   }
 }
 
@@ -193,6 +232,8 @@ interface ComputerUseState {
   lastOpaResult: OpaTaskResult | null;
   lastRouting: ActionRoutingRecord | null;
   pendingApproval: ToolApprovalRequest | null;
+  pausedConfirmation: PausedConfirmation | null;
+  isResolvingConfirmation: boolean;
 
   computerUseEnabled: boolean;
   consentAccepted: boolean;
@@ -208,6 +249,7 @@ interface ComputerUseState {
   setConsentAccepted: (accepted: boolean) => void;
   revokeDesktopConsent: () => Promise<void>;
   clearPendingApproval: () => void;
+  resolveConfirmation: (approved: boolean, rememberForSession?: boolean) => Promise<boolean>;
 
   click: (x: number, y: number) => Promise<void>;
   moveMouse: (x: number, y: number) => Promise<void>;
@@ -257,6 +299,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
       lastOpaResult: null,
       lastRouting: null,
       pendingApproval: null,
+      pausedConfirmation: null,
+      isResolvingConfirmation: false,
 
       computerUseEnabled: false,
       consentAccepted: false,
@@ -275,7 +319,48 @@ export const useComputerUseStore = create<ComputerUseState>()(
       setConsentAccepted: (accepted: boolean) => set({ consentAccepted: accepted }),
 
       clearPendingApproval: () =>
-        set({ pendingApproval: null }, undefined, 'computerUse/clearPendingApproval'),
+        set(
+          { pendingApproval: null, pausedConfirmation: null, isResolvingConfirmation: false },
+          undefined,
+          'computerUse/clearPendingApproval',
+        ),
+
+      resolveConfirmation: async (approved, rememberForSession = false) => {
+        const paused = get().pausedConfirmation;
+        if (!paused || get().isResolvingConfirmation) return false;
+
+        set({ isResolvingConfirmation: true }, undefined, 'computerUse/confirmation/resolving');
+        try {
+          await invoke('respond_tool_confirmation', {
+            requestId: paused.approval.requestId,
+            approved,
+            rememberChoice: false,
+            rememberForSession: rememberForSession && paused.approval.rememberable,
+          });
+          set(
+            (state) => {
+              state.isResolvingConfirmation = false;
+              if (state.pausedConfirmation?.approval.requestId === paused.approval.requestId) {
+                state.pausedConfirmation = null;
+                state.pendingApproval = null;
+              }
+            },
+            undefined,
+            'computerUse/confirmation/resolved',
+          );
+          return true;
+        } catch (error) {
+          set(
+            (state) => {
+              state.isResolvingConfirmation = false;
+              state.error = `Failed to answer the paused step: ${String(error)}`;
+            },
+            undefined,
+            'computerUse/confirmation/error',
+          );
+          return false;
+        }
+      },
 
       revokeDesktopConsent: async () => {
         try {
@@ -403,6 +488,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
             lastOpaResult: null,
             lastRouting: null,
             pendingApproval: null,
+            pausedConfirmation: null,
+            isResolvingConfirmation: false,
           },
           undefined,
           'computerUse/reset',
@@ -759,6 +846,18 @@ interface RoutingDecisionPayload {
   declined: TierAssessment[];
 }
 
+interface ConfirmationRequiredPayload {
+  sessionId: string;
+  stepIndex: number;
+  approval: ToolApprovalRequest;
+}
+
+interface ConfirmationResolvedPayload {
+  sessionId: string;
+  stepIndex: number;
+  outcome: ConfirmationOutcome;
+}
+
 export function subscribeToComputerUseEvents(): () => void {
   const unlisteners: Promise<UnlistenFn>[] = [];
 
@@ -787,13 +886,14 @@ export function subscribeToComputerUseEvents(): () => void {
   );
 
   unlisteners.push(
-    listen<{ sessionId: string; decision: RoutingDecisionPayload }>(
+    listen<{ sessionId: string; stepIndex?: number | null; decision: RoutingDecisionPayload }>(
       'computer_use:action_routed',
       (event) => {
-        const { sessionId, decision } = event.payload;
+        const { sessionId, stepIndex, decision } = event.payload;
         useComputerUseStore.setState({
           lastRouting: {
             sessionId,
+            stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
             selected: decision.selected,
             driver: decision.driver,
             tool: decision.call?.tool ?? null,
@@ -802,6 +902,28 @@ export function subscribeToComputerUseEvents(): () => void {
         });
       },
     ),
+  );
+
+  unlisteners.push(
+    listen<ConfirmationRequiredPayload>('computer_use:confirmation_required', (event) => {
+      const { sessionId, stepIndex, approval } = event.payload;
+      useComputerUseStore.setState({
+        pausedConfirmation: { sessionId, stepIndex, approval },
+        pendingApproval: approval,
+        isResolvingConfirmation: false,
+      });
+    }),
+  );
+
+  unlisteners.push(
+    listen<ConfirmationResolvedPayload>('computer_use:confirmation_resolved', (event) => {
+      const { stepIndex } = event.payload;
+      useComputerUseStore.setState((state) =>
+        state.pausedConfirmation?.stepIndex === stepIndex
+          ? { pausedConfirmation: null, pendingApproval: null, isResolvingConfirmation: false }
+          : state,
+      );
+    }),
   );
 
   unlisteners.push(
@@ -828,6 +950,9 @@ export function subscribeToComputerUseEvents(): () => void {
       useComputerUseStore.setState({
         isActive: false,
         sessionId: null,
+        pausedConfirmation: null,
+        pendingApproval: null,
+        isResolvingConfirmation: false,
       });
     }),
   );
@@ -853,6 +978,9 @@ export const selectIsExecutingOpa = (state: ComputerUseState) => state.isExecuti
 export const selectLastOpaResult = (state: ComputerUseState) => state.lastOpaResult;
 export const selectLastRouting = (state: ComputerUseState) => state.lastRouting;
 export const selectPendingApproval = (state: ComputerUseState) => state.pendingApproval;
+export const selectPausedConfirmation = (state: ComputerUseState) => state.pausedConfirmation;
+export const selectIsResolvingConfirmation = (state: ComputerUseState) =>
+  state.isResolvingConfirmation;
 export const selectLastClickPosition = (state: ComputerUseState) => {
   for (let i = state.actionLog.length - 1; i >= 0; i--) {
     const action = state.actionLog[i];
