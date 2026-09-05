@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  execute: vi.fn(),
   getSubscription: vi.fn(),
   connect: vi.fn(),
 }));
