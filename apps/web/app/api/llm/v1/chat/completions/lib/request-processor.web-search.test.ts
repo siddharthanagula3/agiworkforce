@@ -436,6 +436,25 @@ describe('appendWebSearchTool', () => {
     ]);
   });
 
+  it('drives the Anthropic max_uses from AGI_NATIVE_SEARCH_MAX_USES when set', () => {
+    const original = process.env['AGI_NATIVE_SEARCH_MAX_USES'];
+    process.env['AGI_NATIVE_SEARCH_MAX_USES'] = '7';
+    try {
+      const tools = appendWebSearchTool('anthropic', undefined, caps);
+      expect(tools).toEqual([
+        {
+          type: 'web_search_20260209',
+          name: 'web_search',
+          allowed_callers: ['direct'],
+          max_uses: 7,
+        },
+      ]);
+    } finally {
+      if (original === undefined) delete process.env['AGI_NATIVE_SEARCH_MAX_USES'];
+      else process.env['AGI_NATIVE_SEARCH_MAX_USES'] = original;
+    }
+  });
+
   it('injects the Google google_search tool', () => {
     expect(appendWebSearchTool('google', undefined, caps)).toEqual([{ google_search: {} }]);
   });

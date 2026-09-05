@@ -1199,6 +1199,27 @@ export function applyResearchMode(
  * provider adapter passes this server tool through verbatim and translates
  * its activity/citations into AGI's canonical stream.
  */
+const NATIVE_SEARCH_MAX_USES_DEFAULT = 3;
+const NATIVE_SEARCH_MAX_USES_RESEARCH = 20;
+
+function envInt(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(raw)));
+}
+
+/**
+ * How many grounded native-search responses one turn may spend before the
+ * native search tool is withdrawn for the rest of it. One constant, one env
+ * override, for every provider-native search shape (Anthropic's `max_uses`
+ * included), so an operator override applies uniformly rather than per
+ * provider.
+ */
+export function resolveNativeSearchMaxUses(researchMode: boolean): number {
+  const fallback = researchMode ? NATIVE_SEARCH_MAX_USES_RESEARCH : NATIVE_SEARCH_MAX_USES_DEFAULT;
+  return envInt('AGI_NATIVE_SEARCH_MAX_USES', fallback, 1, 50);
+}
+
 export function appendWebSearchTool(
   providerLower: string,
   tools: unknown[] | undefined,
@@ -1213,7 +1234,7 @@ export function appendWebSearchTool(
         type: 'web_search_20260209',
         name: 'web_search',
         allowed_callers: ['direct'],
-        max_uses: options.researchMode ? 20 : 3,
+        max_uses: resolveNativeSearchMaxUses(options.researchMode ?? false),
       },
     ];
   }

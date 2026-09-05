@@ -13,6 +13,7 @@ import {
   isWebSearchTool,
   webSearchBackendConfigured,
   formatWebSearchResultForModel,
+  nativeSearchBudgetExhaustedMessage,
   webSearchResultsToFetchedSources,
   WEB_SEARCH_TOOL,
   WEB_SEARCH_MAX_RESULTS,
@@ -232,6 +233,14 @@ describe('executeWebSearch, failure modes', () => {
     );
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.errorCode).toBe('timeout');
+  });
+});
+
+describe('nativeSearchBudgetExhaustedMessage', () => {
+  it('names the limit and tells the model to stop grounding', () => {
+    const message = nativeSearchBudgetExhaustedMessage(3);
+    expect(message).toContain('3 allowed');
+    expect(message).toContain('No further grounded searches will run');
   });
 });
 

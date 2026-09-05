@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   classifyAttachedSearchTool,
+  nativeSearchToolName,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
 } from './required-search';
@@ -83,6 +84,20 @@ describe('classifyAttachedSearchTool', () => {
 
   it('finds the search tool among other tools', () => {
     expect(classifyAttachedSearchTool([UNRELATED_TOOL, GENERIC_TOOL])).toBe('generic-function');
+  });
+});
+
+describe('nativeSearchToolName', () => {
+  it('names each provider-native shape', () => {
+    expect(nativeSearchToolName(OPENAI_HOSTED_TOOL)).toBe('openai-hosted');
+    expect(nativeSearchToolName(ANTHROPIC_SERVER_TOOL)).toBe('anthropic-server');
+    expect(nativeSearchToolName(GOOGLE_BUILTIN_TOOL)).toBe('google-builtin');
+  });
+
+  it('is empty for our own function tool and for anything unrelated', () => {
+    expect(nativeSearchToolName(GENERIC_TOOL)).toBe('');
+    expect(nativeSearchToolName(UNRELATED_TOOL)).toBe('');
+    expect(nativeSearchToolName(undefined)).toBe('');
   });
 });
 
