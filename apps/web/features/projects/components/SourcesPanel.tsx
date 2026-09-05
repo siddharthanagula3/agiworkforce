@@ -286,7 +286,7 @@ export function SourcesPanel({ projectId }: Props) {
 
           <h2
             style={{
-              fontFamily: 'var(--serif)',
+              fontFamily: 'var(--sans)',
               fontSize: 20,
               fontWeight: 600,
               color: 'var(--agi-ink)',

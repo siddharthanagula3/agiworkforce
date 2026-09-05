@@ -291,7 +291,7 @@ export default function ProjectDetailPage() {
             </button>
             <h1
               style={{
-                fontFamily: 'var(--serif)',
+                fontFamily: 'var(--sans)',
                 fontSize: 22,
                 color: 'hsl(var(--foreground))',
                 margin: '24px 0 8px',
@@ -534,7 +534,7 @@ export default function ProjectDetailPage() {
             )}
             <h1
               style={{
-                fontFamily: 'var(--serif)',
+                fontFamily: 'var(--sans)',
                 fontSize: 26,
                 fontWeight: 600,
                 color: 'hsl(var(--foreground))',

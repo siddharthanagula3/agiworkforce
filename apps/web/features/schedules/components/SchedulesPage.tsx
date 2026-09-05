@@ -515,7 +515,7 @@ export function SchedulesPage({
               <CalendarClock className="h-4 w-4" aria-hidden="true" />
               Managed Cloud
             </div>
-            <h1 className="text-balance font-[var(--chat-font-serif)] text-[28px] font-medium">
+            <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
               Schedules
             </h1>
             <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
