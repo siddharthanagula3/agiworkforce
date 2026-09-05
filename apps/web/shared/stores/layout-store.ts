@@ -37,12 +37,29 @@ export interface UIState {
    * it is owed once per session rather than silenced forever by one click.
    */
   agiWorkAutonomyNoticeDismissed: boolean;
+
+  /**
+   * The AGI Work task dock occupies the right slot. Deliberately NOT in
+   * `partialize` below: the dock opens itself for each new run, so a persisted
+   * "open" would reopen it over an unrelated conversation on the next load.
+   */
+  taskDockOpen: boolean;
+
+  /**
+   * The run whose open/closed verdict `taskDockOpen` records. A dock the user
+   * closed stays closed for that run and opens again for the next one.
+   */
+  taskDockRunKey: string | null;
 }
 
 export interface UIActions {
   setSidebarCollapsed: (collapsed: boolean) => void;
 
   dismissAgiWorkAutonomyNotice: () => void;
+
+  setTaskDockOpen: (open: boolean) => void;
+
+  setTaskDockRunKey: (runKey: string | null) => void;
 
   /**
    * Sign-out cleanup verb. Invoked dynamically, `authentication-store.ts`
@@ -58,6 +75,8 @@ export type UIStore = UIState & UIActions;
 const INITIAL_STATE: UIState = {
   sidebarCollapsed: false,
   agiWorkAutonomyNoticeDismissed: false,
+  taskDockOpen: false,
+  taskDockRunKey: null,
 };
 
 const enableDevtools = process.env.NODE_ENV !== 'production';
@@ -78,6 +97,16 @@ export const useUIStore = create<UIStore>()(
             state.agiWorkAutonomyNoticeDismissed = true;
           }),
 
+        setTaskDockOpen: (open: boolean) =>
+          set((state) => {
+            state.taskDockOpen = open;
+          }),
+
+        setTaskDockRunKey: (runKey: string | null) =>
+          set((state) => {
+            state.taskDockRunKey = runKey;
+          }),
+
         reset: () =>
           set((state) => {
             Object.assign(state, INITIAL_STATE);
@@ -92,6 +121,8 @@ export const useUIStore = create<UIStore>()(
               ? (persisted as UIState).sidebarCollapsed
               : INITIAL_STATE.sidebarCollapsed,
           agiWorkAutonomyNoticeDismissed: INITIAL_STATE.agiWorkAutonomyNoticeDismissed,
+          taskDockOpen: INITIAL_STATE.taskDockOpen,
+          taskDockRunKey: INITIAL_STATE.taskDockRunKey,
         }),
         partialize: (state) => ({
           sidebarCollapsed: state.sidebarCollapsed,

@@ -366,6 +366,7 @@ export {
   buildAgentActivitySummary,
 } from './components/AgentActivityTimeline';
 export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';
+export { agiWorkPlanSentence } from './lib/agi-work-progress';
 export { ToolCallCard, detectCodeBlock } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
 export { ConnectorConnectCard } from './components/ConnectorConnectCard';

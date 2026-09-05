@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Message } from '@shared/stores/web-chat-store';
-import {
-  buildWorkSessionSummary,
-  WorkSessionPanel,
-  WORK_SESSION_FALLBACK_TITLE,
-} from './WorkSessionPanel';
+import { WorkSessionPanel } from './WorkSessionPanel';
+import { buildTaskDockSummary } from './taskDockSummary';
+import { TASK_DOCK_FALLBACK_TITLE } from '../../lib/agi-work';
 
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
@@ -59,20 +57,20 @@ function messages(withGoal: boolean): Message[] {
 }
 
 describe('WorkSessionPanel header (agentic-modes-gap-04)', () => {
-  it('titles the session with the run’s own goal instead of a constant', () => {
-    expect(buildWorkSessionSummary(messages(true), []).title).toBe(GOAL);
+  it('titles the session with the run own goal instead of a constant', () => {
+    expect(buildTaskDockSummary({ messages: messages(true), artifacts: [] }).title).toBe(GOAL);
 
     render(<WorkSessionPanel messages={messages(true)} open onClose={vi.fn()} />);
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(GOAL);
-    expect(screen.queryByText(WORK_SESSION_FALLBACK_TITLE)).toBeNull();
+    expect(screen.queryByText(TASK_DOCK_FALLBACK_TITLE)).toBeNull();
   });
 
   it('falls back to the generic label only when the run declared no goal', () => {
-    expect(buildWorkSessionSummary(messages(false), []).title).toBeNull();
+    expect(buildTaskDockSummary({ messages: messages(false), artifacts: [] }).title).toBeNull();
 
     render(<WorkSessionPanel messages={messages(false)} open onClose={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(WORK_SESSION_FALLBACK_TITLE);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(TASK_DOCK_FALLBACK_TITLE);
   });
 });
