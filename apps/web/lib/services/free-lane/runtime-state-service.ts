@@ -2,8 +2,13 @@ import 'server-only';
 
 import {
   createRouteHealthStore,
+  credentialClassForProvider,
   emptyRuntimeState,
+  providerRouteHealthConfig,
+  resolveCredentialCooldownConfig,
+  resolveModelLockoutConfig,
   resolveRouteHealthConfig,
+  type CredentialClass,
   type QuotaPool,
   type RouteCacheClass,
   type RouteHealth,
@@ -638,9 +643,20 @@ const ROUTE_HEALTH_SNAPSHOT_CACHE_KEY_SEPARATOR = '\u0000';
 let routeHealthStoreInstance: RouteHealthStore | null = null;
 
 function routeHealthStore(): RouteHealthStore {
+  const providerBreakerConfig = resolveRouteHealthConfig();
   routeHealthStoreInstance ??= createRouteHealthStore({
     store: getKeyValueStore(),
-    config: resolveRouteHealthConfig(),
+    configs: {
+      route: resolveModelLockoutConfig(),
+      provider: providerBreakerConfig,
+      credential: resolveCredentialCooldownConfig(),
+    },
+    // The provider breaker's threshold depends on which credential class
+    // governs THAT provider (`breaker-profiles.ts`): a local runtime like
+    // Ollama trips after two failures where a static-key provider tolerates
+    // twelve. Every other scope stays flat across ids.
+    configFor: (scope, id) =>
+      scope === 'provider' ? providerRouteHealthConfig(id, providerBreakerConfig) : undefined,
     boundedRead: async <T>(read: Promise<T>): Promise<T | null> => {
       const result = await readRedisWithinBudget(read);
       return wasRedisReadAbandoned(result) ? null : result;
@@ -687,17 +703,42 @@ export async function recordRouteOutcome(
   const store = routeHealthStore();
   await store.recordOutcome('route', routeId, outcome, nowMs);
   if (outcome.class !== 'success') return;
-  await store.recordOutcome('credential', providerOfRouteId(routeId), { class: 'success' }, nowMs);
+  await store.recordOutcome('provider', providerOfRouteId(routeId), { class: 'success' }, nowMs);
 }
 
 /**
- * Outcome memory for the CREDENTIAL rather than the route.
+ * Outcome memory for the whole PROVIDER breaker, not one route.
  *
  * A rejected or unfunded managed key answers for every route on its provider,
  * so recording it per route makes the next request walk them one refusal at a
- * time. This is the memory the failover loop consults before dispatch.
+ * time. This is the memory the failover loop consults before dispatch. Named
+ * for the credential historically, callers here still pass a provider id,
+ * AGI Workforce has exactly one managed credential per provider today, see
+ * `recordCredentialCooldownOutcome` for the narrower per-credential scope.
  */
 export async function recordCredentialOutcome(
+  credentialId: string,
+  outcome: RouteOutcome,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  await routeHealthStore().recordOutcome('provider', credentialId, outcome, nowMs);
+}
+
+export async function getCredentialHealthSnapshot(
+  credentialIds: readonly string[],
+  nowMs: number = Date.now(),
+): Promise<Readonly<Record<string, RouteHealthSnapshot>>> {
+  return routeHealthStore().snapshots('provider', credentialIds, nowMs);
+}
+
+/**
+ * The credential cooldown scope: narrower than the provider breaker above,
+ * one bad key or account cools down without parking every route the same
+ * provider serves. Trips on `429` and non-terminal credential rejections
+ * (`resilienceScopeForCategory` in `@agiworkforce/routing`), never on the
+ * 408/5xx classes that belong to the provider breaker.
+ */
+export async function recordCredentialCooldownOutcome(
   credentialId: string,
   outcome: RouteOutcome,
   nowMs: number = Date.now(),
@@ -705,7 +746,7 @@ export async function recordCredentialOutcome(
   await routeHealthStore().recordOutcome('credential', credentialId, outcome, nowMs);
 }
 
-export async function getCredentialHealthSnapshot(
+export async function getCredentialCooldownSnapshot(
   credentialIds: readonly string[],
   nowMs: number = Date.now(),
 ): Promise<Readonly<Record<string, RouteHealthSnapshot>>> {
@@ -734,6 +775,39 @@ export async function getRouteHealthSnapshot(
     expiresAtMs: nowMs + SNAPSHOT_CACHE_TTL_MS,
   };
   return snapshots;
+}
+
+/**
+ * The three resilience scopes, read together, for whatever the router wants
+ * to render alongside a routing decision (the route preview's candidates, a
+ * resilience dashboard, a trace). Each id list is independent, so a caller
+ * that only cares about one scope passes empty arrays for the other two
+ * rather than paying for a fetch it will not use.
+ */
+export interface ResilienceScopeSnapshot {
+  provider: Readonly<Record<string, RouteHealthSnapshot>>;
+  credential: Readonly<Record<string, RouteHealthSnapshot>>;
+  model: Readonly<Record<string, RouteHealthSnapshot>>;
+}
+
+export async function getResilienceScopeSnapshot(
+  ids: {
+    providerIds: readonly string[];
+    credentialIds: readonly string[];
+    routeIds: readonly string[];
+  },
+  nowMs: number = Date.now(),
+): Promise<ResilienceScopeSnapshot> {
+  const [provider, credential, model] = await Promise.all([
+    getCredentialHealthSnapshot(ids.providerIds, nowMs),
+    getCredentialCooldownSnapshot(ids.credentialIds, nowMs),
+    getRouteHealthSnapshot(ids.routeIds, nowMs),
+  ]);
+  return { provider, credential, model };
+}
+
+export function resolveProviderCredentialClass(providerId: string): CredentialClass {
+  return credentialClassForProvider(providerId);
 }
 
 const ROUTE_AFFINITY_KEY_PREFIX = 'agi-raffinity';
