@@ -16,6 +16,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: h.invalidateActiveOrganizationCache,
+  getCachedActiveOrganizationId: vi.fn(),
+  setCachedActiveOrganizationId: vi.fn(),
 }));
 
 import { NextRequest } from 'next/server';

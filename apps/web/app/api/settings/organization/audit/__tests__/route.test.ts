@@ -15,7 +15,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: mockRecordAuditEvent,
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));

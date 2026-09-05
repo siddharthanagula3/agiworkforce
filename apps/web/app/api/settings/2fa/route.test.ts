@@ -37,6 +37,8 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 import { getUserScopedDb } from '@/lib/server/rls-db';

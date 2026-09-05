@@ -19,7 +19,11 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }))
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: mockRecordAuditEvent,
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));

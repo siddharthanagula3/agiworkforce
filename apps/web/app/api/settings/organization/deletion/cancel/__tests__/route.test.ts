@@ -14,7 +14,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: mockRecordAuditEvent,
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockQuery(...args) })),
 }));
