@@ -355,6 +355,8 @@ export {
   sortDirectoryEntries,
   toggleFilterValue,
   DIRECTORY_SECTION_LABELS,
+  DIRECTORY_SOURCE_ALL_ID,
+  DIRECTORY_SOURCE_ALL_LABEL,
   INSTALL_COUNT_FLOOR,
   MARKETPLACE_UNAVAILABLE_COPY,
   type DirectoryAdapter,

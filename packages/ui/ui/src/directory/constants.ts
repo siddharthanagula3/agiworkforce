@@ -37,6 +37,9 @@ export const DIRECTORY_EMPTY_COPY: Record<DirectorySectionKey, string> = {
 export const DIRECTORY_LOADING_LABEL = 'Loading directory';
 export const DIRECTORY_RETRY_LABEL = 'Try again';
 
+export const DIRECTORY_SOURCE_ALL_ID = 'all';
+export const DIRECTORY_SOURCE_ALL_LABEL = 'All';
+
 export const FILTER_MENU_LABEL = 'Filter by';
 export const SORT_MENU_LABEL = 'Sort by';
 export const CLEAR_FILTERS_LABEL = 'Clear filters';
