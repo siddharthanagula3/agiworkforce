@@ -109,6 +109,7 @@ const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
   'sticky -bottom-px z-10 -mx-1.5 mt-1 border-t border-border/30 bg-popover px-1.5 pb-2 pt-1';
+const SEND_PREVIEW_DOCK_CLASS = 'sticky -bottom-px z-10 -mx-1.5 bg-popover px-1.5 pb-0.5 pt-0.5';
 const PALETTE_PANEL_CLASS = 'w-80 px-1.5 pt-1.5';
 const CHAT_PANEL_CLASS = 'w-64 p-1.5';
 const PALETTE_ITEM_SELECTOR =
@@ -814,9 +815,13 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         />
       )}
 
+      {/* Last in the list and sticky to the panel's own scrollport, the same
+      treatment the AGI Work palette uses for its search field, so the send
+      status a user opened the menu to check cannot be the part that scrolls
+      out of view: this panel is routinely taller than the space above the
+      composer. */}
       {props.sendPreviewPresentation && (
-        <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
-          <div className="my-1 border-t border-border/40" />
+        <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID} className={SEND_PREVIEW_DOCK_CLASS}>
           <SendPreview presentation={props.sendPreviewPresentation} variant="card" />
         </div>
       )}

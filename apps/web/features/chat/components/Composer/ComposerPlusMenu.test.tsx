@@ -5,7 +5,12 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
 
-import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
+import { summarizeSendPreview } from '@agiworkforce/types';
+import {
+  ComposerPlusMenu,
+  COMPOSER_MENU_SEND_ROUTE_TESTID,
+  type ComposerPlusMenuProps,
+} from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
 const TRIGGER_LABEL = 'Open composer menu';
@@ -145,6 +150,15 @@ describe('ComposerPlusMenu, chat mode', () => {
 
     expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Manage in Settings' })).toBeInTheDocument();
+  });
+
+  it('docks the send-route status to the panel bottom so it cannot scroll out of view', () => {
+    const sendPreviewPresentation = summarizeSendPreview({ providerMode: 'ManagedGateway' });
+    renderMenu({ sendPreviewPresentation });
+
+    const dock = screen.getByTestId(COMPOSER_MENU_SEND_ROUTE_TESTID);
+    expect(dock.className).toContain('sticky');
+    expect(dock.className).toContain('-bottom-px');
   });
 });
 
