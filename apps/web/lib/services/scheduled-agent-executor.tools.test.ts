@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic', () => ({
   buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
+  buildServingRouteId: vi.fn(() => 'route-id'),
 }));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn(async () => null),
@@ -65,6 +66,12 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
     estimatedCostCents: 2,
   })),
   finalizeManagedUsageRequest: vi.fn(),
+  MANAGED_CHAT_CONTRACT_VERSION: '2026-07-15',
+  ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
+  createManagedUsageErrorBody: vi.fn(),
+  markManagedUsageClientDelivered: vi.fn(),
+  parseManagedUsageIdempotencyKey: vi.fn(),
+  resolveManagedQuotaRecovery: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
@@ -76,6 +83,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(),
   toGenericUpstreamError: vi.fn(),
+  buildProtocolRouteAdapter: vi.fn(),
+  listAvailableManagedProviderIds: vi.fn(() => new Set()),
+  resolveProviderFromModel: vi.fn(() => 'anthropic'),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: vi.fn(),

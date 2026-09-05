@@ -22,6 +22,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/support/handoff/config', () => ({
   getHandoffConfig: () => ({ fallbackEmail: 'support@example.com' }),
+  isValidEmail: vi.fn(),
 }));
 vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: (...args: unknown[]) => mocks.send(...args),
