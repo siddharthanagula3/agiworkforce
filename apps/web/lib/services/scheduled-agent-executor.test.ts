@@ -21,6 +21,16 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   reserveManagedUsageRequest: vi.fn(),
   markManagedUsageProviderStarted: vi.fn(),
   finalizeManagedUsageRequest: vi.fn(),
+  MANAGED_CHAT_CONTRACT_VERSION: '2026-07-15',
+  ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
+  createManagedUsageErrorBody: vi.fn(),
+  markManagedUsageClientDelivered: vi.fn(),
+  parseManagedUsageIdempotencyKey: vi.fn(),
+  reserveManagedUsageProviderStep: vi.fn(async () => ({
+    operationResult: 'covered',
+    estimatedCostCents: 2,
+  })),
+  resolveManagedQuotaRecovery: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
@@ -31,6 +41,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(),
   toGenericUpstreamError: vi.fn(),
+  buildProtocolRouteAdapter: vi.fn(),
+  listAvailableManagedProviderIds: vi.fn(() => new Set()),
+  resolveProviderFromModel: vi.fn(() => 'anthropic'),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: vi.fn(),

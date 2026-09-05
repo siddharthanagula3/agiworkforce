@@ -13,6 +13,14 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/services/enterprise-collection-state', () => ({
   readOrganizationCollectionState: mocks.readOrganizationCollectionState,
+  CURRENT_COLLECTION_STATE: {
+    stage: 'current',
+    daysPastDue: 0,
+    oldestOpenInvoiceDueAt: null,
+    seatExpansionBlocked: false,
+    newPaidUsageBlocked: false,
+    readOnly: false,
+  },
 }));
 
 vi.mock('@/lib/services/organization-policy-gate', () => ({

@@ -2,9 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn() }));
+vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
 vi.mock('@/lib/e2b/session-store', () => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
+  deleteE2BSession: vi.fn(),
+  getE2BSession: vi.fn(),
+  saveE2BSession: vi.fn(),
+  withUserSandboxLock: vi.fn(async (_scope: unknown, critical: () => Promise<unknown>) => ({
+    locked: true,
+    result: await critical(),
+  })),
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(() => ({ stream: vi.fn() })),

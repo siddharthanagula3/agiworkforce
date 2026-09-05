@@ -9,11 +9,24 @@ vi.mock('@/lib/e2b/egress-host-resolution', () => ({
 const { managedCloudCodeSessionScope } = vi.hoisted(() => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
-vi.mock('@/lib/e2b/session-store', () => ({ managedCloudCodeSessionScope }));
+vi.mock('@/lib/e2b/session-store', () => ({
+  managedCloudCodeSessionScope,
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
+  deleteE2BSession: vi.fn(),
+  getE2BSession: vi.fn(),
+  saveE2BSession: vi.fn(),
+  withUserSandboxLock: vi.fn(async (_scope: unknown, critical: () => Promise<unknown>) => ({
+    locked: true,
+    result: await critical(),
+  })),
+}));
 vi.mock('@/lib/github-app', () => ({
   isGitHubAppConfigured: vi.fn(() => true),
   isGitHubInstallationLinkingAvailable: vi.fn(() => true),
   getInstallationAccessToken: vi.fn(),
+  getPrDiff: vi.fn(),
+  postIssueComment: vi.fn(),
+  postPrReview: vi.fn(),
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   getUserGithubInstallations: vi.fn(async () => []),
