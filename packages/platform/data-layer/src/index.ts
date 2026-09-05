@@ -26,5 +26,5 @@ export type {
 
 export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
 
-export { NeonDatabaseAdapter } from './adapters/neon';
-export { PostgresDatabaseAdapter } from './adapters/postgres';
+export { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
+export { PostgresDatabaseAdapter, type PostgresDatabaseAdapterConfig } from './adapters/postgres';
