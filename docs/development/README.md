@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-28
+Last updated: 2026-09-05
 
 How to work in this repository: setup, commands, testing, debugging, migrations,
 CI, and the agent and parallel-agent workflows.
@@ -25,6 +25,12 @@ the process, not the rules.
    docs, and releases.
 6. [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md), contribution workflow and
    PR expectations.
+
+## How-to guides
+
+- [`add-a-gateway.md`](./add-a-gateway.md), the five steps to add an OpenAI-
+  or Anthropic-compatible gateway to the model registry without a dedicated
+  provider package.
 
 ## What belongs here
 
