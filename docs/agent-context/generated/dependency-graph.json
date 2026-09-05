@@ -689,6 +689,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/observability"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/provider-protocol"
       },
       {
