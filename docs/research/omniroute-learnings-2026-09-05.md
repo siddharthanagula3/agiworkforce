@@ -46,7 +46,7 @@ Reject copying any "avoid"-verdict entry: our workbook already treats
 
 ## 2. Compression engines
 
-`docs/compression/COMPRESSION_ENGINES.md` documents 8 modes over a shared
+the clone file docs/compression/COMPRESSION_ENGINES.md documents 8 modes over a shared
 engine contract registered in
 `open-sse/services/compression/engines/registry.ts`. Caveman (prose
 condensation) publishes ~46% input savings; RTK (49 structured
