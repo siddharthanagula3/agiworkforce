@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   providerStarted: vi.fn(),
   clientDelivered: vi.fn(),
   getSubscription: vi.fn(),
-  neonDb: vi.fn(),
+  userScopedDb: vi.fn(),
   fetch: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
 }));
@@ -41,8 +41,8 @@ vi.mock('@shared/utils/env', () => ({
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: (...args: unknown[]) => mocks.neonDb(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: (...args: unknown[]) => mocks.getSubscription(...args) },
@@ -65,13 +65,23 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   };
 });
 
-const { POST, estimateAudioSeconds, estimateTranscriptionCostCents, settleTranscriptionTokens } =
-  await import('./route');
+const {
+  POST,
+  audioMimeEssence,
+  estimateAudioSeconds,
+  estimateTranscriptionCostCents,
+  settleTranscriptionTokens,
+} = await import('./route');
 
-function transcriptionRequest(headers: Record<string, string> = {}): NextRequest {
+const RECORDER_WEBM_TYPE = 'audio/webm;codecs=opus';
+
+function transcriptionRequest(
+  headers: Record<string, string> = {},
+  mimeType = 'audio/webm',
+): NextRequest {
   const webmMagic = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]);
   const body = new FormData();
-  body.append('file', new Blob([webmMagic, new Uint8Array(32)], { type: 'audio/webm' }), 'a.webm');
+  body.append('file', new Blob([webmMagic, new Uint8Array(32)], { type: mimeType }), 'a.webm');
   return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
     method: 'POST',
     body,
@@ -90,7 +100,11 @@ function providerReturns(payload: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.neonDb.mockReturnValue({ query: vi.fn() });
+  mocks.userScopedDb.mockResolvedValue({
+    db: { query: vi.fn() },
+    userId: 'user-1',
+    organizationId: null,
+  });
   mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
   mocks.assertTierUnitAllowance.mockResolvedValue({
     unit: 'transcription_seconds',
@@ -228,6 +242,63 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     const response = await POST(transcriptionRequest({ 'Idempotency-Key': 'short' }));
     expect(response.status).toBe(400);
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('tenant scope on the reservation', () => {
+  it('reserves on the tenant-scoped handle the reservation function requires', async () => {
+    providerReturns({ text: 'hello' });
+    const scopedQuery = vi.fn();
+    mocks.userScopedDb.mockResolvedValue({
+      db: { query: scopedQuery },
+      userId: 'user-1',
+      organizationId: null,
+    });
+
+    await POST(transcriptionRequest());
+
+    expect(mocks.userScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      apiKeyScope: 'inference:write',
+    });
+    expect(mocks.reserve.mock.calls[0]![0]).toMatchObject({ db: { query: scopedQuery } });
+  });
+
+  it('spends nothing when the scoped handle resolves a different tenant', async () => {
+    mocks.userScopedDb.mockResolvedValue({
+      db: { query: vi.fn() },
+      userId: 'someone-else',
+      organizationId: null,
+    });
+
+    const response = await POST(transcriptionRequest());
+
+    expect(response.status).toBe(403);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('accepted audio containers', () => {
+  it('accepts the codec-parameterised type a browser MediaRecorder produces', async () => {
+    providerReturns({ text: 'hello' });
+
+    const response = await POST(transcriptionRequest({}, RECORDER_WEBM_TYPE));
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still rejects a container outside the allowlist', async () => {
+    const response = await POST(transcriptionRequest({}, 'video/mp2t'));
+
+    expect(response.status).toBe(415);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('reduces a media type to its lowercase essence', () => {
+    expect(audioMimeEssence(RECORDER_WEBM_TYPE)).toBe('audio/webm');
+    expect(audioMimeEssence('AUDIO/WAV ; charset=binary')).toBe('audio/wav');
+    expect(audioMimeEssence('')).toBe('');
   });
 });
 
