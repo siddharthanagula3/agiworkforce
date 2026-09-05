@@ -12,6 +12,7 @@ import {
   type RouteOutcome,
   type RouteUnavailabilityReason,
   type RoutingRuntimeState,
+  type RoutingTaskType,
 } from '@agiworkforce/routing';
 import type { ErrorCategory } from '@agiworkforce/provider-runtime';
 
@@ -738,6 +739,8 @@ export async function getRouteHealthSnapshot(
 const ROUTE_AFFINITY_KEY_PREFIX = 'agi-raffinity';
 const AFFINITY_FIELD_ROUTE_ID = 'routeId';
 const AFFINITY_FIELD_UPSTREAM_PROVIDER = 'upstreamProvider';
+const AFFINITY_FIELD_MODEL_KEY = 'modelKey';
+const AFFINITY_FIELD_TASK_TYPE = 'taskType';
 
 const PROVIDER_PROMPT_CACHE_TTL_MS = 5 * 60 * MS_PER_SECOND;
 const EXTENDED_PROMPT_CACHE_TTL_MS = 60 * 60 * MS_PER_SECOND;
@@ -763,6 +766,8 @@ function routeAffinityKey(conversationId: string): string {
 export interface ServedRouteAffinity {
   routeId: string;
   upstreamProvider?: string;
+  modelKey?: string;
+  taskType?: RoutingTaskType;
 }
 
 export async function recordServedRouteAffinity(input: {
@@ -770,6 +775,8 @@ export async function recordServedRouteAffinity(input: {
   routeId: string;
   ttlMs: number;
   upstreamProvider?: string;
+  modelKey?: string;
+  taskType?: RoutingTaskType;
 }): Promise<void> {
   if (input.ttlMs <= 0) return;
   const store = getKeyValueStore();
@@ -783,6 +790,8 @@ export async function recordServedRouteAffinity(input: {
         ...(input.upstreamProvider
           ? { [AFFINITY_FIELD_UPSTREAM_PROVIDER]: input.upstreamProvider }
           : {}),
+        ...(input.modelKey ? { [AFFINITY_FIELD_MODEL_KEY]: input.modelKey } : {}),
+        ...(input.taskType ? { [AFFINITY_FIELD_TASK_TYPE]: input.taskType } : {}),
       })
       .expireIn(key, input.ttlMs)
       .exec();
@@ -813,10 +822,16 @@ export async function getServedRouteAffinity(
     const routeId = record[AFFINITY_FIELD_ROUTE_ID];
     if (typeof routeId !== 'string' || routeId.length === 0) return null;
     const upstreamProvider = record[AFFINITY_FIELD_UPSTREAM_PROVIDER];
+    const modelKey = record[AFFINITY_FIELD_MODEL_KEY];
+    const taskType = record[AFFINITY_FIELD_TASK_TYPE];
     return {
       routeId,
       ...(typeof upstreamProvider === 'string' && upstreamProvider.length > 0
         ? { upstreamProvider }
+        : {}),
+      ...(typeof modelKey === 'string' && modelKey.length > 0 ? { modelKey } : {}),
+      ...(typeof taskType === 'string' && taskType.length > 0
+        ? { taskType: taskType as RoutingTaskType }
         : {}),
     };
   } catch (error) {
