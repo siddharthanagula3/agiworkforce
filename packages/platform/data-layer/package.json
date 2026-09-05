@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Neon + Clerk data-layer boundary for AGI Workforce",
+  "description": "Vendor-neutral database and identity data-layer boundary for AGI Workforce",
   "exports": "./src/index.ts",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -16,7 +16,8 @@
   "dependencies": {},
   "peerDependencies": {
     "@clerk/backend": ">=3.0.0",
-    "@neondatabase/serverless": ">=1.0.0"
+    "@neondatabase/serverless": ">=1.0.0",
+    "pg": ">=8.0.0"
   },
   "peerDependenciesMeta": {
     "@clerk/backend": {
@@ -24,11 +25,16 @@
     },
     "@neondatabase/serverless": {
       "optional": true
+    },
+    "pg": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@clerk/backend": "^3.4.13",
     "@neondatabase/serverless": "^1.1.0",
+    "@types/pg": "^8.15.6",
+    "pg": "^8.22.0",
     "vitest": "^4.1.8"
   }
 }
