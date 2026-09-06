@@ -13,7 +13,7 @@
 //! stopped to ask cannot be answered on a surface the user cannot see.
 
 use agiworkforce_protocol::tool_primitive::ToolApprovalRequest;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use super::approval;
 use super::safety::SafetyDecision;
@@ -38,8 +38,6 @@ pub const CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 /// pause. The unattended blocks the loop emits elsewhere keep their own value.
 const PAUSED_RUN_IS_ATTENDED: bool = false;
 
-const CONFIRMATION_EVENT: &str = "computer_use:confirmation_required";
-const RESOLUTION_EVENT: &str = "computer_use:confirmation_resolved";
 const APPROVED_OUTCOME: &str = "approved";
 const DENIED_OUTCOME: &str = "denied";
 const EXPIRED_OUTCOME: &str = "expired";
@@ -125,16 +123,12 @@ impl<R: tauri::Runtime> ConfirmationSurface for ComputerUseSurface<'_, R> {
     fn present(&self, _request: &ToolConfirmationRequest) -> Result<(), String> {
         surface_the_request(self.app_handle);
 
-        self.app_handle
-            .emit(
-                CONFIRMATION_EVENT,
-                serde_json::json!({
-                    "sessionId": self.session_id,
-                    "stepIndex": self.step_index,
-                    "approval": self.approval,
-                }),
-            )
-            .map_err(|error| error.to_string())
+        crate::ui::events::emit_computer_use_confirmation_required(
+            self.app_handle,
+            &self.session_id,
+            self.step_index,
+            &self.approval,
+        )
     }
 
     fn expire(&self, _request: &ToolConfirmationRequest) {
@@ -144,13 +138,11 @@ impl<R: tauri::Runtime> ConfirmationSurface for ComputerUseSurface<'_, R> {
 
 impl<R: tauri::Runtime> ComputerUseSurface<'_, R> {
     fn resolved(&self, outcome: ConfirmationOutcome) {
-        let _ = self.app_handle.emit(
-            RESOLUTION_EVENT,
-            serde_json::json!({
-                "sessionId": self.session_id,
-                "stepIndex": self.step_index,
-                "outcome": outcome.label(),
-            }),
+        crate::ui::events::emit_computer_use_confirmation_resolved(
+            self.app_handle,
+            &self.session_id,
+            self.step_index,
+            outcome.label(),
         );
     }
 }

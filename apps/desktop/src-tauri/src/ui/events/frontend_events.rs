@@ -302,3 +302,47 @@ pub fn emit_computer_use_approval(
         );
     }
 }
+
+/// The step a confirmation-gated computer-use task has stopped on. The name is
+/// spelled here rather than behind a constant so the desktop event contract can
+/// pair it with the listener that holds the paused step.
+pub fn emit_computer_use_confirmation_required<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+    session_id: &str,
+    step_index: u32,
+    approval: &agiworkforce_protocol::tool_primitive::ToolApprovalRequest,
+) -> Result<(), String> {
+    app_handle
+        .emit(
+            "computer_use:confirmation_required",
+            serde_json::json!({
+                "sessionId": session_id,
+                "stepIndex": step_index,
+                "approval": approval,
+            }),
+        )
+        .map_err(|error| error.to_string())
+}
+
+/// The answer that released a paused step, so the surface holding it clears the
+/// same step it opened on.
+pub fn emit_computer_use_confirmation_resolved<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+    session_id: &str,
+    step_index: u32,
+    outcome: &str,
+) {
+    if let Err(e) = app_handle.emit(
+        "computer_use:confirmation_resolved",
+        serde_json::json!({
+            "sessionId": session_id,
+            "stepIndex": step_index,
+            "outcome": outcome,
+        }),
+    ) {
+        tracing::error!(
+            "[Events] Failed to emit computer-use confirmation resolution: {}",
+            e
+        );
+    }
+}
