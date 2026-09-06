@@ -149,6 +149,12 @@
   padding-bottom: clamp(40px, 5vw, 64px);
 }
 [data-design='agi'] .agi-fl-hero-copy {
+  --agi-fl-hero-mark: clamp(3rem, 6vw, 5.5rem);
+  --agi-fl-hero-brand-shift: clamp(-14px, -1.2vw, -8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: fit-content;
   min-width: 0;
 }
 [data-design='agi'] .agi-fl-hero-visual {
@@ -211,14 +217,14 @@
   white-space: nowrap;
 }
 [data-design='agi'] .agi-fl-hero-brand-mark {
-  width: clamp(3rem, 6vw, 5.5rem);
-  height: clamp(3rem, 6vw, 5.5rem);
+  width: var(--agi-fl-hero-mark);
+  height: var(--agi-fl-hero-mark);
   flex-shrink: 0;
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-fl-hero-brand {
   margin: 0;
-  margin-left: clamp(-14px, -1.2vw, -8px);
+  margin-left: var(--agi-fl-hero-brand-shift);
   font-family: var(--agi-font-display);
   font-size: clamp(4rem, 8vw, 7rem);
   font-weight: 700;
@@ -3170,9 +3176,7 @@
 
 @media (max-width: 640px) {
   [data-design='agi'] .agi-fl-hero-copy {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    width: 100%;
     text-align: center;
   }
   [data-design='agi'] .agi-fl-hero-brand-wrap {
