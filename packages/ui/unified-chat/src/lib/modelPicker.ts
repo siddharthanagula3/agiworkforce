@@ -11,6 +11,7 @@ import {
   getModelReasoning,
   isAutoModeModelId,
   listChatModels,
+  listPickerRecommendedModelIds,
   normalizeUIPlanTier,
   type ModelCapabilities,
   type ModelMetadata,
@@ -209,21 +210,27 @@ export function buildModelPickerShortList(input: ModelPickerShortListInput): Mod
   const admitted = selectable.filter((model) => rowsById.get(model.id)?.lock == null);
   const familyAdmitted = admitted.filter((model) => familyActives.has(model.id));
   const seenFamilies = new Set<string>();
-  const recommended = (familyAdmitted.length > 0 ? familyAdmitted : admitted)
-    .map((model) => rowsById.get(model.id)!)
-    .filter((row) => {
-      const key = row.familySlot ?? row.id;
-      if (seenFamilies.has(key)) return false;
-      seenFamilies.add(key);
-      return true;
-    })
-    .sort(
-      (left, right) =>
-        routerOrderIndex(routerOrder, left.id, left.familySlot) -
-          routerOrderIndex(routerOrder, right.id, right.familySlot) ||
-        left.displayName.localeCompare(right.displayName),
-    )
-    .slice(0, MODEL_PICKER_RECOMMENDED_LIMIT);
+  const curated = listPickerRecommendedModelIds()
+    .map((modelId) => rowsById.get(modelId))
+    .filter((row): row is ModelPickerRowModel => row !== undefined && row.lock == null);
+  const recommended =
+    curated.length > 0
+      ? curated
+      : (familyAdmitted.length > 0 ? familyAdmitted : admitted)
+          .map((model) => rowsById.get(model.id)!)
+          .filter((row) => {
+            const key = row.familySlot ?? row.id;
+            if (seenFamilies.has(key)) return false;
+            seenFamilies.add(key);
+            return true;
+          })
+          .sort(
+            (left, right) =>
+              routerOrderIndex(routerOrder, left.id, left.familySlot) -
+                routerOrderIndex(routerOrder, right.id, right.familySlot) ||
+              left.displayName.localeCompare(right.displayName),
+          )
+          .slice(0, MODEL_PICKER_RECOMMENDED_LIMIT);
 
   const favouriteRows = selectable
     .filter((model) => favourites.has(model.id))
