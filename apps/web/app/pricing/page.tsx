@@ -825,27 +825,20 @@ export default function PricingPage() {
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <section className="agi-ds-section agi-ds-hero" aria-labelledby="pricing-hero-title">
+        <section
+          className="agi-ds-section agi-ds-pricing-plans"
+          aria-labelledby="pricing-hero-title"
+        >
           <Container>
-            <div className="agi-ds-pricing-hero">
-              <div>
-                <Eyebrow>Pricing</Eyebrow>
-                <h1 id="pricing-hero-title" className="agi-ds-h1">
-                  {t('pageTitle')}
-                </h1>
-                {!CHECKOUT_ENABLED ? (
-                  <p role="status" className="agi-ds-prose" data-size="sm">
-                    Checkout is temporarily unavailable. Please try again later. Existing plans and
-                    Enterprise contact are unaffected.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </Container>
-        </section>
-
-        <section className="agi-ds-section" aria-label="Plans" style={{ paddingTop: 0 }}>
-          <Container>
+            <h1 id="pricing-hero-title" className="sr-only">
+              {t('pageTitle')}
+            </h1>
+            {!CHECKOUT_ENABLED ? (
+              <p role="status" className="agi-ds-prose" data-size="sm">
+                Checkout is temporarily unavailable. Please try again later. Existing plans and
+                Enterprise contact are unaffected.
+              </p>
+            ) : null}
             <div className="agi-ds-tier-controls">
               <div className="agi-ds-tier-toggle" role="group" aria-label={t('audienceLabel')}>
                 <button
