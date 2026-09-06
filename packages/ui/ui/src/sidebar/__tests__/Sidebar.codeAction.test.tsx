@@ -33,7 +33,7 @@ describe('sidebar Code control', () => {
     const onOpenCode = vi.fn();
     renderSidebar({ onOpenCode });
 
-    const code = screen.getByRole('button', { name: 'Code' });
+    const code = screen.getByRole('button', { name: 'AGI Code' });
     const newChat = screen.getByRole('button', { name: 'New chat' });
 
     expect(newChat.parentElement).toBe(code.parentElement);
@@ -46,7 +46,7 @@ describe('sidebar Code control', () => {
   it('keeps the New chat pill height so the two controls read as one pair', () => {
     renderSidebar({ onOpenCode: vi.fn() });
 
-    const code = screen.getByRole('button', { name: 'Code' });
+    const code = screen.getByRole('button', { name: 'AGI Code' });
     expect(code.className).toContain('h-8');
     expect(code.className).toContain('w-8');
     expect(code.className).toContain('rounded-lg');
@@ -57,7 +57,7 @@ describe('sidebar Code control', () => {
     const onOpenCode = vi.fn();
     renderSidebar({ collapsed: true, onOpenCode });
 
-    const code = screen.getByRole('button', { name: 'Code' });
+    const code = screen.getByRole('button', { name: 'AGI Code' });
     const newChat = screen.getByRole('button', { name: 'New chat' });
     const search = screen.getByRole('button', { name: 'Search' });
 
@@ -70,11 +70,11 @@ describe('sidebar Code control', () => {
 
   it('renders nothing when the surface has no Code destination', () => {
     renderSidebar({});
-    expect(screen.queryByRole('button', { name: 'Code' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'AGI Code' })).toBeNull();
 
     cleanup();
 
     renderSidebar({ collapsed: true });
-    expect(screen.queryByRole('button', { name: 'Code' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'AGI Code' })).toBeNull();
   });
 });
