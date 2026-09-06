@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { AuthDivider } from './AuthDivider';
@@ -11,12 +11,7 @@ import { AuthProviderButtons } from './AuthProviderButtons';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import { AuthSwitchLine, SWITCH_INSTEAD_LABELS } from './AuthSwitchLine';
-import {
-  AUTH_CHECKBOX_CLASS,
-  AUTH_CHECKBOX_ROW_CLASS,
-  AUTH_ERROR_CLASS,
-  AUTH_LINK_CLASS,
-} from './authStyles';
+import { AUTH_ERROR_CLASS, AUTH_LINK_CLASS } from './authStyles';
 import type { AuthMode, AuthProvider, AuthProviderId } from './authContract';
 
 const HEADINGS: Readonly<Record<AuthMode, string>> = {
@@ -36,9 +31,7 @@ export function AuthEmailStep({
   error,
   fieldError,
   switchOffered,
-  termsAccepted,
   providerPending,
-  onTermsChange,
   onSubmit,
   onStartProvider,
 }: {
@@ -50,14 +43,11 @@ export function AuthEmailStep({
   error: string | null;
   fieldError: string | null;
   switchOffered: boolean;
-  termsAccepted: boolean;
   providerPending: AuthProviderId | null;
-  onTermsChange: (accepted: boolean) => void;
   onSubmit: (email: string) => void;
   onStartProvider: (provider: AuthProviderId) => void;
 }) {
   const [email, setEmail] = useState('');
-  const termsId = useId();
   const isSignup = mode === 'signup';
   const fieldMessage =
     fieldError && switchOffered ? (
@@ -72,7 +62,10 @@ export function AuthEmailStep({
     );
 
   return (
-    <AuthStepFrame heading={HEADINGS[mode]} footer={isSignup ? null : <AuthLegalFooter />}>
+    <AuthStepFrame
+      heading={HEADINGS[mode]}
+      footer={<AuthLegalFooter variant={isSignup ? 'signup' : 'links'} />}
+    >
       <AuthProviderButtons
         providers={providers}
         pending={providerPending}
@@ -101,38 +94,6 @@ export function AuthEmailStep({
           disabled={busy}
           onChange={(event) => setEmail(event.target.value)}
         />
-
-        {isSignup ? (
-          <label htmlFor={termsId} className={AUTH_CHECKBOX_ROW_CLASS}>
-            <input
-              id={termsId}
-              type="checkbox"
-              checked={termsAccepted}
-              className={AUTH_CHECKBOX_CLASS}
-              onChange={(event) => onTermsChange(event.target.checked)}
-            />
-            <span>
-              I agree to the{' '}
-              <Link
-                href={CANONICAL_POLICY_ROUTES.terms}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={AUTH_LINK_CLASS}
-              >
-                Terms of Use
-              </Link>{' '}
-              and{' '}
-              <Link
-                href={CANONICAL_POLICY_ROUTES.privacy}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={AUTH_LINK_CLASS}
-              >
-                Privacy Policy
-              </Link>
-            </span>
-          </label>
-        ) : null}
 
         {error ? (
           <p role="alert" className={AUTH_ERROR_CLASS}>

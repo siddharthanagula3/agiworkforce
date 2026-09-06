@@ -38,12 +38,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 import { useIdentityAuthClient } from '../identityAuthAdapter';
-import {
-  ACCOUNT_ALREADY_EXISTS,
-  NO_ACCOUNT_FOR_EMAIL,
-  TERMS_NOT_ACCEPTED,
-  type AuthMode,
-} from '../authContract';
+import { ACCOUNT_ALREADY_EXISTS, NO_ACCOUNT_FOR_EMAIL, type AuthMode } from '../authContract';
 
 const REDIRECTS = {
   completeUrl: '/login/complete?redirectTo=%2Fchat',
@@ -97,7 +92,7 @@ describe('identity auth adapter contract', () => {
   it('sends an account with a password to the password step', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
 
-    const result = await client('login').current.startWithEmail(EMAIL, false);
+    const result = await client('login').current.startWithEmail(EMAIL);
 
     expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
     expect(result).toEqual({ status: 'next', step: { kind: 'password', email: EMAIL } });
@@ -106,7 +101,7 @@ describe('identity auth adapter contract', () => {
   it('emails a code when the account has no password', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'email_code' }];
 
-    const result = await client('login').current.startWithEmail(EMAIL, false);
+    const result = await client('login').current.startWithEmail(EMAIL);
 
     expect(signInState.emailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
@@ -123,7 +118,7 @@ describe('identity auth adapter contract', () => {
       },
     });
 
-    const result = await client('login').current.startWithEmail(EMAIL, false);
+    const result = await client('login').current.startWithEmail(EMAIL);
 
     expect(result).toEqual({
       status: 'failed',
@@ -141,7 +136,7 @@ describe('identity auth adapter contract', () => {
       },
     });
 
-    const result = await client('signup').current.startWithEmail(EMAIL, true);
+    const result = await client('signup').current.startWithEmail(EMAIL);
 
     expect(result).toEqual({
       status: 'failed',
@@ -151,15 +146,8 @@ describe('identity auth adapter contract', () => {
     });
   });
 
-  it('refuses to create an account before the terms are accepted', async () => {
-    const result = await client('signup').current.startWithEmail(EMAIL, false);
-
-    expect(signUpState.create).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: 'failed', message: TERMS_NOT_ACCEPTED });
-  });
-
   it('records terms acceptance on the account it creates', async () => {
-    await client('signup').current.startWithEmail(EMAIL, true);
+    await client('signup').current.startWithEmail(EMAIL);
 
     expect(signUpState.create).toHaveBeenCalledWith({
       emailAddress: EMAIL,
@@ -244,7 +232,7 @@ describe('identity auth adapter contract', () => {
   });
 
   it('hands a provider sign-in to the callback route the page chose', async () => {
-    const result = await client('login').current.startProvider('google', false);
+    const result = await client('login').current.startProvider('google');
 
     expect(signInState.sso).toHaveBeenCalledWith({
       strategy: 'oauth_google',
@@ -254,15 +242,17 @@ describe('identity auth adapter contract', () => {
     expect(result).toEqual({ status: 'redirecting' });
   });
 
-  it('will not start a provider sign-up before the terms are accepted', async () => {
-    const result = await client('signup').current.startProvider('github', false);
+  it('records the agreement on a provider sign-up, since signing up is the agreement', async () => {
+    const result = await client('signup').current.startProvider('github');
 
-    expect(signUpState.sso).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: 'failed', message: TERMS_NOT_ACCEPTED });
+    expect(signUpState.sso).toHaveBeenCalledWith(
+      expect.objectContaining({ strategy: 'oauth_github', legalAccepted: true }),
+    );
+    expect(result).toEqual({ status: 'redirecting' });
   });
 
   it('carries terms acceptance into a provider sign-up', async () => {
-    await client('signup').current.startProvider('github', true);
+    await client('signup').current.startProvider('github');
 
     expect(signUpState.sso).toHaveBeenCalledWith({
       strategy: 'oauth_github',
