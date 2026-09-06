@@ -209,7 +209,7 @@ const WORK_BAR_CONNECTOR_MARKS = 3;
 const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
 const DESKTOP_APP_HREF = '/download';
 const WORK_BAR_ITEM_CLASS =
-  'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium sm:h-8 sm:px-3 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 
@@ -3437,7 +3437,7 @@ const ChatComposerNewComponent = ({
                 {projectPicker && canUseAgiWork && !imageMode && !videoMode && (
                   <div
                     data-testid="composer-work-mode"
-                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-0.5 text-sm font-medium"
+                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium sm:p-0.5 sm:text-sm"
                   >
                     {(['chat', 'agiwork'] as const).map((mode) => (
                       <button
@@ -3448,7 +3448,7 @@ const ChatComposerNewComponent = ({
                         aria-pressed={workMode === mode}
                         title={WORK_MODE_TITLES[mode]}
                         className={cn(
-                          'flex h-7 items-center rounded-full px-3 transition-colors',
+                          'flex h-6 items-center rounded-full px-2 transition-colors sm:h-7 sm:px-3',
                           workMode === mode
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground',
