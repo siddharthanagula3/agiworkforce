@@ -151,11 +151,11 @@
 [data-design='agi'] .agi-fl-hero-copy {
   --agi-fl-hero-mark: clamp(3rem, 6vw, 5.5rem);
   --agi-fl-hero-brand-shift: clamp(-14px, -1.2vw, -8px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: fit-content;
   min-width: 0;
+}
+[data-design='agi'] .agi-fl-hero .agi-fl-announce,
+[data-design='agi'] .agi-fl-hero .agi-fl-cta-row {
+  margin-left: calc(var(--agi-fl-hero-mark) / 2);
 }
 [data-design='agi'] .agi-fl-hero-visual {
   display: flex;
@@ -3176,8 +3176,14 @@
 
 @media (max-width: 640px) {
   [data-design='agi'] .agi-fl-hero-copy {
-    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
+  }
+  [data-design='agi'] .agi-fl-hero .agi-fl-announce,
+  [data-design='agi'] .agi-fl-hero .agi-fl-cta-row {
+    margin-left: 0;
   }
   [data-design='agi'] .agi-fl-hero-brand-wrap {
     justify-content: center;
