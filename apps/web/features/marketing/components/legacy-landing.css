@@ -3168,3 +3168,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+[data-design='agi'] .agi-lp-hero-stage .agi-dev,
+[data-design='agi'] .agi-fl-hero-visual .agi-dev,
+[data-design='agi'] .agi-fl-surface-visual .agi-dev,
+[data-design='agi'] .agi-ds-bento-visual .agi-dev,
+[data-design='agi'] .agi-ds-split-visual .agi-dev,
+[data-design='agi'] .agi-ds-scrollfeatures-stage .agi-dev,
+[data-design='agi'] .agi-lp-moment .agi-dev,
+[data-design='agi'] .agi-ds-grid-2 > .agi-dev {
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 58%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 58%, transparent 100%);
+}
+[data-design='agi'] .agi-ds-bento-visual .agi-dev {
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 50%, transparent 96%);
+  mask-image: linear-gradient(to bottom, currentColor 50%, transparent 96%);
+}
+[data-design='agi'] .agi-ds-bento-visual {
+  padding-bottom: 0;
+  margin-bottom: calc(var(--agi-space-3) * -1);
+}
+[data-design='agi'] .agi-lp-hero-stage .agi-dev .agi-dev-shell,
+[data-design='agi'] .agi-ds-split-visual .agi-dev .agi-dev-shell,
+[data-design='agi'] .agi-ds-scrollfeatures-stage .agi-dev .agi-dev-shell,
+[data-design='agi'] .agi-ds-bento-visual .agi-dev .agi-dev-shell {
+  box-shadow: none;
+}
