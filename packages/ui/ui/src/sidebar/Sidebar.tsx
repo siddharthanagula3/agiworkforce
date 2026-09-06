@@ -447,7 +447,7 @@ export function Sidebar(props: SidebarProps) {
           className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out"
           style={{ width: COLLAPSED_RAIL_WIDTH }}
         >
-          <div className="flex flex-col items-center gap-2 py-3">
+          <div className="flex flex-col items-center gap-0 py-2">
             <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
             <RailButton
               label={t('sidebar.newChatAction', 'New chat')}
