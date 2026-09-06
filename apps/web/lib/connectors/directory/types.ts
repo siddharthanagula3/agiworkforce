@@ -10,9 +10,22 @@ export type DirectoryConnectableMode =
 
 export type DirectorySource = 'internal' | 'mcp-registry';
 
-export type DirectoryBadge = 'first-party' | 'registry' | 'community';
+export type DirectoryBadge = 'first-party' | 'official' | 'verified' | 'registry' | 'community';
 
 export type DirectoryIconSource = 'brand' | 'registry' | 'site' | 'monogram';
+
+export type DirectoryMonogramHue =
+  | 'code'
+  | 'communication'
+  | 'data'
+  | 'design'
+  | 'financial-services'
+  | 'health'
+  | 'legal'
+  | 'life-sciences'
+  | 'productivity'
+  | 'sales-and-marketing'
+  | 'other';
 
 export interface DirectoryRemote {
   readonly url: string;
@@ -35,6 +48,9 @@ export interface DirectoryRecord {
   readonly badge: DirectoryBadge;
   readonly iconUrl: string | null;
   readonly monogram: string;
+  readonly monogramHue?: DirectoryMonogramHue;
+  readonly featured?: boolean;
+  readonly listingNote?: string;
   readonly documentationUrl: string | null;
   readonly iconSource: DirectoryIconSource;
   readonly brandSlug: string | null;

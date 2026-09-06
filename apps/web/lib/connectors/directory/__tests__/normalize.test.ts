@@ -48,6 +48,18 @@ const TANDEM_DOCS_ENTRY: RegistryEntry = {
   },
 };
 
+const WEATHER_ENTRY: RegistryEntry = {
+  server: {
+    name: 'io.github.acme/weather',
+    title: 'Weather Server MCP',
+    description: 'Weather forecasts over MCP. See https://weather.example.com/docs for details.',
+    version: '2.0.0',
+    remotes: [{ type: 'streamable-http', url: 'https://weather.example.com/mcp' }],
+    websiteUrl: 'https://weather.example.com/docs',
+    icons: [{ src: 'https://weather.example.com/icon.png', mimeType: 'image/png' }],
+  },
+};
+
 describe('derivePublisherFromNamespace', () => {
   it('unwraps the GitHub owner from an io.github.* namespace', () => {
     expect(derivePublisherFromNamespace('io.github.acme/weather')).toBe('acme');
@@ -97,7 +109,13 @@ describe('normalizeRegistryEntry', () => {
         packages: [{ registryType: 'npm', identifier: '@acme/local-tool' }],
       },
     });
-    expect(record).toMatchObject({ authMode: 'none', connectable: 'desktop-and-cli', remotes: [] });
+    expect(record).toMatchObject({
+      authMode: 'none',
+      connectable: 'desktop-and-cli',
+      remotes: [],
+      websiteUrl: null,
+      iconSource: 'monogram',
+    });
   });
 
   it('drops an entry with neither remotes nor packages', () => {
@@ -111,53 +129,146 @@ describe('normalizeRegistryEntry', () => {
     expect(record).toBeNull();
   });
 
-  it('derives categories from the description when the registry has no category field', () => {
-    const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
-    expect(record?.categories).toContain('Communication');
+  it('keeps the raw registry name as the id and derives a clean display name', () => {
+    expect(normalizeRegistryEntry(SMITHERY_SLACK_ENTRY)).toMatchObject({
+      id: 'ai.smithery/smithery-ai-slack',
+      name: 'Slack',
+      monogram: 'S',
+    });
+    expect(normalizeRegistryEntry(TANDEM_DOCS_ENTRY)?.name).toBe('Tandem Docs');
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)).toMatchObject({
+      name: 'Weather Server',
+      monogram: 'WS',
+    });
   });
 
-  it('badges a custom-domain namespace as community', () => {
-    const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
-    expect(record?.badge).toBe('community');
+  it('summarises the description to one clean sentence', () => {
+    expect(normalizeRegistryEntry(SMITHERY_SLACK_ENTRY)?.description).toBe(
+      'Enable interaction with Slack workspaces.',
+    );
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)?.description).toBe('Weather forecasts over MCP.');
   });
 
-  it('badges a GitHub-verified namespace as registry and carries its icon and website url', () => {
+  it('never leaves a description empty', () => {
     const record = normalizeRegistryEntry({
       server: {
-        name: 'io.github.acme/weather',
-        title: 'Weather Server',
-        description: 'Weather forecasts over MCP.',
-        version: '2.0.0',
-        remotes: [{ type: 'streamable-http', url: 'https://weather.example.com/mcp' }],
-        websiteUrl: 'https://weather.example.com/docs',
-        icons: [{ src: 'https://weather.example.com/icon.png', mimeType: 'image/png' }],
+        name: 'io.github.acme/postgres-tools',
+        description: '',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://tools.acme.dev/mcp' }],
+      },
+    });
+    expect(record?.description).toBe('Postgres Tools is a connector for data and search.');
+  });
+
+  it('derives categories and the monogram hue from description, id and hosts', () => {
+    const slack = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
+    expect(slack?.categories[0]).toBe('Communication');
+    expect(slack?.monogramHue).toBe('communication');
+
+    const stripe = normalizeRegistryEntry({
+      server: {
+        name: 'com.stripe/mcp',
+        description: 'Tools.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://mcp.stripe.com' }],
+      },
+    });
+    expect(stripe?.categories[0]).toBe('Financial services');
+    expect(stripe?.monogramHue).toBe('financial-services');
+  });
+
+  it('badges an aggregator namespace as community', () => {
+    expect(normalizeRegistryEntry(SMITHERY_SLACK_ENTRY)?.badge).toBe('community');
+  });
+
+  it('badges a domain-verified publisher that is not a recognised vendor as registry', () => {
+    expect(normalizeRegistryEntry(TANDEM_DOCS_ENTRY)?.badge).toBe('registry');
+  });
+
+  it('badges a recognised vendor publishing its own product as official', () => {
+    const stripe = normalizeRegistryEntry({
+      server: {
+        name: 'com.stripe/mcp',
+        description: 'Stripe tools.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://mcp.stripe.com' }],
+      },
+    });
+    expect(stripe?.badge).toBe('official');
+  });
+
+  it('moves a title tagline into the description when the registry description repeats the name', () => {
+    const record = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.acme/cathedral-mcp',
+        title: 'Cathedral - Persistent memory for AI coding agents',
+        description: 'Cathedral MCP server',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://cathedral.example.com/mcp' }],
       },
     });
     expect(record).toMatchObject({
-      badge: 'registry',
+      name: 'Cathedral',
+      description: 'Persistent memory for AI coding agents.',
+    });
+  });
+
+  it('badges a GitHub namespace with a remote on another domain as community', () => {
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)?.badge).toBe('community');
+  });
+
+  it('carries the registry icon and website url and prefers the registry icon', () => {
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)).toMatchObject({
       iconUrl: 'https://weather.example.com/icon.png',
       websiteUrl: 'https://weather.example.com/docs',
       documentationUrl: null,
-      monogram: 'WS',
       iconSource: 'registry',
     });
   });
 
-  it('has no icon or website url when the registry entry declares neither', () => {
-    const record = normalizeRegistryEntry(TANDEM_DOCS_ENTRY);
-    expect(record?.iconUrl).toBeNull();
-    expect(record?.websiteUrl).toBeNull();
-    expect(record?.iconSource).toBe('monogram');
+  it('falls back to the remote origin as the website and probes it for a favicon', () => {
+    expect(normalizeRegistryEntry(TANDEM_DOCS_ENTRY)).toMatchObject({
+      iconUrl: null,
+      websiteUrl: 'https://tandem.ac',
+      iconSource: 'site',
+    });
   });
 
-  it('derives the author url from a github repository owner', () => {
+  it('never probes a code forge or hosting platform for a favicon', () => {
+    const forge = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.acme/tool',
+        description: 'A tool.',
+        version: '1.0.0',
+        packages: [{ registryType: 'npm', identifier: '@acme/tool' }],
+        repository: { url: 'https://github.com/acme/tool', source: 'github' },
+      },
+    });
+    expect(forge).toMatchObject({
+      websiteUrl: 'https://github.com/acme/tool',
+      iconSource: 'monogram',
+    });
+
+    const hosted = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.acme/tool',
+        description: 'A tool.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://tool.acme.workers.dev/mcp' }],
+      },
+    });
+    expect(hosted?.iconSource).toBe('monogram');
+  });
+
+  it('names the author from the repository owner and links the owner page', () => {
     const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
+    expect(record?.authorName).toBe('smithery-ai');
     expect(record?.authorUrl).toBe('https://github.com/smithery-ai');
-    expect(record?.authorName).toBe('smithery.ai');
   });
 
-  it('gives no author url when the repository is not on github', () => {
-    const record = normalizeRegistryEntry({
+  it('links the owner page on any known forge and falls back to the publisher otherwise', () => {
+    const gitlab = normalizeRegistryEntry({
       server: {
         name: 'io.github.acme/tool',
         description: 'A tool.',
@@ -166,11 +277,15 @@ describe('normalizeRegistryEntry', () => {
         repository: { url: 'https://gitlab.com/acme/tool', source: 'gitlab' },
       },
     });
-    expect(record?.authorUrl).toBeNull();
+    expect(gitlab?.authorUrl).toBe('https://gitlab.com/acme');
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)).toMatchObject({
+      authorName: 'acme',
+      authorUrl: null,
+    });
   });
 
-  it('resolves iconSource to brand when the namespace owner matches a verified simple-icons slug', () => {
-    const record = normalizeRegistryEntry({
+  it('resolves iconSource to brand from the namespace owner or the remote host', () => {
+    const owner = normalizeRegistryEntry({
       server: {
         name: 'io.github.notion/community-tool',
         description: 'A community tool published under the notion GitHub org.',
@@ -178,18 +293,16 @@ describe('normalizeRegistryEntry', () => {
         remotes: [{ type: 'streamable-http', url: 'https://notion-tool.example.com/mcp' }],
       },
     });
-    expect(record?.publisher).toBe('notion');
-    expect(record?.iconSource).toBe('brand');
-    expect(record?.brandSlug).toBe('notion');
-  });
+    expect(owner).toMatchObject({ publisher: 'notion', iconSource: 'brand', brandSlug: 'notion' });
 
-  it('resolves iconSource to site when a website url exists with no registry icon or brand match', () => {
-    const record = normalizeRegistryEntry(TANDEM_DOCS_ENTRY);
-    expect(record?.iconSource).toBe('monogram');
-
-    const withWebsite = normalizeRegistryEntry({
-      server: { ...TANDEM_DOCS_ENTRY.server, websiteUrl: 'https://tandem.ac/docs-mcp' },
+    const host = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.someone/linear-mirror',
+        description: 'Mirror.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://mcp.linear.app/mcp' }],
+      },
     });
-    expect(withWebsite?.iconSource).toBe('site');
+    expect(host).toMatchObject({ iconSource: 'brand', brandSlug: 'linear' });
   });
 });

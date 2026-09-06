@@ -2,15 +2,24 @@ import 'server-only';
 
 import firstPartyTargetsJson from '@/lib/connectors/directory/sources/first-party.json';
 import { deriveInternalBadge } from '@/lib/connectors/directory/badge';
-import { brandSlugForConnectorId } from '@/lib/connectors/directory/brand-icons';
-import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
+import {
+  brandSlugForConnectorId,
+  brandSlugForSignals,
+} from '@/lib/connectors/directory/brand-icons';
 import { deriveDirectoryCategories } from '@/lib/connectors/directory/categorize';
-import { deriveMonogram } from '@/lib/connectors/directory/monogram';
+import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
+import { hostnameOf, originOf } from '@/lib/connectors/directory/hosts';
+import { unionCategories } from '@/lib/connectors/directory/merge';
+import { deriveMonogram, deriveMonogramHue } from '@/lib/connectors/directory/monogram';
+import { summarizeDescription } from '@/lib/connectors/directory/summary';
 import type {
+  DirectoryAuthMode,
   DirectoryIconSource,
   DirectoryRecord,
   DirectoryTransport,
 } from '@/lib/connectors/directory/types';
+
+const DEFAULT_FIRST_PARTY_AUTH_MODE: DirectoryAuthMode = 'oauth';
 
 export interface FirstPartyTarget {
   readonly connectorId: string;
@@ -18,6 +27,7 @@ export interface FirstPartyTarget {
   readonly description: string;
   readonly url: string;
   readonly transport: DirectoryTransport;
+  readonly authMode?: DirectoryAuthMode;
   readonly toolNames: readonly string[];
   readonly documentationUrl: string;
   readonly overridesInternalUrl: boolean;
@@ -27,23 +37,17 @@ export interface FirstPartyTarget {
 export const FIRST_PARTY_MCP_TARGETS: readonly FirstPartyTarget[] =
   firstPartyTargetsJson as FirstPartyTarget[];
 
-function unionCategories(
-  current: readonly string[],
-  incoming: readonly string[],
-): readonly string[] {
-  return [...new Set([...current, ...incoming])];
+function targetHosts(target: FirstPartyTarget): string[] {
+  const host = hostnameOf(target.url);
+  return host ? [host] : [];
 }
 
-function richerDescription(current: string, incoming: string): string {
-  return incoming.length > current.length ? incoming : current;
-}
-
-function deriveAuthorUrl(documentationUrl: string): string | null {
-  try {
-    return new URL(documentationUrl).origin;
-  } catch {
-    return null;
-  }
+function targetCategories(target: FirstPartyTarget) {
+  return deriveDirectoryCategories({
+    name: target.name,
+    description: target.description,
+    hosts: targetHosts(target),
+  });
 }
 
 function upgradeIconSource(current: DirectoryIconSource): DirectoryIconSource {
@@ -53,31 +57,37 @@ function upgradeIconSource(current: DirectoryIconSource): DirectoryIconSource {
 function enrichRecord(record: DirectoryRecord, target: FirstPartyTarget): DirectoryRecord {
   const useTargetUrl =
     !target.directoryOnly && (target.overridesInternalUrl || record.remotes.length === 0);
-  const targetCategories = deriveDirectoryCategories(target.description, target.name);
+  const categories = unionCategories(record.categories, targetCategories(target));
+  const primaryCategory = categories[0] ?? '';
 
   return {
     ...record,
-    description: richerDescription(record.description, target.description),
+    description: summarizeDescription(target.description, target.name, primaryCategory),
     remotes: useTargetUrl ? [{ url: target.url, transport: target.transport }] : record.remotes,
     toolNames: target.toolNames.length > 0 ? target.toolNames : record.toolNames,
     documentationUrl: target.documentationUrl,
-    categories: unionCategories(record.categories, targetCategories),
-    authorUrl: record.authorUrl ?? deriveAuthorUrl(target.documentationUrl),
+    categories,
+    monogramHue: deriveMonogramHue(categories),
+    authorUrl: record.authorUrl ?? originOf(target.documentationUrl),
     iconSource: upgradeIconSource(record.iconSource),
   };
 }
 
 function standaloneRecord(target: FirstPartyTarget): DirectoryRecord {
-  const brandSlug = brandSlugForConnectorId(target.connectorId);
+  const brandSlug =
+    brandSlugForConnectorId(target.connectorId) ??
+    brandSlugForSignals({ publisher: target.name, hosts: targetHosts(target) });
+  const categories = targetCategories(target);
+  const primaryCategory = categories[0] ?? '';
 
   return {
     id: target.connectorId,
     name: target.name,
     publisher: target.name,
-    description: target.description,
-    categories: deriveDirectoryCategories(target.description, target.name),
+    description: summarizeDescription(target.description, target.name, primaryCategory),
+    categories,
     remotes: target.directoryOnly ? [] : [{ url: target.url, transport: target.transport }],
-    authMode: 'oauth',
+    authMode: target.authMode ?? DEFAULT_FIRST_PARTY_AUTH_MODE,
     connectable: connectableForInternalId(target.connectorId),
     toolNames: target.toolNames,
     repositoryUrl: null,
@@ -86,11 +96,12 @@ function standaloneRecord(target: FirstPartyTarget): DirectoryRecord {
     badge: deriveInternalBadge(),
     iconUrl: null,
     monogram: deriveMonogram(target.name),
+    monogramHue: deriveMonogramHue(categories),
     documentationUrl: target.documentationUrl,
     iconSource: brandSlug ? 'brand' : 'site',
     brandSlug,
     authorName: target.name,
-    authorUrl: deriveAuthorUrl(target.documentationUrl),
+    authorUrl: originOf(target.documentationUrl),
     websiteUrl: null,
     supportUrl: null,
     privacyPolicyUrl: null,

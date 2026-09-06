@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { directoryRecord } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -22,7 +24,9 @@ vi.mock('@modelcontextprotocol/client', () => ({
 }));
 
 import {
+  AUTH_PROBE_TIMEOUT_MS,
   authModeFromProbe,
+  isAuthProbeCandidate,
   probeRemoteAuthMode,
   resolveAuthModeForRecord,
 } from '@/lib/connectors/directory/auth-probe';
@@ -33,6 +37,10 @@ describe('probeRemoteAuthMode', () => {
     vi.clearAllMocks();
     mocks.assertResolvedPublicHostname.mockResolvedValue(undefined);
     mocks.query.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('reports open when discovery finds no protected-resource metadata', async () => {
@@ -56,6 +64,17 @@ describe('probeRemoteAuthMode', () => {
     expect(mocks.discoverOAuthServerInfo).not.toHaveBeenCalled();
   });
 
+  it('reports unresolved when hostname resolution hangs past the probe timeout', async () => {
+    vi.useFakeTimers();
+    mocks.assertResolvedPublicHostname.mockReturnValueOnce(new Promise(() => {}));
+
+    const outcome = probeRemoteAuthMode('https://slow-dns.example.com/mcp');
+    await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS);
+
+    await expect(outcome).resolves.toBe('unresolved');
+    expect(mocks.discoverOAuthServerInfo).not.toHaveBeenCalled();
+  });
+
   it('reuses a cached verdict instead of probing again', async () => {
     mocks.query.mockResolvedValueOnce([
       { value: 'open', stamp: '1', expires_at_ms: String(Date.now() + 60_000), scope: 'public' },
@@ -74,30 +93,20 @@ describe('authModeFromProbe', () => {
   });
 });
 
-describe('resolveAuthModeForRecord', () => {
-  const baseRecord: Omit<DirectoryRecord, 'authMode' | 'connectable' | 'remotes'> = {
-    id: 'x',
-    name: 'x',
-    publisher: 'x',
-    description: 'd',
-    categories: [],
-    toolNames: [],
-    repositoryUrl: null,
-    version: null,
-    sourceRegistry: 'mcp-registry',
-    badge: 'community',
-    iconUrl: null,
-    monogram: 'X',
-    documentationUrl: null,
-    iconSource: 'monogram',
-    brandSlug: null,
-    authorName: null,
-    authorUrl: null,
-    websiteUrl: null,
-    supportUrl: null,
-    privacyPolicyUrl: null,
-  };
+describe('isAuthProbeCandidate', () => {
+  it('accepts only unknown records with a network remote', () => {
+    expect(isAuthProbeCandidate(directoryRecord({ id: 'http' }))).toBe(true);
+    expect(isAuthProbeCandidate(directoryRecord({ id: 'known', authMode: 'oauth' }))).toBe(false);
+    expect(
+      isAuthProbeCandidate(
+        directoryRecord({ id: 'stdio', remotes: [{ url: 'stdio://x', transport: 'stdio' }] }),
+      ),
+    ).toBe(false);
+    expect(isAuthProbeCandidate(directoryRecord({ id: 'packages', remotes: [] }))).toBe(false);
+  });
+});
 
+describe('resolveAuthModeForRecord', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertResolvedPublicHostname.mockResolvedValue(undefined);
@@ -105,12 +114,12 @@ describe('resolveAuthModeForRecord', () => {
   });
 
   it('leaves an already-resolved record untouched', async () => {
-    const record: DirectoryRecord = {
-      ...baseRecord,
+    const record: DirectoryRecord = directoryRecord({
+      id: 'x',
       authMode: 'api-key',
       connectable: 'api-key-form',
       remotes: [],
-    };
+    });
 
     await expect(resolveAuthModeForRecord(record)).resolves.toBe(record);
     expect(mocks.discoverOAuthServerInfo).not.toHaveBeenCalled();
@@ -118,15 +127,41 @@ describe('resolveAuthModeForRecord', () => {
 
   it('upgrades an unknown record once discovery resolves it', async () => {
     mocks.discoverOAuthServerInfo.mockResolvedValueOnce({});
-    const record: DirectoryRecord = {
-      ...baseRecord,
-      authMode: 'unknown',
-      connectable: 'needs-setup',
+    const record = directoryRecord({
+      id: 'x',
       remotes: [{ url: 'https://open.example.com/mcp', transport: 'streamable-http' }],
-    };
+    });
 
     const resolved = await resolveAuthModeForRecord(record);
     expect(resolved.authMode).toBe('none');
+    expect(resolved.connectable).toBe('connect');
+  });
+
+  it('leaves a stdio-only record untouched without probing', async () => {
+    const record = directoryRecord({
+      id: 'local',
+      remotes: [{ url: 'stdio://local', transport: 'stdio' }],
+    });
+
+    await expect(resolveAuthModeForRecord(record)).resolves.toBe(record);
+    expect(mocks.assertResolvedPublicHostname).not.toHaveBeenCalled();
+    expect(mocks.discoverOAuthServerInfo).not.toHaveBeenCalled();
+  });
+
+  it('probes the first network remote even when a stdio remote is listed first', async () => {
+    mocks.discoverOAuthServerInfo.mockResolvedValueOnce({ resourceMetadata: {} });
+    const record = directoryRecord({
+      id: 'mixed',
+      remotes: [
+        { url: 'stdio://local', transport: 'stdio' },
+        { url: 'https://remote.example.com/mcp', transport: 'streamable-http' },
+      ],
+    });
+
+    const resolved = await resolveAuthModeForRecord(record);
+
+    expect(mocks.discoverOAuthServerInfo).toHaveBeenCalledWith('https://remote.example.com/mcp');
+    expect(resolved.authMode).toBe('oauth');
     expect(resolved.connectable).toBe('connect');
   });
 });
