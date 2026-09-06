@@ -9,6 +9,7 @@ export type FollowUpType = 'deeper' | 'alternative' | 'apply' | 'discover';
 
 export interface FollowUpSuggestionsProps {
   lastAssistantContent: string;
+  lastUserContent?: string;
   onSelect: (prompt: string) => void;
   isGenerating?: boolean;
   isUserTyping?: boolean;
@@ -180,10 +181,38 @@ const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
   { text: 'Can you summarize the key points?', type: 'alternative' },
 ];
 
-export function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
+const USER_HIT_WEIGHT = 2;
+const ASSISTANT_HIT_WEIGHT = 1;
+const ASSISTANT_HITS_REQUIRED_WITHOUT_USER_SUPPORT = 2;
+
+const TOPIC_MATCHERS = TOPIC_FOLLOW_UPS.map((entry) => ({
+  followUps: entry.followUps,
+  matcher: new RegExp(
+    entry.pattern.source,
+    entry.pattern.flags.includes('g') ? entry.pattern.flags : `${entry.pattern.flags}g`,
+  ),
+}));
+
+function countDistinctMatches(text: string, matcher: RegExp): number {
+  if (!text) return 0;
+  matcher.lastIndex = 0;
+  const seen = new Set<string>();
+  for (const match of text.matchAll(matcher)) {
+    const token = match[0].toLowerCase().trim();
+    if (token) seen.add(token);
+  }
+  return seen.size;
+}
+
+export function deriveFollowUps(
+  content: string,
+  messageCount: number,
+  lastUserContent?: string,
+): FollowUp[] {
   if (!content || content.trim().length < 20) return [];
 
   const sample = content.length > 4000 ? content.slice(0, 4000) : content;
+  const userSample = lastUserContent?.trim() ? lastUserContent.slice(0, 4000) : undefined;
 
   const matched: Array<{ text: string; type: FollowUpType }> = [];
   const seenTexts = new Set<string>();
@@ -195,12 +224,31 @@ export function deriveFollowUps(content: string, messageCount: number): FollowUp
     }
   };
 
-  for (const { pattern, followUps } of TOPIC_FOLLOW_UPS) {
-    if (pattern.test(sample)) {
-      for (const fu of followUps) {
-        addUnique(fu);
-        if (matched.length >= 5) break;
-      }
+  const ranked = TOPIC_MATCHERS.map((entry, index) => {
+    const assistantHits = countDistinctMatches(sample, entry.matcher);
+    const userHits = userSample ? countDistinctMatches(userSample, entry.matcher) : 0;
+    return { ...entry, index, assistantHits, userHits };
+  })
+    .filter((entry) => {
+      if (entry.assistantHits === 0 && entry.userHits === 0) return false;
+      if (!userSample) return true;
+      return (
+        entry.userHits > 0 || entry.assistantHits >= ASSISTANT_HITS_REQUIRED_WITHOUT_USER_SUPPORT
+      );
+    })
+    .map((entry) => ({
+      ...entry,
+      score: entry.userHits * USER_HIT_WEIGHT + entry.assistantHits * ASSISTANT_HIT_WEIGHT,
+    }));
+
+  if (userSample) {
+    ranked.sort((a, b) => (b.score === a.score ? a.index - b.index : b.score - a.score));
+  }
+
+  for (const { followUps } of ranked) {
+    for (const fu of followUps) {
+      addUnique(fu);
+      if (matched.length >= 5) break;
     }
     if (matched.length >= 5) break;
   }
@@ -266,6 +314,7 @@ const pillVariants = {
 
 export function FollowUpSuggestions({
   lastAssistantContent,
+  lastUserContent,
   onSelect,
   isGenerating = false,
   isUserTyping = false,
@@ -273,8 +322,8 @@ export function FollowUpSuggestions({
   className,
 }: FollowUpSuggestionsProps) {
   const followUps = useMemo(
-    () => deriveFollowUps(lastAssistantContent, messageCount),
-    [lastAssistantContent, messageCount],
+    () => deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
+    [lastAssistantContent, messageCount, lastUserContent],
   );
   const [dismissed, setDismissed] = useState(false);
 
