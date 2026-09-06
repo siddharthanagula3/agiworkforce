@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 const speak = vi.fn();
+const unlock = vi.fn();
 const stopSpeaking = vi.fn();
 
 vi.mock('@/lib/hooks/useTTS', () => ({
@@ -10,6 +11,7 @@ vi.mock('@/lib/hooks/useTTS', () => ({
     isSupported: true,
     speak,
     stop: stopSpeaking,
+    unlock,
     voices: [],
     voiceUri: null,
     setVoiceUri: vi.fn(),
@@ -249,5 +251,14 @@ describe('useVoiceSession', () => {
       result.current.toggleMute();
     });
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+  });
+
+  it('unlocks speech playback inside the entry tap', async () => {
+    grantMicrophone('granted');
+    const { result } = mount();
+    await act(async () => {
+      result.current.enter();
+    });
+    expect(unlock).toHaveBeenCalled();
   });
 });
