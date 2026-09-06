@@ -9,6 +9,12 @@ import { CONNECTORS } from '@/features/connectors/data/connectors';
 
 export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
 
+export interface ConnectorSetupRequirementView {
+  kind: string;
+  missingEnv: string[];
+  message: string;
+}
+
 export interface ConnectorStatus {
   connectedIds: Set<string>;
   connectedAtMap: Record<string, string>;
@@ -17,6 +23,7 @@ export interface ConnectorStatus {
   grantedScopes: Record<string, string[]>;
   needsReauthorizationIds: Set<string>;
   availableIds: Set<string>;
+  setupRequirements: Record<string, ConnectorSetupRequirementView>;
   loading: boolean;
   error: string | null;
   mutatingIds: Set<string>;
@@ -36,6 +43,7 @@ interface ConnectorsResponse {
     needsReauthorization?: boolean;
   }>;
   available?: string[];
+  setup?: Record<string, ConnectorSetupRequirementView>;
 }
 
 interface ConnectStartBody {
@@ -94,13 +102,28 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 }
 
 const BROKER_OUTCOME_PARAMS = ['connector', 'status'] as const;
+const DIRECTORY_ENTRY_PATH = '/api/connectors/directory';
+const FALLBACK_CONNECTOR_NAME = 'This connector';
+const DOCUMENTATION_ACTION_LABEL = 'Open documentation';
+const DIRECTORY_ID_MARKERS = ['.', '/'] as const;
 
 type BrokerOutcome = {
   tone: 'success' | 'error' | 'info';
   message: (name: string) => string;
+  offersDocumentation?: boolean;
 };
 
 const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
+  registration_rejected: {
+    tone: 'error',
+    message: (name) => `${name} refused to register this app, so it cannot be connected here.`,
+    offersDocumentation: true,
+  },
+  reauthorize: {
+    tone: 'error',
+    message: (name) =>
+      `${name} moved to a different authorization server. Connect it again to continue.`,
+  },
   connected: { tone: 'success', message: (name) => `${name} is connected.` },
   open: { tone: 'info', message: (name) => `${name} needs no authorization and is ready to use.` },
   denied: {
@@ -130,12 +153,70 @@ const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
   },
 };
 
+interface ConnectorIdentity {
+  name: string;
+  documentationUrl: string | null;
+}
+
 function connectorDisplayName(id: string): string {
-  return CONNECTORS.find((c) => c.id === id)?.name ?? 'This connector';
+  return CONNECTORS.find((c) => c.id === id)?.name ?? FALLBACK_CONNECTOR_NAME;
+}
+
+function looksLikeDirectoryId(id: string): boolean {
+  return DIRECTORY_ID_MARKERS.some((marker) => id.includes(marker));
+}
+
+function directoryEntryPath(id: string): string {
+  return `${DIRECTORY_ENTRY_PATH}/${id.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+async function fetchDirectoryIdentity(id: string): Promise<ConnectorIdentity> {
+  const fallback = { name: FALLBACK_CONNECTOR_NAME, documentationUrl: null };
+  try {
+    const res = await fetch(directoryEntryPath(id), { cache: 'no-store' });
+    if (!res.ok) return fallback;
+    const body = (await res.json()) as {
+      entry?: { name?: string; documentationUrl?: string | null };
+    };
+    return {
+      name: body.entry?.name ?? FALLBACK_CONNECTOR_NAME,
+      documentationUrl: body.entry?.documentationUrl ?? null,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 export function brokerOutcomeMessage(status: string, name: string): string | null {
   return BROKER_OUTCOMES[status]?.message(name) ?? null;
+}
+
+function announceBrokerOutcome(
+  outcome: BrokerOutcome,
+  identity: ConnectorIdentity,
+  onConnected: () => void,
+): void {
+  const message = outcome.message(identity.name);
+  if (outcome.tone === 'success') {
+    toast.success(message);
+    onConnected();
+    return;
+  }
+  if (outcome.tone === 'info') {
+    toast.info(message);
+    return;
+  }
+  const documentationUrl = outcome.offersDocumentation ? identity.documentationUrl : null;
+  if (!documentationUrl) {
+    toast.error(message);
+    return;
+  }
+  toast.error(message, {
+    action: {
+      label: DOCUMENTATION_ACTION_LABEL,
+      onClick: () => window.open(documentationUrl, '_blank', 'noopener,noreferrer'),
+    },
+  });
 }
 
 export function useBrokerOutcome(onConnected: () => void): void {
@@ -147,7 +228,7 @@ export function useBrokerOutcome(onConnected: () => void): void {
     if (!status) return;
 
     const outcome = BROKER_OUTCOMES[status];
-    const name = connectorDisplayName(params.get('connector') ?? '');
+    const connectorId = params.get('connector') ?? '';
 
     for (const key of BROKER_OUTCOME_PARAMS) params.delete(key);
     const query = params.toString();
@@ -159,15 +240,23 @@ export function useBrokerOutcome(onConnected: () => void): void {
 
     if (!outcome) return;
 
-    const message = outcome.message(name);
-    if (outcome.tone === 'success') {
-      toast.success(message);
-      onConnected();
-    } else if (outcome.tone === 'info') {
-      toast.info(message);
-    } else {
-      toast.error(message);
+    const curated = CONNECTORS.find((c) => c.id === connectorId);
+    if (curated || !looksLikeDirectoryId(connectorId)) {
+      announceBrokerOutcome(
+        outcome,
+        { name: connectorDisplayName(connectorId), documentationUrl: null },
+        onConnected,
+      );
+      return;
     }
+
+    let cancelled = false;
+    void fetchDirectoryIdentity(connectorId).then((identity) => {
+      if (!cancelled) announceBrokerOutcome(outcome, identity, onConnected);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [onConnected]);
 }
 
@@ -198,6 +287,9 @@ export function useConnectors(): ConnectorStatus {
   const [grantedScopes, setGrantedScopes] = useState<Record<string, string[]>>({});
   const [needsReauthorizationIds, setNeedsReauthorizationIds] = useState<Set<string>>(new Set());
   const [availableIds, setAvailableIds] = useState<Set<string>>(new Set());
+  const [setupRequirements, setSetupRequirements] = useState<
+    Record<string, ConnectorSetupRequirementView>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
@@ -220,6 +312,7 @@ export function useConnectors(): ConnectorStatus {
       setGrantedScopes({});
       setNeedsReauthorizationIds(new Set());
       setAvailableIds(new Set());
+      setSetupRequirements({});
       setLoading(false);
       setError(null);
       invalidateConnectorsCache();
@@ -252,6 +345,7 @@ export function useConnectors(): ConnectorStatus {
           setGrantedScopes(scopeMap);
           setNeedsReauthorizationIds(staleIds);
           setAvailableIds(new Set(json.available ?? []));
+          setSetupRequirements(json.setup ?? {});
           setError(null);
         }
       } catch (err) {
@@ -411,6 +505,7 @@ export function useConnectors(): ConnectorStatus {
     grantedScopes,
     needsReauthorizationIds,
     availableIds,
+    setupRequirements,
     loading,
     error,
     mutatingIds,

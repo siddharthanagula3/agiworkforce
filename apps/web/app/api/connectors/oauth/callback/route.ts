@@ -21,9 +21,17 @@ import {
   upsertConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
 import { ConnectorOAuthTokenError, exchangeAuthorizationCode } from '@/lib/connectors/oauth-client';
-import { completeMcpAuthorization } from '@/lib/connectors/mcp-discovery';
+import {
+  completeMcpAuthorization,
+  type McpAuthorizationFailure,
+} from '@/lib/connectors/mcp-discovery';
 
 const MAX_CODE_LENGTH = 2048;
+const COMPLETION_FAILURE_STATUS: Partial<Record<McpAuthorizationFailure, string>> = {
+  'authorization-server-changed': 'reauthorize',
+  'registration-rejected': 'registration_rejected',
+};
+const DEFAULT_COMPLETION_FAILURE_STATUS = 'failed';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -103,7 +111,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return redirectTo(
         pending.returnPath,
         pending.connectorId,
-        completion.reason === 'authorization-server-changed' ? 'reauthorize' : 'failed',
+        COMPLETION_FAILURE_STATUS[completion.reason] ?? DEFAULT_COMPLETION_FAILURE_STATUS,
       );
     }
 

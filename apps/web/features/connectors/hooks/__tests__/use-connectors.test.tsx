@@ -392,3 +392,123 @@ describe('useBrokerOutcome', () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
+
+describe('useConnectors, deployment setup requirements', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clerkUserState.isLoaded = true;
+    clerkUserState.isSignedIn = true;
+    invalidateConnectorsCache();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('carries the env names each curated connector still needs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          connectors: [],
+          available: ['notion'],
+          setup: {
+            gmail: {
+              kind: 'oauth-client-pair',
+              missingEnv: [
+                'CONNECTOR_OAUTH_GMAIL_CLIENT_ID',
+                'CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET',
+              ],
+              message:
+                'Gmail needs CONNECTOR_OAUTH_GMAIL_CLIENT_ID and CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET on this deployment.',
+            },
+          },
+        }),
+      ),
+    );
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.setupRequirements['gmail']?.missingEnv).toEqual([
+      'CONNECTOR_OAUTH_GMAIL_CLIENT_ID',
+      'CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET',
+    ]);
+    expect(result.current.setupRequirements['notion']).toBeUndefined();
+  });
+});
+
+describe('useBrokerOutcome for a directory record', () => {
+  const replaceState = vi.fn();
+  const originalReplaceState = window.history.replaceState;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.history.replaceState = replaceState as typeof window.history.replaceState;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState = originalReplaceState;
+    if (originalLocation) Object.defineProperty(window, 'location', originalLocation);
+  });
+
+  it('names the server from the directory and links its documentation when registration is refused', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        entry: { name: 'Cowork24', documentationUrl: 'https://cowork24.ch/docs/mcp' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    stubLocation(
+      'https://app.example.com/chat?connector=ch.cowork24%2Fbooking&status=registration_rejected',
+    );
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Cowork24 refused to register this app, so it cannot be connected here.',
+        expect.objectContaining({
+          action: expect.objectContaining({ label: 'Open documentation' }),
+        }),
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/connectors/directory/ch.cowork24/booking',
+      expect.anything(),
+    );
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/chat');
+  });
+
+  it('announces a connected directory record by its real name', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(200, { entry: { name: 'Tandem Docs MCP', documentationUrl: null } }),
+        ),
+    );
+    stubLocation('https://app.example.com/chat?connector=ac.tandem%2Fdocs-mcp&status=connected');
+    const onConnected = vi.fn();
+
+    renderHook(() => useBrokerOutcome(onConnected));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Tandem Docs MCP is connected.'));
+    expect(onConnected).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a generic name when the directory lookup fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(404, {})));
+    stubLocation('https://app.example.com/chat?connector=io.github.x%2Fy&status=denied');
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Authorization for This connector was declined. Nothing was connected.',
+      ),
+    );
+  });
+});

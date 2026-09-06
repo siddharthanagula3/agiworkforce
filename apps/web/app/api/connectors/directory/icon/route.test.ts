@@ -1,13 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const mocks = vi.hoisted(() => ({
-  getSnapshotRecords: vi.fn(),
-  getIconForUrl: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const clientIpIdentifier = 'ip:203.0.113.7';
+  return {
+    clientIpIdentifier,
+    getSnapshotRecords: vi.fn(),
+    getIconForUrl: vi.fn(),
+    withRateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+    clientIpRateLimitIdentifier: vi.fn((..._args: unknown[]) => clientIpIdentifier),
+  };
+});
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
+  clientIpRateLimitIdentifier: (...args: unknown[]) => mocks.clientIpRateLimitIdentifier(...args),
+}));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
@@ -26,6 +35,32 @@ function request(query: string): NextRequest {
 }
 
 describe('GET /api/connectors/directory/icon', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('spends from the ip-keyed connector icon bucket, never the per-user conversation bucket', async () => {
+    mocks.getSnapshotRecords.mockResolvedValueOnce([]);
+    const incoming = request('?id=notion');
+
+    await GET(incoming);
+
+    expect(mocks.clientIpRateLimitIdentifier).toHaveBeenCalledWith(incoming);
+    expect(mocks.withRateLimit).toHaveBeenCalledTimes(1);
+    expect(mocks.withRateLimit).toHaveBeenCalledWith(
+      incoming,
+      'connector-directory-icon',
+      mocks.clientIpIdentifier,
+    );
+  });
+
+  it('returns the limiter response when the icon bucket is exhausted', async () => {
+    mocks.withRateLimit.mockResolvedValueOnce(new Response(null, { status: 429 }));
+
+    const response = await GET(request('?id=notion'));
+
+    expect(response.status).toBe(429);
+    expect(mocks.getSnapshotRecords).not.toHaveBeenCalled();
+  });
+
   it('requires an id query parameter', async () => {
     const response = await GET(request(''));
     expect(response.status).toBe(400);
@@ -69,6 +104,7 @@ describe('GET /api/connectors/directory/icon', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/png');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=2592000, immutable');
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(bytes)).toEqual([1, 2, 3]);
   });

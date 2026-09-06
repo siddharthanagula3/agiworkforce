@@ -11,7 +11,7 @@ import { loadUserConnectorCapabilityCatalog } from '@/lib/user-connector-tools';
 
 export const runtime = 'nodejs';
 
-const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/;
+const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 
 async function handleGet(
   request: NextRequest,

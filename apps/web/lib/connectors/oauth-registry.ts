@@ -18,6 +18,13 @@ import { filterConnectorScopes } from '@/lib/connectors/oauth-scope-allowlist';
  */
 export { CONNECTOR_OAUTH_CALLBACK_PATH, CONNECTOR_OAUTH_START_PATH };
 
+export const CONNECTOR_OAUTH_PROVIDERS_ENV = 'CONNECTOR_OAUTH_PROVIDERS_JSON';
+export const CONNECTOR_OAUTH_REDIRECT_BASE_ENV = 'CONNECTOR_OAUTH_REDIRECT_BASE_URL';
+export const PUBLIC_APP_URL_ENV = 'NEXT_PUBLIC_APP_URL';
+const CONNECTOR_OAUTH_ENV_PREFIX = 'CONNECTOR_OAUTH_';
+const CLIENT_ID_ENV_SUFFIX = '_CLIENT_ID';
+const CLIENT_SECRET_ENV_SUFFIX = '_CLIENT_SECRET';
+
 const CONNECTOR_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const RESERVED_CONNECTOR_IDS = new Set(['github']);
@@ -76,17 +83,33 @@ export interface ConnectorOAuthProvider extends ProviderDescriptor {
 }
 
 let _registryCache: Map<string, ConnectorOAuthProvider> | null = null;
+let _describedConnectorIds: Set<string> = new Set();
 
 function credentialEnvPrefix(connectorId: string): string {
-  return `CONNECTOR_OAUTH_${connectorId.toUpperCase().replace(/-/g, '_')}`;
+  return `${CONNECTOR_OAUTH_ENV_PREFIX}${connectorId.toUpperCase().replace(/-/g, '_')}`;
+}
+
+export interface ConnectorOAuthCredentialEnvNames {
+  readonly clientId: string;
+  readonly clientSecret: string;
+}
+
+export function connectorOAuthCredentialEnvNames(
+  connectorId: string,
+): ConnectorOAuthCredentialEnvNames {
+  const prefix = credentialEnvPrefix(connectorId);
+  return {
+    clientId: `${prefix}${CLIENT_ID_ENV_SUFFIX}`,
+    clientSecret: `${prefix}${CLIENT_SECRET_ENV_SUFFIX}`,
+  };
 }
 
 function resolveCredentials(
   descriptor: ProviderDescriptor,
 ): { clientId: string; clientSecret: string | null } | null {
-  const prefix = credentialEnvPrefix(descriptor.connectorId);
-  const clientId = process.env[`${prefix}_CLIENT_ID`]?.trim();
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]?.trim();
+  const names = connectorOAuthCredentialEnvNames(descriptor.connectorId);
+  const clientId = process.env[names.clientId]?.trim();
+  const clientSecret = process.env[names.clientSecret]?.trim();
   if (!clientId) return null;
   if (descriptor.tokenAuthMethod === 'none') return { clientId, clientSecret: null };
   if (!clientSecret) return null;
@@ -97,7 +120,8 @@ function loadConnectorOAuthRegistry(): Map<string, ConnectorOAuthProvider> {
   if (_registryCache !== null) return _registryCache;
 
   const registry = new Map<string, ConnectorOAuthProvider>();
-  const inline = process.env['CONNECTOR_OAUTH_PROVIDERS_JSON'];
+  const described = new Set<string>();
+  const inline = process.env[CONNECTOR_OAUTH_PROVIDERS_ENV];
 
   try {
     const raw: unknown = inline ? JSON.parse(inline) : null;
@@ -108,6 +132,7 @@ function loadConnectorOAuthRegistry(): Map<string, ConnectorOAuthProvider> {
         if (!descriptor.enabled) continue;
         if (RESERVED_CONNECTOR_IDS.has(descriptor.connectorId)) continue;
         if (RESERVED_CONNECTOR_PREFIXES.some((p) => descriptor.connectorId.startsWith(p))) continue;
+        described.add(descriptor.connectorId);
         const credentials = resolveCredentials(descriptor);
         if (!credentials) {
           unconfigured += 1;
@@ -138,15 +163,22 @@ function loadConnectorOAuthRegistry(): Map<string, ConnectorOAuthProvider> {
   }
 
   _registryCache = registry;
+  _describedConnectorIds = described;
   return registry;
 }
 
 export function __resetConnectorOAuthRegistryCacheForTests(): void {
   _registryCache = null;
+  _describedConnectorIds = new Set();
 }
 
 export function getConnectorOAuthProvider(connectorId: string): ConnectorOAuthProvider | null {
   return loadConnectorOAuthRegistry().get(connectorId) ?? null;
+}
+
+export function hasConnectorOAuthDescriptor(connectorId: string): boolean {
+  loadConnectorOAuthRegistry();
+  return _describedConnectorIds.has(connectorId);
 }
 
 export function getOAuthConfiguredConnectorIds(): Set<string> {
@@ -174,8 +206,8 @@ export function isLocalDevOrigin(origin: URL): boolean {
 
 export function getConnectorOAuthRedirectUri(): string | null {
   const base = (
-    process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] ??
-    process.env['NEXT_PUBLIC_APP_URL'] ??
+    process.env[CONNECTOR_OAUTH_REDIRECT_BASE_ENV] ??
+    process.env[PUBLIC_APP_URL_ENV] ??
     ''
   ).trim();
   if (!base) return null;

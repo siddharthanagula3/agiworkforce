@@ -45,6 +45,7 @@ vi.mock('@/lib/github-app', () => ({
   getGitHubAppInstallUrl: vi.fn(() => null),
   isGitHubAppConfigured: vi.fn(() => false),
   isGitHubInstallationLinkingAvailable: vi.fn(() => false),
+  missingGitHubInstallationLinkingVars: vi.fn(() => ['GITHUB_APP_ID']),
   getInstallationAccessToken: vi.fn(),
   getPrDiff: vi.fn(),
   postIssueComment: vi.fn(),

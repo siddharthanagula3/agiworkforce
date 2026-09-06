@@ -36,6 +36,12 @@ the process, not the rules.
 - [`add-a-gateway.md`](./add-a-gateway.md), the five steps to add an OpenAI-
   or Anthropic-compatible gateway to the model registry without a dedicated
   provider package.
+- [`connectors-setup.md`](./connectors-setup.md), what each directory
+  connector needs from the deployment: vendor consoles, the redirect URI,
+  permitted scopes, and the exact environment variable names.
+- [`plugins-directory.md`](./plugins-directory.md), how the plugin directory
+  is ingested from the official marketplace and the public listing, refreshed,
+  queried, and installed from into the composer.
 
 ## What belongs here
 

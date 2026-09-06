@@ -30,14 +30,22 @@ export type ConnectorAccessOutcome =
   /** Authorized once, but the stored credential can no longer be used. */
   | { status: 'reauthorization-required'; reason: 'expired' | 'refresh-failed' | 'undecryptable' };
 
+export interface ResolveConnectorAccessOptions {
+  forceRefresh?: boolean;
+  /** The connector is a directory record whose grant was minted by MCP discovery. */
+  discovered?: boolean;
+}
+
 export async function resolveConnectorAccessToken(
   userId: string,
   connectorId: string,
-  options: { forceRefresh?: boolean } = {},
+  options: ResolveConnectorAccessOptions = {},
 ): Promise<ConnectorAccessOutcome> {
   const provider = getConnectorOAuthProvider(connectorId);
 
-  if (!provider && !getMcpEndpoint(connectorId)) return { status: 'not-configured' };
+  if (!provider && !getMcpEndpoint(connectorId) && !options.discovered) {
+    return { status: 'not-configured' };
+  }
 
   let grant;
   try {
@@ -53,6 +61,7 @@ export async function resolveConnectorAccessToken(
     throw error;
   }
   if (!grant) return { status: 'not-connected' };
+  if (options.discovered && !grant.mcpUrl) return { status: 'not-configured' };
 
   const expiresSoon =
     grant.accessTokenExpiresAt !== null &&

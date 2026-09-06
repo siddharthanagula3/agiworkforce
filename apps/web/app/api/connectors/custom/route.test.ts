@@ -36,6 +36,12 @@ vi.mock('@/lib/mcp-url-validation', () => ({
 vi.mock('@/lib/custom-connector-crypto', () => ({
   encryptConnectorToken: vi.fn(() => 'enc'),
   decryptConnectorToken: vi.fn(),
+  bearerCredential: vi.fn((token: string) => ({
+    headerName: 'Authorization',
+    headerValue: `Bearer ${token}`,
+  })),
+  sealCustomConnectorCredential: vi.fn(() => 'enc'),
+  openCustomConnectorCredential: vi.fn(),
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: vi.fn(),
