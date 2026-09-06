@@ -48,7 +48,13 @@
         "trainsOnInputs": "never",
         "source": "https://platform.cheaperinference.com/legal/privacy",
         "verifiedOn": "2026-09-05",
-        "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids."
+        "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids. Discount policy: every request carries min_discount_percent, which the gateway documents as a JSON body field capping billing at list price times (1 minus the percentage) and answering 503 min_discount_unavailable when no qualifying supply exists; the registry prices these routes at that ceiling, never at an observed discount. Verified against https://www.cheaperinference.com/docs and https://www.cheaperinference.com/api-reference on 2026-09-06; the field is absent from the machine-readable openapi.json, so the first live request through this policy confirms it."
+      },
+      "discount": {
+        "requestField": "min_discount_percent",
+        "minPercent": 30,
+        "source": "https://www.cheaperinference.com/docs",
+        "verifiedOn": "2026-09-06"
       }
     },
     "cheaperinference_anthropic": {
@@ -71,6 +77,78 @@
         "source": "https://platform.cheaperinference.com/legal/privacy",
         "verifiedOn": "2026-09-05",
         "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids."
+      }
+    },
+    "deepinfra": {
+      "id": "deepinfra",
+      "displayName": "DeepInfra",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_DEEPINFRA_BASE_URL",
+      "apiKeyEnv": "AGI_DEEPINFRA_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/v1/openai/models",
+        "requiresKey": true
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.deepinfra.com",
+      "governance": {
+        "dataRetentionClass": "zero_retention",
+        "trainsOnInputs": "never",
+        "source": "https://docs.deepinfra.com/account/data-privacy",
+        "verifiedOn": "2026-09-06",
+        "note": "Optimized open-model cloud. DeepInfra states input data is not stored to disk during inference, outputs are not stored, request content is not logged, and customer data is not used for training except for Google and Anthropic models served there, which follow those vendors' policies. Its terms forbid making the Services available to third parties except as expressly permitted, so every route stays experimental_only until the founder confirms the commercial terms in writing. Base URL https://api.deepinfra.com/v1/openai; verified 2026-09-06 against docs.deepinfra.com and deepinfra.com/terms."
+      }
+    },
+    "together": {
+      "id": "together",
+      "displayName": "Together AI",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_TOGETHER_BASE_URL",
+      "apiKeyEnv": "AGI_TOGETHER_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/v1/models",
+        "requiresKey": true
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.together.ai",
+      "governance": {
+        "dataRetentionClass": "provider_default",
+        "trainsOnInputs": "opt_in",
+        "source": "https://docs.together.ai/docs/privacy-and-security",
+        "verifiedOn": "2026-09-06",
+        "note": "Serverless and dedicated open-model cloud. Together stores prompts and responses by default and may use them for product improvements; an organisation admin can turn storage off, which Together documents as zero data retention; training on data is opt-in. Its terms bar reselling the Services on a standalone basis while customers own their outputs. Routes stay experimental_only until the founder enables organisation ZDR and confirms the terms. Base URL https://api.together.ai/v1; verified 2026-09-06 against docs.together.ai and together.ai/terms-of-service."
+      }
+    },
+    "novita": {
+      "id": "novita",
+      "displayName": "Novita AI",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_NOVITA_BASE_URL",
+      "apiKeyEnv": "AGI_NOVITA_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/openai/v1/models",
+        "requiresKey": false
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.novita.ai",
+      "governance": {
+        "dataRetentionClass": "zero_retention",
+        "trainsOnInputs": "never",
+        "source": "https://novita.ai/legal/terms-of-service",
+        "verifiedOn": "2026-09-06",
+        "note": "Low-cost open-model cloud. Novita's terms (section 10.2) state it will not use content to train its own models or improve the Services by default and will not retain content longer than needed to provide the Services. No resale clause was found and processing regions are not published. Routes stay experimental_only until the founder confirms the terms. Base URL https://api.novita.ai/openai/v1; verified 2026-09-06 against novita.ai/legal/terms-of-service and docs.novita.ai/guides/llm-api."
       }
     }
   }

@@ -36,6 +36,14 @@ interface RoutePricingRecord {
   cacheWrite1hPerMillion?: number;
 }
 
+export interface RouteDiscountRecord {
+  minPercent: number;
+  requestField: string;
+  listPricing: RoutePricingRecord;
+  source: string;
+  verifiedOn: string;
+}
+
 interface RouteRecord {
   modelKey: string;
   provider: string;
@@ -47,6 +55,7 @@ interface RouteRecord {
   commercialStatus: RouteCommercialStatus;
   dataRetention: RouteDataRetention;
   pricing: RoutePricingRecord;
+  discount?: RouteDiscountRecord;
 }
 
 export interface RoutePriceSheet {
@@ -66,6 +75,7 @@ export interface RoutePriceSheet {
   cacheReadPerMillion: number | null;
   cacheWritePerMillion: number | null;
   cacheWrite1hPerMillion: number | null;
+  discount: RouteDiscountRecord | null;
 }
 
 const routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;
@@ -89,6 +99,7 @@ function toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {
     cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,
     cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,
     cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,
+    discount: route.discount ?? null,
   };
 }
 
@@ -115,6 +126,48 @@ const governanceRecords = registry.governance as unknown as Readonly<
 
 export function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {
   return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';
+}
+
+export const LIFECYCLE_STAGES = [
+  'discovered',
+  'registered',
+  'probed',
+  'benchmarked',
+  'evaluated',
+  'shadow',
+  'canary',
+  'promoted',
+  'observed',
+  'deprecated',
+  'removed',
+] as const;
+
+export type LifecycleStage = (typeof LIFECYCLE_STAGES)[number];
+
+export function lifecycleStageAtOrAfter(
+  stage: string | null | undefined,
+  floor: LifecycleStage,
+): boolean {
+  const index = LIFECYCLE_STAGES.indexOf(stage as LifecycleStage);
+  return index >= 0 && index >= LIFECYCLE_STAGES.indexOf(floor);
+}
+
+export type DeveloperId = keyof ModelRegistry['developers'];
+
+interface DeveloperRecord {
+  label: string;
+}
+
+const developerRecords = registry.developers as unknown as Readonly<
+  Record<string, DeveloperRecord>
+>;
+
+export function getDeveloperLabel(developerId: string): string | null {
+  return developerRecords[developerId]?.label ?? null;
+}
+
+export function listDevelopers(): readonly { id: string; label: string }[] {
+  return Object.entries(developerRecords).map(([id, record]) => ({ id, label: record.label }));
 }
 
 export type ComputePricingUnit = 'usd_per_vcpu_second';
@@ -226,6 +279,14 @@ export interface GatewayRecord {
   extraHeaderEnvs?: Readonly<Record<string, string>>;
   host: string;
   governanceReviewedOn?: string;
+  discount?: GatewayDiscountPolicy;
+}
+
+export interface GatewayDiscountPolicy {
+  requestField: string;
+  minPercent: number;
+  source: string;
+  verifiedOn: string;
 }
 
 export interface GatewayHarness {

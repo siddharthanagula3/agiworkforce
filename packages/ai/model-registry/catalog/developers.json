@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/registry.schema.json",
+  "schemaVersion": 1,
+  "notes": "Who trained a model, separate from who serves it. A provider id names an inference route (an API account, a gateway, a local runtime); a developer id names the organisation that released the weights or the proprietary model. providerDeveloper maps a first-party provider to the developer it serves so a curated record on that provider inherits it; a host that serves other developers' models (groq, open_router, cheaperinference, nvidia_nim, vercel_gateway) has no entry and every model on it must resolve through an explicit developer field or the author segment of its upstream model id. aliases are matched case-insensitively against that segment; a leading ~ (OpenRouter's latest alias marker) is stripped first.",
+  "developers": {
+    "openai": { "label": "OpenAI", "aliases": ["openai"] },
+    "anthropic": { "label": "Anthropic", "aliases": ["anthropic"] },
+    "google": { "label": "Google", "aliases": ["google"] },
+    "meta": { "label": "Meta", "aliases": ["meta", "meta-llama"] },
+    "deepseek": { "label": "DeepSeek", "aliases": ["deepseek", "deepseek-ai"] },
+    "qwen": { "label": "Qwen", "aliases": ["qwen", "alibaba"] },
+    "mistral": { "label": "Mistral AI", "aliases": ["mistral", "mistralai"] },
+    "zhipu": { "label": "Z.AI", "aliases": ["z-ai", "zhipu", "zhipuai", "zai-org", "thudm"] },
+    "moonshot": { "label": "Moonshot AI", "aliases": ["moonshot", "moonshotai"] },
+    "minimax": { "label": "MiniMax", "aliases": ["minimax", "minimaxai"] },
+    "nvidia": { "label": "NVIDIA", "aliases": ["nvidia"] },
+    "xai": { "label": "xAI", "aliases": ["xai", "x-ai"] },
+    "perplexity": { "label": "Perplexity", "aliases": ["perplexity"] },
+    "cohere": { "label": "Cohere", "aliases": ["cohere"] },
+    "microsoft": { "label": "Microsoft", "aliases": ["microsoft"] },
+    "amazon": { "label": "Amazon", "aliases": ["amazon"] },
+    "runway": { "label": "Runway", "aliases": ["runway", "runwayml"] },
+    "openrouter": { "label": "OpenRouter", "aliases": ["openrouter"] }
+  },
+  "providerDeveloper": {
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "google": "google",
+    "deepseek": "deepseek",
+    "qwen": "qwen",
+    "mistral": "mistral",
+    "zhipu": "zhipu",
+    "moonshot": "moonshot",
+    "minimax": "minimax",
+    "xai": "xai",
+    "perplexity": "perplexity",
+    "runway": "runway"
+  }
+}

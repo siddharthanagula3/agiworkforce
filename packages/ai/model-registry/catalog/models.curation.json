@@ -216,7 +216,7 @@
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
-      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
+      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash\u2192dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old\u2192new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 \u2192 glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
       "date": "2026-06-20",
@@ -289,14 +289,26 @@
       "verifiedBy": "founder-direction-and-openrouter-live-model-list",
       "status": "ADDITION",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) joins tierAllowedModels.economy on the founder's instruction of 2026-09-06 so the composer offers it on the Free plan and every paid plan; the route was already registered on 2026-09-05 with a live end to end check against the OpenRouter API. Its $0 price is the router's list price for the free upstream models it picks, and those upstream providers' terms may allow training on prompts, which is why the company free lane (check-free-pools) still lists no OpenRouter free route; the picker entry is a user choice, not the free lane."
+    },
+    {
+      "date": "2026-09-06",
+      "verifiedBy": "catalog-developers-and-provider-labels",
+      "status": "ADDITION",
+      "notes": "Every model now carries a developer (who trained it) separate from its provider (which route serves it), resolved from catalog/developers.json: a first-party provider inherits its developer, a host such as groq or open_router resolves through the author segment of the upstream model id, so GPT-OSS on Groq is an OpenAI model and a synced OpenRouter entry keeps its author. The qwen provider label becomes Alibaba Model Studio because that provider id is the DashScope account that serves Qwen and third-party models; the Qwen developer label stays Qwen."
     }
   ],
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": [],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "family:google/gemini-flash-lite",
@@ -324,8 +336,14 @@
     "openai": {
       "label": "OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": ["gpt-", "tts-", "whisper", "gpt-image"],
       "aliases": [],
       "defaultModel": "family:openai/gpt-frontier",
@@ -338,13 +356,21 @@
         "long_context": "family:openai/gpt-frontier",
         "computer_use": "family:openai/gpt-frontier"
       },
-      "canonicalization": { "gpt-5.6": "family:openai/gpt-frontier" }
+      "canonicalization": {
+        "gpt-5.6": "family:openai/gpt-frontier"
+      }
     },
     "anthropic": {
       "label": "Anthropic",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      },
       "modelPrefixes": ["claude"],
       "aliases": [],
       "defaultModel": "family:anthropic/claude-sonnet",
@@ -362,8 +388,14 @@
     "google": {
       "label": "Google",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 0.95, "completion": 0.95 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 5 },
+      "tokenMultiplier": {
+        "prompt": 0.95,
+        "completion": 0.95
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 5
+      },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
       "defaultModel": "family:google/gemini-flash",
@@ -380,8 +412,14 @@
     "xai": {
       "label": "xAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0.5
+      },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
       "defaultModel": "family:xai/grok",
@@ -398,8 +436,14 @@
     "deepseek": {
       "label": "DeepSeek",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 0.44, "outputPerMillion": 1.32 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.44,
+        "outputPerMillion": 1.32
+      },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
       "defaultModel": "family:deepseek/deepseek-flash",
@@ -414,10 +458,16 @@
       "canonicalization": {}
     },
     "qwen": {
-      "label": "Qwen",
+      "label": "Alibaba Model Studio",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.4, "outputPerMillion": 1.6 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 1.6
+      },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "family:qwen/qwen-plus",
@@ -434,8 +484,14 @@
     "moonshot": {
       "label": "Moonshot AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
       "taskRouting": {},
@@ -445,8 +501,14 @@
     "perplexity": {
       "label": "Perplexity",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": ["sonar"],
       "aliases": ["perplexity", "pplx", "sonar"],
       "defaultModel": "sonar-deep-research",
@@ -463,8 +525,14 @@
     "zhipu": {
       "label": "ZhipuAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1.4, "outputPerMillion": 4.4 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4
+      },
       "modelPrefixes": ["glm"],
       "aliases": ["zhipu", "zhipuai", "bigmodel", "glm", "z.ai", "zai"],
       "defaultModel": "family:zhipu/glm",
@@ -481,8 +549,14 @@
     "bedrock": {
       "label": "AWS Bedrock",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      },
       "modelPrefixes": ["anthropic.", "amazon.", "meta.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
       "taskRouting": {},
@@ -491,8 +565,14 @@
     "nvidia_nim": {
       "label": "NVIDIA NIM",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5
+      },
       "modelPrefixes": ["nvidia/", "meta/", "mistralai/"],
       "aliases": ["nvidia_nim", "nvidia-nim", "nim"],
       "defaultModel": "",
@@ -502,8 +582,14 @@
     "open_router": {
       "label": "OpenRouter",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
       "defaultModel": "openrouter-auto",
@@ -513,8 +599,14 @@
     "ollama": {
       "label": "Ollama (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -524,8 +616,14 @@
     "lmstudio": {
       "label": "LM Studio (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -535,8 +633,14 @@
     "llamacpp": {
       "label": "llama.cpp (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -546,8 +650,14 @@
     "vllm": {
       "label": "vLLM (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -557,8 +667,14 @@
     "runway": {
       "label": "Runway",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": ["runway", "gen4."],
       "aliases": ["runway-ml", "runwayml"],
       "defaultModel": "",
@@ -568,8 +684,14 @@
     "minimax": {
       "label": "MiniMax",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.3, "outputPerMillion": 1.2 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2
+      },
       "modelPrefixes": ["minimax"],
       "aliases": ["minimax"],
       "taskRouting": {},
@@ -579,8 +701,14 @@
     "groq": {
       "label": "Groq",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": ["groq"],
       "defaultModel": "",
@@ -590,8 +718,14 @@
     "workers_ai": {
       "label": "Cloudflare Workers AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": ["workers_ai", "workers-ai", "cloudflare"],
       "defaultModel": "",
@@ -601,8 +735,14 @@
     "vercel_gateway": {
       "label": "Vercel AI Gateway",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": ["vercel_gateway", "vercel-gateway", "vercel"],
       "defaultModel": "",
@@ -662,7 +802,9 @@
         "explicitBreakpoints": true
       },
       "promptCacheMinimumTokens": 1024,
-      "tierPolicy": { "minTier": "max" },
+      "tierPolicy": {
+        "minTier": "max"
+      },
       "costOverride": {
         "inputCost": 10,
         "outputCost": 50,
@@ -738,7 +880,11 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -757,7 +903,9 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"]
+      },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "deprecation_date": null,
       "cachePolicy": {
@@ -767,8 +915,15 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 5,
-      "tierPolicy": { "minTier": "max" },
-      "costOverride": { "inputCost": 4, "outputCost": 20, "cached_input": 0.4, "cached_write": 5 },
+      "tierPolicy": {
+        "minTier": "max"
+      },
+      "costOverride": {
+        "inputCost": 4,
+        "outputCost": 20,
+        "cached_input": 0.4,
+        "cached_write": 5
+      },
       "contextOverride": 1050000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -837,7 +992,11 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -856,7 +1015,9 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"]
+      },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "deprecation_date": null,
       "cachePolicy": {
@@ -866,7 +1027,9 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 4,
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "costOverride": {
         "inputCost": 2,
         "outputCost": 12,
@@ -941,7 +1104,11 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -960,7 +1127,9 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"]
+      },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "deprecation_date": null,
       "cachePolicy": {
@@ -970,7 +1139,9 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 3,
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "costOverride": {
         "inputCost": 0.2,
         "outputCost": 1.2,
@@ -1032,7 +1203,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "max" },
+      "tierPolicy": {
+        "minTier": "max"
+      },
       "costOverride": {
         "inputCost": 10,
         "outputCost": 50,
@@ -1100,7 +1273,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "max" },
+      "tierPolicy": {
+        "minTier": "max"
+      },
       "costOverride": {
         "inputCost": 5,
         "outputCost": 25,
@@ -1125,7 +1300,9 @@
         "caching": true
       },
       "promptCacheMinimumTokens": 512,
-      "providerCompatibility": { "nativeWebFetch": false },
+      "providerCompatibility": {
+        "nativeWebFetch": false
+      },
       "speedOverride": "slow",
       "releasedOverride": "July 24, 2026",
       "lifecycle": {
@@ -1164,7 +1341,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "costOverride": {
         "inputCost": 2,
         "outputCost": 10,
@@ -1226,7 +1405,9 @@
           "budgetPath": "thinking.budget_tokens"
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "costOverride": {
         "inputCost": 1,
         "outputCost": 5,
@@ -1275,7 +1456,10 @@
       "bestFor": ["Multimodal Retrieval", "Semantic Search", "RAG", "Classification"],
       "deprecation_date": null,
       "pricingNote": "Standard text input $0.20/M tokens; Batch text input $0.10/M tokens. Image/audio/video prices vary by modality.",
-      "costOverride": { "inputCost": 0.2, "outputCost": 0 },
+      "costOverride": {
+        "inputCost": 0.2,
+        "outputCost": 0
+      },
       "contextOverride": 8192,
       "capabilitiesOverride": {
         "streaming": false,
@@ -1315,9 +1499,14 @@
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
       "deprecation_date": null,
       "inputTokenPricingTiers": [
-        { "thresholdTokens": 200000, "inputCost": 4, "cached_input": 0.4, "outputCost": 18 }
+        {
+          "thresholdTokens": 200000,
+          "inputCost": 4,
+          "cached_input": 0.4,
+          "outputCost": 18
+        }
       ],
-      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
+      "pricingNote": "Base rate (\u2264200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1331,7 +1520,9 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "releasedOverride": "February 19, 2026",
       "lifecycle": {
         "stage": "promoted",
@@ -1368,7 +1559,9 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "releasedOverride": "July 21, 2026",
       "lifecycle": {
         "stage": "promoted",
@@ -1407,8 +1600,14 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" },
-      "costOverride": { "inputCost": 0.25, "outputCost": 1.5, "cached_input": 0.025 },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.25,
+        "outputCost": 1.5,
+        "cached_input": 0.025
+      },
       "contextOverride": 1048576,
       "capabilitiesOverride": {
         "streaming": true,
@@ -1448,8 +1647,14 @@
       "deprecation_date": null,
       "imageApi": "gemini",
       "imageOutputMimeType": "image/jpeg",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0.5, "outputCost": 60 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0.5,
+        "outputCost": 60
+      },
       "contextOverride": 131072,
       "capabilitiesOverride": {
         "streaming": false,
@@ -1495,9 +1700,17 @@
       "imageOutputMimeType": "image/jpeg",
       "imagePerImageCost": 0.134,
       "pricingNote": "Input $2.00/1M for text and images, roughly $0.0011 per input image. Output $12.00/1M for text and thinking tokens and $120.00/1M for image tokens: a 1K or 2K image is 1,120 tokens ($0.134) and a 4K image is 2,000 tokens ($0.24). imagePerImageCost carries the 1K and 2K rate. Batch halves input and output. Search grounding bills $14 per 1,000 requests after 5,000 free each month. Google publishes no thinking-level row and no knowledge cutoff for this model, so neither is recorded. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "pro" },
-      "costOverride": { "inputCost": 2, "outputCost": 120 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 2,
+        "outputCost": 120
+      },
       "contextOverride": 65536,
       "capabilitiesOverride": {
         "streaming": false,
@@ -1542,9 +1755,17 @@
       "imageOutputMimeType": "image/jpeg",
       "imagePerImageCost": 0.0336,
       "pricingNote": "Input $0.25/1M for text, image and video. Output $1.50/1M for text and thinking tokens and $30.00/1M for image tokens: a 1K (1024x1024) image is 1,120 tokens, so $0.0336 per image, half the per-image price of gemini-3.1-flash-image. Batch halves both. Optimised for 1K output across 14 aspect ratios, with no search grounding, caching, function calling or structured output. No free tier. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "basic" },
-      "costOverride": { "inputCost": 0.25, "outputCost": 30 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.25,
+        "outputCost": 30
+      },
       "contextOverride": 65536,
       "capabilitiesOverride": {
         "streaming": false,
@@ -1598,10 +1819,18 @@
           "budgetPath": null
         }
       },
-      "costOverride": { "inputCost": 0.44, "outputCost": 1.32, "cached_input": 0.014 },
-      "tierPolicy": { "minTier": "pro" },
+      "costOverride": {
+        "inputCost": 0.44,
+        "outputCost": 1.32,
+        "cached_input": 0.014
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "releasedOverride": "July 31, 2026",
-      "providerCompatibility": { "forcedToolChoice": false },
+      "providerCompatibility": {
+        "forcedToolChoice": false
+      },
       "inputModalities": ["text"],
       "lifecycle": {
         "stage": "promoted",
@@ -1645,10 +1874,18 @@
           "budgetPath": null
         }
       },
-      "costOverride": { "inputCost": 1.32, "outputCost": 3.96, "cached_input": 0.044 },
-      "tierPolicy": { "minTier": "pro" },
+      "costOverride": {
+        "inputCost": 1.32,
+        "outputCost": 3.96,
+        "cached_input": 0.044
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "releasedOverride": "August 13, 2026",
-      "providerCompatibility": { "forcedToolChoice": false },
+      "providerCompatibility": {
+        "forcedToolChoice": false
+      },
       "lifecycle": {
         "stage": "evaluated",
         "stagedOn": "2026-09-05",
@@ -1684,8 +1921,14 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
-      "costOverride": { "inputCost": 0.44, "outputCost": 1.32, "cached_input": 0.014 },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.44,
+        "outputCost": 1.32,
+        "cached_input": 0.014
+      },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -1735,7 +1978,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "basic" },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
       "costOverride": {
         "inputCost": 0.1,
         "outputCost": 0.4,
@@ -1793,8 +2038,13 @@
           "budgetPath": "thinking_budget"
         }
       },
-      "tierPolicy": { "minTier": "basic" },
-      "costOverride": { "inputCost": 0.15, "outputCost": 0.47 },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.15,
+        "outputCost": 0.47
+      },
       "pricingNote": "Singapore/International list price per 1M tokens, matching the dashscope-intl.aliyuncs.com endpoint the Qwen adapter defaults to: a single band of $0.15 input/$0.47 output for any request up to the full 1M window, with no input-length tiers. Cache rates are deliberately absent: Alibaba states that for this model the cached-token price is neither 20% of the input price nor 10% for an explicit hit, and publishes the exact figures only in the Model Studio console. Beijing and Global deployment scopes price the same model at $0.113/$0.382 with a 50% batch discount. Verified against alibabacloud.com/help/en/model-studio/qwen3-8-flash and the Model Studio pricing page, retrieved 2026-09-04.",
       "contextOverride": 1000000,
       "capabilitiesOverride": {
@@ -1833,9 +2083,18 @@
       "qualityTier": "fast",
       "bestFor": ["Web Search", "Quick Research", "Citations"],
       "deprecation_date": "2026-09-27",
-      "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "free" },
-      "lifecycle": { "stage": "evaluated", "stagedOn": "2026-09-05", "source": "models.dev#sonar" }
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar"
+      }
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1880,7 +2139,10 @@
       "qualityTier": "balanced",
       "bestFor": ["Professional Research", "Long Context Search"],
       "deprecation_date": "2026-09-27",
-      "reasoning": { "capable": false, "control": "none" },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
       "lifecycle": {
         "stage": "evaluated",
         "stagedOn": "2026-09-05",
@@ -1913,7 +2175,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "lifecycle": {
         "stage": "evaluated",
         "stagedOn": "2026-09-05",
@@ -1934,23 +2198,61 @@
       "availability": "unavailable",
       "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
       "videoPerSecondCost": 0.12,
-      "videoPerSecondCostByResolution": { "720p": 0.12 },
+      "videoPerSecondCostByResolution": {
+        "720p": 0.12
+      },
       "videoGeneration": {
         "durationSecs": [2, 3, 4, 5, 6, 7, 8, 9, 10],
         "outputSizes": [
-          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
-          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
-          { "resolution": "832p", "aspectRatio": "4:3", "width": 1104, "height": 832 },
-          { "resolution": "960p", "aspectRatio": "1:1", "width": 960, "height": 960 },
-          { "resolution": "1104p", "aspectRatio": "3:4", "width": 832, "height": 1104 },
-          { "resolution": "672p", "aspectRatio": "21:9", "width": 1584, "height": 672 }
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
+          {
+            "resolution": "832p",
+            "aspectRatio": "4:3",
+            "width": 1104,
+            "height": 832
+          },
+          {
+            "resolution": "960p",
+            "aspectRatio": "1:1",
+            "width": 960,
+            "height": 960
+          },
+          {
+            "resolution": "1104p",
+            "aspectRatio": "3:4",
+            "width": 832,
+            "height": 1104
+          },
+          {
+            "resolution": "672p",
+            "aspectRatio": "21:9",
+            "width": 1584,
+            "height": 672
+          }
         ],
         "supportsAudio": false,
         "supportsSeed": true
       },
       "pricingNote": "Runway Gen-4.5 bills 12 credits per second of output at $0.01 per credit, so $0.12/second flat for the default mp4 output format regardless of ratio. Text-to-video accepts ratio 1280:720 or 720:1280 only; image-to-video additionally accepts 1104:832, 960:960, 832:1104 and 1584:672, and requires both a prompt image and prompt text. Duration is an integer from 2-10 seconds on both endpoints. Professional output formats add a per-second surcharge the schema cannot key by format: prores and png_sequence add 5 credits per second (+$0.05), and every 10-bit or HDR profile adds 20 credits per second (+$0.20). The 40 credits per second tier above 4 megapixels is unreachable at these ratios. The model remains non-selectable until AGI verifies provider provisioning with a live 200 probe; default video routing stays on the verified Google Veo route. Verified against docs.dev.runwayml.com, retrieved 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
       "capabilitiesOverride": {
         "streaming": false,
         "tools": false,
@@ -1991,18 +2293,78 @@
           28, 29, 30
         ],
         "outputSizes": [
-          { "resolution": "480p", "aspectRatio": "16:9", "width": 854, "height": 480 },
-          { "resolution": "480p", "aspectRatio": "4:3", "width": 752, "height": 560 },
-          { "resolution": "480p", "aspectRatio": "1:1", "width": 640, "height": 640 },
-          { "resolution": "480p", "aspectRatio": "3:4", "width": 560, "height": 752 },
-          { "resolution": "480p", "aspectRatio": "9:16", "width": 480, "height": 854 },
-          { "resolution": "480p", "aspectRatio": "21:9", "width": 992, "height": 432 },
-          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
-          { "resolution": "720p", "aspectRatio": "4:3", "width": 1112, "height": 834 },
-          { "resolution": "720p", "aspectRatio": "1:1", "width": 960, "height": 960 },
-          { "resolution": "720p", "aspectRatio": "3:4", "width": 834, "height": 1112 },
-          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
-          { "resolution": "720p", "aspectRatio": "21:9", "width": 1470, "height": 630 }
+          {
+            "resolution": "480p",
+            "aspectRatio": "16:9",
+            "width": 854,
+            "height": 480
+          },
+          {
+            "resolution": "480p",
+            "aspectRatio": "4:3",
+            "width": 752,
+            "height": 560
+          },
+          {
+            "resolution": "480p",
+            "aspectRatio": "1:1",
+            "width": 640,
+            "height": 640
+          },
+          {
+            "resolution": "480p",
+            "aspectRatio": "3:4",
+            "width": 560,
+            "height": 752
+          },
+          {
+            "resolution": "480p",
+            "aspectRatio": "9:16",
+            "width": 480,
+            "height": 854
+          },
+          {
+            "resolution": "480p",
+            "aspectRatio": "21:9",
+            "width": 992,
+            "height": 432
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "4:3",
+            "width": 1112,
+            "height": 834
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "1:1",
+            "width": 960,
+            "height": 960
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "3:4",
+            "width": 834,
+            "height": 1112
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "21:9",
+            "width": 1470,
+            "height": 630
+          }
         ],
         "supportsAudio": true,
         "supportsSeed": true,
@@ -2010,14 +2372,20 @@
           "unit": "video_tokens",
           "framesPerSecond": 24,
           "pixelsPerToken": 1024,
-          "usdPerToken": 0.0000107,
-          "usdPerTokenWithoutAudio": 0.0000107,
-          "usdPerTokenWithVideoInput": 0.0000064
+          "usdPerToken": 1.07e-5,
+          "usdPerTokenWithoutAudio": 1.07e-5,
+          "usdPerTokenWithVideoInput": 6.4e-6
         }
       },
       "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The with-audio and without-audio video-token SKUs are both $0.0000107/token; requests that carry a video reference bill at the cheaper $0.0000064/token with-video-input SKU. Every reservation uses the exact catalog pixel tuple rather than a flat resolution price. Verified against openrouter.ai, retrieved 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
       "capabilitiesOverride": {
         "streaming": false,
         "tools": false,
@@ -2055,7 +2423,10 @@
       "deprecation_date": null,
       "imageApi": "openai",
       "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high. OpenAI publishes two separate per-1M-token rows for this model: an image row at $8.00 input, $2.00 cached input, $30.00 output, and a text row at $5.00 input, $1.25 cached input, no output price. This entry carries the image row throughout, so a cache read of $2.00 is correct and a third-party snapshot reporting $1.25 is quoting the text row rather than contradicting it, litellm exposes only the text cache-read field, so it will keep reporting this row as drift. Verified against https://developers.openai.com/api/docs/pricing, retrieved 2026-09-01.",
-      "reasoning": { "capable": false, "control": "none" },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
       "releasedOverride": "April 21, 2026",
       "lifecycle": {
         "stage": "registered",
@@ -2073,8 +2444,14 @@
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration", "Accessibility"],
       "deprecation_date": null,
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0.6, "outputCost": 12 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0.6,
+        "outputCost": 12
+      },
       "contextOverride": 2000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2122,7 +2499,11 @@
       ],
       "deprecation_date": null,
       "promo_expires_at": "2027-01-01T00:00:00Z",
-      "post_promo_prices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 },
+      "post_promo_prices": {
+        "input": 1.5,
+        "output": 7.5,
+        "cached_input": 0.15
+      },
       "pricingNote": "Google lists Gemini 3.8 Flash at an introductory $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31. From 2027-01-01 the published rates are $1.50/$7.50/$0.15, carried in post_promo_prices. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
       "maxOutputTokens": 65536,
       "reasoning": {
@@ -2138,7 +2519,9 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
       "releasedOverride": "September 2, 2026",
       "lifecycle": {
         "stage": "promoted",
@@ -2169,7 +2552,11 @@
       ],
       "deprecation_date": "2026-09-06",
       "promo_expires_at": "2027-01-01T00:00:00Z",
-      "post_promo_prices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 },
+      "post_promo_prices": {
+        "input": 1.5,
+        "output": 7.5,
+        "cached_input": 0.15
+      },
       "pricingNote": "Same introductory schedule as the newer Flash rows: $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31, then $1.50/$7.50/$0.15 from 2027-01-01. The only Flash at or above 3.6 that accepts the minimal thinking level, which makes it the lowest-latency Flash lane at the same price as 3.8. Stable with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
       "reasoning": {
         "capable": true,
@@ -2184,8 +2571,14 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" },
-      "costOverride": { "inputCost": 0.75, "outputCost": 3.75, "cached_input": 0.075 },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.75,
+        "outputCost": 3.75,
+        "cached_input": 0.075
+      },
       "contextOverride": 1048576,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2244,7 +2637,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "lifecycle": {
         "stage": "promoted",
         "stagedOn": "2026-09-05",
@@ -2273,7 +2668,11 @@
       ],
       "deprecation_date": null,
       "promo_expires_at": "2026-09-09T16:00:00Z",
-      "post_promo_prices": { "input": 0.15, "output": 0.5, "cached_input": 0.03 },
+      "post_promo_prices": {
+        "input": 0.15,
+        "output": 0.5,
+        "cached_input": 0.03
+      },
       "pricingNote": "Z.ai lists GLM-5.3-Flash at a 50% promotion: $0.075/1M input, $0.25/1M output, $0.015/1M cached input, against list prices of $0.15/$0.50/$0.03. The promotion ends at 24:00 on 2026-09-09 Singapore time (2026-09-09T16:00:00Z), after which post_promo_prices takes over. Cached input storage is free during the promotion. Verified against docs.z.ai/guides/overview/pricing, retrieved 2026-09-04.",
       "maxOutputTokens": 128000,
       "reasoning": {
@@ -2289,7 +2688,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "basic" },
+      "tierPolicy": {
+        "minTier": "basic"
+      },
       "lifecycle": {
         "stage": "registered",
         "stagedOn": "2026-09-05",
@@ -2326,7 +2727,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "costOverride": {
         "inputCost": 0.4,
         "outputCost": 1.6,
@@ -2402,7 +2805,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "releasedOverride": "July 16, 2026",
       "lifecycle": {
         "stage": "registered",
@@ -2437,8 +2842,14 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
-      "costOverride": { "inputCost": 0.95, "outputCost": 4, "cached_input": 0.19 },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.95,
+        "outputCost": 4,
+        "cached_input": 0.19
+      },
       "contextOverride": 262144,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2491,8 +2902,14 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" },
-      "costOverride": { "inputCost": 0.95, "outputCost": 4, "cached_input": 0.16 },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.95,
+        "outputCost": 4,
+        "cached_input": 0.16
+      },
       "contextOverride": 262144,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2533,7 +2950,11 @@
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Reasoning", "Coding", "Agentic Workflows"],
       "deprecation_date": null,
-      "costOverride": { "inputCost": 2, "outputCost": 6, "cached_input": 0.5 },
+      "costOverride": {
+        "inputCost": 2,
+        "outputCost": 6,
+        "cached_input": 0.5
+      },
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 200000,
@@ -2557,7 +2978,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "max" },
+      "tierPolicy": {
+        "minTier": "max"
+      },
       "contextOverride": 500000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2593,12 +3016,26 @@
       "bestFor": ["Professional Video", "High Quality Clips"],
       "deprecation_date": null,
       "videoPerSecondCost": 0.4,
-      "videoPerSecondCostByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 },
+      "videoPerSecondCostByResolution": {
+        "720p": 0.4,
+        "1080p": 0.4,
+        "4k": 0.6
+      },
       "videoGeneration": {
         "durationSecs": [4, 6, 8],
         "outputSizes": [
-          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
-          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
           {
             "resolution": "1080p",
             "aspectRatio": "16:9",
@@ -2632,8 +3069,14 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0, "outputCost": 750 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 750
+      },
       "contextOverride": 1024,
       "capabilitiesOverride": {
         "streaming": false,
@@ -2669,12 +3112,26 @@
       "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
       "deprecation_date": null,
       "videoPerSecondCost": 0.1,
-      "videoPerSecondCostByResolution": { "720p": 0.1, "1080p": 0.12, "4k": 0.3 },
+      "videoPerSecondCostByResolution": {
+        "720p": 0.1,
+        "1080p": 0.12,
+        "4k": 0.3
+      },
       "videoGeneration": {
         "durationSecs": [4, 6, 8],
         "outputSizes": [
-          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
-          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
           {
             "resolution": "1080p",
             "aspectRatio": "16:9",
@@ -2708,8 +3165,14 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Fast with audio: $0.10/second at 720p, $0.12/second at 1080p, $0.30/second at 4k. 1080p and 4k require 8-second generations. Verified against ai.google.dev/gemini-api/docs/pricing on 2026-08-12.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
       "contextOverride": 1024,
       "capabilitiesOverride": {
         "streaming": false,
@@ -2744,8 +3207,14 @@
       "qualityTier": "balanced",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
       "deprecation_date": "2027-02-26",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 2.5, "outputCost": 10 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 2.5,
+        "outputCost": 10
+      },
       "contextOverride": 16000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2781,8 +3250,14 @@
       "qualityTier": "fast",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
       "deprecation_date": "2027-02-26",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 1.25, "outputCost": 5 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1.25,
+        "outputCost": 5
+      },
       "contextOverride": 16000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -2822,7 +3297,9 @@
       "bestFor": ["Complex Reasoning", "Open-Weight Deployment"],
       "deprecation_date": null,
       "releasedOverride": "June 2026",
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "contextWindow": 1000000,
       "inputCost": 0.3,
       "outputCost": 1.2,
@@ -2875,7 +3352,9 @@
       "bestFor": ["Text Reasoning", "Open-Weight Deployment"],
       "deprecation_date": "2026-09-06",
       "releasedOverride": "March 18, 2026",
-      "tierPolicy": { "minTier": "pro" },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
       "contextWindow": 204800,
       "inputCost": 0.3,
       "outputCost": 1.2,
@@ -2915,12 +3394,25 @@
       "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
-      "videoPerSecondCostByResolution": { "720p": 0.05, "1080p": 0.08 },
+      "videoPerSecondCostByResolution": {
+        "720p": 0.05,
+        "1080p": 0.08
+      },
       "videoGeneration": {
         "durationSecs": [4, 6, 8],
         "outputSizes": [
-          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
-          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
           {
             "resolution": "1080p",
             "aspectRatio": "16:9",
@@ -2940,8 +3432,14 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
       "contextOverride": 1024,
       "capabilitiesOverride": {
         "streaming": false,
@@ -2979,8 +3477,14 @@
       "availability": "preview",
       "videoPerSecondCost": 0.1,
       "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 1.5, "outputCost": 17.5 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1.5,
+        "outputCost": 17.5
+      },
       "contextOverride": 1048576,
       "capabilitiesOverride": {
         "streaming": false,
@@ -3018,8 +3522,14 @@
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 3.5, "outputCost": 21 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 3.5,
+        "outputCost": 21
+      },
       "contextOverride": 131072,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3073,7 +3583,10 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "costOverride": { "inputCost": 0.75, "outputCost": 4.5 },
+      "costOverride": {
+        "inputCost": 0.75,
+        "outputCost": 4.5
+      },
       "contextOverride": 131072,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3113,8 +3626,14 @@
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Input $1.00/1M text tokens, output $20.00/1M audio tokens, batch at half both. Free tier is free of charge. Streaming through streamGenerateContent has been supported since 2026-06-17. The current Gemini text-to-speech model: the 2.5 TTS previews name it as their replacement. Still preview with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" },
-      "costOverride": { "inputCost": 1, "outputCost": 20 },
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1,
+        "outputCost": 20
+      },
       "contextOverride": 8192,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3155,8 +3674,13 @@
       "bestFor": ["Automatic Routing", "Mixed Workloads", "Cost Balancing"],
       "deprecation_date": null,
       "pricingNote": "OpenRouter publishes prompt and completion prices of -1 for the Auto Router, meaning the request is billed at the standard rate of whichever model the router selects, with no router fee. The zero rates carried here are a placeholder for that dynamic price, not a free route: meter managed traffic against the model named in the response, never at zero. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
-      "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" },
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "releasedOverride": "November 8, 2023",
       "lifecycle": {
         "stage": "registered",
@@ -3181,9 +3705,17 @@
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Task-aware sibling of the Auto Router, still labelled Beta by OpenRouter, so it does not replace openrouter/auto. OpenRouter publishes prompt and completion prices of -1, meaning the request bills at the selected model's standard rate with no router fee; the zero rates here are a placeholder for that dynamic price, so meter the model named in the response and never at zero. No maximum completion length is published, so none is recorded. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
-      "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" },
-      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
       "contextOverride": 2000000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3222,8 +3754,13 @@
       "qualityTier": "fast",
       "bestFor": ["Zero-Cost Drafting", "Experimentation", "Overflow Capacity"],
       "deprecation_date": null,
-      "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" },
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "releasedOverride": "February 1, 2026",
       "lifecycle": {
         "stage": "registered",
@@ -3258,7 +3795,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "lifecycle": {
         "stage": "promoted",
         "stagedOn": "2026-09-05",
@@ -3291,7 +3830,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": {
+        "minTier": "free"
+      },
       "lifecycle": {
         "stage": "promoted",
         "stagedOn": "2026-09-05",
@@ -3329,8 +3870,14 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
-      "costOverride": { "inputCost": 0.075, "outputCost": 0.3, "cached_input": 0.0375 },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.075,
+        "outputCost": 0.3,
+        "cached_input": 0.0375
+      },
       "contextOverride": 131072,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3386,8 +3933,13 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
-      "costOverride": { "inputCost": 0.6, "outputCost": 3 },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.6,
+        "outputCost": 3
+      },
       "contextOverride": 131072,
       "capabilitiesOverride": {
         "streaming": true,
@@ -3443,8 +3995,13 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
-      "costOverride": { "inputCost": 0.8, "outputCost": 4 },
+      "tierPolicy": {
+        "minTier": "free"
+      },
+      "costOverride": {
+        "inputCost": 0.8,
+        "outputCost": 4
+      },
       "contextOverride": 131042,
       "capabilitiesOverride": {
         "streaming": true,
