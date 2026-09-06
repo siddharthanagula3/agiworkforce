@@ -49,6 +49,13 @@ describe('skillPublisher', () => {
   });
 });
 
+describe('skill entry editability', () => {
+  it('marks only skills the account authored as editable', () => {
+    expect(toSkillEntry(skill({ editable: true }), new Set()).editable).toBe(true);
+    expect(toSkillEntry(skill(), new Set()).editable).toBeUndefined();
+  });
+});
+
 describe('toSkillEntry', () => {
   it('renders a bundled skill as a slash name under the AGI source', () => {
     const entry = toSkillEntry(skill(), new Set(['canvas-design']));
@@ -84,8 +91,6 @@ describe('toSkillEntry', () => {
 
 describe('toSkillSection', () => {
   const installedAll = new Set(['canvas-design', 'mine', 'later']);
-
-
 
   it('hides the lifecycle filter when every skill shares one lifecycle', () => {
     expect(

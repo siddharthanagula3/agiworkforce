@@ -40,9 +40,7 @@ describe('highlightLine', () => {
     expect(tokens.find((token) => token.text === 'const')?.kind).toBe('keyword');
     expect(tokens.find((token) => token.text === '"hi"')?.kind).toBe('string');
     expect(tokens.find((token) => token.text === '42')?.kind).toBe('number');
-    expect(tokens.some((token) => token.kind === 'plain' && token.text.includes('x'))).toBe(
-      true,
-    );
+    expect(tokens.some((token) => token.kind === 'plain' && token.text.includes('x'))).toBe(true);
   });
 
   it('keeps an unterminated string on one line', () => {

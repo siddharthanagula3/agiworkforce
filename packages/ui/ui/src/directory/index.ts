@@ -1,6 +1,7 @@
 export { DirectoryPanel, type DirectoryPanelProps } from './DirectoryPanel';
 export { DirectoryToolbar } from './DirectoryToolbar';
 export { DirectoryGrid, DirectoryCard } from './DirectoryGrid';
+export { DirectoryBadge, DirectoryBadges } from './DirectoryBadges';
 export { SkillDetailView } from './SkillDetailView';
 export { SkillFileTree, SkillFileBody, CodeBlock, RenderedBody } from './SkillFileViewer';
 export { highlightLine, isCodeFile, isTextFile, fileExtension, splitLines } from './highlight';
@@ -8,6 +9,7 @@ export type { HighlightKind, HighlightToken } from './highlight';
 export { ConnectorDetailView } from './ConnectorDetailView';
 export { PluginDetailView } from './PluginDetailView';
 export { AddMarketplaceDialog } from './AddMarketplaceDialog';
+export { DirectoryActionNotice, isDirectoryActionNotice } from './action-notice';
 export {
   buildFileTree,
   countActiveFilters,
@@ -30,6 +32,7 @@ export {
 export type {
   DirectoryAdapter,
   DirectoryBadgeKind,
+  DirectoryConnectableMode,
   DirectoryConnectorDetail,
   DirectoryDetail,
   DirectoryDetailFile,
@@ -37,13 +40,18 @@ export type {
   DirectoryFilterGroup,
   DirectoryFilterOption,
   DirectoryFilterSelection,
+  DirectoryGroup,
   DirectoryMarketplaceEntry,
   DirectoryMarketplaceInput,
   DirectoryMarketplaceResult,
+  DirectoryPluginComponents,
   DirectoryPluginDetail,
+  DirectoryPluginMcpServer,
+  DirectoryQuery,
   DirectorySection,
   DirectorySectionKey,
   DirectorySkillDetail,
   DirectorySortKey,
   DirectorySourceChip,
+  DirectoryToggle,
 } from './types';

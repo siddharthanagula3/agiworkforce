@@ -48,6 +48,8 @@ import { useDictation } from '@features/chat/hooks/use-dictation';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
+import { ComposerFilesMenu } from './ComposerFilesMenu';
+import { ComposerPluginsMenu } from './ComposerPluginsMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
@@ -540,7 +542,6 @@ const ChatComposerNewComponent = ({
   clearSignal,
   emptyState = false,
   attachmentPrivacyShortLabel,
-  sendPreviewPresentation,
   onUpgradeRequest,
   onModelChange,
   freeTrial,
@@ -3426,7 +3427,6 @@ const ChatComposerNewComponent = ({
                       void handleIncognitoToggle();
                       closeMenu();
                     }}
-                    sendPreviewPresentation={sendPreviewPresentation}
                     skills={availableSkills}
                     onSelectSkill={handleSkillSelect}
                     folders={projectPicker?.projects ?? EMPTY_PALETTE_FOLDERS}
@@ -3453,7 +3453,7 @@ const ChatComposerNewComponent = ({
                           aria-label={WORK_MODE_LABELS[mode]}
                           title={WORK_MODE_TITLES[mode]}
                           className={cn(
-                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-3',
+                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-2.5',
                             workMode === mode
                               ? 'bg-background text-foreground shadow-sm'
                               : 'text-muted-foreground hover:text-foreground',
@@ -4003,45 +4003,50 @@ const ChatComposerNewComponent = ({
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
+              <ComposerFilesMenu
                 disabled={isTurnActive || composerDisabled}
-                className={WORK_BAR_ITEM_CLASS}
+                onAttach={(file) => handleFileDrop([file])}
+                onUploadFromDevice={() => fileInputRef.current?.click()}
               >
-                <LibraryBig className={WORK_BAR_GLYPH_CLASS} />
-                {WORK_BAR_LABELS.files}
-              </button>
+                <button
+                  type="button"
+                  disabled={isTurnActive || composerDisabled}
+                  className={WORK_BAR_ITEM_CLASS}
+                >
+                  <LibraryBig className={WORK_BAR_GLYPH_CLASS} />
+                  {WORK_BAR_LABELS.files}
+                </button>
+              </ComposerFilesMenu>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowOverflowMenu(true);
-                  setConnectorsSubmenuOpen(true);
-                }}
-                className={WORK_BAR_ITEM_CLASS}
+              <ComposerPluginsMenu
+                connectors={connectedConnectorOptions}
+                loading={connectorsLoading}
+                disabledConnectorIds={disabledConnectorIds}
+                onSetConnectorEnabled={setConnectorEnabled}
               >
-                {connectedConnectorOptions.length > 0 && (
-                  <span className="flex shrink-0 items-center" aria-hidden="true">
-                    {connectedConnectorOptions
-                      .slice(0, WORK_BAR_CONNECTOR_MARKS)
-                      .map((connector, index) => (
-                        <OfficialConnectorLogo
-                          key={connector.id}
-                          connector={connector}
-                          className={cn(
-                            'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
-                            index > 0 && '-ml-1.5',
-                          )}
-                        />
-                      ))}
-                  </span>
-                )}
-                {!connectedConnectorOptions.length && (
-                  <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
-                )}
-                {WORK_BAR_LABELS.plugins}
-              </button>
+                <button type="button" className={WORK_BAR_ITEM_CLASS}>
+                  {connectedConnectorOptions.length > 0 && (
+                    <span className="flex shrink-0 items-center" aria-hidden="true">
+                      {connectedConnectorOptions
+                        .slice(0, WORK_BAR_CONNECTOR_MARKS)
+                        .map((connector, index) => (
+                          <OfficialConnectorLogo
+                            key={connector.id}
+                            connector={connector}
+                            className={cn(
+                              'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
+                              index > 0 && '-ml-1.5',
+                            )}
+                          />
+                        ))}
+                    </span>
+                  )}
+                  {!connectedConnectorOptions.length && (
+                    <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
+                  )}
+                  {WORK_BAR_LABELS.plugins}
+                </button>
+              </ComposerPluginsMenu>
             </div>
           ) : (
             <div className="mt-2 flex items-center gap-2">
