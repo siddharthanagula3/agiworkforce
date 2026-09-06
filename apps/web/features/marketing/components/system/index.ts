@@ -7,6 +7,7 @@ export { CodeTabs, type CodeTab } from './CodeTabs';
 export { CtaPanel, type CtaCard } from './CtaPanel';
 export { ProviderGrid, type ProviderTile } from './ProviderGrid';
 export { QuoteBlock } from './QuoteBlock';
+export { ScrollableTable, type ScrollableTableProps } from './ScrollableTable';
 export { ScrollFeatures, type ScrollFeature } from './ScrollFeatures';
 export { SplitFeature, type SplitFeatureProps } from './SplitFeature';
 export { StatBand, type Stat } from './StatBand';

@@ -215,10 +215,6 @@
   transform: rotate(45deg);
 }
 
-[data-design='agi'] .agi-ds-compare-disclosure > div {
-  padding: 0 var(--agi-space-3) var(--agi-space-3);
-}
-
 @media (max-width: 767px) {
   [data-design='agi'] .agi-ds-tier-controls {
     gap: var(--agi-space-1);
