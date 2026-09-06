@@ -12,10 +12,20 @@ import { toUserMessage } from '@/lib/user-error-message';
 import ContentTakedownPanel from '../components/ContentTakedownPanel';
 import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
+import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
-const TABS = ['overview', 'feedback', 'users', 'costs', 'routing', 'content', 'privacy'] as const;
+const TABS = [
+  'overview',
+  'feedback',
+  'users',
+  'costs',
+  'routing',
+  'routes',
+  'content',
+  'privacy',
+] as const;
 
 type Tab = (typeof TABS)[number];
 
@@ -363,6 +373,8 @@ export function OperatorDashboardPage() {
       {tab === 'costs' ? <OperatorCostsPanel /> : null}
 
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
+
+      {tab === 'routes' ? <RouteEconomicsPanel /> : null}
 
       {tab === 'content' ? <ContentTakedownPanel /> : null}
 

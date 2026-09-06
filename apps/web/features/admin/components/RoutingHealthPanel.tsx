@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
-import type { RouteBreakerState } from '@agiworkforce/routing';
 import { toUserMessage } from '@/lib/user-error-message';
+import BreakerStateBadge from './BreakerStateBadge';
 import type { RouteScopeHealthRow, RoutingHealthSummary } from '../services/routing-health-metrics';
 import {
   formatCount,
@@ -19,23 +19,9 @@ const PROVIDER_PARAM = 'provider';
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const TABLE_WRAP_CLASS = 'overflow-x-auto rounded-2xl border border-border';
 
-const STATE_LABEL: Record<RouteBreakerState, string> = {
-  closed: 'Closed',
-  degraded: 'Degraded',
-  open: 'Open',
-  half_open: 'Half open',
-};
-
 const UNFUNDED_LABEL = 'Unfunded';
 
 const UNFUNDED_CLASS = 'border-destructive bg-muted text-destructive-text';
-
-const STATE_CLASS: Record<RouteBreakerState, string> = {
-  closed: 'border-border bg-muted text-foreground',
-  degraded: 'border-warning bg-muted text-warning-text',
-  open: 'border-destructive bg-muted text-destructive-text',
-  half_open: 'border-info bg-muted text-info-text',
-};
 
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: 'no-store' });
@@ -44,17 +30,6 @@ async function readJson<T>(url: string): Promise<T> {
     throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
   }
   return body as T;
-}
-
-function StateBadge({ state }: { state: RouteBreakerState }) {
-  return (
-    <span
-      data-breaker-state={state}
-      className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs ${STATE_CLASS[state]}`}
-    >
-      {STATE_LABEL[state]}
-    </span>
-  );
 }
 
 export default function RoutingHealthPanel() {
@@ -157,11 +132,11 @@ export default function RoutingHealthPanel() {
                     <td className="p-3 font-mono text-xs">{row.provider}</td>
                     <td className="p-3 text-xs">{row.credentialClass}</td>
                     <td className="p-3">
-                      <StateBadge state={row.providerState} />
+                      <BreakerStateBadge state={row.providerState} />
                     </td>
                     <td className="p-3">
                       <div className="flex flex-col items-start gap-1">
-                        <StateBadge state={row.credentialState} />
+                        <BreakerStateBadge state={row.credentialState} />
                         {row.credentialUnfunded ? (
                           <span
                             data-credential-unfunded
@@ -248,7 +223,7 @@ export default function RoutingHealthPanel() {
                         <tr key={route.routeId} className="border-t border-border">
                           <td className="p-3 font-mono text-xs">{route.routeId}</td>
                           <td className="p-3">
-                            <StateBadge state={route.state} />
+                            <BreakerStateBadge state={route.state} />
                           </td>
                           <td className="p-3 tabular-nums">
                             {formatCount(route.observations.sampleCount)}
