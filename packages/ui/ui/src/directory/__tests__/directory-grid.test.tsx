@@ -47,14 +47,27 @@ describe('DirectoryGrid', () => {
     expect(onRemove).toHaveBeenCalledWith('canvas-design');
   });
 
-  it('swaps the add control for a settings control once installed', () => {
+  it('swaps the add control for a settings control once an editable skill is installed', () => {
     const onOpenSettings = vi.fn();
     const onInstall = vi.fn();
-    renderGrid({ entries: [{ ...skill, installed: true }], onInstall, onOpenSettings });
+    renderGrid({
+      entries: [{ ...skill, installed: true, editable: true }],
+      onInstall,
+      onOpenSettings,
+    });
     expect(screen.queryByRole('button', { name: 'Add canvas-design' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Settings canvas-design' }));
     expect(onOpenSettings).toHaveBeenCalledWith('canvas-design');
     expect(onInstall).not.toHaveBeenCalled();
+  });
+
+  it('offers Remove, not Settings, for an installed skill the account cannot edit', () => {
+    const onOpenSettings = vi.fn();
+    const onRemove = vi.fn();
+    renderGrid({ entries: [{ ...skill, installed: true }], onOpenSettings, onRemove });
+    expect(screen.queryByRole('button', { name: 'Settings canvas-design' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove canvas-design' }));
+    expect(onRemove).toHaveBeenCalledWith('canvas-design');
   });
 
   it('disables the trailing control while a mutation is in flight', () => {
@@ -111,6 +124,169 @@ describe('DirectoryGrid', () => {
     const tile = screen.getByText('UN');
     expect(tile.className).toContain('bg-logo-surface');
     expect(tile.className).not.toContain('text-muted-foreground');
+  });
+
+  it('lays the cards out in two columns from the small breakpoint', () => {
+    const { container } = renderGrid({ section: 'connectors' });
+    expect(container.querySelector('.grid')?.className).toContain('sm:grid-cols-2');
+    expect(container.querySelector('.grid')?.className).toContain('grid-cols-1');
+  });
+
+  it('renders the connector state line under the description', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        { id: 'slack', name: 'Slack', description: 'Chat', statusLabel: 'Desktop and CLI' },
+      ],
+    });
+    expect(screen.getByText('Desktop and CLI')).toBeTruthy();
+  });
+
+  it('names the card action by connectable mode with a tooltip', () => {
+    const onInstall = vi.fn();
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        { id: 'slack', name: 'Slack', description: 'Chat', connectableMode: 'connect' },
+        { id: 'stripe', name: 'Stripe', description: 'Pay', connectableMode: 'api-key-form' },
+      ],
+      onInstall,
+    });
+    const connect = screen.getByRole('button', { name: 'Connect Slack' });
+    expect(connect.getAttribute('title')).toBe('Connect');
+    const key = screen.getByRole('button', { name: 'Add API key Stripe' });
+    expect(key.getAttribute('title')).toBe('Add API key');
+    fireEvent.click(key);
+    expect(onInstall).toHaveBeenCalledWith('stripe');
+  });
+
+  it('shows a green check instead of a control for a connected connector', () => {
+    const onRemove = vi.fn();
+    renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'slack', name: 'Slack', description: 'Chat', installed: true }],
+      onInstall: vi.fn(),
+      onRemove,
+    });
+    expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Slack' })).toBeNull();
+  });
+
+  it('renders Official and Community as pills and Custom for user-added servers', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        { id: 'a', name: 'Alpha', description: 'A', badges: ['official'] },
+        { id: 'b', name: 'Beta', description: 'B', badges: ['community'] },
+        { id: 'c', name: 'Gamma', description: 'C', badges: ['custom'] },
+      ],
+    });
+    expect(screen.getByText('Official')).toBeTruthy();
+    expect(screen.getByText('Community')).toBeTruthy();
+    expect(screen.getByText('Custom')).toBeTruthy();
+  });
+
+  it('renders First-party as a pill from the same label map', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'gmail', name: 'Gmail', description: 'Mail', badges: ['first-party'] }],
+    });
+    expect(screen.getByText('First-party')).toBeTruthy();
+  });
+
+  it('gives a long community name the whole row and moves the pill below it', () => {
+    const onInstall = vi.fn();
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'ai-craftsman',
+          name: 'AI Craftsman Workshop Assistant',
+          publisher: 'Craft Labs',
+          description: 'Build things',
+          badges: ['community'],
+          connectableMode: 'connect',
+        },
+      ],
+      onInstall,
+    });
+    const name = screen.getByRole('button', { name: 'AI Craftsman Workshop Assistant' });
+    expect(name.className).toContain('line-clamp-2');
+    expect(name.className).not.toContain('truncate');
+    const pill = screen.getByText('Community');
+    expect(name.parentElement?.contains(pill)).toBe(false);
+    expect(pill.parentElement?.contains(screen.getByText('Craft Labs'))).toBe(true);
+    const control = screen.getByRole('button', { name: 'Connect AI Craftsman Workshop Assistant' });
+    expect(control.parentElement).toBe(name.parentElement?.parentElement?.parentElement);
+  });
+
+  it('keeps the verified glyph beside the name', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'gmail', name: 'Gmail', description: 'Mail', badges: ['verified'] }],
+    });
+    const name = screen.getByRole('button', { name: 'Gmail' });
+    expect(name.parentElement?.contains(screen.getByRole('img', { name: 'Verified' }))).toBe(true);
+  });
+
+  it('falls back to the monogram when the icon fails to load', () => {
+    const { container } = renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'x', name: 'Xylo', description: 'X', iconUrl: '/icon?id=x', monogram: 'XY' }],
+    });
+    const img = container.querySelector('img[src="/icon?id=x"]');
+    expect(img).toBeTruthy();
+    fireEvent.error(img as Element);
+    expect(container.querySelector('img[src="/icon?id=x"]')).toBeNull();
+    expect(screen.getByText('XY')).toBeTruthy();
+  });
+
+  it('labels a plugin card Install and Uninstall with a tooltip', () => {
+    const onInstall = vi.fn();
+    const onRemove = vi.fn();
+    renderGrid({
+      section: 'plugins',
+      entries: [
+        { id: 'frontend-design', name: 'Frontend Design', description: 'Design' },
+        { id: 'superpowers', name: 'Superpowers', description: 'Skills', installed: true },
+      ],
+      onInstall,
+      onRemove,
+    });
+    const install = screen.getByRole('button', { name: 'Install Frontend Design' });
+    expect(install.getAttribute('title')).toBe('Install');
+    fireEvent.click(install);
+    expect(onInstall).toHaveBeenCalledWith('frontend-design');
+    const uninstall = screen.getByRole('button', { name: 'Uninstall Superpowers' });
+    expect(uninstall.getAttribute('title')).toBe('Uninstall');
+    fireEvent.click(uninstall);
+    expect(onRemove).toHaveBeenCalledWith('superpowers');
+  });
+
+  it('writes a plugin install count as a sentence with the publisher and verified glyph', () => {
+    renderGrid({
+      section: 'plugins',
+      entries: [
+        {
+          id: 'frontend-design',
+          name: 'Frontend Design',
+          publisher: 'Anthropic',
+          description: 'Design',
+          badges: ['verified'],
+          installCount: 1_134_112,
+          statusLabel: 'Desktop and CLI',
+          installable: false,
+        },
+      ],
+      onInstall: vi.fn(),
+    });
+    expect(screen.getByText('Anthropic')).toBeTruthy();
+    expect(screen.getByText('1.1M')).toBeTruthy();
+    expect(screen.getByText('installs')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Verified' })).toBeTruthy();
+    expect(screen.getByText('Desktop and CLI')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Install Frontend Design' })).toBeNull();
+    expect(document.querySelector('.lucide-download')).toBeNull();
   });
 
   it('renders a per entry error', () => {
@@ -219,7 +395,8 @@ describe('DirectoryGrid', () => {
     });
     expect(screen.getByRole('button', { name: 'Adobe Creative Cloud' })).toBeTruthy();
     expect(screen.getByText('Adobe')).toBeTruthy();
-    expect(screen.getByText('Verified')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Verified' })).toBeTruthy();
+    expect(screen.queryByText('Verified')).toBeNull();
     expect(screen.queryByText('Made by AGI')).toBeNull();
   });
 });

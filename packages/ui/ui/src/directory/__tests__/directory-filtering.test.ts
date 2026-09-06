@@ -138,6 +138,15 @@ describe('toggleFilterValue', () => {
     expect(toggleFilterValue(added, 'status', 'installed')).toEqual({});
   });
 
+  it('replaces the value when the group is exclusive and clears it on a second toggle', () => {
+    const web = toggleFilterValue({}, 'works-with', 'web', true);
+    expect(web).toEqual({ 'works-with': ['web'] });
+    expect(toggleFilterValue(web, 'works-with', 'claude-code', true)).toEqual({
+      'works-with': ['claude-code'],
+    });
+    expect(toggleFilterValue(web, 'works-with', 'web', true)).toEqual({});
+  });
+
   it('counts every selected value across groups', () => {
     expect(countActiveFilters({ status: ['a', 'b'], type: ['c'] })).toBe(3);
   });

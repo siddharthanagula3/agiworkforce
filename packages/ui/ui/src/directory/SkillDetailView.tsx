@@ -6,6 +6,7 @@ import { Spinner } from '../primitives/Spinner';
 import {
   DIRECTORY_LOADING_LABEL,
   GENERIC_ERROR_COPY,
+  INSTALLED_LABEL,
   INSTALL_LABEL,
   SKILL_DESCRIPTION_LABEL,
   SKILL_LICENSE_LABEL,
@@ -21,6 +22,7 @@ export function SkillDetailView({
   onBack,
   onInstall,
   onUninstall,
+  onOpenSettings,
   onCopyLink,
   onCopyContent,
   onDownloadFile,
@@ -30,6 +32,7 @@ export function SkillDetailView({
   onBack: () => void;
   onInstall?: () => void;
   onUninstall?: () => void;
+  onOpenSettings?: () => void;
   onCopyLink?: () => void;
   onCopyContent?: (content: string) => void;
   onDownloadFile?: (skillId: string, path: string) => Promise<void> | void;
@@ -75,6 +78,7 @@ export function SkillDetailView({
   }, [path, previewable, inline, readFile, loaded]);
 
   const installed = detail.installed === true;
+  const editable = detail.editable === true && onOpenSettings !== undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,10 +87,11 @@ export function SkillDetailView({
         title={detail.name}
         name={detail.name}
         subtitle={detail.publisher}
-        primaryLabel={installed ? UNINSTALL_LABEL : INSTALL_LABEL}
-        primaryDone={false}
+        primaryLabel={editable ? INSTALLED_LABEL : installed ? UNINSTALL_LABEL : INSTALL_LABEL}
+        primaryDone={editable}
         primarySecondary={installed}
-        onPrimary={installed ? onUninstall : onInstall}
+        onPrimary={editable ? undefined : installed ? onUninstall : onInstall}
+        onOpenSettings={editable ? onOpenSettings : undefined}
         onCopyLink={onCopyLink}
         busy={busy}
       />

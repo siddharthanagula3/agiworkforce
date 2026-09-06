@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { summarizeSendPreview } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';

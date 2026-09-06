@@ -86,11 +86,15 @@ export function toggleFilterValue(
   selection: DirectoryFilterSelection,
   groupId: string,
   value: string,
+  exclusive = false,
 ): DirectoryFilterSelection {
   const current = selection[groupId] ?? [];
-  const next = current.includes(value)
+  const selected = current.includes(value);
+  const next = selected
     ? current.filter((item) => item !== value)
-    : [...current, value];
+    : exclusive
+      ? [value]
+      : [...current, value];
   const merged: Record<string, readonly string[]> = { ...selection, [groupId]: next };
   if (next.length === 0) delete merged[groupId];
   return merged;
