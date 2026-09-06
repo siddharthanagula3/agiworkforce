@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-05-21
+Last updated: 2026-09-06
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 
@@ -32,3 +32,29 @@ are not derivable from the catalog.
 - File upload, generated-file, and Code Interpreter-style features must attach `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata before surfacing in Web/Desktop/Mobile.
 - OpenAI Code Interpreter container-file citations are adapted in `@agiworkforce/providers-openai` only after caller-supplied file materialization provides URI, byte count, checksum, privacy mode, provider mode, storage scope, owner, and source context.
 - Surfaces show capability labels from shared metadata; they do not infer capabilities from model-name substrings.
+
+## Model identity and serving routes
+
+A canonical model (`models.curation.json`) has one developer, resolved from
+`catalog/developers.json`, and one or more serving routes compiled from
+`model-routes.json`, `harnesses.json` and `gateways.json`. The developer answers
+who trained the model; the route answers where a request executes, at what
+price sheet, under which commercial status, data retention and cache class. A
+host that serves other developers' models (Groq, OpenRouter, Cheaper Inference,
+DeepInfra, Together, Novita, NVIDIA NIM) is never a developer, and Alibaba
+Model Studio is the provider that serves Qwen alongside third-party models.
+
+Routing order is fixed: workspace policy, commercial status, trust mode,
+harness reachability, lifecycle stage, zero data retention and required
+capabilities admit a route; only then do health, credentials and expected cost
+rank the survivors. An explicit selection rotates through same-model routes
+before any substitution; Auto may change both model and route. Managed traffic
+admits models at lifecycle stage `registered` or later; a discovered upstream
+model stays internal.
+
+Prices, discounts, quotas and expiries are route metadata: a gateway discount
+policy prices its routes at list minus the guaranteed minimum, a promotional
+allocation is a quota pool with an expiry in `apps/web/config/free-pools.json`,
+and an exhausted allocation is a routing event (`quota_exhausted`), never a
+credential failure. The operator Routes tab renders all of it; the chat picker
+shows the model, its developer and the routes that can serve it now.

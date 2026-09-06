@@ -2,12 +2,58 @@
 
 Status: Active
 Owner: Fable (architect) with the founder
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 Every major product or architecture decision is recorded here in one shape: question, evidence,
 current implementation, options, decision, why, tradeoff, reversibility, revisit trigger. Early
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
+
+## D-2026-09-06-16 A model's developer is not its provider, and a discovered model is not a public one
+
+- Question: how the catalogue represents who trained a model, who serves it, what each serving
+  route may bill and promise, and when a model an upstream API lists becomes something a managed
+  user can pick.
+- Evidence: the 2026-09-06 ecosystem research (docs/research) and the founder's own accounts: the
+  same open weights are served by five or more hosts at prices that differ by an order of
+  magnitude; OpenRouter and Vercel already separate model author from hosting provider; Alibaba
+  Model Studio holds 265 expiring promotional allocations that are independent per model id,
+  bill onward to pay-as-you-go unless the console's free-quota-only switch is on, and signal
+  exhaustion with AllocationQuota.FreeTierOnly; Cheaper Inference sells discounted capacity whose
+  discount is a request parameter with a documented refusal; NVIDIA's developer endpoints are
+  not production licensed. In the repo, provider doubled as developer, so open-weight OpenAI models filed under
+  Groq and the picker rail mixed serving hosts with model makers; marketplace routes carried
+  hardcoded discounted prices; a 403 from an exhausted Alibaba allocation classified as a
+  credential failure and would have parked every Alibaba route.
+- Current implementation: models.curation.json plus routes, harnesses, gateways, governance and
+  lifecycle stages already compile into one registry; the router already applies workspace
+  policy, commercial status, trust mode, harness and health before cost, and offers same-model
+  routes before any substitution.
+- Options: a second provider-first registry; per-provider model entries; keep the registry and
+  add the missing identities and policies.
+- Decision: keep the registry. Every model identity now carries a developer resolved from
+  catalog/developers.json (a first-party provider inherits it, a host resolves through the
+  author segment of the upstream id, a synced OpenRouter entry keeps its author); the picker
+  rail groups by developer and the model card lists serving routes with credential-backed
+  availability and free-inventory state. Managed traffic admits only models at lifecycle stage
+  registered or later, so a discovered upstream model never reaches a managed picker. A gateway
+  may declare a discount policy (request field plus minimum percent); a route on it is priced at
+  list reduced by that minimum, the request carries the field, and the gateway's refusal is a
+  capacity signal, never overload. Alibaba allocations are quota pools of window allocation with
+  an expiry, exhaustion classifies as quota_exhausted and marks the pool spent, and every
+  allocation stays ineligible for the company free lane until the founder turns free-quota-only
+  on per model and records the terms review. New hosts (DeepInfra, Together, Novita) enter as
+  gateway definitions with sourced governance and experimental_only routes until the founder
+  confirms their commercial terms; Alibaba Model Studio routes for the DeepSeek flash and pro families and the Kimi family are live on the existing managed account. NVIDIA NIM stays a BYOK harness.
+- Why: the user chooses intelligence and the product manages eligible compute; hard policy
+  precedes economics; nothing free is assumed commercial; no price or discount lives in a
+  component.
+- Tradeoff: three new providers are inert until keys and terms arrive; the Anthropic-dialect
+  marketplace routes carry no discount control and are priced at list; Alibaba snapshot ids are
+  not yet modelled as separate quota-bearing routes.
+- Reversibility: high; each identity, policy and route is one catalog record.
+- Revisit trigger: a provider publishes a programmatic quota read; the founder signs a reseller
+  agreement; observed marketplace bills diverge from the priced ceiling.
 
 ## D-2026-09-05-15 The Electron shell needs a transport to the Rust capability layer
 
