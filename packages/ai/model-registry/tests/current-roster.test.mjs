@@ -352,11 +352,21 @@ test('selects the founder-approved roster and subscription bands', () => {
     .filter((model) => model.modelType === 'chat' || model.modelType === 'reasoning')
     .filter((model) => model.provider === 'openai')
     .map((model) => model.id);
-  assert.deepEqual(
-    new Set(openAITextModels),
-    new Set([compatibility.providers.openai.defaultModel, ...openAIRoutes]),
-    'the current OpenAI text roster must be owned entirely by provider routing',
-  );
+  const openAIOwned = new Set([compatibility.providers.openai.defaultModel, ...openAIRoutes]);
+  for (const modelKey of openAIOwned) {
+    assert.equal(
+      openAITextModels.includes(modelKey),
+      true,
+      `${modelKey} is routed but absent from the OpenAI text roster`,
+    );
+  }
+  for (const modelKey of openAITextModels) {
+    assert.equal(
+      openAIOwned.has(modelKey) || selectableRoster.has(modelKey),
+      true,
+      `${modelKey} is an orphan: no provider route reaches it and no tier band offers it`,
+    );
+  }
   const openAICanonicalizationTargets = Object.values(
     compatibility.providers.openai.canonicalization,
   );

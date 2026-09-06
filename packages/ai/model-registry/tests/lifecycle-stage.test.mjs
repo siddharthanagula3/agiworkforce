@@ -119,14 +119,14 @@ test('the backfill census is the one the compiler prints', () => {
   assert.equal(census.get(LIFECYCLE_STAGE.discovered), 344);
   assert.equal(census.get(LIFECYCLE_STAGE.promoted), 17);
   assert.equal(census.get(LIFECYCLE_STAGE.evaluated), 5);
-  assert.equal(census.get(LIFECYCLE_STAGE.registered), 33);
+  assert.equal(census.get(LIFECYCLE_STAGE.registered), 34);
   assert.equal(
     [...census.values()].reduce((total, count) => total + count, 0),
     Object.keys(REGISTRY.models).length,
   );
   assert.equal(
     formatStageCensus(stages),
-    'discovered 344, registered 33, evaluated 5, promoted 17',
+    'discovered 344, registered 34, evaluated 5, promoted 17',
   );
 });
 

@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-04",
+  "lastUpdated": "2026-09-05",
   "verificationLog": [
+    {
+      "date": "2026-09-05",
+      "verifiedBy": "official-openai-anthropic-pages",
+      "status": "ADDITION",
+      "notes": "Founder-directed addition of the two flagship rows. OpenAI: gpt-6-astra, new to the catalog, verified against developers.openai.com/api/docs/models/gpt-6-astra, developers.openai.com/api/docs/pricing, developers.openai.com/api/docs/guides/reasoning and developers.openai.com/api/docs/guides/prompt-caching on 2026-09-05. A 1,050,000-token context with a 922,000-token input ceiling and 128,000 output, an April 30 2026 knowledge cutoff, released September 3 2026 per the API changelog, and $10 / $1 cached / $12.50 cache write / $50 output per million with a single long-context tier: a prompt over 272,000 input tokens rebills the whole request at 2x input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. It takes no family slot: the gpt-frontier pattern matches only the Sol line, so the slot stays on gpt-5.6-sol. Unpublished fields are left out rather than guessed: OpenAI states no default reasoning effort, no image detail values, and no multi-agent, pro, persistent-reasoning or programmatic tool-calling support for this model, so none of those blocks are authored, and there is no OpenRouter slug or gateway route because no synced gateway carries the model yet. Two authored judgments: speed is slow, because unlike Sol this model rejects reasoning_effort none with a 400 and always reasons, and computerUse and codeExecution are true because the model page lists computer use, code interpreter and hosted shell among its supported tools. Anthropic: claude-fable-5-1 was already curated on 2026-09-04 and was re-checked this wave against platform.claude.com/docs/en/about-claude/models/overview and the pricing page. Every recorded fact still holds, the id, the 1M context, the 128K output, the June 2026 cutoff, $10 / $50 with a 0.025x cache read at $0.25 and $12.50 / $20 cache writes, so the row is unchanged."
+    },
     {
       "date": "2026-09-04",
       "verifiedBy": "official-anthropic-moonshot-deepseek-google-minimax-openrouter-groq-pages",
@@ -587,6 +593,86 @@
     }
   },
   "models": {
+    "gpt-6-astra": {
+      "id": "gpt-6-astra",
+      "apiModelId": "gpt-6-astra",
+      "name": "GPT-6 Astra",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 10,
+      "outputCost": 50,
+      "cached_input": 1,
+      "cached_write": 12.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "slow",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": [
+        "Frontier Reasoning",
+        "Long-Horizon Agentic Work",
+        "Complex Coding",
+        "Computer Use"
+      ],
+      "released": "September 3, 2026",
+      "deprecation_date": null,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputCost": 20,
+          "cached_input": 2,
+          "cached_write": 25,
+          "outputCost": 75
+        }
+      ],
+      "pricingNote": "Standard rates are $10 input, $1 cached input, $12.50 cache write and $50 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed in full at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch takes 50% off every category and fast mode doubles the applicable rates. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, and explicit breakpoints are supported. Verified against developers.openai.com/api/docs/models/gpt-6-astra, developers.openai.com/api/docs/pricing and developers.openai.com/api/docs/guides/prompt-caching, retrieved 2026-09-05.",
+      "openWeight": false,
+      "license": "proprietary",
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-04-30",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.9,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "promptCacheMinimumTokens": 1024,
+      "tierPolicy": { "minTier": "max" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
     "gpt-5.6-sol": {
       "id": "gpt-5.6-sol",
       "apiModelId": "gpt-5.6-sol",
@@ -18859,7 +18945,13 @@
       "minimax-m3",
       "minimax-m2.7"
     ],
-    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5-1", "claude-opus-5", "grok-4.6"]
+    "flagship_additions": [
+      "gpt-5.6-sol",
+      "gpt-6-astra",
+      "claude-fable-5-1",
+      "claude-opus-5",
+      "grok-4.6"
+    ]
   },
   "providerDefaults": {
     "openai": { "imageOutput": "gpt-image-2" },
