@@ -261,6 +261,16 @@ const ALLOWLIST = [
       'replaceSourceEntries is private and reached only from those two.',
   },
   {
+    match: /features\/plugins\/server\/directory\/install\.ts$/,
+    tables: ['plugin_marketplace_entries'],
+    functions: ['upsertShadowEntry'],
+    reason:
+      'upsertShadowEntry is private and reached only from installDirectoryPlugin, which passes ' +
+      'the sourceId that ensureShadowSource just read or inserted with `user_id = $1` in the ' +
+      'same transaction; the entry delete in uninstallDirectoryInstallation joins sources on ' +
+      'user_id and stays policed on its own.',
+  },
+  {
     match: /lib\/services\/plugin-marketplace-installation-service\.ts$/,
     tables: ['plugin_marketplace_installations', 'plugin_marketplace_entries'],
     functions: ['installMarketplaceEntry', 'mapInstallation'],
