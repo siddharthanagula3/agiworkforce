@@ -13,7 +13,7 @@ import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/
 const CHAT_ROOT_PATH = '/chat';
 const AGI_WORK_PATH = '/agi-work';
 const AGI_CODE_PATH = '/agi-code';
-const CLOUD_CODE_PATH = '/chat/code';
+const CLOUD_CODE_PATH = '/code';
 
 const UNAVAILABLE_PATH = '/region-unavailable';
 
@@ -122,6 +122,7 @@ function buildSignedOutRedirect(request: NextRequest): NextResponse {
 
 const isProtectedAppRoute = identityMiddleware.createRouteMatcher([
   '/chat(.*)',
+  '/code(.*)',
   '/library(.*)',
   '/schedules(.*)',
   '/tasks(.*)',
@@ -146,6 +147,7 @@ const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   '/__clerk/(.*)',
   '/login/complete',
   '/chat(.*)',
+  '/code(.*)',
   '/library(.*)',
   '/schedules(.*)',
   '/tasks(.*)',

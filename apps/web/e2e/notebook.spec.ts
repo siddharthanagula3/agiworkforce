@@ -143,7 +143,7 @@ test.describe('notebook', () => {
   });
 
   test('runs a cell and renders ordered text, image and table outputs', async ({ page }) => {
-    await page.goto('/chat/code', { waitUntil: 'domcontentloaded' });
+    await page.goto('/code', { waitUntil: 'domcontentloaded' });
 
     const cellCode = page.getByLabel('Cell 1 code');
     await expect(cellCode).toBeVisible({ timeout: 20000 });
@@ -163,7 +163,7 @@ test.describe('notebook', () => {
   });
 
   test('surfaces a failed cell as an error output', async ({ page }) => {
-    await page.goto('/chat/code', { waitUntil: 'domcontentloaded' });
+    await page.goto('/code', { waitUntil: 'domcontentloaded' });
 
     const cellCode = page.getByLabel('Cell 1 code');
     await expect(cellCode).toBeVisible({ timeout: 20000 });
@@ -176,7 +176,7 @@ test.describe('notebook', () => {
   test('Shift+Enter runs the cell, adds a new one, and moves keyboard focus to it', async ({
     page,
   }) => {
-    await page.goto('/chat/code', { waitUntil: 'domcontentloaded' });
+    await page.goto('/code', { waitUntil: 'domcontentloaded' });
 
     const firstCell = page.getByLabel('Cell 1 code');
     await expect(firstCell).toBeVisible({ timeout: 20000 });
@@ -190,7 +190,7 @@ test.describe('notebook', () => {
   });
 
   test('uploads a file into the sandbox and downloads it back', async ({ page }) => {
-    await page.goto('/chat/code', { waitUntil: 'domcontentloaded' });
+    await page.goto('/code', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByLabel('Cell 1 code')).toBeVisible({ timeout: 20000 });
     await page.getByLabel('Upload file', { exact: false }).setInputFiles({
@@ -211,7 +211,7 @@ test.describe('notebook', () => {
   for (const themeName of ['light', 'dark'] as const) {
     test(`renders the notebook panel in ${themeName} theme`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: themeName });
-      await page.goto('/chat/code', { waitUntil: 'domcontentloaded' });
+      await page.goto('/code', { waitUntil: 'domcontentloaded' });
 
       const cellCode = page.getByLabel('Cell 1 code');
       await expect(cellCode).toBeVisible({ timeout: 20000 });

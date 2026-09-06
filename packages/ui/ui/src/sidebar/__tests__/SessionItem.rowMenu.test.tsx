@@ -17,7 +17,7 @@ import type { SidebarProject, SidebarSession } from '../types';
 const session: SidebarSession = {
   id: 's1',
   title: 'Repository structure overview',
-  updatedAt: new Date(2026, 8, 1).toISOString(),
+  updatedAt: new Date().toISOString(),
 };
 
 const projects: SidebarProject[] = [

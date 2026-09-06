@@ -2,7 +2,7 @@ import type { CloudCodeNetworkAccess, CloudCodeSession } from '@agiworkforce/typ
 import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
 
 export const CODE_ROUTES = {
-  root: '/chat/code',
+  root: '/code',
   chat: '/chat',
   artifacts: '/chat/library?surface=artifact',
   customize: '/settings/capabilities',

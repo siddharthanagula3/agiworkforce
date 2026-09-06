@@ -74,7 +74,7 @@ describe('app rail · every destination resolves to a real route', () => {
   const routed = APP_NAV_DESTINATIONS.filter((d) => typeof d.href === 'string');
 
   it('covers the destinations that navigate somewhere', () => {
-    expect(routed.length).toBeGreaterThan(5);
+    expect(routed.length).toBeGreaterThan(4);
   });
 
   it.each(routed.map((d) => [d.id, d.href as string]))('%s -> %s exists', (_id, href) => {
@@ -97,6 +97,17 @@ describe('app rail · every destination resolves to a real route', () => {
     const ids = APP_NAV_DESTINATIONS.map((d) => d.id);
     expect(ids).not.toContain('tasks');
     expect(APP_NAV_DESTINATIONS.map((d) => d.href)).not.toContain('/tasks');
+  });
+
+  // Founder decision 2026-09-06: Code left the rail. It is its own top-level
+  // route with its own sidebar, so a rail entry beside that sidebar was the
+  // second of two navigation columns on one screen. The sidebar's ">_" control
+  // and the command palette are how it is reached now.
+  it('carries no Code destination', () => {
+    const ids = APP_NAV_DESTINATIONS.map((d) => d.id);
+    expect(ids).not.toContain('code');
+    expect(APP_NAV_DESTINATIONS.map((d) => d.href)).not.toContain('/chat/code');
+    expect(APP_NAV_DESTINATIONS.map((d) => d.href)).not.toContain('/code');
   });
 
   it('routes every destination, with no modal-only entry left behind', () => {

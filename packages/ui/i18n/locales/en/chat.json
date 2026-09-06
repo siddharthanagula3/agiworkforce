@@ -96,6 +96,7 @@
     "moreOptionsFor": "More options for {{name}}",
     "moveToProject": "Move to project",
     "navLabel": "Chat history",
+    "codeAction": "Code",
     "newChatAction": "New chat",
     "newChatInProject": "New chat in project",
     "newChatInProjectNamed": "New chat in {{name}}",
