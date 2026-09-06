@@ -15,6 +15,7 @@ import {
   closeCloudCodeSession,
   getCloudCodeSession,
   isCloudCodeSchemaUnavailable,
+  listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -45,11 +46,12 @@ async function handleGet(request: NextRequest, context: RouteContext) {
   const { sessionId } = await context.params;
   const owner = { userId, organizationId };
   try {
-    const [session, terminalEntries] = await Promise.all([
+    const [session, terminalEntries, turns] = await Promise.all([
       getCloudCodeSession(db, owner, sessionId),
       listCloudCodeTerminalEntries(db, owner, sessionId),
+      listCloudCodeAgentTurns(db, owner, sessionId),
     ]);
-    return NextResponse.json({ session, terminalEntries });
+    return NextResponse.json({ session, terminalEntries, turns });
   } catch (error) {
     rethrowCloudCodeError(error);
   }

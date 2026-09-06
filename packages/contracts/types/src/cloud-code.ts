@@ -76,6 +76,47 @@ export interface CloudCodeTerminalEntry {
   completedAt: string;
 }
 
+export const CLOUD_CODE_AGENT_STOP_REASONS = [
+  'done',
+  'max_steps',
+  'timeout',
+  'cancelled',
+  'error',
+  'denied',
+  'awaiting_approval',
+] as const;
+export type CloudCodeAgentStopReason = (typeof CLOUD_CODE_AGENT_STOP_REASONS)[number];
+
+/**
+ * One tool the agent ran, as the transcript shows it. `label` is the line the
+ * reader recognises: the shell command for a command tool, the tool and its
+ * target for a file tool, and null when neither applies, where the transcript
+ * falls back to `toolName`.
+ */
+export interface CloudCodeAgentStep {
+  index: number;
+  toolName: string;
+  label: string | null;
+  output: string;
+  isError: boolean;
+}
+
+/**
+ * A finished or in-flight agent turn. The Code surface rebuilds its transcript
+ * from these on reopen, so every field the transcript renders lives here rather
+ * than only in the response to the request that started the turn.
+ */
+export interface CloudCodeAgentTurnRecord {
+  turnId: string;
+  goal: string;
+  stopReason: CloudCodeAgentStopReason | null;
+  stepsUsed: number;
+  finalMessage: string;
+  errorMessage: string | null;
+  createdAt: string;
+  steps: CloudCodeAgentStep[];
+}
+
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;
   storageReady: boolean;

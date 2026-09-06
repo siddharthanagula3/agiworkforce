@@ -6,13 +6,18 @@ import {
   ChevronRight,
   Copy,
   Minus,
+  RefreshCw,
   Square,
   TriangleAlert,
   Volume2,
 } from '@agiworkforce/icons';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { Spinner } from '@agiworkforce/ui';
-import type { CloudCodeSession, CloudCodeTerminalEntry } from '@agiworkforce/types';
+import type {
+  CloudCodeAgentStep,
+  CloudCodeSession,
+  CloudCodeTerminalEntry,
+} from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { formatRelativeTime } from '@shared/utils/format';
 import { useTTS } from '@/lib/hooks/useTTS';
@@ -35,9 +40,12 @@ const MARK_SIZE = 16;
 const EXIT_CODE_OK = 0;
 const FIRST_OUTPUT_LINE = 0;
 
-function firstOutputLine(entry: CloudCodeTerminalEntry): string {
-  const output = entry.stdout || entry.stderr;
+function firstLine(output: string): string {
   return output.split('\n')[FIRST_OUTPUT_LINE]?.trim() ?? '';
+}
+
+function firstOutputLine(entry: CloudCodeTerminalEntry): string {
+  return firstLine(entry.stdout || entry.stderr);
 }
 
 function DisclosureRow({
@@ -177,6 +185,45 @@ function CommandGroup({
   );
 }
 
+function StepCard({ step, verbose }: { step: CloudCodeAgentStep; verbose: boolean }) {
+  const [expanded, setExpanded] = useState(verbose);
+
+  useEffect(() => setExpanded(verbose), [verbose]);
+
+  return (
+    <div className={styles['commandCard']}>
+      <DisclosureRow
+        label={step.label ?? step.toolName}
+        expanded={expanded}
+        onToggle={() => setExpanded((open) => !open)}
+        failed={step.isError}
+      />
+      {!expanded && step.output && (
+        <p className={styles['commandSummary']}>{firstLine(step.output)}</p>
+      )}
+      {expanded && step.output && (
+        <div className={styles['activityDetail']}>
+          <pre
+            className={`${styles['activityOutput']} ${step.isError ? styles['terminalError'] : ''}`}
+          >
+            {step.output}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StepGroup({ steps, verbose }: { steps: CloudCodeAgentStep[]; verbose: boolean }) {
+  return (
+    <div className={styles['commandCards']}>
+      {steps.map((step) => (
+        <StepCard key={step.index} step={step} verbose={verbose} />
+      ))}
+    </div>
+  );
+}
+
 function ReplyActions({ text, at }: { text: string; at: string }) {
   const [copied, setCopied] = useState(false);
   const { isSpeaking, isSupported, speak, stop } = useTTS();
@@ -247,6 +294,7 @@ export interface CodeTranscriptProps {
   busySince: string | null;
   verbose: boolean;
   onDecideApproval: (approval: CodeApprovalPrompt, decision: 'approve' | 'reject') => void;
+  onRetryTask: (goal: string) => void;
 }
 
 export function CodeTranscript({
@@ -257,6 +305,7 @@ export function CodeTranscript({
   busySince,
   verbose,
   onDecideApproval,
+  onRetryTask,
 }: CodeTranscriptProps) {
   const lastReplyId = [...items].reverse().find((item) => item.kind === 'reply')?.id ?? null;
   const cloning = session.state === 'provisioning' && Boolean(session.repositoryUrl);
@@ -276,6 +325,9 @@ export function CodeTranscript({
             </p>
           );
         }
+        if (item.kind === 'steps') {
+          return <StepGroup key={item.id} steps={item.steps} verbose={verbose} />;
+        }
         return (
           <div key={item.id} className={styles['replyBlock']}>
             {item.text && (
@@ -292,6 +344,16 @@ export function CodeTranscript({
             >
               {stopReasonLabel(item.stopReason)}
             </p>
+            {item.retryGoal && (
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                onClick={() => onRetryTask(item.retryGoal ?? '')}
+              >
+                <RefreshCw size={ACTION_GLYPH_SIZE} aria-hidden="true" />
+                {CODE_COPY.retryTask}
+              </button>
+            )}
             {item.id === lastReplyId && item.text && <ReplyActions text={item.text} at={item.at} />}
           </div>
         );

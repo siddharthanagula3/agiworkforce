@@ -2,8 +2,10 @@
 
 import { z } from 'zod';
 import {
+  CLOUD_CODE_AGENT_STOP_REASONS,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATES,
+  type CloudCodeAgentTurnRecord,
   type CloudCodeSession,
   type CloudCodeSessionListResponse,
   type CloudCodeTerminalEntry,
@@ -75,9 +77,29 @@ const listSchema = z.object({
   runtimes: z.array(runtimeSchema).default([]),
 });
 
+const agentStepSchema = z.object({
+  index: z.number().int().nonnegative(),
+  toolName: z.string(),
+  label: z.string().nullable(),
+  output: z.string(),
+  isError: z.boolean(),
+});
+
+const agentTurnRecordSchema = z.object({
+  turnId: z.string(),
+  goal: z.string(),
+  stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS).nullable(),
+  stepsUsed: z.number().int().nonnegative(),
+  finalMessage: z.string(),
+  errorMessage: z.string().nullable(),
+  createdAt: z.string(),
+  steps: z.array(agentStepSchema),
+});
+
 const sessionDetailSchema = z.object({
   session: sessionSchema,
   terminalEntries: z.array(terminalEntrySchema),
+  turns: z.array(agentTurnRecordSchema).default([]),
 });
 
 const sessionOnlySchema = z.object({ session: sessionSchema });
@@ -93,19 +115,6 @@ const commitResultSchema = z.object({
   }),
 });
 
-// Mirrors `CloudCodeAgentStopReason` in lib/services/cloud-code-agent-loop.ts. That
-// module is `server-only`, so the browser bundle cannot import the union and this
-// list is the wire contract instead.
-const AGENT_STOP_REASONS = [
-  'done',
-  'max_steps',
-  'timeout',
-  'cancelled',
-  'error',
-  'denied',
-  'awaiting_approval',
-] as const;
-
 const pendingApprovalSchema = z.object({
   stepIndex: z.number().int().nonnegative(),
   toolUseId: z.string(),
@@ -115,9 +124,10 @@ const pendingApprovalSchema = z.object({
 
 const agentTurnSchema = z.object({
   turnId: z.string(),
-  stopReason: z.enum(AGENT_STOP_REASONS),
+  stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS),
   stepsUsed: z.number().int().nonnegative(),
   finalMessage: z.string(),
+  steps: z.array(agentStepSchema).default([]),
   pendingApproval: pendingApprovalSchema.optional(),
   errorMessage: z.string().optional(),
 });
@@ -136,7 +146,7 @@ const agentApprovalsSchema = z.object({
   ),
 });
 
-export type CloudCodeAgentStopReason = (typeof AGENT_STOP_REASONS)[number];
+export type { CloudCodeAgentStopReason } from '@agiworkforce/types';
 export type CloudCodeAgentTurn = z.infer<typeof agentTurnSchema>;
 export type CloudCodeAgentApproval = z.infer<typeof agentApprovalsSchema>['approvals'][number];
 export type CloudCodeApprovalDecision = 'approve' | 'reject';
@@ -165,7 +175,11 @@ export interface CloudCodeApi {
   get(
     sessionId: string,
     signal?: AbortSignal,
-  ): Promise<{ session: CloudCodeSession; terminalEntries: CloudCodeTerminalEntry[] }>;
+  ): Promise<{
+    session: CloudCodeSession;
+    terminalEntries: CloudCodeTerminalEntry[];
+    turns: CloudCodeAgentTurnRecord[];
+  }>;
   create(
     input: CreateCloudCodeSessionInput,
     signal?: AbortSignal,

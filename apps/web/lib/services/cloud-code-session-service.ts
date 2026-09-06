@@ -3,9 +3,13 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  CLOUD_CODE_AGENT_STOP_REASONS,
   CLOUD_CODE_NETWORK_ACCESS,
   NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
+  type CloudCodeAgentStep,
+  type CloudCodeAgentStopReason,
+  type CloudCodeAgentTurnRecord,
   type CloudCodeNetworkAccess,
   type CloudCodeNotebookFile,
   type CloudCodeSession,
@@ -52,6 +56,12 @@ const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$
 const DEFAULT_WORKSPACE_PATH = '/home/user';
 const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
+const TURN_HISTORY_LIMIT = 50;
+const STEP_HISTORY_LIMIT = 400;
+const STEP_HISTORY_OUTPUT_LIMIT = 20_000;
+const STEP_COMMAND_ARGUMENT_KEY = 'command';
+const STEP_TARGET_ARGUMENT_KEY = 'path';
+const AWAITING_APPROVAL_TURN_STATE = 'awaiting_approval';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
@@ -186,6 +196,26 @@ interface TerminalEntryRow extends Record<string, unknown> {
   completed_at: string | Date;
 }
 
+interface AgentTurnRow extends Record<string, unknown> {
+  id: string;
+  goal: string;
+  state: string;
+  stop_reason: string | null;
+  steps_used: number;
+  final_message: string | null;
+  error_message: string | null;
+  created_at: string | Date;
+}
+
+interface AgentStepRow extends Record<string, unknown> {
+  turn_id: string;
+  step_index: number;
+  tool_name: string;
+  tool_args: unknown;
+  output: string | null;
+  is_error: boolean;
+}
+
 interface ValidatedCreateInput {
   requestId: string;
   title: string;
@@ -247,6 +277,91 @@ export function mapCloudCodeTerminalEntry(row: TerminalEntryRow): CloudCodeTermi
     startedAt: iso(row.started_at),
     completedAt: iso(row.completed_at),
   };
+}
+
+/**
+ * The line a step row shows in the transcript: the shell command a command tool
+ * ran, or the tool and the path a file tool touched. Null when the arguments
+ * carry neither, and the transcript then shows the tool name alone.
+ */
+export function agentStepLabel(toolName: string, toolArgs: unknown): string | null {
+  if (!toolArgs || typeof toolArgs !== 'object' || Array.isArray(toolArgs)) return null;
+  const args = toolArgs as Record<string, unknown>;
+  const command = args[STEP_COMMAND_ARGUMENT_KEY];
+  if (typeof command === 'string' && command.length > 0) return command;
+  const target = args[STEP_TARGET_ARGUMENT_KEY];
+  if (typeof target === 'string' && target.length > 0) return `${toolName} ${target}`;
+  return null;
+}
+
+function asStopReason(value: string | null, state: string): CloudCodeAgentStopReason | null {
+  if (value && (CLOUD_CODE_AGENT_STOP_REASONS as readonly string[]).includes(value)) {
+    return value as CloudCodeAgentStopReason;
+  }
+  return state === AWAITING_APPROVAL_TURN_STATE ? AWAITING_APPROVAL_TURN_STATE : null;
+}
+
+function historyOutput(output: string | null): string {
+  const text = output ?? '';
+  if (text.length <= STEP_HISTORY_OUTPUT_LIMIT) return text;
+  return text.slice(0, STEP_HISTORY_OUTPUT_LIMIT);
+}
+
+/**
+ * Everything the Code transcript needs to redraw a session it did not run in
+ * this tab: the turns, their outcome, and every tool each one ran.
+ */
+export async function listCloudCodeAgentTurns(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeAgentTurnRecord[]> {
+  validateCloudCodeSessionId(sessionId);
+  const scoped = ownerSql(owner, 2);
+  const turnRows = await db.query<AgentTurnRow>(
+    `select id, goal, state, stop_reason, steps_used, final_message, error_message, created_at
+       from cloud_code_agent_turns
+      where session_id = $1 and ${scoped.clause}
+      order by created_at asc
+      limit ${TURN_HISTORY_LIMIT}`,
+    [sessionId, ...scoped.params],
+  );
+  if (turnRows.length === 0) return [];
+
+  const scopedTurns = ownerSql(owner, 2, 't');
+  const stepRows = await db.query<AgentStepRow>(
+    `select s.turn_id, s.step_index, s.tool_name, s.tool_args, s.output, s.is_error
+       from cloud_code_agent_steps s
+       join cloud_code_agent_turns t on t.id = s.turn_id
+      where t.session_id = $1 and ${scopedTurns.clause}
+      order by s.turn_id, s.step_index asc
+      limit ${STEP_HISTORY_LIMIT}`,
+    [sessionId, ...scopedTurns.params],
+  );
+
+  const stepsByTurn = new Map<string, CloudCodeAgentStep[]>();
+  for (const row of stepRows) {
+    const steps = stepsByTurn.get(row.turn_id) ?? [];
+    steps.push({
+      index: row.step_index,
+      toolName: row.tool_name,
+      label: agentStepLabel(row.tool_name, row.tool_args),
+      output: historyOutput(row.output),
+      isError: row.is_error,
+    });
+    stepsByTurn.set(row.turn_id, steps);
+  }
+
+  return turnRows.map((row) => ({
+    turnId: row.id,
+    goal: row.goal,
+    stopReason: asStopReason(row.stop_reason, row.state),
+    stepsUsed: row.steps_used,
+    finalMessage: row.final_message ?? '',
+    errorMessage: row.error_message,
+    createdAt: iso(row.created_at),
+    steps: stepsByTurn.get(row.id) ?? [],
+  }));
 }
 
 function validateRepositoryUrl(value: unknown): string | null {
@@ -411,12 +526,14 @@ export function validateCloudCodeSessionId(sessionId: string): string {
 function ownerSql(
   owner: CloudCodeOwner,
   startIndex: number,
+  alias = '',
 ): {
   clause: string;
   params: [string, string | null];
 } {
+  const column = alias ? `${alias}.` : '';
   return {
-    clause: `user_id = $${startIndex} and organization_id is not distinct from $${startIndex + 1}`,
+    clause: `${column}user_id = $${startIndex} and ${column}organization_id is not distinct from $${startIndex + 1}`,
     params: [owner.userId, owner.organizationId],
   };
 }

@@ -95,7 +95,7 @@
     "moreOptions": "更多选项",
     "moreOptionsFor": "{{name}} 的更多选项",
     "moveToProject": "移动到项目",
-    "codeAction": "代码",
+    "codeAction": "AGI 代码",
     "newChatAction": "新对话",
     "newChatInProject": "在项目中新建对话",
     "newChatInProjectNamed": "在 {{name}} 中新建对话",

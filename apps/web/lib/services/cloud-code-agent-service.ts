@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { CloudCodeSession, ProviderMessage } from '@agiworkforce/types';
+import type { CloudCodeAgentStep, CloudCodeSession, ProviderMessage } from '@agiworkforce/types';
 import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
 import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
@@ -11,6 +11,7 @@ import { buildServerProviderAdapter, resolveProviderFromModel } from './provider
 import {
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
+  markManagedUsageProviderStarted,
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
@@ -33,6 +34,7 @@ import {
   CloudCodeConflictError,
   type CloudCodeOwner,
   CloudCodeUnavailableError,
+  agentStepLabel,
   claimCloudCodeSessionForRun,
   getCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
@@ -220,11 +222,13 @@ export interface StartCloudCodeAgentTurnInput {
   signal: AbortSignal;
 }
 
-export interface CloudCodeAgentTurnRecord {
+export interface CloudCodeAgentTurnOutcome {
   turnId: string;
   stopReason: CloudCodeAgentResult['stopReason'];
   stepsUsed: number;
   finalMessage: string;
+  /** Every tool this turn ran, in order, so the transcript can show the work. */
+  steps: CloudCodeAgentStep[];
   pendingApproval?: CloudCodeAgentResult['pendingApproval'];
   errorMessage?: string;
 }
@@ -304,7 +308,7 @@ export interface PersistedAgentTurnExecution {
 
 export async function executePersistedAgentTurn(
   input: PersistedAgentTurnExecution,
-): Promise<CloudCodeAgentTurnRecord> {
+): Promise<CloudCodeAgentTurnOutcome> {
   const claimed = await claimCloudCodeSessionForRun(input.db, input.owner, input.sessionId);
   if (!claimed) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
@@ -323,7 +327,7 @@ export async function executePersistedAgentTurn(
 
 async function runClaimedAgentTurn(
   input: PersistedAgentTurnExecution,
-): Promise<CloudCodeAgentTurnRecord> {
+): Promise<CloudCodeAgentTurnOutcome> {
   const { db, owner, session, sessionId, turnId, goal, model, provider, planTier, idempotencyKey } =
     input;
   const isFlagship = isFlagshipModel(model);
@@ -348,6 +352,24 @@ async function runClaimedAgentTurn(
       owner,
       turnId,
       error instanceof Error ? error.message : 'Usage reservation failed',
+      'error',
+    );
+    throw error;
+  }
+
+  // The ledger only extends a reservation that has entered `provider_started`,
+  // and only settles a *completed* one from that state. Without this the first
+  // step of every turn was rejected as an idempotency conflict and no turn could
+  // ever be billed as delivered.
+  try {
+    await markManagedUsageProviderStarted(reservation);
+  } catch (error) {
+    await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });
+    await markTurnFailed(
+      db,
+      owner,
+      turnId,
+      error instanceof Error ? error.message : 'Usage reservation could not be started',
       'error',
     );
     throw error;
@@ -379,9 +401,19 @@ async function runClaimedAgentTurn(
   const resumingOwnLoop = Boolean(input.preApproved ?? input.priorMessages);
   const harness = resumingOwnLoop ? null : selectHarnessRunner(session.runtimeId);
 
+  const steps: CloudCodeAgentStep[] = [];
+
   const recordStep = async (event: CloudCodeAgentEvent): Promise<void> => {
     if (event.type !== 'tool-end') return;
     stepIndex += 1;
+    const toolName = event.toolName ?? UNKNOWN_TOOL_NAME;
+    steps.push({
+      index: stepIndex,
+      toolName,
+      label: agentStepLabel(toolName, event.toolArgs),
+      output: (event.output ?? '').slice(0, MAX_STEP_OUTPUT_LENGTH),
+      isError: event.isError ?? false,
+    });
     await db.query(
       `insert into cloud_code_agent_steps
          (turn_id, step_index, tool_name, tool_args, output, is_error, completed_at)
@@ -390,7 +422,7 @@ async function runClaimedAgentTurn(
       [
         turnId,
         stepIndex,
-        event.toolName ?? UNKNOWN_TOOL_NAME,
+        toolName,
         JSON.stringify(event.toolArgs ?? {}),
         (event.output ?? '').slice(0, MAX_STEP_OUTPUT_LENGTH),
         event.isError ?? false,
@@ -569,6 +601,7 @@ async function runClaimedAgentTurn(
     stopReason: result.stopReason,
     stepsUsed: cumulativeSteps,
     finalMessage: result.finalMessage,
+    steps,
     ...(pendingApproval ? { pendingApproval } : {}),
     ...(errorMessage ? { errorMessage } : {}),
   };
@@ -576,7 +609,7 @@ async function runClaimedAgentTurn(
 
 export async function startCloudCodeAgentTurn(
   input: StartCloudCodeAgentTurnInput,
-): Promise<CloudCodeAgentTurnRecord> {
+): Promise<CloudCodeAgentTurnOutcome> {
   const { db, owner, sessionId, goal, model, planTier, idempotencyKey } = input;
 
   const session = await getCloudCodeSession(db, owner, sessionId);
