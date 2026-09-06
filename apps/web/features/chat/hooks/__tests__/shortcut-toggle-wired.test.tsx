@@ -43,7 +43,7 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     renderHook(() => useKeyboardShortcuts({ onSearch, onNewChat }));
 
     pressCmd('k');
-    pressCmd('n');
+    pressCmd('o', { shiftKey: true });
 
     expect(onSearch).not.toHaveBeenCalled();
     expect(onNewChat).toHaveBeenCalledTimes(1);
@@ -70,9 +70,14 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     renderHook(() => useKeyboardShortcuts({ onCopyLastMessage, onNewChat }));
 
     pressCmd('c', { shiftKey: true });
-    pressCmd('n');
+    pressCmd('c');
+    pressCmd('o');
 
     expect(onCopyLastMessage).toHaveBeenCalledTimes(1);
+    expect(onNewChat).not.toHaveBeenCalled();
+
+    pressCmd('o', { shiftKey: true });
+
     expect(onNewChat).toHaveBeenCalledTimes(1);
   });
 

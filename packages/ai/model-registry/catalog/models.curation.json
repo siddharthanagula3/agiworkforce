@@ -4,6 +4,12 @@
   "verificationLog": [
     {
       "date": "2026-09-05",
+      "verifiedBy": "openrouter-live-model-list",
+      "status": "CORRECTION",
+      "notes": "Added the OpenRouter failover slug for gpt-6-astra, openai/gpt-6-astra, verified against the live openrouter.ai/api/v1/models list on 2026-09-05. The row shipped without one, so the direct-provider failover guard had no route to fall back to."
+    },
+    {
+      "date": "2026-09-05",
       "verifiedBy": "official-openai-anthropic-pages",
       "status": "ADDITION",
       "notes": "Founder-directed addition of the two flagship rows. OpenAI: gpt-6-astra, new to the catalog, verified against developers.openai.com/api/docs/models/gpt-6-astra, developers.openai.com/api/docs/pricing, developers.openai.com/api/docs/guides/reasoning and developers.openai.com/api/docs/guides/prompt-caching on 2026-09-05. A 1,050,000-token context with a 922,000-token input ceiling and 128,000 output, an April 30 2026 knowledge cutoff, released September 3 2026 per the API changelog, and $10 / $1 cached / $12.50 cache write / $50 output per million with a single long-context tier: a prompt over 272,000 input tokens rebills the whole request at 2x input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. It takes no family slot: the gpt-frontier pattern matches only the Sol line, so the slot stays on gpt-5.6-sol. Unpublished fields are left out rather than guessed: OpenAI states no default reasoning effort, no image detail values, and no multi-agent, pro, persistent-reasoning or programmatic tool-calling support for this model, so none of those blocks are authored, and there is no OpenRouter slug or gateway route because no synced gateway carries the model yet. Two authored judgments: speed is slow, because unlike Sol this model rejects reasoning_effort none with a 400 and always reasons, and computerUse and codeExecution are true because the model page lists computer use, code interpreter and hosted shell among its supported tools. Anthropic: claude-fable-5-1 was already curated on 2026-09-04 and was re-checked this wave against platform.claude.com/docs/en/about-claude/models/overview and the pricing page. Every recorded fact still holds, the id, the 1M context, the 128K output, the June 2026 cutoff, $10 / $50 with a 0.025x cache read at $0.25 and $12.50 / $20 cache writes, so the row is unchanged."
@@ -730,6 +736,7 @@
     "gpt-6-astra": {
       "id": "gpt-6-astra",
       "apiModelId": "gpt-6-astra",
+      "openRouterSlug": "openai/gpt-6-astra",
       "name": "GPT-6 Astra",
       "provider": "openai",
       "modelType": "reasoning",

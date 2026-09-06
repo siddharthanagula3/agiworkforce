@@ -29,9 +29,10 @@ let audit: AuditModule;
 
 function protectedRoutePrefixes(): string[] {
   const proxySource = readFileSync(join(webDir, 'proxy.ts'), 'utf8');
-  const matcher = /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\)/.exec(
-    proxySource,
-  );
+  const matcher =
+    /const isProtectedAppRoute = (?:identityMiddleware\.)?createRouteMatcher\(\[([\s\S]*?)\]\)/.exec(
+      proxySource,
+    );
   if (!matcher) throw new Error('isProtectedAppRoute route list not found in proxy.ts');
   return [...matcher[1]!.matchAll(/'([^']+)'/g)].map((entry) => entry[1]!.replace(/\(\.\*\)$/, ''));
 }

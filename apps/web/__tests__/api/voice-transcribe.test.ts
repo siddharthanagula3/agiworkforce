@@ -183,7 +183,7 @@ describe('POST /api/voice/transcribe', () => {
       db: { query: vi.fn() },
     });
     mockGetNeonDb.mockReturnValue({ query: vi.fn() });
-    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockReserveManagedUsage.mockImplementation(
       async (input: { estimatedCostCents: number; idempotencyKey: string }) => ({
         db: { query: vi.fn() },

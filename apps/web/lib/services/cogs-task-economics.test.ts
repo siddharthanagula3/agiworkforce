@@ -9,11 +9,27 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: vi.fn(async () => []), execute: vi.fn(async () => 1) }),
 }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const fixture = {
+    id: 'fixture-retail-model',
+    provider: 'openai',
+    inputCost: 2,
+    outputCost: 8,
+  };
+  return {
+    ...actual,
+    getModelMetadataById: (id: string) =>
+      id === fixture.id ? fixture : actual.getModelMetadataById(id),
+  };
+});
 
 import {
   recordSettledProviderCost,
   summarizeTaskEconomics,
 } from '@/lib/services/cogs-ledger-service';
+
+const FIXTURE_RETAIL_MODEL = 'fixture-retail-model';
 
 const migration = fs.readFileSync(
   path.resolve(import.meta.dirname, '../../db/neon/0129_cost_event_task_economics.sql'),
@@ -37,8 +53,8 @@ describe('cost events carry the task they bought and how it ended', () => {
 
     await recordSettledProviderCost({
       userId: 'user_1',
-      provider: 'test-provider',
-      model: 'fixture-model',
+      provider: 'openai',
+      model: FIXTURE_RETAIL_MODEL,
       actualCostCents: 42,
       sourceRef: 'managed_usage:user_1:key-1:hash-1',
       taskOutcome: 'delivered',
