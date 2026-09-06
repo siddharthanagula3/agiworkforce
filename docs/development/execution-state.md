@@ -48,31 +48,33 @@ behaviour inspected by the lead, not tests.
 
 ## Dead or disconnected UI
 
-| Found                                                                         | State                                                                                  |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Cmd K did nothing on the chat page                                            | fixed 6a49ffc35                                                                        |
-| Stop lost the attempt and showed a toast                                      | fixed fce4fc435                                                                        |
-| Sandbox refusal repeated three times per turn                                 | fixed 6329a6bd5                                                                        |
-| Share project missing on the main chat page                                   | fixed e0979d2f0                                                                        |
-| Chat row menu drawn at the viewport corner                                    | fixed 01fd497c7                                                                        |
-| Search notice blamed the tool on a code question                              | fixed 33f517c90                                                                        |
-| Code request answered without running code                                    | fixed 81be75123, live recheck pending                                                  |
-| Provider billing exhaustion shown as raw JSON with a dead Retry               | found live 21:46; D-14; fix in flight                                                  |
-| Settings nav first row clipped under the search                               | fixed 5e2136d6f                                                                        |
-| Dev routes under /dev in the production route tree                            | to verify                                                                              |
-| Operator, founder, local, waitlist, beta pages                                | to verify                                                                              |
-| Three built admin APIs (observability, takedown, privacy) with no UI          | fixed 45ff0dffd b6f44a736 34b1f2107: operator console tabs with governed flows         |
-| COGS ledger written but never displayed                                       | fixed b6f44a736: costs tab with attributed cost per account                            |
-| Admin console readiness ledger self attested for 3 of 5 rows                  | fixed a119900bd: rows removed, live policy state remains                               |
-| Pricing models table printed a comma for plans with no models                 | fixed 752d93fdb: the cell reads None; capability table opens by default                |
-| Public pages carried italic accent phrases and unstyled link lists            | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide          |
-| Landing frames were empty greetings                                           | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts          |
-| Surface and feature pages led with ledgers and stale screenshots              | fixed d2cf23d9a 579587379: live frames and five product scenes on every hero           |
-| Public pages read as one template (hero, ledger, cards, close)                | fixed 55d7cc01a: nine section primitives, three console scenes, seven pages recomposed |
-| Nine stale product screenshots on business, teams, agi work and feature pages | fixed 55d7cc01a: replaced with scenes                                                  |
-| Landing cited 22 providers where the providers page computes 14 on your key   | fixed 55d7cc01a: both read the same constants                                          |
-| Ten settings deep links landed on a bare chat page                            | fixed 65188a68f: section travels in a query key the chat page opens; verified          |
-| /download calls four release endpoints that 404 locally                       | open: verify against production release assets before judging                          |
+| Found                                                                         | State                                                                                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Cmd K did nothing on the chat page                                            | fixed 6a49ffc35                                                                                  |
+| Stop lost the attempt and showed a toast                                      | fixed fce4fc435                                                                                  |
+| Sandbox refusal repeated three times per turn                                 | fixed 6329a6bd5                                                                                  |
+| Share project missing on the main chat page                                   | fixed e0979d2f0                                                                                  |
+| Chat row menu drawn at the viewport corner                                    | fixed 01fd497c7                                                                                  |
+| Search notice blamed the tool on a code question                              | fixed 33f517c90                                                                                  |
+| Code request answered without running code                                    | fixed 81be75123, live recheck pending                                                            |
+| Provider billing exhaustion shown as raw JSON with a dead Retry               | found live 21:46; D-14; fix in flight                                                            |
+| Settings nav first row clipped under the search                               | fixed 5e2136d6f                                                                                  |
+| Dev routes under /dev in the production route tree                            | to verify                                                                                        |
+| Operator, founder, local, waitlist, beta pages                                | to verify                                                                                        |
+| Three built admin APIs (observability, takedown, privacy) with no UI          | fixed 45ff0dffd b6f44a736 34b1f2107: operator console tabs with governed flows                   |
+| COGS ledger written but never displayed                                       | fixed b6f44a736: costs tab with attributed cost per account                                      |
+| Admin console readiness ledger self attested for 3 of 5 rows                  | fixed a119900bd: rows removed, live policy state remains                                         |
+| Pricing models table printed a comma for plans with no models                 | fixed 752d93fdb: the cell reads None; capability table opens by default                          |
+| Public pages carried italic accent phrases and unstyled link lists            | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide                    |
+| Landing frames were empty greetings                                           | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts                    |
+| Surface and feature pages led with ledgers and stale screenshots              | fixed d2cf23d9a 579587379: live frames and five product scenes on every hero                     |
+| Public pages read as one template (hero, ledger, cards, close)                | fixed 55d7cc01a: nine section primitives, three console scenes, seven pages recomposed           |
+| Composer tightened by the parity work against the founder's approved size     | fixed a499b7630 and the footer commit: 3 september density restored, quiet line back             |
+| Product frames ended on a hard border                                         | fixed 5ec2faf25: frames fade into the ground on hero, bento, split, walkthrough and moment slots |
+| Nine stale product screenshots on business, teams, agi work and feature pages | fixed 55d7cc01a: replaced with scenes                                                            |
+| Landing cited 22 providers where the providers page computes 14 on your key   | fixed 55d7cc01a: both read the same constants                                                    |
+| Ten settings deep links landed on a bare chat page                            | fixed 65188a68f: section travels in a query key the chat page opens; verified                    |
+| /download calls four release endpoints that 404 locally                       | open: verify against production release assets before judging                                    |
 
 ## Critical flows
 
