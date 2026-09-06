@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
+import { AI_ACCURACY_DISCLAIMER } from '@/lib/compliance/ai-act';
 import React, {
   useState,
   useRef,
@@ -4233,6 +4236,22 @@ const ChatComposerNewComponent = ({
           </div>
         </div>
       )}
+
+      <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[12px] text-muted-foreground">
+        <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
+        <span aria-hidden="true">·</span>
+        <Link
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-inline-link="true"
+          className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+        >
+          Privacy
+        </Link>
+        <span aria-hidden="true">·</span>
+        <ComposerFeedbackDialog conversationId={conversationId} />
+      </div>
     </div>
   );
 };
