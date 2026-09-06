@@ -24,7 +24,7 @@ const HERO_TABS = [
     label: 'curl',
     language: 'shell',
     code: `curl https://agiworkforce.com/api/llm/v1/chat/completions \\
-  -H "Authorization: Bearer $YOUR_SESSION_TOKEN" \\
+  -H "Authorization: Bearer <session token>" \\
   -H "Content-Type: application/json" \\
   -d '{ "model": "auto", "messages": [{ "role": "user", "content": "hello" }] }'`,
   },
@@ -35,7 +35,7 @@ const HERO_TABS = [
 
 client = OpenAI(
     base_url="https://agiworkforce.com/api/llm/v1",
-    api_key=os.environ["YOUR_SESSION_TOKEN"],
+    api_key="<session token>",
 )
 reply = client.chat.completions.create(
     model="auto",
@@ -51,7 +51,7 @@ print(reply.choices[0].message.content)`,
 
 const client = new OpenAI({
   baseURL: 'https://agiworkforce.com/api/llm/v1',
-  apiKey: process.env.YOUR_SESSION_TOKEN,
+  apiKey: '<session token>',
 });
 const reply = await client.chat.completions.create({
   model: 'auto',
