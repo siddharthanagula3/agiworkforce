@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
@@ -126,9 +126,10 @@ test('the real allowlist has an entry for every currently-ungated managed-comput
     'apps/web/app/api/media/image/generate/route.ts',
   ];
   const allowlist = JSON.parse(
-    spawnSync('cat', [
+    readFileSync(
       path.join(REPO_ROOT, 'scripts/config/managed-compute-evaluator-allowlist.json'),
-    ]).stdout,
+      'utf8',
+    ),
   );
   const allowlistedPaths = new Set(allowlist.entries.map((entry) => entry.path));
   for (const seeded of seededPaths) {
@@ -218,7 +219,7 @@ test('ignores an identity SDK import outside apps/web, where the adapter lives',
 
 test('the real identity allowlist names only the provider ui mount, the auth adapter, the client roots and enterprise sso', () => {
   const allowlist = JSON.parse(
-    spawnSync('cat', [path.join(REPO_ROOT, 'scripts/config/identity-sdk-allowlist.json')]).stdout,
+    readFileSync(path.join(REPO_ROOT, 'scripts/config/identity-sdk-allowlist.json'), 'utf8'),
   );
   const allowlistedPaths = new Set(allowlist.entries.map((entry) => entry.path));
   for (const seeded of [
@@ -381,7 +382,7 @@ test('fails a vendor-adapter entry that marks zero or more than one file as owne
 
 test('the real vendor-adapter allowlist enforces the same vendor SDKs as before', () => {
   const allowlist = JSON.parse(
-    spawnSync('cat', [path.join(REPO_ROOT, VENDOR_ADAPTER_ALLOWLIST_PATH)]).stdout,
+    readFileSync(path.join(REPO_ROOT, VENDOR_ADAPTER_ALLOWLIST_PATH), 'utf8'),
   );
   const byPort = new Map(allowlist.vendors.map((vendor) => [vendor.port, vendor]));
   const expected = [

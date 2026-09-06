@@ -41,7 +41,7 @@ export const CLERK_PUBLISHABLE_KEY_ENV = 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY';
 export const CLERK_AUTHORIZED_PARTIES_ENV = 'CLERK_AUTHORIZED_PARTIES';
 
 const CLERK_PUBLISHABLE_KEY_PREFIX = /^pk_(test|live)_/u;
-const CLERK_FAPI_HOST_PADDING = /\$+$/u;
+const CLERK_FAPI_HOST_PADDING_CHAR = '$';
 const HOSTNAME_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u;
 
 const CLERK_ACCOUNTS_ORIGIN = 'https://*.clerk.accounts.dev';
@@ -83,6 +83,12 @@ function readStringClaim(claims: Record<string, unknown>, key: string): string |
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function stripFapiHostPadding(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === CLERK_FAPI_HOST_PADDING_CHAR) end -= 1;
+  return value.slice(0, end);
+}
+
 /**
  * Clerk encodes its frontend API host in the publishable key, and the page
  * policy has to name that origin. It is not derivable from any other
@@ -94,7 +100,7 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
   if (!encoded || encoded === key) return null;
   let host: string;
   try {
-    host = atob(encoded).replace(CLERK_FAPI_HOST_PADDING, '');
+    host = stripFapiHostPadding(atob(encoded));
   } catch {
     return null;
   }

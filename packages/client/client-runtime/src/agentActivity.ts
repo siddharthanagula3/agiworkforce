@@ -298,7 +298,7 @@ function humanizeToolFailureSummary(raw: string | undefined, input: unknown): st
  * apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts.
  */
 const CODE_EXECUTION_UNAVAILABLE_PATTERN =
-  /^Code execution is unavailable for this request(?::\s*([^.]+))?\./;
+  /^Code execution is unavailable for this request(?::([^.]+))?\./;
 const CLOUD_CODE_EXECUTION_OFF_PATTERN = /^Cloud code execution is turned off for this account\./;
 const TOOL_NOT_AVAILABLE_PATTERN = /^Tool ([\w.-]+) is not available\.$/;
 
