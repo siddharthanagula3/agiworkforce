@@ -1,9 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
+
+const MarkdownContent = dynamic(
+  () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
+  { loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" /> },
+);
+
+const StreamingMarkdownContent = dynamic(
+  () => import('@agiworkforce/unified-chat').then((mod) => mod.StreamingMarkdownContent),
+  { loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" /> },
+);
+
+const REASONING_BODY_CLASS =
+  'text-[13px] leading-relaxed text-muted-foreground [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-foreground';
 
 interface ThinkingBlockProps {
   content: string;
@@ -160,19 +174,13 @@ export function ThinkingBlock({
           ref={bodyRef}
           className="mt-1 mb-1 ml-1 max-h-96 overflow-y-auto border-l border-border/40 pl-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
         >
-          <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-            {content}
-            {/* Blinking cursor while streaming (disabled with reduced-motion) */}
-            {isStreaming && (
-              <span
-                className={cn(
-                  'inline-block w-1.5 h-3 bg-muted-foreground/60 ml-0.5 align-middle',
-                  !reducedMotion && 'animate-pulse',
-                )}
-                aria-hidden="true"
-              />
+          <div className={REASONING_BODY_CLASS}>
+            {isStreaming ? (
+              <StreamingMarkdownContent content={content} isStreaming />
+            ) : (
+              <MarkdownContent content={content} />
             )}
-          </p>
+          </div>
         </div>
       </div>
     </div>
