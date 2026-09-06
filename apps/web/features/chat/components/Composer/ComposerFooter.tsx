@@ -79,10 +79,10 @@ const MODEL_CATALOG_ENDPOINT = '/api/models';
 
 /** Locked slot (upgrade prompt): a bordered pill signals it is not a live picker. */
 const MODEL_LOCKED_TRIGGER_CLASS =
-  'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
+  'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
 /** Live model trigger: plain text plus a chevron, no border or fill. */
 const MODEL_TRIGGER_CLASS =
-  'flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground';
+  'flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground';
 
 const CACHE_RESET_NOTE_TEXT = 'Starts a new prompt cache';
 const CACHE_RESET_NOTE_MS = 3000;

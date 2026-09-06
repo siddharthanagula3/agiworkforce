@@ -209,7 +209,7 @@ const WORK_BAR_CONNECTOR_MARKS = 3;
 const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
 const DESKTOP_APP_HREF = '/download';
 const WORK_BAR_ITEM_CLASS =
-  'flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 
@@ -3165,11 +3165,8 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2',
-            // Home's textbox is a step taller than an ongoing chat's, so its
-            // vertical padding is tighter by the same step: both cards rest at
-            // the same one-row height.
-            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-1.5',
+            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
+            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-3',
           )}
         >
           {/* Rest-state row: one line (plus, textbox, right cluster) while the
@@ -3212,7 +3209,7 @@ const ChatComposerNewComponent = ({
               ref={composerRowRef}
               className={cn(
                 'chat-composer-field relative min-w-0 flex-1 min-h-[36px]',
-                emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[36px]',
+                emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[52px]',
               )}
             >
               <ComposerInput
@@ -3440,7 +3437,7 @@ const ChatComposerNewComponent = ({
                 {projectPicker && canUseAgiWork && !imageMode && !videoMode && (
                   <div
                     data-testid="composer-work-mode"
-                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium"
+                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-0.5 text-sm font-medium"
                   >
                     {(['chat', 'agiwork'] as const).map((mode) => (
                       <button
@@ -3451,7 +3448,7 @@ const ChatComposerNewComponent = ({
                         aria-pressed={workMode === mode}
                         title={WORK_MODE_TITLES[mode]}
                         className={cn(
-                          'flex h-6 items-center rounded-full px-1.5 transition-colors',
+                          'flex h-7 items-center rounded-full px-3 transition-colors',
                           workMode === mode
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground',
