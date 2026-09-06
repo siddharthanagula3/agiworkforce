@@ -11,12 +11,16 @@ const SOURCES_HEADING =
  * report whose last section happens to be titled "Sources" but carries prose
  * survives intact.
  */
+const SOURCES_LABEL_WITH_ENTRIES =
+  /^(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:\s*(?:\*\*|__)?\s*(\S.*)$/i;
+
 export function stripTrailingSourceList(markdown: string): string {
   const lines = markdown.split('\n');
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index]!;
-    if (!SOURCES_HEADING.test(line.trim())) continue;
+    const line = lines[index]!.trim();
+    const inline = SOURCES_LABEL_WITH_ENTRIES.exec(line);
+    if (!SOURCES_HEADING.test(line) && !(inline && isCitationOnlyLine(inline[1]!))) continue;
     if (!isSourceListOnly(lines.slice(index + 1))) return markdown;
     return lines.slice(0, index).join('\n').trimEnd();
   }

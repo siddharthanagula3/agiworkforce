@@ -1281,6 +1281,18 @@ const MessageBubbleComponent = function MessageBubble({
     }
   }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
+  const { searchSources, searchQuery, citationsByMarker } = useMemo(
+    () =>
+      isUser
+        ? {
+            searchSources: [] as ResearchSource[],
+            searchQuery: undefined,
+            citationsByMarker: [] as ResearchSource[],
+          }
+        : collectMessageResearchSources(message.metadata),
+    [isUser, message.metadata],
+  );
+
   const cleanedContent = useMemo(() => {
     // While an artifact block is streaming into the panel, hide the growing
     // raw fence from the chat body (a compact "Writing…" chip renders instead)
@@ -1289,16 +1301,24 @@ const MessageBubbleComponent = function MessageBubble({
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
     const stripped = artifacts.length === 0 ? base : removeArtifactBlocks(base, artifacts);
-    const withoutDuplicateSources = message.metadata?.research
-      ? stripTrailingSourceList(stripped)
-      : stripped;
+    const withoutDuplicateSources =
+      message.metadata?.research || searchSources.length > 0
+        ? stripTrailingSourceList(stripped)
+        : stripped;
     const withoutCitationTail = isUser
       ? withoutDuplicateSources
       : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
     // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
     // renderer a half-open fence" treatment the artifact path already gets.
     return closeUnterminatedFence(withoutCitationTail);
-  }, [message.content, artifacts, streamingBlock, message.metadata?.research, isUser]);
+  }, [
+    message.content,
+    artifacts,
+    streamingBlock,
+    message.metadata?.research,
+    isUser,
+    searchSources.length,
+  ]);
 
   const interactiveCards = message.metadata?.interactiveCards;
   const leadingInteractiveCards = useMemo(
@@ -1413,18 +1433,6 @@ const MessageBubbleComponent = function MessageBubble({
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These feed the "Searched the web" step's result count and the compact
   // Sources control at the end of the answer.
-  const { searchSources, searchQuery, citationsByMarker } = useMemo(
-    () =>
-      isUser
-        ? {
-            searchSources: [] as ResearchSource[],
-            searchQuery: undefined,
-            citationsByMarker: [] as ResearchSource[],
-          }
-        : collectMessageResearchSources(message.metadata),
-    [isUser, message.metadata],
-  );
-
   const { cited: citedSources, more: moreSources } = useMemo(
     () => orderSourcesByCitation(cleanedContent, citationsByMarker, searchSources),
     [cleanedContent, citationsByMarker, searchSources],
