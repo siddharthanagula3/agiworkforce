@@ -22,7 +22,7 @@ function readBaseline(): PNG {
 test('Desktop cloud sign-in matches its reviewed pixel baseline', async ({ page }, testInfo) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Sign in to AGI Cloud' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts?.ready;
   });
