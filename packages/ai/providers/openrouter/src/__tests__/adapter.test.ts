@@ -53,6 +53,67 @@ describe('createOpenRouterAdapter', () => {
     ).not.toThrow();
   });
 
+  it('retries when the router finds no endpoint in its sampled pool, then streams', async () => {
+    let calls = 0;
+    const poolExhausted = JSON.stringify({
+      error: {
+        code: 404,
+        message:
+          '0 endpoints out of 8 requested are available matching your guardrail restrictions and data policy.',
+      },
+    });
+    const adapter = createOpenRouterAdapter({
+      apiKey: 'test-key',
+      fetch: async () => {
+        calls += 1;
+        if (calls < 3) {
+          return new Response(poolExhausted, {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return new Response(
+          'data: {"id":"x","choices":[{"index":0,"delta":{"content":"ready"}}]}\n\ndata: [DONE]\n\n',
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    });
+    const chunks: string[] = [];
+    for await (const chunk of adapter.stream(
+      { model: 'router/example-model', messages: [{ role: 'user', content: 'hi' }] },
+      new AbortController().signal,
+    )) {
+      chunks.push(chunk.type);
+    }
+    expect(calls).toBe(3);
+    expect(chunks).not.toContain('error');
+  });
+
+  it('gives up after the retry budget when every sampled pool is empty', async () => {
+    let calls = 0;
+    const adapter = createOpenRouterAdapter({
+      apiKey: 'test-key',
+      fetch: async () => {
+        calls += 1;
+        return new Response(
+          JSON.stringify({
+            error: { code: 404, message: '0 endpoints out of 5 requested are available' },
+          }),
+          { status: 404, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+    const chunks: string[] = [];
+    for await (const chunk of adapter.stream(
+      { model: 'router/example-model', messages: [{ role: 'user', content: 'hi' }] },
+      new AbortController().signal,
+    )) {
+      chunks.push(chunk.type);
+    }
+    expect(calls).toBe(3);
+    expect(chunks).toContain('error');
+  });
+
   it('sends no provider routing field on the wire when providerRouting is unset (never forces ordering by default)', async () => {
     let seenBody: Record<string, unknown> | undefined;
     const adapter = createOpenRouterAdapter({
