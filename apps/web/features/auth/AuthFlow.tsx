@@ -21,21 +21,9 @@ import type {
 
 const INITIAL_STEP: AuthStep = { kind: 'email' };
 
-function readTermsMarker(): boolean {
+function writeTermsMarker(): void {
   try {
-    return window.localStorage.getItem(TERMS_GATE_STORAGE_KEY) === POLICY_LAST_UPDATED.terms;
-  } catch {
-    return false;
-  }
-}
-
-function writeTermsMarker(accepted: boolean): void {
-  try {
-    if (accepted) {
-      window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
-      return;
-    }
-    window.localStorage.removeItem(TERMS_GATE_STORAGE_KEY);
+    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
   } catch {
     return;
   }
@@ -58,11 +46,6 @@ export function AuthFlow({
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [switchOffered, setSwitchOffered] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-
-  useEffect(() => {
-    if (mode === 'signup') setTermsAccepted(readTermsMarker());
-  }, [mode]);
 
   const clearMessages = useCallback(() => {
     setError(null);
@@ -96,11 +79,6 @@ export function AuthFlow({
     [apply, busy, clearMessages, client.isReady],
   );
 
-  const onTermsChange = useCallback((accepted: boolean) => {
-    setTermsAccepted(accepted);
-    writeTermsMarker(accepted);
-  }, []);
-
   const onEditEmail = useCallback(() => {
     clearMessages();
     setStep(INITIAL_STEP);
@@ -112,13 +90,14 @@ export function AuthFlow({
       if (providerPending !== null || !client.isReady) return;
       clearMessages();
       setProviderPending(provider);
-      const result = await client.startProvider(provider, termsAccepted);
+      if (mode === 'signup') writeTermsMarker();
+      const result = await client.startProvider(provider);
       if (result.status !== 'redirecting') {
         setProviderPending(null);
         apply(result);
       }
     },
-    [apply, clearMessages, client, providerPending, termsAccepted],
+    [apply, clearMessages, client, mode, providerPending],
   );
 
   const onSubmitCode = useCallback(
@@ -196,10 +175,11 @@ export function AuthFlow({
         error={error}
         fieldError={fieldError}
         switchOffered={switchOffered}
-        termsAccepted={termsAccepted}
         providerPending={providerPending}
-        onTermsChange={onTermsChange}
-        onSubmit={(email) => void run(() => client.startWithEmail(email, termsAccepted))}
+        onSubmit={(email) => {
+          if (mode === 'signup') writeTermsMarker();
+          void run(() => client.startWithEmail(email));
+        }}
         onStartProvider={(provider) => void onStartProvider(provider)}
       />
       {botProtection}

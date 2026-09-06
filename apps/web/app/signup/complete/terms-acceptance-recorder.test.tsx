@@ -108,7 +108,7 @@ describe('signup terms recorder', () => {
   });
 });
 
-describe('/signup/complete terms gate', () => {
+describe('/signup/complete agreement record', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mocks.replace.mockReset();
@@ -123,30 +123,20 @@ describe('/signup/complete terms gate', () => {
     render(await SignupCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
   }
 
-  it('does not manufacture an acceptance for someone who never saw the terms', async () => {
+  it('records the agreement for the new account without asking again', async () => {
     await renderComplete();
 
-    expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
-    await waitFor(() => expect(globalThis.fetch).not.toHaveBeenCalled());
-    expect(mocks.replace).not.toHaveBeenCalled();
-  });
-
-  it('records and continues once that arrival agrees to the terms', async () => {
-    await renderComplete();
-
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
-
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/terms/accept', expect.anything());
   });
 
-  it('does not let a pre-auth marker authorize the post-auth account write', async () => {
+  it('consumes the pre-auth marker once the account record is written', async () => {
     window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
 
     await renderComplete();
 
-    expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
   });
 });

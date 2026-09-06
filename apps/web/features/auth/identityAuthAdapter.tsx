@@ -6,7 +6,6 @@ import { useCallback, useMemo, useRef } from 'react';
 import {
   ACCOUNT_ALREADY_EXISTS,
   NO_ACCOUNT_FOR_EMAIL,
-  TERMS_NOT_ACCEPTED,
   UNEXPECTED_FAILURE,
   type AuthClient,
   type AuthCodePurpose,
@@ -201,11 +200,8 @@ export function useIdentityAuthClient(mode: AuthMode, redirects: AuthRedirects):
   );
 
   const startWithEmail = useCallback(
-    async (email: string, termsAccepted: boolean): Promise<AuthResult> => {
+    async (email: string): Promise<AuthResult> => {
       if (mode === 'signup') {
-        if (!termsAccepted) {
-          return { status: 'failed', message: TERMS_NOT_ACCEPTED };
-        }
         const { error } = await signUpRef.current.create({
           emailAddress: email,
           legalAccepted: true,
@@ -326,12 +322,11 @@ export function useIdentityAuthClient(mode: AuthMode, redirects: AuthRedirects):
   }, [sendSignInEmailCode]);
 
   const startProvider = useCallback(
-    async (provider: AuthProviderId, termsAccepted: boolean): Promise<AuthResult> => {
+    async (provider: AuthProviderId): Promise<AuthResult> => {
       const strategy = PROVIDER_STRATEGIES[provider];
       const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
 
       if (mode === 'signup') {
-        if (!termsAccepted) return { status: 'failed', message: TERMS_NOT_ACCEPTED };
         const { error } = await signUpRef.current.sso({
           strategy,
           redirectUrl: completeUrl,

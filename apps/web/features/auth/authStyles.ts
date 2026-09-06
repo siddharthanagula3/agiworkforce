@@ -31,7 +31,7 @@ export const AUTH_FOOTER_CLASS =
   'mt-18 flex items-center justify-center gap-3 text-sm text-text-muted';
 export const AUTH_FOOTER_LINK_CLASS =
   'auth-inline rounded text-text-muted underline-offset-4 hover:underline';
-export const AUTH_CHECKBOX_CLASS = 'mt-1 size-4 shrink-0 rounded-sm border-rule accent-accent-fill';
-export const AUTH_CHECKBOX_ROW_CLASS = 'mt-4 flex items-start gap-2.5 text-sm text-text-primary';
+export const AUTH_FOOTER_SENTENCE_CLASS =
+  'mt-18 text-balance text-center text-sm leading-relaxed text-text-muted';
 export const AUTH_STEP_LINKS_CLASS = 'mt-6 flex flex-col items-center gap-3';
 export const AUTH_DETAIL_ROW_CLASS = 'flex flex-wrap items-center justify-center gap-2';

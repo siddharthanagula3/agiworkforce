@@ -20,9 +20,7 @@ function renderStep(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}
     error: null,
     fieldError: null,
     switchOffered: false,
-    termsAccepted: false,
     providerPending: null,
-    onTermsChange: vi.fn(),
     onSubmit: vi.fn(),
     onStartProvider: vi.fn(),
     ...overrides,
@@ -53,27 +51,25 @@ describe('AuthEmailStep', () => {
     expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
   });
 
-  it('carries the terms checkbox above the primary button on sign up', async () => {
-    const props = renderStep({ mode: 'signup' });
-
-    expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('checkbox'));
-
-    expect(props.onTermsChange).toHaveBeenCalledWith(true);
-  });
-
-  it('shows the terms refusal inline rather than as a banner', () => {
-    renderStep({ mode: 'signup', error: 'Accept the terms to create an account.' });
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Accept the terms to create an account.');
-  });
-
-  it('drops the footer policy line on sign up, where the checkbox carries it', () => {
+  it('states on sign up that continuing is the agreement, with no checkbox to tick', () => {
     renderStep({ mode: 'signup' });
 
-    expect(screen.queryByTestId('auth-legal-footer')).toBeNull();
-    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByTestId('auth-legal-footer')).toHaveTextContent(
+      'By signing up, you agree to the Terms of Use and acknowledge the Privacy Policy.',
+    );
+    expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+  });
+
+  it('shows a sign up failure inline rather than as a banner', () => {
+    renderStep({ mode: 'signup', error: 'Could not create the account.' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not create the account.');
   });
 
   it('shows an unknown email inline against the field, with the way out', () => {
