@@ -76,6 +76,13 @@ afterEach(() => {
 });
 
 describe('useTTS, speech content and state', () => {
+  it('primes the synthesiser silently so a later reply can play on iOS', () => {
+    const { result } = renderHook(() => useTTS());
+    act(() => result.current.unlock());
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]!.volume).toBe(0);
+  });
+
   it('reads clean prose instead of Markdown syntax or raw code', () => {
     const { result } = renderHook(() => useTTS());
 

@@ -49,10 +49,13 @@ export interface UseTTSReturn {
   isSupported: boolean;
   speak: (text: string) => void;
   stop: () => void;
+  unlock: () => void;
   voices: SpeechSynthesisVoice[];
   voiceUri: string | null;
   setVoiceUri: (uri: string | null) => void;
 }
+
+const UNLOCK_TEXT = ' ';
 
 export function useTTS(): UseTTSReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -114,6 +117,15 @@ export function useTTS(): UseTTSReturn {
     spokenTextRef.current = null;
   }, [isSupported]);
 
+  const unlock = useCallback(() => {
+    if (!isSupported) return;
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) return;
+    const primer = new SpeechSynthesisUtterance(UNLOCK_TEXT);
+    primer.volume = 0;
+    synth.speak(primer);
+  }, [isSupported]);
+
   const speak = useCallback(
     (text: string) => {
       if (!isSupported) return;
@@ -165,7 +177,7 @@ export function useTTS(): UseTTSReturn {
     [isSupported, isSpeaking, stop, selectedVoice],
   );
 
-  return { isSpeaking, isSupported, speak, stop, voices, voiceUri, setVoiceUri };
+  return { isSpeaking, isSupported, speak, stop, unlock, voices, voiceUri, setVoiceUri };
 }
 
 export default useTTS;
