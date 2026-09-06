@@ -44,6 +44,7 @@ behaviour inspected by the lead, not tests.
 | Public pages (34 nav routes)       | 2026-09-05 | swept in the browser: 200 on every route, no broken images, no overflow; shared system restyled to the landing                                                                            |
 | Landing surface frames             | 2026-09-05 | six frames rebuilt as working sessions with route receipts, approved in isolation and in the marquee                                                                                      |
 | Header and landing sections        | 2026-09-05 | grouped navigation, announcement, proof row, latest and start sections approved in both themes                                                                                            |
+| Header polish and the agi web page | 2026-09-05 | 64px blurred sticky bar, current section held, animated panels, grouped phone menu; /web replaces the wrong /apps target from the Product menu and footer; both themes and 390px reviewed |
 | 72 public routes, mechanical audit | 2026-09-05 | rendered copy scanned for em dashes, orphans, placeholders, overflow, empty controls and dead links; only the deep research orphan headline and the local /download release 404s surfaced |
 | Account menu feedback flow         | 2026-09-05 | menu item, dialog with capture and upload, submit returned 200 and the row carried the page path; operator rendering awaits a platform admin identity                                     |
 
