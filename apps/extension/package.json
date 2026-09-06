@@ -37,26 +37,26 @@
     "check:no-cloud-ipc": "node scripts/check-no-cloud-ipc-v1.mjs"
   },
   "dependencies": {
-    "@clerk/chrome-extension": "^3.1.52",
     "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
-    "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "dompurify": "^3.3.3"
+    "@clerk/chrome-extension": "^3.1.81",
+    "dompurify": "^3.4.15"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.40",
-    "jsdom": "^27.4.0",
-    "terser": "^5.46.2",
+    "@types/chrome": "^0.1.43",
+    "jsdom": "20.0.3",
+    "terser": "^5.51.2",
     "typescript": "5.9.3",
-    "vite": "^7.3.2",
+    "vite": "^8.2.2",
     "vite-plugin-static-copy": "^3.4.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=24.0.0",

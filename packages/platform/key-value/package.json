@@ -13,7 +13,6 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
-  "dependencies": {},
   "peerDependencies": {
     "@upstash/ratelimit": ">=2.0.0",
     "@upstash/redis": ">=1.35.0",
@@ -32,8 +31,8 @@
   },
   "devDependencies": {
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.37.0",
-    "ioredis": "^5.9.0",
-    "vitest": "^4.1.8"
+    "@upstash/redis": "^1.38.4",
+    "ioredis": "^5.11.1",
+    "vitest": "^4.1.11"
   }
 }

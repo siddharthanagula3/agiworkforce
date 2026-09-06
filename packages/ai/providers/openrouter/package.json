@@ -19,9 +19,9 @@
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
     "@agiworkforce/types": "workspace:*",
-    "openai": "^6.38.0"
+    "openai": "^6.49.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
