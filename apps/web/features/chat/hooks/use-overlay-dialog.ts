@@ -20,6 +20,7 @@ export function useOverlayLayout(): OverlayLayout {
     const query = window.matchMedia(MOBILE_OVERLAY_QUERY);
     const apply = (): void => setLayout(query.matches ? 'mobile' : 'desktop');
     apply();
+    if (typeof query.addEventListener !== 'function') return;
     query.addEventListener('change', apply);
     return () => query.removeEventListener('change', apply);
   }, []);

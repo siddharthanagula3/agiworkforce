@@ -79,12 +79,29 @@ describe('buildModelPickerShortList', () => {
     expect(shortList.recommended.map((row) => row.id)).not.toContain(autoSource.id);
   });
 
-  it('lets the catalog own the recommended rows when it flags any admitted model', () => {
+  it('leads the recommended rows with the catalog flags and fills the rest from the profile order', () => {
     const flagged = listPickerRecommendedModelIds();
     expect(flagged.length).toBeGreaterThan(0);
     const list = build({ models: [autoSource, ...familySources, ...flagged.map(toSource)] });
-    expect(list.recommended.map((row) => row.id)).toEqual(flagged);
+    const ids = list.recommended.map((row) => row.id);
+    expect(ids.slice(0, flagged.length)).toEqual(flagged);
+    expect(ids.length).toBe(
+      Math.min(MODEL_PICKER_RECOMMENDED_LIMIT, familySources.length + flagged.length),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
     expect(list.recommended.every((row) => row.lock === null)).toBe(true);
+  });
+
+  it('never lists a model under both Recommended and Favourites', () => {
+    const flagged = listPickerRecommendedModelIds();
+    const favourite = flagged[0]!;
+    const list = build({
+      models: [autoSource, ...familySources, ...flagged.map(toSource)],
+      favouriteModelIds: [favourite],
+    });
+    expect(list.favourites.map((row) => row.id)).toContain(favourite);
+    expect(list.recommended.map((row) => row.id)).not.toContain(favourite);
+    expect(list.recommended.length).toBeGreaterThan(0);
   });
 
   it('falls back to the profile order when no flagged model is admitted', () => {

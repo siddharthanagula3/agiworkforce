@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ButtonHTMLAttributes,
 } from 'react';
 import {
   Brain,
@@ -26,7 +27,16 @@ import {
   type Icon,
 } from '@agiworkforce/icons';
 import { toast } from 'sonner';
-import { Popover, PopoverTrigger, PopoverContent, Slider, useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  Slider,
+  useMenuKeyboard,
+} from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
@@ -62,6 +72,7 @@ import { MODEL_SELECTOR_TRIGGER_ID } from '@features/chat/lib/model-picker-trigg
 import { ProviderLogo } from './ProviderLogo';
 import { ModelCatalogue } from './ModelCatalogue';
 import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
+import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
 import {
   buildModelPickerShortList,
@@ -115,7 +126,10 @@ const PICKER_BADGE_CLASS =
 const PICKER_ICON_SIZE = 16;
 const PICKER_TRIGGER_ICON_SIZE = 12;
 const PICKER_PANEL_WIDTH_CLASS = 'w-80';
-const PICKER_CATALOGUE_WIDTH_CLASS = 'w-[min(40rem,calc(100vw-1rem))]';
+const PICKER_CATALOGUE_WIDTH_CLASS =
+  'w-[min(max(var(--picker-catalogue-width),20rem),48rem,calc(100vw-1rem))]';
+const PICKER_SHEET_CLASS = 'max-h-[85dvh] border-[var(--chat-border)] bg-background';
+const PICKER_SHEET_BODY_CLASS = 'flex min-h-0 flex-1 flex-col overflow-y-hidden';
 const PICKER_SECTION_LABEL_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 
 const CAPABILITY_GLYPHS: Readonly<
@@ -632,22 +646,39 @@ export function ComposerFooter({
     Record<string, ProviderAvailability>
   >({});
   const [composerClearancePx, setComposerClearancePx] = useState(0);
+  const [catalogueAnchor, setCatalogueAnchor] = useState<{
+    alignOffsetPx: number;
+    widthPx: number;
+  } | null>(null);
+  const pickerLayout = useOverlayLayout();
   const modelTriggerRef = useRef<HTMLButtonElement>(null);
   const pickerPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const trigger = modelTriggerRef.current;
-    const card = document.getElementById(PICKER_COMPOSER_CARD_ID);
-    if (!trigger || !card) {
-      setComposerClearancePx(0);
-      return;
-    }
-    const overlap = trigger.getBoundingClientRect().top - card.getBoundingClientRect().top;
-    setComposerClearancePx(
-      overlap > 0 ? overlap + PICKER_COMPOSER_CARD_GAP_PX - PICKER_ANCHOR_OFFSET_PX : 0,
-    );
-  }, [open]);
+    const measure = () => {
+      const trigger = modelTriggerRef.current;
+      const card = document.getElementById(PICKER_COMPOSER_CARD_ID);
+      if (!trigger || !card) {
+        setComposerClearancePx(0);
+        setCatalogueAnchor(null);
+        return;
+      }
+      const triggerRect = trigger.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const overlap = triggerRect.top - cardRect.top;
+      setComposerClearancePx(
+        overlap > 0 ? overlap + PICKER_COMPOSER_CARD_GAP_PX - PICKER_ANCHOR_OFFSET_PX : 0,
+      );
+      setCatalogueAnchor({
+        alignOffsetPx: -(cardRect.right - triggerRect.right),
+        widthPx: cardRect.width,
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open, catalogueOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -1039,16 +1070,12 @@ export function ComposerFooter({
             </button>
           )}
 
-          {showModelSelector && !lockModelSelector && (
-            <Popover
-              open={open}
-              onOpenChange={(o) => {
-                if (o) setOpen(true);
-                else closeModelPopover();
-              }}
-            >
-              <PopoverTrigger asChild>
+          {showModelSelector &&
+            !lockModelSelector &&
+            (() => {
+              const trigger = (extra: ButtonHTMLAttributes<HTMLButtonElement> = {}) => (
                 <button
+                  {...extra}
                   ref={modelTriggerRef}
                   id={MODEL_SELECTOR_TRIGGER_ID}
                   disabled={modelChangePending}
@@ -1070,34 +1097,13 @@ export function ComposerFooter({
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
-              </PopoverTrigger>
-              <PopoverContent
-                ref={pickerPanelRef}
-                side="bottom"
-                align="end"
-                sideOffset={PICKER_ANCHOR_OFFSET_PX}
-                alignOffset={0}
-                collisionPadding={PICKER_VIEWPORT_INSET_PX}
-                style={{ '--picker-flip-offset': `${composerClearancePx}px` } as CSSProperties}
-                data-catalogue-open={catalogueOpen ? 'true' : 'false'}
-                className={`flex overflow-y-hidden max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
-                aria-label={PICKER_TITLE}
-                onKeyDownCapture={catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead}
-                onEscapeKeyDown={(event) => {
-                  if (!catalogueOpen) return;
-                  event.preventDefault();
-                  closeCatalogue();
-                }}
-                onCloseAutoFocus={(event) => {
-                  event.preventDefault();
-                  modelTriggerRef.current?.focus();
-                }}
-              >
+              );
+              const body = (
                 <TooltipProvider>
                   {catalogueOpen ? (
                     <ModelCatalogue
                       entries={catalogue.entries}
-                      providers={catalogue.providers}
+                      developers={catalogue.developers}
                       favouriteModelIds={favouriteModelIds}
                       selectedModelId={selectedModelId}
                       query={searchQuery}
@@ -1225,9 +1231,86 @@ export function ComposerFooter({
                     </div>
                   )}
                 </TooltipProvider>
-              </PopoverContent>
-            </Popover>
-          )}
+              );
+              if (pickerLayout === 'mobile') {
+                return (
+                  <Drawer
+                    open={open}
+                    onOpenChange={(o) => {
+                      if (o) setOpen(true);
+                      else closeModelPopover();
+                    }}
+                  >
+                    {trigger({
+                      onClick: () => setOpen(true),
+                      'aria-expanded': open,
+                      'aria-haspopup': 'dialog',
+                    })}
+                    <DrawerContent
+                      ref={pickerPanelRef}
+                      aria-label={PICKER_TITLE}
+                      aria-describedby={undefined}
+                      data-catalogue-open={catalogueOpen ? 'true' : 'false'}
+                      className={PICKER_SHEET_CLASS}
+                      onKeyDownCapture={(event) => {
+                        if (event.key === 'Escape' && catalogueOpen) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          closeCatalogue();
+                          return;
+                        }
+                        (catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead)(event);
+                      }}
+                    >
+                      <DrawerTitle className="sr-only">{PICKER_TITLE}</DrawerTitle>
+                      <div className={PICKER_SHEET_BODY_CLASS}>{body}</div>
+                    </DrawerContent>
+                  </Drawer>
+                );
+              }
+              return (
+                <Popover
+                  open={open}
+                  onOpenChange={(o) => {
+                    if (o) setOpen(true);
+                    else closeModelPopover();
+                  }}
+                >
+                  <PopoverTrigger asChild>{trigger()}</PopoverTrigger>
+                  <PopoverContent
+                    ref={pickerPanelRef}
+                    side="bottom"
+                    align="end"
+                    sideOffset={PICKER_ANCHOR_OFFSET_PX}
+                    alignOffset={
+                      catalogueOpen && catalogueAnchor ? catalogueAnchor.alignOffsetPx : 0
+                    }
+                    collisionPadding={PICKER_VIEWPORT_INSET_PX}
+                    style={
+                      {
+                        '--picker-flip-offset': `${composerClearancePx}px`,
+                        '--picker-catalogue-width': `${catalogueAnchor?.widthPx ?? 0}px`,
+                      } as CSSProperties
+                    }
+                    data-catalogue-open={catalogueOpen ? 'true' : 'false'}
+                    className={`flex overflow-y-hidden max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
+                    aria-label={PICKER_TITLE}
+                    onKeyDownCapture={catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead}
+                    onEscapeKeyDown={(event) => {
+                      if (!catalogueOpen) return;
+                      event.preventDefault();
+                      closeCatalogue();
+                    }}
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                      modelTriggerRef.current?.focus();
+                    }}
+                  >
+                    {body}
+                  </PopoverContent>
+                </Popover>
+              );
+            })()}
 
           {showModelSelector && !lockModelSelector && hasEffortControl && (
             <Popover open={effortOpen} onOpenChange={setEffortOpen}>

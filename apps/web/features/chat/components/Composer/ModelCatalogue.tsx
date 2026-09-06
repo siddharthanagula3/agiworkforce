@@ -2,9 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
-import { PROVIDER_LABELS } from '@shared/config/llm';
-import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
-import type { ModelCatalogueProvider } from '@features/chat/lib/use-model-catalogue';
+import type { ModelCatalogueEntry, ModelCatalogueRoute } from '@/app/api/models/catalogue/route';
+import type { ModelCatalogueDeveloper } from '@features/chat/lib/use-model-catalogue';
 import { ProviderLogo } from './ProviderLogo';
 
 const FAVOURITES_RAIL_KEY = 'favourites';
@@ -21,6 +20,19 @@ const NOT_PUBLISHED_TEXT = 'Not published';
 
 const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
+const RAIL_LABEL = 'Model developers';
+const ROUTES_LABEL = 'Available through';
+const ROUTE_STATUS_TEXT: Readonly<Record<ModelCatalogueRoute['status'], string>> = {
+  available: 'Available',
+  degraded: 'Recovering',
+  not_configured: 'Not configured',
+};
+const ROUTE_INVENTORY_TEXT: Readonly<
+  Record<NonNullable<ModelCatalogueRoute['freeInventory']>, string>
+> = {
+  promotional: 'Promotional quota',
+  recurring: 'Free allocation',
+};
 
 const RAIL_CLASS =
   'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r';
@@ -69,8 +81,11 @@ const CAPABILITY_CHIPS: readonly {
   },
 ];
 
-function providerLabel(providerKey: string): string {
-  return PROVIDER_LABELS[providerKey] ?? providerKey;
+function routeStatusText(route: ModelCatalogueRoute): string {
+  if (route.status === 'available' && route.freeInventory) {
+    return ROUTE_INVENTORY_TEXT[route.freeInventory];
+  }
+  return ROUTE_STATUS_TEXT[route.status];
 }
 
 function isNewRelease(entry: ModelCatalogueEntry, now: number): boolean {
@@ -135,10 +150,10 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
       </button>
 
       <div className="flex items-center gap-2.5">
-        <ProviderLogo providerKey={entry.provider} size={20} />
+        <ProviderLogo providerKey={entry.developer} size={20} />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{entry.displayName}</p>
-          <p className={CARD_LABEL_CLASS}>{providerLabel(entry.provider)}</p>
+          <p className={CARD_LABEL_CLASS}>{entry.developerLabel}</p>
         </div>
       </div>
 
@@ -201,6 +216,30 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         )}
       </div>
 
+      {entry.routes.length > 0 && (
+        <>
+          <p className={`${CARD_LABEL_CLASS} mt-3`}>{ROUTES_LABEL}</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {entry.routes.map((route) => (
+              <li key={route.routeId} className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2">
+                  <ProviderLogo providerKey={route.provider} size={14} />
+                  <span className="truncate text-sm text-foreground">{route.label}</span>
+                </span>
+                <span
+                  className={[
+                    'shrink-0 text-xs',
+                    route.status === 'not_configured' ? 'text-muted-foreground' : 'text-foreground',
+                  ].join(' ')}
+                >
+                  {routeStatusText(route)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {!entry.admitted && entry.minimumPlanLabel && (
         <p className="mt-3 text-xs text-primary">{`${entry.minimumPlanLabel} and above`}</p>
       )}
@@ -210,7 +249,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
 
 export interface ModelCatalogueProps {
   entries: readonly ModelCatalogueEntry[];
-  providers: readonly ModelCatalogueProvider[];
+  developers: readonly ModelCatalogueDeveloper[];
   favouriteModelIds: readonly string[];
   selectedModelId: string;
   query: string;
@@ -219,13 +258,13 @@ export interface ModelCatalogueProps {
   onToggleFavourite: (modelId: string) => void;
   onUpgradeRequest?: () => void;
   onBack: () => void;
-  initialProviderKey?: string;
+  initialDeveloperKey?: string;
   isEnvironmentLocked: (requiresEnvironment: string) => { locked: boolean; reason?: string };
 }
 
 export function ModelCatalogue({
   entries,
-  providers,
+  developers,
   favouriteModelIds,
   selectedModelId,
   query,
@@ -234,12 +273,12 @@ export function ModelCatalogue({
   onToggleFavourite,
   onUpgradeRequest,
   onBack,
-  initialProviderKey,
+  initialDeveloperKey,
   isEnvironmentLocked,
 }: ModelCatalogueProps) {
   const favourites = useMemo(() => new Set(favouriteModelIds), [favouriteModelIds]);
-  const [chosenRailKey, setChosenRailKey] = useState<string | null>(initialProviderKey ?? null);
-  const railKey = chosenRailKey ?? providers[0]?.key ?? FAVOURITES_RAIL_KEY;
+  const [chosenRailKey, setChosenRailKey] = useState<string | null>(initialDeveloperKey ?? null);
+  const railKey = chosenRailKey ?? developers[0]?.key ?? FAVOURITES_RAIL_KEY;
   const [activeChips, setActiveChips] = useState<ReadonlySet<CapabilityChipKey>>(new Set());
   const [openWeightOnly, setOpenWeightOnly] = useState(false);
   const [cardModelId, setCardModelId] = useState<string | null>(null);
@@ -250,9 +289,14 @@ export function ModelCatalogue({
     return entries.filter((entry) => {
       if (railKey === FAVOURITES_RAIL_KEY) {
         if (!favourites.has(entry.id)) return false;
-      } else if (!needle && entry.provider !== railKey) return false;
+      } else if (!needle && entry.developer !== railKey) return false;
       if (needle) {
-        const haystack = `${entry.displayName} ${providerLabel(entry.provider)} ${entry.family ?? ''}`;
+        const haystack = [
+          entry.displayName,
+          entry.developerLabel,
+          entry.family ?? '',
+          ...entry.routes.map((route) => route.label),
+        ].join(' ');
         if (!haystack.toLowerCase().includes(needle)) return false;
       }
       if (openWeightOnly && !entry.openWeight) return false;
@@ -277,10 +321,10 @@ export function ModelCatalogue({
 
   const railEntries = [
     { key: FAVOURITES_RAIL_KEY, label: FAVOURITES_RAIL_LABEL, count: favourites.size },
-    ...providers.map((provider) => ({
-      key: provider.key,
-      label: providerLabel(provider.key),
-      count: provider.admittedCount,
+    ...developers.map((developer) => ({
+      key: developer.key,
+      label: developer.label,
+      count: developer.admittedCount,
     })),
   ];
 
@@ -312,7 +356,7 @@ export function ModelCatalogue({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <div role="tablist" aria-label="Model providers" className={RAIL_CLASS}>
+        <div role="tablist" aria-label={RAIL_LABEL} className={RAIL_CLASS}>
           {railEntries.map((entry) => {
             const isActive = entry.key === railKey;
             return (
@@ -425,7 +469,7 @@ export function ModelCatalogue({
                             : 'cursor-pointer hover:bg-muted/60 focus-visible:bg-muted/60',
                       ].join(' ')}
                     >
-                      <ProviderLogo providerKey={entry.provider} size={16} />
+                      <ProviderLogo providerKey={entry.developer} size={16} />
                       <span className="min-w-0 flex-1">
                         <span
                           className={[
@@ -437,7 +481,7 @@ export function ModelCatalogue({
                         >
                           {entry.displayName}
                         </span>
-                        <span className={ROW_GUIDANCE_CLASS}>{providerLabel(entry.provider)}</span>
+                        <span className={ROW_GUIDANCE_CLASS}>{entry.developerLabel}</span>
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
                         {isNewRelease(entry, now) && (
