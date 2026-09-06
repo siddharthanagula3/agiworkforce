@@ -1839,7 +1839,7 @@ describe('MessageBubble', () => {
           message={makeMessage({
             role: 'assistant',
             content: 'From what I recall, the headline was about the merger.',
-            metadata: { webSearchRequested: true },
+            metadata: { webSearchRequested: true, webSearchAskedInText: true },
           })}
         />,
       );
@@ -1857,7 +1857,7 @@ describe('MessageBubble', () => {
           message={makeMessage({
             role: 'assistant',
             content: 'From what I recall, the headline was about the merger.',
-            metadata: { webSearchRequested: true },
+            metadata: { webSearchRequested: true, webSearchAskedInText: true },
           })}
           onRegenerate={onRegenerate}
         />,
@@ -1867,6 +1867,19 @@ describe('MessageBubble', () => {
         screen.getByRole('button', { name: /send this turn again with a web search required/i }),
       );
       expect(onRegenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet when search was merely switched on and the message never asked for one', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'ready',
+            metadata: { webSearchRequested: true },
+          })}
+        />,
+      );
+      expect(notInvokedNotice()).not.toBeInTheDocument();
     });
 
     it('stays quiet once the search actually ran', () => {

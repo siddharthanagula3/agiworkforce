@@ -92,7 +92,7 @@ function makeProcessed(overrides: {
     fallbackReason: undefined,
     originalModel: 'gpt-test',
     resolvedTaskType: 'general' as never,
-    searchRequirement: { required: true, source: 'toggle' as const },
+    searchRequirement: { required: true, source: 'explicit_intent' as const },
     searchEnforcement: overrides.enforcement,
     classifierConfidence: 1,
     resolvedSlot: null,
