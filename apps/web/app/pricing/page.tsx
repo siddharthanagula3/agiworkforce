@@ -56,7 +56,7 @@ import {
 } from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Container, Eyebrow, Ledger, Prose } from '@/features/marketing/components/system';
+import { Container, Eyebrow, Prose } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
 import '@/features/marketing/components/pages/business/pricing.css';
 import '@/features/marketing/components/pages/business/data-table.css';
@@ -77,9 +77,6 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'off';
 
 type CheckoutPlan = SelfServePaidPlanTier;
-
-const LOCAL_ROUTE_CHARGE = `$${BILLING_PLAN_PRICING['local-only'].monthlyPriceUsd}`;
-const BYOK_ROUTE_CHARGE = `$${BILLING_PLAN_PRICING.byok.monthlyPriceUsd}`;
 
 const localizedPriceEntrySchema = z.object({
   amountMinor: z.number().int().nonnegative(),
@@ -830,36 +827,18 @@ export default function PricingPage() {
       <main id="main-content">
         <section className="agi-ds-section agi-ds-hero" aria-labelledby="pricing-hero-title">
           <Container>
-            <div className="agi-ds-grid-2 agi-ds-pricing-hero">
+            <div className="agi-ds-pricing-hero">
               <div>
                 <Eyebrow>Pricing</Eyebrow>
                 <h1 id="pricing-hero-title" className="agi-ds-h1">
                   {t('pageTitle')}
                 </h1>
-                <Prose size="lg" className="agi-ds-reveal">
-                  {t('heroLede')}
-                </Prose>
                 {!CHECKOUT_ENABLED ? (
                   <p role="status" className="agi-ds-prose" data-size="sm">
                     Checkout is temporarily unavailable. Please try again later. Existing plans and
                     Enterprise contact are unaffected.
                   </p>
                 ) : null}
-              </div>
-              <div className="agi-ds-pricing-receipt">
-                <p className="agi-ds-pricing-receipt-head">Route pricing</p>
-                <Ledger
-                  caption="What AGI charges for each route"
-                  rows={[
-                    { label: localLabel, value: `${LOCAL_ROUTE_CHARGE} from AGI` },
-                    {
-                      label: byokLabel,
-                      value: `${BYOK_ROUTE_CHARGE} from AGI, provider rates apply`,
-                    },
-                    { label: 'AGI managed cloud', value: `From ${basicPrice} per month` },
-                    { label: 'Billed by AGI', value: 'Managed cloud only', quiet: true },
-                  ]}
-                />
               </div>
             </div>
           </Container>
