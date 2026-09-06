@@ -101,6 +101,7 @@ route receipts).
 | Project icon and colour picker          | /chat/projects/[id] | PUT /api/projects/:id                                        | approved                                                                                                             |
 | Schedule row menu                       | /chat/schedules     | schedule actions                                             | approved                                                                                                             |
 | Settings sections (16)                  | /settings           | preferences, billing, usage                                  | reviewed; propagation untested                                                                                       |
+| Account menu, Send feedback             | all                 | POST /api/feedback with an optional screenshot data URL      | verified 2026-09-05 (localhost); screenshot storage needs private object storage, present in production              |
 | Library viewer, zoom, ask about file    | /chat/library       | media assets, starter prompt                                 | corrections pending                                                                                                  |
 
 ## Desktop (Electron shell), from the 2026-09-05 reconnaissance

@@ -27,6 +27,7 @@ const routes: RouteConfig[] = [
   { path: '/byok', priority: 0.9, changeFrequency: 'monthly' },
   { path: '/local', priority: 0.9, changeFrequency: 'monthly' },
 
+  { path: '/web', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/desktop', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/mobile', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/mobile/legal', priority: 0.45, changeFrequency: 'monthly' },
