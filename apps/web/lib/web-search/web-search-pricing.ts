@@ -37,7 +37,7 @@ type RegistryModelsMap = Record<string, RegistryModelEntry>;
 
 const config = pricingConfig as WebSearchPricingConfig;
 
-function isActivelyRoutedModel(modelId: string): boolean {
+export function isActivelyRoutedModel(modelId: string): boolean {
   const models = modelRegistry.models as unknown as RegistryModelsMap;
   const entry = models[modelId];
   return (
