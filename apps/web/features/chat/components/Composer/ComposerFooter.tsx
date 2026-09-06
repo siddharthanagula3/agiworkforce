@@ -104,7 +104,7 @@ const PICKER_BADGE_CLASS =
 const PICKER_ICON_SIZE = 16;
 const PICKER_TRIGGER_ICON_SIZE = 12;
 const PICKER_PANEL_WIDTH_CLASS = 'w-80';
-const PICKER_CATALOGUE_WIDTH_CLASS = 'w-[40rem]';
+const PICKER_CATALOGUE_WIDTH_CLASS = 'w-[min(40rem,calc(100vw-1rem))]';
 const PICKER_SECTION_LABEL_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 
 const CAPABILITY_GLYPHS: Readonly<
@@ -498,7 +498,7 @@ function ModelRow({
             ? 'text-foreground/60'
             : isSelected
               ? 'font-medium text-foreground'
-              : 'text-muted-foreground',
+              : 'font-normal text-foreground',
         ].join(' ')}
       >
         {model.name}
