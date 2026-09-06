@@ -56,7 +56,7 @@ export function MarketingLanding() {
           visual={<MobileHeroVisual />}
           announcement={{
             tag: 'New',
-            label: `Model catalogue: ${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers`,
+            label: `${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers`,
             href: '/providers',
           }}
         />
