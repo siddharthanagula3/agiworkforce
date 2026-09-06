@@ -24,6 +24,7 @@ import {
   TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { RELEASES } from '@/lib/changelog-entries';
+import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 
@@ -55,7 +56,7 @@ export function MarketingLanding() {
           visual={<MobileHeroVisual />}
           announcement={{
             tag: 'New',
-            label: `Model catalogue: ${MARKETING.models.display} models across ${MARKETING.providers.count} providers, one selector`,
+            label: `Model catalogue: ${MARKETING.models.display} models, ${BYOK_PROVIDER_IDS.length} providers on your key, one selector`,
             href: '/providers',
           }}
         />
@@ -66,9 +67,9 @@ export function MarketingLanding() {
           label="Product facts"
           facts={[
             { value: MARKETING.models.display, label: 'models in the catalogue' },
-            { value: `${MARKETING.providers.count}`, label: 'provider integrations' },
+            { value: `${BYOK_PROVIDER_IDS.length}`, label: 'providers that take your key' },
+            { value: `${DESKTOP_LOCAL_RUNTIMES.names.length}`, label: 'local runtimes on Desktop' },
             { value: MARKETING.surfaces.display, label: 'surfaces, one account' },
-            { value: '3', label: 'routes: Local, BYOK, Cloud' },
           ]}
         />
 

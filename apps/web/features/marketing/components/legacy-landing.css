@@ -3022,3 +3022,149 @@
   font-size: calc(var(--u) * 11);
   color: var(--agi-ink);
 }
+[data-design='agi'] .agi-sc-split[data-cols='1-4'] {
+  grid-template-columns: calc(var(--u) * 150) minmax(0, 1fr);
+}
+[data-design='agi'] .agi-sc-rail--nav {
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 12) calc(var(--u) * 10);
+}
+[data-design='agi'] .agi-sc-navitem {
+  padding: calc(var(--u) * 5) calc(var(--u) * 9);
+  border-radius: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 11);
+  color: var(--agi-ink-quiet);
+}
+[data-design='agi'] .agi-sc-navitem[data-on] {
+  background: var(--agi-bg-2);
+  color: var(--agi-ink);
+  font-weight: 600;
+}
+[data-design='agi'] .agi-sc-table {
+  display: grid;
+}
+[data-design='agi'] .agi-sc-table[data-cols='4'] {
+  grid-template-columns: 1.4fr 0.8fr 0.8fr 1fr;
+}
+[data-design='agi'] .agi-sc-row {
+  display: contents;
+}
+[data-design='agi'] .agi-sc-row > span {
+  padding: calc(var(--u) * 5) calc(var(--u) * 9);
+  border-bottom: 1px solid var(--agi-rule);
+  font-size: calc(var(--u) * 10.5);
+  color: var(--agi-ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+[data-design='agi'] .agi-sc-table .agi-sc-row:last-child > span {
+  border-bottom: 0;
+}
+[data-design='agi'] .agi-sc-mono {
+  font-family: var(--agi-font-mono);
+  font-size: calc(var(--u) * 9.5) !important;
+  color: var(--agi-ink-2) !important;
+}
+[data-design='agi'] .agi-sc-row > span[data-outcome='denied'] {
+  color: var(--agi-amber);
+}
+[data-design='agi'] .agi-sc-row > span[data-outcome='success'] {
+  color: var(--agi-success);
+}
+[data-design='agi'] .agi-sc-usage {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-design='agi'] .agi-sc-usage li {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 5);
+}
+[data-design='agi'] .agi-sc-usage-row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 11);
+  font-weight: 600;
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-sc-bar {
+  position: relative;
+  display: block;
+  height: calc(var(--u) * 6);
+  border-radius: 999px;
+  background: var(--agi-rule);
+  overflow: hidden;
+}
+[data-design='agi'] .agi-sc-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 999px;
+  background: var(--agi-amber);
+}
+[data-design='agi'] .agi-sc-bar[data-fill='50']::after {
+  width: 50%;
+}
+[data-design='agi'] .agi-sc-composer-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 24);
+  background:
+    radial-gradient(60% 50% at 50% 30%, var(--agi-surface-wash), transparent 75%), var(--agi-bg);
+}
+[data-design='agi'] .agi-sc-composer {
+  width: calc(var(--u) * 560);
+  margin-top: 0;
+}
+[data-design='agi'] .agi-sc-chips {
+  gap: calc(var(--u) * 6);
+}
+[data-design='agi'] .agi-sc-typed {
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-sc-slash {
+  width: calc(var(--u) * 560);
+  margin: 0;
+  padding: calc(var(--u) * 6);
+  list-style: none;
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: calc(var(--u) * 12);
+  background: var(--agi-bg-2);
+  box-shadow: 0 calc(var(--u) * 18) calc(var(--u) * 60) var(--agi-shadow);
+}
+[data-design='agi'] .agi-sc-slash li {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 12);
+  padding: calc(var(--u) * 8) calc(var(--u) * 10);
+  border-radius: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 11);
+  color: var(--agi-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+[data-design='agi'] .agi-sc-slash li[data-on] {
+  background: var(--agi-console-tint);
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-sc-slash-name {
+  flex: 0 0 calc(var(--u) * 90);
+  font-family: var(--agi-font-mono);
+  font-weight: 600;
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-sc-slash-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

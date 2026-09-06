@@ -1,6 +1,15 @@
 import './system.css';
 
 export { Button, ButtonRow } from './Button';
+export { Bento, type BentoTile } from './Bento';
+export { Checklist } from './Checklist';
+export { CodeTabs, type CodeTab } from './CodeTabs';
+export { CtaPanel, type CtaCard } from './CtaPanel';
+export { ProviderGrid, type ProviderTile } from './ProviderGrid';
+export { QuoteBlock } from './QuoteBlock';
+export { ScrollFeatures, type ScrollFeature } from './ScrollFeatures';
+export { SplitFeature, type SplitFeatureProps } from './SplitFeature';
+export { StatBand, type Stat } from './StatBand';
 export { Container } from './Container';
 export { Eyebrow } from './Eyebrow';
 export { HeroHeadline } from './HeroHeadline';

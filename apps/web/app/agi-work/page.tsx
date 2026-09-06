@@ -1,12 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -78,24 +78,7 @@ export default function AgiWorkPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat</span>
-                </div>
-                <ProductFrame
-                  src="/product/composer-dark.png"
-                  srcLight="/product/composer-light.png"
-                  alt="The AGI composer, where the Chat and AGI Work modes live side by side"
-                  width={1472}
-                  height={254}
-                  priority
-                />
-              </div>
+              <AgentRunWindow />
             </div>
           </div>
         </section>
