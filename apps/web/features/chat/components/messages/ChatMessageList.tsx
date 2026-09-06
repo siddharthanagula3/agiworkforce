@@ -1269,6 +1269,13 @@ const ChatMessageListComponent = ({
     readAgentActivityStatus(lastMessage) === 'failed',
   );
 
+  const lastUserContent = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === 'user') return messages[index]?.content;
+    }
+    return undefined;
+  }, [messages]);
+
   const showFollowUps =
     enableFollowUpSuggestions &&
     onSendMessage &&
@@ -1788,6 +1795,7 @@ const ChatMessageListComponent = ({
           <div className="mx-auto w-full max-w-3xl px-4" data-testid="follow-up-suggestions-shell">
             <FollowUpSuggestions
               lastAssistantContent={lastMessage.content}
+              lastUserContent={lastUserContent}
               onSelect={onSendMessage!}
               isGenerating={isLoading}
               isUserTyping={isUserTyping}
@@ -1810,6 +1818,7 @@ const ChatMessageListComponent = ({
       prefersReducedMotion,
       showTypingIndicator,
       showFollowUps,
+      lastUserContent,
       onSendMessage,
       isLoading,
       isUserTyping,

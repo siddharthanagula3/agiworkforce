@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -209,6 +208,64 @@ describe('deriveFollowUps() · topic patterns', () => {
     );
     const texts = result.map((f) => f.text);
     expect(texts).toContain('How can I reduce overfitting?');
+  });
+});
+
+describe('deriveFollowUps() · scoring against the user question', () => {
+  const PHONE_QUESTION = 'Find me the best Android smartphone deals ranked by price.';
+  const PHONE_ANSWER =
+    '**Pixel 11 at Google** is the newest option, but the $549 figure requires an eligible ' +
+    'trade-in. Without a trade-in, budget for roughly **$899**. The Google Fi promotion can ' +
+    'lower the effective cost further, but only through 24 months of service credits.';
+
+  it('does not offer finance follow-ups because a phone answer said "budget" once', () => {
+    const texts = deriveFollowUps(PHONE_ANSWER, 4, PHONE_QUESTION).map((f) => f.text);
+
+    expect(texts).not.toContain('What is the risk level of this approach?');
+    expect(texts).not.toContain('How should I adjust this based on my income?');
+    expect(texts).not.toContain('Are there any tax implications?');
+  });
+
+  it('still offers finance follow-ups when the user actually asked about money', () => {
+    const texts = deriveFollowUps(
+      'Your portfolio should balance savings against tax on the income you draw.',
+      4,
+      'How should I invest my savings this year?',
+    ).map((f) => f.text);
+
+    expect(texts).toContain('What is the risk level of this approach?');
+  });
+
+  it('lets a single incidental keyword through when there is no user question to check', () => {
+    const texts = deriveFollowUps(PHONE_ANSWER, 4).map((f) => f.text);
+
+    expect(texts).toContain('What is the risk level of this approach?');
+  });
+
+  it('prefers the topic with the most distinct hits over the first one in the list', () => {
+    const texts = deriveFollowUps(
+      'The function returns a response. The query joins the orders table on the postgres ' +
+        'schema and the index needs care.',
+      2,
+      'How do I speed up this sql query?',
+    ).map((f) => f.text);
+
+    expect(texts).toContain('How can I optimize this query?');
+    expect(texts).not.toContain('Can you add unit tests for this?');
+  });
+
+  it('falls back to generic follow-ups when nothing clears the bar', () => {
+    const texts = deriveFollowUps(PHONE_ANSWER, 4, PHONE_QUESTION).map((f) => f.text);
+    const generic = [
+      'Tell me more about this',
+      'Can you give an example?',
+      'What are the next steps?',
+      'How can I apply this?',
+      'What should I watch out for?',
+      'Can you summarize the key points?',
+    ];
+
+    for (const text of texts) expect(generic).toContain(text);
   });
 });
 
