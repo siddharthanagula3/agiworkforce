@@ -8,11 +8,14 @@ import {
   PLAN_LABEL,
   canAccessModelForSubscriptionTier,
   effectivePlanTier,
+  getDeveloperLabel,
   getMinimumRequiredTier,
   getModelAvailability,
   getModelRegistryFacts,
+  listManagedRoutesForModel,
   modelsCatalogJson as modelsData,
   normalizeUIPlanTier,
+  providerLabels,
   type ModelAvailability,
   type ModelEnvironment,
   type ModelMetadata,
@@ -28,10 +31,79 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
+import {
+  getProviderAvailabilityMap,
+  type ProviderAvailabilitySignal,
+} from '@/lib/services/provider-availability-service';
+import { freePoolDecisions, type FreePoolDecision } from '@/lib/server/free-pools';
 
 export const runtime = 'nodejs';
 
 const ANONYMOUS_PLAN_TIER = 'free';
+
+export type ModelCatalogueRouteStatus = 'available' | 'degraded' | 'not_configured';
+export type ModelCatalogueFreeInventory = 'promotional' | 'recurring';
+
+export interface ModelCatalogueRoute {
+  routeId: string;
+  provider: string;
+  label: string;
+  isDefault: boolean;
+  status: ModelCatalogueRouteStatus;
+  freeInventory: ModelCatalogueFreeInventory | null;
+}
+
+interface RouteContext {
+  configuredProviders: ReadonlySet<string>;
+  availabilityByProvider: Readonly<Record<string, ProviderAvailabilitySignal>>;
+  poolsByRouteId: ReadonlyMap<string, FreePoolDecision>;
+}
+
+function freeInventoryOf(
+  decision: FreePoolDecision | undefined,
+): ModelCatalogueFreeInventory | null {
+  if (!decision?.eligible) return null;
+  return decision.entry.expiresAtMs === null ? 'recurring' : 'promotional';
+}
+
+function routeStatus(provider: string, context: RouteContext): ModelCatalogueRouteStatus {
+  if (!context.configuredProviders.has(provider)) return 'not_configured';
+  return context.availabilityByProvider[provider] ? 'degraded' : 'available';
+}
+
+function toCatalogueRoutes(modelId: string, context: RouteContext): ModelCatalogueRoute[] {
+  const routes: ModelCatalogueRoute[] = [];
+  for (const route of listManagedRoutesForModel(modelId)) {
+    const label = providerLabels[route.provider];
+    const status = routeStatus(route.provider, context);
+    if (!label || status === 'not_configured') continue;
+    routes.push({
+      routeId: route.routeId,
+      provider: route.provider,
+      label,
+      isDefault: route.isDefault,
+      status,
+      freeInventory: freeInventoryOf(context.poolsByRouteId.get(route.routeId)),
+    });
+  }
+  return routes;
+}
+
+async function buildRouteContext(models: readonly ModelMetadata[]): Promise<RouteContext> {
+  const nowMs = Date.now();
+  const providers = new Set<string>();
+  for (const model of models) {
+    for (const route of listManagedRoutesForModel(model.id)) providers.add(route.provider);
+  }
+  return {
+    configuredProviders: listAvailableManagedProviderIds(),
+    availabilityByProvider: await getProviderAvailabilityMap([...providers], nowMs),
+    poolsByRouteId: new Map(
+      freePoolDecisions(nowMs).map((decision) => [decision.entry.routeId, decision]),
+    ),
+  };
+}
 
 export type ModelCatalogueCapabilities = Readonly<
   Partial<Record<ModelPickerFilterCapability, boolean>>
@@ -41,7 +113,11 @@ export interface ModelCatalogueEntry {
   id: string;
   displayName: string;
   provider: string;
+  providerLabel: string;
+  developer: string;
+  developerLabel: string;
   family: string | null;
+  routes: ModelCatalogueRoute[];
   isRouter: boolean;
   releasedOn: string | null;
   stage: string | null;
@@ -75,7 +151,11 @@ function projectCapabilities(
   ) as ModelCatalogueCapabilities;
 }
 
-function toCatalogueEntry(model: ModelMetadata, planTier: string): ModelCatalogueEntry | null {
+function toCatalogueEntry(
+  model: ModelMetadata,
+  planTier: string,
+  context: RouteContext,
+): ModelCatalogueEntry | null {
   const facts = getModelRegistryFacts(model.id);
   if (!facts) return null;
   const admitted = canAccessModelForSubscriptionTier(model.id, planTier);
@@ -85,7 +165,11 @@ function toCatalogueEntry(model: ModelMetadata, planTier: string): ModelCatalogu
     id: model.id,
     displayName: model.name,
     provider: model.provider,
+    providerLabel: providerLabels[model.provider] ?? model.provider,
+    developer: facts.developer,
+    developerLabel: getDeveloperLabel(facts.developer),
     family: facts.family,
+    routes: toCatalogueRoutes(model.id, context),
     isRouter: facts.isRouter,
     releasedOn: facts.releasedOn,
     stage: facts.stage,
@@ -124,8 +208,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const catalog = modelsData as { version: number; lastUpdated: string };
     const planTier = await resolvePlanTier(request);
-    const models = listPickerChatModels()
-      .map((model) => toCatalogueEntry(model, planTier))
+    const pickerModels = listPickerChatModels();
+    const context = await buildRouteContext(pickerModels);
+    const models = pickerModels
+      .map((model) => toCatalogueEntry(model, planTier, context))
       .filter((entry): entry is ModelCatalogueEntry => entry !== null);
 
     logger.info({ modelCount: models.length, planTier }, 'Model catalogue projection served');

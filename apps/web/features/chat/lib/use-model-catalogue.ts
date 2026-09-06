@@ -5,8 +5,9 @@ import type { ModelCatalogueEntry, ModelCatalogueResponse } from '@/app/api/mode
 
 const MODEL_CATALOGUE_ENDPOINT = '/api/models/catalogue';
 
-export interface ModelCatalogueProvider {
+export interface ModelCatalogueDeveloper {
   key: string;
+  label: string;
   admittedCount: number;
   totalCount: number;
 }
@@ -14,7 +15,7 @@ export interface ModelCatalogueProvider {
 export interface ModelCatalogueState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   entries: readonly ModelCatalogueEntry[];
-  providers: readonly ModelCatalogueProvider[];
+  developers: readonly ModelCatalogueDeveloper[];
   count: number;
   planLabel: string;
 }
@@ -22,28 +23,29 @@ export interface ModelCatalogueState {
 const EMPTY_STATE: ModelCatalogueState = {
   status: 'idle',
   entries: [],
-  providers: [],
+  developers: [],
   count: 0,
   planLabel: '',
 };
 
-function groupProviders(
+function groupDevelopers(
   entries: readonly ModelCatalogueEntry[],
-): readonly ModelCatalogueProvider[] {
-  const byProvider = new Map<string, ModelCatalogueProvider>();
+): readonly ModelCatalogueDeveloper[] {
+  const byDeveloper = new Map<string, ModelCatalogueDeveloper>();
   for (const entry of entries) {
-    const current = byProvider.get(entry.provider) ?? {
-      key: entry.provider,
+    const current = byDeveloper.get(entry.developer) ?? {
+      key: entry.developer,
+      label: entry.developerLabel,
       admittedCount: 0,
       totalCount: 0,
     };
-    byProvider.set(entry.provider, {
-      key: entry.provider,
+    byDeveloper.set(entry.developer, {
+      ...current,
       admittedCount: current.admittedCount + (entry.admitted ? 1 : 0),
       totalCount: current.totalCount + 1,
     });
   }
-  return [...byProvider.values()].sort(
+  return [...byDeveloper.values()].sort(
     (left, right) =>
       right.admittedCount - left.admittedCount ||
       right.totalCount - left.totalCount ||
@@ -67,7 +69,7 @@ export function useModelCatalogue(enabled: boolean): ModelCatalogueState {
         setState({
           status: 'ready',
           entries: body.models,
-          providers: groupProviders(body.models),
+          developers: groupDevelopers(body.models),
           count: body.count,
           planLabel: body.planLabel,
         });
