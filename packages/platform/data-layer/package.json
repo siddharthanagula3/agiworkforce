@@ -13,6 +13,7 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
+  "dependencies": {},
   "peerDependencies": {
     "@clerk/backend": ">=3.0.0",
     "@neondatabase/serverless": ">=1.0.0",
@@ -30,10 +31,10 @@
     }
   },
   "devDependencies": {
-    "@clerk/backend": "^3.17.1",
+    "@clerk/backend": "^3.4.13",
     "@neondatabase/serverless": "^1.1.0",
-    "@types/pg": "^8.23.1",
-    "pg": "^8.23.0",
-    "vitest": "^4.1.11"
+    "@types/pg": "^8.15.6",
+    "pg": "^8.22.0",
+    "vitest": "^4.1.8"
   }
 }
