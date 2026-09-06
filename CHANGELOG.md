@@ -2,9 +2,56 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-24
+Last updated: 2026-09-06
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, model developers, provider routes and marketplace discounts], 2026-09-06
+
+### Added
+
+- **Developer identity, separate from the serving provider.**
+  `packages/ai/model-registry/catalog/developers.json` names who trained each
+  model; the compiler resolves it per model (first-party providers inherit it,
+  hosts resolve through the upstream id's author segment) and emits it into the
+  registry and `models.json`. The All models rail now groups by developer, so
+  GPT-OSS sits under OpenAI rather than Groq, and the Qwen provider is labelled
+  Alibaba Model Studio.
+- **Route availability on the model card.** The catalogue projection lists the
+  managed routes that can serve a model right now, with credential-backed
+  availability and free-inventory state, sourced from the registry and the
+  free-pool document.
+- **Alibaba Model Studio routes** for the DeepSeek flash and pro families and the Kimi family on the existing managed account, with promotional allocations
+  recorded as expiring quota pools (`window: allocation`).
+- **Gateway discount policies.** A gateway can declare the request field and
+  minimum percent it must deliver; routes on it are priced at that ceiling and
+  the request carries the field. Cheaper Inference routes drop their hardcoded
+  discounted prices.
+- **DeepInfra, Together and Novita** gateway definitions with sourced
+  governance and verified route prices, shipped `experimental_only` until the
+  founder confirms their commercial terms.
+- **Operator Routes tab** (`/operator`): a searchable, filterable route
+  economics table with list and effective prices, discount, cache price,
+  modality, context, capabilities, retention, regions, free inventory,
+  credential state and breaker health.
+
+### Changed
+
+- Managed traffic admits only models at lifecycle stage `registered` or later,
+  so a model discovered from an upstream catalogue never reaches a managed
+  picker until it is registered.
+- The expanded model browser is anchored to the composer card's width and
+  right edge from measured geometry, and becomes a bottom sheet on phones.
+- Recommended rows lead with the catalog's flagged models and fill from the
+  profile order, never repeating a favourite.
+
+### Fixed
+
+- An exhausted Alibaba allocation (`AllocationQuota.FreeTierOnly`, HTTP 403)
+  now classifies as `quota_exhausted` and marks that pool spent instead of
+  reading as a credential failure that parked every route on the provider.
+- A marketplace refusing the minimum discount (`min_discount_unavailable`)
+  classifies as a capacity signal and rotates, never as provider overload.
 
 ## [Unreleased, plugin directory: real role packs, filters, install counts], 2026-08-24
 
