@@ -1780,8 +1780,13 @@ const MessageBubbleComponent = function MessageBubble({
               className={cn(
                 'prose dark:prose-invert max-w-none',
                 'message-text',
-                'break-words overflow-wrap-anywhere text-start',
-                isUser && 'user-bubble',
+                'break-words text-start',
+                // `w-fit` resolves against the min-content width, which
+                // `break-words` alone does not shrink, so one unbroken URL made
+                // the bubble wider than its column and hung off the left edge.
+                // `wrap-anywhere` is the only one of the two that changes
+                // intrinsic sizing.
+                isUser && 'user-bubble wrap-anywhere',
                 !isUser && message.metadata?.comparisonOptions && 'hidden',
                 isEditing && 'hidden',
               )}

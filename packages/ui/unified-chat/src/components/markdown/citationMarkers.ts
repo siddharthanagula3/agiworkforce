@@ -89,6 +89,37 @@ export function findCitationIndexForUrl(
   return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
 }
 
+const CITATION_MARKER_TEXT_PATTERN = /^(?:\[\d{1,3}\])+$/;
+const URL_SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//i;
+const WWW_PREFIX = /^www\./;
+const TRAILING_SLASHES = /\/+$/;
+
+function bareLinkTextShape(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(URL_SCHEME_PREFIX, '')
+    .replace(WWW_PREFIX, '')
+    .replace(TRAILING_SLASHES, '');
+}
+
+/**
+ * A link may collapse into a citation chip only when its visible text carries
+ * no words of its own: a `[n]` marker, or the URL or domain repeated as the
+ * label. A price, a product name or a sentence is the answer's own text and
+ * cannot be swallowed by the chip that annotates it.
+ */
+export function isCitationOnlyLinkText(text: string, href: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === '') return true;
+  if (CITATION_MARKER_TEXT_PATTERN.test(trimmed)) return true;
+  const shape = bareLinkTextShape(trimmed);
+  if (shape === '') return false;
+  if (shape === bareLinkTextShape(href)) return true;
+  const domain = registrableDomain(href);
+  return domain !== null && shape === domain;
+}
+
 export function stripTrackingParams(url: string): string {
   let parsed: URL;
   try {

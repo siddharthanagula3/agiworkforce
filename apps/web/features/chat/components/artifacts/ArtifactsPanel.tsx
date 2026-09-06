@@ -11,7 +11,11 @@ import {
   resolveOriginPrivacyMode,
   type PublishResult,
 } from '@agiworkforce/artifacts';
-import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import {
+  ARTIFACT_PANEL_OVERLAY_QUERY,
+  useArtifactsStore,
+  type Artifact,
+} from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
@@ -164,8 +168,6 @@ export function resolveArtifactOriginPrivacyMode(
   ]);
 }
 
-const MOBILE_OVERLAY_QUERY = '(max-width: 639px)';
-
 const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 900;
 const PANEL_WIDTH_KEY_STEP = 24;
@@ -178,7 +180,7 @@ function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {
       setLayout('desktop');
       return;
     }
-    const query = window.matchMedia(MOBILE_OVERLAY_QUERY);
+    const query = window.matchMedia(ARTIFACT_PANEL_OVERLAY_QUERY);
     const apply = () => setLayout(query.matches ? 'mobile' : 'desktop');
     apply();
     query.addEventListener('change', apply);

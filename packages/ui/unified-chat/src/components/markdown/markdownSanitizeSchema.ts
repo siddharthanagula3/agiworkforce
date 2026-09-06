@@ -8,10 +8,8 @@ export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
   },
   attributes: {
     ...defaultSchema.attributes,
-    img: [
-      ...(defaultSchema.attributes?.['img'] ?? []),
-      'loading',
-    ],
+    img: [...(defaultSchema.attributes?.['img'] ?? []), 'loading'],
+    input: [...(defaultSchema.attributes?.['input'] ?? []), 'checked'],
     code: [
       ...(defaultSchema.attributes?.['code'] ?? []),
       ['className', /^language-./, 'math-inline', 'math-display'],
