@@ -14,9 +14,9 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.3",
-    "jsdom": "20.0.3",
-    "vitest": "^4.1.11"
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "29.0.1",
+    "vitest": "^4.1.8"
   },
   "peerDependencies": {
     "react": "^19.0.0",

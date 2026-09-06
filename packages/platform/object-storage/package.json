@@ -16,6 +16,7 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
+  "dependencies": {},
   "peerDependencies": {
     "@aws-sdk/client-s3": ">=3.1000.0",
     "@aws-sdk/s3-request-presigner": ">=3.1000.0"
@@ -29,8 +30,8 @@
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.1127.0",
-    "@aws-sdk/s3-request-presigner": "^3.1127.0",
-    "vitest": "^4.1.11"
+    "@aws-sdk/client-s3": "^3.1079.0",
+    "@aws-sdk/s3-request-presigner": "^3.1079.0",
+    "vitest": "^4.1.8"
   }
 }

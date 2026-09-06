@@ -19,6 +19,6 @@
     "@modelcontextprotocol/ext-tasks": "github:modelcontextprotocol/ext-tasks#0d0a6bd4c258b35caa3c810a1dd506cf105b1501"
   },
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.8"
   }
 }
