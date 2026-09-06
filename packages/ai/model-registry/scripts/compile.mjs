@@ -123,6 +123,7 @@ const CANONICAL_ORDER = [
   'quality',
   'qualityTier',
   'bestFor',
+  'pickerRecommended',
   'released',
   'deprecated',
   'deprecation_date',
@@ -822,7 +823,8 @@ function buildModelRoutes({
   modelPricing,
   governance,
 }) {
-  const harnessId = resolveHarnessId(model);
+  const declaredDefault = routeDeclaration?.defaultRoute ?? {};
+  const harnessId = declaredDefault.harnessId ?? resolveHarnessId(model);
   const harness = harnessCatalog.harnesses[harnessId];
   if (!harness) {
     throw new Error(`No harness configuration for ${modelKey}: expected ${harnessId}`);
@@ -834,7 +836,6 @@ function buildModelRoutes({
   }
 
   const selectable = lifecycle.availability === 'live' && lifecycle.deprecated !== true;
-  const declaredDefault = routeDeclaration?.defaultRoute ?? {};
   const entries = [
     [
       routeId(model.provider, modelKey),

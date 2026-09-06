@@ -430,6 +430,7 @@ export interface ModelMetadata {
   quality: ModelQuality;
   qualityTier: ModelQualityTier;
   bestFor: string[];
+  pickerRecommended?: boolean;
   variantPartner?: string;
   released?: string;
   deprecated?: boolean;
@@ -1731,6 +1732,12 @@ export function canAccessModelForSubscriptionTier(
 
 export function listCanonicalModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models);
+}
+
+export function listPickerRecommendedModelIds(): string[] {
+  return Object.values(modelsCatalog.models)
+    .filter((model) => model.pickerRecommended === true)
+    .map((model) => model.id);
 }
 
 export function getModels(options: ModelQueryOptions = {}): ModelMetadata[] {

@@ -6,6 +6,7 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   listCanonicalModels,
+  listPickerRecommendedModelIds,
 } from '@agiworkforce/types';
 import {
   MODEL_PICKER_FAVOURITES_LIMIT,
@@ -76,6 +77,24 @@ describe('buildModelPickerShortList', () => {
     const shortList = build();
     expect(shortList.totalCount).toBe(familySources.length);
     expect(shortList.recommended.map((row) => row.id)).not.toContain(autoSource.id);
+  });
+
+  it('lets the catalog own the recommended rows when it flags any admitted model', () => {
+    const flagged = listPickerRecommendedModelIds();
+    expect(flagged.length).toBeGreaterThan(0);
+    const list = build({ models: [autoSource, ...familySources, ...flagged.map(toSource)] });
+    expect(list.recommended.map((row) => row.id)).toEqual(flagged);
+    expect(list.recommended.every((row) => row.lock === null)).toBe(true);
+  });
+
+  it('falls back to the profile order when no flagged model is admitted', () => {
+    const flagged = new Set(listPickerRecommendedModelIds());
+    const list = build({
+      models: [autoSource, ...familySources, ...[...flagged].map(toSource)],
+      admitsModel: (modelId) => !flagged.has(modelId),
+    });
+    expect(list.recommended.length).toBeGreaterThan(0);
+    expect(list.recommended.some((row) => flagged.has(row.id))).toBe(false);
   });
 
   it('caps recommended at the stated limit and never repeats a family', () => {

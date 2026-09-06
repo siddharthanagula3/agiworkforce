@@ -865,6 +865,12 @@
           }
         }
       ]
+    },
+    "openrouter-free": {
+      "defaultRoute": {
+        "harnessId": "open-router/chat-completions-managed",
+        "commercialStatus": "authorized_marketplace"
+      }
     }
   }
 }
