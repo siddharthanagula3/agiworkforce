@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.58.2"
   },
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.8"
   }
 }

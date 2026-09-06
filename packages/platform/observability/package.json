@@ -15,7 +15,8 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
+  "dependencies": {},
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.8"
   }
 }

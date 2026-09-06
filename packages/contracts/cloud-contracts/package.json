@@ -27,9 +27,9 @@
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
-    "zod": "^4.5.4"
+    "zod": "^4.4.2"
   },
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.8"
   }
 }

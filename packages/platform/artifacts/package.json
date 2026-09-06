@@ -18,10 +18,10 @@
   "dependencies": {
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/types": "workspace:*",
-    "uuid": "^14.0.2",
-    "zustand": "^5.0.15"
+    "uuid": "^14.0.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.8"
   }
 }
