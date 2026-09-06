@@ -282,7 +282,6 @@ const BRAND_HOST_SLUGS: Readonly<Record<string, string>> = {
   'milvus.io': 'milvus',
   'neo4j.com': 'neo4j',
   'langchain.com': 'langchain',
-  'openrouter.ai': 'openrouter',
   'perplexity.ai': 'perplexity',
   'mistral.ai': 'mistralai',
   'deepgram.com': 'deepgram',

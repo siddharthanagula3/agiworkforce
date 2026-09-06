@@ -16,13 +16,13 @@ connector is connectable.
 
 ## How a directory entry connects
 
-| `connectable` mode | What the browser does                                                                                                    | What the deployment needs                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `connect`, open    | `POST /api/connectors` lists the server's tools and saves a custom connector row                                         | Nothing                                                                      |
-| `connect`, OAuth   | `POST /api/connectors` answers 409 with `oauthStartPath`; the start route runs discovery and dynamic client registration | `CONNECTOR_OAUTH_REDIRECT_BASE_URL`, `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` |
-| `api-key-form`     | `GET /api/connectors/<id>/credentials` says which header the key travels in; `POST` tests `tools/list` before saving     | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY`                                      |
-| `needs-setup`      | Nothing; the entry names the missing variables                                                                           | See the checklist below                                                      |
-| `desktop-and-cli`  | Nothing on the web                                                                                                       | Not applicable                                                               |
+| `connectable` mode | What the browser does                                                                                                           | What the deployment needs                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `connect`, open    | `POST /api/connectors` lists the server's tools and saves a custom connector row                                                | Nothing                                                                      |
+| `connect`, OAuth   | `POST /api/connectors` answers 409 with `oauthStartPath`; the start route runs discovery and dynamic client registration        | `CONNECTOR_OAUTH_REDIRECT_BASE_URL`, `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` |
+| `api-key-form`     | `GET /api/connectors/<id>/credentials` says which header the key travels in; `POST` tests the MCP tools list call before saving | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY`                                      |
+| `needs-setup`      | Nothing; the entry names the missing variables                                                                                  | See the checklist below                                                      |
+| `desktop-and-cli`  | Nothing on the web                                                                                                              | Not applicable                                                               |
 
 Registry entries are keyed by their registry name (for example
 `ch.cowork24/booking`). A directory OAuth grant is stored under that name and
