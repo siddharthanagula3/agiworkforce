@@ -41,12 +41,13 @@
  * @packageDocumentation
  */
 
-export type PluginPublisherKind = 'first-party' | 'third-party';
+export type PluginPublisherKind = 'first-party' | 'third-party' | 'partner';
 
 /** Every valid {@link PluginPublisherKind}. */
 export const PLUGIN_PUBLISHER_KINDS: readonly PluginPublisherKind[] = [
   'first-party',
   'third-party',
+  'partner',
 ] as const;
 
 export interface PluginPublisher {

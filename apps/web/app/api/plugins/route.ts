@@ -5,30 +5,46 @@ import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { loadPluginDirectory } from '@/features/plugins/server/directory/catalog';
 import {
-  PLUGIN_REGISTRY_DEFAULT_LIMIT,
-  PLUGIN_REGISTRY_MAX_LIMIT,
-  listPluginRegistryEntries,
-} from '@/lib/services/plugin-registry-service';
-import { countPluginInstallations } from '@/lib/services/plugin-installation-service';
-import { getManagedSkillPluginOwners } from '@/lib/services/skill-catalog-service';
-import {
-  PLUGIN_REGISTRY_STATUSES,
-  PLUGIN_SOURCE_KINDS,
-  type PluginRegistryListResponse,
-} from '@agiworkforce/types';
+  PLUGIN_DIRECTORY_MAX_CURSOR_CHARS,
+  PLUGIN_DIRECTORY_MAX_LIMIT,
+  PLUGIN_DIRECTORY_MAX_SEARCH_CHARS,
+  PLUGIN_SORTS,
+  PLUGIN_SOURCE_FACETS,
+  PLUGIN_WORKS_WITH,
+} from '@/features/plugins/server/directory/constants';
+import { queryPluginDirectory } from '@/features/plugins/server/directory/query';
+import type { PluginDirectoryListResponse } from '@/features/plugins/server/directory/types';
+import { PLUGIN_REGISTRY_STATUSES, type PluginRegistryStatus } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const CURSOR_PATTERN = new RegExp(`^\\d{1,${PLUGIN_DIRECTORY_MAX_CURSOR_CHARS}}$`);
+const CATEGORY_MAX_CHARS = 100;
+const OFFSET_MAX = 10_000;
+const BooleanParam = z.enum(['true', 'false']).transform((value) => value === 'true');
+
 const QuerySchema = z.object({
-  category: z.string().trim().min(1).max(100).optional(),
+  search: z.string().trim().min(1).max(PLUGIN_DIRECTORY_MAX_SEARCH_CHARS).optional(),
+  verified: BooleanParam.optional(),
+  worksWith: z.enum(PLUGIN_WORKS_WITH).optional(),
+  source: z.enum(PLUGIN_SOURCE_FACETS).optional(),
+  category: z.string().trim().min(1).max(CATEGORY_MAX_CHARS).optional(),
   status: z.enum(PLUGIN_REGISTRY_STATUSES as unknown as [string, ...string[]]).optional(),
-  source: z.enum(PLUGIN_SOURCE_KINDS as unknown as [string, ...string[]]).optional(),
-  limit: z.coerce.number().int().min(1).max(PLUGIN_REGISTRY_MAX_LIMIT).optional(),
-  offset: z.coerce.number().int().min(0).max(10_000).optional(),
+  sort: z.enum(PLUGIN_SORTS).optional(),
+  limit: z.coerce.number().int().min(1).max(PLUGIN_DIRECTORY_MAX_LIMIT).optional(),
+  cursor: z.string().regex(CURSOR_PATTERN).optional(),
+  offset: z.coerce.number().int().min(0).max(OFFSET_MAX).optional(),
 });
+
+function readQuery(url: URL) {
+  const raw = Object.fromEntries(
+    Object.keys(QuerySchema.shape).map((key) => [key, url.searchParams.get(key) ?? undefined]),
+  );
+  return QuerySchema.safeParse(raw);
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const preflight = handleCorsPreflightRequest(request);
@@ -38,21 +54,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (rateLimited) return rateLimited;
 
   const headers = { ...getCorsHeaders(request), ...getSecurityHeaders() };
-  const url = new URL(request.url);
-  const parsed = QuerySchema.safeParse({
-    category: url.searchParams.get('category') ?? undefined,
-    status: url.searchParams.get('status') ?? undefined,
-    source: url.searchParams.get('source') ?? undefined,
-    limit: url.searchParams.get('limit') ?? undefined,
-    offset: url.searchParams.get('offset') ?? undefined,
-  });
+  const parsed = readQuery(new URL(request.url));
 
   if (!parsed.success) {
     return NextResponse.json(
       {
         error: {
           code: 'INVALID_QUERY',
-          message: 'Invalid plugin registry query',
+          message: 'Invalid plugin directory query',
           details: parsed.error.flatten(),
         },
       },
@@ -61,29 +70,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const db = getNeonDb();
-    const [{ entries, total }, installCounts, skillOwners] = await Promise.all([
-      listPluginRegistryEntries(db, {
-        category: parsed.data.category,
-        status: parsed.data.status as PluginRegistryListResponse['entries'][number]['status'],
-        source: parsed.data.source as PluginRegistryListResponse['entries'][number]['source'],
-        limit: parsed.data.limit ?? PLUGIN_REGISTRY_DEFAULT_LIMIT,
-        offset: parsed.data.offset ?? 0,
-      }),
-      countPluginInstallations(db),
-      getManagedSkillPluginOwners(),
-    ]);
-
-    const body: PluginRegistryListResponse = {
-      entries: entries.map((entry) => ({
-        ...entry,
-        installCount: installCounts.get(entry.id) ?? 0,
-        skillsRequireInstall: entry.declaredSkills.some(
-          (skill) => skillOwners.get(skill) === entry.id,
-        ),
-      })),
-      total,
-    };
+    const entries = await loadPluginDirectory();
+    const body: PluginDirectoryListResponse = queryPluginDirectory(entries, {
+      ...parsed.data,
+      status: parsed.data.status as PluginRegistryStatus | undefined,
+    });
     return NextResponse.json(body, {
       status: 200,
       headers: {
@@ -92,7 +83,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    logger.error({ error }, 'Plugin registry list failed');
+    logger.error({ error }, 'Plugin directory list failed');
     return NextResponse.json(
       { error: { code: 'PLUGIN_REGISTRY_UNAVAILABLE', message: 'Plugin registry unavailable' } },
       { status: 503, headers },

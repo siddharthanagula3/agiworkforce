@@ -117,7 +117,14 @@ beforeEach(() => {
 
 describe('GET /api/plugins/marketplaces', () => {
   it('lists the caller’s registered marketplace sources', async () => {
-    listMarketplaceSourcesMock.mockResolvedValue([SOURCE]);
+    listMarketplaceSourcesMock.mockResolvedValue([
+      SOURCE,
+      {
+        ...SOURCE,
+        id: 'shadow',
+        repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
+      },
+    ]);
     const response = await GET(get());
     expect(response.status).toBe(200);
     expect((await response.json()).sources).toEqual([SOURCE]);
@@ -228,7 +235,28 @@ describe('POST /api/plugins/marketplaces/[id]/refresh', () => {
 });
 
 describe('GET /api/plugins/marketplaces/entries', () => {
+  it('hides the entries of a directory shadow source', async () => {
+    listMarketplaceSourcesMock.mockResolvedValue([
+      SOURCE,
+      {
+        ...SOURCE,
+        id: '99999999-9999-4999-8999-999999999999',
+        repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
+      },
+    ]);
+    listMarketplaceEntriesForUserMock.mockResolvedValue([
+      { id: 'own', sourceId: SOURCE.id },
+      { id: 'shadow', sourceId: '99999999-9999-4999-8999-999999999999' },
+    ]);
+    const response = await getEntries(get('/api/plugins/marketplaces/entries'));
+    expect(response.status).toBe(200);
+    expect((await response.json()).entries.map((entry: { id: string }) => entry.id)).toEqual([
+      'own',
+    ]);
+  });
+
   it('lists every entry across the caller’s sources', async () => {
+    listMarketplaceSourcesMock.mockResolvedValue([SOURCE]);
     listMarketplaceEntriesForUserMock.mockResolvedValue([]);
     const response = await getEntries(get('/api/plugins/marketplaces/entries'));
     expect(response.status).toBe(200);

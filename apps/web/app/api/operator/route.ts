@@ -24,8 +24,23 @@ import {
 } from '@/features/admin/services/operator-metrics';
 import { readOperatorCosts } from '@/features/admin/services/operator-cost-metrics';
 import { getRequestIdentity } from '@/lib/server/identity';
+import {
+  ingestBudgetForMaxDuration,
+  ingestConnectorDirectory,
+} from '@/lib/connectors/directory/ingest';
+import {
+  ingestBudgetForMaxDuration as pluginIngestBudgetForMaxDuration,
+  ingestPluginDirectory,
+} from '@/features/plugins/server/directory/ingest';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 800;
+
+const CONNECTOR_DIRECTORY_INGEST_BUDGET = ingestBudgetForMaxDuration(maxDuration);
+const CONNECTOR_DIRECTORY_REBUILD_MODE = 'rebuild';
+const PLUGIN_DIRECTORY_INGEST_BUDGET = pluginIngestBudgetForMaxDuration(maxDuration);
+const PLUGIN_DIRECTORY_REBUILD_MODE = 'rebuild';
+const PLUGIN_DIRECTORY_REFRESH_ACTION = 'refresh-plugin-directory';
 
 function errorResponse(err: AppError): NextResponse {
   return NextResponse.json(
@@ -122,6 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       amountCents?: number;
       reason?: string;
       confirm?: string;
+      mode?: string;
     }>(request);
 
     // A preview mutates nothing, so it answers before any confirmation gate.
@@ -183,6 +199,52 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       });
       return NextResponse.json(result);
+    }
+
+    if (body?.action === 'refresh-connector-directory') {
+      const summary = await ingestConnectorDirectory({
+        budget: CONNECTOR_DIRECTORY_INGEST_BUDGET,
+        rebuild: body.mode === CONNECTOR_DIRECTORY_REBUILD_MODE,
+      });
+      await logSecurityEvent({
+        userId: actorId,
+        eventType: 'admin_action',
+        severity: 'medium',
+        endpoint: '/api/operator',
+        details: {
+          action: 'refresh-connector-directory',
+          mode: summary.mode,
+          entries_upserted: summary.entriesUpserted,
+          entries_removed: summary.entriesRemoved,
+          total_records: summary.totalRecords,
+          bootstrap_complete: summary.bootstrapComplete,
+          duration_ms: summary.durationMs,
+        },
+      });
+      return NextResponse.json(summary);
+    }
+
+    if (body?.action === PLUGIN_DIRECTORY_REFRESH_ACTION) {
+      const summary = await ingestPluginDirectory({
+        budget: PLUGIN_DIRECTORY_INGEST_BUDGET,
+        rebuild: body.mode === PLUGIN_DIRECTORY_REBUILD_MODE,
+      });
+      await logSecurityEvent({
+        userId: actorId,
+        eventType: 'admin_action',
+        severity: 'medium',
+        endpoint: '/api/operator',
+        details: {
+          action: PLUGIN_DIRECTORY_REFRESH_ACTION,
+          manifest_plugins: summary.manifestPlugins,
+          public_cards: summary.publicCards,
+          inspections_run: summary.inspectionsRun,
+          inspections_pending: summary.inspectionsPending,
+          total_records: summary.totalRecords,
+          duration_ms: summary.durationMs,
+        },
+      });
+      return NextResponse.json(summary);
     }
 
     if (body?.action !== 'reset-usage') {

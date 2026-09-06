@@ -188,6 +188,7 @@ import {
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
+import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble } from './capability-preamble';
@@ -526,8 +527,10 @@ export async function resolveManagedSkillCatalogWithUserFallback(
 ): Promise<readonly Skill[]> {
   if (managedCatalog.some((skill) => skill.name === requestedSkillName)) return managedCatalog;
   const userSkill = await findUserSkillByName(params.db, params.userId, requestedSkillName);
-  if (!userSkill) return managedCatalog;
-  return [...managedCatalog, toManagedSkillFromUserSkill(userSkill)];
+  if (userSkill) return [...managedCatalog, toManagedSkillFromUserSkill(userSkill)];
+  const directorySkills = await listInstalledDirectorySkills(params.db, params.userId);
+  if (!directorySkills.some((skill) => skill.name === requestedSkillName)) return managedCatalog;
+  return [...managedCatalog, ...directorySkills];
 }
 
 export function applyManagedSkillSelection(
