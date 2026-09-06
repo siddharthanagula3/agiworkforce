@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   Button,
   Dialog,
@@ -10,7 +10,7 @@ import {
   DialogTitle,
   Label,
 } from '@agiworkforce/ui';
-import { MessageSquareText } from 'lucide-react';
+import { Camera, ImagePlus, MessageSquareText, X } from 'lucide-react';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { AGI_WORK_FEEDBACK_LABEL, AGI_WORK_LABEL } from '../../lib/agi-work';
@@ -32,6 +32,42 @@ interface ComposerFeedbackDialogProps {
   finishReason?: 'refusal' | 'content_filter' | null;
   variant?: FeedbackVariant;
   triggerClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+}
+
+const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
+const SCREENSHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const CAPTURE_SETTLE_MS = 350;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read the image'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function captureScreenToDataUrl(): Promise<string> {
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  try {
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    await video.play();
+    await new Promise((resolve) => window.setTimeout(resolve, CAPTURE_SETTLE_MS));
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not draw the capture');
+    context.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/png');
+  } finally {
+    for (const track of stream.getTracks()) track.stop();
+  }
 }
 
 export function ComposerFeedbackDialog({
@@ -41,9 +77,23 @@ export function ComposerFeedbackDialog({
   finishReason,
   variant = 'general',
   triggerClassName,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: ComposerFeedbackDialogProps) {
   const detailsId = useId();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [captureState, setCaptureState] = useState<'idle' | 'capturing'>('idle');
+  const canCaptureScreen =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
   const [kind, setKind] = useState<FeedbackKind>('general');
   const [message, setMessage] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
@@ -56,6 +106,41 @@ export function ComposerFeedbackDialog({
     if (nextOpen) {
       setSubmitState('idle');
       setErrorMessage(null);
+    }
+  };
+
+  const attachFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!SCREENSHOT_TYPES.includes(file.type)) {
+      setErrorMessage('Attach a PNG, JPEG or WebP image.');
+      return;
+    }
+    if (file.size > MAX_SCREENSHOT_BYTES) {
+      setErrorMessage('Screenshots are limited to 4 MiB.');
+      return;
+    }
+    try {
+      setScreenshot(await readFileAsDataUrl(file));
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(toUserMessage(error, 'Could not read the image.'));
+    }
+  };
+
+  const captureScreen = async () => {
+    if (captureState === 'capturing') return;
+    setCaptureState('capturing');
+    try {
+      setScreenshot(await captureScreenToDataUrl());
+      setErrorMessage(null);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'NotAllowedError')) {
+        setErrorMessage(toUserMessage(error, 'Could not capture the screen.'));
+      }
+    } finally {
+      setCaptureState('idle');
     }
   };
 
@@ -97,6 +182,7 @@ export function ComposerFeedbackDialog({
             ...((isSafetyAppeal || isTaskFeedback) && messageId ? { message_id: messageId } : {}),
             ...(isSafetyAppeal && finishReason ? { finish_reason: finishReason } : {}),
           },
+          ...(screenshot && !isSafetyAppeal ? { screenshot: { data_url: screenshot } } : {}),
         }),
       });
 
@@ -114,6 +200,7 @@ export function ComposerFeedbackDialog({
 
       setSubmitState('success');
       setMessage('');
+      setScreenshot(null);
     } catch (error) {
       setSubmitState('error');
       setErrorMessage(toUserMessage(error, 'Could not send feedback. Please try again.'));
@@ -122,7 +209,7 @@ export function ComposerFeedbackDialog({
 
   return (
     <>
-      {isTaskFeedback ? (
+      {hideTrigger ? null : isTaskFeedback ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -208,7 +295,63 @@ export function ComposerFeedbackDialog({
                   We attach only technical identifiers for this refusal. Your prompt and response
                   are not included.
                 </div>
-              ) : null}
+              ) : (
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-foreground">Screenshot</span>
+                  {screenshot ? (
+                    <div className="relative overflow-hidden rounded-xl border border-border">
+                      <img
+                        src={screenshot}
+                        alt="Screenshot attached to this feedback"
+                        className="block max-h-48 w-full object-cover object-top"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setScreenshot(null)}
+                        aria-label="Remove screenshot"
+                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {canCaptureScreen ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void captureScreen()}
+                          isLoading={captureState === 'capturing'}
+                        >
+                          <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          Capture screen
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <ImagePlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        Upload image
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={SCREENSHOT_TYPES.join(',')}
+                        className="sr-only"
+                        onChange={(event) => void attachFile(event)}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Optional. A screenshot goes to the AGI team with your note; blur anything
+                    private first.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor={detailsId}>Details</Label>

@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   shortcutLabel,
 } from '@agiworkforce/ui';
+import { MessageSquareText } from 'lucide-react';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 
@@ -27,6 +28,7 @@ export interface AccountMenuItemsProps {
   onManageWorkspace: () => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
+  onOpenFeedback: () => void;
   onOpenKeyboardShortcuts: () => void;
   showUpgrade: boolean;
   onUpgrade: () => void;
@@ -51,6 +53,7 @@ export function AccountMenuItems({
   onManageWorkspace,
   onOpenSettings,
   onOpenHelp,
+  onOpenFeedback,
   onOpenKeyboardShortcuts,
   showUpgrade,
   onUpgrade,
@@ -78,6 +81,10 @@ export function AccountMenuItems({
       <DropdownMenuItem onClick={onOpenHelp}>
         <HelpCircle className="mr-2 h-4 w-4" />
         {t('common:navGetHelp')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={onOpenFeedback}>
+        <MessageSquareText className="mr-2 h-4 w-4" />
+        {t('common:navSendFeedback')}
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenKeyboardShortcuts}>
         <Keyboard className="mr-2 h-4 w-4" />
