@@ -247,7 +247,7 @@ describe('WebChatPage highlightMessage query parameter (F15)', () => {
   beforeEach(() => {
     mocks.highlightParam = null;
     mocks.routerReplace.mockClear();
-    Element.prototype.scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('{}', { status: 200 })),
@@ -270,7 +270,7 @@ describe('WebChatPage highlightMessage query parameter (F15)', () => {
           .outline,
       ).toBe('2px solid var(--chat-accent-primary)'),
     );
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
   it('keeps rendering the conversation when highlightMessage carries selector metacharacters', async () => {
