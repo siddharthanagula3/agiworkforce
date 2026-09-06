@@ -289,16 +289,30 @@ jobs:
           echo "Deployed $deployment_url"
 
       # `/api/health` imports no auth code, so it stayed green through an outage
-      # that 500'd every authenticated route. This probes the promoted
-      # deployment's own URL: health plus two routes whose module graph reaches
-      # lib/api-auth. It does NOT probe the production domain, so an alias or
-      # promotion failure that leaves the domain on an older build is still
-      # outside this gate.
+      # that 500'd every authenticated route. This probes health plus two routes
+      # whose module graph reaches lib/api-auth.
+      #
+      # Deliberately the public apex, not `steps.deploy.outputs.url`. The
+      # project's SSO protection is set to `all_except_custom_domains`, so every
+      # `*.vercel.app` deployment URL answers 401 to an unauthenticated probe and
+      # the gate could never pass against one: on 2026-09-06 it failed all nine
+      # attempts on a healthy build and rolled a good deploy back. Custom domains
+      # are exempt, and the apex is what real users get.
+      #
+      # Probing the apex would otherwise accept an older build still aliased
+      # there, so the deployed SHA is asserted too. `--await-promotion` makes a
+      # mismatch retryable for this window only: the alias moves a moment after
+      # `vercel deploy --prod` returns, and without it a brief lag reads as a
+      # failed promotion and reverts a good build. The scheduled drift alarm
+      # above passes no such flag and still fails on the first mismatch.
       - name: Verify the production serving path
         id: verify
         env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
-        run: node scripts/verify-deployment.mjs "$DEPLOYMENT_URL"
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL || 'https://agiworkforce.com' }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          node scripts/verify-deployment.mjs --await-promotion
+          "$PRODUCTION_WEB_URL" "$HEAD_SHA"
 
       - name: Record the migration state this deployment serves
         env:

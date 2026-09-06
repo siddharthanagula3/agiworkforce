@@ -209,6 +209,44 @@ test('drift is reported on the first attempt instead of being retried away', asy
   assert.equal(versionHits, 1);
 });
 
+test('a promotion still propagating is retried instead of failing the deploy gate', async (t) => {
+  let versionHits = 0;
+  const server = createServer((request, response) => {
+    versionHits += 1;
+    response.statusCode = 200;
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ commit: versionHits < 3 ? OLDER_SHA : HEAD_SHA }));
+  });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected TCP address');
+
+  const result = await verifyDeployedCommit(`http://127.0.0.1:${address.port}`, HEAD_SHA, {
+    attempts: 5,
+    retryDelayMs: 1,
+    awaitPromotion: true,
+  });
+
+  assert.equal(result.deployedCommit, HEAD_SHA);
+  assert.equal(versionHits, 3);
+});
+
+test('awaiting a promotion still gives up and names both commits when it never lands', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [200, { commit: OLDER_SHA, environment: 'production' }],
+  });
+
+  await assert.rejects(
+    verifyDeployedCommit(baseUrl, HEAD_SHA, {
+      attempts: 2,
+      retryDelayMs: 1,
+      awaitPromotion: true,
+    }),
+    new RegExp(`serving commit ${OLDER_SHA}, but main is at ${HEAD_SHA}`),
+  );
+});
+
 test('an expected commit that is not a git SHA is rejected before any request', async () => {
   await assert.rejects(
     verifyDeployedCommit('https://example.com', 'main', { attempts: 1 }),
