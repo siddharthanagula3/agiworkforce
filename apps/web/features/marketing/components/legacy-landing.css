@@ -2568,6 +2568,11 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+[data-design='agi'] .agi-fl-announce-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 [data-design='agi'] .agi-fl-announce-arrow {
   color: var(--agi-ink-faint);
 }
