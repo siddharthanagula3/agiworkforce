@@ -305,7 +305,7 @@ requireIncludes('.github/workflows/release-cli.yml', 'group: release-cli-${{ git
 requireIncludes('.github/workflows/release-cli.yml', 'cancel-in-progress: false');
 requireIncludes(
   '.github/workflows/release-cli.yml',
-  'softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3',
+  'softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3',
 );
 requireIncludes('.github/workflows/release-cli.yml', 'generate_release_notes: true');
 requireNotIncludes('.github/workflows/release-cli.yml', 'body_path: CHANGELOG.md');
@@ -551,7 +551,7 @@ requireIncludes('.github/workflows/release-vscode-extension.yml', 'name: vscode-
 requireIncludes('.github/workflows/release-vscode-extension.yml', 'id-token: write');
 requireIncludes(
   '.github/workflows/release-vscode-extension.yml',
-  'azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0',
+  'azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2',
 );
 requireIncludes('.github/workflows/release-vscode-extension.yml', '--azure-credential');
 requireIncludes(
