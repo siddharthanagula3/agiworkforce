@@ -26,7 +26,12 @@ import {
 import { RELEASES } from '@/lib/changelog-entries';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import {
+  approximateCount,
+  DESKTOP_LOCAL_RUNTIMES,
+  MARKETING,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 const LATEST_ENTRY_COUNT = 3;
@@ -56,7 +61,7 @@ export function MarketingLanding() {
           visual={<MobileHeroVisual />}
           announcement={{
             tag: 'New',
-            label: `Model catalogue: ${MARKETING.models.display} models, ${BYOK_PROVIDER_IDS.length} providers on your key, one selector`,
+            label: `Model catalogue: ${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers`,
             href: '/providers',
           }}
         />
@@ -66,10 +71,16 @@ export function MarketingLanding() {
         <ProofRow
           label="Product facts"
           facts={[
-            { value: MARKETING.models.display, label: 'models in the catalogue' },
-            { value: `${BYOK_PROVIDER_IDS.length}`, label: 'providers that take your key' },
-            { value: `${DESKTOP_LOCAL_RUNTIMES.names.length}`, label: 'local runtimes on Desktop' },
-            { value: MARKETING.surfaces.display, label: 'surfaces, one account' },
+            { value: approximateCount(MARKETING.models.count), label: 'models in the catalogue' },
+            {
+              value: approximateCount(BYOK_PROVIDER_IDS.length),
+              label: 'providers that take your key',
+            },
+            {
+              value: approximateCount(DESKTOP_LOCAL_RUNTIMES.names.length),
+              label: 'local runtimes on Desktop',
+            },
+            { value: approximateCount(MARKETING.surfaces.count), label: 'surfaces, one account' },
           ]}
         />
 

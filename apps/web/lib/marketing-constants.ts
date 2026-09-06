@@ -176,3 +176,12 @@ export const MARKETING = {
   tagline:
     'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;
+
+const HUNDRED = 100;
+const TEN = 10;
+
+export function approximateCount(count: number): string {
+  if (count >= HUNDRED) return `${Math.floor(count / HUNDRED) * HUNDRED}+`;
+  if (count >= TEN) return `${Math.floor(count / TEN) * TEN}+`;
+  return `${Math.max(count - 1, 1)}+`;
+}
