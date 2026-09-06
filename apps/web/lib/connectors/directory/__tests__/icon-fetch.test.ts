@@ -75,7 +75,14 @@ function assertedUrls(): string[] {
 function recordedChain(name: string): readonly RecordedHop[] {
   const chain = chains.chains.find((candidate) => candidate.name === name);
   if (!chain) throw new Error(`missing recorded chain ${name}`);
-  return chain.hops;
+  return chain.hops.map((hop) => ({
+    ...hop,
+    headers: Object.fromEntries(
+      Object.entries(hop.headers).filter(
+        (pair): pair is [string, string] => typeof pair[1] === 'string',
+      ),
+    ),
+  }));
 }
 
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71]);
