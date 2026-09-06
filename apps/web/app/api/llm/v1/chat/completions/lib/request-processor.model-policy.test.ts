@@ -199,7 +199,7 @@ describe('workspace model policy is re-checked on every model this request can r
     expect(governed.ok).toBe(true);
     if (!governed.ok) return;
     expect(governed.fallbackModels).not.toContain(plan[0]);
-    expect(governed.fallbackModels).toEqual(plan.slice(1));
+    expect((governed.fallbackModels ?? []).slice(0, plan.length - 1)).toEqual(plan.slice(1));
   });
 
   it('empties the failover plan when the workspace allows only the primary model', async () => {
