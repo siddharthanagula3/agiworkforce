@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { TERMS_GATE_STORAGE_KEY } from '@/app/signup/TermsGate';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
