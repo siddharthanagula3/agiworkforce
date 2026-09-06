@@ -23,6 +23,8 @@ export interface FeedbackRow {
   subject: string | null;
   message: string;
   createdAt: string;
+  pagePath: string | null;
+  screenshotKey: string | null;
 }
 
 export interface UserRow {
@@ -147,8 +149,9 @@ export async function readRecentFeedback(limit = 50): Promise<FeedbackRow[]> {
     subject: string | null;
     message: string;
     created_at: string;
+    metadata: Record<string, unknown> | null;
   }>(
-    `select f.id, f.user_id, p.email, f.subject, f.message, f.created_at
+    `select f.id, f.user_id, p.email, f.subject, f.message, f.created_at, f.metadata
        from public.feedback f
        left join public.profiles p on p.id = f.user_id
       order by f.created_at desc
@@ -162,6 +165,9 @@ export async function readRecentFeedback(limit = 50): Promise<FeedbackRow[]> {
     subject: row.subject,
     message: row.message,
     createdAt: new Date(row.created_at).toISOString(),
+    pagePath: typeof row.metadata?.['page_path'] === 'string' ? row.metadata['page_path'] : null,
+    screenshotKey:
+      typeof row.metadata?.['screenshot_key'] === 'string' ? row.metadata['screenshot_key'] : null,
   }));
 }
 

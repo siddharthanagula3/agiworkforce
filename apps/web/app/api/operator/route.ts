@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getPrivateObject } from '@/lib/server/object-storage';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -39,6 +40,8 @@ function errorResponse(err: AppError): NextResponse {
  * uses. Both the read and the write path go through here, so there is one place
  * to audit rather than two that can drift.
  */
+const FEEDBACK_SCREENSHOT_PREFIX = 'feedback';
+
 async function requirePlatformAdmin(): Promise<string> {
   const { subject: userId } = await getRequestIdentity();
   if (!userId) throw createError.unauthorized('Sign in required.');
@@ -64,6 +67,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (view === 'feedback') {
       return NextResponse.json({ feedback: await readRecentFeedback(100) });
+    }
+    if (view === 'feedback-screenshot') {
+      const key = request.nextUrl.searchParams.get('key') ?? '';
+      if (!key.startsWith(`${FEEDBACK_SCREENSHOT_PREFIX}/`) || key.includes('..')) {
+        return NextResponse.json({ error: 'unknown screenshot' }, { status: 404 });
+      }
+      const stored = await getPrivateObject(key);
+      if (!stored) return NextResponse.json({ error: 'unknown screenshot' }, { status: 404 });
+      return new NextResponse(new Uint8Array(stored.data), {
+        headers: {
+          'Content-Type': stored.contentType ?? 'application/octet-stream',
+          'Cache-Control': 'private, no-store',
+        },
+      });
     }
     if (view === 'users') {
       return NextResponse.json({ users: await readRecentUsers(100) });

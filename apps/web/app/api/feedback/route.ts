@@ -8,8 +8,37 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { redactSecrets } from '@/lib/support/handoff/transcript';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
+import { secureFilenameSegment } from '@/lib/secure-random';
 
 const MAX_LOGS_CHARS = 20_000;
+const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
+const MAX_SCREENSHOT_DATA_URL_CHARS = Math.ceil((MAX_SCREENSHOT_BYTES * 4) / 3) + 64;
+const SCREENSHOT_DATA_URL = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/u;
+const SCREENSHOT_KEY_PREFIX = 'feedback';
+
+async function storeScreenshot(dataUrl: string, userId: string | null): Promise<string | null> {
+  const match = SCREENSHOT_DATA_URL.exec(dataUrl);
+  if (!match) throw createError.badRequest('Screenshot must be a PNG, JPEG or WebP data URL');
+  const [, format, base64] = match as unknown as [string, string, string];
+  const data = Buffer.from(base64, 'base64');
+  if (data.byteLength === 0 || data.byteLength > MAX_SCREENSHOT_BYTES) {
+    throw createError.badRequest('Screenshot must be under 4 MiB');
+  }
+  if (!isPrivateObjectStorageConfigured()) {
+    logger.warn('feedback screenshot dropped: private object storage is not configured');
+    return null;
+  }
+  const extension = format === 'jpeg' ? 'jpg' : format;
+  const key = `${SCREENSHOT_KEY_PREFIX}/${userId ?? 'anonymous'}/${Date.now()}_${secureFilenameSegment()}.${extension}`;
+  await putPrivateObject({
+    key,
+    data,
+    contentType: `image/${format}`,
+    contentLength: data.byteLength,
+  });
+  return key;
+}
 
 const FeedbackSchema = z.object({
   subject: z.string().trim().min(1).max(200),
@@ -79,6 +108,7 @@ const FeedbackSchema = z.object({
       }
     }),
   logs: z.string().max(MAX_LOGS_CHARS).nullish(),
+  screenshot: z.object({ data_url: z.string().max(MAX_SCREENSHOT_DATA_URL_CHARS) }).nullish(),
 });
 
 async function handleSubmitFeedback(request: NextRequest) {
@@ -93,13 +123,16 @@ async function handleSubmitFeedback(request: NextRequest) {
   if (!parsed.success) {
     throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
   }
-  const { subject, message, user_id: claimedUserId, metadata, logs } = parsed.data;
+  const { subject, message, user_id: claimedUserId, metadata, logs, screenshot } = parsed.data;
 
   const safeSubject = redactSecrets(subject);
   const safeMessage = redactSecrets(message);
   const safeLogs = typeof logs === 'string' ? redactSecrets(logs).slice(0, MAX_LOGS_CHARS) : null;
 
   const { subject: userId } = await getRequestIdentity();
+  const screenshotKey = screenshot
+    ? await storeScreenshot(screenshot.data_url, userId ?? null)
+    : null;
 
   const db = getNeonDb();
   try {
@@ -124,6 +157,7 @@ async function handleSubmitFeedback(request: NextRequest) {
           ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
           ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
           ...(safeLogs ? { logs: safeLogs } : {}),
+          ...(screenshotKey ? { screenshot_key: screenshotKey } : {}),
         }),
       ],
     );
