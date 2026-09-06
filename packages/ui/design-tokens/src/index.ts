@@ -155,12 +155,19 @@ export const agiRadii = {
  * a literal CSS block by `cssVarsToString` for hosts that cannot import the
  * stylesheet, none of which run next/font, so a var(--font-*) here would name
  * nothing. Keep the families in step with chat.css's fallbacks.
+ *
+ * The emoji faces sit last in every stack, after the generic family, so they
+ * are consulted only for a codepoint no text face covers. A conversation title
+ * carrying an emoji drew a missing-glyph box while the same character rendered
+ * in the message body.
  */
+const EMOJI_FACES = "'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'";
+
 export const agiTypography = {
-  sans: "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
-  serif: "'Newsreader', Georgia, 'Times New Roman', serif",
-  display: "'Newsreader', Georgia, 'Times New Roman', serif",
-  mono: "'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace",
+  sans: `'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, ${EMOJI_FACES}`,
+  serif: `'Newsreader', Georgia, 'Times New Roman', serif, ${EMOJI_FACES}`,
+  display: `'Newsreader', Georgia, 'Times New Roman', serif, ${EMOJI_FACES}`,
+  mono: `'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace, ${EMOJI_FACES}`,
 } as const;
 
 /**

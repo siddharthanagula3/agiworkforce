@@ -61,7 +61,7 @@ export function useStreamingArtifactSync({
       }
       openedForRef.current = artifactId;
       artifacts.selectArtifact(artifactId);
-      if (!autoOpenDismissedRef.current) artifacts.setPanelOpen(true);
+      if (!autoOpenDismissedRef.current) artifacts.autoOpenPanel();
     }
   }, [messageId, conversationId, isStreaming, block]);
 

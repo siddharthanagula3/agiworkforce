@@ -18,14 +18,25 @@
        inherit rather than fall through to Georgia. The literal resolves instead,
        and next/font registers these faces under their real unhashed names.
        apps/desktop loads this same stylesheet with no next/font at all, so it
-       needs the literal for the same reason. */
+       needs the literal for the same reason.
+
+       The emoji faces close every stack, after the generic family, so they are
+       reached only for a codepoint no text face covers: a conversation title
+       carrying an emoji drew a missing-glyph box while the message body below
+       it rendered the same character. Keep these in step with
+       design-tokens/src/index.ts, asserted by theme-contrast.test.ts. */
     --chat-font-sans:
       var(--font-geist-sans, 'Geist'), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
-      sans-serif;
-    --chat-font-serif: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
-    --chat-font-display: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
+      sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --chat-font-serif:
+      var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif, 'Apple Color Emoji',
+      'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --chat-font-display:
+      var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif, 'Apple Color Emoji',
+      'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --chat-font-mono:
-      var(--font-jetbrains, 'JetBrains Mono'), 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+      var(--font-jetbrains, 'JetBrains Mono'), 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace,
+      'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --chat-bg: #faf9f7;
     --chat-fg: #1a1915;
     --chat-surface-base: #faf9f7;

@@ -5,6 +5,7 @@ import {
   citationGroupHref,
   citationHref,
   findCitationIndexForUrl,
+  isCitationOnlyLinkText,
   linkifyCitationMarkers,
 } from './citationMarkers';
 
@@ -125,5 +126,42 @@ describe('findCitationIndexForUrl', () => {
 
   it('still resolves a bare domain link with only a trailing slash', () => {
     expect(findCitationIndexForUrl('https://blog.google/', sources)).toBe(2);
+  });
+});
+
+describe('isCitationOnlyLinkText', () => {
+  const BARE_DOMAIN_HREF = 'https://frame.work';
+
+  it('collapses a link whose text is a single citation marker', () => {
+    expect(isCitationOnlyLinkText('[1]', citationHref(1))).toBe(true);
+  });
+
+  it('collapses a link whose text is a run of citation markers', () => {
+    expect(isCitationOnlyLinkText('[1][2]', citationGroupHref([1, 2]))).toBe(true);
+  });
+
+  it('collapses a link whose text is the bare domain it points at', () => {
+    expect(isCitationOnlyLinkText('frame.work', BARE_DOMAIN_HREF)).toBe(true);
+    expect(isCitationOnlyLinkText('www.frame.work', BARE_DOMAIN_HREF)).toBe(true);
+  });
+
+  it('collapses a link whose text is the href spelled out', () => {
+    expect(isCitationOnlyLinkText('https://frame.work/', BARE_DOMAIN_HREF)).toBe(true);
+  });
+
+  it('collapses a link with no visible text at all', () => {
+    expect(isCitationOnlyLinkText('  ', BARE_DOMAIN_HREF)).toBe(true);
+  });
+
+  it('keeps a price label that happens to link to a cited domain', () => {
+    expect(isCitationOnlyLinkText('$1,999', BARE_DOMAIN_HREF)).toBe(false);
+  });
+
+  it('keeps prose link text', () => {
+    expect(isCitationOnlyLinkText('Framework Laptop 13', BARE_DOMAIN_HREF)).toBe(false);
+  });
+
+  it('keeps a label that only contains the domain alongside other words', () => {
+    expect(isCitationOnlyLinkText('frame.work store', BARE_DOMAIN_HREF)).toBe(false);
   });
 });

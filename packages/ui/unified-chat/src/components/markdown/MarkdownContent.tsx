@@ -16,6 +16,7 @@ import {
   CITATION_GROUP_HREF_PATTERN,
   CITATION_HREF_PATTERN,
   findCitationIndexForUrl,
+  isCitationOnlyLinkText,
   linkifyCitationMarkers,
   stripTrackingParams,
 } from './citationMarkers';
@@ -203,24 +204,37 @@ function citationItemsForIndices(
   return items;
 }
 
+function citationChipItems(
+  href: string,
+  children: React.ReactNode,
+  citations: readonly MarkdownCitation[],
+): CitationItem[] {
+  const groupMatch = CITATION_GROUP_HREF_PATTERN.exec(href);
+  if (groupMatch) {
+    const indices = (groupMatch[1] ?? '').split(',').map(Number);
+    return citationItemsForIndices(indices, citations);
+  }
+  const citationMatch = CITATION_HREF_PATTERN.exec(href);
+  if (citationMatch) {
+    const index = Number(citationMatch[1]);
+    const citation = citations[index - 1];
+    return citation ? [{ index, citation }] : [];
+  }
+  if (!isCitationOnlyLinkText(reactNodeText(children), href)) return [];
+  const inlineIndex = findCitationIndexForUrl(href, citations);
+  if (inlineIndex === undefined) return [];
+  const citation = citations[inlineIndex - 1];
+  return citation ? [{ index: inlineIndex, citation }] : [];
+}
+
 function isCitationLinkElement(
   node: React.ReactNode,
   citations: readonly MarkdownCitation[],
 ): boolean {
   if (!React.isValidElement(node) || node.type !== MarkdownLink) return false;
-  const href = (node.props as { href?: unknown }).href;
-  if (typeof href !== 'string') return false;
-
-  const groupMatch = CITATION_GROUP_HREF_PATTERN.exec(href);
-  if (groupMatch) {
-    const indices = (groupMatch[1] ?? '').split(',').map(Number);
-    return citationItemsForIndices(indices, citations).length > 0;
-  }
-  const citationMatch = CITATION_HREF_PATTERN.exec(href);
-  if (citationMatch) {
-    return citations[Number(citationMatch[1]) - 1] !== undefined;
-  }
-  return findCitationIndexForUrl(href, citations) !== undefined;
+  const props = node.props as { href?: unknown; children?: React.ReactNode };
+  if (typeof props.href !== 'string') return false;
+  return citationChipItems(props.href, props.children, citations).length > 0;
 }
 
 function unwrapCitationParens(
@@ -256,25 +270,8 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
   if (typeof href !== 'string' || href.startsWith(PROTOCOL_RELATIVE_PREFIX)) {
     return <>{children}</>;
   }
-  const groupMatch = CITATION_GROUP_HREF_PATTERN.exec(href);
-  if (groupMatch) {
-    const indices = (groupMatch[1] ?? '').split(',').map(Number);
-    const items = citationItemsForIndices(indices, citations);
-    if (items.length > 0) return <CitationChip items={items} />;
-  } else {
-    const citationMatch = CITATION_HREF_PATTERN.exec(href);
-    if (citationMatch) {
-      const index = Number(citationMatch[1]);
-      const citation = citations[index - 1];
-      if (citation) return <CitationChip items={[{ index, citation }]} />;
-    } else {
-      const inlineIndex = findCitationIndexForUrl(href, citations);
-      if (inlineIndex !== undefined) {
-        const citation = citations[inlineIndex - 1];
-        if (citation) return <CitationChip items={[{ index: inlineIndex, citation }]} />;
-      }
-    }
-  }
+  const chipItems = citationChipItems(href, children, citations);
+  if (chipItems.length > 0) return <CitationChip items={chipItems} />;
   const cleanHref = stripTrackingParams(href);
   // A fragment points inside this same document - a heading link, or a
   // citation whose source went missing. Opening it in a new tab lands the
@@ -296,9 +293,75 @@ const MarkdownParagraph = ({ children }: { children?: React.ReactNode }) => {
   return <p className="mb-3 leading-relaxed">{unwrapCitationParens(children, citations)}</p>;
 };
 
-const MarkdownListItem = ({ children }: { children?: React.ReactNode }) => {
+const TASK_LIST_CLASS = 'contains-task-list';
+const TASK_LIST_ITEM_CLASS = 'task-list-item';
+const CHECKBOX_INPUT_TYPE = 'checkbox';
+
+function hasClassToken(className: unknown, token: string): boolean {
+  return typeof className === 'string' && className.split(/\s+/).includes(token);
+}
+
+/**
+ * The native disabled checkbox paints a white tick on light grey, about 1.5:1,
+ * so a completed item read as an open box. The box is drawn here instead: the
+ * input keeps the role and the checked state for assistive technology while
+ * the square takes the accent fill and the on-fill token declared for it.
+ * White is not that token on this surface: apps/web/app/globals.css overrides
+ * both accents, and white measures 3.11:1 on what it resolves them to. The
+ * boundary stays on the text-muted token in both states, because the accent
+ * fill alone reaches only 2.82:1 against the page.
+ */
+const MarkdownTaskCheckbox = ({ checked, disabled }: { checked?: boolean; disabled?: boolean }) => (
+  <span
+    className={cn(
+      'relative mr-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
+      'translate-y-[0.15em] rounded-[3px] border border-[var(--chat-text-muted)] align-top',
+      checked
+        ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]'
+        : 'bg-transparent',
+    )}
+  >
+    <input
+      type={CHECKBOX_INPUT_TYPE}
+      checked={Boolean(checked)}
+      disabled={Boolean(disabled)}
+      readOnly
+      className="absolute inset-0 m-0 h-full w-full appearance-none opacity-0"
+    />
+    {checked && <Check className="h-[11px] w-[11px]" strokeWidth={3.5} aria-hidden="true" />}
+  </span>
+);
+
+const MarkdownUnorderedList = ({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) => (
+  <ul
+    className={cn(
+      'mb-3',
+      hasClassToken(className, TASK_LIST_CLASS) ? 'list-none pl-0' : 'list-disc pl-6',
+    )}
+  >
+    {children}
+  </ul>
+);
+
+const MarkdownListItem = ({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) => {
   const citations = useMarkdownCitations();
-  return <li className="mb-1">{unwrapCitationParens(children, citations)}</li>;
+  return (
+    <li className={cn('mb-1', hasClassToken(className, TASK_LIST_ITEM_CLASS) && 'list-none')}>
+      {unwrapCitationParens(children, citations)}
+    </li>
+  );
 };
 
 const MarkdownTableCell = ({ children }: { children?: React.ReactNode }) => {
@@ -315,9 +378,10 @@ const markdownComponents: Components = {
   h2: ({ children }) => <h2 className="mb-3 mt-5 text-lg font-semibold">{children}</h2>,
   h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>,
   p: MarkdownParagraph as Components['p'],
-  ul: ({ children }) => <ul className="mb-3 list-disc pl-6">{children}</ul>,
+  ul: MarkdownUnorderedList as Components['ul'],
   ol: ({ children }) => <ol className="mb-3 list-decimal pl-6">{children}</ol>,
   li: MarkdownListItem as Components['li'],
+  input: MarkdownTaskCheckbox as Components['input'],
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-l-2 border-border pl-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
