@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { ProjectWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
@@ -80,24 +81,7 @@ export default function ProjectsFeaturePage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat/projects</span>
-                </div>
-                <ProductFrame
-                  src="/product/projects-dark.png"
-                  srcLight="/product/projects-light.png"
-                  alt="The AGI projects view listing standing instructions, files, and threads"
-                  width={2880}
-                  height={1800}
-                  priority
-                />
-              </div>
+              <ProjectWindow />
             </div>
           </div>
         </section>
