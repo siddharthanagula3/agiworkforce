@@ -5,12 +5,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
 
-import { summarizeSendPreview } from '@agiworkforce/types';
-import {
-  ComposerPlusMenu,
-  COMPOSER_MENU_SEND_ROUTE_TESTID,
-  type ComposerPlusMenuProps,
-} from './ComposerPlusMenu';
+import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
 const TRIGGER_LABEL = 'Open composer menu';
@@ -151,15 +146,6 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Manage in Settings' })).toBeInTheDocument();
   });
-
-  it('docks the send-route status to the panel bottom so it cannot scroll out of view', () => {
-    const sendPreviewPresentation = summarizeSendPreview({ providerMode: 'ManagedGateway' });
-    renderMenu({ sendPreviewPresentation });
-
-    const dock = screen.getByTestId(COMPOSER_MENU_SEND_ROUTE_TESTID);
-    expect(dock.className).toContain('sticky');
-    expect(dock.className).toContain('-bottom-px');
-  });
 });
 
 describe('ComposerPlusMenu, AGI Work palette', () => {
@@ -192,7 +178,9 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Deep Research' })).toBeInTheDocument();
     expect(within(menu).queryByRole('button', { name: 'Connectors' })).not.toBeInTheDocument();
     expect(within(menu).queryByRole('button', { name: 'Plugins' })).not.toBeInTheDocument();
-    expect(within(menu).getByText('Web search')).toBeInTheDocument();
+    expect(within(menu).queryByText('Web search')).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Run code')).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Memory')).not.toBeInTheDocument();
   });
 
   it('gives every connected connector a row with its capability line and its mark', () => {

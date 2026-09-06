@@ -85,8 +85,8 @@ const EFFORT_TRIGGER_CLASS =
   'flex min-h-7 shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
 const EFFORT_THUMB_INSET = '0.875rem';
 const EFFORT_TRACK_CLASS = 'h-7 rounded-full bg-muted';
-const EFFORT_RANGE_CLASS = 'bg-terra-cotta-500';
-const EFFORT_THUMB_CLASS = 'h-7 w-7 border-0 bg-white shadow-md';
+const EFFORT_RANGE_CLASS = 'bg-info';
+const EFFORT_THUMB_CLASS = 'h-7 w-7 border-0 bg-[var(--chat-accent-on-secondary)] shadow-md';
 const LADDER_FULL_PERCENT = 100;
 function ladderOffset(index: number, length: number): string {
   return `${(index / Math.max(length - 1, 1)) * LADDER_FULL_PERCENT}%`;
@@ -1268,9 +1268,30 @@ export function ComposerFooter({
                 )}
                 {effortSliderVisible && (
                   <div id={effortPanelId} className={showThinkingSwitch ? 'mt-3' : 'mt-1'}>
-                    <p className="text-center text-base font-semibold text-foreground">
-                      {selectedEffortLabel}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEffortOpen(false);
+                        setOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-sm transition-colors hover:bg-muted/60"
+                      aria-label={`${selectedModel.name} ${selectedEffortLabel}. Change model`}
+                    >
+                      <Brain
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-center font-semibold text-foreground">
+                        {selectedModel.name}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          {selectedEffortLabel}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </button>
                     <div className="relative mt-2">
                       <Slider
                         min={0}

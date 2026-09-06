@@ -13,7 +13,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Brain,
   Camera,
   Check,
   ChevronRight,
@@ -21,14 +20,12 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  Globe,
   ImagePlus,
   ListChecks,
   Paperclip,
   Search,
   Sparkles,
   Telescope,
-  Terminal,
   Video,
   X,
 } from '@agiworkforce/icons';
@@ -42,9 +39,8 @@ import {
 } from '@agiworkforce/ui';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useTranslation } from 'react-i18next';
-import { SendPreview } from '@agiworkforce/unified-chat';
-import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash } from '@/features/directory';
 import type { SkillItem } from '@features/chat/hooks/use-skills-list';
@@ -54,7 +50,6 @@ import {
 } from '@features/chat/services/palette-plugin-catalog';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 
-export const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
 
 const MENU_LABEL = 'More composer options';
@@ -67,19 +62,14 @@ const ROW_LABEL_FOLDER = 'Add working folder';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
-const ROW_LABEL_WEB_SEARCH = 'Web search';
 const ROW_LABEL_RESEARCH = 'Deep Research';
-const ROW_LABEL_CODE = 'Run code';
 const ROW_LABEL_OFFICE = 'Create Office files';
-const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = 'Temporary chat';
 const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
   "Won't be saved to your history and skips memory for this turn.";
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
 const CONNECTORS_EMPTY_COPY = 'No connectors connected yet.';
-const WEB_SEARCH_ON = 'On';
-const WEB_SEARCH_OFF = 'Off';
 const BADGE_CHECKING = 'Checking';
 const BADGE_RETRY = 'Retry';
 const BADGE_UNAVAILABLE = 'Unavailable';
@@ -91,10 +81,6 @@ const PLAN_CHECKING_TITLE = 'Checking your plan.';
 const IMAGE_ENTITLEMENT_HINT = 'Image generation is available on Pro and above.';
 const VIDEO_ENTITLEMENT_HINT = 'Video generation is available on Max 15x and Enterprise.';
 const FOLDER_UNSUPPORTED_TITLE = 'Folder access is not supported in this browser';
-const WEB_SEARCH_ON_TITLE =
-  'This model can search the web when the question needs current information.';
-const WEB_SEARCH_OFF_TITLE =
-  'This model has no web-search path, so this turn answers from its training data.';
 
 const ROW_CLASS = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors';
 const ROW_HOVER_CLASS = 'hover:bg-muted/60';
@@ -109,7 +95,6 @@ const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
   'sticky -bottom-px z-10 -mx-1.5 mt-1 border-t border-border/30 bg-popover px-1.5 pb-2 pt-1';
-const SEND_PREVIEW_DOCK_CLASS = 'sticky -bottom-px z-10 -mx-1.5 bg-popover px-1.5 pb-0.5 pt-0.5';
 const PALETTE_PANEL_CLASS = 'w-80 px-1.5 pt-1.5';
 const CHAT_PANEL_CLASS = 'w-64 p-1.5';
 const PALETTE_ITEM_SELECTOR =
@@ -432,6 +417,7 @@ export interface ComposerPlusMenuProps {
   selectedSkillName: string | null;
   onOpenSettings: (section: string) => void;
 
+  sendPreviewPresentation?: SendPreviewPresentation;
   connectorsSubmenuOpen: boolean;
   onToggleConnectorsSubmenu: () => void;
   connectorsLoading: boolean;
@@ -471,8 +457,6 @@ export interface ComposerPlusMenuProps {
   isIncognito: boolean;
   canToggleIncognito: boolean;
   onToggleIncognito: () => void;
-
-  sendPreviewPresentation?: SendPreviewPresentation;
 
   skills: SkillItem[];
   onSelectSkill: (skillName: string) => void;
@@ -640,21 +624,6 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
   );
 }
 
-function WebSearchStatusRow({ props }: { props: ComposerPlusMenuProps }) {
-  return (
-    <div
-      className={cn(ROW_CLASS, 'text-muted-foreground')}
-      title={props.webSearchEnabled ? WEB_SEARCH_ON_TITLE : WEB_SEARCH_OFF_TITLE}
-    >
-      <Globe className={cn(GLYPH_CLASS, 'text-muted-foreground')} aria-hidden="true" />
-      <span className="flex-1 text-left">{ROW_LABEL_WEB_SEARCH}</span>
-      <span className="text-[12px] font-medium">
-        {props.webSearchEnabled ? WEB_SEARCH_ON : WEB_SEARCH_OFF}
-      </span>
-    </div>
-  );
-}
-
 function ChatMenu(props: ComposerPlusMenuProps) {
   const { t } = useTranslation('v3');
   const enabledConnector = (id: string) => !props.disabledConnectorIds.includes(id);
@@ -668,6 +637,24 @@ function ChatMenu(props: ComposerPlusMenuProps) {
 
       {props.canTakeScreenshot && <ScreenshotRow props={props} />}
       {props.showWorkingFolderRow && <WorkingFolderRow props={props} />}
+
+      <MenuToggleRow
+        icon={Telescope}
+        label={ROW_LABEL_RESEARCH}
+        checked={props.researchEnabled}
+        onToggle={props.onToggleResearch}
+        disabled={props.researchDisabled}
+        title={props.researchTitle}
+      />
+
+      <MenuToggleRow
+        icon={FileText}
+        label={ROW_LABEL_OFFICE}
+        checked={props.officeCreationEnabled}
+        onToggle={props.onToggleOfficeCreation}
+        disabled={props.officeCreationDisabled}
+        title={props.officeCreationTitle}
+      />
 
       <div className={DIVIDER_CLASS} />
 
@@ -754,10 +741,6 @@ function ChatMenu(props: ComposerPlusMenuProps) {
 
       <div className={DIVIDER_CLASS} />
 
-      {/* Search is ambient (model and deployment driven, not a manual toggle),
-      so this is a status row, never a button pretending to control it. */}
-      {props.billingPolicyReady && <WebSearchStatusRow props={props} />}
-
       {props.showScopeRow && (
         <MenuToggleRow
           icon={ListChecks}
@@ -767,42 +750,6 @@ function ChatMenu(props: ComposerPlusMenuProps) {
           disabled={props.scopeDisabled}
         />
       )}
-
-      <MenuToggleRow
-        icon={Telescope}
-        label={ROW_LABEL_RESEARCH}
-        checked={props.researchEnabled}
-        onToggle={props.onToggleResearch}
-        disabled={props.researchDisabled}
-        title={props.researchTitle}
-      />
-
-      <MenuToggleRow
-        icon={Terminal}
-        label={ROW_LABEL_CODE}
-        checked={props.codeExecutionEnabled}
-        onToggle={props.onToggleCodeExecution}
-        disabled={props.codeExecutionDisabled}
-        title={props.codeExecutionTitle}
-      />
-
-      <MenuToggleRow
-        icon={FileText}
-        label={ROW_LABEL_OFFICE}
-        checked={props.officeCreationEnabled}
-        onToggle={props.onToggleOfficeCreation}
-        disabled={props.officeCreationDisabled}
-        title={props.officeCreationTitle}
-      />
-
-      <MenuToggleRow
-        icon={Brain}
-        label={ROW_LABEL_MEMORY}
-        checked={props.memoryEnabled}
-        onToggle={props.onToggleMemory}
-        disabled={props.memoryDisabled}
-        title={props.memoryTitle}
-      />
 
       {props.showTemporaryChat && (
         <MenuToggleRow
@@ -820,11 +767,6 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       status a user opened the menu to check cannot be the part that scrolls
       out of view: this panel is routinely taller than the space above the
       composer. */}
-      {props.sendPreviewPresentation && (
-        <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID} className={SEND_PREVIEW_DOCK_CLASS}>
-          <SendPreview presentation={props.sendPreviewPresentation} variant="card" />
-        </div>
-      )}
     </>
   );
 }
@@ -925,20 +867,6 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     props.showWorkingFolderRow && matches(ROW_LABEL_FOLDER, props.folderName ?? undefined) && (
       <WorkingFolderRow key="folder" props={props} role="menuitem" />
     ),
-    props.billingPolicyReady && matches(ROW_LABEL_WEB_SEARCH) && (
-      <WebSearchStatusRow key="web-search" props={props} />
-    ),
-    props.showScopeRow && matches(t('agiWork.compose.scopeAdd')) && (
-      <MenuToggleRow
-        key="scope"
-        role="menuitem"
-        icon={ListChecks}
-        label={t('agiWork.compose.scopeAdd')}
-        checked={props.scopeOpen}
-        onToggle={props.onToggleScope}
-        disabled={props.scopeDisabled}
-      />
-    ),
     matches(ROW_LABEL_RESEARCH) && (
       <MenuToggleRow
         key="research"
@@ -949,18 +877,6 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         onToggle={props.onToggleResearch}
         disabled={props.researchDisabled}
         title={props.researchTitle}
-      />
-    ),
-    matches(ROW_LABEL_CODE) && (
-      <MenuToggleRow
-        key="code"
-        role="menuitem"
-        icon={Terminal}
-        label={ROW_LABEL_CODE}
-        checked={props.codeExecutionEnabled}
-        onToggle={props.onToggleCodeExecution}
-        disabled={props.codeExecutionDisabled}
-        title={props.codeExecutionTitle}
       />
     ),
     matches(ROW_LABEL_OFFICE) && (
@@ -975,16 +891,15 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         title={props.officeCreationTitle}
       />
     ),
-    matches(ROW_LABEL_MEMORY) && (
+    props.showScopeRow && matches(t('agiWork.compose.scopeAdd')) && (
       <MenuToggleRow
-        key="memory"
+        key="scope"
         role="menuitem"
-        icon={Brain}
-        label={ROW_LABEL_MEMORY}
-        checked={props.memoryEnabled}
-        onToggle={props.onToggleMemory}
-        disabled={props.memoryDisabled}
-        title={props.memoryTitle}
+        icon={ListChecks}
+        label={t('agiWork.compose.scopeAdd')}
+        checked={props.scopeOpen}
+        onToggle={props.onToggleScope}
+        disabled={props.scopeDisabled}
       />
     ),
     props.showTemporaryChat && matches(ROW_LABEL_TEMPORARY) && (
@@ -1110,13 +1025,6 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         <p className="px-3 py-2 text-[12px] text-muted-foreground">
           {t('agiWork.compose.palette.noMatches')}
         </p>
-      )}
-
-      {!searching && props.sendPreviewPresentation && (
-        <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
-          <div className="my-1 border-t border-border/40" />
-          <SendPreview presentation={props.sendPreviewPresentation} variant="card" />
-        </div>
       )}
 
       {/* Last in the list so Arrow navigation ends on the field, and sticky to

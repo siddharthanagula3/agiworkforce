@@ -37,7 +37,6 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 /** Both shells gate their narrow layout on this query; `md:` is its complement. */
 const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 const FOOTER_ENTRY_SELECTOR = '[data-testid^="composer-footer-entry-"]';
-const MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 const DESTINATION_HOST = 'AGI managed cloud';
 
 function picker(): ComposerProjectPicker {
@@ -108,15 +107,5 @@ describe('composer carries no footer line under the card', () => {
     expect(screen.queryByTestId('ai-accuracy-disclaimer')).not.toBeInTheDocument();
     expect(screen.queryByText(AI_ACCURACY_DISCLAIMER)).not.toBeInTheDocument();
     expect(screen.queryByTestId('composer-model-summary')).not.toBeInTheDocument();
-  });
-
-  it('keeps the send route reachable from the "+" menu at every width', () => {
-    renderComposer();
-
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-
-    const route = screen.getByTestId(MENU_SEND_ROUTE_TESTID);
-    expect(route.className).not.toContain('md:hidden');
-    expect(within(route).getByText(`Sent to ${DESTINATION_HOST}`)).toBeTruthy();
   });
 });
