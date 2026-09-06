@@ -70,6 +70,24 @@ export interface OpenRouterAdapterConfig extends ProviderAdapterConfig {
   providerRouting?: OpenRouterProviderRoutingPreferences;
 }
 
+const ENDPOINT_POOL_EXHAUSTED_MARKER = '0 endpoints out of';
+const ENDPOINT_POOL_RETRIES = 2;
+
+function isEndpointPoolExhausted(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes(ENDPOINT_POOL_EXHAUSTED_MARKER);
+}
+
+async function createWithEndpointPoolRetry<T>(create: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await create();
+    } catch (err) {
+      if (attempt >= ENDPOINT_POOL_RETRIES || !isEndpointPoolExhausted(err)) throw err;
+    }
+  }
+}
+
 export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): ProviderAdapter {
   const { url: baseUrl } = resolveValidatedBaseUrl(config.baseUrl, OPENROUTER_DEFAULT_BASE_URL, {
     allowedHosts: [
@@ -144,9 +162,11 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
       const normalizer = createOpenRouterUsageNormalizer();
 
       try {
-        const sdkStream = await sdk.chat.completions.create(
-          params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
-          { signal },
+        const sdkStream = await createWithEndpointPoolRetry(() =>
+          sdk.chat.completions.create(
+            params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
+            { signal },
+          ),
         );
         const normalizedSource = normalizer.normalizeSource(
           sdkStream as unknown as Parameters<typeof normalizer.normalizeSource>[0],
