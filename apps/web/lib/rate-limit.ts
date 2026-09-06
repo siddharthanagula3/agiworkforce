@@ -831,11 +831,13 @@ export interface RateLimitInfo {
   identifier: string;
 }
 
+type RateLimitConfigEntry = (typeof rateLimitConfigs)[RateLimitKey];
+
 function inMemoryRateLimitInfo(
   key: RateLimitKey,
   id: string,
   effectiveLimit: number,
-  config: RateLimitConfig,
+  config: RateLimitConfigEntry,
   extraHeaders: Record<string, string>,
 ): RateLimitInfo {
   const windowMs = parseWindow(config.window);
