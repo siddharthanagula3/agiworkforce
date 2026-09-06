@@ -16,6 +16,7 @@ vi.mock('@clerk/nextjs', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => '/apps',
 }));
 
 vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
@@ -59,7 +60,7 @@ describe('/apps navigation', () => {
       expect(String(call[0]).startsWith('/integrations')).toBe(false);
     }
     const pageLinks = [...container.querySelectorAll('a')].filter(
-      (link) => !link.closest('.agi-footer'),
+      (link) => !link.closest('header, footer'),
     );
     for (const link of pageLinks) {
       expect(link.getAttribute('href')?.startsWith('/integrations')).toBeFalsy();

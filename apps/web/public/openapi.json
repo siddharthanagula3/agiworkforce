@@ -370,6 +370,75 @@
           }
         }
       },
+      "RoutePreviewRequest": {
+        "type": "object",
+        "required": ["taskType"],
+        "properties": {
+          "selection": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Model key or Auto alias to preview. Defaults to the Auto policy's default alias."
+          },
+          "taskType": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "A routing task type from the Auto policy."
+          },
+          "conversationId": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "When given, the conversation's served route affinity informs the preview."
+          },
+          "capabilitiesInUse": {
+            "type": "array",
+            "maxItems": 16,
+            "items": { "type": "string" },
+            "description": "Intrinsic capability names from the model registry the conversation relies on. A route observed failing one is excluded."
+          }
+        }
+      },
+      "RoutePreviewResponse": {
+        "type": "object",
+        "required": ["selected", "candidates", "excluded", "liveRequestExecuted"],
+        "properties": {
+          "selected": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The Auto route decision for the request."
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["routeId", "modelKey", "providerId", "admitted", "score", "reasons"],
+              "properties": {
+                "routeId": { "type": "string" },
+                "modelKey": { "type": "string" },
+                "providerId": { "type": "string" },
+                "admitted": { "type": "boolean" },
+                "score": { "type": "object", "additionalProperties": true },
+                "reasons": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "excluded": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["reason"],
+              "properties": {
+                "slotId": { "type": "string" },
+                "modelKey": { "type": "string" },
+                "reason": { "type": "string" }
+              }
+            }
+          },
+          "liveRequestExecuted": {
+            "type": "boolean",
+            "description": "Always false: a preview never reaches a provider."
+          }
+        }
+      },
       "CreditBalance": {
         "type": "object",
         "description": "Percentage-only managed-usage status. Ledger units and allocations never cross this boundary.",
@@ -616,6 +685,52 @@
           "403": { "description": "API key lacks the `inference:write` scope" },
           "413": { "description": "Audio file exceeds 25 MB" },
           "415": { "description": "Unsupported audio type, or content that is not audio" },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/route/preview": {
+      "post": {
+        "summary": "Preview an Auto route",
+        "description": "Resolves the route Auto would take for a selection and task type under the caller's plan, workspace policy, zero-data-retention posture and observed route health, without executing a request. The same auth gate and rate limits as `POST /chat/completions` apply.",
+        "tags": ["Inference"],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoutePreviewRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The selected route, the candidates considered and the routes excluded",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoutePreviewResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or unknown routing task type",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "403": {
+            "description": "Subscription inactive, workspace policy refused the caller, or the API key lacks the `inference:write` scope",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
           "429": {
             "description": "Rate limited",
             "content": {

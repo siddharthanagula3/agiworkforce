@@ -156,6 +156,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   cloud_code_agent_turns: 'Cascades from cloud_code_sessions.',
   managed_usage_request_extensions: 'Cascades from managed_usage_requests.',
   free_daily_usage_reservations: 'Cascades from profiles.',
+  identities:
+    'Cascades from profiles (0174). The provider-subject mapping is owner-only, so no scoped delete could reach it.',
   website_auto_economy_trial_usage: 'Cascades from profiles.',
   web_push_subscriptions: 'Cascades from profiles.',
   organization_project_access:
