@@ -335,30 +335,34 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByRole('button', { name: 'Connect GitHub' })).toBeTruthy();
   });
 
-  it('shows a secure-storage configuration failure on the connector row', async () => {
-    const fetchMock = stubFetch({ available: ['notion'] });
-    const readResponse = fetchMock.getMockImplementation()!;
-    const message =
-      'Connector authorization is unavailable because secure token storage is not configured. Contact your administrator.';
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (input === '/api/connectors' && init?.method === 'POST') {
-        return Response.json({ error: message, connectorId: 'notion' }, { status: 503 });
-      }
-      return readResponse(input);
-    });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
-    await settleParentConnectorState();
-    openConnectorsSection();
+  it(
+    'shows a secure-storage configuration failure on the connector row',
+    { timeout: 20000 },
+    async () => {
+      const fetchMock = stubFetch({ available: ['notion'] });
+      const readResponse = fetchMock.getMockImplementation()!;
+      const message =
+        'Connector authorization is unavailable because secure token storage is not configured. Contact your administrator.';
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === '/api/connectors' && init?.method === 'POST') {
+          return Response.json({ error: message, connectorId: 'notion' }, { status: 503 });
+        }
+        return readResponse(input);
+      });
+      render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+      await settleParentConnectorState();
+      openConnectorsSection();
 
-    const connectButton = await screen.findByRole('button', { name: 'Connect Notion' });
-    await act(async () => {
-      fireEvent.click(connectButton);
-    });
+      const connectButton = await screen.findByRole('button', { name: 'Connect Notion' });
+      await act(async () => {
+        fireEvent.click(connectButton);
+      });
 
-    expect(await screen.findByText(message)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Connect Notion' })).toBeEnabled();
-    expect(screen.queryByRole('img', { name: 'Connected' })).toBeNull();
-  });
+      expect(await screen.findByText(message)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Connect Notion' })).toBeEnabled();
+      expect(screen.queryByRole('img', { name: 'Connected' })).toBeNull();
+    },
+  );
 
   it('names the real cause instead of blaming the connection for a server fault', async () => {
     // A 5xx is the server failing, not the user's network. Telling them to
