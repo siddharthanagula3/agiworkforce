@@ -219,6 +219,7 @@ const SIZE = {
   md: { wrapper: 'h-9 w-9 rounded-lg', svg: 18, img: 22 },
   lg: { wrapper: 'h-11 w-11 rounded-xl', svg: 22, img: 28 },
   xl: { wrapper: 'h-16 w-16 rounded-xl', svg: 32, img: 40 },
+  '2xl': { wrapper: 'h-20 w-20 rounded-2xl', svg: 40, img: 48 },
 } as const;
 
 export type ConnectorLogoSize = keyof typeof SIZE;

@@ -16,12 +16,23 @@ export const DIRECTORY_MENU_TRIGGER =
 export const DIRECTORY_CREATE_BUTTON =
   'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-export const ENTRY_ICON_SIZE = 'size-8 shrink-0';
+export const ENTRY_ICON_SIZE = 'size-11 shrink-0';
 
 export const LOGO_SURFACE = 'bg-logo-surface text-logo-on-surface';
 
-export const ENTRY_ICON_SHAPE = `rounded-md border border-border ${LOGO_SURFACE}`;
+export const ENTRY_ICON_SHAPE = `rounded-xl border border-border ${LOGO_SURFACE}`;
 
-export const DETAIL_LOGO_SIZE = 'size-16 shrink-0';
+export const DIRECTORY_ADD_BUTTON = 'rounded-full border border-border';
 
-export const DETAIL_LOGO_SHAPE = `rounded-xl border border-border ${LOGO_SURFACE}`;
+export const DETAIL_LOGO_SIZE = 'size-20 shrink-0';
+
+export const DETAIL_LOGO_SHAPE = `rounded-2xl border border-border ${LOGO_SURFACE}`;
+
+export const DETAIL_HEADER_BAND = 'rounded-xl bg-muted p-4 sm:p-5';
+
+export const DETAIL_NOTICE =
+  'flex items-start gap-2 rounded-lg border border-border bg-muted p-3 text-xs text-foreground';
+
+export const DETAIL_LABEL = 'text-xs font-medium uppercase tracking-wide text-muted-foreground';
+
+export const DETAIL_HEADING = 'text-lg font-semibold text-foreground';

@@ -1,4 +1,9 @@
-import type { DirectoryBadgeKind, DirectorySectionKey, DirectorySortKey } from './types';
+import type {
+  DirectoryBadgeKind,
+  DirectoryConnectableMode,
+  DirectorySectionKey,
+  DirectorySortKey,
+} from './types';
 
 export const DIRECTORY_BACK_LABEL = 'Back';
 
@@ -20,7 +25,7 @@ export const DIRECTORY_CATALOG_HEADINGS: Record<DirectorySectionKey, string> = {
   plugins: 'All plugins',
 };
 
-export const CONNECTOR_POPULAR_HEADING = 'Popular';
+export const CONNECTOR_POPULAR_HEADING = 'Top connectors';
 
 export const DIRECTORY_SEARCH_PLACEHOLDERS: Record<DirectorySectionKey, string> = {
   skills: 'Search skills',
@@ -46,20 +51,23 @@ export const CLEAR_FILTERS_LABEL = 'Clear filters';
 
 export const DIRECTORY_SORT_LABELS: Record<DirectorySortKey, string> = {
   popular: 'Most popular',
+  installs: 'Most installed',
   updated: 'Recently updated',
   name: 'Name A to Z',
 };
 
 export const DIRECTORY_BADGE_LABELS: Record<DirectoryBadgeKind, string> = {
-  agi: 'Made by AGI',
-  partner: 'Partner',
+  'first-party': 'First-party',
+  official: 'Official',
   verified: 'Verified',
   community: 'Community',
-  yours: 'Yours',
+  custom: 'Custom',
 };
 
-export const SKILL_SOURCE_AGI_LABEL = 'Made by AGI';
-export const SKILL_SOURCE_YOURS_LABEL = 'Yours';
+export const VERIFIED_GLYPH_BADGE: DirectoryBadgeKind = 'verified';
+export const CUSTOM_BADGE: DirectoryBadgeKind = 'custom';
+export const CONNECTED_GLYPH_LABEL = 'Connected';
+export const DIRECTORY_CUSTOM_HEADING = 'Your custom connectors';
 
 export const NEW_BADGE_LABEL = 'New';
 
@@ -80,14 +88,44 @@ export const SKILL_RAW_LABEL = 'Raw';
 export const SKILL_COPY_LABEL = 'Copy file contents';
 export const SKILL_FILES_LABEL = 'Skill files';
 
-export const CONNECTOR_COMMUNITY_NOTICE =
-  'Community connectors have passed automated checks only. They can read what you send them and may return instructions to the assistant.';
 export const CONNECTOR_TOOLS_LABEL = 'Tools';
-export const CONNECTOR_PERMISSIONS_LABEL = 'Permissions';
 
-export const PLUGIN_BY_PREFIX = 'by';
-export const PLUGIN_SOURCE_LABEL = 'View source';
+export const CARD_INSTALL_LABELS: Record<DirectorySectionKey, string> = {
+  skills: ADD_LABEL,
+  connectors: ADD_LABEL,
+  plugins: INSTALL_LABEL,
+};
+export const CARD_REMOVE_LABELS: Record<DirectorySectionKey, string> = {
+  skills: REMOVE_LABEL,
+  connectors: REMOVE_LABEL,
+  plugins: UNINSTALL_LABEL,
+};
+export const DIRECTORY_COUNT_SUFFIXES: Partial<Record<DirectorySectionKey, string>> = {
+  plugins: 'installs',
+};
+
 export const PLUGIN_PROMPTS_LABEL = 'Try asking';
+export const PLUGIN_COMPONENTS_HEADING = 'Includes';
+export const PLUGIN_SKILLS_LABEL = 'Skills';
+export const PLUGIN_COMMANDS_LABEL = 'Commands';
+export const PLUGIN_AGENTS_LABEL = 'Agents';
+export const PLUGIN_MCP_SERVERS_LABEL = 'MCP servers';
+export const PLUGIN_HOOKS_LABEL = 'Hooks';
+export const PLUGIN_HOOKS_VALUE = 'Included';
+export const PLUGIN_LSP_SERVERS_LABEL = 'Language servers';
+export const PLUGIN_MCP_TRANSPORT_SEPARATOR = ' via ';
+export const PLUGIN_DESKTOP_ONLY_LABEL = 'Desktop and CLI';
+export const PLUGIN_INSTALL_COMMAND_LABEL = 'Install from the CLI';
+export const PLUGIN_INSTALL_COMMAND_COPY_LABEL = 'Copy install command';
+export const PLUGIN_COMMAND_COPIED_LABEL = 'Copied';
+export const PLUGIN_COMMAND_COPIED_RESET_MS = 2000;
+export const PLUGIN_MORE_INFO_LABEL = 'More info';
+export const PLUGIN_HOMEPAGE_LABEL = 'Homepage';
+export const PLUGIN_REPOSITORY_LABEL = 'Repository';
+export const PLUGIN_MARKETPLACE_LABEL = 'Marketplace';
+export const PLUGIN_WORKS_WITH_LABEL = 'Works with';
+export const PLUGIN_VERSION_LABEL = 'Version';
+export const PLUGIN_INSTALLS_SUFFIX = 'installs';
 
 export const ADD_MARKETPLACE_LABEL = 'Add marketplace';
 export const ADD_MARKETPLACE_INTRO = 'Choose where these plugins come from.';
@@ -122,13 +160,19 @@ export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';
 
 export const CONNECTOR_COMMUNITY_NOTICE_SHORT =
   'Community connectors have passed automated checks only. They may not meet the quality of verified connectors.';
-export const CONNECTOR_DEVELOPED_BY_PREFIX = 'Developed by';
 export const CONNECTOR_TRUST_COPY =
   'Only use connectors from developers you trust. AGI does not control which tools a developer offers and cannot verify that they work as intended or will not change.';
 export const CONNECTOR_CATEGORIES_LABEL = 'Categories';
-export const CONNECTOR_DETAILS_LABEL = 'Details';
+export const CONNECTOR_MADE_BY_LABEL = 'Made by';
 export const CONNECTOR_AUTHOR_LABEL = 'Author';
+export const CONNECTOR_SIGN_IN_LABEL = 'Sign-in';
+export const CONNECTOR_SIGN_IN_REQUIRED = 'Required';
+export const CONNECTOR_SIGN_IN_NONE = 'None';
 export const CONNECTOR_URL_LABEL = 'Connector URL';
+export const CONNECTOR_ADDED_LABEL = 'Added';
+export const CONNECTOR_RELATED_HEADING = 'Related connectors';
+export const CONNECTOR_TERMS_PREFIX = 'Use of connectors is governed by the';
+export const CONNECTOR_TERMS_LINK_LABEL = 'Terms of Service';
 export const CONNECTOR_MORE_INFO_LABEL = 'More info';
 export const CONNECTOR_DOCUMENTATION_LABEL = 'Documentation';
 export const CONNECTOR_WEBSITE_LABEL = 'Website';
@@ -139,9 +183,29 @@ export const COPY_VALUE_LABEL = 'Copy';
 export const SHOW_MORE_PREFIX = '+';
 export const SHOW_MORE_SUFFIX = 'more';
 export const SHOW_LESS_LABEL = 'Show less';
-export const CHIP_PREVIEW_COUNT = 8;
+export const CHIP_PREVIEW_COUNT = 12;
 
 export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not available yet.';
 
 export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
 export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';
+
+export const CONNECTOR_ADD_API_KEY_LABEL = 'Add API key';
+export const CONNECTOR_CARD_ACTION_LABELS: Record<DirectoryConnectableMode, string> = {
+  connect: 'Connect',
+  'api-key-form': 'Add API key',
+  'desktop-and-cli': 'Available on desktop and CLI',
+  'needs-setup': 'Needs setup',
+};
+export const CONNECTOR_DESKTOP_ONLY_LABEL = 'Available on desktop and CLI';
+export const CONNECTOR_DESKTOP_ONLY_COPY =
+  'This connector runs on your own computer, so it connects from the desktop app or the CLI rather than from the browser.';
+export const CONNECTOR_DESKTOP_DOWNLOAD_LABEL = 'Get the desktop app';
+export const CONNECTOR_NEEDS_SETUP_LABEL = 'Needs setup';
+export const CONNECTOR_REPOSITORY_LABEL = 'Repository';
+
+export const DIRECTORY_LOAD_MORE_LABEL = 'Load more';
+export const DIRECTORY_LOADING_MORE_LABEL = 'Loading more';
+export const DIRECTORY_SHOWING_PREFIX = 'Showing';
+export const DIRECTORY_SHOWING_OF = 'of';
+export const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;

@@ -1,12 +1,56 @@
 'use client';
 
-import { ArrowLeft, Link2, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Link2, Settings as SettingsIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
 import { COPY_LINK_LABEL, DIRECTORY_BACK_LABEL, REMOVE_LABEL, SETTINGS_LABEL } from './constants';
-import { DIRECTORY_FOCUS_RING, DIRECTORY_ICON_BUTTON } from './styles';
+import {
+  DETAIL_LOGO_SHAPE,
+  DETAIL_LOGO_SIZE,
+  DIRECTORY_FOCUS_RING,
+  DIRECTORY_ICON_BUTTON,
+} from './styles';
+
+export function DetailMonogram({ monogram }: { monogram: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        DETAIL_LOGO_SIZE,
+        DETAIL_LOGO_SHAPE,
+        'inline-flex items-center justify-center text-xl font-semibold',
+      )}
+    >
+      {monogram}
+    </span>
+  );
+}
+
+export function OutboundLink({
+  href,
+  children,
+  onOpenHref,
+}: {
+  href: string;
+  children: ReactNode;
+  onOpenHref?: (href: string) => Promise<void> | void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => void onOpenHref?.(href)}
+      className={cn(
+        'inline-flex w-fit items-center gap-1 text-sm text-foreground underline underline-offset-4',
+        DIRECTORY_FOCUS_RING,
+      )}
+    >
+      {children}
+      <ArrowUpRight aria-hidden className="size-3.5" />
+    </button>
+  );
+}
 
 export function DirectoryBackLink({ onBack }: { onBack: () => void }) {
   return (
@@ -38,6 +82,7 @@ export function DirectoryDetailHeader({
   onRemove,
   removeLabel,
   onCopyLink,
+  statusNote,
   busy,
 }: {
   title: string;
@@ -53,19 +98,20 @@ export function DirectoryDetailHeader({
   onRemove?: () => void;
   removeLabel?: string;
   onCopyLink?: () => void;
+  statusNote?: ReactNode;
   busy?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       {icon}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-40">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="truncate text-xl font-semibold text-foreground">{title}</h3>
+          <h3 className="break-words text-xl font-semibold text-foreground">{title}</h3>
           {badge}
         </div>
         {subtitle ? <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div> : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex w-full shrink-0 items-center gap-1 sm:w-auto">
         {onCopyLink ? (
           <button
             type="button"
@@ -118,6 +164,8 @@ export function DirectoryDetailHeader({
             {busy ? <Spinner size="sm" aria-label={primaryLabel} /> : null}
             {primaryLabel}
           </button>
+        ) : statusNote ? (
+          <span className="text-sm text-muted-foreground">{statusNote}</span>
         ) : null}
       </div>
     </div>

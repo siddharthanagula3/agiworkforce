@@ -3,6 +3,7 @@
 import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 
 import { cn } from '../cn';
+import { Switch } from '../primitives/Switch';
 import { Menu, MenuItem, MenuSeparator } from '../sidebar/Menu';
 import {
   ADD_MARKETPLACE_LABEL,
@@ -21,7 +22,10 @@ import type {
   DirectorySectionKey,
   DirectorySortKey,
   DirectorySourceChip,
+  DirectoryToggle,
 } from './types';
+
+const TOGGLE_ID_PREFIX = 'directory-toggle';
 
 export function DirectoryToolbar({
   section,
@@ -39,6 +43,10 @@ export function DirectoryToolbar({
   sort,
   onSortChange,
   onAddMarketplace,
+  countLabel,
+  toggles = [],
+  toggleValues = {},
+  onToggle,
 }: {
   section: DirectorySectionKey;
   query: string;
@@ -55,6 +63,10 @@ export function DirectoryToolbar({
   sort: DirectorySortKey;
   onSortChange: (sort: DirectorySortKey) => void;
   onAddMarketplace?: () => void;
+  countLabel?: string;
+  toggles?: readonly DirectoryToggle[];
+  toggleValues?: Readonly<Record<string, boolean>>;
+  onToggle?: (id: string, checked: boolean) => void;
 }) {
   const activeFilterCount = countActiveFilters(selection);
   return (
@@ -81,29 +93,39 @@ export function DirectoryToolbar({
         {sourcesHeading ? (
           <span className="text-sm font-medium text-foreground">{sourcesHeading}</span>
         ) : null}
-        {sources.map((source) => {
-          const isAll = source.id === DIRECTORY_SOURCE_ALL_ID;
-          const selected = isAll ? activeSource === null : activeSource === source.id;
-          return (
-            <button
-              key={source.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSourceChange(isAll ? null : selected ? null : source.id)}
-              className={cn(
-                DIRECTORY_CHIP,
-                selected
-                  ? 'bg-muted font-semibold text-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                DIRECTORY_FOCUS_RING,
-              )}
-            >
-              {source.label}
-            </button>
-          );
-        })}
+        {sources.length > 0 ? (
+          <div role="tablist" className="flex flex-wrap items-center gap-1">
+            {sources.map((source) => {
+              const isAll = source.id === DIRECTORY_SOURCE_ALL_ID;
+              const selected = isAll ? activeSource === null : activeSource === source.id;
+              return (
+                <button
+                  key={source.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => onSourceChange(isAll ? null : selected ? null : source.id)}
+                  className={cn(
+                    DIRECTORY_CHIP,
+                    selected
+                      ? 'bg-muted font-semibold text-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    DIRECTORY_FOCUS_RING,
+                  )}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {countLabel ? (
+            <span className="text-xs text-muted-foreground" data-testid="directory-count">
+              {countLabel}
+            </span>
+          ) : null}
           {filterGroups.length > 0 ? (
             <Menu
               align="end"
@@ -209,6 +231,27 @@ export function DirectoryToolbar({
           ) : null}
         </div>
       </div>
+
+      {toggles.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {toggles.map((toggle) => {
+            const id = `${TOGGLE_ID_PREFIX}-${section}-${toggle.id}`;
+            return (
+              <div key={toggle.id} className="flex items-center gap-2">
+                <Switch
+                  id={id}
+                  checked={toggleValues[toggle.id] === true}
+                  onCheckedChange={(checked) => onToggle?.(toggle.id, checked)}
+                  className="h-5 min-h-0 w-9 min-w-0 [&>span]:size-4 [&>span]:data-[state=checked]:translate-x-4"
+                />
+                <label htmlFor={id} className="text-xs text-muted-foreground">
+                  {toggle.label}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -34,6 +34,7 @@ import {
   SKILL_STATUS_NOT_INSTALLED,
   SKILL_STATUS_NOT_INSTALLED_LABEL,
 } from '../constants';
+import { DirectoryRequestError } from './request-error';
 
 const OWNED_SOURCES = new Set(['personal', 'project', 'workspace']);
 const ENTRY_FILE = 'SKILL.md';
@@ -66,6 +67,7 @@ export function toSkillEntry(
     description: skill.description,
     sourceId: skillSourceId(skill.source),
     installed: isInstalled,
+    ...(skill.editable ? { editable: true } : {}),
     facets: {
       [SKILL_LIFECYCLE_GROUP_ID]: [skill.lifecycle],
       [SKILL_STATUS_GROUP_ID]: [isInstalled ? SKILL_STATUS_INSTALLED : SKILL_STATUS_NOT_INSTALLED],
@@ -143,7 +145,9 @@ export async function installSkill(name: string, csrfToken: string): Promise<voi
     headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
     body: JSON.stringify({ name }),
   });
-  if (!response.ok) throw new Error(`skill install failed: ${response.status}`);
+  if (!response.ok) {
+    throw new DirectoryRequestError(response.status, `skill install failed: ${response.status}`);
+  }
 }
 
 export async function uninstallSkill(name: string, csrfToken: string): Promise<void> {
@@ -151,7 +155,9 @@ export async function uninstallSkill(name: string, csrfToken: string): Promise<v
     method: 'DELETE',
     headers: { 'x-csrf-token': csrfToken },
   });
-  if (!response.ok) throw new Error(`skill uninstall failed: ${response.status}`);
+  if (!response.ok) {
+    throw new DirectoryRequestError(response.status, `skill uninstall failed: ${response.status}`);
+  }
 }
 
 function filesPath(name: string): string {
@@ -198,9 +204,7 @@ export async function fetchSkillDetail(
   const entry = files.find((file) => file.path === ENTRY_FILE);
   if (entry) entry.content = await fetchSkillBody(id);
 
-  const licenseFile = files.find((file) =>
-    file.path.toLowerCase().startsWith(LICENSE_PREFIX),
-  );
+  const licenseFile = files.find((file) => file.path.toLowerCase().startsWith(LICENSE_PREFIX));
 
   return {
     kind: 'skill',

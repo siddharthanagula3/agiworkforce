@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { Brain, Mic } from 'lucide-react';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type {
+  DirectoryConnectorDetail,
   SettingsDataAdapter,
   SettingsNavGroupResolved,
   SettingsPlugin,
@@ -22,6 +23,7 @@ import { ConnectorConsentSummary } from '@/features/connectors/components/Connec
 import { ConnectorScopeList } from '@/features/connectors/components/ConnectorScopeList';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
+import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import {
   brokerOutcomeMessage,
   currentConnectorReturnPath,
@@ -610,6 +612,7 @@ export function WebSettingsModal({
   );
 
   const [toolPermissionsConnectorId, setToolPermissionsConnectorId] = useState<string | null>(null);
+  const [apiKeyConnectorId, setApiKeyConnectorId] = useState<string | null>(null);
 
   const mergedSettingsConnectors = useMemo(
     () =>
@@ -653,7 +656,7 @@ export function WebSettingsModal({
       // this. Kept non-optimistic for when a real flow lands: POST first, only
       // reflect state the server confirmed, surface failures to the panel.
       const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
-      if (!connector) return;
+      const name = connector?.name ?? id;
       const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors', {
         method: 'POST',
@@ -662,7 +665,10 @@ export function WebSettingsModal({
           'x-csrf-token': csrfToken,
         }),
         credentials: 'include',
-        body: JSON.stringify({ connectorId: id, authType: connector.authType }),
+        body: JSON.stringify({
+          connectorId: id,
+          ...(connector ? { authType: connector.authType } : {}),
+        }),
       });
       if (!res.ok) {
         // GitHub connects through the App install flow: the server answers POST
@@ -674,7 +680,12 @@ export function WebSettingsModal({
           error?: string;
           oauthStartPath?: string;
           installStartPath?: string;
+          credentialsPath?: string;
         } | null;
+        if (res.status === 409 && body?.credentialsPath) {
+          setApiKeyConnectorId(id);
+          return;
+        }
         if (res.status === 409 && typeof window !== 'undefined') {
           if (body?.oauthStartPath) {
             const target = withConnectorReturnPath(
@@ -697,9 +708,9 @@ export function WebSettingsModal({
                 return;
               }
               throw new Error(
-                (probeBody?.status && brokerOutcomeMessage(probeBody.status, connector.name)) ??
+                (probeBody?.status && brokerOutcomeMessage(probeBody.status, name)) ??
                   probeBody?.error ??
-                  `Could not connect ${connector.name}.`,
+                  `Could not connect ${name}.`,
               );
             }
           }
@@ -708,7 +719,7 @@ export function WebSettingsModal({
             return;
           }
         }
-        throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
+        throw new Error(body?.error ?? `Could not connect ${name}.`);
       }
       const json = (await res.json()) as {
         connector: { connectorId: string; connectedAt?: string };
@@ -1228,15 +1239,30 @@ export function WebSettingsModal({
     connectorsError,
     connectorsNotice:
       [connectorsNotice, githubInstallationsNotice].filter(Boolean).join(' ') || null,
-    renderConnectorDetailFooter: (connectorId: string) => (
-      <button
-        type="button"
-        onClick={() => setToolPermissionsConnectorId(connectorId)}
-        className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted"
-      >
-        <span className="font-medium">{TOOL_PERMISSIONS_LABEL}</span>
-        <span className="mt-0.5 block text-muted-foreground">{TOOL_PERMISSIONS_HINT}</span>
-      </button>
+    renderConnectorDetailFooter: (connectorId: string, detail: DirectoryConnectorDetail) => (
+      <div className="flex flex-col gap-3">
+        {apiKeyConnectorId === connectorId ? (
+          <ConnectorApiKeyForm
+            connectorId={connectorId}
+            onConnected={() => {
+              setApiKeyConnectorId(null);
+              void loadConnectors();
+              void directoryAdapter.loadSection?.('connectors');
+            }}
+            onCancel={() => setApiKeyConnectorId(null)}
+          />
+        ) : null}
+        {detail.connected || (detail.tools?.length ?? 0) > 0 ? (
+          <button
+            type="button"
+            onClick={() => setToolPermissionsConnectorId(connectorId)}
+            className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted"
+          >
+            <span className="font-medium">{TOOL_PERMISSIONS_LABEL}</span>
+            <span className="mt-0.5 block text-muted-foreground">{TOOL_PERMISSIONS_HINT}</span>
+          </button>
+        ) : null}
+      </div>
     ),
     onRetryConnectors: loadConnectors,
     onConnectConnector: connectConnector,

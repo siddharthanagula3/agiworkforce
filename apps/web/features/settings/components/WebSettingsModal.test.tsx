@@ -36,6 +36,11 @@ vi.mock('../sections/ReflectSection', () => ({
   ReflectSection: () => <div>Reflect settings content</div>,
 }));
 
+async function findConnectedGlyph(name: string) {
+  const card = (await screen.findByRole('button', { name })).closest('.group') as HTMLElement;
+  return within(card).findByRole('img', { name: 'Connected' });
+}
+
 function stubFetch({
   connectors = [] as Array<{
     connectorId: string;
@@ -49,6 +54,7 @@ function stubFetch({
     source: string;
     lifecycle?: 'included' | 'draft';
     downloadable?: boolean;
+    editable?: boolean;
   }>,
   canAuthorSkills = false,
   installedSkillNames = [] as string[],
@@ -132,16 +138,18 @@ function stubFetch({
     }
     if (url.includes('/api/plugins')) {
       const isLegacyPluginRequest = init?.credentials === 'include';
-      if (!isLegacyPluginRequest) {
+      const isMarketplacePage = url.includes('source=marketplace');
+      if (!isLegacyPluginRequest && isMarketplacePage) {
         pluginCatalogAttempt += 1;
         if (pluginCatalogFailAttempts.includes(pluginCatalogAttempt)) {
           return { ok: false, status: 503, json: async () => ({}) } as Response;
         }
       }
+      const entries = isLegacyPluginRequest || url.includes('source=partner') ? plugins : [];
       return {
         ok: true,
         status: 200,
-        json: async () => ({ entries: plugins, total: plugins.length }),
+        json: async () => ({ entries, total: entries.length }),
       } as Response;
     }
     if (url.includes('/api/github/installations')) {
@@ -262,9 +270,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
+    expect(await findConnectedGlyph('Notion')).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Slack' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
   });
 
@@ -281,7 +289,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
+    expect(await findConnectedGlyph('Notion')).toBeTruthy();
     expect(
       await screen.findByText(
         'Some connector data could not be read. Valid connectors remain available; retry to refresh.',
@@ -310,9 +318,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add Notion' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Add GitHub' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect Notion' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect GitHub' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
@@ -324,7 +332,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Add GitHub' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Connect GitHub' })).toBeTruthy();
   });
 
   it('shows a secure-storage configuration failure on the connector row', async () => {
@@ -342,14 +350,14 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    const connectButton = await screen.findByRole('button', { name: 'Add Notion' });
+    const connectButton = await screen.findByRole('button', { name: 'Connect Notion' });
     await act(async () => {
       fireEvent.click(connectButton);
     });
 
     expect(await screen.findByText(message)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add Notion' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Remove Notion' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Connect Notion' })).toBeEnabled();
+    expect(screen.queryByRole('img', { name: 'Connected' })).toBeNull();
   });
 
   it('names the real cause instead of blaming the connection for a server fault', async () => {
@@ -407,8 +415,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
-    expect(await screen.findByRole('button', { name: 'Add GitHub' })).toBeTruthy();
+    expect(await findConnectedGlyph('Notion')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Connect GitHub' })).toBeTruthy();
 
     expect(
       await screen.findByText(
@@ -436,7 +444,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
+    expect(await findConnectedGlyph('Notion')).toBeTruthy();
     expect(
       await screen.findByText(
         'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
@@ -459,7 +467,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Add Notion' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Connect Notion' })).toBeTruthy();
     expect(
       await screen.findByText(
         'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
@@ -672,6 +680,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
           name: 'fixture-authored-skill',
           description: 'An authored fixture skill.',
           source: 'personal',
+          editable: true,
         },
       ],
     });
