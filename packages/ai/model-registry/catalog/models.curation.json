@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-05",
+  "lastUpdated": "2026-09-06",
   "verificationLog": [
     {
       "date": "2026-09-05",
@@ -277,6 +277,12 @@
       "verifiedBy": "official-deepseek-and-openai-pricing-pages",
       "status": "CORRECTION",
       "notes": "DeepSeek publishes a peak/off-peak rate card, and both V4 rows carried figures that match neither half of it. Peak is $0.44/$1.32 per 1M with a $0.014 cache hit for deepseek-v4-flash and $1.32/$3.96 with a $0.044 cache hit for deepseek-v4-pro; off-peak is exactly half of each, and peak hours are 01:00-04:00 and 06:00-10:00 UTC Monday through Friday. Both rows now carry the peak rate as a curation costOverride, because peak is the only figure never undercut on any date and the schema has no field for a time-of-day split; the same reasoning moved providers.deepseek.defaultPricing, the cost-calculator fallback for unrecognised deepseek ids, from $0.14/$0.28 to $0.44/$1.32. The prior values ($0.14/$0.28/$0.0028 for flash, $0.435/$0.87/$0.003625 for pro) came from models.dev, which still publishes them for the first-party deepseek provider; litellm's first-party deepseek entry independently agrees with the peak rate. The pro row additionally asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22, no discount, promotion or expiry language appears anywhere on DeepSeek's pricing page, so that claim is withdrawn. The override lives in curation rather than the synced snapshot so a later models.dev refresh cannot silently restore the undercharge. gpt-image-2 was checked in the same pass and is correct as recorded: OpenAI publishes an image row at $8.00 input, $2.00 cached input, $30.00 output and a separate text row at $5.00 input, $1.25 cached input, and this entry carries the image row throughout, so the $2.00 cache read stands and the $1.25 a snapshot reports is the text row. Sources retrieved 2026-09-01: https://api-docs.deepseek.com/quick_start/pricing and https://developers.openai.com/api/docs/pricing."
+    },
+    {
+      "date": "2026-09-06",
+      "verifiedBy": "founder-direction-and-openrouter-live-model-list",
+      "status": "ADDITION",
+      "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) joins tierAllowedModels.economy on the founder's instruction of 2026-09-06 so the composer offers it on the Free plan and every paid plan; the route was already registered on 2026-09-05 with a live end to end check against the OpenRouter API. Its $0 price is the router's list price for the free upstream models it picks, and those upstream providers' terms may allow training on prompts, which is why the company free lane (check-free-pools) still lists no OpenRouter free route; the picker entry is a user choice, not the free lane."
     }
   ],
   "providers": {
@@ -2352,9 +2358,9 @@
           "unit": "video_tokens",
           "framesPerSecond": 24,
           "pixelsPerToken": 1024,
-          "usdPerToken": 0.0000107,
-          "usdPerTokenWithoutAudio": 0.0000107,
-          "usdPerTokenWithVideoInput": 0.0000064
+          "usdPerToken": 1.07e-5,
+          "usdPerTokenWithoutAudio": 1.07e-5,
+          "usdPerTokenWithVideoInput": 6.4e-6
         }
       },
       "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The with-audio and without-audio video-token SKUs are both $0.0000107/token; requests that carry a video reference bill at the cheaper $0.0000064/token with-video-input SKU. Every reservation uses the exact catalog pixel tuple rather than a flat resolution price. Verified against openrouter.ai, retrieved 2026-09-04.",
@@ -4008,7 +4014,8 @@
       "family:openai/gpt-fast",
       "family:google/gemini-flash-lite",
       "family:google/gemini-flash",
-      "family:qwen/qwen-flash"
+      "family:qwen/qwen-flash",
+      "openrouter-free"
     ],
     "pro_additions": [
       "family:openai/gpt-balanced",
