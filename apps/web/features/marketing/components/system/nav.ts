@@ -24,7 +24,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
     columns: 2,
     items: [
       {
-        href: '/apps',
+        href: '/web',
         label: 'AGI Web',
         description: 'Chat, projects and artifacts in the browser',
       },
@@ -174,7 +174,7 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Surfaces',
     links: [
-      { href: '/apps', label: 'Web', status: SURFACE_STATUS.web },
+      { href: '/web', label: 'Web', status: SURFACE_STATUS.web },
       { href: '/cli', label: 'CLI', status: SURFACE_STATUS.cli },
       { href: '/desktop', label: 'Desktop', status: SURFACE_STATUS.desktop },
       { href: '/vscode-extension', label: 'VS Code', status: SURFACE_STATUS.vscode },
