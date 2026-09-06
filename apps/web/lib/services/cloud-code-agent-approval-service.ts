@@ -8,7 +8,7 @@ import { CLOUD_CODE_RUN_COMMAND_TOOL } from './cloud-code-agent-tools';
 import { truncateToolOutput } from './cloud-code-agent-loop';
 import {
   executePersistedAgentTurn,
-  type CloudCodeAgentTurnRecord,
+  type CloudCodeAgentTurnOutcome,
 } from './cloud-code-agent-service';
 import { resolveProviderFromModel } from './provider-adapter-service';
 import {
@@ -165,7 +165,7 @@ export interface DecideCloudCodeAgentApprovalInput {
 
 export function decideCloudCodeAgentApproval(
   input: DecideCloudCodeAgentApprovalInput,
-): Promise<CloudCodeAgentTurnRecord> {
+): Promise<CloudCodeAgentTurnOutcome> {
   return withSpan(
     'approval.decide',
     {
@@ -181,7 +181,7 @@ export function decideCloudCodeAgentApproval(
 
 async function resolveCloudCodeAgentApproval(
   input: DecideCloudCodeAgentApprovalInput,
-): Promise<CloudCodeAgentTurnRecord> {
+): Promise<CloudCodeAgentTurnOutcome> {
   const { db, owner, sessionId, decision, planTier } = input;
   const turnId = requireTurnId(input.turnId);
   if (!Number.isInteger(input.stepIndex) || input.stepIndex < 0) {

@@ -68,6 +68,35 @@ const READ_ONLY_COMMANDS = new Set([
   'printenv',
 ]);
 
+/**
+ * A two-token probe of a toolchain binary: `node --version`, `git --version`.
+ * It reads no file, writes nothing and reaches no network, and asking the reader
+ * to approve one is the kind of prompt that trains people to click Approve
+ * without reading. The check runs AFTER the approval patterns on purpose, so
+ * `npm --version` still stops at the dependency-manager rule.
+ */
+const VERSION_PROBE_BINARIES = new Set([
+  'node',
+  'python',
+  'python3',
+  'git',
+  'go',
+  'cargo',
+  'rustc',
+  'java',
+  'ruby',
+  'php',
+  'deno',
+  'bun',
+  'tsc',
+  'gcc',
+  'make',
+]);
+
+const VERSION_PROBE_FLAGS = new Set(['--version', '-v', '-V', '--help']);
+
+const VERSION_PROBE_TOKEN_COUNT = 2;
+
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   {
     pattern: /\bsudo\b|\bsu\b/,
@@ -153,9 +182,17 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
     };
   }
 
-  const firstToken = command.split(/\s+/)[0] ?? '';
+  const tokens = command.split(/\s+/);
+  const firstToken = tokens[0] ?? '';
   if (READ_ONLY_COMMANDS.has(firstToken)) {
     return { risk: 'safe', reason: 'Read-only, workspace-scoped command.' };
+  }
+  if (
+    tokens.length === VERSION_PROBE_TOKEN_COUNT &&
+    VERSION_PROBE_BINARIES.has(firstToken) &&
+    VERSION_PROBE_FLAGS.has(tokens[1] ?? '')
+  ) {
+    return { risk: 'safe', reason: 'Version or help probe of an installed tool.' };
   }
 
   return {

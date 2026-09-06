@@ -37,9 +37,9 @@ export const CODE_TIMING = {
 } as const;
 
 export const CODE_COPY = {
-  surface: 'Code',
+  surface: 'AGI Code',
   toChat: 'Go to chat',
-  toCode: 'Code',
+  toCode: 'AGI Code',
   newSession: 'New',
   artifacts: 'Artifacts',
   customize: 'Customize',
@@ -56,6 +56,7 @@ export const CODE_COPY = {
   loadingSessions: 'Loading sessions',
   openingSession: 'Opening session',
   retry: 'Retry',
+  retryTask: 'Run this task again',
   dismiss: 'Dismiss',
   composerPlaceholder: 'Describe a task or ask a question',
   greetingWithName: "What's up next, {name}?",

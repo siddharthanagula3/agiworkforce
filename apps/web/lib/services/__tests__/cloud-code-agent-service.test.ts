@@ -31,6 +31,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   reserveManagedUsageProviderStep: vi.fn(),
+  markManagedUsageProviderStarted: vi.fn(async () => undefined),
   finalizeManagedUsageRequest: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
@@ -56,6 +57,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import {
   finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
@@ -147,7 +149,60 @@ beforeEach(() => {
     estimatedCostCents: FLAT_RESERVATION_CENTS,
   } as never);
   vi.mocked(reserveManagedUsageProviderStep).mockResolvedValue({} as never);
+  vi.mocked(markManagedUsageProviderStarted).mockResolvedValue(undefined as never);
   vi.mocked(finalizeManagedUsageRequest).mockResolvedValue({} as never);
+});
+
+describe('Cloud Code turn lifecycle', () => {
+  it('starts the reservation before the first provider step is charged', async () => {
+    await runTurn({});
+
+    expect(markManagedUsageProviderStarted).toHaveBeenCalledTimes(1);
+    const startedAt = vi.mocked(markManagedUsageProviderStarted).mock.invocationCallOrder[0] ?? 0;
+    const chargedAt = vi.mocked(reserveManagedUsageProviderStep).mock.invocationCallOrder[0] ?? 0;
+    expect(startedAt).toBeLessThan(chargedAt);
+  });
+
+  it('returns the tools the turn ran so the transcript can show them', async () => {
+    vi.mocked(runCloudCodeAgentTurn).mockImplementation(async (input) => {
+      await input.onEvent?.({
+        type: 'tool-end',
+        stepIndex: 1,
+        toolName: 'run_command',
+        toolArgs: { command: 'node --version' },
+        output: 'v22.11.0',
+        isError: false,
+      });
+      return {
+        stopReason: 'done',
+        stepsUsed: 1,
+        usage: NO_USAGE,
+        finalMessage: 'Node 22 is installed.',
+        messages: [],
+      };
+    });
+
+    const outcome = await startCloudCodeAgentTurn({
+      db: dbStub() as never,
+      owner: { userId: 'user-1', organizationId: null },
+      sessionId: 'session-1',
+      goal: 'Print the node version',
+      model: STANDARD_MODEL,
+      planTier: 'pro',
+      idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      signal: new AbortController().signal,
+    });
+
+    expect(outcome.steps).toEqual([
+      {
+        index: 1,
+        toolName: 'run_command',
+        label: 'node --version',
+        output: 'v22.11.0',
+        isError: false,
+      },
+    ]);
+  });
 });
 
 describe('Cloud Code turn settlement uses measured tokens', () => {

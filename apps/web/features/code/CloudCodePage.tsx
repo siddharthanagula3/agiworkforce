@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/icons';
 import { Sheet, SheetContent, SheetTitle, Spinner, useConfirmAction } from '@agiworkforce/ui';
 import type {
+  CloudCodeAgentTurnRecord,
   CloudCodeAvailability,
   CloudCodeRuntime,
   CloudCodeSession,
@@ -37,6 +38,7 @@ import {
   filterAndSortSessions,
   parseExtraHosts,
   sessionContextChip,
+  stopReasonIsFailure,
   type CodeSessionFilters,
 } from './code-surface';
 import {
@@ -58,6 +60,7 @@ const DEFAULT_SESSION_TITLE_WORDS = 6;
 const GREETING_MARK_SIZE = 28;
 const GREETING_NAME_SLOT = '{name}';
 const CHANGED_FILES_COMMAND = 'git status --porcelain';
+const DOCUMENT_TITLE_SEPARATOR = ' · ';
 
 function makeRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -71,6 +74,20 @@ function makeRequestId(): string {
 // toUserMessage keeps a sentence somebody wrote and drops operator detail.
 function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
+}
+
+function toTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnRecord {
+  return {
+    id: record.turnId,
+    turnId: record.turnId,
+    at: record.createdAt,
+    goal: record.goal,
+    stopReason: record.stopReason,
+    finalMessage: record.finalMessage,
+    errorMessage: record.errorMessage,
+    steps: record.steps,
+    retryable: record.stopReason !== null && stopReasonIsFailure(record.stopReason),
+  };
 }
 
 function titleFromTask(task: string): string {
@@ -196,6 +213,17 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       .then((body) => {
         replaceSession(body.session);
         setEntries(body.terminalEntries);
+        // Merge rather than replace: this read races the turn running in this
+        // tab, and a response computed before that turn's row existed used to
+        // wipe it out of the transcript.
+        setTurns((current) => {
+          const stored = body.turns.map(toTurnRecord);
+          const storedIds = new Set(stored.map((record) => record.id));
+          return [
+            ...stored,
+            ...current.filter((record) => !record.turnId || !storedIds.has(record.turnId)),
+          ];
+        });
       })
       .catch((detailError) => {
         if (detailError instanceof DOMException && detailError.name === 'AbortError') return;
@@ -225,6 +253,14 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const transcript = useMemo(() => buildCodeTranscript(entries, turns), [entries, turns]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const title = selectedSession?.title.trim();
+    document.title = title
+      ? `${title}${DOCUMENT_TITLE_SEPARATOR}${CODE_COPY.surface}`
+      : CODE_COPY.surface;
+  }, [selectedSession]);
+
+  useEffect(() => {
     const end = transcriptEndRef.current;
     if (typeof end?.scrollIntoView === 'function') end.scrollIntoView({ block: 'nearest' });
   }, [transcript, busy]);
@@ -237,9 +273,12 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         record.id === recordId
           ? {
               ...record,
+              turnId: turn.turnId,
               stopReason: turn.stopReason,
               finalMessage: turn.finalMessage,
               errorMessage: turn.errorMessage ?? null,
+              steps: turn.steps,
+              retryable: stopReasonIsFailure(turn.stopReason),
             }
           : record,
       ),
@@ -266,11 +305,14 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         ...current,
         {
           id: recordId,
+          turnId: null,
           at: new Date().toISOString(),
           goal,
           stopReason: null,
           finalMessage: '',
           errorMessage: null,
+          steps: [],
+          retryable: false,
         },
       ]);
       setBusy(true);
@@ -285,9 +327,22 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         applyTurn(recordId, turn, goal);
         void loadSessions();
       } catch (turnError) {
-        setTurns((current) => current.filter((record) => record.id !== recordId));
+        // The failure belongs in the transcript, next to the task that caused
+        // it. The page-level notice cannot carry it: the session refresh below
+        // clears that notice before it has been painted once.
+        setTurns((current) =>
+          current.map((record) =>
+            record.id === recordId
+              ? {
+                  ...record,
+                  stopReason: 'error',
+                  errorMessage: friendlyError(turnError),
+                  retryable: true,
+                }
+              : record,
+          ),
+        );
         setTask(goal);
-        setError(friendlyError(turnError));
         void loadSessions();
       } finally {
         setBusy(false);
@@ -367,11 +422,14 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         ...current,
         {
           id: recordId,
+          turnId: approval.turnId,
           at: new Date().toISOString(),
           goal: approval.goal,
           stopReason: null,
           finalMessage: '',
           errorMessage: null,
+          steps: [],
+          retryable: false,
         },
       ]);
       setBusy(true);
@@ -683,6 +741,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         onDecideApproval={(approval, decision) =>
                           void handleApproval(approval, decision)
                         }
+                        onRetryTask={(goal) => void handleSubmit(goal)}
                       />
                     )}
 
