@@ -2,6 +2,36 @@ import { describe, it, expect } from 'vitest';
 import { preprocessMath } from './preprocessMath';
 
 describe('preprocessMath', () => {
+  it('escapes dollar amounts so prices never become inline math', () => {
+    expect(preprocessMath('starts at $2,499 for M5 Max and $5,499 for M5 Ultra')).toBe(
+      'starts at \\$2,499 for M5 Max and \\$5,499 for M5 Ultra',
+    );
+  });
+
+  it('escapes a lone dollar amount with no closing dollar on the line', () => {
+    expect(preprocessMath('DGX Spark costs $4,699 today.')).toBe('DGX Spark costs \\$4,699 today.');
+  });
+
+  it('escapes a price that precedes real inline math on the same line', () => {
+    expect(preprocessMath('It costs $5 and the area is $x^2$.')).toBe(
+      'It costs \\$5 and the area is $x^2$.',
+    );
+  });
+
+  it('keeps inline math that starts with a digit', () => {
+    expect(preprocessMath('So $2x + 3 = 7$ gives $x = 2$.')).toBe('So $2x + 3 = 7$ gives $x = 2$.');
+    expect(preprocessMath('Then $2 \\times 3$ is six.')).toBe('Then $2 \\times 3$ is six.');
+  });
+
+  it('leaves display math and already escaped dollars alone', () => {
+    expect(preprocessMath('$$\n5 + 5 = 10\n$$')).toBe('$$\n5 + 5 = 10\n$$');
+    expect(preprocessMath('costs \\$5 today')).toBe('costs \\$5 today');
+  });
+
+  it('does not escape dollars inside code', () => {
+    expect(preprocessMath('run `echo $1 and $2`')).toBe('run `echo $1 and $2`');
+  });
+
   it('converts \\( ... \\) to $ ... $', () => {
     expect(preprocessMath('The value is \\(x^2\\) here.')).toBe('The value is $x^2$ here.');
   });
