@@ -52,9 +52,11 @@ export function buildConnectorAuthorizationRequiredPayload(params: {
   reason: ConnectorAuthorizationReason;
   additionalScopes?: string[];
   returnPath?: string;
+  /** Overrides the registry check for connectors whose authorization is discovered at connect time. */
+  connectable?: boolean;
 }): ConnectorAuthorizationRequiredPayload {
   const provider = getConnectorOAuthProvider(params.connectorId);
-  const connectable = isConnectorOAuthSupported(params.connectorId);
+  const connectable = params.connectable ?? isConnectorOAuthSupported(params.connectorId);
   const connectorName = params.connectorLabel ?? provider?.displayName ?? params.connectorId;
   const scopes = [...new Set([...(provider?.scopes ?? []), ...(params.additionalScopes ?? [])])];
   return {

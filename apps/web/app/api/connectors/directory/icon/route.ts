@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
+import { clientIpRateLimitIdentifier, withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getIconForUrl } from '@/lib/connectors/directory/icon-fetch';
 import { getSnapshotRecords } from '@/lib/connectors/directory/memory-cache';
@@ -13,7 +13,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const rateLimited = await withRateLimit(request, 'chat-conversation');
+  const rateLimited = await withRateLimit(
+    request,
+    'connector-directory-icon',
+    clientIpRateLimitIdentifier(request),
+  );
   if (rateLimited) return rateLimited;
 
   const connectorId = new URL(request.url).searchParams.get('id');

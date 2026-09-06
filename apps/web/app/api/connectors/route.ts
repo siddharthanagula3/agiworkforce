@@ -7,8 +7,11 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import {
   evictConnectorOAuthCaches,
+  evictCustomConnectorCaches,
+  findUserCustomConnectorByUrl,
   getOperatorMappedConnectorIds,
   getUserGithubInstallations,
   getUserCustomConnectorSummaries,
@@ -40,31 +43,43 @@ import {
   CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
   isConnectorTokenStorageAvailable,
 } from '@/lib/custom-connector-crypto';
+import { describeConnectorSetup, type ConnectorSetupKind } from '@/lib/connectors/oauth-setup';
+import {
+  findDirectoryTargetByRemoteUrl,
+  resolveDirectoryConnectAuthMode,
+  resolveDirectoryTarget,
+  type DirectoryConnectTarget,
+} from '@/lib/connectors/mcp-directory-targets';
+import {
+  assertConnectorToolCapacity,
+  assertCustomConnectorCapacity,
+  clearConnectorToolPermissions,
+  CONNECTOR_UNREACHABLE_CODE,
+  customConnectorId,
+  deleteCustomConnectorRows,
+  insertCustomConnector,
+  isUndefinedTableError,
+  McpProbeError,
+  probeMcpServer,
+  type McpProbeResult,
+} from '@/lib/connectors/mcp-custom-connections';
+import { setCachedToolNames } from '@/lib/connectors/directory/tool-names-cache';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 
 const GITHUB_CONNECTOR_ID = 'github';
+const GITHUB_INSTALL_START_PATH = '/api/github/install/start';
+const RATE_LIMIT_BUCKET = 'chat-conversation';
+const CUSTOM_AUTH_TYPE = 'custom_mcp';
+const OAUTH_AUTH_TYPE = 'oauth';
+const DIRECTORY_AUDIT_SOURCE = 'directory';
+const CUSTOM_AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
+const CREDENTIALS_ROUTE_SEGMENT = 'credentials';
+const CONNECTORS_API_PATH = '/api/connectors';
+const AUTH_TYPES = ['local', 'oauth', 'api_key', 'connection_string', 'pat'] as const;
 
 const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
-
-async function clearConnectorToolPermissions(
-  db: ScopedDb,
-  userId: string,
-  connectorId: string,
-): Promise<void> {
-  try {
-    await db.execute(
-      `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,
-      [userId, connectorId],
-    );
-  } catch (error) {
-    if (isUndefinedTable(error)) return;
-    logger.warn(
-      { userId, connectorId, error },
-      'Connector tool permissions could not be cleared on disconnect; a later reconnect may reuse them',
-    );
-  }
-}
 
 type UserConnectorRow = {
   id: string;
@@ -74,15 +89,39 @@ type UserConnectorRow = {
   updated_at: string;
 };
 
-const PG_UNDEFINED_TABLE = '42P01';
+type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
 
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
+interface ConnectorEntry {
+  id: string;
+  connectorId: string;
+  authType: string;
+  connectedAt: string;
+  updatedAt: string;
+  source: ConnectorSource;
+  name?: string;
+  toolConnectorId?: string;
+  directoryId?: string;
+  scopes?: string[];
+  needsReauthorization?: boolean;
+  health?: ConnectorHealth;
+}
+
+interface ConnectorSetupEntry {
+  kind: ConnectorSetupKind;
+  missingEnv: readonly string[];
+  message: string;
+}
+
+function unreachableResponse(serverName: string, detail: string): NextResponse {
+  const message = `${serverName} could not be reached: ${detail}`;
+  return NextResponse.json(
+    { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
+    { status: 502 },
   );
+}
+
+export function credentialsPathFor(connectorId: string): string {
+  return `${CONNECTORS_API_PATH}/${encodeURIComponent(connectorId)}/${CREDENTIALS_ROUTE_SEGMENT}`;
 }
 
 function getAvailableConnectorIds(): string[] {
@@ -90,7 +129,7 @@ function getAvailableConnectorIds(): string[] {
   for (const id of getOperatorMappedConnectorIds()) available.add(id);
   for (const id of getOAuthConfiguredConnectorIds()) available.add(id);
   for (const id of connectorIdsWithMcpEndpoint()) {
-    if (isSelfServiceConnector(id)) available.add(id);
+    if (isSelfServiceConnector(id) && describeConnectorSetup(id) === null) available.add(id);
   }
   if (
     isGitHubInstallationLinkingAvailable() &&
@@ -102,8 +141,31 @@ function getAvailableConnectorIds(): string[] {
   return [...available];
 }
 
+function describeCuratedSetup(available: ReadonlySet<string>): Record<string, ConnectorSetupEntry> {
+  const setup: Record<string, ConnectorSetupEntry> = {};
+  for (const connector of CONNECTORS) {
+    if (available.has(connector.id)) continue;
+    const requirement = describeConnectorSetup(connector.id, connector.name);
+    if (!requirement) continue;
+    setup[connector.id] = {
+      kind: requirement.kind,
+      missingEnv: requirement.missingEnv,
+      message: requirement.message,
+    };
+  }
+  return setup;
+}
+
+function isCuratedOrConfiguredId(connectorId: string): boolean {
+  return (
+    isKnownConnectorId(connectorId) ||
+    getOperatorMappedConnectorIds().has(connectorId) ||
+    isConnectorOAuthConfigured(connectorId)
+  );
+}
+
 async function handleGetConnectors(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
@@ -118,26 +180,13 @@ async function handleGetConnectors(request: NextRequest) {
       [userId],
     );
   } catch (error) {
-    if (isUndefinedTable(error)) {
+    if (isUndefinedTableError(error)) {
       logger.warn({ userId }, 'user_connectors table not migrated; returning empty connectors');
       rows = [];
     } else {
       throw error;
     }
   }
-
-  type ConnectorEntry = {
-    id: string;
-    connectorId: string;
-    authType: string;
-    connectedAt: string;
-    updatedAt: string;
-    source: 'user' | 'github-app' | 'custom' | 'oauth';
-    name?: string;
-    scopes?: string[];
-    needsReauthorization?: boolean;
-    health?: ConnectorHealth;
-  };
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
   const connectors: ConnectorEntry[] = rows
@@ -165,26 +214,41 @@ async function handleGetConnectors(request: NextRequest) {
 
   const oauthGrants = await getUserConnectorOAuthGrantSummaries(userId);
   for (const grant of oauthGrants) {
-    if (!isConnectorOAuthSupported(grant.connectorId)) continue;
     if (connectors.some((c) => c.connectorId === grant.connectorId)) continue;
-    connectors.push({
+    const base = {
       id: `oauth-${grant.connectorId}`,
       connectorId: grant.connectorId,
-      authType: 'oauth',
+      authType: OAUTH_AUTH_TYPE,
       connectedAt: grant.connectedAt,
       updatedAt: grant.updatedAt,
-      source: 'oauth',
+      source: 'oauth' as const,
       scopes: grant.grantedScopes,
       needsReauthorization: grant.needsReauthorization,
+    };
+    if (isConnectorOAuthSupported(grant.connectorId)) {
+      connectors.push(base);
+      continue;
+    }
+    const target = await resolveDirectoryTarget(grant.connectorId);
+    if (!target) continue;
+    connectors.push({
+      ...base,
+      name: target.name,
+      toolConnectorId: target.serverId,
+      directoryId: target.connectorId,
     });
   }
 
   const customConnectors = await getUserCustomConnectorSummaries(db, userId);
   for (const c of customConnectors) {
+    const linked = await findDirectoryTargetByRemoteUrl(c.url);
+    const toolConnectorId = customConnectorId(c.shortId);
     connectors.push({
       id: c.id,
-      connectorId: `custom-${c.shortId}`,
-      authType: 'custom_mcp',
+      connectorId: linked ? linked.connectorId : toolConnectorId,
+      toolConnectorId,
+      ...(linked ? { directoryId: linked.connectorId } : {}),
+      authType: CUSTOM_AUTH_TYPE,
       connectedAt: c.createdAt,
       updatedAt: c.updatedAt,
       source: 'custom',
@@ -201,14 +265,161 @@ async function handleGetConnectors(request: NextRequest) {
           ...entry,
           health: resolveConnectorHealth({
             connectorId: entry.connectorId,
-            available: availableSet.has(entry.connectorId),
+            available: availableSet.has(entry.connectorId) || entry.directoryId !== undefined,
             connected: true,
             needsReauthorization: entry.needsReauthorization === true,
           }),
         },
   );
 
-  return NextResponse.json({ connectors: withHealth, available });
+  return NextResponse.json({
+    connectors: withHealth,
+    available,
+    setup: describeCuratedSetup(availableSet),
+  });
+}
+
+function directoryConnectorEntry(
+  target: DirectoryConnectTarget,
+  row: { id: string; shortId: string; name: string; url: string; transport: string },
+  timestamps: { connectedAt: string; updatedAt: string },
+): ConnectorEntry {
+  return {
+    id: row.id,
+    connectorId: target.connectorId,
+    toolConnectorId: customConnectorId(row.shortId),
+    directoryId: target.connectorId,
+    authType: CUSTOM_AUTH_TYPE,
+    connectedAt: timestamps.connectedAt,
+    updatedAt: timestamps.updatedAt,
+    source: 'custom',
+    name: row.name,
+    health: 'connected',
+  };
+}
+
+async function connectDirectoryTarget(
+  request: NextRequest,
+  db: ScopedDb,
+  userId: string,
+  target: DirectoryConnectTarget,
+): Promise<NextResponse> {
+  const connectorId = target.connectorId;
+  const authMode = await resolveDirectoryConnectAuthMode(target);
+
+  if (authMode === 'unknown') {
+    const message = `${target.name} does not say how it authenticates and did not answer a discovery probe, so it cannot be connected from the browser yet.`;
+    return NextResponse.json({ error: message, message, connectorId }, { status: 501 });
+  }
+
+  if (authMode !== 'none' && !isConnectorTokenStorageAvailable()) {
+    return NextResponse.json(
+      {
+        error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
+        message: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
+        connectorId,
+      },
+      { status: 503 },
+    );
+  }
+
+  if (authMode === 'oauth') {
+    const startPath = buildConnectorOAuthStartPath(connectorId);
+    const message = `${target.name} connects through its own authorization page.`;
+    return NextResponse.json(
+      {
+        error: message,
+        message,
+        connectorId,
+        oauthStartPath: startPath,
+        installStartPath: startPath,
+      },
+      { status: 409 },
+    );
+  }
+
+  if (authMode === 'api-key') {
+    const message = `${target.name} needs an API key before it can connect.`;
+    return NextResponse.json(
+      { error: message, message, connectorId, credentialsPath: credentialsPathFor(connectorId) },
+      { status: 409 },
+    );
+  }
+
+  const existing = await findUserCustomConnectorByUrl(userId, target.mcpUrl);
+  if (existing) {
+    const now = new Date().toISOString();
+    return NextResponse.json({
+      connector: directoryConnectorEntry(target, existing, { connectedAt: now, updatedAt: now }),
+      alreadyConnected: true,
+    });
+  }
+
+  const capacity = await assertCustomConnectorCapacity(db, userId);
+  const parsedUrl = await validateHttpsMcpUrl(target.mcpUrl);
+  const url = parsedUrl.toString();
+
+  let probe: McpProbeResult;
+  try {
+    probe = await probeMcpServer({
+      serverName: target.serverId,
+      url,
+      transport: target.transport,
+      authorizationContext: `user:${userId}:custom-url:${url}`,
+    });
+  } catch (error) {
+    if (error instanceof McpProbeError) return unreachableResponse(target.name, error.message);
+    throw error;
+  }
+
+  assertConnectorToolCapacity(capacity.planTier, probe.toolCount);
+
+  const saved = await insertCustomConnector(db, {
+    userId,
+    name: target.name,
+    url,
+    transport: target.transport,
+    credentialEnc: null,
+    connectorLimit: capacity.connectorLimit,
+  });
+
+  await setCachedToolNames(connectorId, probe.toolNames);
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_added',
+    request,
+    detail: {
+      resourceType: CUSTOM_AUDIT_RESOURCE_TYPE,
+      resourceId: saved.id,
+      resourceName: saved.name,
+      connectorId: customConnectorId(saved.short_id),
+      subjectRef: connectorId,
+      transport: saved.transport,
+      source: DIRECTORY_AUDIT_SOURCE,
+    },
+  });
+
+  return NextResponse.json(
+    {
+      connector: directoryConnectorEntry(
+        target,
+        {
+          id: saved.id,
+          shortId: saved.short_id,
+          name: saved.name,
+          url: saved.url,
+          transport: saved.transport,
+        },
+        { connectedAt: saved.created_at, updatedAt: saved.updated_at },
+      ),
+      toolCount: probe.toolCount,
+      toolNames: probe.toolNames,
+      capabilityCounts: probe.capabilityCounts,
+      protocolEra: probe.protocolEra,
+    },
+    { status: 201 },
+  );
 }
 
 async function handleCreateConnector(request: NextRequest) {
@@ -217,7 +428,7 @@ async function handleCreateConnector(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: { connectorId?: string; authType?: string };
@@ -232,12 +443,10 @@ async function handleCreateConnector(request: NextRequest) {
   }
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
-  if (
-    !isKnownConnectorId(body.connectorId) &&
-    !operatorMappedIds.has(body.connectorId) &&
-    !isConnectorOAuthConfigured(body.connectorId)
-  ) {
-    throw createError.validation('Invalid connector ID');
+  if (!isCuratedOrConfiguredId(body.connectorId)) {
+    const target = await resolveDirectoryTarget(body.connectorId);
+    if (!target) throw createError.validation('Invalid connector ID');
+    return connectDirectoryTarget(request, db, userId, target);
   }
 
   const isLocal = isDeviceLocalConnector(body.connectorId);
@@ -251,8 +460,8 @@ async function handleCreateConnector(request: NextRequest) {
     );
   }
 
-  const authType = body.authType ?? 'oauth';
-  if (!['local', 'oauth', 'api_key', 'connection_string', 'pat'].includes(authType)) {
+  const authType = body.authType ?? OAUTH_AUTH_TYPE;
+  if (!(AUTH_TYPES as readonly string[]).includes(authType)) {
     throw createError.validation('Invalid auth type');
   }
 
@@ -263,6 +472,7 @@ async function handleCreateConnector(request: NextRequest) {
           error:
             'GitHub installation ownership verification is not available in this deployment. The connector stays disabled until the GitHub user authorization flow is configured.',
           connectorId: body.connectorId,
+          setup: describeConnectorSetup(body.connectorId),
         },
         { status: 501 },
       );
@@ -272,7 +482,7 @@ async function handleCreateConnector(request: NextRequest) {
       {
         error: 'GitHub connects through the GitHub App install flow, not a directory toggle.',
         connectorId: body.connectorId,
-        ...(installUrl ? { installStartPath: '/api/github/install/start' } : {}),
+        ...(installUrl ? { installStartPath: GITHUB_INSTALL_START_PATH } : {}),
       },
       { status: installUrl ? 409 : 501 },
     );
@@ -283,6 +493,13 @@ async function handleCreateConnector(request: NextRequest) {
       return NextResponse.json(
         { error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE, connectorId: body.connectorId },
         { status: 503 },
+      );
+    }
+    const setup = describeConnectorSetup(body.connectorId);
+    if (setup) {
+      return NextResponse.json(
+        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        { status: 501 },
       );
     }
     const startPath = buildConnectorOAuthStartPath(body.connectorId);
@@ -299,10 +516,12 @@ async function handleCreateConnector(request: NextRequest) {
 
   const isOperatorMapped = operatorMappedIds.has(body.connectorId);
   if (!isOperatorMapped) {
+    const setup = describeConnectorSetup(body.connectorId);
     return NextResponse.json(
       {
         error:
           'Connector authorization is not implemented for this provider. Start the provider-specific OAuth or credential flow instead of marking it active.',
+        ...(setup ? { message: setup.message, setup } : {}),
         connectorId: body.connectorId,
         authType,
       },
@@ -327,7 +546,7 @@ async function handleCreateConnector(request: NextRequest) {
       [userId, body.connectorId, authType, now, now],
     );
   } catch (error) {
-    if (isUndefinedTable(error)) {
+    if (isUndefinedTableError(error)) {
       logger.warn(
         { userId, connectorId: body.connectorId },
         'user_connectors table not migrated; connector save unavailable',
@@ -370,25 +589,71 @@ async function handleCreateConnector(request: NextRequest) {
   );
 }
 
+async function disconnectDirectoryTarget(
+  request: NextRequest,
+  db: ScopedDb,
+  userId: string,
+  target: DirectoryConnectTarget,
+): Promise<NextResponse> {
+  const row = await findUserCustomConnectorByUrl(userId, target.mcpUrl);
+  if (row) {
+    const deleted = await deleteCustomConnectorRows(db, userId, row.id);
+    for (const removed of deleted) {
+      await evictCustomConnectorCaches(userId, removed.id);
+      await clearConnectorToolPermissions(db, userId, customConnectorId(removed.short_id));
+      await recordAuditEvent({
+        userId,
+        eventType: 'connector_removed',
+        request,
+        detail: {
+          resourceType: CUSTOM_AUDIT_RESOURCE_TYPE,
+          resourceId: removed.id,
+          connectorId: customConnectorId(removed.short_id),
+          subjectRef: target.connectorId,
+          source: DIRECTORY_AUDIT_SOURCE,
+        },
+      });
+    }
+  }
+
+  if (await disconnectConnectorOAuthGrant(userId, target.connectorId)) {
+    await evictConnectorOAuthCaches(userId, target.connectorId);
+    await clearConnectorToolPermissions(db, userId, target.serverId);
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_removed',
+      request,
+      detail: {
+        resourceType: 'connector',
+        connectorId: target.connectorId,
+        source: DIRECTORY_AUDIT_SOURCE,
+      },
+    });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
 async function handleDeleteConnector(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError2 = await requireCsrfToken(request);
   if (csrfError2) return csrfError2 as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
   const url = new URL(request.url);
   const connectorId = url.searchParams.get('connectorId');
 
-  if (
-    !connectorId ||
-    (!isKnownConnectorId(connectorId) &&
-      !getOperatorMappedConnectorIds().has(connectorId) &&
-      !isConnectorOAuthConfigured(connectorId))
-  ) {
+  if (!connectorId) {
     throw createError.validation('Valid connectorId query param is required');
+  }
+
+  if (!isCuratedOrConfiguredId(connectorId)) {
+    const target = await resolveDirectoryTarget(connectorId);
+    if (!target) throw createError.validation('Valid connectorId query param is required');
+    return disconnectDirectoryTarget(request, db, userId, target);
   }
 
   const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
@@ -410,7 +675,7 @@ async function handleDeleteConnector(request: NextRequest) {
     try {
       await db.execute(`delete from github_installations where user_id = $1`, [userId]);
     } catch (error) {
-      if (!isUndefinedTable(error)) throw error;
+      if (!isUndefinedTableError(error)) throw error;
     }
     await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID);
     await recordAuditEvent({
@@ -434,7 +699,7 @@ async function handleDeleteConnector(request: NextRequest) {
       [new Date().toISOString(), userId, connectorId],
     );
   } catch (error) {
-    if (isUndefinedTable(error)) {
+    if (isUndefinedTableError(error)) {
       logger.warn({ userId, connectorId }, 'user_connectors table not migrated; delete ignored');
       throw createError.serviceUnavailable('Connectors are not available in this environment');
     }
