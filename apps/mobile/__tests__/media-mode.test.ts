@@ -1,4 +1,3 @@
-
 import { getRoutingSlotModel, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import {
   clearInvalidMediaModelSelections,
@@ -38,15 +37,17 @@ describe('media mode', () => {
       },
     );
 
-    it('excludes video-input/chat models that merely advertise videoGen', () => {
-      const genericCapabilityModels = Object.values(modelsCatalog.models).filter(
-        (model) => model.capabilities.videoGen === true && model.modelType !== 'video',
-      );
+    it('offers only video models for video, never a chat model that advertises videoGen', () => {
+      const genericCapabilityIds = Object.values(modelsCatalog.models)
+        .filter((model) => model.capabilities.videoGen === true && model.modelType !== 'video')
+        .map((model) => model.id);
+      const offered = listMediaModels('video');
 
-      expect(genericCapabilityModels.length).toBeGreaterThan(0);
-      expect(listMediaModels('video')).not.toEqual(
-        expect.arrayContaining(genericCapabilityModels.map((model) => model.id)),
-      );
+      expect(offered.length).toBeGreaterThan(0);
+      for (const id of offered) {
+        expect(modelsCatalog.models[id]?.modelType).toBe('video');
+        expect(genericCapabilityIds).not.toContain(id);
+      }
     });
 
     it('excludes non-live preview video models even when they advertise videoGen', () => {
@@ -95,13 +96,13 @@ describe('media mode', () => {
       expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
     });
 
-    it('rejects a persisted generic video-capability model that cannot generate video output', () => {
-      const genericCapabilityModel = Object.values(modelsCatalog.models).find(
-        (model) => model.capabilities.videoGen === true && model.modelType !== 'video',
+    it('rejects a persisted model that cannot generate video output', () => {
+      const nonVideoModel = Object.values(modelsCatalog.models).find(
+        (model) => model.modelType !== 'video',
       );
-      expect(genericCapabilityModel).toBeDefined();
+      expect(nonVideoModel).toBeDefined();
 
-      useChatViewStore.getState().setMediaModel('video', genericCapabilityModel!.id);
+      useChatViewStore.getState().setMediaModel('video', nonVideoModel!.id);
 
       expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
       expect(resolveMediaModelId('video')).not.toBe(genericCapabilityModel!.id);
