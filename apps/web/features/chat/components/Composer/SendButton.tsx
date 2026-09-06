@@ -35,7 +35,7 @@ function SendControl({
         type="button"
         onClick={onClick}
         className={cn(
-          'rounded-full p-2 bg-foreground text-background hover:bg-foreground/90 transition-all duration-200',
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 bg-foreground text-background hover:bg-foreground/90 transition-all duration-200',
           className,
         )}
         title="Stop generation"
@@ -53,7 +53,7 @@ function SendControl({
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          'rounded-full p-2 transition-all duration-200',
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
           disabled
             ? 'bg-muted text-muted-foreground cursor-not-allowed'
             : 'bg-terra-cotta-500 text-white hover:bg-terra-cotta-600 shadow-md',
@@ -62,7 +62,7 @@ function SendControl({
         title="Queue message · will send after current response finishes"
         aria-label="Add message to queue"
       >
-        <Clock className="h-4 w-4" aria-hidden="true" />
+        <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
       </button>
     );
   }
@@ -75,7 +75,7 @@ function SendControl({
       onClick={onClick}
       disabled={!canSend}
       className={cn(
-        'rounded-full p-2 transition-all duration-200',
+        'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
         canSend
           ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
           : 'bg-muted text-muted-foreground cursor-not-allowed',
@@ -84,7 +84,11 @@ function SendControl({
       title={isSending ? 'Sending…' : 'Send message'}
       aria-label={isSending ? 'Sending message…' : 'Send message'}
     >
-      {isSending ? <Spinner size="sm" /> : <ArrowUp className="h-4 w-4" aria-hidden="true" />}
+      {isSending ? (
+        <Spinner size="sm" />
+      ) : (
+        <ArrowUp className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+      )}
     </button>
   );
 }
