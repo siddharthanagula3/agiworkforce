@@ -8,7 +8,7 @@ import {
 
 import { WEB_SEARCH_TOOL } from './web-search-tool';
 
-export type RequiredSearchSource = 'toggle' | 'work_mode' | 'explicit_intent' | 'research_task';
+export type RequiredSearchSource = 'work_mode' | 'explicit_intent' | 'research_task';
 
 export type WebSearchRequirement = {
   required: boolean;
@@ -33,7 +33,6 @@ export function resolveWebSearchRequirement(input: {
 }): WebSearchRequirement {
   if (input.webSearchEnabled === false) return NOT_REQUIRED;
   if (input.agiWorkRun) return { required: true, source: 'work_mode' };
-  if (input.webSearchEnabled === true) return { required: true, source: 'toggle' };
   if (detectExplicitWebSearchIntent(input.userMessage) !== null) {
     return { required: true, source: 'explicit_intent' };
   }

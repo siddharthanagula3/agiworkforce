@@ -25,10 +25,20 @@ const UNRELATED_TOOL = {
 describe('resolveWebSearchRequirement', () => {
   const base = { webSearchEnabled: undefined, agiWorkRun: false, researchTask: false };
 
-  it('requires a search when the composer toggle is on', () => {
+  it('offers but never forces a search when search is merely switched on', () => {
     expect(
       resolveWebSearchRequirement({ ...base, webSearchEnabled: true, userMessage: 'hi' }),
-    ).toEqual({ required: true, source: 'toggle' });
+    ).toEqual({ required: false, source: null });
+  });
+
+  it('forces a search when search is on and the message asks for one', () => {
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        webSearchEnabled: true,
+        userMessage: 'search the web for the latest mac studio price',
+      }),
+    ).toEqual({ required: true, source: 'explicit_intent' });
   });
 
   it('requires a search for an AGI Work run with search enabled', () => {
