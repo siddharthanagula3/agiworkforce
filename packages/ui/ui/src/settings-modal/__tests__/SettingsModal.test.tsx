@@ -134,7 +134,7 @@ describe('SettingsModal nav (web IA)', () => {
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeTruthy();
   });
 
-  it('raises the mobile nav clip and cues an overflowing list with a scroll fade', () => {
+  it('lays the sections out as a strip on phones and cues an overflowing column with a scroll fade', () => {
     renderModal();
 
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
@@ -142,7 +142,11 @@ describe('SettingsModal nav (web IA)', () => {
     const topFade = screen.getByTestId('settings-nav-scroll-fade-top');
     const bottomFade = screen.getByTestId('settings-nav-scroll-fade-bottom');
 
-    expect(nav.className).toContain('max-h-[64%]');
+    expect(nav.className).not.toContain('max-h-');
+    expect(scrollRegion.className).toContain('flex-row');
+    expect(scrollRegion.className).toContain('overflow-x-auto');
+    expect(scrollRegion.className).toContain('md:flex-col');
+    expect(topFade.className).toContain('md:block');
     expect(topFade.className).toContain('opacity-0');
     expect(bottomFade.className).toContain('opacity-0');
 

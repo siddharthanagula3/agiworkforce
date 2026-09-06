@@ -1752,7 +1752,7 @@ function NavButton({
       type="button"
       onClick={() => onClick(itemKey)}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+        'flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm transition-colors md:w-full md:whitespace-normal',
         FOCUS_RING,
         isActive
           ? 'bg-accent text-accent-foreground font-medium'
@@ -1980,11 +1980,11 @@ export function SettingsModal({
         aria-describedby={undefined}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
-        className="flex h-[min(94vh,680px)] w-[min(96vw,860px)] max-w-none flex-col gap-0 overflow-hidden rounded-xl border-border/60 bg-background p-0 shadow-2xl md:flex-row"
+        className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-2xl md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl"
       >
         <nav
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="relative flex max-h-[64%] w-full shrink-0 flex-col border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
+          className="relative flex w-full shrink-0 flex-col border-b border-border/60 py-3 md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
         >
           {/* Title */}
           <DialogTitle className="mb-3 px-4 pr-12 text-base font-semibold text-foreground md:pr-4">
@@ -2016,23 +2016,26 @@ export function SettingsModal({
           <div
             ref={navRef}
             data-testid="settings-nav-scroll-region"
-            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+            className="relative flex min-h-0 flex-1 flex-row gap-1 overflow-x-auto overscroll-contain px-2 pb-1 md:flex-col md:gap-0 md:overflow-x-visible md:overflow-y-auto md:px-0 md:pb-0"
           >
             <div
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-top"
               className={cn(
-                'pointer-events-none sticky left-0 top-0 z-10 -mb-6 h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity',
+                'pointer-events-none sticky left-0 top-0 z-10 -mb-6 hidden h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity md:block',
                 canScrollUp ? 'opacity-100' : 'opacity-0',
               )}
             />
-            <div aria-hidden="true" className="h-6 shrink-0" />
+            <div aria-hidden="true" className="hidden h-6 shrink-0 md:block" />
             {visibleGroups ? (
-              <div className="flex flex-col gap-3 px-2">
+              <div className="flex flex-row gap-1 md:flex-col md:gap-3 md:px-2">
                 {visibleGroups.map((group, gi) => (
-                  <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
+                  <div
+                    key={group.label ?? `group-${gi}`}
+                    className="flex flex-row gap-1 md:flex-col md:gap-0.5"
+                  >
                     {group.label && (
-                      <div className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <div className="hidden px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block">
                         {group.label}
                       </div>
                     )}
@@ -2056,7 +2059,7 @@ export function SettingsModal({
                 )}
               </div>
             ) : (
-              <div className="flex flex-col gap-0.5 px-2">
+              <div className="flex flex-row gap-1 md:flex-col md:gap-0.5 md:px-2">
                 {visibleEntries.map((entry) => (
                   <NavButton
                     key={entry.key}
@@ -2070,12 +2073,12 @@ export function SettingsModal({
                 ))}
               </div>
             )}
-            <div aria-hidden="true" className="h-6 shrink-0" />
+            <div aria-hidden="true" className="hidden h-6 shrink-0 md:block" />
             <div
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-bottom"
               className={cn(
-                'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity',
+                'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 hidden h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity md:block',
                 canScrollDown ? 'opacity-100' : 'opacity-0',
               )}
             />
