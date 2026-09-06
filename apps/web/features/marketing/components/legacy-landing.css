@@ -2513,7 +2513,7 @@
   align-items: center;
   gap: 10px;
   width: fit-content;
-  margin: 0 0 26px;
+  margin: 6px 0 26px;
   padding: 6px 14px 6px 6px;
   border: 1px solid var(--agi-rule-strong);
   border-radius: 999px;

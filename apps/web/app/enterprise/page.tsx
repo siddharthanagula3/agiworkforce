@@ -27,7 +27,7 @@ export const metadata = buildMetadata({
  * is the same defect /trust was rewritten to remove (it promised "claims with
  * dates" and rendered none). Change this when you change a row.
  */
-const STATUS_AS_OF = '23 August 2026';
+const STATUS_AS_OF = '5 September 2026';
 
 /**
  * Field order is what `formatAuditEvent` emits; the metadata keys are the ones
@@ -105,10 +105,10 @@ export default function EnterprisePage() {
               </h2>
               <Prose>
                 Reviewed {STATUS_AS_OF}. Everything below is implemented and live, gated on the
-                enterprise_controls entitlement that ships with the Enterprise plan. When your
-                org&rsquo;s owner configures both directly once that entitlement is on the account,
-                an admin can read and filter the audit trail, and the workspace owner can set a
-                retention window and decide whether it is enforced.
+                enterprise_controls entitlement that ships with the Enterprise plan. Once that
+                entitlement is on the account, the workspace owner configures single sign-on and
+                directory provisioning directly, an admin can read and filter the audit trail, and
+                the owner can set a retention window and decide whether it is enforced.
               </Prose>
             </div>
             <SplitFeature
