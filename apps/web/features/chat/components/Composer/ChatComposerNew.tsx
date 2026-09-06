@@ -211,7 +211,7 @@ const WORK_BAR_LABELS = {
 const WORK_BAR_CONNECTOR_MARKS = 3;
 const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
 const WORK_BAR_ITEM_CLASS =
-  'flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium sm:h-8 sm:px-3 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium sm:h-8 sm:px-2 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
 
@@ -3962,7 +3962,7 @@ const ChatComposerNewComponent = ({
           {workScopeBarVisible ? (
             <div
               data-testid="composer-work-bar"
-              className="-mt-3 ml-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-1 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-2 pb-1.5 pt-4"
+              className="-mt-3 ml-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-0.5 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-1 pb-1.5 pt-4"
             >
               <button
                 ref={projectPickerTriggerRef}
