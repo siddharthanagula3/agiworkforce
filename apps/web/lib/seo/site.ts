@@ -1,4 +1,3 @@
-
 export const SITE_URL = (process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com').replace(
   /\/$/,
   '',
@@ -34,6 +33,7 @@ export const DISALLOW_APP = [
   '/account/',
   '/chat',
   '/chat/schedules',
+  '/code',
   '/settings',
   '/billing',
   '/chat/projects',

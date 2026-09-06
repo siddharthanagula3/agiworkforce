@@ -95,6 +95,7 @@
     "moreOptions": "その他のオプション",
     "moreOptionsFor": "{{name}} のその他のオプション",
     "moveToProject": "プロジェクトに移動",
+    "codeAction": "コード",
     "newChatAction": "新しいチャット",
     "newChatInProject": "プロジェクト内に新しいチャット",
     "newChatInProjectNamed": "{{name}} に新しいチャット",

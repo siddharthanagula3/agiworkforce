@@ -95,6 +95,7 @@
     "moreOptions": "Weitere Optionen",
     "moreOptionsFor": "Weitere Optionen für {{name}}",
     "moveToProject": "Zu Projekt verschieben",
+    "codeAction": "Code",
     "newChatAction": "Neuer Chat",
     "newChatInProject": "Neuer Chat im Projekt",
     "newChatInProjectNamed": "Neuer Chat in {{name}}",

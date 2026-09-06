@@ -14,7 +14,7 @@ import { signIn } from './qa-capability-harness';
 const DEFAULT_ROUTES = [
   '/chat',
   '/chat/artifacts',
-  '/chat/code',
+  '/code',
   '/chat/customize',
   '/chat/library',
   '/chat/projects',

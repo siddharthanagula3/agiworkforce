@@ -19,6 +19,7 @@ import {
   Search,
   Settings,
   SquarePen,
+  TerminalSquare,
   Trash2,
   Upload,
 } from '@agiworkforce/icons';
@@ -56,6 +57,11 @@ export interface SidebarProps extends SessionItemHandlers {
   showUsageWidget?: boolean;
 
   onNewChat: () => void;
+  /**
+   * Opens the Code surface. The route belongs to the host surface, so a caller
+   * that has no Code destination omits this and the control does not render.
+   */
+  onOpenCode?: () => void;
   onToggleCollapse?: () => void;
   onOpenSearch?: () => void;
   onOpenUsage?: () => void;
@@ -81,6 +87,7 @@ export interface SidebarProps extends SessionItemHandlers {
 
 const DEFAULT_EXPANDED: SidebarTemporalGroup[] = ['today', 'yesterday', 'thisWeek'];
 const COLLAPSED_RAIL_WIDTH = 52;
+const TOOLTIP_DELAY_MS = 200;
 const ROW_FOCUSABLE_SELECTOR = 'a, button';
 
 export function Sidebar(props: SidebarProps) {
@@ -98,6 +105,7 @@ export function Sidebar(props: SidebarProps) {
     budgetPercent = 0,
     showUsageWidget = false,
     onNewChat,
+    onOpenCode,
     onToggleCollapse,
     onOpenSearch,
     onOpenUsage,
@@ -131,6 +139,7 @@ export function Sidebar(props: SidebarProps) {
 
   const { t } = useUiTranslation('chat');
   const { t: tCommon } = useUiTranslation('common');
+  const codeLabel = t('sidebar.codeAction', 'Code');
 
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
@@ -432,7 +441,7 @@ export function Sidebar(props: SidebarProps) {
   if (collapsed) {
     const toggleLabel = t('sidebar.toggleSidebar', 'Toggle sidebar');
     return (
-      <TooltipProvider delayDuration={200}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <nav
           aria-label={t('sidebar.navLabel', 'Chat history')}
           className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out"
@@ -445,6 +454,9 @@ export function Sidebar(props: SidebarProps) {
               icon={SquarePen}
               onClick={onNewChat}
             />
+            {onOpenCode && (
+              <RailButton label={codeLabel} icon={TerminalSquare} onClick={onOpenCode} />
+            )}
             <RailButton
               label={tCommon('search', 'Search')}
               icon={Search}
@@ -525,6 +537,23 @@ export function Sidebar(props: SidebarProps) {
                 <SquarePen className="h-4 w-4" />
                 {t('newChat', 'New Chat')}
               </button>
+              {onOpenCode && (
+                <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={onOpenCode}
+                        aria-label={codeLabel}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
+                      >
+                        <TerminalSquare className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{codeLabel}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
           <button

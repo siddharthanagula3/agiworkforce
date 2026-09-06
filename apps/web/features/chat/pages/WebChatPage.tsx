@@ -145,6 +145,7 @@ import {
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { CODE_ROUTES } from '@/features/code/code-surface';
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
 import { VoiceHeaderLabel } from '../components/Voice/VoiceHeaderLabel';
 import { VoiceActivityPanel } from '../components/Voice/VoiceActivityPanel';
@@ -4701,6 +4702,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [handleDeleteSession],
   );
 
+  const handleSidebarOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
+
   const sharedSidebarProps = {
     sessions: sidebarSessions,
     projects: sidebarProjects,
@@ -4711,6 +4714,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     mode: 'cloud' as const,
     headerSlot: <SidebarWordmark />,
     onNewChat: handleSidebarNewChat,
+    onOpenCode: handleSidebarOpenCode,
     onToggleCollapse: handleToggleSidebar,
     onOpenSearch: handleSidebarOpenSearch,
     navItems: sidebarNavItems,

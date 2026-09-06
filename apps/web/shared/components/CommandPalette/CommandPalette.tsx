@@ -22,7 +22,7 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { ListChecks, MessageSquare, SquarePen } from '@agiworkforce/icons';
+import { ListChecks, MessageSquare, SquarePen, TerminalSquare } from '@agiworkforce/icons';
 import { cn } from '@shared/utils/cn';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
@@ -33,6 +33,7 @@ import { formatRelativeTime } from '@shared/utils/format';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { CODE_COPY, CODE_ROUTES } from '@/features/code/code-surface';
 
 export interface CommandOption {
   id: string;
@@ -137,6 +138,16 @@ function useCommands(
 
   const actions: CommandOption[] = [
     ...pageActions,
+    // Code left the rail (it has its own sidebar and its own route), so
+    // `pageActions` no longer carries it and the palette has to name it
+    // itself or the surface becomes unreachable from here.
+    {
+      id: 'go-code',
+      title: CODE_COPY.surface,
+      group: 'Actions',
+      icon: TerminalSquare,
+      action: () => router.push(CODE_ROUTES.root),
+    },
     {
       id: 'go-settings',
       title: 'Go to Settings',
