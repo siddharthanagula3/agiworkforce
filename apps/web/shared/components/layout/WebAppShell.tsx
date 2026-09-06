@@ -69,6 +69,7 @@ import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/d
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
+import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -100,6 +101,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
   const collapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Shared with WebChatPage's account menu (useUpgradePlanFlow) so the
   // dialog, mid-cycle confirm, and the real Stripe checkout call cannot
@@ -341,6 +343,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
       onManageWorkspace={() => openSettings('team')}
       onOpenSettings={() => openSettings('general')}
       onOpenHelp={() => router.push('/help')}
+      onOpenFeedback={() => setFeedbackOpen(true)}
       onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
       showUpgrade={hasSelfServeUpgradePath(currentTier)}
       onUpgrade={() => openUpgradeDialog()}
@@ -471,6 +474,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
       {upgradeDialogs}
+      <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
         open={keyboardShortcutsOpen}
         onOpenChange={setKeyboardShortcutsOpen}

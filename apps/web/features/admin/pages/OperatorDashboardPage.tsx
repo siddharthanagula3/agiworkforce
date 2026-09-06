@@ -333,7 +333,24 @@ export function OperatorDashboardPage() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {row.email ?? row.userId ?? 'signed out'}
                   </p>
+                  {row.pagePath ? (
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{row.pagePath}</p>
+                  ) : null}
                   <p className="mt-2 whitespace-pre-wrap text-sm">{row.message}</p>
+                  {row.screenshotKey ? (
+                    <a
+                      href={`/api/operator?view=feedback-screenshot&key=${encodeURIComponent(row.screenshotKey)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 block max-w-md overflow-hidden rounded-lg border border-border"
+                    >
+                      <img
+                        src={`/api/operator?view=feedback-screenshot&key=${encodeURIComponent(row.screenshotKey)}`}
+                        alt="Screenshot attached to this feedback"
+                        className="block w-full"
+                      />
+                    </a>
+                  ) : null}
                 </li>
               ))}
             </ul>

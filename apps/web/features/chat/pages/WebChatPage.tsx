@@ -126,6 +126,7 @@ import {
 } from '@features/settings/lib/web-settings-sections';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
+import { ComposerFeedbackDialog } from '../components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
 import { printConversation } from '../lib/print-conversation';
@@ -950,6 +951,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Project settings dialog state (opened from sidebar row context menu)
   const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
@@ -4595,6 +4597,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       onManageWorkspace={() => openSettings('team')}
       onOpenSettings={() => openSettings('general')}
       onOpenHelp={() => router.push('/help')}
+      onOpenFeedback={() => setFeedbackOpen(true)}
       onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
       showUpgrade={hasSelfServeUpgradePath(subscriptionTier)}
       onUpgrade={() => handleOpenUpgradeDialog()}
@@ -4750,6 +4753,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           instance for the page; `confirmDestructive` fills in the copy. */}
       {destructiveConfirmDialog}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
+      <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
         open={keyboardShortcutsOpen}
         onOpenChange={setKeyboardShortcutsOpen}
