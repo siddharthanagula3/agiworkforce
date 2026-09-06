@@ -61,15 +61,6 @@ export function FlagshipHero({
       <div className="agi-fl-hero-backdrop" aria-hidden="true" />
       <div className="agi-fl-hero-split">
         <div className="agi-fl-hero-copy">
-          {announcement ? (
-            <Link href={announcement.href} className="agi-fl-announce">
-              <span className="agi-fl-announce-tag">{announcement.tag}</span>
-              <span className="agi-fl-announce-label">{announcement.label}</span>
-              <span className="agi-fl-announce-arrow" aria-hidden="true">
-                →
-              </span>
-            </Link>
-          ) : null}
           <div className="agi-fl-hero-brand-wrap">
             <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel="AGI logo" />
             <div className="agi-fl-hero-brand-text">
@@ -79,6 +70,15 @@ export function FlagshipHero({
               <p className="agi-fl-h1--single agi-fl-hero-brand-sub">{eyebrow}</p>
             </div>
           </div>
+          {announcement ? (
+            <Link href={announcement.href} className="agi-fl-announce">
+              <span className="agi-fl-announce-tag">{announcement.tag}</span>
+              <span className="agi-fl-announce-label">{announcement.label}</span>
+              <span className="agi-fl-announce-arrow" aria-hidden="true">
+                →
+              </span>
+            </Link>
+          ) : null}
           <p className="agi-fl-lede">{lede}</p>
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
