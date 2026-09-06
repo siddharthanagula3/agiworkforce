@@ -20,6 +20,7 @@ import {
   ManagedUsageRequestError,
   parseManagedUsageIdempotencyKey,
 } from '@/lib/services/managed-usage-request-service';
+import { managedUsageErrorResponse } from '@/lib/services/cloud-code-route-errors';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -57,9 +58,6 @@ function rethrowCloudCodeError(error: unknown): never {
   if (error instanceof CloudCodeUnavailableError) {
     throw createError.serviceUnavailable(error.message);
   }
-  if (error instanceof ManagedUsageRequestError) {
-    throw createError.validation(error.message);
-  }
   if (isCloudCodeSchemaUnavailable(error)) {
     throw createError.serviceUnavailable(
       'Managed Code is coming soon. Cloud sessions are not available yet.',
@@ -90,7 +88,8 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
   try {
     idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
   } catch (error) {
-    rethrowCloudCodeError(error);
+    if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
+    throw error;
   }
 
   let body: unknown;
@@ -139,6 +138,7 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
     rethrowCloudCodeError(error);
   }
 }

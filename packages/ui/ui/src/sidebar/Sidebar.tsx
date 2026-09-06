@@ -139,7 +139,7 @@ export function Sidebar(props: SidebarProps) {
 
   const { t } = useUiTranslation('chat');
   const { t: tCommon } = useUiTranslation('common');
-  const codeLabel = t('sidebar.codeAction', 'Code');
+  const codeLabel = t('sidebar.codeAction', 'AGI Code');
 
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';

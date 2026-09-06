@@ -9,7 +9,7 @@ import {
 import { useUIStore } from '@shared/stores/layout-store';
 import { TOOL_APPROVAL_POLICY_OPTIONS } from '@shared/types/toolApprovalPolicy';
 import { CloudCodePage } from './CloudCodePage';
-import type { CloudCodeApi } from './services/cloud-code-api';
+import { CloudCodeApiError, type CloudCodeApi } from './services/cloud-code-api';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -94,8 +94,8 @@ const availability = {
 function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
   return {
     list: vi.fn(async () => ({ availability, sessions: [], runtimes: [] })),
-    get: vi.fn(async () => ({ session, terminalEntries: [] })),
-    create: vi.fn(async () => ({ session, terminalEntries: [] })),
+    get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
+    create: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     run: vi.fn(async () => ({
       session,
       terminalEntry: {
@@ -119,6 +119,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       stopReason: 'done' as const,
       stepsUsed: 2,
       finalMessage: 'Installed dependencies and ran the tests.',
+      steps: [],
     })),
     listApprovals: vi.fn(async () => []),
     decideApproval: vi.fn(async () => ({
@@ -126,6 +127,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       stopReason: 'done' as const,
       stepsUsed: 3,
       finalMessage: 'Tests pass.',
+      steps: [],
     })),
     ...overrides,
   };
@@ -295,7 +297,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
-      get: vi.fn(async () => ({ session, terminalEntries: [entry] })),
+      get: vi.fn(async () => ({ session, terminalEntries: [entry], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -324,7 +326,7 @@ describe('CloudCodePage', () => {
     }));
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
-      get: vi.fn(async () => ({ session, terminalEntries: entries })),
+      get: vi.fn(async () => ({ session, terminalEntries: entries, turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -347,13 +349,131 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
-      get: vi.fn(async () => ({ session, terminalEntries: [entry] })),
+      get: vi.fn(async () => ({ session, terminalEntries: [entry], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
 
     expect(await screen.findByText('pnpm test exited 1')).toBeInTheDocument();
+  });
+
+  it('shows every command the agent ran, with its output', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      startAgentTurn: vi.fn(async () => ({
+        turnId: '22222222-2222-4222-8222-222222222222',
+        stopReason: 'done' as const,
+        stepsUsed: 1,
+        finalMessage: 'Node 22 is installed.',
+        steps: [
+          {
+            index: 1,
+            toolName: 'run_command',
+            label: 'node --version',
+            output: 'v22.11.0\n[exit 0]',
+            isError: false,
+          },
+        ],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, 'print the node version');
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    const row = await screen.findByRole('button', { name: 'node --version' });
+    await user.click(row);
+    expect(await screen.findByText(/v22\.11\.0/)).toBeInTheDocument();
+  });
+
+  it('keeps a live turn when the session read lands after it', async () => {
+    const user = userEvent.setup();
+    let releaseDetail = () => {};
+    const detail = new Promise<void>((resolve) => {
+      releaseDetail = resolve;
+    });
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => {
+        await detail;
+        return { session, terminalEntries: [], turns: [] };
+      }),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, 'run the tests');
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
+
+    releaseDetail();
+
+    expect(
+      await screen.findByText('Installed dependencies and ran the tests.'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a failed turn in the transcript with a retry, and the task in the composer', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      startAgentTurn: vi.fn(async () => {
+        throw new CloudCodeApiError('Code session is busy; wait and try again', 409);
+      }),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, 'run the tests');
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    expect(await screen.findByText('Code session is busy; wait and try again')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Run this task again' })).toBeInTheDocument();
+    await waitFor(() => expect(field).toHaveValue('run the tests'));
+  });
+
+  it('rebuilds the transcript of a session it did not run in this tab', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({
+        session,
+        terminalEntries: [],
+        turns: [
+          {
+            turnId: '33333333-3333-4333-8333-333333333333',
+            goal: 'print the node version',
+            stopReason: 'done' as const,
+            stepsUsed: 1,
+            finalMessage: 'Node 22 is installed.',
+            errorMessage: null,
+            createdAt: '2026-07-30T12:05:00.000Z',
+            steps: [
+              {
+                index: 1,
+                toolName: 'run_command',
+                label: 'node --version',
+                output: 'v22.11.0',
+                isError: false,
+              },
+            ],
+          },
+        ],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    expect(await screen.findByText('print the node version')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'node --version' })).toBeInTheDocument();
+    expect(await screen.findByText('Node 22 is installed.')).toBeInTheDocument();
   });
 
   it('surfaces a pending approval inline and resumes the turn on approve', async () => {
@@ -365,6 +485,7 @@ describe('CloudCodePage', () => {
         stopReason: 'awaiting_approval' as const,
         stepsUsed: 1,
         finalMessage: '',
+        steps: [],
         pendingApproval: {
           stepIndex: 0,
           toolUseId: 'tool-1',
@@ -426,7 +547,7 @@ describe('CloudCodePage', () => {
     const closed: CloudCodeSession = { ...session, state: 'closed' };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [closed], runtimes: [] })),
-      get: vi.fn(async () => ({ session: closed, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: closed, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -494,7 +615,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
-      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
       commit: vi.fn(async () => ({
         session: repoSession,
         push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
@@ -877,7 +998,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
-      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -895,7 +1016,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
-      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -930,7 +1051,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [failed], runtimes: [] })),
-      get: vi.fn(async () => ({ session: failed, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: failed, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -954,7 +1075,7 @@ describe('CloudCodePage', () => {
     }));
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
-      get: vi.fn(async () => ({ session, terminalEntries: entries })),
+      get: vi.fn(async () => ({ session, terminalEntries: entries, turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -980,7 +1101,7 @@ describe('CloudCodePage', () => {
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
-      get: vi.fn(async () => ({ session, terminalEntries: [entry] })),
+      get: vi.fn(async () => ({ session, terminalEntries: [entry], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -1020,7 +1141,7 @@ describe('CloudCodePage', () => {
     const api = createApi({
       run,
       list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
-      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
@@ -1121,7 +1242,7 @@ describe('CloudCodePage', () => {
     const notebookSession: CloudCodeSession = { ...session, runtimeId: NOTEBOOK_TEMPLATE_ID };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [notebookSession], runtimes: [] })),
-      get: vi.fn(async () => ({ session: notebookSession, terminalEntries: [] })),
+      get: vi.fn(async () => ({ session: notebookSession, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 

@@ -487,3 +487,62 @@ describe('HARD-008, the command deadline is clamped to the turn budget', () => {
     expect(runner.runCommand).toHaveBeenCalledWith('ls -la', CLOUD_CODE_COMMAND_DEADLINE_MS);
   });
 });
+
+describe('agent step events', () => {
+  it('reports the command on the end event so the transcript can label the row', async () => {
+    const events: Array<{ type: string; toolArgs?: Record<string, unknown> }> = [];
+    await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([
+        toolTurn('t1', 'run_command', { command: 'node --version' }),
+        textTurn('Node is installed.'),
+      ]),
+      runner: runnerStub(),
+      onEvent: (event) => {
+        events.push(event);
+      },
+    });
+
+    const end = events.find((event) => event.type === 'tool-end');
+    expect(end?.toolArgs).toEqual({ command: 'node --version' });
+  });
+});
+
+describe('runCloudCodeAgentTurn provider failures', () => {
+  it('fails the turn on a provider error chunk instead of reporting it finished', async () => {
+    const message = 'Your credit balance is too low to access the API.';
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([[{ type: 'error', message } as StreamChunk]]),
+      runner: runnerStub(),
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(result.errorMessage).toBe(message);
+  });
+
+  it('fails a turn that produced neither words nor work', async () => {
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([[]]),
+      runner: runnerStub(),
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(result.errorMessage).toContain('no answer');
+  });
+
+  it('still reports done when an earlier step produced an answer', async () => {
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([
+        [...toolTurn('t1', 'list_files', {}), ...textTurn('Listed the workspace.')],
+        [],
+      ]),
+      runner: runnerStub(),
+    });
+
+    expect(result.stopReason).toBe('done');
+    expect(result.finalMessage).toBe('Listed the workspace.');
+  });
+});

@@ -150,7 +150,16 @@ interface DrainedTurn {
   text: string;
   toolCalls: ToolUseBlock[];
   usage?: CloudCodeProviderCallUsage;
+  /**
+   * An adapter reports a provider failure as a chunk, not a throw. Dropping it
+   * turned a refused or unpaid provider call into a turn that stopped for
+   * `done` with nothing to show.
+   */
+  error?: string;
 }
+
+const EMPTY_PROVIDER_TURN_MESSAGE =
+  'The model returned no answer and ran no commands. Nothing was changed in the environment.';
 
 export type CloudCodeTurnUsage = ObservedProviderUsage;
 
@@ -167,6 +176,7 @@ type CloudCodeProviderCallUsage = Pick<
 export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Promise<DrainedTurn> {
   let text = '';
   let usage: CloudCodeProviderCallUsage | undefined;
+  let error: string | undefined;
   const names = new Map<string, string>();
   const buffers = new Map<string, string>();
   const completed: string[] = [];
@@ -185,6 +195,9 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
         break;
       case 'tool-use-end':
         completed.push(chunk.toolUseId);
+        break;
+      case 'error':
+        error ??= chunk.message;
         break;
       case 'usage':
         usage = {
@@ -219,7 +232,7 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
     }
     toolCalls.push({ type: 'tool_use', id, name, input });
   }
-  return { text, toolCalls, usage };
+  return { text, toolCalls, usage, ...(error ? { error } : {}) };
 }
 
 function toolResultBlock(toolUseId: string, outcome: CloudCodeToolOutcome): ContentBlock {
@@ -261,6 +274,7 @@ export async function runCloudCodeAgentTurn(
       type: 'tool-end',
       stepIndex: stepsUsed,
       toolName: CLOUD_CODE_RUN_COMMAND_TOOL,
+      toolArgs: { command },
       output: outcome.output,
       isError: outcome.isError,
     });
@@ -310,12 +324,35 @@ export async function runCloudCodeAgentTurn(
       });
     }
 
+    if (drained.error) {
+      return {
+        stopReason: 'error',
+        stepsUsed,
+        finalMessage,
+        messages,
+        usage,
+        errorMessage: drained.error,
+      };
+    }
+
     if (drained.text) {
       finalMessage = drained.text;
       await input.onEvent?.({ type: 'assistant-text', stepIndex: stepsUsed, text: drained.text });
     }
 
     if (drained.toolCalls.length === 0) {
+      // Neither words nor work: there is nothing for the reader to read, so
+      // this is a failed turn rather than a finished one.
+      if (!finalMessage) {
+        return {
+          stopReason: 'error',
+          stepsUsed,
+          finalMessage,
+          messages,
+          usage,
+          errorMessage: EMPTY_PROVIDER_TURN_MESSAGE,
+        };
+      }
       return { stopReason: 'done', stepsUsed, finalMessage, messages, usage };
     }
 
@@ -387,10 +424,14 @@ export async function runCloudCodeAgentTurn(
       }
 
       results.push(toolResultBlock(call.id, outcome));
+      // The arguments travel with the END event too: the transcript labels each
+      // row with the command line, and a step row recorded without them can
+      // only ever show the bare tool name.
       await input.onEvent?.({
         type: 'tool-end',
         stepIndex: stepsUsed,
         toolName: call.name,
+        toolArgs: call.input,
         output: outcome.output,
         isError: outcome.isError,
       });

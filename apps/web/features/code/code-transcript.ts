@@ -1,5 +1,8 @@
-import type { CloudCodeTerminalEntry } from '@agiworkforce/types';
-import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
+import type {
+  CloudCodeAgentStep,
+  CloudCodeAgentStopReason,
+  CloudCodeTerminalEntry,
+} from '@agiworkforce/types';
 
 export interface CodeApprovalPrompt {
   turnId: string;
@@ -11,35 +14,42 @@ export interface CodeApprovalPrompt {
 
 export interface CodeTurnRecord {
   id: string;
+  /** The server's turn id once it is known, which is what a reload dedupes on. */
+  turnId: string | null;
   at: string;
   goal: string;
   stopReason: CloudCodeAgentStopReason | null;
   finalMessage: string;
   errorMessage: string | null;
+  steps: CloudCodeAgentStep[];
+  /** A turn the reader can start again, unchanged, from the transcript. */
+  retryable: boolean;
 }
 
 export type CodeTranscriptItem =
   | { kind: 'commands'; id: string; at: string; entries: CloudCodeTerminalEntry[] }
   | { kind: 'task'; id: string; at: string; text: string }
+  | { kind: 'steps'; id: string; at: string; steps: CloudCodeAgentStep[] }
   | {
       kind: 'reply';
       id: string;
       at: string;
       text: string;
       stopReason: CloudCodeAgentStopReason;
+      retryGoal: string | null;
     };
 
 /**
- * The agent turn endpoint returns one turn at a time and no turn history, so a
- * reload leaves only the persisted terminal entries. Interleaving by timestamp
- * keeps this tab's turns in place around them rather than pinning either block
- * to the end of the transcript.
+ * Terminal entries and agent turns are two independent histories of the same
+ * session, so interleaving by timestamp keeps each block where it happened
+ * rather than pinning either one to the end of the transcript.
  */
-/** A task and the reply to it carry the same timestamp, so rank breaks the tie. */
+/** A task, its steps and its reply carry one timestamp, so rank breaks the tie. */
 const KIND_RANK: Record<CodeTranscriptItem['kind'], number> = {
   commands: 0,
   task: 1,
-  reply: 2,
+  steps: 2,
+  reply: 3,
 };
 
 export function buildCodeTranscript(
@@ -54,6 +64,9 @@ export function buildCodeTranscript(
 
   for (const turn of turns) {
     items.push({ kind: 'task', id: `${turn.id}-task`, at: turn.at, text: turn.goal });
+    if (turn.steps.length > 0) {
+      items.push({ kind: 'steps', id: `${turn.id}-steps`, at: turn.at, steps: turn.steps });
+    }
     if (!turn.stopReason) continue;
     const text = [turn.finalMessage, turn.errorMessage].filter(Boolean).join('\n\n');
     items.push({
@@ -62,6 +75,7 @@ export function buildCodeTranscript(
       at: turn.at,
       text,
       stopReason: turn.stopReason,
+      retryGoal: turn.retryable ? turn.goal : null,
     });
   }
 

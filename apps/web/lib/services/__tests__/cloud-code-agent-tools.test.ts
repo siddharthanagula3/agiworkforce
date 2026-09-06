@@ -168,3 +168,22 @@ describe('cloudCodeAgentToolDefs', () => {
     expect(runCommand?.function.description).toMatch(/approval/i);
   });
 });
+
+describe('version probes', () => {
+  it('runs a two-token version probe of a toolchain binary without approval', () => {
+    expect(classifyCommandRisk('node --version').risk).toBe('safe');
+    expect(classifyCommandRisk('git --version').risk).toBe('safe');
+    expect(classifyCommandRisk('python3 -V').risk).toBe('safe');
+  });
+
+  it('still asks before a dependency manager, even for its version', () => {
+    expect(classifyCommandRisk('npm --version').risk).toBe('requires_approval');
+    expect(classifyCommandRisk('pnpm -v').risk).toBe('requires_approval');
+  });
+
+  it('does not extend the probe to a third token or another flag', () => {
+    expect(classifyCommandRisk('node --version extra').risk).toBe('requires_approval');
+    expect(classifyCommandRisk('node --eval').risk).toBe('requires_approval');
+    expect(classifyCommandRisk('rustc --emit=obj').risk).toBe('requires_approval');
+  });
+});
