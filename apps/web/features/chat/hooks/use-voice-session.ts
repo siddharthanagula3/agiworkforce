@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 import { useTTS } from '@/lib/hooks/useTTS';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
@@ -68,6 +68,19 @@ function resolveAudioContext(): AudioContextConstructor | null {
   return vendor['AudioContext'] ?? vendor['webkitAudioContext'] ?? null;
 }
 
+function primeAudioContext(ref: RefObject<AudioContext | null>): AudioContext | null {
+  const AudioContextCtor = resolveAudioContext();
+  if (!AudioContextCtor) return null;
+  ref.current ??= new AudioContextCtor();
+  if (ref.current.state === 'suspended') void ref.current.resume();
+  return ref.current;
+}
+
+function releaseAudioContext(ref: RefObject<AudioContext | null>): void {
+  void ref.current?.close();
+  ref.current = null;
+}
+
 async function microphoneAlreadyGranted(): Promise<boolean> {
   if (typeof navigator === 'undefined') return false;
   const query = navigator.permissions?.query;
@@ -114,6 +127,7 @@ export function useVoiceSession({
   const shouldCapture = listening || (speaking && !muted);
 
   const spokenReplyIdRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const playbackStartedRef = useRef(false);
   const replyRef = useRef(reply);
   replyRef.current = reply;
@@ -198,10 +212,9 @@ export function useVoiceSession({
 
   useEffect(() => {
     if (!shouldCapture || !captureStream) return undefined;
-    const AudioContextCtor = resolveAudioContext();
-    if (!AudioContextCtor) return undefined;
+    const context = primeAudioContext(audioContextRef);
+    if (!context) return undefined;
 
-    const context = new AudioContextCtor();
     const source = context.createMediaStreamSource(captureStream);
     const analyser = context.createAnalyser();
     analyser.fftSize = ANALYSER_FFT_SIZE;
@@ -240,7 +253,6 @@ export function useVoiceSession({
       window.cancelAnimationFrame(frame);
       source.disconnect();
       analyser.disconnect();
-      void context.close();
     };
   }, [shouldCapture, captureStream, speaking, dispatch, finishUtterance]);
 
@@ -295,6 +307,8 @@ export function useVoiceSession({
   }, [status, tts.isSpeaking, dispatch]);
 
   const enter = useCallback(() => {
+    primeAudioContext(audioContextRef);
+    ttsRef.current.unlock();
     useVoiceInputStore.getState().cancelListening();
     dispatch({ type: VOICE_SESSION_EVENT.enter });
   }, [dispatch]);
@@ -303,6 +317,7 @@ export function useVoiceSession({
     ttsRef.current.stop();
     useVoiceInputStore.getState().cancelListening();
     useVoiceInputStore.getState().clearTranscript();
+    releaseAudioContext(audioContextRef);
     dispatch({ type: VOICE_SESSION_EVENT.exit });
   }, [dispatch]);
 
@@ -334,12 +349,14 @@ export function useVoiceSession({
   );
 
   const retry = useCallback(() => {
+    primeAudioContext(audioContextRef);
     dispatch({ type: VOICE_SESSION_EVENT.retry });
   }, [dispatch]);
 
   useEffect(
     () => () => {
       useVoiceInputStore.getState().cancelListening();
+      releaseAudioContext(audioContextRef);
     },
     [],
   );
