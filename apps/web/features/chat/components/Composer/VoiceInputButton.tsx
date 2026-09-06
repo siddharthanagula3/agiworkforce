@@ -59,15 +59,15 @@ export function VoiceInputButton({
         aria-label={isSupported ? LABEL.start : LABEL.unsupported}
         aria-pressed={active}
         className={cn(
-          'relative flex h-8 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-150 sm:h-9 sm:w-9',
-          'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+          'relative flex h-8 min-h-0 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-150 sm:h-9 sm:w-9',
+          'border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-muted/60 hover:text-foreground',
           !isSupported && 'cursor-not-allowed opacity-40',
           disabled && 'cursor-not-allowed opacity-50',
         )}
         onMouseEnter={() => !isSupported && setShowHint(true)}
         onMouseLeave={() => setShowHint(false)}
       >
-        <Mic className="h-4 w-4" aria-hidden="true" />
+        <Mic className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
       </button>
 
       {showHint && (

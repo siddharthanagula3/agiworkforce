@@ -81,6 +81,17 @@ const MODEL_CATALOG_ENDPOINT = '/api/models';
 const MODEL_LOCKED_TRIGGER_CLASS =
   'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs sm:px-2.5 sm:py-1 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
 /** Live model trigger: plain text plus a chevron, no border or fill. */
+const EFFORT_TRIGGER_CLASS =
+  'flex min-h-7 shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
+const EFFORT_THUMB_INSET = '0.875rem';
+const EFFORT_TRACK_CLASS = 'h-7 rounded-full bg-muted';
+const EFFORT_RANGE_CLASS = 'bg-terra-cotta-500';
+const EFFORT_THUMB_CLASS = 'h-7 w-7 border-0 bg-white shadow-md';
+const LADDER_FULL_PERCENT = 100;
+function ladderOffset(index: number, length: number): string {
+  return `${(index / Math.max(length - 1, 1)) * LADDER_FULL_PERCENT}%`;
+}
+const EFFORT_OFF_LABEL = 'Off';
 const MODEL_TRIGGER_CLASS =
   'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
 
@@ -616,14 +627,13 @@ export function ComposerFooter({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [effortExpanded, setEffortExpanded] = useState(false);
+  const [effortOpen, setEffortOpen] = useState(false);
   const [providerAvailability, setProviderAvailability] = useState<
     Record<string, ProviderAvailability>
   >({});
   const [composerClearancePx, setComposerClearancePx] = useState(0);
   const modelTriggerRef = useRef<HTMLButtonElement>(null);
   const pickerPanelRef = useRef<HTMLDivElement>(null);
-  const effortPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -640,11 +650,6 @@ export function ComposerFooter({
   }, [open]);
 
   useEffect(() => {
-    if (!effortExpanded) return;
-    effortPanelRef.current?.querySelector<HTMLElement>('[role="slider"]')?.focus();
-  }, [effortExpanded]);
-
-  useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     fetchProviderAvailability(controller.signal)
@@ -657,7 +662,6 @@ export function ComposerFooter({
     setOpen(false);
     setSearchQuery('');
     setCatalogueOpen(false);
-    setEffortExpanded(false);
   }, []);
 
   const closeCatalogue = useCallback(() => {
@@ -990,6 +994,11 @@ export function ComposerFooter({
   const selectedEffortLabel = selectedEffortChip ? EFFORT_LABEL[selectedEffortChip] : '';
   const effortSliderVisible =
     effortChipsVisible && effortChips.length > 1 && (!showThinkingSwitch || thinkingEnabled);
+  const effortLadder = [...effortChips, ...gatedEffortChips];
+  const firstGatedIndex = gatedEffortChips.length > 0 ? effortChips.length : -1;
+  const effortMarks = effortLadder
+    .map((_, index) => index)
+    .filter((index) => index !== firstGatedIndex);
 
   return (
     <div
@@ -1059,11 +1068,6 @@ export function ComposerFooter({
                   <span className="min-w-[3.5rem] max-w-[6rem] shrink truncate font-medium sm:max-w-[140px]">
                     {modelChangePending ? 'Saving…' : selectedModel.name}
                   </span>
-                  {hasEffortControl && (
-                    <span className="hidden shrink-0 font-normal text-muted-foreground sm:inline">
-                      {EFFORT_LABEL[effectiveEffort]}
-                    </span>
-                  )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               </PopoverTrigger>
@@ -1076,7 +1080,7 @@ export function ComposerFooter({
                 collisionPadding={PICKER_VIEWPORT_INSET_PX}
                 style={{ '--picker-flip-offset': `${composerClearancePx}px` } as CSSProperties}
                 data-catalogue-open={catalogueOpen ? 'true' : 'false'}
-                className={`flex max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
+                className={`flex overflow-y-hidden max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
                 aria-label={PICKER_TITLE}
                 onKeyDownCapture={catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead}
                 onEscapeKeyDown={(event) => {
@@ -1182,111 +1186,6 @@ export function ComposerFooter({
                             </>
                           )}
 
-                          {!searchMatches && (showThinkingSwitch || effortSliderVisible) && (
-                            <div className="mt-1 border-t border-[var(--chat-border)] pt-1">
-                              {showThinkingSwitch && (
-                                <div className={PICKER_ROW_CLASS}>
-                                  <span className="min-w-0 flex-1">
-                                    <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                      Extended thinking
-                                    </span>
-                                    <span className={PICKER_ROW_GUIDANCE_CLASS}>
-                                      Thinks for more complex tasks
-                                    </span>
-                                  </span>
-                                  <Switch
-                                    {...{ [PICKER_ROW_ATTR]: '' }}
-                                    checked={thinkingEnabled}
-                                    onCheckedChange={handleThinkingEnabledChange}
-                                    aria-label="Toggle extended thinking"
-                                    className="h-5 w-9"
-                                  />
-                                </div>
-                              )}
-
-                              {effortSliderVisible && (
-                                <>
-                                  <button
-                                    type="button"
-                                    {...{ [PICKER_ROW_ATTR]: '' }}
-                                    className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-                                    onClick={() => setEffortExpanded((v) => !v)}
-                                    aria-expanded={effortExpanded}
-                                    aria-controls={effortPanelId}
-                                  >
-                                    <span className="min-w-0 flex-1">
-                                      <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                        Effort
-                                      </span>
-                                      <span className={PICKER_ROW_GUIDANCE_CLASS}>
-                                        {isAlwaysOn
-                                          ? 'Always on for this model'
-                                          : 'Choose how much reasoning to use'}
-                                      </span>
-                                    </span>
-                                    <span className="shrink-0 text-xs text-muted-foreground">
-                                      {selectedEffortLabel}
-                                    </span>
-                                    <ChevronRight
-                                      className={[
-                                        'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                                        effortExpanded ? 'rotate-90' : '',
-                                      ].join(' ')}
-                                      aria-hidden="true"
-                                    />
-                                  </button>
-                                  {effortExpanded && (
-                                    <div
-                                      id={effortPanelId}
-                                      ref={effortPanelRef}
-                                      role="group"
-                                      aria-label="Reasoning effort level"
-                                      className="px-3 pb-3 pt-1"
-                                    >
-                                      <div className="rounded-full border border-[var(--chat-border)] bg-muted/35 px-3 py-3">
-                                        <Slider
-                                          min={0}
-                                          max={effortChips.length - 1}
-                                          step={1}
-                                          value={[effortSliderIndex]}
-                                          onValueChange={(value) => {
-                                            const chip = effortChips[value[0] ?? -1];
-                                            if (chip) handleEffortChip(chip);
-                                          }}
-                                          thumbAriaLabel="Reasoning effort"
-                                          valueLabel={selectedEffortLabel}
-                                          className="px-0.5"
-                                        />
-                                      </div>
-                                      {gatedEffortChips.length > 0 && (
-                                        <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                                          <span>
-                                            {gatedEffortChips
-                                              .map((chip) => EFFORT_LABEL[chip])
-                                              .join(', ')}{' '}
-                                            {gatedEffortChips.length > 1
-                                              ? 'effort levels are'
-                                              : 'effort is'}{' '}
-                                            not included in your plan.
-                                          </span>
-                                          {onUpgradeRequest && (
-                                            <button
-                                              type="button"
-                                              {...{ [PICKER_ROW_ATTR]: '' }}
-                                              onClick={onUpgradeRequest}
-                                              className="font-medium text-primary underline-offset-2 hover:underline"
-                                            >
-                                              Upgrade
-                                            </button>
-                                          )}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )}
                           <div className="my-1 border-t border-[var(--chat-border)]" />
                           <button
                             type="button"
@@ -1326,6 +1225,115 @@ export function ComposerFooter({
                     </div>
                   )}
                 </TooltipProvider>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {showModelSelector && !lockModelSelector && hasEffortControl && (
+            <Popover open={effortOpen} onOpenChange={setEffortOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={EFFORT_TRIGGER_CLASS}
+                  aria-label={`Reasoning effort: ${effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}`}
+                  aria-expanded={effortOpen}
+                  title="Reasoning effort"
+                >
+                  <Brain className="hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden="true" />
+                  <span className="font-medium">
+                    {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
+                  </span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                sideOffset={PICKER_ANCHOR_OFFSET_PX}
+                className="w-72 rounded-lg border-[var(--chat-border)] p-3"
+                aria-label="Reasoning effort"
+              >
+                {(showThinkingSwitch || !effortSliderVisible) && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-foreground">Effort</span>
+                    {showThinkingSwitch && (
+                      <Switch
+                        checked={thinkingEnabled}
+                        onCheckedChange={handleThinkingEnabledChange}
+                        aria-label="Toggle extended thinking"
+                        className="h-5 w-9"
+                      />
+                    )}
+                  </div>
+                )}
+                {effortSliderVisible && (
+                  <div id={effortPanelId} className={showThinkingSwitch ? 'mt-3' : 'mt-1'}>
+                    <p className="text-center text-base font-semibold text-foreground">
+                      {selectedEffortLabel}
+                    </p>
+                    <div className="relative mt-2">
+                      <Slider
+                        min={0}
+                        max={effortLadder.length - 1}
+                        step={1}
+                        value={[effortSliderIndex]}
+                        onValueChange={(value) => {
+                          const chip = effortChips[value[0] ?? -1];
+                          if (chip) handleEffortChip(chip);
+                        }}
+                        onValueCommit={(value) => {
+                          if ((value[0] ?? 0) >= effortChips.length) onUpgradeRequest?.();
+                        }}
+                        marks={effortMarks}
+                        markInset={EFFORT_THUMB_INSET}
+                        thumbAriaLabel="Reasoning effort"
+                        valueLabel={selectedEffortLabel}
+                        trackClassName={EFFORT_TRACK_CLASS}
+                        rangeClassName={EFFORT_RANGE_CLASS}
+                        thumbClassName={EFFORT_THUMB_CLASS}
+                      />
+                      {firstGatedIndex >= 0 && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0"
+                          style={{ left: EFFORT_THUMB_INSET, right: EFFORT_THUMB_INSET }}
+                        >
+                          <span
+                            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-muted-foreground"
+                            style={{ left: ladderOffset(firstGatedIndex, effortLadder.length) }}
+                          >
+                            <Lock className="h-3.5 w-3.5" />
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {isAlwaysOn
+                    ? 'Always on for this model'
+                    : effortSliderVisible
+                      ? 'Higher effort thinks longer before it answers.'
+                      : 'Extended thinking is off for this model.'}
+                </p>
+                {gatedEffortChips.length > 0 && (
+                  <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    <span>
+                      {gatedEffortChips.map((chip) => EFFORT_LABEL[chip]).join(', ')}{' '}
+                      {gatedEffortChips.length > 1 ? 'effort levels are' : 'effort is'} not included
+                      in your plan.
+                    </span>
+                    {onUpgradeRequest && (
+                      <button
+                        type="button"
+                        onClick={onUpgradeRequest}
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Upgrade
+                      </button>
+                    )}
+                  </p>
+                )}
               </PopoverContent>
             </Popover>
           )}

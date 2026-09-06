@@ -87,11 +87,11 @@ describe('SendButton · stop mode', () => {
     expect(btn?.className).not.toContain('shadow-red-500');
   });
 
-  it('matches the send control shape: rounded-full, same padding, a square glyph', () => {
+  it('matches the send control shape: rounded-full, same size, a square glyph', () => {
     const { container } = renderButton({ mode: 'stop', onClick: vi.fn() });
     const btn = container.querySelector('button');
     expect(btn?.className).toContain('rounded-full');
-    expect(btn?.className).toContain('p-2');
+    expect(btn?.className).toContain('sm:h-9 sm:w-9');
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
