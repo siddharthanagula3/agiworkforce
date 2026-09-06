@@ -1061,7 +1061,7 @@ describe('ChatComposerNew', () => {
     expect(within(bar).getByRole('button', { name: /project or folder/i })).toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Files' })).toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Plugins' })).toBeInTheDocument();
-    expect(within(bar).getByRole('button', { name: 'Open desktop app' })).toBeInTheDocument();
+    expect(within(bar).queryByRole('button', { name: 'Open desktop app' })).not.toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: /add scope/i })).not.toBeInTheDocument();
   });
 

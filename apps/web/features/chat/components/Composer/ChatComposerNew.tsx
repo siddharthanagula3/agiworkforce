@@ -26,8 +26,8 @@ import {
   FolderOpen,
   Telescope,
   ListChecks,
+  MessageSquare,
   LibraryBig,
-  Monitor,
   Brain,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -169,6 +169,10 @@ const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   chat: 'Chat: quick questions and conversation',
   agiwork: 'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
 };
+const WORK_MODE_GLYPHS: Record<ComposerWorkMode, typeof MessageSquare> = {
+  chat: MessageSquare,
+  agiwork: ListChecks,
+};
 
 /**
  * Placeholder copy per work mode.
@@ -202,12 +206,10 @@ const WORK_BAR_LABELS = {
   project: 'Project',
   files: 'Files',
   plugins: 'Plugins',
-  desktop: 'Open desktop app',
 } as const;
 
 const WORK_BAR_CONNECTOR_MARKS = 3;
 const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
-const DESKTOP_APP_HREF = '/download';
 const WORK_BAR_ITEM_CLASS =
   'flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium sm:h-8 sm:px-3 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
@@ -3280,7 +3282,7 @@ const ChatComposerNewComponent = ({
                     }}
                     disabled={composerDisabled}
                     className={cn(
-                      'relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors',
+                      'relative flex h-8 min-h-0 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9',
                       hasOverflowActive
                         ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -3439,25 +3441,30 @@ const ChatComposerNewComponent = ({
                     data-testid="composer-work-mode"
                     className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium sm:p-0.5 sm:text-sm"
                   >
-                    {(['chat', 'agiwork'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => handleWorkModeChange(mode)}
-                        disabled={isTurnActive || composerDisabled}
-                        aria-pressed={workMode === mode}
-                        title={WORK_MODE_TITLES[mode]}
-                        className={cn(
-                          'flex h-6 items-center rounded-full px-2 transition-colors sm:h-7 sm:px-3',
-                          workMode === mode
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
-                          (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-                        )}
-                      >
-                        {WORK_MODE_LABELS[mode]}
-                      </button>
-                    ))}
+                    {(['chat', 'agiwork'] as const).map((mode) => {
+                      const ModeGlyph = WORK_MODE_GLYPHS[mode];
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => handleWorkModeChange(mode)}
+                          disabled={isTurnActive || composerDisabled}
+                          aria-pressed={workMode === mode}
+                          aria-label={WORK_MODE_LABELS[mode]}
+                          title={WORK_MODE_TITLES[mode]}
+                          className={cn(
+                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-3',
+                            workMode === mode
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                            (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
+                          )}
+                        >
+                          <ModeGlyph className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                          <span className="hidden sm:inline">{WORK_MODE_LABELS[mode]}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3955,7 +3962,7 @@ const ChatComposerNewComponent = ({
           {workScopeBarVisible ? (
             <div
               data-testid="composer-work-bar"
-              className="-mt-3 flex flex-wrap items-center gap-1 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-2 pb-1.5 pt-4"
+              className="-mt-3 ml-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-1 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-2 pb-1.5 pt-4"
             >
               <button
                 ref={projectPickerTriggerRef}
@@ -4034,15 +4041,6 @@ const ChatComposerNewComponent = ({
                   <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
                 )}
                 {WORK_BAR_LABELS.plugins}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push(DESKTOP_APP_HREF)}
-                className={cn(WORK_BAR_ITEM_CLASS, 'ml-auto')}
-              >
-                <Monitor className={WORK_BAR_GLYPH_CLASS} />
-                {WORK_BAR_LABELS.desktop}
               </button>
             </div>
           ) : (
