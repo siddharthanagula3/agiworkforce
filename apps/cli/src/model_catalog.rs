@@ -2018,7 +2018,9 @@ mod tests {
             assert!(m.output_price_per_1m >= 0.0, "{} price must parse", m.id);
         }
         assert!(
-            cat.cloud_models().iter().any(|m| m.input_price_per_1m > 0.0),
+            cat.cloud_models()
+                .iter()
+                .any(|m| m.input_price_per_1m > 0.0),
             "paid cloud models must remain in the catalog"
         );
     }
