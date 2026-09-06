@@ -4,6 +4,7 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 const ATTEMPTS = 10;
+const DRIFT_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 5_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const HEALTH_STATUSES = ['healthy', 'degraded', 'unhealthy'];
@@ -249,7 +250,12 @@ async function readDeployedCommit(baseUrl) {
 }
 
 export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options = {}) {
-  const { attempts = 3, retryDelayMs = RETRY_DELAY_MS, onRetry = () => {} } = options;
+  const {
+    attempts = DRIFT_ATTEMPTS,
+    retryDelayMs = RETRY_DELAY_MS,
+    onRetry = () => {},
+    awaitPromotion = false,
+  } = options;
   const baseUrl = parseDeploymentUrl(rawBaseUrl);
   const expected = normalizeSha(rawExpectedSha);
   if (!expected) {
@@ -261,10 +267,10 @@ export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options =
     try {
       const deployed = await readDeployedCommit(baseUrl);
       if (!sameCommit(deployed, expected)) {
-        throw settled(
+        const message =
           `${baseUrl.origin} is serving commit ${deployed}, but main is at ${expected}; ` +
-            'the promotion did not happen',
-        );
+          'the promotion did not happen';
+        throw awaitPromotion ? new Error(message) : settled(message);
       }
       return { baseUrl: baseUrl.href, deployedCommit: deployed, expectedCommit: expected };
     } catch (error) {
@@ -282,11 +288,13 @@ export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options =
 
 async function main() {
   const argv = process.argv.slice(2);
-  const apiHostOnly = argv[0] === '--api-host';
-  const [baseUrl, expectedSha] = apiHostOnly ? argv.slice(1) : argv;
+  const apiHostOnly = argv.includes('--api-host');
+  const awaitPromotion = argv.includes('--await-promotion');
+  const [baseUrl, expectedSha] = argv.filter((argument) => !argument.startsWith('--'));
   if (!baseUrl) {
     throw new Error(
-      'Usage: node scripts/verify-deployment.mjs [--api-host] <deployment-url> [expected-commit-sha]',
+      'Usage: node scripts/verify-deployment.mjs [--api-host] [--await-promotion] ' +
+        '<deployment-url> [expected-commit-sha]',
     );
   }
 
@@ -306,7 +314,11 @@ async function main() {
   console.log(`Deployment serving path verified: ${result.baseUrl} (${result.probes.join(', ')})`);
 
   if (expectedSha) {
-    const drift = await verifyDeployedCommit(baseUrl, expectedSha, { onRetry });
+    const drift = await verifyDeployedCommit(baseUrl, expectedSha, {
+      onRetry,
+      awaitPromotion,
+      attempts: awaitPromotion ? ATTEMPTS : DRIFT_ATTEMPTS,
+    });
     console.log(`Deployed commit verified: ${drift.deployedCommit}`);
   }
 }
