@@ -23,9 +23,9 @@ const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
 
 const RAIL_CLASS =
-  'flex w-40 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--chat-border)] p-1';
+  'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r';
 const RAIL_ROW_CLASS =
-  'flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors focus-visible:outline-none';
+  'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm transition-colors focus-visible:outline-none sm:w-full sm:whitespace-normal';
 const ROW_CLASS =
   'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-2 text-left transition-colors focus-visible:outline-none';
 const ROW_NAME_CLASS = 'block truncate text-sm leading-5';
@@ -311,7 +311,7 @@ export function ModelCatalogue({
         />
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <div role="tablist" aria-label="Model providers" className={RAIL_CLASS}>
           {railEntries.map((entry) => {
             const isActive = entry.key === railKey;
@@ -326,7 +326,7 @@ export function ModelCatalogue({
                   RAIL_ROW_CLASS,
                   isActive
                     ? 'bg-muted/70 font-medium text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/50',
+                    : 'font-normal text-foreground hover:bg-muted/50',
                 ].join(' ')}
               >
                 {entry.key === FAVOURITES_RAIL_KEY ? (
@@ -430,7 +430,9 @@ export function ModelCatalogue({
                         <span
                           className={[
                             ROW_NAME_CLASS,
-                            isSelected ? 'font-medium text-foreground' : 'text-muted-foreground',
+                            isSelected
+                              ? 'font-medium text-foreground'
+                              : 'font-normal text-foreground',
                           ].join(' ')}
                         >
                           {entry.displayName}
