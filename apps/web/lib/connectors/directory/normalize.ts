@@ -1,12 +1,18 @@
 import { GITHUB_NAMESPACE_PREFIX, deriveRegistryBadge } from '@/lib/connectors/directory/badge';
-import { brandSlugForPublisher } from '@/lib/connectors/directory/brand-icons';
+import { brandSlugForSignals } from '@/lib/connectors/directory/brand-icons';
 import { deriveDirectoryCategories } from '@/lib/connectors/directory/categorize';
-import { deriveMonogram } from '@/lib/connectors/directory/monogram';
-import type {
-  RegistryEntry,
-  RegistryRemote,
-  RegistryRepository,
-} from '@/lib/connectors/directory/registry-client';
+import { deriveDisplayTitle } from '@/lib/connectors/directory/display-name';
+import {
+  hostnameOf,
+  isCodeForgeHost,
+  isHostingPlatformHost,
+  originOf,
+  repositoryOwnerOf,
+  repositoryOwnerUrl,
+} from '@/lib/connectors/directory/hosts';
+import { deriveMonogram, deriveMonogramHue } from '@/lib/connectors/directory/monogram';
+import { selectDescriptionSource, summarizeDescription } from '@/lib/connectors/directory/summary';
+import type { RegistryEntry, RegistryRemote } from '@/lib/connectors/directory/registry-client';
 import type {
   DirectoryAuthMode,
   DirectoryConnectableMode,
@@ -21,7 +27,6 @@ const REMOTE_TRANSPORT_PRIORITY: readonly DirectoryTransport[] = [
   'sse',
   'stdio',
 ];
-const GITHUB_REPOSITORY_SOURCE = 'github';
 
 export function derivePublisherFromNamespace(name: string): string {
   const namespace = name.split('/')[0] ?? name;
@@ -44,24 +49,14 @@ function hasSecretHeader(remote: RegistryRemote | null): boolean {
   return (remote?.headers ?? []).some((header) => header.isSecret === true);
 }
 
-function deriveAuthorUrl(repository: RegistryRepository | undefined): string | null {
-  if (repository?.source !== GITHUB_REPOSITORY_SOURCE) return null;
-  try {
-    const owner = new URL(repository.url).pathname.split('/').filter(Boolean)[0];
-    return owner ? `https://github.com/${owner}` : null;
-  } catch {
-    return null;
-  }
-}
-
 function deriveIconSource(
   brandSlug: string | null,
   hasRegistryIcon: boolean,
-  hasWebsite: boolean,
+  siteHost: string | null,
 ): DirectoryIconSource {
   if (brandSlug) return 'brand';
   if (hasRegistryIcon) return 'registry';
-  if (hasWebsite) return 'site';
+  if (siteHost && !isCodeForgeHost(siteHost) && !isHostingPlatformHost(siteHost)) return 'site';
   return 'monogram';
 }
 
@@ -76,6 +71,9 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
   const directoryRemotes: DirectoryRemote[] = remotes
     .filter((remote): remote is RegistryRemote & { url: string } => Boolean(remote.url))
     .map((remote) => ({ url: remote.url, transport: remote.type }));
+  const remoteHosts = directoryRemotes
+    .map((remote) => hostnameOf(remote.url))
+    .filter((host): host is string => host !== null);
 
   let authMode: DirectoryAuthMode;
   let connectable: DirectoryConnectableMode;
@@ -90,33 +88,51 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
     connectable = 'needs-setup';
   }
 
-  const displayName = server.title ?? server.name;
+  const title = deriveDisplayTitle(server.name, server.title);
+  const displayName = title.name;
   const publisher = derivePublisherFromNamespace(server.name);
-  const websiteUrl = server.websiteUrl ?? null;
+  const repositoryUrl = server.repository?.url ?? null;
+  const repositoryOwner = repositoryUrl ? repositoryOwnerOf(repositoryUrl) : null;
+  const primaryRemoteOrigin = primary?.url ? originOf(primary.url) : null;
+  const websiteUrl = server.websiteUrl ?? primaryRemoteOrigin ?? repositoryUrl;
+  const websiteHost = websiteUrl ? hostnameOf(websiteUrl) : null;
+  const signalHosts = [
+    ...remoteHosts,
+    ...(websiteHost && !isCodeForgeHost(websiteHost) ? [websiteHost] : []),
+  ];
   const registryIconUrl = server.icons?.[0]?.src ?? null;
-  const brandSlug = brandSlugForPublisher(publisher);
+  const brandSlug = brandSlugForSignals({ publisher, hosts: signalHosts, repositoryOwner });
+  const categories = deriveDirectoryCategories({
+    name: displayName,
+    description: `${server.description} ${title.tagline}`,
+    id: server.name,
+    hosts: signalHosts,
+  });
+  const primaryCategory = categories[0] ?? '';
+  const descriptionSource = selectDescriptionSource(server.description, displayName, title.tagline);
 
   return {
     id: server.name,
     name: displayName,
     publisher,
-    description: server.description,
-    categories: deriveDirectoryCategories(server.description, server.title),
+    description: summarizeDescription(descriptionSource, displayName, primaryCategory),
+    categories,
     remotes: directoryRemotes,
     authMode,
     connectable,
     toolNames: [],
-    repositoryUrl: server.repository?.url ?? null,
+    repositoryUrl,
     version: server.version,
     sourceRegistry: 'mcp-registry',
-    badge: deriveRegistryBadge(server.name),
+    badge: deriveRegistryBadge({ registryName: server.name, remoteHosts }),
     iconUrl: registryIconUrl,
     monogram: deriveMonogram(displayName),
+    monogramHue: deriveMonogramHue(categories),
     documentationUrl: null,
-    iconSource: deriveIconSource(brandSlug, registryIconUrl !== null, websiteUrl !== null),
+    iconSource: deriveIconSource(brandSlug, registryIconUrl !== null, websiteHost),
     brandSlug,
-    authorName: publisher,
-    authorUrl: deriveAuthorUrl(server.repository),
+    authorName: repositoryOwner ?? publisher,
+    authorUrl: repositoryUrl ? repositoryOwnerUrl(repositoryUrl) : null,
     websiteUrl,
     supportUrl: null,
     privacyPolicyUrl: null,

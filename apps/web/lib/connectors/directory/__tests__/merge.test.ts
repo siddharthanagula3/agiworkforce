@@ -1,19 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/connectors/oauth-registry', () => ({
-  isConnectorOAuthConfigured: () => false,
+vi.mock('@/lib/connectors/directory/connectable', () => ({
+  connectableForInternalId: (id: string) =>
+    id === 'local-filesystem' ? 'desktop-and-cli' : 'connect',
+  connectableFromAuthMode: () => 'connect',
 }));
-vi.mock('@/lib/github-app', () => ({
-  isGitHubAppConfigured: () => true,
-  isGitHubInstallationLinkingAvailable: () => true,
+vi.mock('@/lib/connectors/directory/vendor-directory', () => ({
+  applyVendorDirectory: (records: readonly unknown[]) => [...records],
 }));
 
 import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { applyFirstPartyTargets } from '@/lib/connectors/directory/first-party';
+import {
+  FIRST_PARTY_MCP_TARGETS,
+  applyFirstPartyTargets,
+} from '@/lib/connectors/directory/first-party';
 import {
   buildInternalDirectoryRecords,
   mergeDirectoryRecords,
+  unionCategories,
 } from '@/lib/connectors/directory/merge';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
@@ -34,6 +39,7 @@ function internalRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     badge: 'first-party',
     iconUrl: null,
     monogram: 'N',
+    monogramHue: 'productivity',
     documentationUrl: null,
     iconSource: 'monogram',
     brandSlug: null,
@@ -60,9 +66,10 @@ function registryRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     repositoryUrl: 'https://github.com/someone/notion-mirror',
     version: '1.0.0',
     sourceRegistry: 'mcp-registry',
-    badge: 'registry',
+    badge: 'community',
     iconUrl: null,
     monogram: 'NM',
+    monogramHue: 'other',
     documentationUrl: null,
     iconSource: 'monogram',
     brandSlug: null,
@@ -129,7 +136,7 @@ describe('mergeDirectoryRecords', () => {
     expect(merged[0]?.sourceRegistry).toBe('internal');
   });
 
-  it('keeps the richer of the two descriptions and unions categories', () => {
+  it('keeps the curated description, unions categories and refreshes the hue', () => {
     const merged = mergeDirectoryRecords(
       [internalRecord({ description: 'Notion.', categories: ['Productivity'] })],
       [
@@ -140,14 +147,35 @@ describe('mergeDirectoryRecords', () => {
       ],
     );
 
-    expect(merged[0]?.description).toBe('A community mirror of the Notion MCP server.');
+    expect(merged[0]?.description).toBe('Notion.');
     expect(merged[0]?.categories).toEqual(['Productivity', 'Code']);
+    expect(merged[0]?.monogramHue).toBe('productivity');
   });
 
   it('never lets a registry match downgrade the internal badge', () => {
     const merged = mergeDirectoryRecords([internalRecord()], [registryRecord()]);
 
     expect(merged[0]?.badge).toBe('first-party');
+  });
+
+  it('marks an unmatched registry record as verified when a catalog vendor domain hosts it', () => {
+    const merged = mergeDirectoryRecords(
+      [internalRecord()],
+      [
+        registryRecord({
+          id: 'io.github.someone/notion-tool',
+          remotes: [{ url: 'https://api.notion.com/mcp', transport: 'streamable-http' }],
+        }),
+        registryRecord({
+          id: 'io.github.someone/hosted',
+          remotes: [{ url: 'https://notion.workers.dev/mcp', transport: 'streamable-http' }],
+        }),
+      ],
+    );
+
+    const byId = new Map(merged.map((record) => [record.id, record]));
+    expect(byId.get('io.github.someone/notion-tool')?.badge).toBe('verified');
+    expect(byId.get('io.github.someone/hosted')?.badge).toBe('community');
   });
 
   it('fills in a missing icon and docs url from the matched registry record', () => {
@@ -193,7 +221,20 @@ describe('mergeDirectoryRecords', () => {
   });
 });
 
+describe('unionCategories', () => {
+  it('drops Other as soon as a specific category is present', () => {
+    expect(unionCategories(['Other'], ['Code'])).toEqual(['Code']);
+    expect(unionCategories(['Productivity'], ['Other', 'Code'])).toEqual(['Productivity', 'Code']);
+    expect(unionCategories(['Other'], ['Other'])).toEqual(['Other']);
+  });
+});
+
 describe('applyFirstPartyTargets', () => {
+  const catalogIds = new Set(CONNECTORS.map((connector) => connector.id));
+  const standaloneTargets = FIRST_PARTY_MCP_TARGETS.filter(
+    (target) => !catalogIds.has(target.connectorId),
+  );
+
   it('overrides a stale internal remote for a provider the first-party file flags as superseded', () => {
     const [jira] = applyFirstPartyTargets([
       internalRecord({
@@ -228,18 +269,19 @@ describe('applyFirstPartyTargets', () => {
   });
 
   it('leaves records with no first-party target untouched', () => {
-    const [other] = applyFirstPartyTargets([internalRecord({ id: 'stripe' })]);
+    const [trello] = applyFirstPartyTargets([internalRecord({ id: 'trello' })]);
 
-    expect(other?.documentationUrl).toBeNull();
+    expect(trello?.documentationUrl).toBeNull();
   });
 
-  it('derives categories for a first-party target through the same keyword rules as the registry', () => {
+  it('derives categories for a first-party target through the same keyword and host rules as the registry', () => {
     const [hubspot] = applyFirstPartyTargets([internalRecord({ id: 'hubspot', categories: [] })]);
 
     expect(hubspot?.categories).toContain('Sales and marketing');
+    expect(hubspot?.monogramHue).toBe('sales-and-marketing');
   });
 
-  it('keeps the richer of the internal and first-party descriptions', () => {
+  it('replaces the catalog description with the first-party card sentence', () => {
     const [gmail] = applyFirstPartyTargets([
       internalRecord({ id: 'gmail', description: 'Gmail.' }),
     ]);
@@ -247,22 +289,39 @@ describe('applyFirstPartyTargets', () => {
     expect(gmail?.description).toBe('Search, draft, and send email through Gmail.');
   });
 
-  it('adds a directory-only provider as a standalone record with no wired remote', () => {
+  it('adds a directory-only provider as a standalone first-party record with no wired remote', () => {
     const withStandalone = applyFirstPartyTargets(buildInternalDirectoryRecords());
     const microsoft365 = withStandalone.find((record) => record.id === 'microsoft-365');
 
-    expect(microsoft365).toBeDefined();
-    expect(microsoft365?.remotes).toEqual([]);
-    expect(microsoft365?.connectable).toBe('needs-setup');
-    expect(microsoft365?.badge).toBe('first-party');
+    expect(microsoft365).toMatchObject({
+      remotes: [],
+      badge: 'first-party',
+      authMode: 'oauth',
+      sourceRegistry: 'internal',
+    });
   });
 
-  it('applies exactly one standalone record on top of the full internal catalog, with no duplicate ids', () => {
+  it('adds one standalone record per target outside the catalog, with no duplicate ids', () => {
     const internal = buildInternalDirectoryRecords();
     const withStandalone = applyFirstPartyTargets(internal);
 
-    expect(withStandalone).toHaveLength(internal.length + 1);
+    expect(standaloneTargets.length).toBeGreaterThan(0);
+    expect(withStandalone).toHaveLength(internal.length + standaloneTargets.length);
     expect(new Set(withStandalone.map((record) => record.id)).size).toBe(withStandalone.length);
+  });
+
+  it('gives a standalone vendor record its remote, brand mark and documentation origin', () => {
+    const neon = applyFirstPartyTargets(buildInternalDirectoryRecords()).find(
+      (record) => record.id === 'neon',
+    );
+
+    expect(neon).toMatchObject({
+      remotes: [{ url: 'https://mcp.neon.tech/mcp', transport: 'streamable-http' }],
+      iconSource: 'brand',
+      brandSlug: 'neon',
+      authorUrl: 'https://neon.com',
+      badge: 'first-party',
+    });
   });
 
   it('keeps the brand icon source it already had from the connector id, for a provider we ship a mark for', () => {
@@ -315,6 +374,25 @@ describe('buildInternalDirectoryRecords', () => {
       { url: 'https://mcp.notion.com/mcp', transport: 'streamable-http' },
     ]);
     expect(notion?.connectable).toBe('connect');
+  });
+
+  it('maps every catalog category onto a directory category and hue', () => {
+    const byId = new Map(buildInternalDirectoryRecords().map((record) => [record.id, record]));
+
+    expect(byId.get('github')).toMatchObject({ categories: ['Code'], monogramHue: 'code' });
+    expect(byId.get('stripe')).toMatchObject({
+      categories: ['Financial services'],
+      monogramHue: 'financial-services',
+    });
+    expect(byId.get('epic-fhir')?.categories).toEqual(['Health']);
+  });
+
+  it('writes a one-sentence card description from the capability summary', () => {
+    const github = buildInternalDirectoryRecords().find((record) => record.id === 'github');
+
+    expect(github?.description).toBe(
+      'Connect GitHub for pull request diffs, issue comments, and PR reviews.',
+    );
   });
 
   it('marks a connector with a verified simple-icons entry as a brand icon', () => {
