@@ -3071,3 +3071,32 @@
     animation: none;
   }
 }
+
+@media (max-width: 640px) {
+  [data-design='agi'].agi-ds-consent .agi-ds-consent-panel {
+    gap: 0.5rem;
+    padding: 0.75rem 0.875rem;
+  }
+  [data-design='agi'].agi-ds-consent .agi-ds-consent-title {
+    font-size: 0.9rem;
+  }
+  [data-design='agi'].agi-ds-consent .agi-ds-consent-copy {
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+  [data-design='agi'].agi-ds-consent .agi-ds-consent-actions {
+    gap: 0.375rem;
+  }
+  [data-design='agi'].agi-ds-consent .agi-ds-consent-actions .agi-ds-btn {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  [data-design='agi'] .agi-ds-footer-link {
+    display: inline-block;
+    padding-block: 0.3rem;
+  }
+  [data-design='agi'] .agi-ds-navpanel-item,
+  [data-design='agi'] .agi-ds-mobile-nav-link {
+    min-height: 44px;
+  }
+}
