@@ -53,11 +53,6 @@ export function MarketingLanding() {
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },
           ]}
-          ctas2={[
-            { href: '/vscode-extension', label: 'VS Code Extension' },
-            { href: '/chrome-extension', label: 'Chrome Extension' },
-          ]}
-          lede="One assistant across six surfaces, and you choose where each request actually runs."
           visual={<MobileHeroVisual />}
           announcement={{
             tag: 'New',
