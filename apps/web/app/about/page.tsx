@@ -1,9 +1,11 @@
 import Link from 'next/link';
+import { RELEASES } from '@/lib/changelog-entries';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
+  Eyebrow,
   ButtonRow,
   Ledger,
   Prose,
@@ -25,6 +27,14 @@ import {
   LEGAL_ENTITY_DESCRIPTOR,
   REGISTERED_AGENT_ADDRESS,
 } from '../../lib/legal-constants';
+
+const PROGRESS_COUNT = 5;
+const PROGRESS = RELEASES.slice(0, PROGRESS_COUNT)
+  .map((release) => ({
+    date: release.date,
+    headline: release.headline.split(' · ')[0] ?? release.headline,
+  }))
+  .reverse();
 
 export const metadata = buildMetadata({
   title: 'About: multi-provider by design',
@@ -85,6 +95,26 @@ export default function AboutPage() {
             name={FOUNDER_NAME}
             role={`${FOUNDER_ROLE}, ${LEGAL_ENTITY}`}
           />
+        </Section>
+
+        <Section id="progress" labelledBy="agi-about-progress-title" rule>
+          <div>
+            <Eyebrow>Path of progress</Eyebrow>
+            <h2 className="agi-ds-h2" id="agi-about-progress-title">
+              Every milestone, dated.
+            </h2>
+            <ol className="agi-ds-timeline">
+              {PROGRESS.map((release) => (
+                <li key={release.date}>
+                  <span className="agi-ds-timeline-date">{release.date}</span>
+                  <span className="agi-ds-timeline-title">{release.headline}</span>
+                </li>
+              ))}
+            </ol>
+            <Link href="/changelog" className="agi-ds-timeline-more">
+              Full changelog →
+            </Link>
+          </div>
         </Section>
 
         <Section id="colophon" labelledBy="agi-about-colophon-title" rule>

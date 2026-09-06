@@ -66,6 +66,8 @@ behaviour inspected by the lead, not tests.
 | Pricing models table printed a comma for plans with no models        | fixed 752d93fdb: the cell reads None; capability table opens by default        |
 | Public pages carried italic accent phrases and unstyled link lists   | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide  |
 | Landing frames were empty greetings                                  | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts  |
+| Surface and feature pages led with ledgers and stale screenshots     | fixed d2cf23d9a 579587379: live frames and five product scenes on every hero   |
+| Ten settings deep links landed on a bare chat page                   | fixed 65188a68f: section travels in a query key the chat page opens; verified  |
 | /download calls four release endpoints that 404 locally              | open: verify against production release assets before judging                  |
 
 ## Critical flows
@@ -96,7 +98,7 @@ resilience 84eaf9dc3 b9e077d80 642b32800 e7c829ba6; adherence 81be75123
 32c0e291c; route preview d742a1b7b 5f244a834; telemetry 7ff4257e3 347e60191
 855b39141; selector 5d4984b06 a984e8777; docs and decisions f5e81c0d9
 35ceaa689 fb6e29bac f44c0438e 8f4866e18 8cce76a69; marketing 552427af5 4ccc39928
-69c545157 752d93fdb (reference study: x.ai home, product, api, company, pricing,
+69c545157 752d93fdb 9936eecbc d2cf23d9a 579587379; settings deep links 65188a68f (reference study: x.ai home, product, api, company, pricing,
 business pages captured under scratchpad ref).
 
 ## CI and security
