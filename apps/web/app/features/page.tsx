@@ -11,6 +11,24 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { WebWindow } from '@/features/marketing/components/DeviceMockups';
+import {
+  AgentRunWindow,
+  ArtifactsWindow,
+  MemoryWindow,
+  ProjectWindow,
+  ResearchWindow,
+} from '@/features/marketing/components/FeatureScenes';
+
+const FAMILY_SCENES: Record<string, ReactNode> = {
+  'AI chat': <WebWindow />,
+  Artifacts: <ArtifactsWindow />,
+  Projects: <ProjectWindow />,
+  Memory: <MemoryWindow />,
+  'Deep research': <ResearchWindow />,
+  Agents: <AgentRunWindow />,
+};
 
 export const metadata = buildMetadata({
   title: 'Features: chat, artifacts, projects, tools, memory, and research',
@@ -154,24 +172,7 @@ export default function FeaturesHubPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat/projects</span>
-                </div>
-                <ProductFrame
-                  src="/product/projects-dark-landing.png"
-                  srcLight="/product/projects-light-landing.png"
-                  alt="The AGI projects view listing standing instructions, files, and threads"
-                  width={2880}
-                  height={1300}
-                  priority
-                />
-              </div>
+              <WebWindow />
             </div>
           </div>
         </section>
@@ -194,13 +195,15 @@ export default function FeaturesHubPage() {
                       Read the {family.title} page
                     </Link>
                   </div>
-                  <ProductFrame
-                    src={family.image.dark}
-                    srcLight={family.image.light}
-                    alt={family.image.alt}
-                    width={family.image.width}
-                    height={family.image.height}
-                  />
+                  {FAMILY_SCENES[family.title] ?? (
+                    <ProductFrame
+                      src={family.image.dark}
+                      srcLight={family.image.light}
+                      alt={family.image.alt}
+                      width={family.image.width}
+                      height={family.image.height}
+                    />
+                  )}
                 </article>
               ))}
             </div>

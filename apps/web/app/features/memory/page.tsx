@@ -1,12 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { MemoryWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -68,24 +68,7 @@ export default function MemoryFeaturePage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/settings/memory</span>
-                </div>
-                <ProductFrame
-                  src="/product/memory-settings-dark.png"
-                  srcLight="/product/memory-settings-light.png"
-                  alt="The memory settings panel in AGI, listing where memories come from and how to suppress a source"
-                  width={1720}
-                  height={1360}
-                  priority
-                />
-              </div>
+              <MemoryWindow />
             </div>
           </div>
         </section>
