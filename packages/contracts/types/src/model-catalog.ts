@@ -20,7 +20,9 @@
 
 import modelsCatalogJson from './models.json';
 import {
+  lifecycleStageAtOrAfter,
   modelRegistry,
+  type LifecycleStage,
   type ModelCapabilityName,
   type ModelCapabilityValue,
   type RouteCommercialStatus,
@@ -30,8 +32,11 @@ export {
   getRoutePricing,
   getProviderCacheTokenBillingClass,
   getProviderComputePricing,
+  lifecycleStageAtOrAfter,
+  LIFECYCLE_STAGES,
 } from '@agiworkforce/model-registry';
 export type {
+  LifecycleStage,
   RoutePriceSheet,
   RouteCommercialStatus,
   CacheTokenBillingClass,
@@ -418,6 +423,7 @@ export interface ModelMetadata {
   openRouterSlug?: string;
   name: string;
   provider: Provider;
+  developer: string;
   modelType: ModelType;
   inputModalities?: Array<'text' | 'image' | 'audio' | 'video' | 'pdf'>;
   contextWindow?: number;
@@ -615,6 +621,7 @@ export interface ModelsCatalog {
   version: number | string;
   lastUpdated: string;
   providers: Record<string, ProviderConfig>;
+  developers: Record<string, { label: string }>;
   models: Record<string, ModelMetadata>;
   tierAllowedModels: TierAllowedModels;
   providerDefaults: ProviderCapabilityDefaults;
@@ -1252,14 +1259,40 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
   }
 })();
 
-export const providerLabels: Record<string, string> = Object.fromEntries(
-  Object.entries(modelsCatalog.providers).map(([providerId, providerConfig]) => [
-    providerId,
-    providerConfig.label,
-  ]),
+const GATEWAY_PROVIDER_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.values(
+    modelRegistry.gateways as Readonly<Record<string, { id: string; displayName: string }>>,
+  ).map((gateway) => [gateway.id, gateway.displayName]),
 );
 
+export const providerLabels: Record<string, string> = {
+  ...GATEWAY_PROVIDER_LABELS,
+  ...Object.fromEntries(
+    Object.entries(modelsCatalog.providers).map(([providerId, providerConfig]) => [
+      providerId,
+      providerConfig.label,
+    ]),
+  ),
+};
+
 export const PROVIDERS_IN_ORDER = [...modelsCatalog.providersInOrder];
+
+export const DEVELOPER_LABELS: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(modelsCatalog.developers).map(([developerId, developer]) => [
+      developerId,
+      developer.label,
+    ]),
+  ),
+);
+
+export function getDeveloperLabel(developerId: string): string {
+  return DEVELOPER_LABELS[developerId] ?? developerId;
+}
+
+export function getModelDeveloper(modelId: string | null | undefined): string | null {
+  return getModelMetadataById(modelId)?.developer ?? null;
+}
 
 export function getProviderConfig(provider: Provider | string): ProviderConfig | null {
   return modelsCatalog.providers[provider] ?? null;
@@ -1414,6 +1447,7 @@ export function getModelFamilySlotForModel(modelId: string): ModelFamilySlot | n
 
 export interface ModelRegistryFacts {
   family: string | null;
+  developer: string;
   isRouter: boolean;
   aliases: readonly string[];
   releasedOn: string | null;
@@ -1422,7 +1456,7 @@ export interface ModelRegistryFacts {
 }
 
 interface RegistryModelRecord {
-  identity: { family?: string | null; role?: string; aliases?: string[] };
+  identity: { family?: string | null; developer: string; role?: string; aliases?: string[] };
   lifecycle: { releasedOn?: string | null; stage?: string | null };
 }
 
@@ -1437,6 +1471,7 @@ export function getModelRegistryFacts(modelId: string): ModelRegistryFacts | nul
   )[canonicalModelId];
   return {
     family: entry.identity.family ?? null,
+    developer: entry.identity.developer,
     isRouter: entry.identity.role === 'router',
     aliases: Object.freeze([...(entry.identity.aliases ?? [])]),
     releasedOn: entry.lifecycle.releasedOn ?? null,
@@ -1612,18 +1647,70 @@ const MANAGED_TRAFFIC_COMMERCIAL_STATUSES: ReadonlySet<string> = Object.freeze(
 
 interface RegistryRouteRecord {
   modelKey: string;
+  provider: string;
+  providerModelId: string;
   trustModes: readonly string[];
   selectable: boolean;
+  isDefault: boolean;
   commercialStatus: string;
+  dataRetention: string;
 }
+
+export interface ManagedModelRoute {
+  routeId: string;
+  provider: string;
+  providerModelId: string;
+  isDefault: boolean;
+  commercialStatus: RouteCommercialStatus;
+  dataRetention: string;
+}
+
+const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
+
+function routePermitsManagedTraffic(route: RegistryRouteRecord): boolean {
+  return (
+    route.selectable &&
+    route.trustModes.includes(MANAGED_CLOUD_TRUST_MODE) &&
+    MANAGED_TRAFFIC_COMMERCIAL_STATUSES.has(route.commercialStatus)
+  );
+}
+
+export function listManagedRoutesForModel(modelId: string): ManagedModelRoute[] {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) return [];
+  const routes = modelRegistry.routes as Readonly<Record<string, RegistryRouteRecord>>;
+  return Object.entries(routes)
+    .filter(([, route]) => route.modelKey === canonicalModelId && routePermitsManagedTraffic(route))
+    .sort(([leftId, left], [rightId, right]) => {
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+      return leftId.localeCompare(rightId);
+    })
+    .map(([routeId, route]) => ({
+      routeId,
+      provider: route.provider,
+      providerModelId: route.providerModelId,
+      isDefault: route.isDefault,
+      commercialStatus: route.commercialStatus as RouteCommercialStatus,
+      dataRetention: route.dataRetention,
+    }));
+}
+
+const MANAGED_TRAFFIC_MINIMUM_STAGE = 'registered' satisfies LifecycleStage;
 
 const MANAGED_TRAFFIC_MODEL_IDS: ReadonlySet<string> = (() => {
   const permitted = new Set<string>();
   const routes = modelRegistry.routes as Readonly<Record<string, RegistryRouteRecord>>;
+  const models = modelRegistry.models as Readonly<Record<string, RegistryModelRecord>>;
   for (const route of Object.values(routes)) {
-    if (!route.selectable) continue;
-    if (!route.trustModes.includes('managed_cloud')) continue;
-    if (!MANAGED_TRAFFIC_COMMERCIAL_STATUSES.has(route.commercialStatus)) continue;
+    if (!routePermitsManagedTraffic(route)) continue;
+    if (
+      !lifecycleStageAtOrAfter(
+        models[route.modelKey]?.lifecycle.stage,
+        MANAGED_TRAFFIC_MINIMUM_STAGE,
+      )
+    ) {
+      continue;
+    }
     permitted.add(route.modelKey);
   }
   return permitted;

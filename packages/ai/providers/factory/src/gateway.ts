@@ -23,6 +23,11 @@ export interface GatewayGovernanceStub {
   note?: string;
 }
 
+export interface GatewayDiscountControl {
+  requestField: string;
+  minPercent: number;
+}
+
 export interface GatewayEndpointDefinition {
   id: string;
   displayName: string;
@@ -30,6 +35,13 @@ export interface GatewayEndpointDefinition {
   baseUrlEnv: string;
   apiKeyEnv: string;
   extraHeaderEnvs?: Readonly<Record<string, string>>;
+  discount?: GatewayDiscountControl;
+}
+
+export function gatewayDiscountBody(
+  discount: GatewayDiscountControl | undefined,
+): Readonly<Record<string, number>> | undefined {
+  return discount ? { [discount.requestField]: discount.minPercent } : undefined;
 }
 
 export interface GatewayDefinition extends GatewayEndpointDefinition {
@@ -78,6 +90,7 @@ export function createGatewayAdapter(
   const apiKey = requireEnv(env, gateway.apiKeyEnv, gateway.id, 'an API key');
   const extraHeaders = resolveExtraHeaders(gateway, env);
   const hasExtraHeaders = Object.keys(extraHeaders).length > 0;
+  const extraBody = gatewayDiscountBody(gateway.discount);
 
   switch (gateway.protocol) {
     case 'openai_chat_completions':
@@ -94,6 +107,7 @@ export function createGatewayAdapter(
           baseUrl,
           skipDiscovery: true,
           ...(hasExtraHeaders ? { extraHeaders } : {}),
+          ...(extraBody ? { extraBody } : {}),
         },
       );
     case 'openai_responses':

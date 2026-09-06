@@ -37,6 +37,115 @@
       "limit": 1000,
       "unit": "requests",
       "hardStopsBeforePaid": true
+    },
+    {
+      "routeId": "qwen/deepseek-v4-flash",
+      "poolId": "modelstudio-promo-deepseek-v4-flash",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1792540800000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
+    },
+    {
+      "routeId": "qwen/deepseek-v4-pro",
+      "poolId": "modelstudio-promo-deepseek-v4-pro",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1792540800000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
+    },
+    {
+      "routeId": "qwen/kimi-k3",
+      "poolId": "modelstudio-promo-kimi-k3",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1794960000000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
+    },
+    {
+      "routeId": "qwen/qwen-3.8-flash",
+      "poolId": "modelstudio-promo-qwen-3.8-flash",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1795564800000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
+    },
+    {
+      "routeId": "qwen/qwen-3.7-plus",
+      "poolId": "modelstudio-promo-qwen-3.7-plus",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1792540800000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
+    },
+    {
+      "routeId": "qwen/qwen-3.5-flash",
+      "poolId": "modelstudio-promo-qwen-3.5-flash",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://www.alibabacloud.com/help/en/model-studio/new-free-quota",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": 1792540800000,
+      "window": "allocation",
+      "limit": 1000000,
+      "unit": "tokens",
+      "hardStopsBeforePaid": false
     }
-  ]
+  ],
+  "notes": "Alibaba Model Studio entries are promotional allocations: independent per model id, 1,000,000 tokens each, expiring on the console date recorded in expiresAtMs (read from the Benefits page on 2026-09-06). hardStopsBeforePaid mirrors the console's Free quota only switch, which was off for every listed model on that date; the lane refuses a pool that can bill past its allowance, so these rows stay ineligible until the founder turns the switch on per model and records the review. Exhaustion is signalled by AllocationQuota.FreeTierOnly, which the runtime classifies as quota_exhausted and marks the pool spent until its expiry."
 }

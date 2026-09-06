@@ -256,6 +256,45 @@ const QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
 
 export const SPENDING_CAP_PROVIDER_HINT = 'spending_cap';
 
+/**
+ * Alibaba Model Studio answers an exhausted promotional allocation with
+ * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on) and an
+ * exceeded paid allocation with `Throttling.AllocationQuota` (HTTP 429). Both
+ * are quota facts about one model's pool, never credential facts: a 403 read as
+ * `auth` would park every route on the provider over one spent allocation.
+ */
+const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set([
+  'allocationquota.freetieronly',
+  'throttling.allocationquota',
+]);
+export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
+export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
+
+/**
+ * A discounted-capacity marketplace refuses a request whose required discount
+ * has no qualifying supply (Cheaper Inference: HTTP 503 `min_discount_unavailable`)
+ * rather than serving it at a higher price. The route has no capacity at the
+ * price we accept; the provider is not down, and the request moves on.
+ */
+const MIN_DISCOUNT_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(['min_discount_unavailable']);
+export const MIN_DISCOUNT_UNAVAILABLE_CODE = 'min_discount_unavailable';
+
+function errorCodeFields(e: SDKErrorLike): string[] {
+  return [e.name, e.code, e.type, e.error?.type, e.error?.code, e.error?.status]
+    .filter((raw): raw is string => typeof raw === 'string')
+    .map((raw) => raw.trim().toLowerCase());
+}
+
+function matchesAllocationQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
+  if (errorCodeFields(e).some((code) => ALLOCATION_QUOTA_CODES.has(code))) return true;
+  return [...ALLOCATION_QUOTA_CODES].some((code) => lowerMessage.includes(code));
+}
+
+function matchesMinimumDiscountUnavailable(e: SDKErrorLike, lowerMessage: string): boolean {
+  if (errorCodeFields(e).some((code) => MIN_DISCOUNT_UNAVAILABLE_CODES.has(code))) return true;
+  return [...MIN_DISCOUNT_UNAVAILABLE_CODES].some((code) => lowerMessage.includes(code));
+}
+
 function matchesSpendingCapExhausted(lowerMessage: string): boolean {
   return lowerMessage.includes('spending cap');
 }
@@ -440,6 +479,29 @@ export function classifyError(err: unknown): ClassifiedError {
       retryable: true,
       fallbackable: false,
       ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+      ...(typeof status === 'number' ? { status } : {}),
+      message,
+    };
+  }
+
+  if (matchesAllocationQuotaExhausted(e, lower)) {
+    return {
+      category: 'quota_exhausted',
+      code: FREE_QUOTA_EXHAUSTED_CODE,
+      retryable: false,
+      fallbackable: true,
+      ...(typeof status === 'number' ? { status } : {}),
+      message,
+      providerHint: FREE_TIER_ONLY_PROVIDER_HINT,
+    };
+  }
+
+  if (matchesMinimumDiscountUnavailable(e, lower)) {
+    return {
+      category: 'capacity_off_switch',
+      code: MIN_DISCOUNT_UNAVAILABLE_CODE,
+      retryable: false,
+      fallbackable: true,
       ...(typeof status === 'number' ? { status } : {}),
       message,
     };

@@ -36,6 +36,7 @@ import type { OpenAIChatCompletionChunk } from './types';
 export interface OpenAICompatAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
   extraHeaders?: Record<string, string>;
+  extraBody?: Readonly<Record<string, unknown>>;
 }
 
 export interface OpenAICompatAdapterSpec {
@@ -125,10 +126,13 @@ export function createOpenAICompatAdapter(
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: spec.id,
-      });
+      const params = {
+        ...translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: spec.id,
+        }),
+        ...(config.extraBody ?? {}),
+      };
 
       try {
         const sdkStream = await sdk.chat.completions.create(
