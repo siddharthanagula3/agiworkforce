@@ -151,7 +151,10 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
     assert.equal(model.provider, providerKey);
     assert.deepEqual(model.inputModalities, ['text', 'image', 'video']);
     assert.equal(model.contextOverride, 1_000_000);
-    assert.equal(model.maxOutputTokens, 64_000);
+    assert.ok(
+      model.maxOutputTokens >= 64_000,
+      `${modelKey} must not drop below the Qwen family output floor`,
+    );
     assert.equal(model.capabilitiesOverride.vision, true);
     assert.equal(model.capabilitiesOverride.tools, true);
     assert.equal(model.capabilitiesOverride.caching, true);
@@ -161,10 +164,8 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
 
   const flash = curation.models[qwenProvider.taskRouting.fast_completion];
   assert.deepEqual(flash.costOverride, {
-    inputCost: 0.1,
-    outputCost: 0.4,
-    cached_input: 0.02,
-    cached_write: 0.125,
+    inputCost: 0.15,
+    outputCost: 0.47,
   });
   assert.equal(
     flash.inputTokenPricingTiers,

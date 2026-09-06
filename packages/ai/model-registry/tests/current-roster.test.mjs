@@ -337,10 +337,11 @@ test('selects the founder-approved roster and subscription bands', () => {
 
   for (const modelKey of registry.providerModelKeys.minimax) {
     const minTier = compatibility.models[modelKey].tierPolicy?.minTier;
+    const superseded = registry.models[modelKey].lifecycle.deprecated === true;
     assert.equal(minTier, 'pro', `${modelKey} tierPolicy.minTier must match its roster band`);
-    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), true);
+    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), !superseded);
     assert.equal(basicRoster.has(modelKey), false);
-    assert.equal(selectableRoster.has(modelKey), true);
+    assert.equal(selectableRoster.has(modelKey), !superseded);
   }
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);

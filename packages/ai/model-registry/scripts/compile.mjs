@@ -2447,6 +2447,7 @@ export function loadFamilySnapshot() {
     readJson(PROVIDER_HOSTS_JSON),
     readJson(PROVIDER_DEFAULTS_JSON),
     readJson(PROVIDER_COMPUTE_PRICING_JSON),
+    readJson(GATEWAYS_JSON),
   );
   return {
     familyCatalog,
