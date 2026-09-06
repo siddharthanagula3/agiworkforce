@@ -47,6 +47,16 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- **All models panel no longer hammers a failing catalogue endpoint.** The
+  fetch effect re-ran on its own error transition, so an unavailable endpoint
+  produced an unbounded loading/error loop while the panel was open. The hook
+  now requests once per open, settles in an error state, and the panel shows
+  a loading line, a failure line and a retry control.
+- **Project retrieval keeps non-Latin query terms.** Term extraction accepted
+  ASCII only, so a Cyrillic or Han question ranked knowledge files by recency
+  alone. Terms now come from Unicode letters and digits, with character
+  bigrams for scripts written without word spacing.
+
 - An exhausted Alibaba allocation (`AllocationQuota.FreeTierOnly`, HTTP 403)
   now classifies as `quota_exhausted` and marks that pool spent instead of
   reading as a credential failure that parked every route on the provider.

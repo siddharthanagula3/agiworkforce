@@ -16,6 +16,9 @@ const CATALOGUE_SEARCH_LABEL = 'Search models';
 const CATALOGUE_BACK_LABEL = 'Back to the short list';
 const MODEL_CARD_BACK_LABEL = 'Back to the model list';
 const EMPTY_LIST_TEXT = 'No models match';
+const LOADING_TEXT = 'Loading models…';
+const LOAD_FAILED_TEXT = 'The model list could not be loaded.';
+const RETRY_LABEL = 'Try again';
 const NOT_PUBLISHED_TEXT = 'Not published';
 
 const COMING_SOON_TAG_LABEL = 'Coming soon';
@@ -250,6 +253,8 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
 export interface ModelCatalogueProps {
   entries: readonly ModelCatalogueEntry[];
   developers: readonly ModelCatalogueDeveloper[];
+  status?: 'idle' | 'loading' | 'ready' | 'error';
+  onRetry?: () => void;
   favouriteModelIds: readonly string[];
   selectedModelId: string;
   query: string;
@@ -265,6 +270,8 @@ export interface ModelCatalogueProps {
 export function ModelCatalogue({
   entries,
   developers,
+  status = 'ready',
+  onRetry,
   favouriteModelIds,
   selectedModelId,
   query,
@@ -422,7 +429,27 @@ export function ModelCatalogue({
           </div>
 
           <div role="listbox" aria-label="Models" className="min-h-0 flex-1 overflow-y-auto p-1">
-            {visible.length === 0 ? (
+            {status === 'error' && entries.length === 0 ? (
+              <div
+                role="alert"
+                className="flex flex-col items-center gap-2 px-3 py-4 text-center text-xs text-muted-foreground"
+              >
+                <span>{LOAD_FAILED_TEXT}</span>
+                {onRetry ? (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="rounded-md border border-[var(--chat-border)] px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:bg-muted/60"
+                  >
+                    {RETRY_LABEL}
+                  </button>
+                ) : null}
+              </div>
+            ) : status !== 'ready' && entries.length === 0 ? (
+              <p role="status" className="px-3 py-4 text-center text-xs text-muted-foreground">
+                {LOADING_TEXT}
+              </p>
+            ) : visible.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">
                 {EMPTY_LIST_TEXT}
               </p>

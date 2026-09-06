@@ -87,3 +87,63 @@ describe('project knowledge retrieval by relevance', () => {
     expect(prompt).toContain('scanned-contract.pdf');
   });
 });
+
+describe('project knowledge retrieval across scripts', () => {
+  it('ranks a Cyrillic match ahead of newer unrelated files', async () => {
+    const query = stubDb([
+      {
+        file_name: 'notes-1.md',
+        summary: 'Заметки о встрече',
+        extracted_text: 'Обсуждали расписание.',
+      },
+      {
+        file_name: 'policy.md',
+        summary: 'Политика возврата',
+        extracted_text: 'Возврат средств производится в течение 14 дней.',
+      },
+    ]);
+
+    const context = await loadProjectContext(
+      { query },
+      {
+        projectId: 'proj-1',
+        userId: 'user-1',
+        currentUserQuery: 'какой у нас срок возврата средств?',
+      },
+    );
+
+    expect(context?.knowledgeFiles.map((file) => file.fileName)).toEqual([
+      'policy.md',
+      'notes-1.md',
+    ]);
+  });
+
+  it('ranks a Han match without word spacing ahead of newer unrelated files', async () => {
+    const query = stubDb([
+      {
+        file_name: 'agenda.md',
+        summary: '会议日程',
+        extracted_text: '早餐九点开始。',
+      },
+      {
+        file_name: 'refunds.md',
+        summary: '退款政策',
+        extracted_text: '退款在十四天内处理。',
+      },
+    ]);
+
+    const context = await loadProjectContext(
+      { query },
+      {
+        projectId: 'proj-1',
+        userId: 'user-1',
+        currentUserQuery: '我们的退款期限是多久？',
+      },
+    );
+
+    expect(context?.knowledgeFiles.map((file) => file.fileName)).toEqual([
+      'refunds.md',
+      'agenda.md',
+    ]);
+  });
+});

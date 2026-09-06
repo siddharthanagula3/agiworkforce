@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelCatalogueEntry, ModelCatalogueResponse } from '@/app/api/models/catalogue/route';
 
 const MODEL_CATALOGUE_ENDPOINT = '/api/models/catalogue';
@@ -12,15 +12,26 @@ export interface ModelCatalogueDeveloper {
   totalCount: number;
 }
 
+export type ModelCatalogueStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export interface ModelCatalogueState {
-  status: 'idle' | 'loading' | 'ready' | 'error';
+  status: ModelCatalogueStatus;
+  entries: readonly ModelCatalogueEntry[];
+  developers: readonly ModelCatalogueDeveloper[];
+  count: number;
+  planLabel: string;
+  retry: () => void;
+}
+
+interface CatalogueData {
+  status: ModelCatalogueStatus;
   entries: readonly ModelCatalogueEntry[];
   developers: readonly ModelCatalogueDeveloper[];
   count: number;
   planLabel: string;
 }
 
-const EMPTY_STATE: ModelCatalogueState = {
+const EMPTY_DATA: CatalogueData = {
   status: 'idle',
   entries: [],
   developers: [],
@@ -54,19 +65,28 @@ function groupDevelopers(
 }
 
 export function useModelCatalogue(enabled: boolean): ModelCatalogueState {
-  const [state, setState] = useState<ModelCatalogueState>(EMPTY_STATE);
+  const [data, setData] = useState<CatalogueData>(EMPTY_DATA);
+  const [attempt, setAttempt] = useState(0);
+  const loadedRef = useRef(false);
+
+  const retry = useCallback(() => {
+    if (loadedRef.current) return;
+    setAttempt((previous) => previous + 1);
+  }, []);
 
   useEffect(() => {
-    if (!enabled || state.status === 'ready') return;
+    if (!enabled || loadedRef.current) return;
     const controller = new AbortController();
-    setState((previous) => ({ ...previous, status: 'loading' }));
+    setData((previous) => ({ ...previous, status: 'loading' }));
     fetch(MODEL_CATALOGUE_ENDPOINT, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(String(response.status));
         return (await response.json()) as ModelCatalogueResponse;
       })
       .then((body) => {
-        setState({
+        if (controller.signal.aborted) return;
+        loadedRef.current = true;
+        setData({
           status: 'ready',
           entries: body.models,
           developers: groupDevelopers(body.models),
@@ -74,13 +94,12 @@ export function useModelCatalogue(enabled: boolean): ModelCatalogueState {
           planLabel: body.planLabel,
         });
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (controller.signal.aborted) return;
-        setState({ ...EMPTY_STATE, status: 'error' });
-        void error;
+        setData({ ...EMPTY_DATA, status: 'error' });
       });
     return () => controller.abort();
-  }, [enabled, state.status]);
+  }, [enabled, attempt]);
 
-  return state;
+  return { ...data, retry };
 }

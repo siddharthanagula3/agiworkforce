@@ -71,15 +71,34 @@ function singleLine(value: string, max: number): string {
   return truncate(value.replace(/[\r\n\t]+/g, ' ').trim(), max);
 }
 
+const MAX_QUERY_TERMS = 24;
+const WORD_TERM_PATTERN = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\\p{M}_-]{2,}', 'gu');
+const UNSPACED_SCRIPT_CLASS =
+  '[\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Hangul}\\p{Script=Thai}]';
+const UNSPACED_SCRIPT_RUN_PATTERN = new RegExp(`${UNSPACED_SCRIPT_CLASS}+`, 'gu');
+const UNSPACED_SCRIPT_CHAR_PATTERN = new RegExp(UNSPACED_SCRIPT_CLASS, 'u');
+
+function unspacedScriptTerms(query: string): string[] {
+  const terms: string[] = [];
+  for (const run of query.match(UNSPACED_SCRIPT_RUN_PATTERN) ?? []) {
+    const characters = Array.from(run);
+    if (characters.length < 2) continue;
+    for (let index = 0; index + 1 < characters.length; index += 1) {
+      terms.push(characters[index]! + characters[index + 1]!);
+    }
+  }
+  return terms;
+}
+
 function extractQueryTerms(query: string | undefined): string[] {
-  return Array.from(
-    new Set(
-      (query ?? '')
-        .toLowerCase()
-        .match(/[a-z0-9][a-z0-9_-]{2,}/g)
-        ?.filter((term) => !RELEVANCE_STOP_WORDS.has(term)) ?? [],
-    ),
-  ).slice(0, 24);
+  const lowered = (query ?? '').toLowerCase();
+  const wordTerms = (lowered.match(WORD_TERM_PATTERN) ?? []).filter(
+    (term) => !RELEVANCE_STOP_WORDS.has(term) && !UNSPACED_SCRIPT_CHAR_PATTERN.test(term),
+  );
+  return Array.from(new Set([...wordTerms, ...unspacedScriptTerms(lowered)])).slice(
+    0,
+    MAX_QUERY_TERMS,
+  );
 }
 
 function scoreKnowledgeFile(
