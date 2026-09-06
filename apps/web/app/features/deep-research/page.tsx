@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { WebWindow } from '@/features/marketing/components/DeviceMockups';
 import { ResearchWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -7,7 +8,6 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -87,14 +87,7 @@ export default function DeepResearchPage() {
                     them until you accept the plan.
                   </p>
                 </div>
-                <ProductFrame
-                  src="/product/deep-research-composer-dark.png"
-                  srcLight="/product/deep-research-composer-light.png"
-                  alt="The AGI composer with deep research mode selected before a run starts"
-                  width={1472}
-                  height={254}
-                  caption={['Composer', 'Deep research']}
-                />
+                <WebWindow />
               </article>
             </div>
           </div>

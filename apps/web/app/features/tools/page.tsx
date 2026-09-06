@@ -2,13 +2,13 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -77,15 +77,7 @@ export default function FeaturesToolsPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <ProductFrame
-                src="/product/agents-tool-approvals-dark.png"
-                srcLight="/product/agents-tool-approvals-light.png"
-                alt='The tool approvals setting in AGI, with "Ask before every action" selected'
-                width={1132}
-                height={584}
-                caption={['Settings', 'Tool approvals']}
-                priority
-              />
+              <AgentRunWindow />
             </div>
           </div>
         </section>

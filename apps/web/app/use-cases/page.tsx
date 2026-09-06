@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -6,11 +5,18 @@ import {
   Button,
   ButtonRow,
   Eyebrow,
-  ProductFrame,
   Prose,
   Section,
   Stack,
+  Bento,
 } from '@/features/marketing/components/system';
+import type { ReactNode } from 'react';
+import { WebWindow, TerminalWindow } from '@/features/marketing/components/DeviceMockups';
+import {
+  AgentRunWindow,
+  ProjectWindow,
+  ResearchWindow,
+} from '@/features/marketing/components/FeatureScenes';
 import { USE_CASE_CONTENT } from '@/features/marketing/components/pages/business/use-cases-content';
 
 export const metadata = buildMetadata({
@@ -21,6 +27,13 @@ export const metadata = buildMetadata({
 });
 
 const INDEX_ORDER = ['startups', 'consulting', 'it-providers', 'sales-teams'] as const;
+
+const USE_CASE_VISUALS: Record<(typeof INDEX_ORDER)[number], ReactNode> = {
+  startups: <TerminalWindow />,
+  consulting: <ProjectWindow />,
+  'it-providers': <AgentRunWindow />,
+  'sales-teams': <ResearchWindow />,
+};
 
 const IDS = {
   hero: 'agi-usecases-title',
@@ -54,24 +67,7 @@ export default function UseCasesPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat</span>
-                </div>
-                <ProductFrame
-                  src="/product/hero-thread-dark.png"
-                  srcLight="/product/hero-thread-light.png"
-                  alt="A working AGI chat thread in the browser"
-                  width={2392}
-                  height={1244}
-                  priority
-                />
-              </div>
+              <WebWindow />
             </div>
           </div>
         </section>
@@ -88,26 +84,21 @@ export default function UseCasesPage() {
                 routing, so what changes between them is where the work starts.
               </Prose>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {INDEX_ORDER.map((slug) => {
+            <Bento
+              label="Use case pages"
+              tiles={INDEX_ORDER.map((slug) => {
                 const entry = USE_CASE_CONTENT[slug];
                 if (!entry) throw new Error(`missing use case content for slug: ${slug}`);
                 const label = entry.eyebrow.replace('Use case · ', '');
-                return (
-                  <div
-                    key={slug}
-                    className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
-                  >
-                    <Eyebrow>{label}</Eyebrow>
-                    <h3 className="agi-ds-h3">{entry.title}</h3>
-                    <Prose size="sm">{entry.lede}</Prose>
-                    <Link href={`/use-cases/${entry.slug}`} className="agi-ds-link">
-                      Read the {label} page
-                    </Link>
-                  </div>
-                );
+                return {
+                  title: entry.title,
+                  body: entry.lede,
+                  href: `/use-cases/${entry.slug}`,
+                  eyebrow: label,
+                  visual: USE_CASE_VISUALS[slug],
+                };
               })}
-            </div>
+            />
           </Stack>
         </Section>
 

@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { BILLING_PLAN_PRICING, MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -45,17 +45,7 @@ export default function BusinessPage() {
               variant: 'secondary',
             },
           ]}
-          visual={
-            <ProductFrame
-              src="/product/usage-dark.png"
-              srcLight="/product/usage-light.png"
-              alt="The account usage screen, showing spend against the plan window"
-              width={1128}
-              height={716}
-              caption={['Account', 'Usage']}
-              priority
-            />
-          }
+          visual={<ConsoleWindow view="usage" />}
         />
 
         <Section id="cost-ownership" labelledBy="agi-business-cost-title" rule>
