@@ -1104,6 +1104,8 @@ export function ComposerFooter({
                     <ModelCatalogue
                       entries={catalogue.entries}
                       developers={catalogue.developers}
+                      status={catalogue.status}
+                      onRetry={catalogue.retry}
                       favouriteModelIds={favouriteModelIds}
                       selectedModelId={selectedModelId}
                       query={searchQuery}
