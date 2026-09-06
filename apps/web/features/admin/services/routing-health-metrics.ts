@@ -39,6 +39,8 @@ export interface RouteHealthObservations {
   serverErrorRate: number | null;
   timeoutRate: number | null;
   streamCorruptionRate: number | null;
+  ttftP50Ms: number | null;
+  throughputTokensPerSecond: number | null;
   cooldownUntil: string | null;
 }
 
@@ -71,6 +73,11 @@ export interface RouteScopeHealthRow {
   observations: RouteHealthObservations;
 }
 
+export interface RouteScopeHealth {
+  state: RouteBreakerState;
+  observations: RouteHealthObservations;
+}
+
 export interface RoutingHealthSummary {
   providers: ProviderHealthRow[];
   lockoutWindowMs: number;
@@ -92,6 +99,8 @@ function toObservations(snapshot: RouteHealthSnapshot | undefined): RouteHealthO
     serverErrorRate: snapshot?.serverErrorRate ?? null,
     timeoutRate: snapshot?.timeoutRate ?? null,
     streamCorruptionRate: snapshot?.streamCorruptionRate ?? null,
+    ttftP50Ms: snapshot?.ttftP50Ms ?? null,
+    throughputTokensPerSecond: snapshot?.throughputTokensPerSecond ?? null,
     cooldownUntil:
       snapshot?.cooldownUntilMs !== undefined
         ? new Date(snapshot.cooldownUntilMs).toISOString()
@@ -141,6 +150,21 @@ export async function readRoutingHealth(nowMs: number = Date.now()): Promise<Rou
       };
     }),
   };
+}
+
+export async function readRouteScopeHealth(
+  routeIds: readonly string[],
+  nowMs: number = Date.now(),
+): Promise<Readonly<Record<string, RouteScopeHealth>>> {
+  const snapshots = await getRouteHealthSnapshot(routeIds, nowMs);
+  const health: Record<string, RouteScopeHealth> = {};
+  for (const routeId of routeIds) {
+    health[routeId] = {
+      state: routeBreakerState(snapshots[routeId]),
+      observations: toObservations(snapshots[routeId]),
+    };
+  }
+  return health;
 }
 
 export function isKnownRoutingProvider(provider: string): boolean {
