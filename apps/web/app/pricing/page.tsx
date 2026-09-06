@@ -56,7 +56,7 @@ import {
 } from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Container, Eyebrow, Prose } from '@/features/marketing/components/system';
+import { Container, Eyebrow, Prose, ScrollableTable } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
 import '@/features/marketing/components/pages/business/pricing.css';
 import '@/features/marketing/components/pages/business/data-table.css';
@@ -1279,12 +1279,7 @@ export default function PricingPage() {
                   {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
                 </span>
               </summary>
-              <div
-                aria-label="Scrollable plan comparison"
-                role="region"
-                tabIndex={0}
-                className="agi-ds-compare-table-wrap"
-              >
+              <ScrollableTable label="Scrollable plan comparison">
                 <table
                   aria-label="Plan capabilities"
                   className="agi-ds-compare-table agi-ds-compare-table-wide"
@@ -1324,7 +1319,7 @@ export default function PricingPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             </details>
           </Container>
         </section>
@@ -1341,11 +1336,8 @@ export default function PricingPage() {
               this is how many of each provider&apos;s models are reachable at each level, read live
               from our model catalog.
             </Prose>
-            <div
-              aria-label="Scrollable model access by plan"
-              role="region"
-              tabIndex={0}
-              className="agi-ds-compare-table-wrap"
+            <ScrollableTable
+              label="Scrollable model access by plan"
               style={{ marginTop: 'var(--agi-space-4)' }}
             >
               <table aria-label="Model access by plan" className="agi-ds-compare-table">
@@ -1372,7 +1364,7 @@ export default function PricingPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableTable>
           </Container>
         </section>
 
