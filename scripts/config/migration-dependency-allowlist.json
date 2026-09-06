@@ -285,6 +285,21 @@
       "file": "apps/web/lib/services/web-push-service.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/features/plugins/server/directory/install.ts",
+      "migration": 159,
+      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
+    },
+    {
+      "file": "apps/web/features/plugins/server/directory/installed-skills.ts",
+      "migration": 159,
+      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 174,
+      "reason": "identities are founder-gated; the deploy runbook applies migration 0174 before this code reaches production."
     }
   ]
 }

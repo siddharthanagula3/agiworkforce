@@ -209,12 +209,15 @@ export async function uninstallDirectoryInstallation(
     if (!isDirectoryMarketplaceRepository(row.repository_url)) return true;
     await tx.execute(
       `delete from public.plugin_marketplace_entries entries
+        using public.plugin_marketplace_sources sources
         where entries.id = $1
+          and sources.id = entries.source_id
+          and sources.user_id = $2
           and not exists (
             select 1 from public.plugin_marketplace_installations installation
              where installation.entry_id = entries.id
           )`,
-      [row.entry_id],
+      [row.entry_id, userId],
     );
     await tx.execute(
       `delete from public.plugin_marketplace_sources sources
