@@ -1465,9 +1465,9 @@ const MessageBubbleComponent = function MessageBubble({
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
     if (hasStreamError({ metadata: message.metadata })) return null;
+    if (message.metadata?.webSearchAskedInText !== true) return null;
     if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
-    if (searchSources.length > 0) return null;
-    return message.metadata?.webSearchAskedInText === true ? 'no-results' : null;
+    return searchSources.length > 0 ? null : 'no-results';
   }, [
     isUser,
     message.isStreaming,
