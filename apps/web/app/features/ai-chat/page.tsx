@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
+import { ComposerWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -111,14 +111,7 @@ export default function AiChatFeaturePage() {
                     providers.
                   </p>
                 </div>
-                <ProductFrame
-                  src="/product/composer-dark.png"
-                  srcLight="/product/composer-light.png"
-                  alt="The AGI composer with attachments, dictation, and the model picker"
-                  width={1472}
-                  height={254}
-                  caption={['Chat', 'Composer']}
-                />
+                <ComposerWindow />
               </article>
             </div>
           </div>

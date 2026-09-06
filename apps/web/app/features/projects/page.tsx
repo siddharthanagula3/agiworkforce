@@ -7,7 +7,6 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -107,14 +106,7 @@ export default function ProjectsFeaturePage() {
                     action.&rdquo;
                   </p>
                 </div>
-                <ProductFrame
-                  src="/product/projects-dark-landing.png"
-                  srcLight="/product/projects-light-landing.png"
-                  alt="Creating a new AGI project from a template"
-                  width={2880}
-                  height={1800}
-                  caption={['Projects', 'New project']}
-                />
+                <ProjectWindow />
               </article>
             </div>
           </div>

@@ -299,3 +299,229 @@ export function ProjectWindow() {
     </AppWindow>
   );
 }
+
+const CONSOLE_MEMBERS = [
+  { name: 'A. Okafor', role: 'Owner', seat: 'SSO', last: 'today' },
+  { name: 'J. Lindqvist', role: 'Admin', seat: 'SSO', last: 'today' },
+  { name: 'M. Ferreira', role: 'Member', seat: 'SCIM', last: 'yesterday' },
+  { name: 'R. Nakamura', role: 'Member', seat: 'SCIM', last: '2 Sep' },
+  { name: 'S. Adeyemi', role: 'Viewer', seat: 'Invite', last: 'pending' },
+] as const;
+
+const CONSOLE_AUDIT = [
+  { time: '09:14', actor: 'A. Okafor', action: 'policy.changed', outcome: 'success' },
+  { time: '09:02', actor: 'system', action: 'scim.user_provisioned', outcome: 'success' },
+  { time: '08:41', actor: 'J. Lindqvist', action: 'data_exported', outcome: 'denied' },
+  { time: '08:40', actor: 'A. Okafor', action: 'admin_policy_changed', outcome: 'success' },
+] as const;
+
+export function ConsoleWindow({
+  view = 'members',
+}: {
+  view?: 'members' | 'policy' | 'audit' | 'usage';
+}) {
+  return (
+    <AppWindow title="agiworkforce.com/workspace" badge="Console" label="The AGI workspace console">
+      <div className="agi-sc-split" data-cols="1-4">
+        <aside className="agi-sc-rail agi-sc-rail--left agi-sc-rail--nav">
+          {[
+            'Overview',
+            'Members',
+            'Policy',
+            'Models',
+            'Connectors',
+            'Usage',
+            'Identity',
+            'Audit',
+          ].map((item) => (
+            <span
+              className="agi-sc-navitem"
+              data-on={
+                (view === 'members' && item === 'Members') ||
+                (view === 'policy' && item === 'Policy') ||
+                (view === 'audit' && item === 'Audit') ||
+                (view === 'usage' && item === 'Usage')
+                  ? 'true'
+                  : undefined
+              }
+              key={item}
+            >
+              {item}
+            </span>
+          ))}
+        </aside>
+        {view === 'members' ? (
+          <div className="agi-sc-page">
+            <div className="agi-sc-page-head">
+              <span className="agi-sc-page-title">Members</span>
+              <span className="agi-sc-meta">12 seats · 11 active · 1 invitation</span>
+            </div>
+            <div className="agi-mk-table agi-sc-table" data-cols="4">
+              <span className="agi-mk-table-h">Name</span>
+              <span className="agi-mk-table-h">Role</span>
+              <span className="agi-mk-table-h">Seat</span>
+              <span className="agi-mk-table-h">Last active</span>
+              {CONSOLE_MEMBERS.map((member) => (
+                <span className="agi-sc-row" key={member.name}>
+                  <span>{member.name}</span>
+                  <span>{member.role}</span>
+                  <span>{member.seat}</span>
+                  <span>{member.last}</span>
+                </span>
+              ))}
+            </div>
+            <p className="agi-mk-receipt">
+              <span className="agi-mk-dot" />
+              SSO: SAML connected · SCIM: on, last sync 09:02 · every change lands in the audit
+              trail
+            </p>
+          </div>
+        ) : null}
+        {view === 'policy' ? (
+          <div className="agi-sc-page">
+            <div className="agi-sc-page-head">
+              <span className="agi-sc-page-title">Policy</span>
+              <span className="agi-sc-meta">Enforced server side</span>
+            </div>
+            <ul className="agi-sc-perms">
+              <Perm label="Local runs allowed" state="allowed" />
+              <Perm label="BYOK allowed" state="allowed" />
+              <Perm label="AGI Cloud allowed" state="allowed" />
+              <Perm label="Public share links" state="denied" />
+              <Perm label="Data export" state="ask" />
+              <Perm label="Client sync to phones" state="denied" />
+            </ul>
+            <div className="agi-sc-card">
+              <span className="agi-sc-card-head">Retention</span>
+              <p className="agi-sc-instructions">
+                90 days, enforced. Legal holds exempt two conversations.
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {view === 'usage' ? (
+          <div className="agi-sc-page">
+            <div className="agi-sc-page-head">
+              <span className="agi-sc-page-title">Usage</span>
+              <span className="agi-sc-meta">This billing period · resets in 27 days</span>
+            </div>
+            <ul className="agi-sc-usage">
+              <li>
+                <span className="agi-sc-usage-row">
+                  <span>Local</span>
+                  <span className="agi-sc-meta">312 runs · $0.00</span>
+                </span>
+                <span className="agi-sc-bar" data-fill="0" />
+              </li>
+              <li>
+                <span className="agi-sc-usage-row">
+                  <span>BYOK</span>
+                  <span className="agi-sc-meta">1,048 runs · billed by your provider</span>
+                </span>
+                <span className="agi-sc-bar" data-fill="0" />
+              </li>
+              <li>
+                <span className="agi-sc-usage-row">
+                  <span>AGI Cloud</span>
+                  <span className="agi-sc-meta">$12.40 of the $25.00 seat cap</span>
+                </span>
+                <span className="agi-sc-bar" data-fill="50" />
+              </li>
+            </ul>
+            <div className="agi-sc-card">
+              <span className="agi-sc-card-head">Spend ceiling</span>
+              <p className="agi-sc-instructions">
+                Runs stop at the cap. Overage stays off until an owner turns it on.
+              </p>
+            </div>
+            <div className="agi-sc-panel-foot">
+              <span>Export CSV</span>
+              <span>By member</span>
+              <span>By model</span>
+            </div>
+          </div>
+        ) : null}
+        {view === 'audit' ? (
+          <div className="agi-sc-page">
+            <div className="agi-sc-page-head">
+              <span className="agi-sc-page-title">Audit</span>
+              <span className="agi-sc-meta">Streaming to your SIEM · signed batches</span>
+            </div>
+            <div className="agi-mk-table agi-sc-table" data-cols="4">
+              <span className="agi-mk-table-h">Time</span>
+              <span className="agi-mk-table-h">Actor</span>
+              <span className="agi-mk-table-h">Action</span>
+              <span className="agi-mk-table-h">Outcome</span>
+              {CONSOLE_AUDIT.map((event) => (
+                <span className="agi-sc-row" key={event.time + event.action}>
+                  <span>{event.time}</span>
+                  <span>{event.actor}</span>
+                  <span className="agi-sc-mono">{event.action}</span>
+                  <span data-outcome={event.outcome}>{event.outcome}</span>
+                </span>
+              ))}
+            </div>
+            <div className="agi-sc-panel-foot">
+              <span>Export JSONL</span>
+              <span>Filter</span>
+              <span>Legal hold</span>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </AppWindow>
+  );
+}
+
+const SLASH_COMMANDS = [
+  { name: '/research', hint: 'Plan searches, wait for approval, cite every claim' },
+  { name: '/code', hint: 'Run in the sandbox and return the output' },
+  { name: '/image', hint: 'Generate or edit an image' },
+  { name: '/summarise', hint: 'Condense the attached files' },
+] as const;
+
+export function ComposerWindow() {
+  return (
+    <AppWindow
+      title="agiworkforce.com/chat"
+      badge="Web"
+      label="The AGI composer with a slash menu open"
+    >
+      <div className="agi-sc-composer-stage">
+        <div className="agi-mk-composer agi-sc-composer">
+          <div className="agi-mk-composer-row agi-sc-chips">
+            <span className="agi-mk-chip">▤ deck-v7.pdf</span>
+            <span className="agi-mk-chip">▣ screenshot.png</span>
+            <span className="agi-mk-chip">◉ 0:42 dictated</span>
+          </div>
+          <div className="agi-mk-composer-row">
+            <span className="agi-mk-ghost agi-sc-typed">
+              /research the EU AI Act deployer duties
+              <span className="agi-dev-caret" />
+            </span>
+            <span className="agi-dev-send">➤</span>
+          </div>
+          <div className="agi-mk-composer-row agi-mk-composer-foot">
+            <span className="agi-mk-seg">
+              <span data-on="true">Chat</span>
+              <span>AGI Work</span>
+            </span>
+            <span className="agi-mk-chip agi-mk-chip--model">Auto ▾</span>
+            <span className="agi-mk-chip">Search · on</span>
+            <span className="agi-mk-composer-meta">
+              <span>Enter to send</span>
+            </span>
+          </div>
+        </div>
+        <ul className="agi-sc-slash">
+          {SLASH_COMMANDS.map((command, index) => (
+            <li data-on={index === 0 ? 'true' : undefined} key={command.name}>
+              <span className="agi-sc-slash-name">{command.name}</span>
+              <span className="agi-sc-slash-hint">{command.hint}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </AppWindow>
+  );
+}

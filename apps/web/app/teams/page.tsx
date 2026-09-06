@@ -1,13 +1,13 @@
 import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -20,17 +20,6 @@ export const metadata = buildMetadata({
     'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on managed cloud.',
   path: '/teams',
 });
-
-const BROWSER_DOTS = 3;
-
-const APPROVALS_SHOT = {
-  dark: '/product/agents-tool-approvals-dark.png',
-  light: '/product/agents-tool-approvals-light.png',
-  alt: 'The tool approvals screen, where the default answer for connector, plugin and tool actions is chosen',
-  width: 1132,
-  height: 584,
-  caption: ['Settings', 'Tool approvals'],
-} as const;
 
 const CONTROL_STATES = [
   {
@@ -61,26 +50,7 @@ export default function TeamsPage() {
             { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
             { href: '/contact-sales', label: 'Enterprise sales', variant: 'secondary' },
           ]}
-          visual={
-            <div className="agi-lp-browser" style={{ alignSelf: 'start' }}>
-              <div className="agi-lp-browser-bar" aria-hidden="true">
-                <span className="agi-lp-browser-dots">
-                  {Array.from({ length: BROWSER_DOTS }, (_, position) => (
-                    <i key={position} />
-                  ))}
-                </span>
-              </div>
-              <ProductFrame
-                src={APPROVALS_SHOT.dark}
-                srcLight={APPROVALS_SHOT.light}
-                alt={APPROVALS_SHOT.alt}
-                width={APPROVALS_SHOT.width}
-                height={APPROVALS_SHOT.height}
-                caption={APPROVALS_SHOT.caption}
-                priority
-              />
-            </div>
-          }
+          visual={<ConsoleWindow view="members" />}
         />
 
         <Section id="team-basics" labelledBy="agi-teams-basics-title" rule>

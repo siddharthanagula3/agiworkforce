@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -6,11 +5,17 @@ import {
   Button,
   ButtonRow,
   Eyebrow,
-  ProductFrame,
-  Prose,
   Section,
   Stack,
+  Bento,
 } from '@/features/marketing/components/system';
+import type { ReactNode } from 'react';
+import { WebWindow, EditorWindow } from '@/features/marketing/components/DeviceMockups';
+import {
+  AgentRunWindow,
+  ConsoleWindow,
+  ProjectWindow,
+} from '@/features/marketing/components/FeatureScenes';
 
 export const metadata = buildMetadata({
   title: 'Solutions: AI workflows for teams, developers, and operators',
@@ -52,6 +57,13 @@ const ROUTES = [
   },
 ] as const;
 
+const SOLUTION_VISUALS: Record<string, ReactNode> = {
+  'AGI Code': <EditorWindow />,
+  'AGI Work': <AgentRunWindow />,
+  'AGI for Business': <ConsoleWindow view="policy" />,
+  'Use cases': <ProjectWindow />,
+};
+
 const MAP_FACTS = [
   'the same chat',
   'the same projects',
@@ -81,24 +93,7 @@ export default function SolutionsPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat</span>
-                </div>
-                <ProductFrame
-                  src="/product/hero-thread-dark.png"
-                  srcLight="/product/hero-thread-light.png"
-                  alt="A working AGI chat thread in the browser"
-                  width={2392}
-                  height={1244}
-                  priority
-                />
-              </div>
+              <WebWindow />
             </div>
           </div>
         </section>
@@ -111,21 +106,16 @@ export default function SolutionsPage() {
                 Each of these pages was written for someone doing a different job.
               </h2>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {ROUTES.map((route) => (
-                <div
-                  key={route.title}
-                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
-                >
-                  <Eyebrow>{route.meta}</Eyebrow>
-                  <h3 className="agi-ds-h3">{route.title}</h3>
-                  <Prose size="sm">{route.body}</Prose>
-                  <Link href={route.href} className="agi-ds-link">
-                    Read more
-                  </Link>
-                </div>
-              ))}
-            </div>
+            <Bento
+              label="Solution pages"
+              tiles={ROUTES.map((route) => ({
+                title: route.title,
+                body: route.body,
+                href: route.href,
+                eyebrow: route.meta,
+                visual: SOLUTION_VISUALS[route.title],
+              }))}
+            />
           </Stack>
         </Section>
 
