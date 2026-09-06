@@ -28,16 +28,13 @@ const STATE_LABEL: Record<RouteBreakerState, string> = {
 
 const UNFUNDED_LABEL = 'Unfunded';
 
-const UNFUNDED_CLASS =
-  'border-red-600/40 bg-red-500/10 text-red-800 dark:border-red-400/30 dark:text-red-100';
+const UNFUNDED_CLASS = 'border-destructive bg-muted text-destructive-text';
 
 const STATE_CLASS: Record<RouteBreakerState, string> = {
   closed: 'border-border bg-muted text-foreground',
-  degraded:
-    'border-amber-600/40 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:text-amber-100',
-  open: 'border-red-600/40 bg-red-500/10 text-red-800 dark:border-red-400/30 dark:text-red-100',
-  half_open:
-    'border-sky-600/40 bg-sky-500/10 text-sky-800 dark:border-sky-300/30 dark:text-sky-100',
+  degraded: 'border-warning bg-muted text-warning-text',
+  open: 'border-destructive bg-muted text-destructive-text',
+  half_open: 'border-info bg-muted text-info-text',
 };
 
 async function readJson<T>(url: string): Promise<T> {

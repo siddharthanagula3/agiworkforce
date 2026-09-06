@@ -28,8 +28,7 @@ const CONVERSATION_PACE_MS = 15_000;
 const CACHE_NOTE_TEXT = 'Starts a new prompt cache';
 const TURN_FAILED_LEAD = 'Response failed';
 const THEME_STORAGE_KEY = 'theme';
-const THEMES = ['dark', 'light'] as const;
-type CaptureTheme = (typeof THEMES)[number];
+type CaptureTheme = 'dark' | 'light';
 
 async function applyTheme(page: Page, theme: CaptureTheme): Promise<void> {
   await page.addInitScript(

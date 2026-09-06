@@ -118,13 +118,7 @@ interface SchedulesPageProps {
   createIdempotencyKey?: () => string;
   scope?: ScheduleProjectScope | null;
   projects?: ScheduleProjectOption[];
-  /**
-   * Starts a chat about a schedule's latest result. Injected rather than
-   * called from a `useRouter()` here, the same reason `api` and `now` are
-   * props: this component is rendered from both the standalone schedules
-   * route and the project-detail page, and unit-tested with neither.
-   */
-  onOpenChat?: (schedule: ScheduleTask) => void;
+  onOpenChat: (schedule: ScheduleTask) => void;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -565,12 +559,7 @@ export function SchedulesPage({
 
   const openChatAboutSchedule = useCallback(
     (schedule: ScheduleTask) => {
-      if (onOpenChat) {
-        onOpenChat(schedule);
-        return;
-      }
-      const target = `/chat?starterPrompt=${encodeURIComponent(schedule.prompt ?? schedule.name)}`;
-      if (typeof window !== 'undefined') window.location.assign(target);
+      onOpenChat(schedule);
     },
     [onOpenChat],
   );
