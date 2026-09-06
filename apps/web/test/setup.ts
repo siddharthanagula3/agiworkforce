@@ -18,6 +18,9 @@ if (typeof HTMLElement !== 'undefined') {
   if (!HTMLElement.prototype.releasePointerCapture) {
     HTMLElement.prototype.releasePointerCapture = () => {};
   }
+  if (!HTMLElement.prototype.scrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = () => {};
+  }
 }
 
 globalThis.ResizeObserver = class ResizeObserver {

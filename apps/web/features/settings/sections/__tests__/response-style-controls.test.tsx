@@ -132,28 +132,26 @@ describe('response style controls on web', () => {
     );
   });
 
-  it('hydrates a stored slider rather than snapping it back to neutral', async () => {
+  it('hydrates a stored level rather than snapping it back to neutral', async () => {
     mocks.fetchPreferences.mockImplementation(async (ns: string) =>
       ns === 'personalization' ? { style: 'formal', emoji: 0 } : {},
     );
 
     render(<GeneralSection />);
 
-    await waitFor(async () =>
-      expect((await screen.findByLabelText('Emoji')) as HTMLInputElement).toHaveValue('0'),
-    );
+    await waitFor(async () => expect(await screen.findByLabelText('Emoji')).toHaveValue('less'));
     expect(await screen.findByLabelText('Response style')).toHaveValue('formal');
   });
 
-  it('describes the slider position to assistive technology, not just by position', async () => {
+  it('describes the level to assistive technology in words, not just by position', async () => {
     mocks.fetchPreferences.mockImplementation(async (ns: string) =>
       ns === 'personalization' ? { emoji: 0 } : {},
     );
 
     render(<GeneralSection />);
 
-    await waitFor(async () =>
-      expect(await screen.findByLabelText('Emoji')).toHaveAttribute('aria-valuetext', 'None'),
-    );
+    const emoji = (await screen.findByLabelText('Emoji')) as HTMLSelectElement;
+    await waitFor(() => expect(emoji.selectedOptions[0]?.textContent).toBe('Less'));
+    expect(screen.queryByRole('slider')).toBeNull();
   });
 });

@@ -57,7 +57,9 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     happens. run-schedules is the cadence users are offered for scheduled
   //     tasks; drain-audit-streams is the near-real-time delivery a SIEM
   //     integration expects, described as streaming on the /workspace posture
-  //     page.
+  //     page; reclaim-sandboxes frees a paused sandbox's slot against the
+  //     per-user cap inside the two hour window PAUSED_SANDBOX_MAX_AGE_MS
+  //     promises, which a daily sweep cannot keep.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -70,6 +72,7 @@ describe('cron routes and vercel.json schedules agree', () => {
   const PRODUCT_CADENCE_CRONS = new Set([
     '/api/cron/run-schedules',
     '/api/cron/drain-audit-streams',
+    '/api/cron/reclaim-sandboxes',
   ]);
   const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;

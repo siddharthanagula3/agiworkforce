@@ -40,8 +40,9 @@ describe('/enterprise, dated posture', () => {
 
     const asOf = declaration![1];
     // A constant nothing renders is not a date on the page. Both the control
-    // ledger and the compliance ledger must carry it.
-    const interpolations = source.match(/\$\{STATUS_AS_OF\}/gu) ?? [];
+    // section and the compliance ledger must carry it, as a JSX expression or
+    // inside a template literal.
+    const interpolations = source.match(/\$?\{STATUS_AS_OF\}/gu) ?? [];
     expect(interpolations.length).toBeGreaterThanOrEqual(2);
     expect(asOf).toMatch(/\d{4}/u);
   });
@@ -51,48 +52,74 @@ describe('/enterprise, dated posture', () => {
   });
 });
 
+/**
+ * The contract-coverage section: the intro that states the build status and
+ * the entitlement gate for every control block under it, through the control
+ * blocks themselves, stopping before the contract-terms ledger.
+ */
+function contractSection(): string {
+  const source = rendered();
+  const start = source.indexOf('id="contract-coverage"');
+  const end = source.indexOf('caption="Contract terms"');
+  expect(start, 'contract coverage section missing').toBeGreaterThan(-1);
+  expect(end, 'contract terms ledger missing').toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
+/**
+ * One control block inside the contract-coverage section, found by its eyebrow
+ * and read up to the next block, lower-cased for matching.
+ */
+function controlBlock(eyebrow: string): string {
+  const section = contractSection();
+  const anchor = `eyebrow="${eyebrow}"`;
+  const start = section.indexOf(anchor);
+  expect(start, `${eyebrow} control block missing`).toBeGreaterThan(-1);
+  const rest = section.slice(start + anchor.length);
+  const next = rest.search(/<SplitFeature|<Ledger/u);
+  return (next === -1 ? rest : rest.slice(0, next)).toLowerCase();
+}
+
+const ROADMAP_FRAMING =
+  /roadmap|ask us for current implementation status|scoped and dated in your contract/u;
+
 describe('/enterprise, control claims stay accurate: shipped controls say so, unbuilt ones do not', () => {
-  // These rows must match shipped code. SSO and SCIM are implemented and gated
-  // on the `enterprise_controls` entitlement, so the assertions require them to
-  // read "implemented" and forbid roadmap/ask-us framing, underclaiming a
-  // shipped, gated control is the same honesty bug as overclaiming one. Audit is
-  // checked separately below, and retention keeps its contract-scoped assertion
-  // because there is still no per-organization retention control.
+  // These blocks must match shipped code. SSO and SCIM are implemented and
+  // gated on the `enterprise_controls` entitlement, so the section that
+  // introduces them must read "implemented" and name the gate, and forbid
+  // roadmap/ask-us framing, underclaiming a shipped, gated control is the same
+  // honesty bug as overclaiming one. Audit is checked separately below, and
+  // retention keeps its opt-in assertion.
   it('states SSO and directory provisioning as implemented and entitlement-gated', () => {
-    const source = rendered();
-    for (const control of ["label: 'SSO'", "label: 'Directory provisioning'"]) {
-      const index = source.indexOf(control);
-      expect(index, `${control} row missing`).toBeGreaterThan(-1);
-      const context = source.slice(index, index + 420).toLowerCase();
-      expect(/implemented/u.test(context), `${control} does not say it is implemented`).toBe(true);
-      expect(
-        /entitlement|enterprise_controls/u.test(context),
-        `${control} does not name its entitlement gate`,
-      ).toBe(true);
-      expect(
-        /roadmap|ask us for current implementation status|scoped and dated in your contract/u.test(
-          context,
-        ),
-        `${control} regressed to roadmap/not-yet-built framing`,
-      ).toBe(false);
-    }
+    const section = contractSection().toLowerCase();
+    const identity = controlBlock('Identity');
+    expect(/sso|single sign-on/u.test(identity), 'Identity block does not name SSO').toBe(true);
+    expect(
+      /directory provisioning|scim/u.test(identity),
+      'Identity block does not name directory provisioning',
+    ).toBe(true);
+    expect(
+      /implemented/u.test(section),
+      'the contract section does not say its controls are implemented',
+    ).toBe(true);
+    expect(
+      /entitlement|enterprise_controls/u.test(section),
+      'the contract section does not name its entitlement gate',
+    ).toBe(true);
+    expect(
+      ROADMAP_FRAMING.test(section),
+      'the contract section regressed to roadmap/not-yet-built framing',
+    ).toBe(false);
   });
 
   it('states audit logging as implemented and gated on org-admin membership, not the SSO entitlement', () => {
-    const source = rendered();
-    const index = source.indexOf("label: 'Audit'");
-    expect(index, "'Audit' row missing").toBeGreaterThan(-1);
-    const context = source.slice(index, index + 420).toLowerCase();
-    expect(/implemented/u.test(context), 'Audit does not say it is implemented').toBe(true);
-    expect(/admin/u.test(context), 'Audit does not name its real (admin-membership) gate').toBe(
-      true,
+    const section = contractSection().toLowerCase();
+    const audit = controlBlock('Audit');
+    expect(/implemented/u.test(section), 'Audit does not say it is implemented').toBe(true);
+    expect(/admin/u.test(audit), 'Audit does not name its real (admin-membership) gate').toBe(true);
+    expect(ROADMAP_FRAMING.test(audit), 'Audit regressed to roadmap/not-yet-built framing').toBe(
+      false,
     );
-    expect(
-      /roadmap|ask us for current implementation status|scoped and dated in your contract/u.test(
-        context,
-      ),
-      'Audit regressed to roadmap/not-yet-built framing',
-    ).toBe(false);
   });
 
   it('describes retention as the opt-in control it actually is', () => {
@@ -101,11 +128,8 @@ describe('/enterprise, control claims stay accurate: shipped controls say so, un
     // guard against is implying that setting a window deletes anything. It
     // does not until an owner switches enforcement on, and the earlier
     // "org-level retention windows, you set them" phrasing is exactly the
-    // overclaim that got this row rewritten the first time.
-    const source = rendered();
-    const index = source.indexOf("label: 'Retention'");
-    expect(index, 'Retention row missing').toBeGreaterThan(-1);
-    const context = source.slice(index, index + 900).toLowerCase();
+    // overclaim that got this block rewritten the first time.
+    const context = controlBlock('Policy and retention');
 
     expect(
       /until enforcement is on|recorded position|whether it is enforced/u.test(context),

@@ -27,20 +27,18 @@ function segmentPages(segment: string): string[] {
 
 const PRODUCTION_GUARD = /process\.env(\.NODE_ENV|\[['"]NODE_ENV['"]\])\s*===\s*['"]production['"]/;
 
-const PUBLIC_HARNESS_ROUTES = new Set(['dev/landing-preview']);
-
 describe('SIX-24, /dev harness segment layout', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('passes children through unconditionally, since the guard now lives on individual pages', async () => {
+  it('answers 404 in production, so no harness page under it is reachable there', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const { default: DevHarnessLayout } = await import('../dev/layout');
 
-    render(DevHarnessLayout({ children: <div data-testid="harness">harness</div> }));
-
-    expect(screen.getByTestId('harness')).toBeInTheDocument();
+    expect(() => DevHarnessLayout({ children: <div data-testid="harness">harness</div> })).toThrow(
+      /NEXT_HTTP_ERROR_FALLBACK;404/,
+    );
   });
 
   it('renders the harness outside production', async () => {
@@ -74,10 +72,6 @@ describe('SIX-24, every harness route segment carries a production guard', () =>
 
       for (const page of segmentPages(segment)) {
         const route = `${segment}/${page}`;
-        if (PUBLIC_HARNESS_ROUTES.has(route)) {
-          continue;
-        }
-
         const pagePath = resolve(APP_DIR, segment, page, 'page.tsx');
         const source = readFileSync(pagePath, 'utf8');
         expect(

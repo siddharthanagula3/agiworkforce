@@ -201,6 +201,24 @@ vi.mock('@agiworkforce/ui', async () => {
     TooltipTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     TooltipContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     TooltipProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    // The account menu's feedback dialog mounts closed with its trigger hidden;
+    // the stub renders its content only while open so nothing leaks into the
+    // menu assertions.
+    Dialog: ({ open, children }: { open?: boolean; children?: React.ReactNode }) =>
+      open ? <>{children}</> : null,
+    DialogContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DialogHeader: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DialogTitle: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DialogDescription: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    Button: ({
+      children,
+      ...rest
+    }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode }) => (
+      <button {...rest}>{children}</button>
+    ),
+    Label: ({ children, ...rest }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
+      <label {...rest}>{children}</label>
+    ),
     // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
     // delete project) go through the shared AlertDialog wrapper instead of
     // window.confirm. Stable identity so the shell's useCallback deps do not

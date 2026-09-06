@@ -97,8 +97,9 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationUserMessage', () 
     expect(result).toEqual({ ok: true, messageId: SAVED_USER_MESSAGE_ID });
   });
 
-  it('returns an explicit failure and surfaces a toast when the save fails', async () => {
+  it('returns an explicit failure and logs it instead of toasting when the save fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' })));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const updateMessage = vi.fn();
 
     const result = await persistImageGenerationUserMessage({
@@ -111,9 +112,11 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationUserMessage', () 
 
     expect(result).toMatchObject({ ok: false });
     expect(() => requireImageMessagePersistence(result)).toThrow(/save message to DB/i);
-    expect(toastError).toHaveBeenCalledTimes(1);
-    expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save your message/i);
+    expect(toastError).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(String(consoleError.mock.calls[0]?.[0])).toMatch(/failed to save user message/i);
     expect(updateMessage).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
 
@@ -248,8 +251,9 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     );
   });
 
-  it('returns an explicit failure and surfaces a toast when the save fails', async () => {
+  it('returns an explicit failure and logs it instead of toasting when the save fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' })));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const updateMessage = vi.fn();
 
     const result = await persistImageGenerationAssistantMessage({
@@ -263,7 +267,10 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
 
     expect(result).toMatchObject({ ok: false });
     expect(() => requireImageMessagePersistence(result)).toThrow(/save message to DB/i);
-    expect(toastError).toHaveBeenCalledTimes(1);
-    expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save this response/i);
+    expect(toastError).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(String(consoleError.mock.calls[0]?.[0])).toMatch(/failed to save assistant message/i);
+    expect(updateMessage).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

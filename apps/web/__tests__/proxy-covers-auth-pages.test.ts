@@ -3,10 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Every page that calls `auth()` must be covered by the proxy matcher.
+ * Every page that calls `getRequestIdentity()` must be covered by the proxy
+ * matcher.
  *
- * `auth()` in a server component resolves from the session the Clerk proxy
- * established. On a route the proxy does not match, it cannot resolve, and the
+ * `getRequestIdentity()` in a server component resolves from the session the
+ * identity proxy established. On a route the proxy does not match, it cannot resolve, and the
  * `redirect()` the page meant to issue becomes an unhandled error instead, the
  * page answers 200 with an error boundary rather than sending the visitor to
  * sign in.
@@ -21,14 +22,13 @@ import { describe, expect, it } from 'vitest';
 const APP = join(process.cwd(), 'app');
 
 /**
- * Pages that legitimately call `auth()` while staying public. Each needs a
+ * Pages that legitimately call `getRequestIdentity()` while staying public. Each needs a
  * reason, because "it is public" is exactly what someone would write to silence
  * this test about a page that should not be.
  */
 const PUBLIC_BY_DESIGN: Record<string, string> = {
-  '/': 'The landing page reads the session only to vary its call to action; a signed-out visitor is its primary audience.',
   '/login/complete':
-    'The sign-in landing itself. It is matched by isClerkSessionRoute rather than isProtectedAppRoute, since gating it would make signing in impossible.',
+    'The sign-in landing itself. It is matched by isIdentitySessionRoute rather than isProtectedAppRoute, since gating it would make signing in impossible.',
 };
 
 function pagesCallingAuth(dir: string, base = '', out: string[] = []): string[] {
@@ -43,14 +43,16 @@ function pagesCallingAuth(dir: string, base = '', out: string[] = []): string[] 
     }
 
     if (entry !== 'page.tsx' && entry !== 'layout.tsx') continue;
-    if (/await auth\(\)/.test(readFileSync(full, 'utf8'))) out.push(base || '/');
+    if (/await getRequestIdentity\(\)/.test(readFileSync(full, 'utf8'))) out.push(base || '/');
   }
   return out;
 }
 
 function matcherPatterns(name: string): string[] {
   const proxy = readFileSync(join(process.cwd(), 'proxy.ts'), 'utf8');
-  const block = new RegExp(`${name} = createRouteMatcher\\(\\[([\\s\\S]*?)\\]\\)`).exec(proxy);
+  const block = new RegExp(
+    `${name} = (?:identityMiddleware\\.)?createRouteMatcher\\(\\[([\\s\\S]*?)\\]\\)`,
+  ).exec(proxy);
   expect(block, `${name} not found in proxy.ts`).not.toBeNull();
   return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
 }
@@ -83,10 +85,10 @@ function covers(patterns: string[], route: string): boolean {
   });
 }
 
-describe('proxy covers every page that calls auth()', () => {
+describe('proxy covers every page that calls getRequestIdentity()', () => {
   const routes = [...new Set(pagesCallingAuth(APP))].filter((r) => !r.includes('['));
   const protectedPatterns = matcherPatterns('isProtectedAppRoute');
-  const sessionPatterns = matcherPatterns('isClerkSessionRoute');
+  const sessionPatterns = matcherPatterns('isIdentitySessionRoute');
 
   it('finds the pages to check', () => {
     expect(routes.length).toBeGreaterThan(3);
@@ -100,19 +102,19 @@ describe('proxy covers every page that calls auth()', () => {
       }
       expect(
         covers(protectedPatterns, route),
-        `${route} calls auth() but isProtectedAppRoute does not match it, so a signed-out visitor gets an error boundary instead of the sign-in gate`,
+        `${route} calls getRequestIdentity() but isProtectedAppRoute does not match it, so a signed-out visitor gets an error boundary instead of the sign-in gate`,
       ).toBe(true);
     });
   }
 
   it('keeps the session matcher at least as wide as the protected matcher', () => {
-    // A route the proxy protects but does not hand a Clerk session to would
+    // A route the proxy protects but does not hand an identity session to would
     // redirect every visitor, signed in or not.
     for (const route of routes) {
       if (PUBLIC_BY_DESIGN[route]) continue;
       expect(
         covers(sessionPatterns, route),
-        `${route} is protected but gets no Clerk session`,
+        `${route} is protected but gets no identity session`,
       ).toBe(true);
     }
   });
