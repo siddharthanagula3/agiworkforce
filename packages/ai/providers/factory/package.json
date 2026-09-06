@@ -34,6 +34,6 @@
     "@agiworkforce/types": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
