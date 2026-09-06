@@ -36,11 +36,12 @@
           "cacheClass": "provider_explicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
-            "inputPerMillion": 1.4,
-            "outputPerMillion": 7,
-            "cacheReadPerMillion": 0.14,
-            "cacheWritePerMillion": 1.75
-          }
+            "inputPerMillion": 2,
+            "outputPerMillion": 10,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          },
+          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
         }
       ]
     },
@@ -78,12 +79,8 @@
           "upstreamModelId": "gpt-5.6-sol",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 1,
-            "outputPerMillion": 5,
-            "cacheReadPerMillion": 0.1,
-            "cacheWritePerMillion": 1.25
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
     },
@@ -121,12 +118,8 @@
           "upstreamModelId": "gpt-5.6-terra",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.9917,
-            "outputPerMillion": 5.9502,
-            "cacheReadPerMillion": 0.09917,
-            "cacheWritePerMillion": 1.239625
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
     },
@@ -164,12 +157,8 @@
           "upstreamModelId": "gpt-5.6-luna",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.08,
-            "outputPerMillion": 0.48,
-            "cacheReadPerMillion": 0.008,
-            "cacheWritePerMillion": 0.1
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
     },
@@ -208,11 +197,12 @@
           "cacheClass": "provider_explicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
-            "inputPerMillion": 3.5,
-            "outputPerMillion": 17.5,
-            "cacheReadPerMillion": 0.35,
-            "cacheWritePerMillion": 4.375
-          }
+            "inputPerMillion": 5,
+            "outputPerMillion": 25,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 6.25
+          },
+          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
         }
       ]
     },
@@ -250,12 +240,8 @@
           "upstreamModelId": "gemini-3.1-pro-preview",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 1.4,
-            "outputPerMillion": 8.4,
-            "cacheReadPerMillion": 0.14,
-            "cacheWritePerMillion": 0.2625
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
     },
@@ -293,12 +279,8 @@
           "upstreamModelId": "google/gemini-3.5-flash-lite",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.21,
-            "outputPerMillion": 1.75,
-            "cacheReadPerMillion": 0.021,
-            "cacheWritePerMillion": 0.078333
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
     },
@@ -366,12 +348,8 @@
           "upstreamModelId": "deepseek-v4-flash",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.067336,
-            "outputPerMillion": 0.166606,
-            "cacheReadPerMillion": 0.013452,
-            "cacheWritePerMillion": 0.067336
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
         {
           "provider": "deepseek_anthropic",
@@ -385,6 +363,57 @@
             "cacheReadPerMillion": 0.014,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "qwen",
+          "harnessId": "qwen/chat-completions",
+          "upstreamModelId": "deepseek-v4-flash",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 0.4
+          },
+          "pricingNote": "Alibaba Model Studio Singapore/International list price per 1M tokens for deepseek-v4-flash, verified against https://www.alibabacloud.com/help/en/model-studio/model-pricing on 2026-09-06. Cached-token rates are published only in the Model Studio console, so no cache price is claimed. This model id also carries an independent promotional free quota on the company account (see apps/web/config/free-pools.json)."
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "deepseek-ai/DeepSeek-V4-Flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.09,
+            "outputPerMillion": 0.18,
+            "cacheReadPerMillion": 0.018
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek-ai/DeepSeek-V4-Flash, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.14,
+            "outputPerMillion": 0.28,
+            "cacheReadPerMillion": 0.03
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek-ai/DeepSeek-V4-Flash-0731, verified against https://www.together.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.14,
+            "outputPerMillion": 0.28,
+            "cacheReadPerMillion": 0.028
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek/deepseek-v4-flash, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -422,12 +451,8 @@
           "upstreamModelId": "deepseek-v4-pro",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.6204,
-            "outputPerMillion": 1.8612,
-            "cacheReadPerMillion": 0.051725,
-            "cacheWritePerMillion": 0.6204
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
         {
           "provider": "deepseek_anthropic",
@@ -441,6 +466,57 @@
             "cacheReadPerMillion": 0.044,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "qwen",
+          "harnessId": "qwen/chat-completions",
+          "upstreamModelId": "deepseek-v4-pro",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 2.4,
+            "outputPerMillion": 4.8
+          },
+          "pricingNote": "Alibaba Model Studio Singapore/International list price per 1M tokens for deepseek-v4-pro, verified against https://www.alibabacloud.com/help/en/model-studio/model-pricing on 2026-09-06. Cached-token rates are published only in the Model Studio console, so no cache price is claimed. This model id also carries an independent promotional free quota on the company account (see apps/web/config/free-pools.json)."
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "deepseek-ai/DeepSeek-V4-Pro",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.3,
+            "outputPerMillion": 2.6,
+            "cacheReadPerMillion": 0.1
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek-ai/DeepSeek-V4-Pro, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.32,
+            "outputPerMillion": 3.96,
+            "cacheReadPerMillion": 0.13
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek-ai/DeepSeek-V4-Pro-0813, verified against https://www.together.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-pro-0813",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.32,
+            "outputPerMillion": 3.96,
+            "cacheReadPerMillion": 0.132
+          },
+          "pricingNote": "Serverless list price per 1M tokens for deepseek/deepseek-v4-pro-0813, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -538,12 +614,8 @@
           "upstreamModelId": "glm-5.3",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.77,
-            "outputPerMillion": 2.42,
-            "cacheReadPerMillion": 0.143,
-            "cacheWritePerMillion": 0.77
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
         {
           "provider": "zhipu_anthropic",
@@ -557,6 +629,45 @@
             "cacheReadPerMillion": 0.26,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "zai-org/GLM-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.2,
+            "outputPerMillion": 4.0,
+            "cacheReadPerMillion": 0.12
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/GLM-5.3, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "zai-org/GLM-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4,
+            "cacheReadPerMillion": 0.26
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/GLM-5.3, verified against https://www.together.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "zai-org/glm-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4,
+            "cacheReadPerMillion": 0.26
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/glm-5.3, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -594,12 +705,8 @@
           "upstreamModelId": "glm-5.3-flash",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.066824,
-            "outputPerMillion": 0.222748,
-            "cacheReadPerMillion": 0.013365,
-            "cacheWritePerMillion": 0.066824
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
         {
           "provider": "zhipu_anthropic",
@@ -613,6 +720,44 @@
             "cacheReadPerMillion": 0.015,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "zai-org/GLM-5.3-Flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.075,
+            "outputPerMillion": 0.25,
+            "cacheReadPerMillion": 0.015
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/GLM-5.3-Flash, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "zai-org/GLM-5.3-Flash",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.5
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/GLM-5.3-Flash, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "zai-org/glm-5.3-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.075,
+            "outputPerMillion": 0.25,
+            "cacheReadPerMillion": 0.015
+          },
+          "pricingNote": "Serverless list price per 1M tokens for zai-org/glm-5.3-flash, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -650,12 +795,8 @@
           "upstreamModelId": "kimi-k3",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 2.1,
-            "outputPerMillion": 10.5,
-            "cacheReadPerMillion": 0.21,
-            "cacheWritePerMillion": 2.1
-          }
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
         {
           "provider": "moonshot_anthropic",
@@ -669,6 +810,57 @@
             "cacheReadPerMillion": 0.3,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "qwen",
+          "harnessId": "qwen/chat-completions",
+          "upstreamModelId": "kimi-k3",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15
+          },
+          "pricingNote": "Alibaba Model Studio Singapore/International list price per 1M tokens for kimi-k3, verified against https://www.alibabacloud.com/help/en/model-studio/model-pricing on 2026-09-06. Cached-token rates are published only in the Model Studio console, so no cache price is claimed. This model id also carries an independent promotional free quota on the company account (see apps/web/config/free-pools.json)."
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "moonshotai/Kimi-K3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2.85,
+            "outputPerMillion": 14.25,
+            "cacheReadPerMillion": 0.285
+          },
+          "pricingNote": "Serverless list price per 1M tokens for moonshotai/Kimi-K3, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "moonshotai/Kimi-K3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.3
+          },
+          "pricingNote": "Serverless list price per 1M tokens for moonshotai/Kimi-K3, verified against https://www.together.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "moonshotai/kimi-k3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.3
+          },
+          "pricingNote": "Serverless list price per 1M tokens for moonshotai/kimi-k3, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -699,6 +891,45 @@
             "cacheReadPerMillion": 0.06,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "MiniMaxAI/MiniMax-M3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.28,
+            "outputPerMillion": 1.1,
+            "cacheReadPerMillion": 0.056
+          },
+          "pricingNote": "Serverless list price per 1M tokens for MiniMaxAI/MiniMax-M3, verified against https://deepinfra.com/models on 2026-09-06."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "MiniMaxAI/MiniMax-M3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.06
+          },
+          "pricingNote": "Serverless list price per 1M tokens for MiniMaxAI/MiniMax-M3, verified against https://www.together.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "minimax/minimax-m3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.06
+          },
+          "pricingNote": "Serverless list price per 1M tokens for minimax/minimax-m3, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },
@@ -736,12 +967,44 @@
           "upstreamModelId": "gpt-oss-120b",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-120b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
           "pricing": {
-            "inputPerMillion": 0.04,
-            "outputPerMillion": 0.2,
-            "cacheReadPerMillion": 0.012057,
-            "cacheWritePerMillion": 0.04
-          }
+            "inputPerMillion": 0.037,
+            "outputPerMillion": 0.17
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://deepinfra.com/models on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-120b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.6
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-120b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.05,
+            "outputPerMillion": 0.25
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://novita.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
         }
       ]
     },
@@ -772,6 +1035,42 @@
             "cacheReadPerMillion": 0,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "deepinfra",
+          "harnessId": "deepinfra/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-20b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.03,
+            "outputPerMillion": 0.14
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://deepinfra.com/models on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-20b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.05,
+            "outputPerMillion": 0.2
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-20b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.04,
+            "outputPerMillion": 0.15
+          },
+          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://novita.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed. Novita's live model list tags this id with structured-outputs and reasoning but not function-calling, so a tool-carrying request must not be assumed to work here until probed."
         }
       ]
     },
@@ -811,11 +1110,12 @@
           "cacheClass": "provider_explicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
-            "inputPerMillion": 7,
-            "outputPerMillion": 35,
-            "cacheReadPerMillion": 0.175,
-            "cacheWritePerMillion": 8.75
-          }
+            "inputPerMillion": 10,
+            "outputPerMillion": 50,
+            "cacheReadPerMillion": 0.25,
+            "cacheWritePerMillion": 12.5
+          },
+          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
         }
       ]
     },
@@ -863,6 +1163,31 @@
             "cacheReadPerMillion": 0.016,
             "cacheWritePerMillion": 0.2
           }
+        },
+        {
+          "provider": "together",
+          "harnessId": "together/chat-completions",
+          "upstreamModelId": "Qwen/Qwen3.8-Flash",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.47
+          },
+          "pricingNote": "Serverless list price per 1M tokens for Qwen/Qwen3.8-Flash, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
+        },
+        {
+          "provider": "novita",
+          "harnessId": "novita/chat-completions",
+          "upstreamModelId": "qwen/qwen3.8-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.47,
+            "cacheReadPerMillion": 0.016
+          },
+          "pricingNote": "Serverless list price per 1M tokens for qwen/qwen3.8-flash, verified against https://novita.ai/pricing on 2026-09-06."
         }
       ]
     },

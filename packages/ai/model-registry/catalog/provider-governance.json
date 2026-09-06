@@ -274,6 +274,36 @@
       "verifiedOn": "2026-09-05",
       "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source.",
       "cacheTokenBillingClass": "unknown"
+    },
+    "deepinfra": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "https://docs.deepinfra.com/account/data-privacy",
+      "verifiedOn": "2026-09-06",
+      "note": "Input data is not stored to disk during inference and outputs are not stored; request content is not logged; customer data is not used for training except for Google and Anthropic models served on DeepInfra. Processing regions are not published. Retrieved 2026-09-06.",
+      "cacheTokenBillingClass": "unknown"
+    },
+    "together": {
+      "dataRetentionClass": "provider_default",
+      "zeroDataRetentionAvailability": "on_request",
+      "trainsOnInputs": "opt_in",
+      "residencyRegions": null,
+      "source": "https://docs.together.ai/docs/privacy-and-security",
+      "verifiedOn": "2026-09-06",
+      "note": "Prompts and responses are stored by default and may be used for product improvements; organisation admins can turn storage off, which Together calls zero data retention; sharing data for training is opt-in. Serverless endpoints offer no region selection. Retrieved 2026-09-06.",
+      "cacheTokenBillingClass": "unknown"
+    },
+    "novita": {
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "https://novita.ai/legal/terms-of-service",
+      "verifiedOn": "2026-09-06",
+      "note": "Section 10.2 of the terms: content is not used to train Novita's own models or improve the Services by default, and is not retained longer than necessary to provide the Services; automated safety screening is carved out. Processing regions are not published. Retrieved 2026-09-06.",
+      "cacheTokenBillingClass": "unknown"
     }
   }
 }

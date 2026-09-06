@@ -324,6 +324,36 @@
       "baseUrl": "https://api.z.ai/api/anthropic",
       "apiKeyEnv": "ZHIPU_API_KEY",
       "hostPolicy": "registry_declared"
+    },
+    "deepinfra/chat-completions": {
+      "provider": "deepinfra",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "deepinfra"
+    },
+    "together/chat-completions": {
+      "provider": "together",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "together"
+    },
+    "novita/chat-completions": {
+      "provider": "novita",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "novita"
     }
   },
   "harnessGroups": {
@@ -343,7 +373,10 @@
       "minimax/chat-completions",
       "open-router/chat-completions-managed",
       "cheaperinference/chat-completions",
-      "cheaperinference-anthropic/messages"
+      "cheaperinference-anthropic/messages",
+      "deepinfra/chat-completions",
+      "together/chat-completions",
+      "novita/chat-completions"
     ],
     "byok-text": [
       "openai/responses",

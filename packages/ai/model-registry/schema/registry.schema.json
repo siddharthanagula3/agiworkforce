@@ -8,6 +8,7 @@
     "$schema",
     "schemaVersion",
     "models",
+    "developers",
     "providerModelKeys",
     "routes",
     "harnesses",
@@ -37,6 +38,20 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/model"
+      }
+    },
+    "developers": {
+      "type": "object",
+      "description": "Every developer id referenced by a model identity, with its display label.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        }
       }
     },
     "providerModelKeys": {
@@ -179,6 +194,7 @@
         "key",
         "displayName",
         "provider",
+        "developer",
         "providerModelId",
         "kind",
         "aliases",
@@ -193,6 +209,10 @@
         },
         "provider": {
           "$ref": "#/definitions/nonEmptyString"
+        },
+        "developer": {
+          "$ref": "#/definitions/nonEmptyString",
+          "description": "The organisation that trained or released the model, resolved from catalog/developers.json. Distinct from provider, which names the inference route this record is served on."
         },
         "providerModelId": {
           "$ref": "#/definitions/nonEmptyString"
@@ -361,6 +381,9 @@
         },
         "pricing": {
           "$ref": "#/definitions/pricing"
+        },
+        "discount": {
+          "$ref": "#/definitions/routeDiscount"
         }
       }
     },
@@ -491,6 +514,9 @@
         "governanceReviewedOn": {
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "discount": {
+          "$ref": "#/definitions/gatewayDiscountPolicy"
         }
       }
     },
@@ -1553,6 +1579,55 @@
           "exclusiveMinimum": 0,
           "exclusiveMaximum": 1,
           "description": "Share of this slot's requests the candidate serves, decided by a deterministic hash of the request id."
+        }
+      }
+    },
+    "gatewayDiscountPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestField", "minPercent", "source", "verifiedOn"],
+      "description": "The minimum discount a marketplace gateway must deliver before a route on it is used. The request field carries it upstream; the gateway refuses the request when no qualifying supply exists, so the discounted price is a guaranteed ceiling, never an estimate.",
+      "properties": {
+        "requestField": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "minPercent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 99.99
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "verifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        }
+      }
+    },
+    "routeDiscount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minPercent", "requestField", "listPricing", "source", "verifiedOn"],
+      "description": "A route priced through a gateway discount policy. pricing on the route is listPricing reduced by minPercent, the most the route can bill.",
+      "properties": {
+        "minPercent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 99.99
+        },
+        "requestField": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "listPricing": {
+          "$ref": "#/definitions/pricing"
+        },
+        "source": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "verifiedOn": {
+          "$ref": "#/definitions/isoDate"
         }
       }
     }
