@@ -1,27 +1,66 @@
 import 'server-only';
 
-import { readSnapshotRecords, readSnapshotStamp } from '@/lib/connectors/directory/snapshot-cache';
+import {
+  readSnapshotRecords,
+  readSnapshotStamp,
+  readSyncState,
+} from '@/lib/connectors/directory/snapshot-cache';
+import {
+  computeDirectoryCounts,
+  orderDirectoryRecords,
+  withDefaultBadge,
+  type DirectoryCounts,
+} from '@/lib/connectors/directory/snapshot-view';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
-let cachedStamp: number | null = null;
-let cachedRecords: readonly DirectoryRecord[] = [];
+interface CachedSnapshot {
+  readonly stamp: number;
+  readonly records: readonly DirectoryRecord[];
+  readonly counts: DirectoryCounts;
+}
 
-export async function getSnapshotRecords(): Promise<readonly DirectoryRecord[]> {
+const EMPTY_SNAPSHOT: Omit<CachedSnapshot, 'stamp'> = {
+  records: [],
+  counts: computeDirectoryCounts([]),
+};
+
+let cached: CachedSnapshot | null = null;
+
+async function loadSnapshot(): Promise<Omit<CachedSnapshot, 'stamp'>> {
   const stamp = await readSnapshotStamp();
   if (stamp === null) {
-    cachedStamp = null;
-    cachedRecords = [];
-    return cachedRecords;
+    cached = null;
+    return EMPTY_SNAPSHOT;
   }
-  if (stamp === cachedStamp) return cachedRecords;
+  if (cached && cached.stamp === stamp) return cached;
 
-  const records = await readSnapshotRecords();
-  cachedStamp = stamp;
-  cachedRecords = records ?? [];
-  return cachedRecords;
+  const stored = (await readSnapshotRecords()) ?? [];
+  const records = orderDirectoryRecords(stored.map(withDefaultBadge));
+  cached = { stamp, records, counts: computeDirectoryCounts(records) };
+  return cached;
+}
+
+export async function getSnapshotRecords(): Promise<readonly DirectoryRecord[]> {
+  return (await loadSnapshot()).records;
+}
+
+export interface DirectorySnapshotView {
+  readonly records: readonly DirectoryRecord[];
+  readonly counts: DirectoryCounts;
+  readonly bootstrapComplete: boolean;
+  readonly lastSyncAt: string | null;
+}
+
+export async function getSnapshotView(): Promise<DirectorySnapshotView> {
+  const [snapshot, syncState] = await Promise.all([loadSnapshot(), readSyncState()]);
+  return {
+    records: snapshot.records,
+    counts: snapshot.counts,
+    bootstrapComplete: syncState.bootstrapComplete,
+    lastSyncAt: syncState.lastSyncAt,
+  };
 }
 
 export function __resetSnapshotMemoryCacheForTests(): void {
-  cachedStamp = null;
-  cachedRecords = [];
+  cached = null;
 }

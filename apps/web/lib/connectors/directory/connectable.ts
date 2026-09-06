@@ -1,36 +1,14 @@
 import 'server-only';
 
-import { getConnectorCapability, isDeviceLocalConnector } from '@/lib/connectors/catalog';
-import { getMcpEndpoint, isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
-import { isConnectorOAuthConfigured } from '@/lib/connectors/oauth-registry';
-import { isGitHubAppConfigured, isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
+import { isDeviceLocalConnector } from '@/lib/connectors/catalog';
+import { describeConnectorSetup } from '@/lib/connectors/oauth-setup';
+import { getConnectorOAuthRedirectUri } from '@/lib/connectors/oauth-registry';
+import { isConnectorTokenStorageAvailable } from '@/lib/custom-connector-crypto';
 import type { DirectoryAuthMode, DirectoryConnectableMode } from '@/lib/connectors/directory/types';
-
-const GITHUB_CONNECTOR_ID = 'github';
-const CREDENTIAL_FORM_SCHEMES = new Set(['api-key', 'connection-string', 'pat']);
 
 export function connectableForInternalId(id: string): DirectoryConnectableMode {
   if (isDeviceLocalConnector(id)) return 'desktop-and-cli';
-
-  if (id === GITHUB_CONNECTOR_ID) {
-    return isGitHubAppConfigured() && isGitHubInstallationLinkingAvailable()
-      ? 'connect'
-      : 'needs-setup';
-  }
-
-  const endpoint = getMcpEndpoint(id);
-  if (endpoint) {
-    if (isSelfServiceConnector(id)) return 'connect';
-    return isConnectorOAuthConfigured(id) ? 'connect' : 'needs-setup';
-  }
-
-  const capability = getConnectorCapability(id);
-  if (capability && CREDENTIAL_FORM_SCHEMES.has(capability.authScheme)) return 'api-key-form';
-  if (capability?.authScheme === 'oauth2') {
-    return isConnectorOAuthConfigured(id) ? 'connect' : 'needs-setup';
-  }
-
-  return 'needs-setup';
+  return describeConnectorSetup(id) === null ? 'connect' : 'needs-setup';
 }
 
 export function connectableFromAuthMode(
@@ -38,7 +16,9 @@ export function connectableFromAuthMode(
   hasRemote: boolean,
 ): DirectoryConnectableMode {
   if (!hasRemote) return 'desktop-and-cli';
-  if (authMode === 'none' || authMode === 'oauth') return 'connect';
-  if (authMode === 'api-key') return 'api-key-form';
-  return 'needs-setup';
+  if (authMode === 'none') return 'connect';
+  if (!isConnectorTokenStorageAvailable()) return 'needs-setup';
+  if (authMode === 'unknown') return 'connect';
+  if (authMode === 'oauth') return getConnectorOAuthRedirectUri() ? 'connect' : 'needs-setup';
+  return 'api-key-form';
 }

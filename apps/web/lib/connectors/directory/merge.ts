@@ -1,16 +1,24 @@
 import 'server-only';
 
-import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { CONNECTORS, type ConnectorCategory } from '@/features/connectors/data/connectors';
 import {
   allowsPresentTenseCopy,
   getConnectorCapability,
   getDeclaredConnectorActions,
 } from '@/lib/connectors/catalog';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
-import { deriveInternalBadge } from '@/lib/connectors/directory/badge';
+import { deriveInternalBadge, upgradeToVerifiedBadge } from '@/lib/connectors/directory/badge';
 import { brandSlugForConnectorId } from '@/lib/connectors/directory/brand-icons';
+import { OTHER_CATEGORY, type DirectoryCategory } from '@/lib/connectors/directory/categorize';
 import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
-import { deriveMonogram } from '@/lib/connectors/directory/monogram';
+import {
+  hostnameOf,
+  isHostingPlatformHost,
+  registrableDomain,
+} from '@/lib/connectors/directory/hosts';
+import { deriveMonogram, deriveMonogramHue } from '@/lib/connectors/directory/monogram';
+import { summarizeDescription } from '@/lib/connectors/directory/summary';
+import { applyVendorDirectory } from '@/lib/connectors/directory/vendor-directory';
 import type {
   DirectoryAuthMode,
   DirectoryIconSource,
@@ -26,11 +34,32 @@ const ICON_SOURCE_PRIORITY: Readonly<Record<DirectoryIconSource, number>> = {
   monogram: 0,
 };
 
+const CATALOG_CATEGORY_MAP: Readonly<Record<ConnectorCategory, DirectoryCategory>> = {
+  Productivity: 'Productivity',
+  Developer: 'Code',
+  CRM: 'Sales and marketing',
+  Marketing: 'Sales and marketing',
+  Finance: 'Financial services',
+  Social: 'Communication',
+  AI: 'Code',
+  Communication: 'Communication',
+  Cloud: 'Code',
+  Data: 'Data',
+  Design: 'Design',
+  Storage: 'Productivity',
+  Healthcare: 'Health',
+  Exclusive: 'Code',
+};
+
 function authModeForCapability(authScheme: string | undefined): DirectoryAuthMode {
   if (authScheme === 'api-key' || authScheme === 'connection-string' || authScheme === 'pat')
     return 'api-key';
   if (authScheme === 'oauth2' || authScheme === 'github-app') return 'oauth';
   return 'unknown';
+}
+
+function internalCardDescription(name: string, capabilitySummary: string): string {
+  return `Connect ${name} for ${capabilitySummary}.`;
 }
 
 export function buildInternalDirectoryRecords(): DirectoryRecord[] {
@@ -42,13 +71,19 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
     const capability = getConnectorCapability(connector.id);
     const publisher = allowsPresentTenseCopy(connector.id) ? AGI_PUBLISHER_LABEL : connector.name;
     const brandSlug = brandSlugForConnectorId(connector.id);
+    const categories = [CATALOG_CATEGORY_MAP[connector.category]];
+    const primaryCategory = categories[0] ?? OTHER_CATEGORY;
 
     return {
       id: connector.id,
       name: connector.name,
       publisher,
-      description: connector.description,
-      categories: [connector.category],
+      description: summarizeDescription(
+        internalCardDescription(connector.name, connector.capabilitySummary),
+        connector.name,
+        primaryCategory,
+      ),
+      categories,
       remotes,
       authMode: authModeForCapability(capability?.authScheme),
       connectable: connectableForInternalId(connector.id),
@@ -59,6 +94,7 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
       badge: deriveInternalBadge(),
       iconUrl: null,
       monogram: deriveMonogram(connector.name),
+      monogramHue: deriveMonogramHue(categories),
       documentationUrl: null,
       iconSource: brandSlug ? 'brand' : 'monogram',
       brandSlug,
@@ -71,12 +107,10 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
   });
 }
 
-function hostnameOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
+function remoteHostsOf(record: DirectoryRecord): string[] {
+  return record.remotes
+    .map((remote) => hostnameOf(remote.url))
+    .filter((host): host is string => host !== null);
 }
 
 function buildInternalHostIndex(
@@ -84,35 +118,39 @@ function buildInternalHostIndex(
 ): Map<string, DirectoryRecord> {
   const index = new Map<string, DirectoryRecord>();
   for (const record of internalRecords) {
-    for (const remote of record.remotes) {
-      const host = hostnameOf(remote.url);
-      if (host) index.set(host, record);
-    }
+    for (const host of remoteHostsOf(record)) index.set(host, record);
   }
   return index;
+}
+
+function buildVendorDomains(internalRecords: readonly DirectoryRecord[]): Set<string> {
+  const domains = new Set<string>();
+  for (const record of internalRecords) {
+    for (const host of remoteHostsOf(record)) {
+      if (!isHostingPlatformHost(host)) domains.add(registrableDomain(host));
+    }
+  }
+  return domains;
 }
 
 function matchInternalRecord(
   registryRecord: DirectoryRecord,
   internalHosts: Map<string, DirectoryRecord>,
 ): DirectoryRecord | undefined {
-  for (const remote of registryRecord.remotes) {
-    const host = hostnameOf(remote.url);
-    const match = host ? internalHosts.get(host) : undefined;
+  for (const host of remoteHostsOf(registryRecord)) {
+    const match = internalHosts.get(host);
     if (match) return match;
   }
   return undefined;
 }
 
-function unionCategories(
+export function unionCategories(
   current: readonly string[],
   incoming: readonly string[],
 ): readonly string[] {
-  return [...new Set([...current, ...incoming])];
-}
-
-function richerDescription(current: string, incoming: string): string {
-  return incoming.length > current.length ? incoming : current;
+  const union = [...new Set([...current, ...incoming])];
+  const specific = union.filter((category) => category !== OTHER_CATEGORY);
+  return specific.length > 0 ? specific : union;
 }
 
 function enrichWithRegistryRecord(
@@ -121,11 +159,13 @@ function enrichWithRegistryRecord(
 ): DirectoryRecord {
   const takeIncomingIcon =
     ICON_SOURCE_PRIORITY[registryRecord.iconSource] > ICON_SOURCE_PRIORITY[current.iconSource];
+  const categories = unionCategories(current.categories, registryRecord.categories);
 
   return {
     ...current,
-    description: richerDescription(current.description, registryRecord.description),
-    categories: unionCategories(current.categories, registryRecord.categories),
+    description: current.description || registryRecord.description,
+    categories,
+    monogramHue: deriveMonogramHue(categories),
     toolNames: current.toolNames.length > 0 ? current.toolNames : registryRecord.toolNames,
     repositoryUrl: current.repositoryUrl ?? registryRecord.repositoryUrl,
     documentationUrl: current.documentationUrl ?? registryRecord.documentationUrl,
@@ -139,11 +179,17 @@ function enrichWithRegistryRecord(
   };
 }
 
+function withVendorBadge(record: DirectoryRecord, vendorDomains: ReadonlySet<string>) {
+  const badge = upgradeToVerifiedBadge(record.badge, remoteHostsOf(record), vendorDomains);
+  return badge === record.badge ? record : { ...record, badge };
+}
+
 export function mergeDirectoryRecords(
   internalRecords: readonly DirectoryRecord[],
   registryRecords: readonly DirectoryRecord[],
 ): DirectoryRecord[] {
   const internalHosts = buildInternalHostIndex(internalRecords);
+  const vendorDomains = buildVendorDomains(internalRecords);
   const merged = new Map<string, DirectoryRecord>();
   for (const record of internalRecords) merged.set(record.id, record);
 
@@ -154,8 +200,10 @@ export function mergeDirectoryRecords(
       merged.set(matched.id, enrichWithRegistryRecord(current, registryRecord));
       continue;
     }
-    if (!merged.has(registryRecord.id)) merged.set(registryRecord.id, registryRecord);
+    if (!merged.has(registryRecord.id)) {
+      merged.set(registryRecord.id, withVendorBadge(registryRecord, vendorDomains));
+    }
   }
 
-  return [...merged.values()];
+  return applyVendorDirectory([...merged.values()]);
 }
