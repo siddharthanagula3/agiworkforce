@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
