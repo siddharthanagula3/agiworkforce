@@ -50,7 +50,7 @@ export function FlagshipHero({
 }: {
   eyebrow: string;
   brand: string;
-  lede: string;
+  lede?: string;
   ctas: FlagshipCta[];
   ctas2?: FlagshipCta[];
   visual: ReactNode;
@@ -79,7 +79,7 @@ export function FlagshipHero({
               </span>
             </Link>
           ) : null}
-          <p className="agi-fl-lede">{lede}</p>
+          {lede ? <p className="agi-fl-lede">{lede}</p> : null}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
               <CtaButton key={cta.label} cta={cta} kind={ctaKind(i)} />
