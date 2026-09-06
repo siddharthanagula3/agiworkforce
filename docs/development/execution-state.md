@@ -32,43 +32,47 @@ behaviour inspected by the lead, not tests.
 
 ## UI surfaces audited (rendered, by the lead)
 
-| Surface                      | Date       | Result                                                                                                         |
-| ---------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
-| Web sign in and sign up      | 2026-09-05 | rebuilt to the measured reference, approved                                                                    |
-| Desktop sign in card         | 2026-09-05 | rebuilt, approved                                                                                              |
-| Web chat run (search, code)  | 2026-09-05 | trace, dock, failure row, queued row corrected; code execution invented a result (fixed, live recheck pending) |
-| Settings modal, 16 sections  | 2026-09-05 | density and copy corrected; nav clipping found by measurement and fixed                                        |
-| Command palette, menus       | 2026-09-05 | palette reshaped; chat row menu anchoring defect fixed; project picker rebuilt                                 |
-| Library viewer               | 2026-09-05 | zoom defect fixed; two corrections pending recapture                                                           |
-| Model selector short list    | 2026-09-05 | approved after seven corrections; catalogue in flight                                                          |
-| Public pages (34 nav routes) | 2026-09-05 | swept in the browser: 200 on every route, no broken images, no overflow; shared system restyled to the landing |
-| Landing surface frames       | 2026-09-05 | six frames rebuilt as working sessions with route receipts, approved in isolation and in the marquee           |
-| Header and landing sections  | 2026-09-05 | grouped navigation, announcement, proof row, latest and start sections approved in both themes                 |
+| Surface                            | Date       | Result                                                                                                                                                                                    |
+| ---------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web sign in and sign up            | 2026-09-05 | rebuilt to the measured reference, approved                                                                                                                                               |
+| Desktop sign in card               | 2026-09-05 | rebuilt, approved                                                                                                                                                                         |
+| Web chat run (search, code)        | 2026-09-05 | trace, dock, failure row, queued row corrected; code execution invented a result (fixed, live recheck pending)                                                                            |
+| Settings modal, 16 sections        | 2026-09-05 | density and copy corrected; nav clipping found by measurement and fixed                                                                                                                   |
+| Command palette, menus             | 2026-09-05 | palette reshaped; chat row menu anchoring defect fixed; project picker rebuilt                                                                                                            |
+| Library viewer                     | 2026-09-05 | zoom defect fixed; two corrections pending recapture                                                                                                                                      |
+| Model selector short list          | 2026-09-05 | approved after seven corrections; catalogue in flight                                                                                                                                     |
+| Public pages (34 nav routes)       | 2026-09-05 | swept in the browser: 200 on every route, no broken images, no overflow; shared system restyled to the landing                                                                            |
+| Landing surface frames             | 2026-09-05 | six frames rebuilt as working sessions with route receipts, approved in isolation and in the marquee                                                                                      |
+| Header and landing sections        | 2026-09-05 | grouped navigation, announcement, proof row, latest and start sections approved in both themes                                                                                            |
+| 72 public routes, mechanical audit | 2026-09-05 | rendered copy scanned for em dashes, orphans, placeholders, overflow, empty controls and dead links; only the deep research orphan headline and the local /download release 404s surfaced |
 
 ## Dead or disconnected UI
 
-| Found                                                                | State                                                                          |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Cmd K did nothing on the chat page                                   | fixed 6a49ffc35                                                                |
-| Stop lost the attempt and showed a toast                             | fixed fce4fc435                                                                |
-| Sandbox refusal repeated three times per turn                        | fixed 6329a6bd5                                                                |
-| Share project missing on the main chat page                          | fixed e0979d2f0                                                                |
-| Chat row menu drawn at the viewport corner                           | fixed 01fd497c7                                                                |
-| Search notice blamed the tool on a code question                     | fixed 33f517c90                                                                |
-| Code request answered without running code                           | fixed 81be75123, live recheck pending                                          |
-| Provider billing exhaustion shown as raw JSON with a dead Retry      | found live 21:46; D-14; fix in flight                                          |
-| Settings nav first row clipped under the search                      | fixed 5e2136d6f                                                                |
-| Dev routes under /dev in the production route tree                   | to verify                                                                      |
-| Operator, founder, local, waitlist, beta pages                       | to verify                                                                      |
-| Three built admin APIs (observability, takedown, privacy) with no UI | fixed 45ff0dffd b6f44a736 34b1f2107: operator console tabs with governed flows |
-| COGS ledger written but never displayed                              | fixed b6f44a736: costs tab with attributed cost per account                    |
-| Admin console readiness ledger self attested for 3 of 5 rows         | fixed a119900bd: rows removed, live policy state remains                       |
-| Pricing models table printed a comma for plans with no models        | fixed 752d93fdb: the cell reads None; capability table opens by default        |
-| Public pages carried italic accent phrases and unstyled link lists   | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide  |
-| Landing frames were empty greetings                                  | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts  |
-| Surface and feature pages led with ledgers and stale screenshots     | fixed d2cf23d9a 579587379: live frames and five product scenes on every hero   |
-| Ten settings deep links landed on a bare chat page                   | fixed 65188a68f: section travels in a query key the chat page opens; verified  |
-| /download calls four release endpoints that 404 locally              | open: verify against production release assets before judging                  |
+| Found                                                                         | State                                                                                  |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Cmd K did nothing on the chat page                                            | fixed 6a49ffc35                                                                        |
+| Stop lost the attempt and showed a toast                                      | fixed fce4fc435                                                                        |
+| Sandbox refusal repeated three times per turn                                 | fixed 6329a6bd5                                                                        |
+| Share project missing on the main chat page                                   | fixed e0979d2f0                                                                        |
+| Chat row menu drawn at the viewport corner                                    | fixed 01fd497c7                                                                        |
+| Search notice blamed the tool on a code question                              | fixed 33f517c90                                                                        |
+| Code request answered without running code                                    | fixed 81be75123, live recheck pending                                                  |
+| Provider billing exhaustion shown as raw JSON with a dead Retry               | found live 21:46; D-14; fix in flight                                                  |
+| Settings nav first row clipped under the search                               | fixed 5e2136d6f                                                                        |
+| Dev routes under /dev in the production route tree                            | to verify                                                                              |
+| Operator, founder, local, waitlist, beta pages                                | to verify                                                                              |
+| Three built admin APIs (observability, takedown, privacy) with no UI          | fixed 45ff0dffd b6f44a736 34b1f2107: operator console tabs with governed flows         |
+| COGS ledger written but never displayed                                       | fixed b6f44a736: costs tab with attributed cost per account                            |
+| Admin console readiness ledger self attested for 3 of 5 rows                  | fixed a119900bd: rows removed, live policy state remains                               |
+| Pricing models table printed a comma for plans with no models                 | fixed 752d93fdb: the cell reads None; capability table opens by default                |
+| Public pages carried italic accent phrases and unstyled link lists            | fixed 4ccc39928: landing eyebrow, heading weight and card treatment site wide          |
+| Landing frames were empty greetings                                           | fixed 69c545157: sessions with tool rows, approvals, sources, diffs, receipts          |
+| Surface and feature pages led with ledgers and stale screenshots              | fixed d2cf23d9a 579587379: live frames and five product scenes on every hero           |
+| Public pages read as one template (hero, ledger, cards, close)                | fixed 55d7cc01a: nine section primitives, three console scenes, seven pages recomposed |
+| Nine stale product screenshots on business, teams, agi work and feature pages | fixed 55d7cc01a: replaced with scenes                                                  |
+| Landing cited 22 providers where the providers page computes 14 on your key   | fixed 55d7cc01a: both read the same constants                                          |
+| Ten settings deep links landed on a bare chat page                            | fixed 65188a68f: section travels in a query key the chat page opens; verified          |
+| /download calls four release endpoints that 404 locally                       | open: verify against production release assets before judging                          |
 
 ## Critical flows
 
@@ -103,7 +107,13 @@ business pages captured under scratchpad ref).
 
 ## CI and security
 
-CI: 1e8902ccd went red in seven lanes with four causes (an index export swept ahead
+CI: dccc11b5c was red in four lanes that were already red on 5080fa8fd (raw palette
+classes in the routing health panel and diluted text in the model selector against
+the web UI invariants guard; an unused tuple and a window.location navigation
+against lint; the workflow bundle reaching node:async_hooks through the logger,
+which failed next build; the desktop sign-in visual spec looking for the
+pre-rebuild heading), all four fixed in 8395ee11a and the run on 55d7cc01a is the
+gate for the founder-authorised production deploy. Earlier: 1e8902ccd went red in seven lanes with four causes (an index export swept ahead
 of its definition, colour literals in the project page, a lint warning in the
 trace timeline, a desktop wire id collision from the gateway sync); all four fixed,
 33 commits pushed as b77bd2da8 through the new clean worktree pre-push hook
