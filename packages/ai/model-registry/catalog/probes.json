@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastRunOn": "2026-09-05",
+  "lastRunOn": "2026-09-06",
   "probes": {
     "claude-fable-5-1": {
       "routeId": "anthropic/claude-fable-5-1",
@@ -60,11 +60,11 @@
     },
     "gemini-3.1-flash-lite": {
       "routeId": "google/gemini-3.1-flash-lite",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 528,
       "echoedModelId": null,
-      "detail": "no value for GOOGLE_API_KEY"
+      "detail": null
     },
     "gemini-3.1-pro-preview": {
       "routeId": "google/gemini-3.1-pro-preview",
@@ -84,19 +84,19 @@
     },
     "gemini-3.6-flash": {
       "routeId": "google/gemini-3.6-flash",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 607,
       "echoedModelId": null,
-      "detail": "no value for GOOGLE_API_KEY"
+      "detail": null
     },
     "gemini-3.8-flash": {
       "routeId": "google/gemini-3.8-flash",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 953,
       "echoedModelId": null,
-      "detail": "no value for GOOGLE_API_KEY"
+      "detail": null
     },
     "glm-5.3": {
       "routeId": "zhipu/glm-5.3",
@@ -180,11 +180,11 @@
     },
     "kimi-k2.6": {
       "routeId": "moonshot/kimi-k2.6",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for MOONSHOT_API_KEY"
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 890,
+      "echoedModelId": "kimi-k2.6",
+      "detail": null
     },
     "kimi-k2.7-code": {
       "routeId": "moonshot/kimi-k2.7-code",
@@ -196,11 +196,11 @@
     },
     "kimi-k3": {
       "routeId": "moonshot/kimi-k3",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for MOONSHOT_API_KEY"
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 1514,
+      "echoedModelId": "kimi-k3",
+      "detail": null
     },
     "minimax-m2.7": {
       "routeId": "minimax/minimax-m2.7",
@@ -211,12 +211,12 @@
       "detail": "no value for MINIMAX_API_KEY"
     },
     "minimax-m3": {
-      "routeId": "minimax/minimax-m3",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for MINIMAX_API_KEY"
+      "routeId": "open_router/minimax-m3",
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 592,
+      "echoedModelId": "minimax/minimax-m3",
+      "detail": null
     },
     "openrouter-auto": {
       "routeId": "open_router/openrouter-auto",
@@ -236,11 +236,11 @@
     },
     "qwen-3.5-flash": {
       "routeId": "qwen/qwen-3.5-flash",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for QWEN_API_KEY"
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 1321,
+      "echoedModelId": "qwen3.5-flash",
+      "detail": null
     },
     "qwen-3.7-plus": {
       "routeId": "qwen/qwen-3.7-plus",
@@ -252,11 +252,11 @@
     },
     "qwen-3.8-flash": {
       "routeId": "qwen/qwen-3.8-flash",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for QWEN_API_KEY"
+      "probedOn": "2026-09-06",
+      "outcome": "answered",
+      "ttfbMs": 1011,
+      "echoedModelId": "qwen3.8-flash",
+      "detail": null
     },
     "sonar": {
       "routeId": "perplexity/sonar",

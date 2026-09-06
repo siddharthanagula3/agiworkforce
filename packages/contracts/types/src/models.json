@@ -3,6 +3,12 @@
   "lastUpdated": "2026-09-06",
   "verificationLog": [
     {
+      "date": "2026-09-06",
+      "verifiedBy": "live-route-probes-alibaba-model-studio-models-dev",
+      "status": "CORRECTION",
+      "notes": "One current model per family. Audited all 26 family slots in model-families.json for a released same-family successor already in the catalog and found five families carrying two generations. qwen/qwen-flash was the only slot whose active model was the older one, so it is the only promotion: Qwen3.5-Flash to Qwen3.8-Flash. The other four already served the successor, so their predecessors were retired without a slot move: gemini-3.6-flash under gemini-3.8-flash, gemini-3.1-flash-lite under gemini-3.5-flash-lite, kimi-k2.6 under kimi-k3, and minimax-m2.7 under minimax-m3. minimax-m2.7 was also the last explicit model id left in tierAllowedModels.pro_additions beside minimax-m3 and it is gone from that list; every other tier entry is already a family slot reference, so those follow the promotion on their own. All five predecessors are deprecated rather than removed: the records stay in the catalog and stay resolvable, so a conversation that named one still opens, and lifecycle.deprecated takes them out of the picker and out of every routing target the compiler resolves. Evidence for the promotion. Qwen3.8-Flash answers: probed 2026-09-06 through its own default route, qwen/qwen-3.8-flash on the dashscope-intl endpoint, first byte at 1011 ms, echoing the model id qwen3.8-flash back, recorded in probes.json. The managed OpenRouter route was probed first because that is what managed cloud dispatches on for Qwen, and it returned 404 with every endpoint excluded by the account zero-data-retention setting at openrouter.ai/settings/privacy. That is an account policy rather than a model fact: the outgoing Qwen3.5-Flash fails the same way through the same route, while gemini-3.8-flash, kimi-k3 and minimax-m3 all answer through it. Release date and shape: models.dev publishes alibaba/qwen3.8-flash with release_date 2026-08-26, a 1,000,000-token context, 131,072 output tokens and 0.15 in / 0.47 out per million, and alibabacloud.com/help/en/model-studio/qwen3-8-flash, retrieved 2026-09-06 and last updated there 2026-08-28, confirms the same 1M context and 131,072 output ceiling. Neither source publishes benchmark scores for this model, so the advance from probed to evaluated rests on that published capability, limit and pricing record plus the live probe, not on comparative scores; that gap is stated here rather than papered over. Two judgments a reviewer should see. The promotion breached the default 25 percent input cost regression ceiling: input rises 0.10 to 0.15 per million, a 50 percent increase, while output rises 0.40 to 0.47, 17.5 percent, and context holds at 1M while max output more than doubles from 64,000 to 131,072. The per-family thresholds override that families.mjs already merges is set on qwen/qwen-flash at maxInputCostIncreaseRatio 0.5 so the slot accepts this generation, and it is recorded here because the family record has no field to carry a reason. Second, loadFamilySnapshot in scripts/compile.mjs never passed the gateway catalog to buildNormalizedRegistry, so every family slot command has crashed since gateways were introduced; the missing argument is restored, which is what made this audit possible at all."
+    },
+    {
       "date": "2026-09-05",
       "verifiedBy": "openrouter-live-model-list",
       "status": "CORRECTION",
@@ -416,7 +422,7 @@
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "qwen-3.7-plus",
       "taskRouting": {
-        "fast_completion": "qwen-3.5-flash",
+        "fast_completion": "qwen-3.8-flash",
         "code_generation": "qwen-3.7-plus",
         "complex_reasoning": "qwen-3.7-plus",
         "chat": "qwen-3.7-plus",
@@ -1434,6 +1440,7 @@
       "qualityTier": "fast",
       "bestFor": ["Cheapest Multimodal", "Function Calling", "High Volume"],
       "released": "May 7, 2026",
+      "deprecated": true,
       "deprecation_date": "2027-05-07",
       "pricingNote": "Input $0.25/1M for text, image and video and $0.50/1M for audio; output $1.50/1M; cache read $0.025/1M text, image and video and $0.05/1M audio, plus $1.00 per 1M tokens per hour of storage. Cheaper than gemini-3.5-flash-lite but Google has announced a 2027-05-07 shutdown and the knowledge cutoff is a year older, so gemini-3.5-flash-lite stays the family slot. Verified against ai.google.dev/gemini-api/docs/pricing and the deprecations page, retrieved 2026-09-04.",
       "openWeight": false,
@@ -1455,9 +1462,9 @@
       },
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "deprecated",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/models.curation.json#gemini-3.1-flash-lite.deprecation_date"
       }
     },
     "gemini-3.1-flash-image": {
@@ -1815,7 +1822,8 @@
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multimodal", "Long Context"],
       "released": "February 2026",
-      "deprecation_date": null,
+      "deprecated": true,
+      "deprecation_date": "2026-09-06",
       "pricingNote": "Singapore/International list price per 1M tokens, matching the dashscope-intl.aliyuncs.com endpoint the Qwen adapter has defaulted to since 2026-08-30: a single band of $0.10 input/$0.40 output for any request up to the full 1M window, with no input-length tiers. The recorded cache-read price is the implicit-cache rate of 20% of input and the cache-write price is the explicit-cache creation rate of 125%; Alibaba prints neither figure for this model, both are derived from its published cache rules. Limited-time discounts are intentionally excluded. Verified against alibabacloud.com/help/en/model-studio/model-pricing, retrieved 2026-09-04.",
       "maxOutputTokens": 64000,
       "reasoning": {
@@ -1831,9 +1839,9 @@
       },
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_economy"
+        "stage": "deprecated",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/models.curation.json#qwen-3.5-flash.deprecation_date"
       }
     },
     "qwen-3.8-flash": {
@@ -1884,9 +1892,9 @@
       },
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "promoted",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/model-families.json#qwen/qwen-flash"
       }
     },
     "sonar": {
@@ -2378,7 +2386,8 @@
         "Multimodal Reasoning"
       ],
       "released": "July 21, 2026",
-      "deprecation_date": null,
+      "deprecated": true,
+      "deprecation_date": "2026-09-06",
       "promo_expires_at": "2027-01-01T00:00:00Z",
       "post_promo_prices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 },
       "pricingNote": "Same introductory schedule as the newer Flash rows: $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31, then $1.50/$7.50/$0.15 from 2027-01-01. The only Flash at or above 3.6 that accepts the minimal thinking level, which makes it the lowest-latency Flash lane at the same price as 3.8. Stable with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
@@ -2401,9 +2410,9 @@
       },
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "deprecated",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/models.curation.json#gemini-3.6-flash.deprecation_date"
       }
     },
     "glm-5.3": {
@@ -2753,7 +2762,8 @@
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Tool Use", "Vision"],
       "released": "April 20, 2026",
-      "deprecation_date": null,
+      "deprecated": true,
+      "deprecation_date": "2026-09-06",
       "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.16/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. The 32,768 output figure is the documented default; Moonshot publishes no ceiling and no knowledge cutoff. Older than kimi-k3 and below the Kimi family context floor, so it can never take the family slot. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k26, retrieved 2026-09-04.",
       "openWeight": true,
       "license": "Modified MIT License",
@@ -2772,9 +2782,9 @@
       },
       "tierPolicy": { "minTier": "pro" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "deprecated",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/models.curation.json#kimi-k2.6.deprecation_date"
       }
     },
     "grok-4.6": {
@@ -3156,15 +3166,16 @@
       "qualityTier": "balanced",
       "bestFor": ["Text Reasoning", "Open-Weight Deployment"],
       "released": "March 18, 2026",
-      "deprecation_date": null,
+      "deprecated": true,
+      "deprecation_date": "2026-09-06",
       "pricingNote": "Flat rate with no context tiers: $0.30/1M input, $1.20/1M output, $0.06/1M cache read. The $0.375/1M cache-write price applies only to explicit cache_control caching on the Anthropic-compatible route; the OpenAI-compatible route this catalog calls uses passive caching and charges no write fee, so none is recorded. Text only and always thinking, older than MiniMax-M3 but still classed as current by MiniMax. No knowledge cutoff and no structured-output support are documented. Verified against platform.minimax.io, retrieved 2026-09-04.",
       "openWeight": true,
       "maxOutputTokens": 204800,
       "tierPolicy": { "minTier": "pro" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "deprecated",
+        "stagedOn": "2026-09-06",
+        "source": "catalog/models.curation.json#minimax-m2.7.deprecation_date"
       }
     },
     "veo-3.1-lite": {
@@ -18950,7 +18961,7 @@
       "gpt-5.6-luna",
       "gemini-3.5-flash-lite",
       "gemini-3.8-flash",
-      "qwen-3.5-flash",
+      "qwen-3.8-flash",
       "openrouter-free"
     ],
     "pro_additions": [
@@ -18962,8 +18973,7 @@
       "qwen-3.7-plus",
       "glm-5.3",
       "kimi-k3",
-      "minimax-m3",
-      "minimax-m2.7"
+      "minimax-m3"
     ],
     "flagship_additions": [
       "gpt-5.6-sol",
