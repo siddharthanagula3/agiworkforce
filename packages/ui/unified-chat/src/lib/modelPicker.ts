@@ -210,31 +210,35 @@ export function buildModelPickerShortList(input: ModelPickerShortListInput): Mod
   const admitted = selectable.filter((model) => rowsById.get(model.id)?.lock == null);
   const familyAdmitted = admitted.filter((model) => familyActives.has(model.id));
   const seenFamilies = new Set<string>();
-  const curated = listPickerRecommendedModelIds()
-    .map((modelId) => rowsById.get(modelId))
-    .filter((row): row is ModelPickerRowModel => row !== undefined && row.lock == null);
-  const recommended =
-    curated.length > 0
-      ? curated
-      : (familyAdmitted.length > 0 ? familyAdmitted : admitted)
-          .map((model) => rowsById.get(model.id)!)
-          .filter((row) => {
-            const key = row.familySlot ?? row.id;
-            if (seenFamilies.has(key)) return false;
-            seenFamilies.add(key);
-            return true;
-          })
-          .sort(
-            (left, right) =>
-              routerOrderIndex(routerOrder, left.id, left.familySlot) -
-                routerOrderIndex(routerOrder, right.id, right.familySlot) ||
-              left.displayName.localeCompare(right.displayName),
-          )
-          .slice(0, MODEL_PICKER_RECOMMENDED_LIMIT);
-
   const favouriteRows = selectable
     .filter((model) => favourites.has(model.id))
     .map((model) => rowsById.get(model.id)!);
+  const shownFavouriteIds = new Set(
+    favouriteRows.slice(0, MODEL_PICKER_FAVOURITES_LIMIT).map((row) => row.id),
+  );
+  const curated = listPickerRecommendedModelIds()
+    .map((modelId) => rowsById.get(modelId))
+    .filter((row): row is ModelPickerRowModel => row !== undefined && row.lock == null);
+  const curatedIds = new Set(curated.map((row) => row.id));
+  for (const row of curated) seenFamilies.add(row.familySlot ?? row.id);
+  const ranked = (familyAdmitted.length > 0 ? familyAdmitted : admitted)
+    .map((model) => rowsById.get(model.id)!)
+    .filter((row) => !curatedIds.has(row.id))
+    .filter((row) => {
+      const key = row.familySlot ?? row.id;
+      if (seenFamilies.has(key)) return false;
+      seenFamilies.add(key);
+      return true;
+    })
+    .sort(
+      (left, right) =>
+        routerOrderIndex(routerOrder, left.id, left.familySlot) -
+          routerOrderIndex(routerOrder, right.id, right.familySlot) ||
+        left.displayName.localeCompare(right.displayName),
+    );
+  const recommended = [...curated, ...ranked]
+    .filter((row) => !shownFavouriteIds.has(row.id))
+    .slice(0, MODEL_PICKER_RECOMMENDED_LIMIT);
   const autoProfile = input.models.some((model) => isAutoModeModelId(model.id))
     ? getDefaultAutoRoutingProfile()
     : null;

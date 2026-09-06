@@ -26,6 +26,10 @@ const CATALOGUE_ENTRIES = vi.hoisted(() => [
     id: 'fixture-premium-model',
     displayName: 'Premium Model',
     provider: 'openai',
+    providerLabel: 'openai',
+    developer: 'openai',
+    developerLabel: 'openai',
+    routes: [],
     family: null,
     isRouter: false,
     releasedOn: null,
@@ -43,13 +47,15 @@ const CATALOGUE_ENTRIES = vi.hoisted(() => [
     requiresEnvironment: null,
   },
 ]);
-const CATALOGUE_PROVIDERS = vi.hoisted(() => [{ key: 'openai', admittedCount: 0, totalCount: 1 }]);
+const CATALOGUE_PROVIDERS = vi.hoisted(() => [
+  { key: 'openai', label: 'openai', admittedCount: 0, totalCount: 1 },
+]);
 
 vi.mock('@features/chat/lib/use-model-catalogue', () => ({
   useModelCatalogue: () => ({
     status: 'ready',
     entries: CATALOGUE_ENTRIES,
-    providers: CATALOGUE_PROVIDERS,
+    developers: CATALOGUE_PROVIDERS,
     count: CATALOGUE_ENTRIES.length,
     planLabel: 'Free',
   }),
