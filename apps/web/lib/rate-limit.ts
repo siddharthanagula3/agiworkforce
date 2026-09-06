@@ -42,6 +42,14 @@ export function resolveRedisOutagePolicy(): RedisOutagePolicy {
 }
 
 const RATE_LIMIT_SCALE_ENV = 'AGI_RATE_LIMIT_SCALE';
+const SHARED_STORE_QUOTA_MARKER = 'max requests limit exceeded';
+const DEGRADED_HEADER = 'X-RateLimit-Degraded';
+const DEGRADED_SHARED_STORE_QUOTA = 'shared-store-quota';
+
+export function isSharedStoreQuotaExhausted(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes(SHARED_STORE_QUOTA_MARKER);
+}
 
 const UNSCALED_RATE_LIMIT_MULTIPLIER = 1;
 
@@ -250,6 +258,11 @@ export const rateLimitConfigs = {
     // again whenever a conversation changes, while `chat-conversation` is a
     // shared bucket a dozen other reads also spend from. A read is cheap and
     // refusing it empties the sidebar, so it gets its own generous budget.
+    limit: 600,
+    window: '1 m',
+    failClosed: false,
+  },
+  'connector-directory-icon': {
     limit: 600,
     window: '1 m',
     failClosed: false,
@@ -768,6 +781,12 @@ export function getClientIpForRateLimit(request: NextRequest): string {
   }
 }
 
+const IP_IDENTIFIER_PREFIX = 'ip:';
+
+export function clientIpRateLimitIdentifier(request: NextRequest): string {
+  return `${IP_IDENTIFIER_PREFIX}${getClientIpForRateLimit(request)}`;
+}
+
 async function resolveVerifiedUserBucket(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
 
@@ -800,7 +819,7 @@ async function resolveRateLimitIdentifier(
   if (identifier) return identifier;
   const verified = await resolveVerifiedUserBucket(request);
   if (verified) return verified;
-  return `ip:${getClientIpForRateLimit(request)}`;
+  return clientIpRateLimitIdentifier(request);
 }
 
 export interface RateLimitInfo {
@@ -810,6 +829,37 @@ export interface RateLimitInfo {
   reset: number;
   headers: Record<string, string>;
   identifier: string;
+}
+
+function inMemoryRateLimitInfo(
+  key: RateLimitKey,
+  id: string,
+  effectiveLimit: number,
+  config: RateLimitConfig,
+  extraHeaders: Record<string, string>,
+): RateLimitInfo {
+  const windowMs = parseWindow(config.window);
+  const result = inMemoryRateLimit(`${key}:${id}`, effectiveLimit, windowMs);
+
+  const headers: Record<string, string> = {
+    'X-RateLimit-Limit': effectiveLimit.toString(),
+    'X-RateLimit-Remaining': result.remaining.toString(),
+    'X-RateLimit-Reset': new Date(result.reset).toISOString(),
+    ...extraHeaders,
+  };
+
+  if (!result.success) {
+    headers['Retry-After'] = Math.ceil((result.reset - Date.now()) / 1000).toString();
+  }
+
+  return {
+    success: result.success,
+    limit: effectiveLimit,
+    remaining: result.remaining,
+    reset: result.reset,
+    headers,
+    identifier: id,
+  };
 }
 
 export async function checkRateLimit(
@@ -851,27 +901,7 @@ export async function checkRateLimit(
       };
     }
 
-    const windowMs = parseWindow(config.window);
-    const result = inMemoryRateLimit(`${key}:${id}`, effectiveLimit, windowMs);
-
-    const headers: Record<string, string> = {
-      'X-RateLimit-Limit': effectiveLimit.toString(),
-      'X-RateLimit-Remaining': result.remaining.toString(),
-      'X-RateLimit-Reset': new Date(result.reset).toISOString(),
-    };
-
-    if (!result.success) {
-      headers['Retry-After'] = Math.ceil((result.reset - Date.now()) / 1000).toString();
-    }
-
-    return {
-      success: result.success,
-      limit: effectiveLimit,
-      remaining: result.remaining,
-      reset: result.reset,
-      headers,
-      identifier: id,
-    };
+    return inMemoryRateLimitInfo(key, id, effectiveLimit, config, {});
   }
 
   try {
@@ -910,6 +940,16 @@ export async function checkRateLimit(
     };
   } catch (error) {
     logger.error({ error, key, identifier }, 'Rate limiting check error');
+
+    if (isSharedStoreQuotaExhausted(error)) {
+      logger.warn(
+        { key, identifier },
+        'Shared rate limit store quota exhausted; limiting per instance until it resets',
+      );
+      return inMemoryRateLimitInfo(key, id, effectiveLimit, config, {
+        [DEGRADED_HEADER]: DEGRADED_SHARED_STORE_QUOTA,
+      });
+    }
 
     const policy = resolveRedisOutagePolicy();
 
@@ -1123,6 +1163,13 @@ export async function acquireManagedTurnSlot(input: {
       { error, userId: input.userId, limit },
       'GOV-3: concurrent-turn slot check failed',
     );
+    if (isSharedStoreQuotaExhausted(error)) {
+      logger.warn(
+        { userId: input.userId, limit },
+        'GOV-3: shared store quota exhausted; admitting the turn without a recorded slot',
+      );
+      return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+    }
     return unavailableTurnSlot(input.userId, limit, 'redis-error');
   }
 }

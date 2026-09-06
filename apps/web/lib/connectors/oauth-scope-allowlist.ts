@@ -86,6 +86,21 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   basecamp: NO_SCOPE_PARAMETER,
   evernote: NO_SCOPE_PARAMETER,
 
+  airtable: SCOPE_REVIEW_PENDING,
+  clickup: SCOPE_REVIEW_PENDING,
+  cloudflare: SCOPE_REVIEW_PENDING,
+  datadog: SCOPE_REVIEW_PENDING,
+  huggingface: SCOPE_REVIEW_PENDING,
+  monday: SCOPE_REVIEW_PENDING,
+  pagerduty: SCOPE_REVIEW_PENDING,
+  plaid: SCOPE_REVIEW_PENDING,
+  posthog: SCOPE_REVIEW_PENDING,
+  sentry: SCOPE_REVIEW_PENDING,
+  square: SCOPE_REVIEW_PENDING,
+  stripe: SCOPE_REVIEW_PENDING,
+  todoist: SCOPE_REVIEW_PENDING,
+  vercel: SCOPE_REVIEW_PENDING,
+
   linear: [
     'read',
     'write',

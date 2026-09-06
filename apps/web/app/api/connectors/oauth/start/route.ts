@@ -15,8 +15,17 @@ import {
   sanitizeConnectorReturnPath,
 } from '@/lib/connectors/oauth-registry';
 import { generateOAuthState, generatePkcePair } from '@/lib/connectors/pkce';
-import { beginMcpAuthorization } from '@/lib/connectors/mcp-discovery';
+import {
+  beginMcpAuthorization,
+  type McpAuthorizationFailure,
+  type McpAuthorizationStart,
+} from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { resolveDirectoryTarget } from '@/lib/connectors/mcp-directory-targets';
+import {
+  describeConnectorSetup,
+  describeDiscoveredConnectorSetup,
+} from '@/lib/connectors/oauth-setup';
 import {
   CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
   isConnectorTokenStorageAvailable,
@@ -25,6 +34,48 @@ import {
   ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization,
 } from '@/lib/connectors/oauth-store';
+
+export const OAUTH_START_STATUS_NOT_CONFIGURED = 'not_configured';
+export const OAUTH_START_STATUS_REGISTRATION_REJECTED = 'registration_rejected';
+export const OAUTH_START_STATUS_REAUTHORIZE = 'reauthorize';
+export const OAUTH_START_STATUS_ERROR = 'error';
+export const OAUTH_START_STATUS_OPEN = 'open';
+export const OAUTH_START_STATUS_UNAVAILABLE = 'unavailable';
+
+const FAILURE_STATUS: Record<McpAuthorizationFailure, string> = {
+  'no-client-identity': OAUTH_START_STATUS_NOT_CONFIGURED,
+  'registration-rejected': OAUTH_START_STATUS_REGISTRATION_REJECTED,
+  'authorization-server-changed': OAUTH_START_STATUS_REAUTHORIZE,
+  'discovery-failed': OAUTH_START_STATUS_ERROR,
+  unexpected: OAUTH_START_STATUS_ERROR,
+};
+
+const NOT_CONFIGURED_MESSAGE =
+  'This connector has no OAuth application configured in this deployment.';
+const BROKER_UNAVAILABLE_MESSAGE = 'Connector authorization is not available in this environment.';
+const OPEN_SERVER_MESSAGE = 'This connector needs no authorization.';
+
+interface DiscoveredServer {
+  readonly mcpUrl: string;
+  readonly name: string;
+  readonly documentationUrl: string | null;
+}
+
+export function registrationRejectedMessage(serverName: string): string {
+  return `${serverName} refused to register this app, so it cannot be connected here.`;
+}
+
+function failureMessage(
+  started: Extract<McpAuthorizationStart, { status: 'error' }>,
+  connectorId: string,
+  server: DiscoveredServer,
+): string {
+  if (started.reason === 'registration-rejected') return registrationRejectedMessage(server.name);
+  if (started.reason === 'no-client-identity') {
+    return describeDiscoveredConnectorSetup(connectorId, server.name)?.message ?? started.message;
+  }
+  return started.message;
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -50,9 +101,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
+  const provider = getConnectorOAuthProvider(connectorId);
+  const redirectUri = getConnectorOAuthRedirectUri();
+  const endpoint = provider ? null : getMcpEndpoint(connectorId);
+  const directory = provider || endpoint ? null : await resolveDirectoryTarget(connectorId);
+  const discovered: DiscoveredServer | null = endpoint
+    ? { mcpUrl: endpoint.url, name: connectorId, documentationUrl: null }
+    : directory
+      ? {
+          mcpUrl: directory.mcpUrl,
+          name: directory.name,
+          documentationUrl: directory.documentationUrl,
+        }
+      : null;
+
   const fail = (status: string, httpStatus: number, message: string): NextResponse => {
     if (wantsJson) {
-      return NextResponse.json({ error: message, connectorId, status }, { status: httpStatus });
+      return NextResponse.json(
+        {
+          error: message,
+          message,
+          connectorId,
+          status,
+          ...(discovered
+            ? { connectorName: discovered.name, documentationUrl: discovered.documentationUrl }
+            : {}),
+        },
+        { status: httpStatus },
+      );
     }
     const target = new URL(returnPath, request.url);
     target.searchParams.set('connector', connectorId);
@@ -60,51 +136,41 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(target);
   };
 
-  const provider = getConnectorOAuthProvider(connectorId);
-  const redirectUri = getConnectorOAuthRedirectUri();
-  const endpoint = !provider ? getMcpEndpoint(connectorId) : null;
-
-  if ((provider || endpoint) && !isConnectorTokenStorageAvailable()) {
-    return fail('unavailable', 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
+  if ((provider || discovered) && !isConnectorTokenStorageAvailable()) {
+    return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
   }
 
-  if (!provider) {
-    if (endpoint) {
-      const started = await beginMcpAuthorization({
-        userId,
-        connectorId,
-        mcpUrl: endpoint.url,
-        returnPath,
-      });
+  if (!provider && discovered) {
+    const started = await beginMcpAuthorization({
+      userId,
+      connectorId,
+      mcpUrl: discovered.mcpUrl,
+      returnPath,
+    });
 
-      if (started.status === 'redirect') {
-        if (wantsJson) {
-          return NextResponse.json({ connectorId, authorizeUrl: started.authorizationUrl });
-        }
-        return NextResponse.redirect(started.authorizationUrl);
+    if (started.status === 'redirect') {
+      if (wantsJson) {
+        return NextResponse.json({ connectorId, authorizeUrl: started.authorizationUrl });
       }
-
-      if (started.status === 'no-authorization-required') {
-        return fail('open', 200, 'This connector needs no authorization.');
-      }
-
-      return fail(
-        started.reason === 'no-client-identity'
-          ? 'not_configured'
-          : started.reason === 'registration-rejected'
-            ? 'unavailable'
-            : 'error',
-        502,
-        started.message,
-      );
+      return NextResponse.redirect(started.authorizationUrl);
     }
+
+    if (started.status === 'no-authorization-required') {
+      return fail(OAUTH_START_STATUS_OPEN, 200, OPEN_SERVER_MESSAGE);
+    }
+
+    return fail(
+      FAILURE_STATUS[started.reason],
+      502,
+      failureMessage(started, connectorId, discovered),
+    );
   }
 
   if (!provider || !redirectUri) {
     return fail(
-      'not_configured',
+      OAUTH_START_STATUS_NOT_CONFIGURED,
       501,
-      'This connector has no OAuth application configured in this deployment.',
+      describeConnectorSetup(connectorId)?.message ?? NOT_CONFIGURED_MESSAGE,
     );
   }
 
@@ -128,11 +194,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { connectorId },
         '[connector-oauth] broker tables are not migrated; refusing to start a flow',
       );
-      return fail(
-        'unavailable',
-        503,
-        'Connector authorization is not available in this environment.',
-      );
+      return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, BROKER_UNAVAILABLE_MESSAGE);
     }
     throw error;
   }

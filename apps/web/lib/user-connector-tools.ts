@@ -30,12 +30,18 @@ import {
   postIssueComment,
   postPrReview,
 } from '@/lib/github-app';
-import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
+import { openCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import {
   getConnectorOAuthProvider,
   getOAuthConfiguredConnectorIds,
   isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
+import {
+  isDirectoryServerId,
+  normalizeRemoteUrl,
+  resolveDirectoryTarget,
+  type DirectoryConnectTarget,
+} from '@/lib/connectors/mcp-directory-targets';
 import {
   connectorIdsWithMcpEndpoint,
   getMcpEndpoint,
@@ -805,12 +811,47 @@ export class ConnectorCredentialError extends Error {
   }
 }
 
+export interface UserCustomConnectorRef {
+  id: string;
+  shortId: string;
+  connectorId: string;
+  name: string;
+  url: string;
+  transport: string;
+}
+
+function customRowRef(row: CustomConnectorRow): UserCustomConnectorRef {
+  return {
+    id: row.id,
+    shortId: row.short_id,
+    connectorId: customServerId(row.short_id),
+    name: row.name,
+    url: row.url,
+    transport: row.transport,
+  };
+}
+
+function findCustomRowByUrl(rows: readonly CustomConnectorRow[], url: string) {
+  const normalized = normalizeRemoteUrl(url);
+  return rows.find(
+    (candidate) => candidate.url === url || normalizeRemoteUrl(candidate.url) === normalized,
+  );
+}
+
+export async function findUserCustomConnectorByUrl(
+  userId: string,
+  url: string,
+): Promise<UserCustomConnectorRef | null> {
+  const row = findCustomRowByUrl(await getUserCustomConnectorRows(userId), url);
+  return row ? customRowRef(row) : null;
+}
+
 function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   const headers: Record<string, string> = {};
   if (row.auth_header_enc) {
     try {
-      headers['Authorization'] =
-        `Bearer ${decryptConnectorToken(row.auth_header_enc, 'custom-connector-auth-header')}`;
+      const credential = openCustomConnectorCredential(row.auth_header_enc);
+      headers[credential.headerName] = credential.headerValue;
     } catch (err) {
       logger.warn(
         { rowId: row.id, error: err instanceof Error ? err.message : err },
@@ -1003,10 +1044,14 @@ function isOAuthServerUnreachable(catalog: McpToolCatalog, connectorId: string):
 }
 
 interface ConnectorMcpTarget {
+  /** Key of the stored grant and of every cache entry. */
   connectorId: string;
+  /** Name the chat catalog and tool permissions see; equals connectorId unless discovered. */
+  serverId: string;
   mcpUrl: string;
   transport: 'streamable-http' | 'sse';
   displayName?: string | undefined;
+  discovered: boolean;
 }
 
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
@@ -1014,16 +1059,49 @@ function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | nu
   if (provider) {
     return {
       connectorId,
+      serverId: connectorId,
       mcpUrl: provider.mcpUrl,
       transport: provider.transport,
       displayName: provider.displayName,
+      discovered: false,
     };
   }
   const endpoint = getMcpEndpoint(connectorId);
   if (endpoint) {
-    return { connectorId, mcpUrl: endpoint.url, transport: endpoint.transport };
+    return {
+      connectorId,
+      serverId: connectorId,
+      mcpUrl: endpoint.url,
+      transport: endpoint.transport,
+      discovered: false,
+    };
   }
   return null;
+}
+
+function directoryMcpTarget(target: DirectoryConnectTarget): ConnectorMcpTarget {
+  return {
+    connectorId: target.connectorId,
+    serverId: target.serverId,
+    mcpUrl: target.mcpUrl,
+    transport: target.transport,
+    displayName: target.name,
+    discovered: true,
+  };
+}
+
+async function resolveAnyConnectorMcpTarget(ref: string): Promise<ConnectorMcpTarget | null> {
+  const curated = resolveConnectorMcpTarget(ref);
+  if (curated) return curated;
+  const directory = await resolveDirectoryTarget(ref);
+  return directory ? directoryMcpTarget(directory) : null;
+}
+
+async function findCustomRowForDirectoryTarget(
+  userId: string,
+  target: DirectoryConnectTarget,
+): Promise<CustomConnectorRow | undefined> {
+  return findCustomRowByUrl(await getUserCustomConnectorRows(userId), target.mcpUrl);
 }
 
 function oauthConnectorMcpConfig(
@@ -1048,6 +1126,8 @@ export async function evictConnectorOAuthCaches(
 
 function connectRequiredResult(params: {
   connectorId: string;
+  connectorLabel?: string | undefined;
+  connectable?: boolean;
   toolName: string;
   reason: ConnectorAuthorizationReason;
   additionalScopes?: string[];
@@ -1056,6 +1136,8 @@ function connectRequiredResult(params: {
     connectorId: params.connectorId,
     toolName: params.toolName,
     reason: params.reason,
+    ...(params.connectorLabel ? { connectorLabel: params.connectorLabel } : {}),
+    ...(params.connectable === undefined ? {} : { connectable: params.connectable }),
     ...(params.additionalScopes ? { additionalScopes: params.additionalScopes } : {}),
   });
   return {
@@ -1120,7 +1202,7 @@ async function buildOAuthConnectorCatalog(
   try {
     const { catalog, handles } = await buildMcpToolCatalog(
       {
-        [target.connectorId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
+        [target.serverId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
       },
       MCP_EGRESS_POLICY,
       {
@@ -1129,7 +1211,7 @@ async function buildOAuthConnectorCatalog(
       },
     );
     await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
-    const ttl = isOAuthServerUnreachable(catalog, target.connectorId)
+    const ttl = isOAuthServerUnreachable(catalog, target.serverId)
       ? OAUTH_CATALOG_UNREACHABLE_TTL_MS
       : OAUTH_CATALOG_TTL_MS;
     _oauthCatalogCache.set(cacheKey, { catalog, expiresAt: now + ttl });
@@ -1161,7 +1243,7 @@ async function callOAuthConnectorTool(
     await assertResolvedPublicHostname(target.mcpUrl);
     handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
-      serverName: target.connectorId,
+      serverName: target.serverId,
       config: oauthConnectorMcpConfig(target, accessToken, tokenType),
       ...(await getMcpStatelessRuntime(
         target.mcpUrl,
@@ -1171,7 +1253,7 @@ async function callOAuthConnectorTool(
     const result = await callConnectorTool(handle, toolName, args, options);
     return mcpResultToConnectorExec({
       userId: _userId,
-      connectorId: target.connectorId,
+      connectorId: target.serverId,
       toolName,
       args,
       result,
@@ -1181,23 +1263,52 @@ async function callOAuthConnectorTool(
   }
 }
 
+function resolveTargetAccess(userId: string, target: ConnectorMcpTarget, forceRefresh = false) {
+  if (target.discovered) {
+    return resolveConnectorAccessToken(userId, target.connectorId, {
+      discovered: true,
+      ...(forceRefresh ? { forceRefresh } : {}),
+    });
+  }
+  return forceRefresh
+    ? resolveConnectorAccessToken(userId, target.connectorId, { forceRefresh })
+    : resolveConnectorAccessToken(userId, target.connectorId);
+}
+
+function connectRequiredForTarget(
+  target: ConnectorMcpTarget,
+  toolName: string,
+  reason: ConnectorAuthorizationReason,
+  additionalScopes?: string[],
+): ConnectorExecResult {
+  return connectRequiredResult({
+    connectorId: target.connectorId,
+    connectorLabel: target.displayName,
+    ...(target.discovered ? { connectable: true } : {}),
+    toolName,
+    reason,
+    ...(additionalScopes ? { additionalScopes } : {}),
+  });
+}
+
 async function executeOAuthConnectorTool(
   userId: string,
-  connectorId: string,
+  connectorRef: string,
   toolName: string,
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const target = resolveConnectorMcpTarget(connectorId);
+  const target = await resolveAnyConnectorMcpTarget(connectorRef);
   if (!target) return NOT_HANDLED;
+  const connectorId = target.connectorId;
 
-  const access = await resolveConnectorAccessToken(userId, connectorId);
+  const access = await resolveTargetAccess(userId, target);
   if (access.status !== 'ready') {
-    return connectRequiredResult({
-      connectorId,
+    return connectRequiredForTarget(
+      target,
       toolName,
-      reason: access.status === 'not-connected' ? 'not_connected' : 'authorization_expired',
-    });
+      access.status === 'not-connected' ? 'not_connected' : 'authorization_expired',
+    );
   }
 
   try {
@@ -1236,19 +1347,17 @@ async function executeOAuthConnectorTool(
     await evictConnectorOAuthCaches(userId, connectorId);
 
     if (challenge.status === 403) {
-      return connectRequiredResult({
-        connectorId,
+      return connectRequiredForTarget(
+        target,
         toolName,
-        reason: 'insufficient_scope',
-        additionalScopes: challenge.requiredScope?.split(/\s+/).filter(Boolean) ?? [],
-      });
+        'insufficient_scope',
+        challenge.requiredScope?.split(/\s+/).filter(Boolean) ?? [],
+      );
     }
 
-    const refreshed = await resolveConnectorAccessToken(userId, connectorId, {
-      forceRefresh: true,
-    });
+    const refreshed = await resolveTargetAccess(userId, target, true);
     if (refreshed.status !== 'ready') {
-      return connectRequiredResult({ connectorId, toolName, reason: 'authorization_expired' });
+      return connectRequiredForTarget(target, toolName, 'authorization_expired');
     }
 
     try {
@@ -1264,11 +1373,7 @@ async function executeOAuthConnectorTool(
     } catch (retryErr) {
       if (detectConnectorAuthChallenge(retryErr)) {
         await evictConnectorOAuthCaches(userId, connectorId);
-        return connectRequiredResult({
-          connectorId,
-          toolName,
-          reason: 'authorization_unavailable',
-        });
+        return connectRequiredForTarget(target, toolName, 'authorization_unavailable');
       }
       const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
       logger.warn(
@@ -1728,16 +1833,65 @@ export async function loadUserConnectorCapabilityCatalog(
           }
         }
       }
+    } else {
+      result = await loadDirectoryCapabilityCatalog(userId, connectorRef);
     }
   }
 
   if (!result) return null;
-  const isCustom = result.source === 'custom' || result.source === 'organization';
+  const isCustom =
+    result.source === 'custom' ||
+    result.source === 'organization' ||
+    isDirectoryServerId(result.connectorId);
   if (!(await connectorPolicyAllows(result.connectorId, organizationId, isCustom))) return null;
   return {
     ...result,
     catalog: filterCapabilityCatalogTools(result.catalog, options.isToolDenied),
   };
+}
+
+/**
+ * A directory record connects through one of two stores: an open or API-key
+ * server lives in `user_custom_connectors` (matched by its remote URL), an OAuth
+ * server lives in `connector_oauth_grants` under the record id.
+ */
+async function loadDirectoryCapabilityCatalog(
+  userId: string,
+  connectorRef: string,
+): Promise<UserConnectorCapabilityCatalog | null> {
+  const directory = await resolveDirectoryTarget(connectorRef);
+  if (!directory) return null;
+  const customRow = await findCustomRowForDirectoryTarget(userId, directory);
+  if (customRow) {
+    const catalog = await buildCustomConnectorCatalog(userId, customRow);
+    return catalog
+      ? {
+          connectorId: customServerId(customRow.short_id),
+          connectorLabel: customRow.name,
+          source: 'custom',
+          catalog,
+        }
+      : null;
+  }
+  const target = directoryMcpTarget(directory);
+  const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+    discovered: true,
+  });
+  if (access.status !== 'ready') return null;
+  const catalog = await buildOAuthConnectorCatalog(
+    userId,
+    target,
+    access.accessToken,
+    access.tokenType,
+  );
+  return catalog
+    ? {
+        connectorId: target.serverId,
+        connectorLabel: target.displayName ?? target.serverId,
+        source: 'oauth',
+        catalog,
+      }
+    : null;
 }
 
 export interface UserConnectorMcpHandle {
@@ -1827,6 +1981,36 @@ export async function withUserConnectorMcpHandle<T>(
           isCustom: false,
         };
       }
+    } else {
+      const directory = await resolveDirectoryTarget(connectorRef);
+      const customRow = directory
+        ? await findCustomRowForDirectoryTarget(userId, directory)
+        : undefined;
+      if (directory && customRow) {
+        descriptor = {
+          connectorId: customServerId(customRow.short_id),
+          connectorLabel: customRow.name,
+          url: customRow.url,
+          authorizationContext: `user:${userId}:custom:${customRow.id}`,
+          config: customRowToMcpConfig(customRow),
+          isCustom: true,
+        };
+      } else if (directory) {
+        const target = directoryMcpTarget(directory);
+        const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+          discovered: true,
+        });
+        if (access.status === 'ready') {
+          descriptor = {
+            connectorId: target.serverId,
+            connectorLabel: target.displayName ?? target.serverId,
+            url: target.mcpUrl,
+            authorizationContext: `user:${userId}:oauth:${target.connectorId}`,
+            config: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
+            isCustom: true,
+          };
+        }
+      }
     }
   }
 
@@ -1878,10 +2062,8 @@ export async function loadUserConnectorToolCatalog(
     }
 
     const usableOAuthIds = getUsableOAuthConnectorIds();
-    const grantedOAuthIds =
-      usableOAuthIds.length > 0
-        ? new Set((await getUserConnectorOAuthGrantSummaries(userId)).map((g) => g.connectorId))
-        : new Set<string>();
+    const grantSummaries = await getUserConnectorOAuthGrantSummaries(userId);
+    const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
     for (const connectorId of usableOAuthIds) {
       if (!grantedOAuthIds.has(connectorId)) continue;
       const target = resolveConnectorMcpTarget(connectorId);
@@ -1907,6 +2089,28 @@ export async function loadUserConnectorToolCatalog(
     // endpoint from a catalog integration. They are different risks and the
     // policy governs them separately.
     const customServerIds = new Set<string>();
+
+    const usableOAuthIdSet = new Set(usableOAuthIds);
+    for (const grant of grantSummaries) {
+      if (usableOAuthIdSet.has(grant.connectorId) || map.has(grant.connectorId)) continue;
+      const directory = await resolveDirectoryTarget(grant.connectorId);
+      if (!directory) continue;
+      const target = directoryMcpTarget(directory);
+      const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+        discovered: true,
+      });
+      if (access.status !== 'ready') continue;
+      const catalog = await buildOAuthConnectorCatalog(
+        userId,
+        target,
+        access.accessToken,
+        access.tokenType,
+      );
+      if (!catalog) continue;
+      const directoryDefs = catalogToConnectorToolDefs(catalog, target.displayName);
+      for (const def of directoryDefs) customServerIds.add(def.serverId);
+      defs.push(...directoryDefs);
+    }
 
     const customRows = await getUserCustomConnectorRows(userId, customConnectorLimit);
     for (const row of customRows) {
@@ -2015,6 +2219,10 @@ export function makeUserConnectorExecutor(
         args,
         options,
       );
+    }
+
+    if (isDirectoryServerId(serverId)) {
+      return executeOAuthConnectorTool(userId, serverId, toolName, args, options);
     }
 
     const map = loadConnectorMcpMap();

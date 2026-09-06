@@ -15,7 +15,7 @@ import { bindMcpTask, isMcpTaskBound } from '@/lib/connectors/mcp-state-store';
 
 export const runtime = 'nodejs';
 
-const ConnectorRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/);
+const ConnectorRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/);
 const OperationSchema = z.discriminatedUnion('operation', [
   z
     .object({
