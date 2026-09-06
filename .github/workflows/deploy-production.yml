@@ -288,6 +288,19 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
 
+      # This project has autoAssignCustomDomains disabled, so `vercel deploy
+      # --prod` only leaves a READY production deployment: it never takes
+      # agiworkforce.com. Production served the 23 August build through every
+      # deploy between then and 2026-09-06 for exactly that reason, and the
+      # verify step below could not see it because it probed the deployment's
+      # own URL rather than the domain. Promotion has to be explicit here.
+      - name: Promote the deployment to the production domains
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: >-
+          vercel promote "$DEPLOYMENT_URL" --yes --timeout 10m
+          --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
       # `/api/health` imports no auth code, so it stayed green through an outage
       # that 500'd every authenticated route. This probes health plus two routes
       # whose module graph reaches lib/api-auth.
