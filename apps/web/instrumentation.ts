@@ -30,6 +30,7 @@ function tagRequestOrganization(event: TenantTaggedEvent): void {
 
 export async function register() {
   if (process.env['NEXT_RUNTIME'] === NODE_RUNTIME) {
+    await import('./lib/observability/trace-storage.node');
     try {
       const { validateEnvironment, logValidationResults } = await import('./lib/validate-env');
       const result = validateEnvironment();

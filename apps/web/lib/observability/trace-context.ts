@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { secureTokenHex } from '@/lib/secure-random';
 
 export interface TraceContext {
@@ -14,7 +13,22 @@ export interface TenantScope {
   userId?: string;
 }
 
-const storage = new AsyncLocalStorage<TraceContext>();
+export interface TraceStorage {
+  getStore(): TraceContext | undefined;
+  run<R>(store: TraceContext, fn: () => R): R;
+}
+
+const STORAGE_KEY = Symbol.for('agiworkforce.trace-context.storage');
+
+type StorageHost = typeof globalThis & { [STORAGE_KEY]?: TraceStorage };
+
+export function installTraceStorage(candidate: TraceStorage): void {
+  (globalThis as StorageHost)[STORAGE_KEY] = candidate;
+}
+
+function storageOrNull(): TraceStorage | null {
+  return (globalThis as StorageHost)[STORAGE_KEY] ?? null;
+}
 
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/u;
 const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/u;
@@ -30,11 +44,12 @@ export function newSpanId(): string {
 }
 
 export function getTraceContext(): TraceContext | null {
-  return storage.getStore() ?? null;
+  return storageOrNull()?.getStore() ?? null;
 }
 
 export function runWithTraceContext<R>(context: TraceContext, fn: () => R): R {
-  return storage.run(context, fn);
+  const storage = storageOrNull();
+  return storage ? storage.run(context, fn) : fn();
 }
 
 export function parseTraceparent(header: string | null | undefined): TraceContext | null {
@@ -55,7 +70,7 @@ export function formatTraceparent(context: TraceContext): string {
 }
 
 export function traceLogFields(): Record<string, string> {
-  const context = storage.getStore();
+  const context = storageOrNull()?.getStore();
   if (!context) return {};
   const fields: Record<string, string> = { trace_id: context.traceId, span_id: context.spanId };
   if (context.organizationId) fields['organization_id'] = context.organizationId;
@@ -64,13 +79,13 @@ export function traceLogFields(): Record<string, string> {
 }
 
 export function setTenantScope(scope: TenantScope): void {
-  const context = storage.getStore();
+  const context = storageOrNull()?.getStore();
   if (!context) return;
   if (scope.organizationId) context.organizationId = scope.organizationId;
   if (scope.userId) context.userId = scope.userId;
 }
 
 export function getTenantScope(): TenantScope {
-  const context = storage.getStore();
+  const context = storageOrNull()?.getStore();
   return { organizationId: context?.organizationId, userId: context?.userId };
 }

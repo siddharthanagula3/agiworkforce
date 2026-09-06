@@ -326,7 +326,7 @@ export function ModelCatalogue({
                   RAIL_ROW_CLASS,
                   isActive
                     ? 'bg-muted/70 font-medium text-foreground'
-                    : 'text-foreground/80 hover:bg-muted/50',
+                    : 'text-muted-foreground hover:bg-muted/50',
                 ].join(' ')}
               >
                 {entry.key === FAVOURITES_RAIL_KEY ? (
@@ -430,7 +430,7 @@ export function ModelCatalogue({
                         <span
                           className={[
                             ROW_NAME_CLASS,
-                            isSelected ? 'font-medium text-foreground' : 'text-foreground/85',
+                            isSelected ? 'font-medium text-foreground' : 'text-muted-foreground',
                           ].join(' ')}
                         >
                           {entry.displayName}

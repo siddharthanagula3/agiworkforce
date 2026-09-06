@@ -105,7 +105,7 @@ describe('SchedulesPage', () => {
 
   it('keeps the header to a heading, one sentence, and the create action', async () => {
     const api = createApi();
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByText('No schedules yet');
 
     expect(screen.getByRole('heading', { name: 'Schedules' })).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe('SchedulesPage', () => {
   it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
     const api = createApi();
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -134,7 +134,7 @@ describe('SchedulesPage', () => {
     const request = deferred<ReturnType<typeof page>>();
     const api = createApi({ listSchedules: vi.fn(() => request.promise) });
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     expect(screen.getByRole('status', { name: 'Loading schedules' })).toBeInTheDocument();
 
     await act(async () => request.resolve(page()));
@@ -151,7 +151,7 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not reach the schedules service.',
     );
@@ -180,7 +180,7 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'Load More Schedules' }));
 
@@ -200,7 +200,13 @@ describe('SchedulesPage', () => {
   it('keeps invalid create input in the dialog, reports inline errors, and focuses the first field', async () => {
     const api = createApi();
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -222,7 +228,13 @@ describe('SchedulesPage', () => {
   it('confirms discarding unsaved changes with the shared dialog, not a native window.confirm', async () => {
     const api = createApi();
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -256,7 +268,13 @@ describe('SchedulesPage', () => {
   it('closes the editor without a confirmation when nothing changed', async () => {
     const api = createApi();
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -270,7 +288,13 @@ describe('SchedulesPage', () => {
   it('offers only interval units the deployed sweep can deliver and names its real cadence', async () => {
     const api = createApi();
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -319,7 +343,13 @@ describe('SchedulesPage', () => {
     });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByRole('heading', { name: 'Legacy hourly brief' });
     await user.click(screen.getByRole('button', { name: 'Edit Legacy hourly brief' }));
 
@@ -349,7 +379,13 @@ describe('SchedulesPage', () => {
     const created = { ...schedule, id: 'schedule-created', name: 'Daily plan' };
     const api = createApi({ createSchedule: vi.fn(async () => created) });
     const user = userEvent.setup();
-    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByText('No schedules yet');
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
@@ -400,6 +436,7 @@ describe('SchedulesPage', () => {
         api={api}
         createIdempotencyKey={() => 'request-key'}
         now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
       />,
     );
     await screen.findByRole('heading', { name: 'Morning brief' });
@@ -446,7 +483,7 @@ describe('SchedulesPage', () => {
     });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'View History for Morning brief' }));
 
@@ -469,7 +506,7 @@ describe('SchedulesPage', () => {
     });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'View History for Morning brief' }));
     await screen.findByText('Three priorities are ready.');
@@ -489,7 +526,7 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
 
     await user.click(screen.getByRole('button', { name: 'View History for Morning brief' }));
@@ -522,7 +559,7 @@ describe('SchedulesPage', () => {
       listRuns,
     });
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
 
     await waitFor(() =>
@@ -543,7 +580,7 @@ describe('SchedulesPage', () => {
     });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
     await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
@@ -575,7 +612,7 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([active, completed])) });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Active brief' });
     expect(screen.getByRole('heading', { name: 'Finished brief' })).toBeInTheDocument();
 
@@ -606,7 +643,7 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([unsupported, completed])) });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Legacy workflow' });
 
     const legacyCard = screen.getByRole('article', { name: 'Legacy workflow' });
@@ -638,7 +675,13 @@ describe('SchedulesPage', () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([schedule, scoped])) });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} projects={[{ id: 'project-1', name: 'Marketing launch' }]} />);
+    render(
+      <SchedulesPage
+        api={api}
+        projects={[{ id: 'project-1', name: 'Marketing launch' }]}
+        onOpenChat={() => undefined}
+      />,
+    );
     await screen.findByRole('heading', { name: 'Launch brief' });
 
     const card = screen.getByRole('article', { name: 'Launch brief' });
@@ -670,6 +713,7 @@ describe('SchedulesPage', () => {
         api={api}
         now={() => new Date('2026-07-15T12:00:00.000Z')}
         scope={{ projectId: 'project-1', projectName: 'Marketing launch' }}
+        onOpenChat={() => undefined}
       />,
     );
 
@@ -707,7 +751,7 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
     const user = userEvent.setup();
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
 
@@ -741,7 +785,7 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
       configurable: true,
     });
 
-    render(<SchedulesPage api={api} />);
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
     await user.click(screen.getByRole('menuitem', { name: 'Share' }));

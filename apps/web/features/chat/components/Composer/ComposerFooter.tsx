@@ -498,7 +498,7 @@ function ModelRow({
             ? 'text-foreground/60'
             : isSelected
               ? 'font-medium text-foreground'
-              : 'text-foreground/85',
+              : 'text-muted-foreground',
         ].join(' ')}
       >
         {model.name}
