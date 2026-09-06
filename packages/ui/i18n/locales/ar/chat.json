@@ -95,6 +95,7 @@
     "moreOptions": "المزيد من الخيارات",
     "moreOptionsFor": "المزيد من الخيارات لـ {{name}}",
     "moveToProject": "نقل إلى مشروع",
+    "codeAction": "الكود",
     "newChatAction": "محادثة جديدة",
     "newChatInProject": "محادثة جديدة في المشروع",
     "newChatInProjectNamed": "محادثة جديدة في {{name}}",

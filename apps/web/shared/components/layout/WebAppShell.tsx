@@ -66,6 +66,7 @@ import {
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
+import { CODE_ROUTES } from '@/features/code/code-surface';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
@@ -84,9 +85,15 @@ interface WebAppShellProps {
   children: React.ReactNode;
   /** Rendered inside the narrow-viewport header, after the wordmark. */
   narrowHeaderSlot?: React.ReactNode;
+  /**
+   * A surface that owns its own left column sets this to false: it keeps every
+   * provider, dialog and overlay this shell mounts and loses only the app
+   * navigation, which would otherwise render as a second sidebar beside it.
+   */
+  rail?: boolean;
 }
 
-export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
+export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
@@ -194,6 +201,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
 
   // ---- Session row handlers (navigation-focused) ----
   const handleNewChat = useCallback(() => router.push('/chat'), [router]);
+  const handleOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
   const handleSelectSession = useCallback(
     (id: string) => router.push(`/chat/${encodeURIComponent(id)}`),
     [router],
@@ -441,6 +449,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
     collapsedFooterSlot,
     getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
     onNewChat: handleNewChat,
+    onOpenCode: handleOpenCode,
     onSelect: handleSelectSession,
     onDelete: (id: string) => void handleDeleteSession(id),
     onRename: handleRenameSession,
@@ -482,7 +491,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
       />
       {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
           header trigger + modal drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
-      {!isNarrowViewport && (
+      {rail && !isNarrowViewport && (
         <Sidebar
           {...sharedSidebarProps}
           collapsed={collapsed}
@@ -492,22 +501,24 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
 
       <div
         className="relative flex min-h-0 min-w-0 flex-1 flex-col"
-        aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
-        inert={isNarrowViewport && mobileNavOpen ? true : undefined}
+        aria-hidden={rail && isNarrowViewport && mobileNavOpen ? true : undefined}
+        inert={rail && isNarrowViewport && mobileNavOpen ? true : undefined}
       >
         {isNarrowViewport && (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
-            <button
-              ref={mobileNavTriggerRef}
-              type="button"
-              aria-label="Open navigation"
-              aria-expanded={mobileNavOpen}
-              aria-controls="webappshell-mobile-nav"
-              onClick={() => setMobileNavOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Menu className="h-5 w-5" aria-hidden="true" />
-            </button>
+            {rail && (
+              <button
+                ref={mobileNavTriggerRef}
+                type="button"
+                aria-label="Open navigation"
+                aria-expanded={mobileNavOpen}
+                aria-controls="webappshell-mobile-nav"
+                onClick={() => setMobileNavOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
             <SidebarWordmark />
             {/* A surface with its own left column puts its title and drawer
                 trigger here rather than stacking a second bar underneath. */}
@@ -521,7 +532,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
         <div id={CONTENT_OVERLAY_ROOT_ID} className="pointer-events-none absolute inset-0" />
       </div>
 
-      {isNarrowViewport && (
+      {rail && isNarrowViewport && (
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetContent
             id="webappshell-mobile-nav"

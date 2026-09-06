@@ -21,7 +21,6 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
-import { useUIStore } from '@shared/stores/layout-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
@@ -120,7 +119,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
 
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
-  const setShellCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   useEffect(() => {
@@ -131,15 +129,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
-
-  // This surface has its own left column, so two full sidebars would sit side by
-  // side. The shell's rail collapses while Code is mounted and the reader's own
-  // choice is restored when they leave.
-  useEffect(() => {
-    const previous = useUIStore.getState().sidebarCollapsed;
-    setShellCollapsed(true);
-    return () => setShellCollapsed(previous);
-  }, [setShellCollapsed]);
 
   const replaceSession = useCallback((next: CloudCodeSession) => {
     setSessions((current) => {
@@ -591,7 +580,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   ) : null;
 
   return (
-    <WebAppShell narrowHeaderSlot={narrowHeaderSlot}>
+    <WebAppShell narrowHeaderSlot={narrowHeaderSlot} rail={false}>
       {confirmDialog}
       <div className={styles['surface']}>
         {!railCollapsed && (

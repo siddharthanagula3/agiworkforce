@@ -95,6 +95,7 @@
     "moreOptions": "추가 옵션",
     "moreOptionsFor": "{{name}}의 추가 옵션",
     "moveToProject": "프로젝트로 이동",
+    "codeAction": "코드",
     "newChatAction": "새 채팅",
     "newChatInProject": "프로젝트에서 새 채팅",
     "newChatInProjectNamed": "{{name}}에서 새 채팅",

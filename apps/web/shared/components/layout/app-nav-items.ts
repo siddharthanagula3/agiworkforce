@@ -25,7 +25,6 @@ import {
   LibraryBig,
   MessageSquare,
   ShieldCheck,
-  TerminalSquare,
 } from '@agiworkforce/icons';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
 
@@ -35,7 +34,6 @@ import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
  * not claim it; every other `/chat/...` path is a conversation and IS Chat.
  */
 const CHAT_SECTION_PREFIXES = [
-  '/chat/code',
   '/chat/projects',
   '/chat/artifacts',
   '/chat/library',
@@ -88,14 +86,6 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: MessageSquare,
     href: '/chat',
     isActive: (pathname) => isUnder(pathname, '/chat') && !isChatSectionPath(pathname),
-  },
-  {
-    id: 'code',
-    label: 'Code',
-    icon: TerminalSquare,
-    href: '/chat/code',
-    isActive: (pathname) => isUnder(pathname, '/chat/code'),
-    hideable: true,
   },
   // Persistent Projects entry (claude.ai parity). The Projects *section* in the
   // sidebar body only renders once the user has at least one project, so a

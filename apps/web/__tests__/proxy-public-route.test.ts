@@ -169,7 +169,7 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
-  it('rewrites /agi-code to /chat/code for a signed-in visitor', async () => {
+  it('rewrites /agi-code to /code for a signed-in visitor', async () => {
     const { proxy } = await import('../proxy');
 
     const response = await proxy(
@@ -179,7 +179,7 @@ describe('web proxy', () => {
       {} as never,
     );
 
-    expect(response?.headers.get('x-middleware-rewrite')).toBe('http://localhost/chat/code');
+    expect(response?.headers.get('x-middleware-rewrite')).toBe('http://localhost/code');
   });
 
   it('runs the post-login acceptance checkpoint through Clerk session middleware', async () => {

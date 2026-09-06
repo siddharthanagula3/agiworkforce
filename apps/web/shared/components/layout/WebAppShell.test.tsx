@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebAppShell } from './WebAppShell';
 
@@ -98,6 +98,7 @@ vi.mock('@agiworkforce/ui', async () => {
       isLoading?: boolean;
       error?: string | null;
       onRetryLoad?: () => void;
+      onOpenCode?: () => void;
       footerSlot?: React.ReactNode;
     }) => (
       <div
@@ -109,6 +110,11 @@ vi.mock('@agiworkforce/ui', async () => {
         {props.onRetryLoad && (
           <button type="button" onClick={props.onRetryLoad}>
             Retry
+          </button>
+        )}
+        {props.onOpenCode && (
+          <button type="button" onClick={props.onOpenCode}>
+            Code
           </button>
         )}
         {props.footerSlot}
@@ -403,6 +409,43 @@ describe('WebAppShell responsive navigation', () => {
     );
     expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open navigation' })).toBeNull();
+  });
+
+  // The Code surface renders its own left column, so the shell that hosts it
+  // must be able to drop the app navigation and keep everything else it mounts.
+  // Two sidebars side by side is what shipped before this prop existed.
+  it('rail=false: renders no app navigation on either viewport', () => {
+    render(
+      <WebAppShell rail={false}>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    expect(screen.queryByTestId('app-sidebar')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open navigation' })).toBeNull();
+
+    cleanup();
+    mediaState.matches = true;
+
+    render(
+      <WebAppShell rail={false}>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    expect(screen.queryByTestId('app-sidebar')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open navigation' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+  });
+
+  it('hands the sidebar a Code destination beside its New chat control', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }));
+
+    expect(routerState.push).toHaveBeenCalledWith('/code');
   });
 
   it('narrow: hides the persistent sidebar behind an Open navigation control', () => {

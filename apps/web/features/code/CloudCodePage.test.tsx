@@ -14,18 +14,20 @@ import type { CloudCodeApi } from './services/cloud-code-api';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/chat/code',
+  usePathname: () => '/code',
 }));
 
 vi.mock('@shared/components/layout/WebAppShell', () => ({
   WebAppShell: ({
     children,
     narrowHeaderSlot,
+    rail = true,
   }: {
     children: React.ReactNode;
     narrowHeaderSlot?: React.ReactNode;
+    rail?: boolean;
   }) => (
-    <div data-testid="web-app-shell">
+    <div data-testid="web-app-shell" data-rail={String(rail)}>
       <div data-testid="app-bar">{narrowHeaderSlot}</div>
       {children}
     </div>
@@ -1075,14 +1077,15 @@ describe('CloudCodePage', () => {
     expect(screen.getByRole('button', { name: 'Add a repository' })).toBeInTheDocument();
   });
 
-  it('collapses the shell rail while mounted and restores the reader choice on leave', async () => {
+  it('asks the shell for no rail and leaves the reader collapse choice alone', async () => {
     const { setSidebarCollapsed } = useUIStore.getState();
     setSidebarCollapsed(false);
 
     const view = render(<CloudCodePage api={createApi()} />);
     await screen.findByRole('heading', { name: /What's up next/ });
 
-    expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+    expect(screen.getByTestId('web-app-shell').dataset['rail']).toBe('false');
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
 
     view.unmount();
 

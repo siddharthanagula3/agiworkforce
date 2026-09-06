@@ -41,7 +41,7 @@ describe('sitemap-indexed client routes carry their own title', () => {
 /**
  * The signed-in rail is noindex, so the sitemap check above never covered it.
  * and /chat/projects and /chat/library both shipped showing the marketing
- * title in the browser tab, history and bookmarks while /tasks and /chat/code
+ * title in the browser tab, history and bookmarks while /tasks and /code
  * beside them showed their own.
  *
  * Derived from the rail rather than a second hand-maintained list, so adding a
@@ -86,6 +86,31 @@ describe('every rail destination carries its own title', () => {
         'One AI workspace across models and tools',
       );
     }
+  });
+});
+
+/**
+ * Code is reached from the sidebar's ">_" control and the command palette
+ * rather than the rail, so the rail-derived list above no longer covers it.
+ */
+describe('the Code surface carries its own title', () => {
+  it('/code declares metadata', () => {
+    expect(routeDeclaresMetadata('code')).toBe(true);
+  });
+
+  it('does not fall back to the marketing title', () => {
+    const source = ['layout.tsx', 'page.tsx']
+      .map((file) => join(APP_DIR, 'code', file))
+      .filter((path) => existsSync(path))
+      .map((path) => readFileSync(path, 'utf8'))
+      .join('\n');
+    expect(source).not.toContain('One AI workspace across models and tools');
+  });
+
+  it('/chat/code permanently redirects onto it', () => {
+    const legacy = readFileSync(join(APP_DIR, 'chat', 'code', 'page.tsx'), 'utf8');
+    expect(legacy).toContain('permanentRedirect');
+    expect(legacy).toContain('CODE_ROUTES.root');
   });
 });
 
