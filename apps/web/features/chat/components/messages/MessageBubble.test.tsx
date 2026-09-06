@@ -1882,6 +1882,26 @@ describe('MessageBubble', () => {
       expect(notInvokedNotice()).not.toBeInTheDocument();
     });
 
+    it('drops a Sources list the model wrote into the body once the panel lists the sources', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Starts at $2,499 [1].\n\nSources:\n[1]: apple.com\n[2]: 9to5mac.com',
+            metadata: {
+              tools: [{ name: 'web_search', status: 'completed' }],
+              searchResults: [
+                { url: 'https://www.apple.com/mac-studio/', title: 'Mac Studio' },
+                { url: 'https://9to5mac.com/mac-studio', title: 'Mac Studio price' },
+              ],
+            } as never,
+          })}
+        />,
+      );
+      expect(screen.queryByText(/^Sources:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/9to5mac\.com/)).not.toBeInTheDocument();
+    });
+
     it('stays quiet once the search actually ran', () => {
       render(
         <MessageBubble

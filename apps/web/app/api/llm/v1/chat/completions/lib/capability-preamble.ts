@@ -183,7 +183,8 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
           'the claim as a markdown link straight to that source URL. The app turns either form ' +
           'into a clickable citation for the exact source. Reuse the same number for a source ' +
           'cited again. Do this for every source you used, including a single fetched page, not ' +
-          'only when there are several.',
+          'only when there are several. Do not end the answer with a Sources, References or ' +
+          'bibliography section: the app lists every cited source under the answer.',
       );
     }
 

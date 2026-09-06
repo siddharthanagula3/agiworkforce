@@ -54,6 +54,26 @@ describe('stripTrailingSourceList', () => {
   });
 });
 
+describe('stripTrailingSourceList on chat answers', () => {
+  it('drops definition style entries a chat model writes under a Sources line', () => {
+    const body =
+      'Starts at $2,499 [1].\n\nSources:\n[1]: apple.com\n[2]: 9to5mac.com\n[3]: macrumors.com';
+    expect(stripTrailingSourceList(body)).toBe('Starts at $2,499 [1].');
+  });
+
+  it('drops entries that carry a dash and a description after the markers', () => {
+    const body =
+      'Recordation is ministerial [1][2].\n\n**Sources:**\n[1][2] - USPTO states recordation is ministerial.\n[3] - accrued damages.';
+    expect(stripTrailingSourceList(body)).toBe('Recordation is ministerial [1][2].');
+  });
+
+  it('drops a Sources line whose entries sit on the same line', () => {
+    expect(stripTrailingSourceList('Answer [1].\n\nSources: [1] [2] (apple.com)')).toBe(
+      'Answer [1].',
+    );
+  });
+});
+
 describe('stripTrailingCitationOnlyBlock', () => {
   it('drops a headingless tail of bracketed markers with a parenthesised host', () => {
     const answer = [
