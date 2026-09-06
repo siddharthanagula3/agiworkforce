@@ -2858,8 +2858,8 @@
 }
 [data-design='agi'] .agi-ds-provider-foot {
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   margin-top: auto;
   padding-top: 0.75rem;
   border-top: 1px solid var(--agi-rule);
@@ -2868,7 +2868,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--agi-ink-faint, var(--agi-ink-3));
-  white-space: nowrap;
 }
 
 [data-design='agi'] .agi-ds-quote {
