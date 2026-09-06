@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt,clippy
@@ -363,7 +363,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v-cli-}" >> $GITHUB_OUTPUT
 
       - name: Create release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           name: 'AGI Workforce CLI v${{ steps.version.outputs.VERSION }}'
