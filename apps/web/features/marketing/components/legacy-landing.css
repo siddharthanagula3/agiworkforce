@@ -3169,20 +3169,47 @@
 }
 
 @media (max-width: 640px) {
+  [data-design='agi'] .agi-fl-hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  [data-design='agi'] .agi-fl-hero-brand-wrap {
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  [data-design='agi'] .agi-fl-hero-brand-text {
+    align-items: center;
+    gap: 4px;
+  }
+  [data-design='agi'] .agi-fl-hero-brand-mark {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+  [data-design='agi'] .agi-fl-hero-brand {
+    margin-left: 0;
+    font-size: 4.5rem;
+    letter-spacing: 6px;
+  }
+  [data-design='agi'] .agi-fl-hero-brand-sub {
+    white-space: normal;
+    text-align: center;
+  }
   [data-design='agi'] .agi-fl-announce {
-    align-items: flex-start;
-    width: 100%;
-    padding: 8px 12px 8px 8px;
-    border-radius: 14px;
+    align-self: center;
+    align-items: center;
+    width: auto;
+    max-width: 100%;
+    padding: 6px 12px 6px 6px;
     font-size: 12.5px;
     line-height: 1.35;
   }
   [data-design='agi'] .agi-fl-announce-label {
-    white-space: normal;
-    overflow: visible;
+    white-space: nowrap;
   }
-  [data-design='agi'] .agi-fl-announce-tag {
-    margin-top: 1px;
+  [data-design='agi'] .agi-fl-hero .agi-fl-cta-row {
+    width: 100%;
   }
   [data-design='agi'] .agi-fl-hero .agi-fl-cta-row {
     display: grid;
