@@ -3,13 +3,13 @@ const MAX_SCRUBBED_TEXT_LENGTH = 256;
 const TRUNCATION_SUFFIX = '…';
 
 const TEXT_SCRUB_PATTERNS: readonly RegExp[] = [
-  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gu,
-  /\bhttps?:\/\/[^\s'")]+/giu,
-  /(?:\/[\w.-]+){2,}/gu,
-  /\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/giu,
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/gu,
-  /\b[A-Za-z0-9_-]*(?:secret|token|password)[A-Za-z0-9_-]*[-_][A-Za-z0-9_-]{8,}\b/giu,
-  /\b(?:sk|pk|rk|whsec)[-_][A-Za-z0-9_-]{12,}\b/gu,
+  /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,24}/gu,
+  /\bhttps?:\/\/[^\s'")]{1,2048}/giu,
+  /(?:\/[\w.-]{1,255}){2,64}/gu,
+  /\b(?:bearer|basic)\s{1,8}[A-Za-z0-9._~+/=-]{8,512}/giu,
+  /\beyJ[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{4,1024}/gu,
+  /\b[A-Za-z0-9_-]{0,64}(?:secret|token|password)[A-Za-z0-9_-]{0,64}[-_][A-Za-z0-9_-]{8,256}\b/giu,
+  /\b(?:sk|pk|rk|whsec)[-_][A-Za-z0-9_-]{12,256}\b/gu,
 ];
 
 export function scrubText(value: string): string {
