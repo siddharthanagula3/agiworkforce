@@ -3525,6 +3525,7 @@
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Zero-Cost Drafting", "Experimentation", "Overflow Capacity"],
+      "pickerRecommended": true,
       "released": "February 1, 2026",
       "deprecation_date": null,
       "openWeight": false,

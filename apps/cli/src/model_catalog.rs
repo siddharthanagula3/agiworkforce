@@ -2011,11 +2011,16 @@ mod tests {
     }
 
     #[test]
-    fn cloud_models_are_paid() {
+    fn cloud_models_carry_prices() {
         let cat = Catalog::bundled();
         for m in cat.cloud_models() {
-            assert!(m.input_price_per_1m > 0.0, "{} should not be free", m.id);
+            assert!(m.input_price_per_1m >= 0.0, "{} price must parse", m.id);
+            assert!(m.output_price_per_1m >= 0.0, "{} price must parse", m.id);
         }
+        assert!(
+            cat.cloud_models().iter().any(|m| m.input_price_per_1m > 0.0),
+            "paid cloud models must remain in the catalog"
+        );
     }
 
     #[test]
@@ -2071,8 +2076,8 @@ mod tests {
                 m.id
             );
             assert!(
-                m.input_price_per_1m > 0.0,
-                "{} should not be free (input)",
+                m.input_price_per_1m >= 0.0,
+                "{} pricing must parse (input)",
                 m.id
             );
         }

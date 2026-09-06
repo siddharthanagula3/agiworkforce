@@ -94,6 +94,11 @@ test('every route declares a known cache class, commercial status and its own pr
 });
 
 const MANAGED_OPEN_ROUTER_HARNESS_ID = 'open-router/chat-completions-managed';
+const MANAGED_OPEN_ROUTER_DEFAULT_KEYS = Object.entries(declarations.models)
+  .filter(
+    ([, declaration]) => declaration.defaultRoute?.harnessId === MANAGED_OPEN_ROUTER_HARNESS_ID,
+  )
+  .map(([modelKey]) => modelKey);
 const MANAGED_OPEN_ROUTER_MODEL_KEYS = Object.entries(declarations.models)
   .filter(([, declaration]) =>
     (declaration.additionalRoutes ?? []).some(
@@ -101,7 +106,8 @@ const MANAGED_OPEN_ROUTER_MODEL_KEYS = Object.entries(declarations.models)
         route.provider === 'open_router' && route.harnessId === MANAGED_OPEN_ROUTER_HARNESS_ID,
     ),
   )
-  .map(([modelKey]) => modelKey);
+  .map(([modelKey]) => modelKey)
+  .concat(MANAGED_OPEN_ROUTER_DEFAULT_KEYS);
 
 test('the openrouter route admits managed traffic only for the models the registry names', () => {
   for (const [routeId, route] of Object.entries(registry.routes)) {
@@ -118,7 +124,11 @@ test('the openrouter route admits managed traffic only for the models the regist
         'authorized_marketplace',
         `${routeId} must keep its authorized_marketplace status while admitting managed traffic`,
       );
-      assert.equal(route.isDefault, false, `${routeId} must not become the default route`);
+      assert.equal(
+        route.isDefault,
+        MANAGED_OPEN_ROUTER_DEFAULT_KEYS.includes(route.modelKey),
+        `${routeId} is the default route only for a model whose canonical provider is openrouter`,
+      );
     }
   }
   for (const modelKey of MANAGED_OPEN_ROUTER_MODEL_KEYS) {

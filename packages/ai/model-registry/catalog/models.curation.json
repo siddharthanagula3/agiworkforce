@@ -3749,7 +3749,8 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
+      },
+      "pickerRecommended": true
     },
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
