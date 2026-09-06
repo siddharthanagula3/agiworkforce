@@ -17,12 +17,6 @@ const PROVIDERS = PROVIDER_IDS.map((id) => ({ id, name: providerLabel(id) }));
 
 const SURFACES = ['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code'];
 
-const MODE_LANES = [
-  'Local · on-device',
-  'BYOK · direct to provider',
-  'Cloud · managed by AGI',
-] as const;
-
 const W = 960;
 const H = 460;
 const HUB_X = W / 2;
@@ -149,12 +143,6 @@ export function RouteFlow({
               <li key={surface} className="agi-rf-node agi-rf-node--surface">
                 {surface}
               </li>
-            ))}
-          </ul>
-
-          <ul className="agi-rf-modes" aria-hidden="true">
-            {MODE_LANES.map((lane) => (
-              <li key={lane}>{lane}</li>
             ))}
           </ul>
         </div>
