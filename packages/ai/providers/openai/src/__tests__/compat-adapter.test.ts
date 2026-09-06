@@ -128,6 +128,22 @@ describe('createOpenAICompatAdapter · request translation', () => {
     });
   });
 
+  it('carries every extraBody field on the wire, the way a marketplace minimum discount travels', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createOpenAICompatAdapter(buildSpec(), {
+      apiKey: TEST_API_KEY,
+      extraBody: { min_discount_percent: 30 },
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return sseResponse([chunkEvent({ content: 'pong' })]);
+      },
+    });
+
+    await collect(adapter.stream(buildRequest(), new AbortController().signal));
+
+    expect(seenBody).toMatchObject({ model: TEST_MODEL_ID, min_discount_percent: 30 });
+  });
+
   it('routes through the caller baseUrl when one is supplied', async () => {
     const overrideBaseUrl = 'https://api.deepseek.com/v9';
     let seenUrl: string | undefined;

@@ -52,6 +52,44 @@ describe('classifyError', () => {
     expect(c.code).toBe('overloaded_503');
   });
 
+  it('classifies an exhausted free-tier-only allocation as quota_exhausted, never auth', () => {
+    const err = {
+      status: 403,
+      code: 'AllocationQuota.FreeTierOnly',
+      message: 'The free tier of the model has been exhausted.',
+    };
+    const c = classifyError(err);
+    expect(c.category).toBe('quota_exhausted');
+    expect(c.code).toBe('free_quota_exhausted');
+    expect(c.providerHint).toBe('free_tier_only');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
+  it('classifies an exceeded allocation quota on a 429 as quota_exhausted', () => {
+    const err = {
+      status: 429,
+      error: { code: 'Throttling.AllocationQuota' },
+      message: 'Allocated quota exceeded, please increase your quota limit.',
+    };
+    const c = classifyError(err);
+    expect(c.category).toBe('quota_exhausted');
+    expect(c.code).toBe('free_quota_exhausted');
+  });
+
+  it('classifies a marketplace refusing the minimum discount as capacity, not overload', () => {
+    const err = {
+      status: 503,
+      error: { code: 'min_discount_unavailable' },
+      message: 'No supply clears the requested discount.',
+    };
+    const c = classifyError(err);
+    expect(c.category).toBe('capacity_off_switch');
+    expect(c.code).toBe('min_discount_unavailable');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
   it('classifies 429 as rate_limit and reads retry-after', () => {
     const err = {
       status: 429,

@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 import freePoolsDocument from '@/config/free-pools.json';
 
-const QUOTA_WINDOWS = ['minute', 'hour', 'day', 'month'] as const;
+const QUOTA_WINDOWS = ['minute', 'hour', 'day', 'month', 'allocation'] as const;
+const ALLOCATION_WINDOW = 'allocation' satisfies (typeof QUOTA_WINDOWS)[number];
 const QUOTA_UNITS = ['requests', 'tokens', 'credits', 'neurons'] as const;
 const MIN_IDENTIFIER_LENGTH = 1;
 const MIN_QUOTA_LIMIT = 1;
@@ -18,23 +19,29 @@ const FreePoolTermsSchema = z.object({
   promptsExcludedFromTraining: z.boolean(),
 });
 
-const FreePoolEntrySchema = z.object({
-  routeId: z.string().min(MIN_IDENTIFIER_LENGTH),
-  poolId: z.string().min(MIN_IDENTIFIER_LENGTH),
-  terms: FreePoolTermsSchema,
-  evidenceUrl: z.string().url(),
-  reviewedBy: z.string().min(MIN_IDENTIFIER_LENGTH).nullable(),
-  verifiedAtMs: z.number().int().positive().nullable(),
-  expiresAtMs: z.number().int().positive().nullable(),
-  window: z.enum(QUOTA_WINDOWS),
-  limit: z.number().int().min(MIN_QUOTA_LIMIT),
-  unit: z.enum(QUOTA_UNITS),
-  hardStopsBeforePaid: z.boolean(),
-});
+const FreePoolEntrySchema = z
+  .object({
+    routeId: z.string().min(MIN_IDENTIFIER_LENGTH),
+    poolId: z.string().min(MIN_IDENTIFIER_LENGTH),
+    terms: FreePoolTermsSchema,
+    evidenceUrl: z.string().url(),
+    reviewedBy: z.string().min(MIN_IDENTIFIER_LENGTH).nullable(),
+    verifiedAtMs: z.number().int().positive().nullable(),
+    expiresAtMs: z.number().int().positive().nullable(),
+    window: z.enum(QUOTA_WINDOWS),
+    limit: z.number().int().min(MIN_QUOTA_LIMIT),
+    unit: z.enum(QUOTA_UNITS),
+    hardStopsBeforePaid: z.boolean(),
+  })
+  .refine((entry) => entry.window !== ALLOCATION_WINDOW || entry.expiresAtMs !== null, {
+    message: 'an allocation never resets, so it must carry the expiry that ends it',
+    path: ['expiresAtMs'],
+  });
 
 export const FreePoolsDocumentSchema = z.object({
   schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
   workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
+  notes: z.string().optional(),
   entries: z.array(FreePoolEntrySchema),
 });
 

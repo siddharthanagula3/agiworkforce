@@ -61,7 +61,8 @@ const REQUESTS_PER_SETTLED_TURN = 1;
 type QuotaWindow = FreePoolEntry['window'];
 type QuotaUnit = FreePoolEntry['unit'];
 
-const WINDOW_DURATION_MS: Readonly<Record<Exclude<QuotaWindow, 'month'>, number>> = {
+const ALLOCATION_WINDOW_START_MS = 0;
+const WINDOW_DURATION_MS: Readonly<Record<Exclude<QuotaWindow, 'month' | 'allocation'>, number>> = {
   minute: 60_000,
   hour: 60 * 60_000,
   day: 24 * 60 * 60_000,
@@ -155,6 +156,8 @@ export function providerOfRouteId(routeId: string): string {
 function windowStartMs(window: QuotaWindow, nowMs: number): number {
   const at = new Date(nowMs);
   switch (window) {
+    case 'allocation':
+      return ALLOCATION_WINDOW_START_MS;
     case 'month':
       return Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1);
     case 'day':
@@ -172,7 +175,8 @@ function windowStartMs(window: QuotaWindow, nowMs: number): number {
   }
 }
 
-function windowEndMs(window: QuotaWindow, startMs: number): number {
+function windowEndMs(window: QuotaWindow, startMs: number, expiresAtMs?: number): number {
+  if (window === 'allocation') return expiresAtMs ?? Number.MAX_SAFE_INTEGER;
   if (window === 'month') {
     const start = new Date(startMs);
     return Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1);
@@ -199,6 +203,7 @@ interface PoolAccount {
   unit: QuotaUnit;
   limit: number;
   hardStopsBeforePaid: boolean;
+  expiresAtMs?: number;
 }
 
 /**
@@ -220,6 +225,7 @@ function accountsByPool(entries: readonly FreePoolEntry[]): Map<string, PoolAcco
         unit: entry.unit,
         limit: entry.limit,
         hardStopsBeforePaid: entry.hardStopsBeforePaid,
+        ...(entry.expiresAtMs === null ? {} : { expiresAtMs: entry.expiresAtMs }),
       });
       continue;
     }
@@ -375,7 +381,7 @@ async function readRuntimeState(
         id: account.id,
         routeIds: account.routeIds,
         headroomFraction: clampHeadroom((account.limit - used) / account.limit),
-        resetsAtMs: windowEndMs(account.window, startMs),
+        resetsAtMs: windowEndMs(account.window, startMs, account.expiresAtMs),
         hardStopsBeforePaid: account.hardStopsBeforePaid,
       };
     });
@@ -450,7 +456,7 @@ export async function recordFreeLaneUsage(input: {
     await store
       .batch()
       .increment(key, units)
-      .expireAt(key, windowEndMs(entry.window, startMs))
+      .expireAt(key, windowEndMs(entry.window, startMs, entry.expiresAtMs ?? undefined))
       .exec();
   } catch (error) {
     logger.error(
@@ -572,7 +578,7 @@ async function markPoolSpent(
     await store
       .batch()
       .set(key, entry.limit)
-      .expireAt(key, windowEndMs(entry.window, startMs))
+      .expireAt(key, windowEndMs(entry.window, startMs, entry.expiresAtMs ?? undefined))
       .exec();
   } catch (error) {
     logger.error(
@@ -651,10 +657,6 @@ function routeHealthStore(): RouteHealthStore {
       provider: providerBreakerConfig,
       credential: resolveCredentialCooldownConfig(),
     },
-    // The provider breaker's threshold depends on which credential class
-    // governs THAT provider (`breaker-profiles.ts`): a local runtime like
-    // Ollama trips after two failures where a static-key provider tolerates
-    // twelve. Every other scope stays flat across ids.
     configFor: (scope, id) =>
       scope === 'provider' ? providerRouteHealthConfig(id, providerBreakerConfig) : undefined,
     boundedRead: async <T>(read: Promise<T>): Promise<T | null> => {
@@ -706,16 +708,6 @@ export async function recordRouteOutcome(
   await store.recordOutcome('provider', providerOfRouteId(routeId), { class: 'success' }, nowMs);
 }
 
-/**
- * Outcome memory for the whole PROVIDER breaker, not one route.
- *
- * A rejected or unfunded managed key answers for every route on its provider,
- * so recording it per route makes the next request walk them one refusal at a
- * time. This is the memory the failover loop consults before dispatch. Named
- * for the credential historically, callers here still pass a provider id,
- * AGI Workforce has exactly one managed credential per provider today, see
- * `recordCredentialCooldownOutcome` for the narrower per-credential scope.
- */
 export async function recordCredentialOutcome(
   credentialId: string,
   outcome: RouteOutcome,
@@ -731,13 +723,6 @@ export async function getCredentialHealthSnapshot(
   return routeHealthStore().snapshots('provider', credentialIds, nowMs);
 }
 
-/**
- * The credential cooldown scope: narrower than the provider breaker above,
- * one bad key or account cools down without parking every route the same
- * provider serves. Trips on `429` and non-terminal credential rejections
- * (`resilienceScopeForCategory` in `@agiworkforce/routing`), never on the
- * 408/5xx classes that belong to the provider breaker.
- */
 export async function recordCredentialCooldownOutcome(
   credentialId: string,
   outcome: RouteOutcome,
@@ -777,13 +762,6 @@ export async function getRouteHealthSnapshot(
   return snapshots;
 }
 
-/**
- * The three resilience scopes, read together, for whatever the router wants
- * to render alongside a routing decision (the route preview's candidates, a
- * resilience dashboard, a trace). Each id list is independent, so a caller
- * that only cares about one scope passes empty arrays for the other two
- * rather than paying for a fetch it will not use.
- */
 export interface ResilienceScopeSnapshot {
   provider: Readonly<Record<string, RouteHealthSnapshot>>;
   credential: Readonly<Record<string, RouteHealthSnapshot>>;
