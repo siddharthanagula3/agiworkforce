@@ -210,6 +210,7 @@ import {
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
+import { findInstalledDirectorySkill } from '@/features/plugins/server/directory/installed-skills';
 import { functionToolName } from './tool-loop-routing';
 import {
   generateManagedOfficeFile,
@@ -1510,6 +1511,13 @@ async function runMcpTool(
         const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
           availableTools,
         });
+        return { content: fallback.content, isError: fallback.isError };
+      }
+      const directorySkill = requestedSkillName
+        ? await findInstalledDirectorySkill(getNeonDb(), userId, requestedSkillName)
+        : null;
+      if (directorySkill) {
+        const fallback = executeSkillTool([directorySkill], toolCall.args, { availableTools });
         return { content: fallback.content, isError: fallback.isError };
       }
     }
