@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Fable (architect)
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 The living evidence of what is happening. One screen, updated when state
 changes, never a narrative. Older detail lives in the decision model
@@ -19,16 +19,16 @@ behaviour inspected by the lead, not tests.
 
 ## Release blockers (web)
 
-| Blocker                                                  | Owner       | State                              |
-| -------------------------------------------------------- | ----------- | ---------------------------------- |
-| Migrations 0159 to 0174 applied in production            | founder     | drafts proven locally, not applied |
-| Production key value quota (rate limits fail closed)     | founder     | decision pending                   |
-| Separate Google key for local and QA                     | founder     | pending                            |
-| Stripe live configuration                                | founder     | pending                            |
-| Model selector catalogue and derived admission (D-13)    | engineering | in flight                          |
-| Dead UI sweep of the product routes (truth map below)    | lead        | started 2026-09-05                 |
-| Admin console reachable with a workspace bearing account | founder     | QA account has no workspace        |
-| Public pages at the landing's standard (founder gate)    | lead        | systemic restyle landed 2026-09-05 |
+| Blocker                                                  | Owner       | State                                                                                                      |
+| -------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| Migrations 0159 to 0174 applied in production            | founder     | drafts proven locally, not applied                                                                         |
+| Production key value quota (rate limits fail closed)     | founder     | decision pending                                                                                           |
+| Separate Google key for local and QA                     | founder     | pending                                                                                                    |
+| Stripe live configuration                                | founder     | pending                                                                                                    |
+| Model selector catalogue and derived admission (D-13)    | engineering | landed 2026-09-05; developer rail, route card, composer anchoring and phone sheet landed 2026-09-06 (D-16) |
+| Dead UI sweep of the product routes (truth map below)    | lead        | started 2026-09-05                                                                                         |
+| Admin console reachable with a workspace bearing account | founder     | QA account has no workspace                                                                                |
+| Public pages at the landing's standard (founder gate)    | lead        | systemic restyle landed 2026-09-05                                                                         |
 
 ## UI surfaces audited (rendered, by the lead)
 
@@ -155,6 +155,22 @@ green; web span scrubbing landed (2cc92999e); vendor adapter allowlist is config
 | CLI         | blocked on NPM_TOKEN and binary signing                        |
 | Chrome ext  | blocked on Web Store publisher identity                        |
 | VS Code ext | blocked on Entra ids and Marketplace grant                     |
+
+## Founder actions to unlock provider routes (2026-09-06)
+
+Everything below is wired and inert until the named action happens. Each row says where to act
+and how to verify it.
+
+| Action                                                                                                                                                  | Where                                                                                                                                                       | Verify                                                                                                                                                           | Unblocks                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Turn on "Free quota only" for each Model Studio model the lane may use, then set `hardStopsBeforePaid: true` and `reviewedBy`/`verifiedAtMs` on its row | home.qwencloud Benefits page, per model; `apps/web/config/free-pools.json`                                                                                  | `pnpm check:free-pools` reports the row verified; a Free-plan turn shows `X-AGI-Route-Lane: free` on that route                                                  | Alibaba promotional allocations serving the company free lane without pay-as-you-go spill    |
+| Confirm the four free-pool terms for Model Studio (commercial use, third-party serving, proxying, no training)                                          | Model Studio service agreement and the training-data disclosure linked in the row                                                                           | Row `terms` unchanged, `reviewedBy` set                                                                                                                          | Same as above                                                                                |
+| Decide DeepInfra terms (its terms bar making the Services available to third parties except as permitted)                                               | deepinfra.com/terms, DeepInfra sales; then `AGI_DEEPINFRA_BASE_URL`, `AGI_DEEPINFRA_API_KEY` in Vercel env and `.env.local`, `AGI_ROUTING_GATEWAY_ROUTES=1` | Flip the routes' `commercialStatus` to `agi_direct` in `model-routes.json`, regenerate; `/operator` Routes tab shows Credential configured                       | The cheapest verified DeepSeek flash-family and open-weight OpenAI routes on managed traffic |
+| Decide Together terms and enable organisation zero data retention                                                                                       | together.ai/terms-of-service; org privacy settings; `AGI_TOGETHER_*` env                                                                                    | As above; governance row `zeroDataRetentionAvailability` stays `on_request` until the org setting is confirmed                                                   | Redundant open-model capacity                                                                |
+| Decide Novita terms                                                                                                                                     | novita.ai/legal/terms-of-service; `AGI_NOVITA_*` env                                                                                                        | As above                                                                                                                                                         | Cheapest open-weight OpenAI and NVIDIA routes                                                |
+| Fund Cheaper Inference and add `AGI_CHEAPERINFERENCE_BASE_URL` and `AGI_CHEAPERINFERENCE_API_KEY`                                                       | platform.cheaperinference.com; Vercel env                                                                                                                   | First live request confirms `min_discount_percent` is honoured (the field is documented in prose, absent from the OpenAPI schema); then decide commercial status | Discounted proprietary-model capacity at a guaranteed ceiling                                |
+| Add the QA user to `AGI_PLATFORM_ADMIN_USER_IDS` on the local dev server                                                                                | `.env.local`, restart the dev server                                                                                                                        | `/operator` renders for the QA account; the Routes tab shows real registry rows                                                                                  | Rendered verification of the operator route table on real data                               |
+| Pair the Claude in Chrome extension with the current account                                                                                            | Chrome extension sign in                                                                                                                                    | `list_connected_browsers` returns the browser                                                                                                                    | Browser-driven QA from the lead session without Playwright                                   |
 
 ## External blockers
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 A gateway is any OpenAI Chat Completions, OpenAI Responses, or Anthropic
 Messages compatible endpoint: a self-hosted proxy, an aggregator, a corporate
@@ -87,10 +87,24 @@ a reseller agreement confirmed by the founder, not an engineering judgement.
 That single field is the last step between a cheaper route and live managed
 traffic; everything above it is already wired.
 
-The live example: `cheaperinference` and `cheaperinference_anthropic` are
-gateway-backed harnesses whose routes price 30 percent under their models'
-native routes. They sit in the `managed-text` harness group and are refused
-today only by that commercial field and by the flag.
+The live examples: `cheaperinference`, `cheaperinference_anthropic`,
+`deepinfra`, `together` and `novita` are gateway-backed harnesses in the
+`managed-text` group, refused today only by that commercial field and by the
+flag.
+
+## Discount policies
+
+A marketplace gateway may declare a `discount` block: the request body field
+that carries the minimum discount and the minimum percent the product accepts,
+with a source and a verification date. A route on that gateway declares
+`"discount": "gateway"` instead of a price; the compiler prices it at the
+canonical model's list price reduced by the minimum percent and records the
+list price beside it under `route.discount.listPricing`. `createGatewayAdapter`
+sends the field on every request, so the gateway either bills at or under that
+ceiling or refuses with its documented capacity error, which
+`@agiworkforce/provider-runtime` classifies as `capacity_off_switch` and the
+failover plan rotates past. No observed discount is ever written into the
+catalog.
 
 ## The five steps
 
