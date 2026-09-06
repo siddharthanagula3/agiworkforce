@@ -37,7 +37,7 @@ export interface AuthRedirects {
 
 export interface AuthClient {
   isReady: boolean;
-  startWithEmail: (email: string, termsAccepted: boolean) => Promise<AuthResult>;
+  startWithEmail: (email: string) => Promise<AuthResult>;
   submitPassword: (password: string) => Promise<AuthResult>;
   submitCode: (code: string, purpose: AuthCodePurpose) => Promise<AuthResult>;
   resendCode: (purpose: AuthCodePurpose) => Promise<AuthResult>;
@@ -45,7 +45,7 @@ export interface AuthClient {
   submitNewPassword: (password: string) => Promise<AuthResult>;
   startPasswordReset: () => Promise<AuthResult>;
   startEmailCode: () => Promise<AuthResult>;
-  startProvider: (provider: AuthProviderId, termsAccepted: boolean) => Promise<AuthResult>;
+  startProvider: (provider: AuthProviderId) => Promise<AuthResult>;
   restart: () => Promise<void>;
 }
 
@@ -54,5 +54,4 @@ export const AUTH_RESEND_COOLDOWN_SECONDS = 30;
 
 export const NO_ACCOUNT_FOR_EMAIL = 'No account uses this email.';
 export const ACCOUNT_ALREADY_EXISTS = 'This email already has an account.';
-export const TERMS_NOT_ACCEPTED = 'Accept the terms to create an account.';
 export const UNEXPECTED_FAILURE = 'Something went wrong. Try again.';
