@@ -67,7 +67,7 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
-  margin-top: 34px;
+  margin-top: 22px;
 }
 [data-design='agi'] .agi-fl-cta-row--sm {
   flex-wrap: wrap;
@@ -2513,7 +2513,7 @@
   align-items: center;
   gap: 10px;
   width: fit-content;
-  margin: 6px 0 26px;
+  margin: 6px 0 0;
   padding: 6px 14px 6px 6px;
   border: 1px solid var(--agi-rule-strong);
   border-radius: 999px;
