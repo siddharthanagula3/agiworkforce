@@ -105,7 +105,7 @@ describe('media mode', () => {
       useChatViewStore.getState().setMediaModel('video', nonVideoModel!.id);
 
       expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
-      expect(resolveMediaModelId('video')).not.toBe(genericCapabilityModel!.id);
+      expect(resolveMediaModelId('video')).not.toBe(nonVideoModel!.id);
     });
 
     it('rejects a persisted non-live preview video model', () => {
