@@ -11,7 +11,9 @@ import { createError } from '@/lib/errors';
 import {
   isMissingPluginMarketplaceSchema,
   listMarketplaceEntriesForUser,
+  listMarketplaceSources,
 } from '@/lib/services/plugin-marketplace-service';
+import { isDirectoryMarketplaceRepository } from '@/features/plugins/server/directory/official-marketplace';
 import type { PluginMarketplaceEntryListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -23,8 +25,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   if (limited) return limited;
 
   let entries;
+  let sources;
   try {
-    entries = await listMarketplaceEntriesForUser(getNeonDb(), userId);
+    [entries, sources] = await Promise.all([
+      listMarketplaceEntriesForUser(getNeonDb(), userId),
+      listMarketplaceSources(getNeonDb(), userId),
+    ]);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
       throw createError.serviceUnavailable(
@@ -34,7 +40,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
-  const body: PluginMarketplaceEntryListResponse = { entries };
+  const hiddenSourceIds = new Set(
+    sources
+      .filter((source) => isDirectoryMarketplaceRepository(source.repositoryUrl))
+      .map((source) => source.id),
+  );
+  const body: PluginMarketplaceEntryListResponse = {
+    entries: entries.filter((entry) => !hiddenSourceIds.has(entry.sourceId)),
+  };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 

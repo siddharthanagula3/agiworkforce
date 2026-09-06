@@ -23,6 +23,7 @@ import {
 } from '@/lib/services/user-skill-service';
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 
@@ -51,11 +52,12 @@ async function handleListSkills(request: NextRequest) {
   }
   const canAuthorSkills = userSkillAuthoringEnabled();
   const userSkills = canAuthorSkills ? await listUserSkills(getNeonDb(), userId) : [];
+  const directorySkills = await listInstalledDirectorySkills(getNeonDb(), userId);
   let body;
   try {
     body = ManagedSkillsResponseSchema.parse({
       skills: [
-        ...skills.map((s) => ({
+        ...[...skills, ...directorySkills].map((s) => ({
           name: s.name,
           description: s.description,
           source: s.source,

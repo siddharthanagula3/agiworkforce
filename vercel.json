@@ -75,6 +75,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/refresh-plugin-directory",
+      "schedule": "35 6 * * *"
+    },
+    {
       "path": "/api/cron/refresh-connector-directory",
       "schedule": "15 6 * * *"
     },

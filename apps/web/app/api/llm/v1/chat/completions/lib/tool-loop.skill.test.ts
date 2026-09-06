@@ -28,6 +28,11 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
 const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));
 vi.mock('@/lib/services/user-skill-service', () => userSkillService);
 
+const directorySkills = vi.hoisted(() => ({
+  findInstalledDirectorySkill: vi.fn(async () => null as Skill | null),
+}));
+vi.mock('@/features/plugins/server/directory/installed-skills', () => directorySkills);
+
 const neonAdapter = vi.hoisted(() => ({ query: vi.fn(async (_sql: string) => [] as unknown[]) }));
 vi.mock('@/lib/server/neon-db', () => {
   const emptyAdapter = {
@@ -318,6 +323,36 @@ describe('managed Cloud Skill tool loop', () => {
     expect(output).toContain('my-standup-notes');
     expect(output).toContain('Lead with blockers, then yesterday, then today.');
     expect(output).toContain('Notes formatted.');
+  });
+
+  it('loads a skill from an installed directory plugin after the caller skills miss', async () => {
+    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
+    directorySkills.findInstalledDirectorySkill.mockResolvedValueOnce({
+      name: 'session-report',
+      description: 'Generate a session report.',
+      body: 'Summarise tokens, cache hits and subagents.',
+      contentHash: 'sha256:0000',
+      filePath: 'plugins/session-report/skills/session-report/SKILL.md',
+      source: 'extra',
+      metadata: {},
+      frontmatter: { plugin: 'session-report' },
+    });
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('session-report'))
+      .mockResolvedValueOnce(finalAnswerStream('Report ready.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(directorySkills.findInstalledDirectorySkill).toHaveBeenCalledWith(
+      expect.anything(),
+      'caller-1',
+      'session-report',
+    );
+    expect(output).toContain('"status":"completed"');
+    expect(output).toContain('Summarise tokens, cache hits and subagents.');
+    expect(output).toContain('Report ready.');
   });
 
   it('still fails a name that matches neither the managed catalog nor the caller skills', async () => {

@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getPluginRegistryEntry } from '@/lib/services/plugin-registry-service';
 import { getManagedSkillPluginOwners } from '@/lib/services/skill-catalog-service';
+import { findDirectoryEntry } from '@/features/plugins/server/directory/catalog';
 import type { PluginRegistryEntryResponse } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
@@ -43,10 +44,21 @@ export async function GET(
   try {
     const found = await getPluginRegistryEntry(getNeonDb(), parsed.data.id);
     if (!found) {
-      return NextResponse.json(
-        { error: { code: 'NOT_FOUND', message: 'Plugin not found' } },
-        { status: 404, headers },
-      );
+      const directoryEntry = await findDirectoryEntry(parsed.data.id);
+      if (!directoryEntry) {
+        return NextResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Plugin not found' } },
+          { status: 404, headers },
+        );
+      }
+      const directoryBody: PluginRegistryEntryResponse = { entry: directoryEntry, manifest: null };
+      return NextResponse.json(directoryBody, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+          ...headers,
+        },
+      });
     }
 
     const skillOwners = await getManagedSkillPluginOwners();

@@ -70,6 +70,18 @@ export async function listMarketplaceInstallations(
   return rows.map(mapInstallation);
 }
 
+export async function getMarketplaceInstallation(
+  db: DatabaseAdapter,
+  userId: string,
+  installationId: string,
+): Promise<PluginMarketplaceInstallation | null> {
+  const rows = await db.query<PluginMarketplaceInstallationRow>(
+    `${INSTALLATION_SELECT} where installation.id = $1 and installation.user_id = $2`,
+    [installationId, userId],
+  );
+  return rows[0] ? mapInstallation(rows[0]) : null;
+}
+
 export async function installMarketplaceEntry(
   db: DatabaseAdapter,
   userId: string,

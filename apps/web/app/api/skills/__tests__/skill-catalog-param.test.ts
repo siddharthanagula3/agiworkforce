@@ -48,6 +48,9 @@ vi.mock('@/lib/services/user-skill-authoring', () => ({
   userSkillAuthoringEnabled: mockAuthoringEnabled,
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
 }));
+vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  listInstalledDirectorySkills: vi.fn(async () => []),
+}));
 
 import { GET } from '../route';
 

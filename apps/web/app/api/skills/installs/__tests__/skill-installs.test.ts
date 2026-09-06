@@ -18,6 +18,9 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));
+vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  listInstalledDirectorySkills: vi.fn(async () => []),
+}));
 
 interface FakeDb {
   query: () => Promise<Array<{ settings: Record<string, unknown> }>>;

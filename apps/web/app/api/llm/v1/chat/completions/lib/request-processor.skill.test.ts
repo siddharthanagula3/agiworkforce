@@ -6,8 +6,12 @@ import type { UserSkillRecord } from '@/lib/services/user-skill-service';
 vi.mock('@/lib/services/user-skill-service', () => ({
   findUserSkillByName: vi.fn(),
 }));
+vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  listInstalledDirectorySkills: vi.fn(async () => []),
+}));
 
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
+import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import {
   applyManagedSkillSelection,
   ChatCompletionRequestSchema,
@@ -160,6 +164,23 @@ describe('user-owned skill fallback', () => {
     });
     expect(applyManagedSkillSelection(request, catalog)).toEqual({ ok: true });
     expect(JSON.stringify(request.messages)).not.toContain('MY STANDUP SKILL BODY');
+  });
+
+  it('falls back to the installed directory skills after the account skills', async () => {
+    mockedFindUserSkillByName.mockClear();
+    mockedFindUserSkillByName.mockResolvedValueOnce(null);
+    const directorySkill = { ...skill(), name: 'background-removal', source: 'extra' as const };
+    vi.mocked(listInstalledDirectorySkills).mockResolvedValueOnce([directorySkill]);
+    const managedCatalog = [skill()];
+
+    const catalog = await resolveManagedSkillCatalogWithUserFallback(
+      'background-removal',
+      managedCatalog,
+      { db: fakeDb, userId: 'user-1' },
+    );
+
+    expect(listInstalledDirectorySkills).toHaveBeenCalledWith(fakeDb, 'user-1');
+    expect(catalog.map((entry) => entry.name)).toEqual([skill().name, 'background-removal']);
   });
 
   it('keeps the not-found result when the name matches neither catalog', async () => {

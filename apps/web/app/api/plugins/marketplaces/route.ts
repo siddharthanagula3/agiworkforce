@@ -17,6 +17,7 @@ import {
   listMarketplaceSources,
   registerMarketplaceSource,
 } from '@/lib/services/plugin-marketplace-service';
+import { isDirectoryMarketplaceRepository } from '@/features/plugins/server/directory/official-marketplace';
 import type { PluginMarketplaceSourceListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -47,7 +48,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
-  const body: PluginMarketplaceSourceListResponse = { sources };
+  const body: PluginMarketplaceSourceListResponse = {
+    sources: sources.filter((source) => !isDirectoryMarketplaceRepository(source.repositoryUrl)),
+  };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
