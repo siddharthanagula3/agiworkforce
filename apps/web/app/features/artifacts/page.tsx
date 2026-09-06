@@ -4,12 +4,12 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
-  ProductFrame,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
 import { Header } from '@shared/components/layout/Header';
+import { ArtifactsWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export const metadata = buildMetadata({
@@ -91,24 +91,7 @@ export default function ArtifactsFeaturePage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/gallery</span>
-                </div>
-                <ProductFrame
-                  src="/product/artifacts-library-dark.png"
-                  srcLight="/product/artifacts-library-light.png"
-                  alt="The AGI library listing generated artifacts with their type, size, and route labels"
-                  width={2880}
-                  height={1800}
-                  priority
-                />
-              </div>
+              <ArtifactsWindow />
             </div>
           </div>
         </section>

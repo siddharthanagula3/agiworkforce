@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { WebWindow } from '@/features/marketing/components/DeviceMockups';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
@@ -83,24 +84,7 @@ export default function AiChatFeaturePage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat</span>
-                </div>
-                <ProductFrame
-                  src="/product/hero-thread-dark.png"
-                  srcLight="/product/hero-thread-light.png"
-                  alt="A working AGI chat thread in the browser"
-                  width={2392}
-                  height={1244}
-                  priority
-                />
-              </div>
+              <WebWindow />
             </div>
           </div>
         </section>

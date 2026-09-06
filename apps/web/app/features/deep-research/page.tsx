@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
+import { ResearchWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
@@ -62,24 +63,7 @@ export default function DeepResearchPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span>agiworkforce.com/chat</span>
-                </div>
-                <ProductFrame
-                  src="/product/deep-research-report-dark.png"
-                  srcLight="/product/deep-research-report-light.png"
-                  alt="A finished AGI deep research report with numbered inline citations and a sources list"
-                  width={2392}
-                  height={1402}
-                  priority
-                />
-              </div>
+              <ResearchWindow />
             </div>
           </div>
         </section>

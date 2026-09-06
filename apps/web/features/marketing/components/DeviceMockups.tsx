@@ -34,7 +34,7 @@ interface RouteReceipt {
   cost: string;
 }
 
-const ROUTE_RECEIPTS: Record<RouteMode, RouteReceipt> = {
+export const ROUTE_RECEIPTS: Record<RouteMode, RouteReceipt> = {
   local: { lane: 'Local', provider: LOCAL_RUNTIME_LABEL, cost: '$0.00' },
   byok: { lane: 'BYOK', provider: 'your provider', cost: 'billed to your key' },
   managed: { lane: 'AGI Cloud', provider: 'Auto route', cost: '$0.004' },
@@ -84,7 +84,7 @@ function WindowBar({ title, badge }: { title: string; badge?: string }) {
   );
 }
 
-function Receipt({
+export function Receipt({
   route,
   tokensIn,
   tokensOut,
@@ -108,7 +108,15 @@ function Receipt({
   );
 }
 
-function ToolRow({ state, label, meta }: { state: 'done' | 'wait'; label: string; meta: string }) {
+export function ToolRow({
+  state,
+  label,
+  meta,
+}: {
+  state: 'done' | 'wait';
+  label: string;
+  meta: string;
+}) {
   return (
     <p className="agi-mk-tool" data-state={state}>
       <i>{state === 'done' ? '✓' : '●'}</i>
@@ -750,6 +758,31 @@ export function PhoneDevice({
             </div>
           </div>
         </div>
+      </div>
+    </DeviceRoot>
+  );
+}
+
+export function AppWindow({
+  title,
+  badge,
+  label,
+  type = 'web',
+  className,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  label: string;
+  type?: DeviceType;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <DeviceRoot type={type} label={label} className={className}>
+      <WindowBar title={title} badge={badge} />
+      <div className="agi-dev-body agi-sc" aria-hidden="true">
+        {children}
       </div>
     </DeviceRoot>
   );
