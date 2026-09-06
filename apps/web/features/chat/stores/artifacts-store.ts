@@ -24,6 +24,18 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 const MAX_RETAINED_ARTIFACTS = 200;
 const MAX_ARTIFACTS_PER_PUSH = 500;
 
+/**
+ * Below this width the panel is a full-screen overlay, so opening it for the
+ * reader buries the transcript they were reading under a document they never
+ * asked to see. The transcript's artifact card is the way in on a phone.
+ */
+export const ARTIFACT_PANEL_OVERLAY_QUERY = '(max-width: 639px)';
+
+function isArtifactPanelOverlayViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia(ARTIFACT_PANEL_OVERLAY_QUERY).matches;
+}
+
 /** @internal The shared vanilla store: the live engine for collection + UI state. */
 export const _sharedArtifactStore = createArtifactStore({
   maxArtifacts: MAX_RETAINED_ARTIFACTS,
@@ -346,6 +358,7 @@ type ArtifactsStoreReturn = {
   selectArtifact: (id: string | null) => void;
   togglePanel: () => void;
   setPanelOpen: (open: boolean) => void;
+  autoOpenPanel: () => void;
   clearArtifacts: () => void;
   clearArtifactsForMessage: (messageId: string) => void;
   clearArtifactsForConversation: (conversationId: string) => void;
@@ -457,6 +470,11 @@ const actions = {
 
   setPanelOpen(open: boolean): void {
     _sharedArtifactStore.getState().setPanelOpen(open);
+  },
+
+  autoOpenPanel(): void {
+    if (isArtifactPanelOverlayViewport()) return;
+    _sharedArtifactStore.getState().setPanelOpen(true);
   },
 
   clearArtifacts(): void {

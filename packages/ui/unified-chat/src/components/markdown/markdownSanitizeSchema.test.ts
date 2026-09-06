@@ -18,6 +18,15 @@ describe('MARKDOWN_SANITIZE_SCHEMA', () => {
     expect(hrefProtocols).not.toContain('data');
   });
 
+  it('names checked on input, so narrowing the wildcard list cannot uncheck a completed task item', () => {
+    const inputAttributes = MARKDOWN_SANITIZE_SCHEMA.attributes?.['input'] ?? [];
+    expect(inputAttributes).toContain('checked');
+    expect(inputAttributes).toEqual(
+      expect.arrayContaining(defaultSchema.attributes?.['input'] ?? []),
+    );
+    expect(defaultSchema.attributes?.['input'] ?? []).not.toContain('checked');
+  });
+
   it('keeps the language/math className allow-list for code/span/div', () => {
     expect(MARKDOWN_SANITIZE_SCHEMA.attributes?.['code']).toBeDefined();
     expect(MARKDOWN_SANITIZE_SCHEMA.attributes?.['img']).toContain('loading');

@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
-import { useArtifactsStore } from './artifacts-store';
+import { ARTIFACT_PANEL_OVERLAY_QUERY, useArtifactsStore } from './artifacts-store';
 
 function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
   return {
@@ -403,5 +403,45 @@ describe('local artifact push batching', () => {
     });
 
     expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+});
+
+describe('artifact panel auto-open', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function stubViewport(overlay: boolean): void {
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query === ARTIFACT_PANEL_OVERLAY_QUERY ? overlay : !overlay,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+  }
+
+  beforeEach(() => {
+    useArtifactsStore.getState().setPanelOpen(false);
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('opens the panel on a viewport wide enough to show it beside the transcript', () => {
+    stubViewport(false);
+    useArtifactsStore.getState().autoOpenPanel();
+    expect(useArtifactsStore.getState().panelOpen).toBe(true);
+  });
+
+  it('leaves the panel closed where it would cover the whole screen', () => {
+    stubViewport(true);
+    useArtifactsStore.getState().autoOpenPanel();
+    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+  });
+
+  it('still opens the panel when the reader asks for it on a phone', () => {
+    stubViewport(true);
+    useArtifactsStore.getState().setPanelOpen(true);
+    expect(useArtifactsStore.getState().panelOpen).toBe(true);
   });
 });

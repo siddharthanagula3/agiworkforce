@@ -12,7 +12,14 @@ describe('message content direction', () => {
   });
 
   it('aligns with a logical property so alignment follows direction', () => {
-    expect(SOURCE).toContain('break-words overflow-wrap-anywhere text-start');
-    expect(SOURCE).not.toContain('break-words overflow-wrap-anywhere text-left');
+    expect(SOURCE).toContain('break-words text-start');
+    expect(SOURCE).not.toContain('break-words text-left');
+  });
+
+  // `overflow-wrap-anywhere` was never a Tailwind utility, so it emitted no CSS
+  // and a long URL in a `w-fit` user bubble overflowed its column.
+  it('wraps the user bubble with a utility Tailwind actually generates', () => {
+    expect(SOURCE).toContain("isUser && 'user-bubble wrap-anywhere'");
+    expect(SOURCE).not.toContain('overflow-wrap-anywhere');
   });
 });
