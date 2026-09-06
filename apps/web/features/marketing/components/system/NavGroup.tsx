@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import type { NavGroupDefinition } from './nav';
 
@@ -8,6 +9,10 @@ const CLOSE_DELAY_MS = 140;
 
 export function NavGroup({ group }: { group: NavGroupDefinition }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname() ?? '';
+  const current = group.items.some(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -42,6 +47,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
     <div
       className="agi-ds-navgroup"
       data-open={open ? 'true' : undefined}
+      data-current={current ? 'true' : undefined}
       onMouseEnter={() => {
         cancelClose();
         setOpen(true);
