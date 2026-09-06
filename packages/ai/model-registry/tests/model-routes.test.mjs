@@ -153,10 +153,37 @@ test('a declared additional route compiles to a second priced route on the same 
     assert.equal(route.providerModelId, declaration.upstreamModelId);
     assert.equal(route.cacheClass, declaration.cacheClass);
     assert.equal(route.commercialStatus, declaration.commercialStatus);
-    assert.equal(route.pricing.inputPerMillion, declaration.pricing.inputPerMillion);
-    assert.equal(route.pricing.outputPerMillion, declaration.pricing.outputPerMillion);
-    assert.equal(route.pricing.cacheReadPerMillion, declaration.pricing.cacheReadPerMillion);
-    assert.equal(route.pricing.cacheWritePerMillion, declaration.pricing.cacheWritePerMillion);
+    if (declaration.discount === undefined) {
+      assert.equal(route.discount, undefined);
+      assert.equal(route.pricing.inputPerMillion, declaration.pricing.inputPerMillion);
+      assert.equal(route.pricing.outputPerMillion, declaration.pricing.outputPerMillion);
+      assert.equal(route.pricing.cacheReadPerMillion, declaration.pricing.cacheReadPerMillion);
+      assert.equal(
+        route.pricing.cacheWritePerMillion,
+        declaration.pricing.cacheWritePerMillion ??
+          (declaration.cacheClass === 'provider_implicit_prompt_cache'
+            ? declaration.pricing.inputPerMillion
+            : undefined),
+      );
+    } else {
+      const harness = harnesses[route.harnessId];
+      const gateway = registry.gateways[harness.gatewayId];
+      assert.ok(gateway?.discount, `${routeId} names a gateway discount policy`);
+      const factor = (100 - gateway.discount.minPercent) / 100;
+      const list = registry.pricing[modelKey];
+      assert.equal(route.discount.minPercent, gateway.discount.minPercent);
+      assert.equal(route.discount.requestField, gateway.discount.requestField);
+      assert.equal(route.discount.listPricing.inputPerMillion, list.inputPerMillion);
+      assert.equal(
+        route.pricing.inputPerMillion,
+        Number((list.inputPerMillion * factor).toFixed(6)),
+      );
+      assert.equal(
+        route.pricing.outputPerMillion,
+        Number((list.outputPerMillion * factor).toFixed(6)),
+      );
+      assert.ok(route.pricing.inputPerMillion < list.inputPerMillion);
+    }
     assert.notEqual(
       route.provider,
       registry.models[modelKey].identity.provider,
@@ -263,4 +290,24 @@ test('every declared compute-pricing entry carries a known unit, a positive rate
 test('e2b sandbox compute pricing is declared in the registry, not a literal in compute-metering.ts', () => {
   assert.ok(registry.computePricing.e2b, 'e2b must have a compute-pricing entry');
   assert.equal(registry.computePricing.e2b.ratePerUnit, 0.000014);
+});
+
+test('a marketplace route never bills above its list price and always names its ceiling', () => {
+  const discounted = Object.entries(registry.routes).filter(([, route]) => route.discount);
+  assert.ok(discounted.length > 0, 'the catalog must exercise at least one discount route');
+  for (const [routeId, route] of discounted) {
+    assert.ok(route.discount.minPercent > 0 && route.discount.minPercent < 100, routeId);
+    assert.ok(route.discount.source.startsWith('https://'), routeId);
+    for (const field of ['inputPerMillion', 'outputPerMillion']) {
+      assert.ok(route.pricing[field] <= route.discount.listPricing[field], `${routeId} ${field}`);
+    }
+  }
+});
+
+test('a marketplace or third-party host stays experimental until its commercial terms are confirmed', () => {
+  for (const [routeId, route] of Object.entries(registry.routes)) {
+    if (!['deepinfra', 'together', 'novita', 'cheaperinference'].includes(route.provider)) continue;
+    assert.equal(route.commercialStatus, 'experimental_only', routeId);
+    assert.ok(!route.trustModes.includes('byok'), routeId);
+  }
 });

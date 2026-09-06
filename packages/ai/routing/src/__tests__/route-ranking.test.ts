@@ -1,4 +1,8 @@
-import { modelRegistry } from '@agiworkforce/model-registry';
+import {
+  LIFECYCLE_STAGES,
+  lifecycleStageAtOrAfter,
+  modelRegistry,
+} from '@agiworkforce/model-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -140,7 +144,11 @@ async function resolveWithRegistry(
   const registry = buildSyntheticRegistry();
   mutate?.(registry);
   vi.resetModules();
-  vi.doMock('@agiworkforce/model-registry', () => ({ modelRegistry: registry }));
+  vi.doMock('@agiworkforce/model-registry', () => ({
+    modelRegistry: registry,
+    LIFECYCLE_STAGES,
+    lifecycleStageAtOrAfter,
+  }));
   const { resolveAutoRoute } = await import('../auto');
   return resolveAutoRoute(request);
 }
