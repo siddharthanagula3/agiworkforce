@@ -52,6 +52,28 @@ describe('parseDirectoryListing', () => {
     expect(worksWithFromLabel('Claude Cowork')).toBe('cowork');
     expect(worksWithFromLabel('Desktop')).toBeNull();
   });
+
+  it('lets no entity-encoded tag survive into a card name or description', () => {
+    const [card] = parseDirectoryListing(
+      listingHtml([
+        [
+          '<div role="listitem" class="stories_cms_item w-dyn-item">',
+          '<a href="/plugins/encoded" class="connector_cms_pill">',
+          '<h3 fs-list-field="name">&lt;script&gt;alert(1)&lt;/script&gt;Encoded</h3>',
+          '<div><p class="caption">',
+          '<b>real</b> and &lt;img src=x onerror=alert(2)&gt; encoded',
+          '</p></div>',
+          '</a></div>',
+        ].join(''),
+      ]),
+    );
+    expect(card?.name).toBe('alert(1)Encoded');
+    expect(card?.description).toBe('real and encoded');
+    for (const field of [card?.name ?? '', card?.description ?? '']) {
+      expect(field).not.toContain('<');
+      expect(field).not.toContain('>');
+    }
+  });
 });
 
 describe('parseDirectoryDetail', () => {

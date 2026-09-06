@@ -30,6 +30,8 @@ const { IdentityConfigError } = await import('../types');
 
 const SECRET = 'sk_test_secret';
 const PARTIES = ['https://app.test'];
+const PADDING_RUN_LENGTH = 100_000;
+const PADDING_BUDGET_MS = 1_000;
 
 function providerWith(verify: (token: string, options: unknown) => Promise<unknown>) {
   return new ClerkIdentityProvider({
@@ -279,6 +281,16 @@ describe('middleware support', () => {
     expect(clerkFrontendApiOrigin('not-a-key')).toBeNull();
     expect(clerkFrontendApiOrigin(`pk_live_${btoa('not a host')}`)).toBeNull();
     expect(clerkFrontendApiOrigin(undefined)).toBeNull();
+  });
+
+  it('strips a long padding run promptly instead of backtracking over it', () => {
+    const run = '$'.repeat(PADDING_RUN_LENGTH);
+    const started = Date.now();
+    expect(clerkFrontendApiOrigin(`pk_live_${btoa(`${run}x`)}`)).toBeNull();
+    expect(clerkFrontendApiOrigin(`pk_live_${btoa(`clerk.example.com${run}`)}`)).toBe(
+      'https://clerk.example.com',
+    );
+    expect(Date.now() - started).toBeLessThan(PADDING_BUDGET_MS);
   });
 
   it('puts the frontend api origin first and telemetry only on connect', () => {

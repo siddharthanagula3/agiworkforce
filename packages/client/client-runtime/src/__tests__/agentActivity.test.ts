@@ -8,6 +8,10 @@ import {
 } from '../agentActivity';
 import type { AgentActivityEntry, AgentActivityToolEntry } from '../agentActivity';
 
+const UNAVAILABLE_PREFIX = 'Code execution is unavailable for this request';
+const UNAVAILABLE_PADDING_LENGTH = 100_000;
+const UNAVAILABLE_BUDGET_MS = 1_000;
+
 function isToolEntry(entry: AgentActivityEntry | undefined): entry is AgentActivityToolEntry {
   return entry?.kind === 'tool';
 }
@@ -697,5 +701,16 @@ describe('unavailable tool notices', () => {
   it('leaves a genuine tool failure styled as a failure', () => {
     const entry = endWithError('TypeError: x is not a function');
     expect(entry.unavailable).toBe(false);
+  });
+
+  it('returns promptly on a long run of spaces that used to backtrack', () => {
+    const padding = ' '.repeat(UNAVAILABLE_PADDING_LENGTH);
+    const started = Date.now();
+    const unterminated = endWithError(`${UNAVAILABLE_PREFIX}:${padding}!`);
+    const terminated = endWithError(`${UNAVAILABLE_PREFIX}:${padding}no sandbox was free.`);
+    expect(Date.now() - started).toBeLessThan(UNAVAILABLE_BUDGET_MS);
+    expect(unterminated.unavailable).toBe(false);
+    expect(terminated.unavailable).toBe(true);
+    expect(terminated.summary).toBe('Code execution was not available: no sandbox was free.');
   });
 });

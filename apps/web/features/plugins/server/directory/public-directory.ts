@@ -22,6 +22,9 @@ const PAGE_PARAM_PATTERN = /\?([a-z0-9]+_page)=2\b/;
 const COPY_COMMAND_PATTERN = /data-copy="([^"]*)"/g;
 const GITHUB_LINK_PATTERN = /href="(https:\/\/github\.com\/[^"#?]+)"/g;
 const TAG_PATTERN = /<[^>]+>/g;
+const ANGLE_BRACKET_PATTERN = /[<>]/g;
+const WHITESPACE_RUN_PATTERN = /\s+/g;
+const TAG_STRIP_MAX_PASSES = 8;
 const ENTITY_PATTERN = /&(amp|quot|#x27|#39|lt|gt|nbsp);/g;
 const ENTITY_VALUES: Readonly<Record<string, string>> = {
   amp: '&',
@@ -33,13 +36,20 @@ const ENTITY_VALUES: Readonly<Record<string, string>> = {
   nbsp: ' ',
 };
 
+function stripTags(value: string): string {
+  let current = value;
+  for (let pass = 0; pass < TAG_STRIP_MAX_PASSES; pass += 1) {
+    const next = current.replace(TAG_PATTERN, '');
+    if (next === current) return current;
+    current = next;
+  }
+  return current.replace(ANGLE_BRACKET_PATTERN, '');
+}
+
 function decodeText(value: string | undefined): string {
   if (!value) return '';
-  return value
-    .replace(TAG_PATTERN, '')
-    .replace(ENTITY_PATTERN, (_, entity: string) => ENTITY_VALUES[entity] ?? '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const decoded = value.replace(ENTITY_PATTERN, (_, entity: string) => ENTITY_VALUES[entity] ?? '');
+  return stripTags(decoded).replace(WHITESPACE_RUN_PATTERN, ' ').trim();
 }
 
 function parseInstalls(raw: string | undefined): number | null {

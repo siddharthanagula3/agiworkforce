@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { scrubAttributes, scrubText } from '../text-scrub';
 
+const MAX_LENGTH = 256;
+const TRUNCATION = '…';
+const ADVERSARIAL_SEEDS = ['%', 'token'] as const;
+const ADVERSARIAL_LENGTH = 150_000;
+const ADVERSARIAL_BUDGET_MS = 1_000;
+
 describe('scrubText', () => {
   it('redacts a path, a url and a token shape in one message', () => {
     const message =
@@ -25,6 +31,21 @@ describe('scrubText', () => {
     const result = scrubText('a'.repeat(400));
     expect(result.length).toBeLessThan(400);
     expect(result.endsWith('…')).toBe(true);
+  });
+
+  it('returns promptly on runs that used to backtrack polynomially', () => {
+    for (const seed of ADVERSARIAL_SEEDS) {
+      const input = seed.repeat(Math.ceil(ADVERSARIAL_LENGTH / seed.length));
+      const started = Date.now();
+      const result = scrubText(input);
+      expect(Date.now() - started).toBeLessThan(ADVERSARIAL_BUDGET_MS);
+      expect(result).toBe(`${input.slice(0, MAX_LENGTH)}${TRUNCATION}`);
+    }
+  });
+
+  it('still redacts a realistic secret that follows a long benign run', () => {
+    const input = `${'token'.repeat(20)} sk-live-0123456789abcdef`;
+    expect(scrubText(input)).toBe(`${'token'.repeat(20)} [redacted]`);
   });
 });
 
