@@ -61,8 +61,8 @@ describe('plugin registry enums', () => {
     }
   });
 
-  it('keeps third-party in the publisher union even though launch is first-party only', () => {
-    expect(PLUGIN_PUBLISHER_KINDS).toEqual(['first-party', 'third-party']);
+  it('names the three publisher kinds the directory shows', () => {
+    expect(PLUGIN_PUBLISHER_KINDS).toEqual(['first-party', 'third-party', 'partner']);
   });
 
   it('enumerates the source kinds the plugin lists already display', () => {
