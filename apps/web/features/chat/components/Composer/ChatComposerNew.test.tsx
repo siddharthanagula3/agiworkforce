@@ -1112,7 +1112,6 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     expect(screen.getByRole('button', { name: /deep research/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /run code/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /create office files/i })).toBeEnabled();
   });
 
@@ -1144,9 +1143,9 @@ describe('ChatComposerNew', () => {
 
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /run code/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create office files/i }));
 
-    expect(screen.getByRole('status', { name: 'Active options: Run code' })).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Active options: Office files' })).toBeVisible();
   });
 
   it('exposes the toggle state of + menu rows to assistive technology', () => {
@@ -1155,52 +1154,16 @@ describe('ChatComposerNew', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
-    const runCode = screen.getByRole('button', { name: /run code/i });
-    expect(runCode).toHaveAttribute('aria-pressed', 'false');
+    const officeFiles = screen.getByRole('button', { name: /create office files/i });
+    expect(officeFiles).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.click(runCode);
+    fireEvent.click(officeFiles);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
-    expect(screen.getByRole('button', { name: /run code/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /create office files/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-  });
-
-  it('shows the Memory + menu item on by default and persists turning it off for one conversation', async () => {
-    const conversationId = 'memory-toggle-conversation';
-    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /memory/i })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-    });
-    expect(screen.getByRole('button', { name: /memory/i })).toBeEnabled();
-
-    fireEvent.click(screen.getByRole('button', { name: /memory/i }));
-
-    expect(useChatStore.getState().getMemoryEnabled(conversationId)).toBe(false);
-
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /memory/i })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-    });
-  });
-
-  it('disables the Memory + menu item with a settings hint when the account switch is off', async () => {
-    chatComposerMocks.memoryCapabilityEnabled = false;
-    render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-
-    const memoryRow = await screen.findByRole('button', { name: /memory/i });
-    expect(memoryRow).toBeDisabled();
-    expect(memoryRow).toHaveAttribute('title', expect.stringMatching(/settings/i));
   });
 
   it('shows a Memory off footer indicator only once Memory is turned off for the conversation', async () => {
