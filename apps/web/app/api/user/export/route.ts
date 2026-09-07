@@ -287,6 +287,44 @@ const artifactVersionExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+export type ExportCompletenessStatus = 'complete' | 'partial';
+
+export interface ExportCompleteness {
+  status: ExportCompletenessStatus;
+  unavailable_sections: string[];
+  skipped_rows: Array<{ section: string; count: number }>;
+  retry: string;
+}
+
+const EXPORT_RETRY_INSTRUCTION =
+  'Request the export again. Sections listed as unavailable were not read, and skipped rows were present but could not be exported in this format.';
+
+class ExportCompletenessLedger {
+  private readonly unavailable = new Set<string>();
+  private readonly skipped = new Map<string, number>();
+
+  sectionUnavailable(section: string): void {
+    this.unavailable.add(section);
+  }
+
+  rowSkipped(section: string): void {
+    this.skipped.set(section, (this.skipped.get(section) ?? 0) + 1);
+  }
+
+  summary(): ExportCompleteness {
+    const unavailableSections = [...this.unavailable].sort();
+    const skippedRows = [...this.skipped.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([section, count]) => ({ section, count }));
+    return {
+      status: unavailableSections.length === 0 && skippedRows.length === 0 ? 'complete' : 'partial',
+      unavailable_sections: unavailableSections,
+      skipped_rows: skippedRows,
+      retry: EXPORT_RETRY_INSTRUCTION,
+    };
+  }
+}
+
 async function queryExportRows<T>(params: {
   db: DatabaseAdapter;
   sql: string;
@@ -294,8 +332,9 @@ async function queryExportRows<T>(params: {
   schema: z.ZodType<T>;
   section: string;
   userId: string;
+  ledger: ExportCompletenessLedger;
 }): Promise<T[]> {
-  const { db, sql, values, schema, section, userId } = params;
+  const { db, sql, values, schema, section, userId, ledger } = params;
   try {
     const rows = await db.query<unknown>(sql, values);
     const parsedRows: T[] = [];
@@ -304,11 +343,13 @@ async function queryExportRows<T>(params: {
       if (parsed.success) {
         parsedRows.push(parsed.data);
       } else {
+        ledger.rowSkipped(section);
         logger.warn({ userId, section }, 'Skipping invalid row in user data export');
       }
     }
     return parsedRows;
   } catch (error) {
+    ledger.sectionUnavailable(section);
     logger.warn({ error, userId, section }, 'User data export section unavailable');
     return [];
   }
@@ -330,6 +371,7 @@ async function queryExportRowsAcrossWorkspaces<T>(params: {
   schema: z.ZodType<T>;
   section: string;
   userId: string;
+  ledger: ExportCompletenessLedger;
 }): Promise<T[]> {
   const { scopedDbFor, workspaces, ...query } = params;
   const collected: T[] = [];
@@ -363,6 +405,7 @@ async function collectUserData(
   origin: string,
 ): Promise<Record<string, unknown>> {
   const db = scopedDbFor(null);
+  const ledger = new ExportCompletenessLedger();
   let workspaces: (string | null)[] = [null];
   const exportData: Record<string, unknown> = {
     export_metadata: {
@@ -386,6 +429,7 @@ async function collectUserData(
     schema: profileExportSchema,
     section: 'profile',
     userId: user.id,
+    ledger,
   });
   if (profileRows.length > 0) exportData['profile'] = profileRows[0];
 
@@ -398,6 +442,7 @@ async function collectUserData(
     schema: subscriptionExportSchema,
     section: 'subscription',
     userId: user.id,
+    ledger,
   });
   if (subscriptionRows.length > 0) exportData['subscription'] = subscriptionRows[0];
 
@@ -412,6 +457,7 @@ async function collectUserData(
     schema: topUpPurchaseExportSchema,
     section: 'top_up_purchases',
     userId: user.id,
+    ledger,
   });
   if (topUpPurchases.length > 0) {
     exportData['top_up_purchases'] = topUpPurchases.map((purchase) => ({
@@ -429,6 +475,7 @@ async function collectUserData(
     schema: emailPreferencesExportSchema,
     section: 'email_preferences',
     userId: user.id,
+    ledger,
   });
   if (emailRows.length > 0) exportData['email_preferences'] = emailRows[0];
 
@@ -440,6 +487,7 @@ async function collectUserData(
     schema: organizationMemberExportSchema,
     section: 'organization_memberships',
     userId: user.id,
+    ledger,
   });
   if (orgMemberRows.length > 0) {
     const orgIds = orgMemberRows
@@ -456,6 +504,7 @@ async function collectUserData(
         schema: organizationExportSchema,
         section: 'organizations',
         userId: user.id,
+        ledger,
       });
       orgsById = Object.fromEntries(orgRows.map((organization) => [organization.id, organization]));
     }
@@ -473,6 +522,7 @@ async function collectUserData(
     schema: betaRedemptionExportSchema,
     section: 'beta_redemptions',
     userId: user.id,
+    ledger,
   });
   if (betaRows.length > 0) {
     const inviteIds = betaRows
@@ -488,6 +538,7 @@ async function collectUserData(
         schema: betaInviteExportSchema,
         section: 'beta_invites',
         userId: user.id,
+        ledger,
       });
       invitesById = Object.fromEntries(inviteRows.map((invite) => [invite.id, invite]));
     }
@@ -508,6 +559,7 @@ async function collectUserData(
     schema: deviceAuthorizationExportSchema,
     section: 'device_authorizations',
     userId: user.id,
+    ledger,
   });
   if (deviceAuthRows.length > 0) exportData['device_authorizations'] = deviceAuthRows;
 
@@ -519,6 +571,7 @@ async function collectUserData(
     schema: desktopDeviceExportSchema,
     section: 'desktop_devices',
     userId: user.id,
+    ledger,
   });
   if (desktopRows.length > 0) exportData['desktop_devices'] = desktopRows;
 
@@ -530,6 +583,7 @@ async function collectUserData(
     schema: mobileDeviceExportSchema,
     section: 'mobile_devices',
     userId: user.id,
+    ledger,
   });
   if (mobileRows.length > 0) exportData['mobile_devices'] = mobileRows;
 
@@ -541,6 +595,7 @@ async function collectUserData(
     schema: syncDataExportSchema,
     section: 'sync_data',
     userId: user.id,
+    ledger,
   });
   if (syncRows.length > 0) exportData['sync_data'] = syncRows;
 
@@ -555,6 +610,7 @@ async function collectUserData(
     schema: conversationExportSchema,
     section: 'conversations',
     userId: user.id,
+    ledger,
   });
   exportData['conversations'] = conversations;
 
@@ -570,6 +626,7 @@ async function collectUserData(
     schema: messageExportSchema,
     section: 'messages',
     userId: user.id,
+    ledger,
   });
   exportData['messages'] = messages;
 
@@ -585,6 +642,7 @@ async function collectUserData(
     schema: projectExportSchema,
     section: 'projects',
     userId: user.id,
+    ledger,
   });
   exportData['projects'] = projects;
 
@@ -601,6 +659,7 @@ async function collectUserData(
     schema: projectKnowledgeFileExportSchema,
     section: 'project_knowledge_files',
     userId: user.id,
+    ledger,
   });
   exportData['project_knowledge_files'] = projectKnowledgeFiles;
 
@@ -620,6 +679,7 @@ async function collectUserData(
     schema: mediaAssetExportSchema,
     section: 'media_assets',
     userId: user.id,
+    ledger,
   });
   exportData['media_assets'] = mediaAssets.map((asset) => ({
     ...asset,
@@ -637,6 +697,7 @@ async function collectUserData(
     schema: memoryExportSchema,
     section: 'memories',
     userId: user.id,
+    ledger,
   });
   exportData['memories'] = memories;
 
@@ -652,6 +713,7 @@ async function collectUserData(
     schema: artifactExportSchema,
     section: 'artifacts',
     userId: user.id,
+    ledger,
   });
   exportData['artifacts'] = artifacts;
 
@@ -668,12 +730,14 @@ async function collectUserData(
     schema: artifactVersionExportSchema,
     section: 'artifact_versions',
     userId: user.id,
+    ledger,
   });
   exportData['artifact_versions'] = artifactVersions;
 
   try {
     exportData['billing_invoices'] = await listUserBillingInvoices(db, user.id);
   } catch (error) {
+    ledger.sectionUnavailable('billing_invoices');
     logger.warn({ error, userId: user.id }, 'Billing invoices unavailable for user export');
     exportData['billing_invoices'] = [];
   }
@@ -681,8 +745,12 @@ async function collectUserData(
   try {
     exportData['managed_usage'] = await getManagedUsageSummary(db, user.id);
   } catch (error) {
+    ledger.sectionUnavailable('managed_usage');
     logger.warn({ error, userId: user.id }, 'Managed usage summary unavailable for user export');
   }
+
+  const completeness = ledger.summary();
+  (exportData['export_metadata'] as Record<string, unknown>)['completeness'] = completeness;
 
   logger.info(
     { userId: user.id, dataSections: Object.keys(exportData).length },
@@ -700,11 +768,15 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
 
   const jsonData = JSON.stringify(data, null, 2);
   const timestamp = new Date().toISOString().split('T')[0];
+  const completeness = (data as { export_metadata?: { completeness?: ExportCompleteness } })
+    .export_metadata?.completeness;
+  const status: ExportCompletenessStatus = completeness?.status ?? 'partial';
 
   if (isDownload) {
     return new NextResponse(jsonData, {
       headers: {
         'Content-Type': 'application/json',
+        'X-Export-Status': status,
         'Content-Disposition': `attachment; filename="user-data-export-${timestamp}.json"`,
         ...getCorsHeaders(request),
         ...getSecurityHeaders(),
@@ -714,7 +786,8 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
 
   return NextResponse.json(
     {
-      success: true,
+      success: status === 'complete',
+      status,
       export_timestamp: new Date().toISOString(),
       user_id: userId,
       data,
