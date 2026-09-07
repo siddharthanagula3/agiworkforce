@@ -7,6 +7,8 @@ import {
   getPluginRegistryEntry,
   listPluginRegistryEntries,
 } from '@/lib/services/plugin-registry-service';
+import { findDirectoryEntry } from './directory/catalog';
+import type { PluginDirectoryEntry } from './directory/types';
 import {
   cachedRenderInput,
   RENDER_CACHE_SECONDS,
@@ -17,10 +19,16 @@ export type PluginCatalogResult =
   | { status: 'ok'; entries: PluginRegistryEntry[] }
   | { status: 'unavailable' };
 
+export type PluginDetailEntry = PluginRegistryEntry | PluginDirectoryEntry;
+
 export type PluginEntryResult =
-  | { status: 'ok'; entry: PluginRegistryEntry; manifest: PluginManifest | null }
+  | { status: 'ok'; entry: PluginDetailEntry; manifest: PluginManifest | null }
   | { status: 'missing' }
   | { status: 'unavailable' };
+
+export function detailInstallCommand(entry: PluginDetailEntry): string | null {
+  return 'installCommand' in entry ? entry.installCommand : null;
+}
 
 async function readPluginCatalog(): Promise<PluginCatalogResult> {
   try {
@@ -34,8 +42,15 @@ async function readPluginCatalog(): Promise<PluginCatalogResult> {
 async function readPluginEntry(id: string): Promise<PluginEntryResult> {
   try {
     const found = await getPluginRegistryEntry(getNeonDb(), id);
-    if (!found) return { status: 'missing' };
-    return { status: 'ok', entry: found.entry, manifest: found.manifest };
+    if (found) return { status: 'ok', entry: found.entry, manifest: found.manifest };
+  } catch {
+    return { status: 'unavailable' };
+  }
+  try {
+    const directoryEntry = await findDirectoryEntry(id);
+    return directoryEntry
+      ? { status: 'ok', entry: directoryEntry, manifest: null }
+      : { status: 'missing' };
   } catch {
     return { status: 'unavailable' };
   }

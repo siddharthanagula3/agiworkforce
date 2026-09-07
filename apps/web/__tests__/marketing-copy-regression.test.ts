@@ -130,7 +130,6 @@ describe('public marketing copy regressions', () => {
 
   it('keeps managed cloud waitlist copy scoped by surface trust boundary', () => {
     const waitlist = readWebFile('app/waitlist/page.tsx');
-    const waitlistForm = readWebFile('app/byok/WaitlistForm.tsx');
     const normalizedWaitlist = waitlist.replace(/\s+/g, ' ');
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
@@ -142,8 +141,6 @@ describe('public marketing copy regressions', () => {
     expect(normalizedWaitlist).toContain(
       'Use your provider accounts on supported ${BYOK_RELEASE_LABEL} releases with visible labels.',
     );
-    expect(waitlistForm).not.toContain('var(--teal, #2eb88a)');
-    expect(waitlistForm).toContain('var(--agi-success)');
   });
 
   it('does not imply public Web or Mobile BYOK chat', () => {

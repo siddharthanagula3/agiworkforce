@@ -9,11 +9,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { createError } from '@/lib/errors';
 import {
   deleteMarketplaceSource,
   isMissingPluginMarketplaceSchema,
 } from '@/lib/services/plugin-marketplace-service';
+import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,9 +42,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
     removed = await deleteMarketplaceSource(getNeonDb(), userId, params.data.id);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
-      throw createError.serviceUnavailable(
-        'The plugin marketplace is not available yet. Please try again later.',
-      );
+      throw marketplaceUnavailableError();
     }
     throw error;
   }

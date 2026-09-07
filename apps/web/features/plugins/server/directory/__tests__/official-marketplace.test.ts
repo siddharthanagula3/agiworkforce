@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  PLUGIN_MARKETPLACE_MAX_PLUGINS,
+  PluginMarketplaceManifestSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import {
   buildMarketplaceManifestUrl,
@@ -96,6 +100,35 @@ describe('resolvePluginSource', () => {
     });
   });
 
+  it('refuses a source path that climbs out of the plugin directory', () => {
+    expect(resolvePluginSource('../../etc/passwd', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
+    expect(resolvePluginSource('./plugins/../../x', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
+    expect(resolvePluginSource('/absolute/path', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
+    expect(
+      resolvePluginSource(
+        { source: 'github', repo: 'adobe/skills', path: 'plugins/../../other' },
+        OFFICIAL_MARKETPLACE_SOURCE,
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses a backslash-obfuscated climb without relying on url encoding', () => {
+    expect(resolvePluginSource('..\\..\\etc', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
+    expect(resolvePluginSource('plugins\\..\\..\\x', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
+    expect(
+      resolvePluginSource(
+        { source: 'github', repo: 'adobe/skills', path: 'plugins\\..\\other' },
+        OFFICIAL_MARKETPLACE_SOURCE,
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps a path whose segments merely contain dots', () => {
+    expect(resolvePluginSource('plugins/v1.2/pack', OFFICIAL_MARKETPLACE_SOURCE)?.path).toBe(
+      'plugins/v1.2/pack',
+    );
+  });
+
   it('returns null for a remote string source and for a non-github url', () => {
     expect(resolvePluginSource('https://example.com/x', OFFICIAL_MARKETPLACE_SOURCE)).toBeNull();
     expect(
@@ -159,5 +192,42 @@ describe('fetchClaudeMarketplace', () => {
         async () => new Response('{', { status: 200 }),
       ),
     ).rejects.toBeInstanceOf(ClaudeMarketplaceFetchError);
+  });
+});
+
+describe('the manifest plugin ceiling', () => {
+  function manifestWith(count: number) {
+    return {
+      name: 'claude-plugins-official',
+      plugins: Array.from({ length: count }, (_, index) => ({
+        name: `plugin-${index}`,
+        source: './plugins/x',
+      })),
+    };
+  }
+
+  it('refuses a manifest past the shared ceiling', () => {
+    expect(() =>
+      parseClaudeMarketplaceManifest(manifestWith(PLUGIN_MARKETPLACE_MAX_PLUGINS + 1)),
+    ).toThrow();
+  });
+
+  it('accepts a manifest exactly at the ceiling', () => {
+    const parsed = parseClaudeMarketplaceManifest(manifestWith(PLUGIN_MARKETPLACE_MAX_PLUGINS));
+    expect(parsed.plugins).toHaveLength(PLUGIN_MARKETPLACE_MAX_PLUGINS);
+  });
+
+  it('uses the same ceiling the internal manifest schema uses', () => {
+    expect(PLUGIN_MARKETPLACE_MAX_PLUGINS).toBeGreaterThan(0);
+    const overCap = {
+      name: 'x',
+      plugins: Array.from({ length: PLUGIN_MARKETPLACE_MAX_PLUGINS + 1 }, (_, index) => ({
+        id: `plugin-${index}`,
+        name: `Plugin ${index}`,
+        description: 'x',
+        version: '1.0.0',
+      })),
+    };
+    expect(PluginMarketplaceManifestSchema.safeParse(overCap).success).toBe(false);
   });
 });

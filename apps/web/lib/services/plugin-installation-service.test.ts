@@ -266,6 +266,27 @@ describe('listEnabledPluginIds', () => {
   });
 });
 
+describe('a registered marketplace can never enable a first-party pack', () => {
+  it('ignores an own-marketplace install entirely when listing enabled packs', async () => {
+    const db = database([]);
+    db.query.mockResolvedValueOnce([{ plugin_id: 'engineering-pack' }]);
+
+    await expect(listEnabledPluginIds(db, 'user-1')).resolves.toEqual(
+      new Set(['engineering-pack']),
+    );
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads only plugin_installations, never a marketplace table', async () => {
+    const db = database([]);
+    await listEnabledPluginIds(db, 'user-1');
+    const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
+    expect(sql).toContain('public.plugin_installations');
+    expect(sql).not.toContain('plugin_marketplace_installations');
+    expect(sql).not.toContain('plugin_marketplace_sources');
+  });
+});
+
 describe('getPluginInstallationSettings', () => {
   beforeEach(() => {
     getNeonDbMock.mockReset();

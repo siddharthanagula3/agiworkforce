@@ -154,6 +154,25 @@ describe('github access', () => {
     );
   });
 
+  it('refuses to build a raw url that climbs out of the pinned plugin directory', () => {
+    expect(rawFileUrl(LOCATION, '../../other/SKILL.md')).toBeNull();
+    expect(rawFileUrl({ ...LOCATION, path: 'plugins/../../x' }, 'skills/a/SKILL.md')).toBeNull();
+    expect(rawFileUrl(LOCATION, '/etc/passwd')).toBeNull();
+  });
+
+  it('refuses a backslash in either half of the path', () => {
+    expect(rawFileUrl(LOCATION, 'skills\\..\\..\\SKILL.md')).toBeNull();
+    expect(rawFileUrl({ ...LOCATION, path: 'plugins\\x' }, 'skills/a/SKILL.md')).toBeNull();
+  });
+
+  it('escapes path characters that would otherwise truncate or break the raw url', () => {
+    const url = rawFileUrl({ ...LOCATION, path: 'plugins/rough draft' }, 'skills/a b#c/SKILL.md');
+    expect(url).toBe(
+      `https://raw.githubusercontent.com/adobe/skills/${SHA}/plugins/rough%20draft/skills/a%20b%23c/SKILL.md`,
+    );
+    expect(new URL(url!).pathname.endsWith('/SKILL.md')).toBe(true);
+  });
+
   it('reports rate limiting, missing refs and malformed trees', async () => {
     const limited = new Response('', {
       status: 403,
@@ -248,5 +267,27 @@ describe('inspectPluginSource', () => {
     expect(result.status).toBe('ok');
     expect(requested.every((url) => !url.includes('/git/trees/'))).toBe(true);
     if (result.status === 'ok') expect(result.record.treeSha).toBe(SHA);
+  });
+
+  it('refuses to conclude a truncated tree ships no skills', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 404 }));
+    const result = await inspectPluginSource(LOCATION, {
+      fetchImpl,
+      tree: { sha: SHA, entries: [], truncated: true },
+    });
+    expect(result.status).toBe('failed');
+  });
+
+  it('still records a truncated tree once a skill was seen', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 404 }));
+    const result = await inspectPluginSource(LOCATION, {
+      fetchImpl,
+      tree: { sha: SHA, entries: TREE, truncated: true },
+      now: () => 0,
+    });
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.record.components.skills).toContain('background-removal');
+    }
   });
 });

@@ -52,6 +52,17 @@ and declares no hooks, no language server and no stdio MCP server. Anything
 else carries a one-sentence `runtime.note` naming the reason and pointing at
 the desktop app or the CLI, and the response includes `installCommand`.
 
+GitHub truncates a recursive tree response on a very large repository. A
+truncated tree that yielded no skill is treated as a failed inspection rather
+than as a plugin without skills, so the entry keeps the "not inspected yet"
+note instead of claiming the repository ships nothing the web app can load.
+Raw file URLs escape every path segment, so a skill directory containing a
+space or a `#` still resolves. A path that is absolute, carries a `..` segment,
+or contains a backslash is refused outright, both where a manifest source is
+resolved and again where the URL is built. The backslash is rejected rather than
+split on, because a repository path never legitimately contains one, and because
+the guard must not depend on the later encoding step to neutralise it.
+
 Unauthenticated GitHub API calls are capped at 40 per run; set `GITHUB_TOKEN`
 on the deployment to inspect the whole manifest in one run. A token GitHub
 rejects is dropped for the rest of the run with a warning, and the run
@@ -112,6 +123,13 @@ installs a web-installable directory plugin for the signed-in account:
 
 Shadow sources and entries are hidden from `GET /api/plugins/marketplaces` and
 its `entries` route so the account's own registered marketplaces stay separate.
+A shadow source is identified by its **name**, which `installDirectoryPlugin`
+writes with the `agi:installed:` prefix, not by its repository. Keying that on
+the repository was a bug: an account that registered
+`anthropics/claude-plugins-official` itself had its own source hidden, so no chip
+and no entries ever appeared for it. Registering a repository that already has a
+shadow source adopts that row, rewriting its name to the real one, so the
+marketplace becomes visible rather than duplicated.
 `DELETE /api/plugins/marketplace-installations/<installationId>` removes the
 installation and prunes the shadow entry and source when nothing else uses
 them.
@@ -122,5 +140,130 @@ packs use: `GET /api/skills` lists them with `source: "extra"`, an explicit
 account's own skills, and the skill tool loads them on `skill_not_found`.
 
 Blocked installs answer 409 with the runtime note and the CLI install command.
-While migration 0159 is not applied the routes answer 503 with
-"Plugin installs are not enabled on this deployment yet".
+While migration 0159 is not applied every install, uninstall and settings route
+under `marketplace-installations` answers 503 with "Plugin installs are not
+enabled on this deployment yet", and every route under `marketplaces` answers
+503 with "The plugin marketplace is not available yet. Please try again later."
+That second sentence is raised as `capabilityUnavailable`, not
+`serviceUnavailable`: the error handler replaces a `SERVICE_UNAVAILABLE`
+message with generic copy, so only the capability code reaches the reader.
+
+## Three install paths, and what each one delivers
+
+| path                                                                                    | table                                                     | what installing gives the account                                                                   |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| built-in pack, `POST /api/plugins/installations`                                        | `plugin_installations`                                    | unlocks the bundled managed skills whose frontmatter names the pack, through `listEnabledPluginIds` |
+| directory plugin, `POST /api/plugins/marketplace-installations` with `pluginId`         | `plugin_marketplace_installations` on a shadow source     | the plugin's own `SKILL.md` bodies, through `listInstalledDirectorySkills`                          |
+| account's own marketplace, `POST /api/plugins/marketplace-installations` with `entryId` | `plugin_marketplace_installations` on a registered source | that entry's own `SKILL.md` bodies from its own repository, see below                               |
+
+An account can register its own marketplace repository with
+`POST /api/plugins/marketplaces` and install entries from it. Registration reads
+`.claude-plugin/marketplace.json` first, the manifest public marketplaces actually
+publish, parsed with the same parser the directory ingest uses and normalised into the
+internal shape: the plugin's `name` becomes its key, `displayName` its label, a
+non-semver or absent `version` becomes `0.0.0`, and each declared skill path is reduced
+to its last segment. `.agiworkforce/marketplace.json` is read only when the standard file
+is absent, so our own format stays usable. A standard file that is present but malformed
+is an error rather than a silent fall-through.
+
+Both formats share one ceiling. `PLUGIN_MARKETPLACE_MAX_PLUGINS`, currently **2000**, caps
+the plugin count in the internal schema **and** in `ClaudeMarketplaceManifestSchema`, and
+`PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES` bounds the response body before it is parsed, on
+both the registration path and the ingest. A manifest over either ceiling is refused with
+a 422, never truncated, because a registration writes one row per plugin inside a single
+transaction and an unbounded manifest would drive an unbounded one.
+
+The number is a bound on that transaction, not a product limit: two thousand sequential
+inserts take seconds. It is set well above what any manifest carries today, because the
+same ceiling binds the directory ingest, and a refresh that fails loudly on a manifest
+that merely grew would be a worse outcome than the cost it prevents. The official
+marketplace carried a few hundred plugins when this was written, so it can grow several
+times over before the ceiling is reached.
+
+An install from a registered source serves
+**that entry's own skills from that entry's own repository**, on exactly the path the
+official directory uses: `skills/<name>/SKILL.md` fetched through
+`fetchPluginSkillFiles`, so it inherits the same path guard, the fifty-skill cap, the
+fetch timeout and the concurrency limit, and the bodies are cached under
+`plugins.directory.installed-skills` keyed by repository, plugin key and the manifest
+content hash.
+
+`listInstalledEntries` therefore selects every installation whose source belongs to the
+caller (`sources.user_id`), not only the sources in `DIRECTORY_MARKETPLACES`. Which
+resolution a row gets is decided by **whether its `installed_version` carries a pinned
+sha**, not by which repository it names: an install made through the directory carries
+one and resolves its location and skill paths from the shared snapshot at that sha, while
+an install made from a registered source carries none.
+
+For a registered source, the snapshot is still consulted, but only used when the record's
+**marketplace repository matches the row's source repository**. That makes an account that
+registers a marketplace we already crawl get the inspected paths, which is what the
+official repository needs because its plugins live under `plugins/<name>/` and declare
+skills relative to their own directory. When the repositories do not match, or the plugin
+is unknown to us, the fetch falls back to `skills/<name>/SKILL.md` at the source root. A
+plugin id colliding with one in the snapshot can therefore never cause a read from another
+repository.
+
+**Known limitation.** A third-party repository that nests its plugins and is not in our
+snapshot only resolves skills under the root-level `skills/` convention. Recording each
+entry's source path would need a column on `plugin_marketplace_entries`, which is a
+founder-gated migration.
+
+A registered manifest is **not** required to name skills that already exist in the
+managed catalogue, because it ships its own. A name that collides with a managed skill is
+resolved on the skills side, where the managed skill wins.
+
+### What this deliberately does not do
+
+An entry in an account's own marketplace **never enables a first-party pack**.
+`listEnabledPluginIds` reads `plugin_installations` alone and touches no marketplace
+table. An earlier version of this code unlocked a published, web-installable registry
+pack whenever an own-marketplace manifest declared a skill whose name matched one the
+pack declares. That was privilege widening by string match: the manifest is unvetted and
+user-supplied, a bare name collision was enough, the grant produced no installation row,
+and nothing in Settings showed it had happened. It is gone, and
+`plugin-installation-service.test.ts` pins the refusal.
+
+## Which table an install goes through
+
+| what is installed                                       | table                                                                  | why                                                                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| a built-in pack from `plugin_registry_entries`          | `plugin_installations`                                                 | the pack is a row this deployment publishes; the install records a version and an enabled flag against that id                                  |
+| a directory plugin from the official Claude marketplace | `plugin_marketplace_installations`, against a shadow source and entry  | the plugin is not a row this deployment publishes, so its identity, its pinned sha and its fetched skill bodies have to be recorded per account |
+| an entry from an account's own registered marketplace   | `plugin_marketplace_installations`, against that account's real source | same table as the directory case; the source row is the account's own rather than a shadow                                                      |
+
+The two tables never describe the same plugin. A built-in pack has an id in
+`plugin_registry_entries` and installs only through `plugin_installations`;
+`installDirectoryPlugin` refuses a built-in entry with
+`INSTALL_BUILTIN_MESSAGE` and 409. Everything else installs only through
+`plugin_marketplace_installations`. One id therefore has exactly one install
+state, and the directory's `isPluginInstalled` picks the table from the entry's
+`sourceFacet` rather than consulting both.
+
+## Per-installation state
+
+Both installation families carry `enabled` and per-skill selection, and both
+are honoured on the read side: `listEnabledPluginIds` requires
+`enabled = true`, and `listInstalledDirectorySkills` requires
+`installation.enabled = true` and intersects the cached skills with
+`enabled_skills`.
+
+| route                                                                          | effect                                                                                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH /api/plugins/installations/<pluginId>`                                  | enable or disable a built-in pack                                                                                         |
+| `PATCH /api/plugins/marketplace-installations/<installationId>`                | enable or disable a marketplace install                                                                                   |
+| `GET`/`PATCH /api/plugins/<pluginId>/settings`                                 | read or set `enabledSkills` and `customExamplePrompts` for a built-in pack, with the readiness of each required connector |
+| `GET`/`PATCH /api/plugins/marketplace-installations/<installationId>/settings` | the same for a marketplace install                                                                                        |
+
+A settings `PATCH` drops any skill name the entry does not declare, so the
+stored selection can never widen past the manifest.
+
+All four are wired into the plugins section of Settings. Opening an installed
+plugin shows an Enabled switch, a switch per declared skill, and a readiness line
+per required connector; `usePluginsSettingsAdapter` reads and writes them and
+`useDirectoryAdapter` exposes them to `PluginDetailView`. Selecting one of the
+account's own marketplaces shows a Refresh control that calls
+`POST /api/plugins/marketplaces/<id>/refresh`.
+
+Both mutations call `invalidateSkillsCatalog` and `announceSkillCatalogChanged`,
+so the skills list and the composer follow a change without a reload.

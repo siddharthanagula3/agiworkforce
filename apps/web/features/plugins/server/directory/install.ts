@@ -7,6 +7,7 @@ import type { PluginMarketplaceInstallation } from '@agiworkforce/cloud-contract
 
 import { getMarketplaceInstallation } from '@/lib/services/plugin-marketplace-installation-service';
 import {
+  shadowSourceName,
   INSTALL_BUILTIN_MESSAGE,
   INSTALL_SKILLS_UNAVAILABLE_MESSAGE,
   INSTALL_UNKNOWN_MESSAGE,
@@ -66,7 +67,14 @@ async function ensureShadowSource(
        (user_id, name, repository_url, ref, status, content_hash, last_synced_at)
      values ($1, $2, $3, $4, $5, $6, now())
      returning id`,
-    [userId, marketplace.name, repositoryUrl, ref, SOURCE_STATUS_ACTIVE, contentHash],
+    [
+      userId,
+      shadowSourceName(marketplace.name),
+      repositoryUrl,
+      ref,
+      SOURCE_STATUS_ACTIVE,
+      contentHash,
+    ],
   );
   return inserted[0]!.id;
 }
