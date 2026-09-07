@@ -49,6 +49,10 @@ function gaScripts(): HTMLScriptElement[] {
   return Array.from(document.querySelectorAll<HTMLScriptElement>('[data-testid="ga-script"]'));
 }
 
+function collectionDisabled(): unknown {
+  return (window as unknown as Record<string, unknown>)[`ga-disable-${TRACKING_ID}`];
+}
+
 function storeDecision(preferences: CookiePreferences): void {
   window.localStorage.setItem(
     COOKIE_CONSENT_STORAGE_KEY,
@@ -58,6 +62,7 @@ function storeDecision(preferences: CookiePreferences): void {
 
 beforeEach(() => {
   window.localStorage.clear();
+  delete (window as unknown as Record<string, unknown>)[`ga-disable-${TRACKING_ID}`];
   clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 });
 
@@ -111,6 +116,21 @@ describe('AnalyticsConsentGate', () => {
     expect(gaScripts()[0]?.getAttribute('src')).toBe(
       `https://www.googletagmanager.com/gtag/js?id=${TRACKING_ID}`,
     );
+  });
+
+  it('turns collection off for a gtag.js that already loaded, not just the tags', async () => {
+    storeDecision(ALL_ACCEPTED_PREFERENCES);
+
+    render(<AnalyticsConsentGate trackingId={TRACKING_ID} />);
+    await waitFor(() => expect(collectionDisabled()).toBe(false));
+
+    storeDecision(NECESSARY_ONLY_PREFERENCES);
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', { key: COOKIE_CONSENT_STORAGE_KEY }));
+    });
+
+    await waitFor(() => expect(collectionDisabled()).toBe(true));
+    expect(gaScripts()).toHaveLength(0);
   });
 });
 
