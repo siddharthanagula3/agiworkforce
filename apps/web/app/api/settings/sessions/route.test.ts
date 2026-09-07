@@ -74,6 +74,13 @@ function session(
   };
 }
 
+function providerError(status: number, retryAfter?: number): Error {
+  return Object.assign(new Error(`provider responded ${status}`), {
+    status,
+    ...(retryAfter === undefined ? {} : { retryAfter }),
+  });
+}
+
 function bearerRequest(method: 'GET' | 'DELETE', token: string) {
   return new Request('http://localhost:3000/api/settings/sessions', {
     method,
@@ -173,12 +180,12 @@ describe('/api/settings/sessions', () => {
       );
     });
 
-    it('keeps the current session active when another device cannot be revoked', async () => {
+    it('keeps the current session active and reports progress when a device cannot be revoked', async () => {
       mockGetSessionList.mockResolvedValue({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
       });
-      mockRevokeSession.mockRejectedValueOnce(new Error('upstream unavailable'));
+      mockRevokeSession.mockRejectedValueOnce(providerError(500));
 
       const response = await DELETE(
         new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
@@ -188,9 +195,70 @@ describe('/api/settings/sessions', () => {
       expect(mockRevokeSession).toHaveBeenCalledTimes(1);
       expect(mockRevokeSession).not.toHaveBeenCalledWith('sess_current');
       expect(await response.json()).toMatchObject({
-        error: expect.stringMatching(/current session remains active/i),
+        error: 'Ended 0 of 1 sessions, try again to finish.',
+        failedCount: 1,
+        currentSessionRevoked: false,
+      });
+    });
+
+    it('waits out a rate limit and finishes the revoke the provider refused', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+      mockRevokeSession
+        .mockRejectedValueOnce(providerError(429, 0))
+        .mockResolvedValue({ status: 'revoked' });
+
+      const response = await DELETE(
+        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ revokedCount: 2, currentSessionRevoked: true });
+      expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([
+        'sess_other',
+        'sess_other',
+        'sess_current',
+      ]);
+    });
+
+    it('gives up on a session the provider keeps rate limiting, and says how far it got', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+      mockRevokeSession.mockRejectedValue(providerError(429, 0));
+
+      const response = await DELETE(
+        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
+      );
+
+      expect(response.status).toBe(502);
+      expect(mockRevokeSession).toHaveBeenCalledTimes(3);
+      expect(mockRevokeSession).not.toHaveBeenCalledWith('sess_current');
+      expect(await response.json()).toMatchObject({
+        error: 'Ended 0 of 1 sessions, try again to finish.',
         failedCount: 1,
       });
+    });
+
+    it('treats a session the provider has already dropped as ended, not as a failure', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_gone')],
+        totalCount: 2,
+      });
+      mockRevokeSession.mockImplementation(async (id: string) => {
+        if (id === 'sess_gone') throw providerError(404);
+        return { status: 'revoked' };
+      });
+
+      const response = await DELETE(
+        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ currentSessionRevoked: true });
     });
 
     it('lists what it can hold and reports the rest instead of failing on size', async () => {
