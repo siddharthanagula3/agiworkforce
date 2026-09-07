@@ -259,6 +259,10 @@ export const DIRECTORY_MANAGE_ROW_ACTION_PREFIX = 'Manage';
 export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
 export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';
 
+export const SKILL_ENABLED_LABEL = 'Enable skill';
+export const SKILL_ENABLED_HINT = 'Turn this off to keep it in the catalogue without offering it.';
+export const SKILL_TRY_IN_CHAT_LABEL = 'Try in chat';
+
 export const DELETE_SKILL_CONFIRM_TITLE = 'Delete skill?';
 export const DELETE_SKILL_CONFIRM_DESCRIPTION =
   'This removes it from your account. Chats that already used it are not affected.';

@@ -7,6 +7,8 @@ import { DirectoryActionNotice, type DirectoryMarketplaceResult } from '@agiwork
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type { PluginDirectoryEntry } from '@/features/plugins/server/directory/types';
 
+import { useChatStore } from '@shared/stores/web-chat-store';
+
 import { useDirectoryAdapter } from '../hooks/useDirectoryAdapter';
 import { DEFAULT_DIRECTORY_QUERY } from '../services/connectors-directory';
 import { DEFAULT_PLUGIN_QUERY } from '../services/plugins-directory';
@@ -850,6 +852,50 @@ describe('the skills installed table', () => {
     expect(routerPush).toHaveBeenCalledWith(
       '/chat?starterPrompt=Write%20a%20skill%20for%20me%20that%20',
     );
+  });
+
+  it('turns a skill off through the uninstall route and back on through install', async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${input}`);
+      if (input === '/api/skills/installs' && init?.method === 'POST') {
+        return Promise.resolve(json({}));
+      }
+      if (input.startsWith('/api/skills/installs/')) return Promise.resolve(json({}));
+      if (input === '/api/skills/installs') return Promise.resolve(json({ installed: [] }));
+      if (input.startsWith('/api/skills')) {
+        return Promise.resolve(json({ skills: [authored], canAuthorSkills: true }));
+      }
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.setSkillEnabled?.('fixture-authored', false);
+    });
+    expect(calls).toContain('DELETE /api/skills/installs/fixture-authored');
+
+    await act(async () => {
+      await result.current.setSkillEnabled?.('fixture-authored', true);
+    });
+    expect(calls).toContain('POST /api/skills/installs');
+  });
+
+  it('selects the skill in the composer and leaves settings on Try in chat', async () => {
+    routerPush.mockClear();
+    stubSkillRoutes([authored]);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    act(() => result.current.trySkillInChat?.('fixture-authored'));
+    expect(useChatStore.getState().getComposerToggles().selectedSkillName).toBe('fixture-authored');
+    expect(routerPush).toHaveBeenCalledWith('/chat');
+  });
+
+  it('primes the catalog so a deep link to a skill detail resolves', async () => {
+    stubSkillRoutes([authored]);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    const detail = await act(async () => result.current.loadDetail?.('skills', 'fixture-authored'));
+    expect(detail).toMatchObject({ kind: 'skill', id: 'fixture-authored' });
   });
 
   it('carries a catalog failure onto the table with its retry', async () => {

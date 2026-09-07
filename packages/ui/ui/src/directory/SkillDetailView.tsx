@@ -4,19 +4,23 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
+import { Switch } from '../primitives/Switch';
 import {
   DIRECTORY_LOADING_LABEL,
   GENERIC_ERROR_COPY,
   INSTALLED_LABEL,
   INSTALL_LABEL,
   SKILL_DESCRIPTION_LABEL,
+  SKILL_ENABLED_HINT,
+  SKILL_ENABLED_LABEL,
   SKILL_LICENSE_LABEL,
+  SKILL_TRY_IN_CHAT_LABEL,
   UNINSTALL_LABEL,
 } from './constants';
 import { DirectoryBackLink, DirectoryDetailHeader } from './DirectoryDetailHeader';
 import { isTextFile } from './highlight';
 import { SkillFileBody, SkillFileTree } from './SkillFileViewer';
-import { DIRECTORY_FOCUS_RING } from './styles';
+import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectorySkillDetail } from './types';
 
 const SKILL_DELETE_LABEL = 'Delete skill';
@@ -32,6 +36,8 @@ export function SkillDetailView({
   onCopyLink,
   onCopyContent,
   onDownloadFile,
+  onSetEnabled,
+  onTryInChat,
   busy,
 }: {
   detail: DirectorySkillDetail;
@@ -43,6 +49,8 @@ export function SkillDetailView({
   onCopyLink?: () => void;
   onCopyContent?: (content: string) => void;
   onDownloadFile?: (skillId: string, path: string) => Promise<void> | void;
+  onSetEnabled?: (enabled: boolean) => Promise<void> | void;
+  onTryInChat?: () => void;
   busy?: boolean;
 }) {
   const entryPath = detail.files[0]?.path ?? '';
@@ -86,6 +94,8 @@ export function SkillDetailView({
 
   const installed = detail.installed === true;
   const editable = detail.editable === true && onOpenSettings !== undefined;
+  const switchable = installed && !editable && onSetEnabled !== undefined;
+  const switchId = `skill-enabled-${detail.id}`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,14 +104,44 @@ export function SkillDetailView({
         title={detail.name}
         name={detail.name}
         subtitle={detail.publisher}
-        primaryLabel={editable ? INSTALLED_LABEL : installed ? UNINSTALL_LABEL : INSTALL_LABEL}
-        primaryDone={editable}
+        primaryLabel={
+          editable || switchable ? INSTALLED_LABEL : installed ? UNINSTALL_LABEL : INSTALL_LABEL
+        }
+        primaryDone={editable || switchable}
         primarySecondary={installed}
-        onPrimary={editable ? undefined : installed ? onUninstall : onInstall}
+        onPrimary={editable || switchable ? undefined : installed ? onUninstall : onInstall}
         onOpenSettings={editable ? onOpenSettings : undefined}
         onCopyLink={onCopyLink}
         busy={busy}
       />
+
+      {switchable ? (
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+          <label htmlFor={switchId} className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-foreground">{SKILL_ENABLED_LABEL}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{SKILL_ENABLED_HINT}</span>
+          </label>
+          <Switch
+            id={switchId}
+            checked
+            disabled={busy}
+            onCheckedChange={(checked) => void onSetEnabled?.(checked)}
+            aria-label={SKILL_ENABLED_LABEL}
+          />
+        </div>
+      ) : null}
+
+      {onTryInChat && installed ? (
+        <div>
+          <button
+            type="button"
+            onClick={onTryInChat}
+            className={cn(DIRECTORY_CREATE_BUTTON, 'min-h-9')}
+          >
+            {SKILL_TRY_IN_CHAT_LABEL}
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
         <SkillFileTree
