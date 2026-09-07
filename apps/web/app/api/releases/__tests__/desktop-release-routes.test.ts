@@ -284,6 +284,23 @@ describe('desktop release routes', () => {
     );
   });
 
+  it('reads the standard desktop installer from the shared release repository when no override is set', async () => {
+    getOptionalEnvMock.mockReturnValue(undefined);
+
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=linux'),
+    );
+
+    expect(response.status).toBe(200);
+    const releaseListCall = fetchMock.mock.calls.find(([input]) =>
+      /\/releases\?per_page=/.test(String(input)),
+    );
+    expect(String(releaseListCall?.[0])).toContain(
+      '/repos/siddharthanagula3/agiworkforce/releases',
+    );
+    expect(String(releaseListCall?.[0])).not.toContain('agiworkforce-desktop-app');
+  });
+
   it('reports the exact AGI Cloud macOS architectures that are published', async () => {
     fetchMock.mockResolvedValue(Response.json([cloudDesktopRelease()]));
 

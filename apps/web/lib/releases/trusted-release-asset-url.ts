@@ -1,7 +1,9 @@
-const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
-const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
-const CLOUD_REPO_OWNER = process.env['DESKTOP_CLOUD_GITHUB_OWNER'] || 'siddharthanagula3';
-const CLOUD_REPO_NAME = process.env['DESKTOP_CLOUD_GITHUB_REPO'] || 'agiworkforce';
+import {
+  DEFAULT_DESKTOP_RELEASE_OWNER,
+  DEFAULT_DESKTOP_RELEASE_REPO,
+  resolveDesktopCloudReleaseRepository,
+  resolveDesktopReleaseRepository,
+} from './github-desktop-releases';
 
 const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
   'downloads.agiworkforce.com',
@@ -10,11 +12,13 @@ const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
   'objects.githubusercontent.com',
 ]);
 
-const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = [
-  { owner: 'siddharthanagula3', repo: 'agiworkforce' },
-  { owner: REPO_OWNER, repo: REPO_NAME },
-  { owner: CLOUD_REPO_OWNER, repo: CLOUD_REPO_NAME },
-];
+function trustedGitHubReleases(): ReadonlyArray<{ owner: string; repo: string }> {
+  return [
+    { owner: DEFAULT_DESKTOP_RELEASE_OWNER, repo: DEFAULT_DESKTOP_RELEASE_REPO },
+    resolveDesktopReleaseRepository(),
+    resolveDesktopCloudReleaseRepository(),
+  ];
+}
 
 export function isTrustedReleaseAssetUrl(rawUrl: string): boolean {
   let parsed: URL;
@@ -33,7 +37,7 @@ export function isTrustedReleaseAssetUrl(rawUrl: string): boolean {
     if (kind !== 'releases') return false;
     const ownerLower = owner?.toLowerCase() ?? '';
     const repoLower = repo?.toLowerCase() ?? '';
-    return TRUSTED_GITHUB_RELEASES.some(
+    return trustedGitHubReleases().some(
       (pair) => pair.owner.toLowerCase() === ownerLower && pair.repo.toLowerCase() === repoLower,
     );
   }
