@@ -28,6 +28,10 @@ import {
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { isCapabilityEnabled } from '@agiworkforce/types';
 import {
+  loadInstalledPlugins,
+  type InstalledPlugin,
+} from '@features/chat/services/installed-plugins';
+import {
   BUILT_IN_SLASH_COMMANDS,
   SlashCommandMenu as SharedSlashCommandMenu,
   filterSlashCommandsByCapability,
@@ -56,13 +60,44 @@ const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
 interface SkillMeta {
   name: string;
   description: string;
+  source?: string;
   requiredTools?: readonly string[];
 }
 
 const REQUIREMENT_SEPARATOR = ' · ';
+const BUNDLED_SKILL_SOURCE = 'bundled';
+const BUNDLED_GROUP_LABEL = 'Skills';
 
 function skillRequirementNote(tools: readonly string[] | undefined): string {
   return tools?.length ? `Needs ${tools.join(', ')}` : '';
+}
+
+interface SuggestionGroup {
+  label?: string;
+  suggestions: CommandSuggestion[];
+}
+
+function byCommand(left: CommandSuggestion, right: CommandSuggestion): number {
+  return left.command.localeCompare(right.command);
+}
+
+function matchRank(suggestion: CommandSuggestion, query: string): number | null {
+  const name = (suggestion.id?.replace(/^skill:/, '') ?? suggestion.command.slice(1)).toLowerCase();
+  const label = suggestion.command.slice(1).toLowerCase();
+  if (name.startsWith(query) || label.startsWith(query)) return 0;
+  if (name.includes(query) || label.includes(query)) return 1;
+  return null;
+}
+
+function filterGroup(group: SuggestionGroup, query: string): CommandSuggestion[] {
+  if (query === '') return group.suggestions;
+  return group.suggestions
+    .map((suggestion) => ({ suggestion, rank: matchRank(suggestion, query) }))
+    .filter(
+      (entry): entry is { suggestion: CommandSuggestion; rank: number } => entry.rank !== null,
+    )
+    .sort((left, right) => left.rank - right.rank)
+    .map((entry) => entry.suggestion);
 }
 
 export interface SlashCommandMenuHandle {
@@ -96,6 +131,17 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     const platform = usePlatform();
     const [activeIndex, setActiveIndex] = useState(0);
     const previousQueryRef = useRef(query);
+    const [installedPlugins, setInstalledPlugins] = useState<readonly InstalledPlugin[]>([]);
+
+    useEffect(() => {
+      let cancelled = false;
+      void loadInstalledPlugins().then((entries) => {
+        if (!cancelled) setInstalledPlugins(entries);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
     const suggestions = useMemo<CommandSuggestion[]>(() => {
       const builtIns = filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
@@ -123,43 +169,72 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         }),
       );
 
-      const skillSuggestions = skills
-        .map((skill): CommandSuggestion => {
-          const note = skillRequirementNote(skill.requiredTools);
-          return {
-            id: `skill:${skill.name}`,
-            command: `/${skill.name}`,
-            description: note
-              ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
-              : skill.description,
-            icon: <Sparkles className="h-4 w-4 text-amber-400" />,
-            isSkill: true,
-          };
-        })
-        .sort((left, right) => left.command.localeCompare(right.command));
+      const toSuggestion = (skill: SkillMeta): CommandSuggestion => {
+        const note = skillRequirementNote(skill.requiredTools);
+        return {
+          id: `skill:${skill.name}`,
+          command: `/${skill.name}`,
+          description: note
+            ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
+            : skill.description,
+          icon: <Sparkles className="h-4 w-4 text-amber-400" />,
+          isSkill: true,
+        };
+      };
+
+      const byName = new Map(skills.map((skill) => [skill.name, skill]));
+      const claimed = new Set<string>();
+      const own: CommandSuggestion[] = [];
+      for (const skill of skills) {
+        if (skill.source === BUNDLED_SKILL_SOURCE) continue;
+        claimed.add(skill.name);
+        own.push(toSuggestion(skill));
+      }
+
+      const pluginGroups: SuggestionGroup[] = [];
+      for (const plugin of installedPlugins) {
+        const suggestions: CommandSuggestion[] = [];
+        for (const name of plugin.skills) {
+          if (claimed.has(name)) continue;
+          const skill = byName.get(name);
+          if (!skill) continue;
+          claimed.add(name);
+          suggestions.push(toSuggestion(skill));
+        }
+        if (suggestions.length > 0) {
+          pluginGroups.push({ label: plugin.name, suggestions: suggestions.sort(byCommand) });
+        }
+      }
+
+      const bundled = skills
+        .filter((skill) => !claimed.has(skill.name))
+        .map(toSuggestion)
+        .sort(byCommand);
+
+      const groups: SuggestionGroup[] = [
+        { suggestions: [...builtIns, ...custom] },
+        { suggestions: own.sort(byCommand) },
+        ...pluginGroups,
+        { label: BUNDLED_GROUP_LABEL, suggestions: bundled },
+      ];
 
       const normalizedQuery = query.toLowerCase();
-      const all = [...builtIns, ...custom, ...skillSuggestions];
-      if (normalizedQuery === '') return all;
-
-      return all
-        .map((suggestion) => {
-          const name = (
-            suggestion.id?.replace(/^skill:/, '') ?? suggestion.command.slice(1)
-          ).toLowerCase();
-          const label = suggestion.command.slice(1).toLowerCase();
-          if (name.startsWith(normalizedQuery) || label.startsWith(normalizedQuery)) {
-            return { suggestion, rank: 0 };
-          }
-          if (name.includes(normalizedQuery) || label.includes(normalizedQuery)) {
-            return { suggestion, rank: 1 };
-          }
-          return null;
-        })
-        .filter((entry): entry is { suggestion: CommandSuggestion; rank: number } => entry !== null)
-        .sort((left, right) => left.rank - right.rank)
-        .map((entry) => entry.suggestion);
-    }, [codeCommandAvailable, customCommands, imageCommandAvailable, platform, query, skills]);
+      return groups.flatMap((group) => {
+        const matches = filterGroup(group, normalizedQuery);
+        if (matches.length === 0) return [];
+        return group.label
+          ? matches.map((suggestion) => ({ ...suggestion, groupLabel: group.label }))
+          : matches;
+      });
+    }, [
+      codeCommandAvailable,
+      customCommands,
+      imageCommandAvailable,
+      installedPlugins,
+      platform,
+      query,
+      skills,
+    ]);
 
     useEffect(() => {
       if (previousQueryRef.current === query) return;
