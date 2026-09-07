@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
-import { Menu, MenuItem } from '../sidebar/Menu';
+import { Menu, MenuItem, keepOpenForMenuEscape } from '../sidebar/Menu';
 import type {
   SettingsDataAdapter,
   SettingsConnector,
@@ -2044,6 +2044,7 @@ export function SettingsModal({
         aria-describedby={undefined}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={keepOpenForMenuEscape}
         className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-2xl md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl"
       >
         <nav
