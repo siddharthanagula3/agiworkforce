@@ -41,6 +41,9 @@ vi.mock('@/lib/services/skill-install-service', () => ({
   resolveInstalledManagedSkills: mockResolveInstalled,
 }));
 vi.mock('@/lib/services/user-skill-service', () => ({
+  findUserSkillByName: vi.fn(async () => null),
+  listUserSkillsAsManagedSkills: vi.fn(async () => []),
+  toManagedSkillFromUserSkill: vi.fn(),
   createUserSkill: vi.fn(),
   listUserSkills: mockListUserSkills,
   toUserSkillSummary: vi.fn(),

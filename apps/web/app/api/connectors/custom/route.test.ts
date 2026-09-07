@@ -50,6 +50,9 @@ vi.mock('@/lib/user-connector-tools', () => ({
   getUserCustomConnectorSummaries: (...args: unknown[]) => mocks.summaries(...args),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+  isDirectoryServerId: vi.fn(() => false),
+  normalizeRemoteUrl: vi.fn((url: string) => url),
+  resolveDirectoryTarget: vi.fn(async () => null),
   findDirectoryTargetByRemoteUrl: (...args: unknown[]) => mocks.directoryByUrl(...args),
 }));
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
