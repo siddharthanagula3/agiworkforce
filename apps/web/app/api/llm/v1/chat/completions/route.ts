@@ -83,6 +83,7 @@ import {
   withDisabledConnectorIds,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
+import { admitConversationTurn } from './lib/conversation-turn-admission';
 import { loadToolApprovalPolicy } from './lib/tool-approval-policy';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import type { StreamChunk } from '@agiworkforce/types';
@@ -94,7 +95,6 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
-  createCloudAgentRun,
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
@@ -206,6 +206,30 @@ function resolveAgentOriginSurface(surface: CloudChatSurface): CloudAgentOriginS
   return surface === 'unknown' ? 'api' : surface;
 }
 
+const CONVERSATION_RUN_CONFLICT_STATUS = 409;
+
+async function conversationRunConflictResponse(
+  userId: string,
+  processed: ProcessedRequest,
+  activeRun: CloudAgentRun,
+): Promise<NextResponse> {
+  await refundFailedReservation(userId, processed, 'request_failure');
+  const conflictHeaders: Record<string, string> = { ...getSecurityHeaders() };
+  addAgentRunHeaders(conflictHeaders, activeRun);
+  return NextResponse.json(
+    {
+      error: {
+        message:
+          'This conversation already has a response in progress. Stop it before sending a new message.',
+        type: 'invalid_request_error',
+        code: 'conversation_run_in_progress',
+        run_id: activeRun.id,
+      },
+    },
+    { status: CONVERSATION_RUN_CONFLICT_STATUS, headers: conflictHeaders },
+  );
+}
+
 async function beginCloudAgentRun(
   request: NextRequest,
   userId: string,
@@ -221,7 +245,9 @@ async function beginCloudAgentRun(
     // parallel paid run. Reject with 409 so the client stops the prior turn
     // first. Same-request retries and cooperatively-cancelling runs are excluded
     // by the service query, so an idempotent replay or a stop-then-send
-    // follow-up is never blocked.
+    // follow-up is never blocked. This lookup is the lock-free fast rejection;
+    // `admitConversationTurn` re-reads it under a per-conversation advisory lock
+    // so two turns that both pass here still produce one run and one 409.
     if (processed.conversationId) {
       const activeRun = await findActiveCloudAgentRunForConversation(db, {
         userId,
@@ -229,25 +255,11 @@ async function beginCloudAgentRun(
         excludeRequestId: processed.requestId,
       });
       if (activeRun) {
-        await refundFailedReservation(userId, processed, 'request_failure');
-        const conflictHeaders: Record<string, string> = { ...getSecurityHeaders() };
-        addAgentRunHeaders(conflictHeaders, activeRun);
-        return NextResponse.json(
-          {
-            error: {
-              message:
-                'This conversation already has a response in progress. Stop it before sending a new message.',
-              type: 'invalid_request_error',
-              code: 'conversation_run_in_progress',
-              run_id: activeRun.id,
-            },
-          },
-          { status: 409, headers: conflictHeaders },
-        );
+        return await conversationRunConflictResponse(userId, processed, activeRun);
       }
     }
 
-    const run = await createCloudAgentRun(db, {
+    const admission = await admitConversationTurn(db, {
       userId,
       requestId: processed.requestId,
       ...(processed.conversationId ? { conversationId: processed.conversationId } : {}),
@@ -256,7 +268,10 @@ async function beginCloudAgentRun(
       provider: processed.provider,
       model: processed.chatRequest.model,
     });
-    return { run, db };
+    if (!admission.admitted) {
+      return await conversationRunConflictResponse(userId, processed, admission.activeRun);
+    }
+    return { run: admission.run, db };
   } catch (error) {
     logger.error(
       { error, userId, requestId: processed.requestId },
