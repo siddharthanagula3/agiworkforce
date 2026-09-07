@@ -211,7 +211,7 @@ export const DIRECTORY_MANAGE_COLUMNS: Record<
   DirectorySectionKey,
   readonly DirectoryManageColumn[]
 > = {
-  skills: ['name', 'updated', 'author'],
+  skills: ['name', 'author'],
   connectors: ['name', 'updated'],
   plugins: ['name', 'author', 'skills', 'updated'],
 };
@@ -232,19 +232,19 @@ export const DIRECTORY_MANAGE_COLUMN_HEADINGS: Record<
 };
 
 export const DIRECTORY_MANAGE_EMPTY_TITLES: Record<DirectorySectionKey, string> = {
-  skills: 'No skills yet',
+  skills: 'No skills of your own yet.',
   connectors: 'No connectors yet',
   plugins: 'No plugins yet',
 };
 
 export const DIRECTORY_MANAGE_EMPTY_BODIES: Record<DirectorySectionKey, string> = {
-  skills: 'Add skills to extend what AGI can do for you.',
+  skills: 'Browse the catalogue to add one, or write your own.',
   connectors: 'Connect the tools and data sources you want AGI to reach.',
   plugins: 'Install a plugin to give AGI a bundle of skills and connectors at once.',
 };
 
 export const DIRECTORY_MANAGE_EMPTY_ACTION_LABELS: Record<DirectorySectionKey, string> = {
-  skills: 'Add skill',
+  skills: 'Browse',
   connectors: 'Add connector',
   plugins: 'Install',
 };

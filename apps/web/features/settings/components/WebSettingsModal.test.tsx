@@ -634,17 +634,19 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Browse' }))[0]!);
     await screen.findByText('/fixture-reviewed-skill');
 
-    const { fireEvent } = await import('@testing-library/react');
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
     fireEvent.click(within(nav).getByRole('button', { name: 'Skills' }));
 
     expect(await screen.findByText('Skills are unavailable right now.')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0]!);
 
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Browse' }))[0]!);
     expect(await screen.findByText('/fixture-reviewed-skill')).toBeTruthy();
     expect(screen.queryByText('Skills are unavailable right now.')).toBeNull();
   });
@@ -666,6 +668,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Browse' }))[0]!);
 
     await screen.findByText('/fixture-authored-skill');
     expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
@@ -691,7 +695,13 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
+    expect(await screen.findByRole('menuitem', { name: 'Create a skill' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Create with AGI' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
     await screen.findByText('/fixture-authored-skill');
     expect(await screen.findByRole('button', { name: 'New skill' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Settings fixture-authored-skill' })).toBeTruthy();
