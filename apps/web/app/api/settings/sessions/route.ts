@@ -17,6 +17,11 @@ import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 const PAGE_SIZE = 100;
 const REVOKE_BATCH_SIZE = 10;
 const MAX_REVOKE_PASSES = 200;
+const REVOKE_MAX_ATTEMPTS = 3;
+const REVOKE_BACKOFF_BASE_MS = 500;
+const REVOKE_BACKOFF_CEILING_MS = 30_000;
+const RATE_LIMITED_STATUS = 429;
+const ALREADY_GONE_STATUSES: ReadonlySet<number> = new Set([400, 404]);
 
 export interface ActiveIdentitySessions {
   sessions: IdentitySession[];
@@ -46,11 +51,46 @@ export async function listActiveIdentitySessions(
   return { sessions, totalCount, truncated: sessions.length < totalCount };
 }
 
-interface RevokeSweep {
-  revoked: string[];
+function errorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === 'number' ? status : null;
+}
+
+function isAlreadyGone(error: unknown): boolean {
+  const status = errorStatus(error);
+  return status !== null && ALREADY_GONE_STATUSES.has(status);
+}
+
+/**
+ * Milliseconds to wait before another attempt, or null when the error is not a
+ * rate limit and retrying it would only spend another call. The provider sends
+ * Retry-After in seconds and the SDK surfaces it as retryAfter; without one this
+ * backs off exponentially rather than guessing the provider's window.
+ */
+function rateLimitDelayMs(error: unknown, attempt: number): number | null {
+  if (errorStatus(error) !== RATE_LIMITED_STATUS) return null;
+  const retryAfter = (error as { retryAfter?: unknown }).retryAfter;
+  if (typeof retryAfter === 'number' && Number.isFinite(retryAfter)) {
+    return Math.min(Math.max(retryAfter, 0) * 1000, REVOKE_BACKOFF_CEILING_MS);
+  }
+  return Math.min(REVOKE_BACKOFF_BASE_MS * 2 ** (attempt - 1), REVOKE_BACKOFF_CEILING_MS);
+}
+
+function delay(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+interface RevokeOutcome {
+  ended: string[];
+  alreadyGone: string[];
   failed: string[];
+}
+
+interface RevokeSweep extends RevokeOutcome {
   currentSession: IdentitySession | undefined;
   incomplete: boolean;
+  targetCount: number;
 }
 
 async function revokeEveryOtherSession(
@@ -58,10 +98,12 @@ async function revokeEveryOtherSession(
   userId: string,
   currentSessionId: string | null,
 ): Promise<RevokeSweep> {
-  const revoked: string[] = [];
+  const ended: string[] = [];
+  const alreadyGone: string[] = [];
   const failed: string[] = [];
   const attempted = new Set<string>();
   let currentSession: IdentitySession | undefined;
+  let targetCount = 0;
 
   // A revoked session leaves the active list, so the first page always holds
   // the next batch of work and the whole account never has to be in memory.
@@ -74,21 +116,28 @@ async function revokeEveryOtherSession(
       offset: 0,
     });
 
-    currentSession =
-      page.sessions.find((session) => session.id === currentSessionId) ?? currentSession;
+    const foundCurrent = page.sessions.find((session) => session.id === currentSessionId);
+    currentSession = foundCurrent ?? currentSession;
+    if (pass === 0) {
+      const total = Math.max(page.totalCount, page.sessions.length);
+      targetCount = Math.max(0, total - (foundCurrent ? 1 : 0));
+    }
 
     const pending = page.sessions.filter(
       (session) => session.id !== currentSessionId && !attempted.has(session.id),
     );
-    if (pending.length === 0) return { revoked, failed, currentSession, incomplete: false };
+    if (pending.length === 0) {
+      return { ended, alreadyGone, failed, currentSession, incomplete: false, targetCount };
+    }
 
     for (const session of pending) attempted.add(session.id);
     const outcome = await revokeInBatches(identity, pending);
-    revoked.push(...outcome.revoked);
+    ended.push(...outcome.ended);
+    alreadyGone.push(...outcome.alreadyGone);
     failed.push(...outcome.failed);
   }
 
-  return { revoked, failed, currentSession, incomplete: true };
+  return { ended, alreadyGone, failed, currentSession, incomplete: true, targetCount };
 }
 
 function toIsoTimestamp(timestamp: number | null): string | null {
@@ -121,24 +170,47 @@ function serializeSession(session: IdentitySession, currentSessionId: string | n
 async function revokeInBatches(
   identity: IdentitySessionOperations,
   sessions: IdentitySession[],
-): Promise<{ revoked: string[]; failed: string[] }> {
-  const revoked: string[] = [];
+): Promise<RevokeOutcome> {
+  const ended: string[] = [];
+  const alreadyGone: string[] = [];
   const failed: string[] = [];
+  let queue = sessions.map((session) => ({ id: session.id, attempts: 0 }));
 
-  for (let index = 0; index < sessions.length; index += REVOKE_BATCH_SIZE) {
-    const batch = sessions.slice(index, index + REVOKE_BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map((session) => identity.revokeSession(session.id)),
-    );
-    results.forEach((result, resultIndex) => {
-      const id = batch[resultIndex]?.id;
-      if (!id) return;
-      if (result.status === 'fulfilled') revoked.push(id);
-      else failed.push(id);
+  while (queue.length > 0) {
+    const batch = queue.slice(0, REVOKE_BATCH_SIZE);
+    queue = queue.slice(REVOKE_BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(({ id }) => identity.revokeSession(id)));
+
+    let pauseMs = 0;
+    results.forEach((result, index) => {
+      const item = batch[index];
+      if (!item) return;
+      if (result.status === 'fulfilled') {
+        ended.push(item.id);
+        return;
+      }
+      // A session the provider has already dropped is not a failure to report
+      // back: the user asked for it to be gone and it is gone.
+      if (isAlreadyGone(result.reason)) {
+        alreadyGone.push(item.id);
+        return;
+      }
+      const attempts = item.attempts + 1;
+      const retryMs = rateLimitDelayMs(result.reason, attempts);
+      if (retryMs === null || attempts >= REVOKE_MAX_ATTEMPTS) {
+        failed.push(item.id);
+        return;
+      }
+      pauseMs = Math.max(pauseMs, retryMs);
+      queue.push({ id: item.id, attempts });
     });
+
+    // The rate limit belongs to the account, not to one session, so the whole
+    // sweep waits out the window the provider asked for.
+    await delay(pauseMs);
   }
 
-  return { revoked, failed };
+  return { ended, alreadyGone, failed };
 }
 
 async function handleList(request: NextRequest) {
@@ -186,37 +258,44 @@ async function handleRevokeAll(request: NextRequest) {
     [userId],
   );
 
+  const settled = result.ended.length + result.alreadyGone.length;
+
   if (result.failed.length > 0 || result.incomplete) {
     logger.error(
       {
         userId,
-        revokedCount: result.revoked.length,
+        endedCount: result.ended.length,
+        alreadyGoneCount: result.alreadyGone.length,
         failedCount: result.failed.length,
+        targetCount: result.targetCount,
         incomplete: result.incomplete,
       },
       'Some non-current sessions could not be revoked',
     );
     return NextResponse.json(
       {
-        error:
-          result.failed.length === 0
-            ? 'Not every session ended in one pass. Run it again to finish the rest.'
-            : currentSession
-              ? 'Some sessions could not be revoked. Your current session remains active.'
-              : 'Some sessions could not be revoked. Please try again.',
-        revokedCount: result.revoked.length,
+        // What actually happened, not a generic apology: the provider rate
+        // limits a large account part way through, and the caller needs to know
+        // the run made progress and that another one finishes it.
+        error: `Ended ${settled} of ${Math.max(result.targetCount, settled + result.failed.length)} sessions, try again to finish.`,
+        revokedCount: result.ended.length,
         failedCount: result.failed.length,
+        currentSessionRevoked: false,
       },
       { status: 502 },
     );
   }
 
+  const revokedIds = [...result.ended];
   if (currentSession) {
     await identity.revokeSession(currentSession.id);
-    result.revoked.push(currentSession.id);
+    revokedIds.push(currentSession.id);
   }
 
-  logger.info({ userId, revokedCount: result.revoked.length }, 'All active sessions revoked');
+  logger.info(
+    { userId, revokedCount: revokedIds.length, alreadyGoneCount: result.alreadyGone.length },
+    'All active sessions revoked',
+  );
 
   await recordAuditEvent({
     userId,
@@ -225,14 +304,14 @@ async function handleRevokeAll(request: NextRequest) {
     detail: {
       source: 'revoke_all_sessions',
       resourceType: 'session',
-      count: result.revoked.length,
+      count: revokedIds.length,
       isCurrent: currentSession !== undefined,
     },
   });
 
   return NextResponse.json({
     message: 'All active sessions revoked',
-    revokedCount: result.revoked.length,
+    revokedCount: revokedIds.length,
     currentSessionRevoked: currentSession !== undefined,
   });
 }

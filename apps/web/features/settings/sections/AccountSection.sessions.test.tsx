@@ -100,6 +100,37 @@ describe('AccountSection active sessions', () => {
     mockSignOut.mockResolvedValue(undefined);
   });
 
+  it('surfaces the partial progress a rate limited log out of all devices reports', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions, totalCount: sessions.length });
+      }
+      if (String(input) === '/api/settings/sessions' && init?.method === 'DELETE') {
+        return jsonResponse(
+          {
+            error: 'Ended 120 of 1647 sessions, try again to finish.',
+            revokedCount: 120,
+            failedCount: 1527,
+            currentSessionRevoked: false,
+          },
+          502,
+        );
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+    });
+
+    render(<AccountSection />);
+
+    await screen.findByText('Mobile Safari 19');
+    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
+
+    expect(
+      await screen.findByText('Ended 120 of 1647 sessions, try again to finish.'),
+    ).toBeInTheDocument();
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
   it('says how many sessions it is showing when the account has more than it can list', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
