@@ -253,6 +253,7 @@ async function handleGetConnectors(request: NextRequest) {
       updatedAt: c.updatedAt,
       source: 'custom',
       name: c.name,
+      ...(c.credentialUnreadable ? { needsReauthorization: true } : {}),
     });
   }
 
@@ -260,7 +261,12 @@ async function handleGetConnectors(request: NextRequest) {
   const availableSet = new Set(available);
   const withHealth: ConnectorEntry[] = connectors.map((entry) =>
     entry.source === 'custom'
-      ? { ...entry, health: 'connected' as const }
+      ? {
+          ...entry,
+          health: (entry.needsReauthorization === true
+            ? 'needs-reauthorization'
+            : 'connected') as ConnectorHealth,
+        }
       : {
           ...entry,
           health: resolveConnectorHealth({

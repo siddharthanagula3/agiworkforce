@@ -146,6 +146,42 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Manage in Settings' })).toBeInTheDocument();
   });
+
+  it('makes the Skills entry bookmarkable the same way', () => {
+    window.location.hash = '';
+    const { props } = renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+
+    expect(window.location.hash).toBe('#settings/customize-skills');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('skills');
+    expect(props.closeMenu).toHaveBeenCalled();
+    window.location.hash = '';
+  });
+
+  it('makes the Plugins entry bookmarkable the same way', () => {
+    window.location.hash = '';
+    const { props } = renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Plugins' }));
+
+    expect(window.location.hash).toBe('#settings/customize-plugins');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('plugins');
+    expect(props.closeMenu).toHaveBeenCalled();
+    window.location.hash = '';
+  });
+
+  it('makes the settings it opens bookmarkable by setting the hash', () => {
+    window.location.hash = '';
+    const { props } = renderMenu({ connectorsSubmenuOpen: true });
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage in Settings' }));
+
+    expect(window.location.hash).toBe('#settings/customize-connectors');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('connectors');
+    expect(props.closeMenu).toHaveBeenCalled();
+    window.location.hash = '';
+  });
 });
 
 describe('ComposerPlusMenu, AGI Work palette', () => {
@@ -237,6 +273,55 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
 
     fireEvent.click(screen.getByRole('menuitem', { name: /Website Redesign/ }));
     expect(props.onSelectFolder).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('sends the typed term to the plugin route once, after the debounce', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    renderMenu({ workPalette: true });
+    const field = screen.getByLabelText('Search the AGI Work palette');
+
+    for (const value of ['a', 'ad', 'ado', 'adob', 'adobe']) {
+      fireEvent.change(field, { target: { value } });
+    }
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('search=adobe');
+  });
+
+  it('asks the route again for a different term rather than filtering one page', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    renderMenu({ workPalette: true });
+    const field = screen.getByLabelText('Search the AGI Work palette');
+
+    fireEvent.change(field, { target: { value: 'adobe' } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(field, { target: { value: 'figma' } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('search=figma');
+  });
+
+  it('asks for nothing while the field is empty', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    renderMenu({ workPalette: true });
+
+    fireEvent.change(screen.getByLabelText('Search the AGI Work palette'), {
+      target: { value: '   ' },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sets the same hash from the palette Manage in Settings row', () => {
+    window.location.hash = '';
+    const { props } = renderMenu({ workPalette: true });
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage in Settings' }));
+
+    expect(window.location.hash).toBe('#settings/customize-connectors');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('connectors');
+    window.location.hash = '';
   });
 
   it('says so when nothing matches the query', async () => {

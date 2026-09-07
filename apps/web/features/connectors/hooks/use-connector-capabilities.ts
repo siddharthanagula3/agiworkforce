@@ -8,6 +8,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 const CatalogItemSchema = z.object({
   name: z.string(),
   title: z.string().optional(),
+  description: z.string().optional(),
 });
 
 const ConnectorCapabilityCatalogSchema = z.object({

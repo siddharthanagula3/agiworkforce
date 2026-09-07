@@ -37,6 +37,7 @@ import {
   isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
 import {
+  findDirectoryTargetByRemoteUrl,
   isDirectoryServerId,
   normalizeRemoteUrl,
   resolveDirectoryTarget,
@@ -61,6 +62,27 @@ import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
+
+const CONNECTOR_CONNECTION_TIMEOUT_MS = 10_000;
+const CONNECTOR_DIAL_CONCURRENCY = 6;
+
+async function mapWithConcurrency<Input, Output>(
+  items: readonly Input[],
+  limit: number,
+  run: (item: Input) => Promise<Output>,
+): Promise<Output[]> {
+  const results = new Array<Output>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let index = next++; index < items.length; index = next++) {
+      results[index] = await run(items[index]!);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, () => worker()),
+  );
+  return results;
+}
 
 export interface DroppedConnectorTools {
   connectorId: string;
@@ -466,6 +488,7 @@ function entryToMcpConfig(entry: RemoteConnectorEntry): McpServerConfig {
     url: entry.url,
     transport: 'streamable-http',
     headers: entry.headers,
+    connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
 
@@ -767,6 +790,17 @@ export interface UserCustomConnectorSummary {
   transport: string;
   createdAt: string;
   updatedAt: string;
+  credentialUnreadable?: true;
+}
+
+function credentialReadable(sealed: string | null): boolean {
+  if (!sealed) return true;
+  try {
+    openCustomConnectorCredential(sealed);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getUserCustomConnectorSummaries(
@@ -780,10 +814,11 @@ export async function getUserCustomConnectorSummaries(
       name: string;
       url: string;
       transport: string;
+      auth_header_enc: string | null;
       created_at: string;
       updated_at: string;
     }>(
-      `select id, short_id, name, url, transport, created_at, updated_at
+      `select id, short_id, name, url, transport, auth_header_enc, created_at, updated_at
          from user_custom_connectors
         where user_id = $1
         order by created_at desc`,
@@ -797,6 +832,7 @@ export async function getUserCustomConnectorSummaries(
       transport: r.transport,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
     }));
   } catch (error) {
     if (isUndefinedTable(error)) return [];
@@ -846,6 +882,18 @@ export async function findUserCustomConnectorByUrl(
   return row ? customRowRef(row) : null;
 }
 
+export async function findUserCustomConnectorByServerId(
+  userId: string,
+  serverId: string,
+): Promise<UserCustomConnectorRef | null> {
+  const shortId = customShortIdFromServerId(serverId);
+  if (shortId === null) return null;
+  const row = (await getUserCustomConnectorRows(userId)).find(
+    (candidate) => candidate.short_id === shortId,
+  );
+  return row ? customRowRef(row) : null;
+}
+
 function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   const headers: Record<string, string> = {};
   if (row.auth_header_enc) {
@@ -866,6 +914,7 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
     url: row.url,
     transport: row.transport === 'sse' ? 'sse' : 'streamable-http',
     headers,
+    connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
 
@@ -1006,6 +1055,23 @@ async function executeCustomConnectorTool(
         { rowId: row.id, toolName, status: challenge.status },
         '[user-connector] custom connector rejected the stored credential',
       );
+      const serverId = customServerId(row.short_id);
+      const linked = await findDirectoryTargetByRemoteUrl(row.url);
+      if (linked) {
+        return {
+          handled: true,
+          content: serializeConnectorAuthorizationRequired(
+            buildConnectorAuthorizationRequiredPayload({
+              connectorId: serverId,
+              connectorLabel: row.name,
+              toolName,
+              reason: 'authorization_unavailable',
+              connectable: true,
+            }),
+          ),
+          isError: true,
+        };
+      }
       return {
         handled: true,
         content: `${row.name} rejected the saved credential (HTTP ${challenge.status}). Ask the user to update this connector's token in Settings > Connectors, then try again.`,
@@ -1113,6 +1179,7 @@ function oauthConnectorMcpConfig(
     url: target.mcpUrl,
     transport: target.transport,
     headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
+    connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
 
@@ -2051,36 +2118,6 @@ export async function loadUserConnectorToolCatalog(
       defs.push(...GITHUB_TOOL_DEFS);
     }
 
-    const map = loadConnectorMcpMap();
-    if (map.size > 0) {
-      const activeIds = await getUserActiveConnectorIds(userId);
-      const connectedEntries = [...map.values()].filter((e) => activeIds.has(e.connectorId));
-      for (const entry of connectedEntries) {
-        const catalog = await buildRemoteConnectorCatalog(entry);
-        if (catalog) defs.push(...catalogToConnectorToolDefs(catalog));
-      }
-    }
-
-    const usableOAuthIds = getUsableOAuthConnectorIds();
-    const grantSummaries = await getUserConnectorOAuthGrantSummaries(userId);
-    const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
-    for (const connectorId of usableOAuthIds) {
-      if (!grantedOAuthIds.has(connectorId)) continue;
-      const target = resolveConnectorMcpTarget(connectorId);
-      if (!target) continue;
-      const access = await resolveConnectorAccessToken(userId, connectorId);
-      if (access.status !== 'ready') continue;
-      const catalog = await buildOAuthConnectorCatalog(
-        userId,
-        target,
-        access.accessToken,
-        access.tokenType,
-      );
-      if (catalog) {
-        defs.push(...catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId));
-      }
-    }
-
     const customConnectorLimit =
       options.customConnectorLimit === undefined
         ? undefined
@@ -2090,51 +2127,108 @@ export async function loadUserConnectorToolCatalog(
     // policy governs them separately.
     const customServerIds = new Set<string>();
 
+    const map = loadConnectorMcpMap();
+    const usableOAuthIds = getUsableOAuthConnectorIds();
     const usableOAuthIdSet = new Set(usableOAuthIds);
+
+    const [activeIds, grantSummaries, customRows, organizationId] = await Promise.all([
+      map.size > 0 ? getUserActiveConnectorIds(userId) : Promise.resolve(new Set<string>()),
+      getUserConnectorOAuthGrantSummaries(userId),
+      getUserCustomConnectorRows(userId, customConnectorLimit),
+      resolveConnectorOrganizationId(userId, options.organizationId),
+    ]);
+    const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
+    const sharedRows = organizationId
+      ? await getOrgSharedConnectorRows(userId, organizationId, customConnectorLimit)
+      : [];
+
+    const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];
+
+    for (const entry of map.values()) {
+      if (!activeIds.has(entry.connectorId)) continue;
+      dials.push({
+        member: false,
+        load: async () => {
+          const catalog = await buildRemoteConnectorCatalog(entry);
+          return catalog ? catalogToConnectorToolDefs(catalog) : [];
+        },
+      });
+    }
+
+    for (const connectorId of usableOAuthIds) {
+      if (!grantedOAuthIds.has(connectorId)) continue;
+      dials.push({
+        member: false,
+        load: async () => {
+          const target = resolveConnectorMcpTarget(connectorId);
+          if (!target) return [];
+          const access = await resolveConnectorAccessToken(userId, connectorId);
+          if (access.status !== 'ready') return [];
+          const catalog = await buildOAuthConnectorCatalog(
+            userId,
+            target,
+            access.accessToken,
+            access.tokenType,
+          );
+          return catalog
+            ? catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId)
+            : [];
+        },
+      });
+    }
+
     for (const grant of grantSummaries) {
       if (usableOAuthIdSet.has(grant.connectorId) || map.has(grant.connectorId)) continue;
-      const directory = await resolveDirectoryTarget(grant.connectorId);
-      if (!directory) continue;
-      const target = directoryMcpTarget(directory);
-      const access = await resolveConnectorAccessToken(userId, target.connectorId, {
-        discovered: true,
+      dials.push({
+        member: true,
+        load: async () => {
+          const directory = await resolveDirectoryTarget(grant.connectorId);
+          if (!directory) return [];
+          const target = directoryMcpTarget(directory);
+          const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+            discovered: true,
+          });
+          if (access.status !== 'ready') return [];
+          const catalog = await buildOAuthConnectorCatalog(
+            userId,
+            target,
+            access.accessToken,
+            access.tokenType,
+          );
+          return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
+        },
       });
-      if (access.status !== 'ready') continue;
-      const catalog = await buildOAuthConnectorCatalog(
-        userId,
-        target,
-        access.accessToken,
-        access.tokenType,
-      );
-      if (!catalog) continue;
-      const directoryDefs = catalogToConnectorToolDefs(catalog, target.displayName);
-      for (const def of directoryDefs) customServerIds.add(def.serverId);
-      defs.push(...directoryDefs);
     }
 
-    const customRows = await getUserCustomConnectorRows(userId, customConnectorLimit);
     for (const row of customRows) {
-      const catalog = await buildCustomConnectorCatalog(userId, row);
-      if (!catalog) continue;
-      const customDefs = catalogToConnectorToolDefs(catalog, row.name);
-      for (const def of customDefs) customServerIds.add(def.serverId);
-      defs.push(...customDefs);
+      dials.push({
+        member: true,
+        load: async () => {
+          const catalog = await buildCustomConnectorCatalog(userId, row);
+          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+        },
+      });
     }
 
-    const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
-    if (organizationId) {
-      const sharedRows = await getOrgSharedConnectorRows(
-        userId,
-        organizationId,
-        customConnectorLimit,
-      );
-      for (const row of sharedRows) {
-        const catalog = await buildOrgSharedConnectorCatalog(row);
-        if (!catalog) continue;
-        const sharedDefs = catalogToConnectorToolDefs(catalog, row.name);
-        for (const def of sharedDefs) customServerIds.add(def.serverId);
-        defs.push(...sharedDefs);
+    for (const row of sharedRows) {
+      dials.push({
+        member: true,
+        load: async () => {
+          const catalog = await buildOrgSharedConnectorCatalog(row);
+          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+        },
+      });
+    }
+
+    const dialled = await mapWithConcurrency(dials, CONNECTOR_DIAL_CONCURRENCY, (dial) =>
+      dial.load(),
+    );
+
+    for (const [index, group] of dialled.entries()) {
+      if (dials[index]?.member === true) {
+        for (const def of group) customServerIds.add(def.serverId);
       }
+      defs.push(...group);
     }
 
     // The workspace administrator's connector policy, applied to the catalog a

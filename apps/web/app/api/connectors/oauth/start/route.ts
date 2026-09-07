@@ -21,7 +21,13 @@ import {
   type McpAuthorizationStart,
 } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
-import { resolveDirectoryTarget } from '@/lib/connectors/mcp-directory-targets';
+import {
+  findDirectoryTargetByRemoteUrl,
+  resolveDirectoryTarget,
+} from '@/lib/connectors/mcp-directory-targets';
+import { resolveConnectorCredentialSpec } from '@/lib/connectors/mcp-credential-spec';
+import { findUserCustomConnectorByServerId } from '@/lib/user-connector-tools';
+import { buildSettingsBrowseHash } from '@/features/directory/routing';
 import {
   describeConnectorSetup,
   describeDiscoveredConnectorSetup,
@@ -41,6 +47,12 @@ export const OAUTH_START_STATUS_REAUTHORIZE = 'reauthorize';
 export const OAUTH_START_STATUS_ERROR = 'error';
 export const OAUTH_START_STATUS_OPEN = 'open';
 export const OAUTH_START_STATUS_UNAVAILABLE = 'unavailable';
+export const OAUTH_START_STATUS_CREDENTIAL = 'credential';
+
+const CONNECTORS_PATH = '/connectors';
+const CONNECTORS_PATH_API = '/api/connectors';
+const CREDENTIAL_HEADER_PLACEMENT = 'header';
+const DIRECTORY_OPEN_AUTH_MODE = 'none';
 
 const FAILURE_STATUS: Record<McpAuthorizationFailure, string> = {
   'no-client-identity': OAUTH_START_STATUS_NOT_CONFIGURED,
@@ -63,6 +75,19 @@ interface DiscoveredServer {
 
 export function registrationRejectedMessage(serverName: string): string {
   return `${serverName} refused to register this app, so it cannot be connected here.`;
+}
+
+async function resolveCredentialReconnectTarget(
+  userId: string,
+  connectorId: string,
+): Promise<{ connectorId: string; name: string } | null> {
+  const row = await findUserCustomConnectorByServerId(userId, connectorId);
+  if (!row) return null;
+  const target = await findDirectoryTargetByRemoteUrl(row.url);
+  if (!target) return null;
+  const spec = await resolveConnectorCredentialSpec(target);
+  if (spec.placement !== CREDENTIAL_HEADER_PLACEMENT) return null;
+  return { connectorId: target.connectorId, name: target.name };
 }
 
 function failureMessage(
@@ -101,6 +126,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
+  const credentialTarget = await resolveCredentialReconnectTarget(userId, connectorId);
+  if (credentialTarget) {
+    const settingsHref = `${CONNECTORS_PATH}${buildSettingsBrowseHash('connectors', credentialTarget.connectorId)}`;
+    if (wantsJson) {
+      return NextResponse.json({
+        connectorId,
+        status: OAUTH_START_STATUS_CREDENTIAL,
+        connectorName: credentialTarget.name,
+        settingsHref,
+        credentialsPath: `${CONNECTORS_PATH_API}/${encodeURIComponent(credentialTarget.connectorId)}/credentials`,
+      });
+    }
+    return NextResponse.redirect(new URL(settingsHref, request.url));
+  }
+
   const provider = getConnectorOAuthProvider(connectorId);
   const redirectUri = getConnectorOAuthRedirectUri();
   const endpoint = provider ? null : getMcpEndpoint(connectorId);
@@ -135,6 +175,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     target.searchParams.set('status', status);
     return NextResponse.redirect(target);
   };
+
+  if (!provider && directory && directory.record.authMode === DIRECTORY_OPEN_AUTH_MODE) {
+    return fail(OAUTH_START_STATUS_OPEN, 409, OPEN_SERVER_MESSAGE);
+  }
 
   if ((provider || discovered) && !isConnectorTokenStorageAvailable()) {
     return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);

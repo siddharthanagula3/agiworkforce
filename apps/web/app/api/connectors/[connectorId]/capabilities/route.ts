@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { loadUserConnectorCapabilityCatalog } from '@/lib/user-connector-tools';
+import { plainMcpServerText } from '@/lib/connectors/mcp-untrusted-text';
 
 export const runtime = 'nodejs';
 
@@ -46,14 +47,15 @@ async function handleGet(
       tasksSupported: server.tasksSupported,
       tools: server.tools.map((tool) => ({
         name: tool.toolName,
-        title: tool.title,
+        title: plainMcpServerText(tool.title),
+        description: plainMcpServerText(tool.description),
         visibility: tool.visibility,
         hasApp: Boolean(tool.app),
       })),
       resources: server.resources.map((resource) => ({
         uri: resource.uri,
         name: resource.name,
-        title: resource.title,
+        title: plainMcpServerText(resource.title),
         mimeType: resource.mimeType,
         size: resource.size,
         isApp: resource.isApp,
@@ -61,12 +63,12 @@ async function handleGet(
       resourceTemplates: server.resourceTemplates.map((template) => ({
         uriTemplate: template.uriTemplate,
         name: template.name,
-        title: template.title,
+        title: plainMcpServerText(template.title),
         mimeType: template.mimeType,
       })),
       prompts: server.prompts.map((prompt) => ({
         name: prompt.name,
-        title: prompt.title,
+        title: plainMcpServerText(prompt.title),
         arguments: prompt.arguments,
       })),
       apps: server.apps,

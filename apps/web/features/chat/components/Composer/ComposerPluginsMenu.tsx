@@ -7,19 +7,19 @@ import { cn } from '@shared/lib/utils';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash } from '@/features/directory';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import type { ComposerPlusMenuConnector } from './ComposerPlusMenu';
+import { connectorToggleId, type ComposerPlusMenuConnector } from './ComposerPlusMenu';
 
-export const COMPOSER_PLUGINS_MENU_TESTID = 'composer-plugins-menu';
-export const COMPOSER_PLUGINS_SEARCH_LABEL = 'Search plugins';
-export const COMPOSER_PLUGINS_CONNECT_LABEL = 'Connect plugins';
-export const COMPOSER_PLUGINS_EMPTY_COPY = 'No plugins are connected yet.';
+export const COMPOSER_CONNECTORS_MENU_TESTID = 'composer-connectors-menu';
+export const COMPOSER_CONNECTORS_SEARCH_LABEL = 'Search connectors';
+export const COMPOSER_CONNECTORS_CONNECT_LABEL = 'Add connectors';
+export const COMPOSER_CONNECTORS_EMPTY_COPY = 'No connectors are connected yet.';
 
-const MENU_LABEL = 'Plugins';
-const NO_MATCH_COPY = 'No connected plugin matches that search.';
-const LOADING_LABEL = 'Loading plugins';
+const MENU_LABEL = 'Connectors';
+const NO_MATCH_COPY = 'No connected connector matches that search.';
+const LOADING_LABEL = 'Loading connectors';
 const TOGGLE_LABEL_PREFIX = 'Use';
 const SETTINGS_SECTION = 'connectors';
-const TOGGLE_ID_PREFIX = 'composer-plugin';
+const TOGGLE_ID_PREFIX = 'composer-connector';
 
 const PANEL_CLASS = 'w-[min(20rem,calc(100vw-1rem))] rounded-xl p-1.5';
 const SEARCH_WRAP_CLASS = 'relative px-1 pb-1.5 pt-1';
@@ -95,7 +95,7 @@ export function ComposerPluginsMenu({
         side="top"
         align="start"
         aria-label={MENU_LABEL}
-        data-testid={COMPOSER_PLUGINS_MENU_TESTID}
+        data-testid={COMPOSER_CONNECTORS_MENU_TESTID}
         className={PANEL_CLASS}
       >
         {connectors.length > 0 ? (
@@ -108,8 +108,8 @@ export function ComposerPluginsMenu({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={COMPOSER_PLUGINS_SEARCH_LABEL}
-              aria-label={COMPOSER_PLUGINS_SEARCH_LABEL}
+              placeholder={COMPOSER_CONNECTORS_SEARCH_LABEL}
+              aria-label={COMPOSER_CONNECTORS_SEARCH_LABEL}
               className={SEARCH_INPUT_CLASS}
             />
           </div>
@@ -121,13 +121,14 @@ export function ComposerPluginsMenu({
             {LOADING_LABEL}
           </div>
         ) : connectors.length === 0 ? (
-          <p className={NOTE_CLASS}>{COMPOSER_PLUGINS_EMPTY_COPY}</p>
+          <p className={NOTE_CLASS}>{COMPOSER_CONNECTORS_EMPTY_COPY}</p>
         ) : visible.length === 0 ? (
           <p className={NOTE_CLASS}>{NO_MATCH_COPY}</p>
         ) : (
           <ul className="flex flex-col">
             {visible.map((connector) => {
-              const enabled = !disabledConnectorIds.includes(connector.id);
+              const toggleId = connectorToggleId(connector);
+              const enabled = !disabledConnectorIds.includes(toggleId);
               const switchId = `${TOGGLE_ID_PREFIX}-${connector.id}`;
               return (
                 <li key={connector.id} className={ROW_CLASS}>
@@ -138,7 +139,7 @@ export function ComposerPluginsMenu({
                   <Switch
                     id={switchId}
                     checked={enabled}
-                    onCheckedChange={(checked) => onSetConnectorEnabled(connector.id, checked)}
+                    onCheckedChange={(checked) => onSetConnectorEnabled(toggleId, checked)}
                     aria-label={`${TOGGLE_LABEL_PREFIX} ${connector.label}`}
                     className={SWITCH_CLASS}
                   />
@@ -153,7 +154,7 @@ export function ComposerPluginsMenu({
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
             <Plug aria-hidden className="h-3.5 w-3.5" />
           </span>
-          <span className="min-w-0 flex-1 truncate">{COMPOSER_PLUGINS_CONNECT_LABEL}</span>
+          <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
           <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverContent>

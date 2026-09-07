@@ -45,6 +45,7 @@ beforeEach(() => {
     transport: 'streamable-http',
     name: 'Cowork24',
     documentationUrl: 'https://cowork24.ch/docs/mcp',
+    record: { authMode: 'oauth' },
   };
   process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'https://app.example.com';
   __resetConnectorOAuthRegistryCacheForTests();
@@ -134,5 +135,44 @@ describe('GET /api/connectors/oauth/start for a directory record', () => {
 
     expect(response.status).toBe(501);
     expect(mocks.begin).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/connectors/oauth/start, a record that needs no sign-in', () => {
+  it('answers a conflict without dialling the server', async () => {
+    mocks.target = { ...(mocks.target as Record<string, unknown>), record: { authMode: 'none' } };
+
+    const response = await GET(request(`?connectorId=${ENCODED_ID}&mode=json`));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'open',
+      connectorId: RECORD_ID,
+      message: expect.stringContaining('needs no authorization'),
+    });
+    expect(mocks.begin).not.toHaveBeenCalled();
+  });
+
+  it('sends a browser back with the open outcome rather than a fault', async () => {
+    mocks.target = { ...(mocks.target as Record<string, unknown>), record: { authMode: 'none' } };
+
+    const response = await GET(request(`?connectorId=${ENCODED_ID}`));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toContain('status=open');
+    expect(mocks.begin).not.toHaveBeenCalled();
+  });
+
+  it('still discovers a record whose auth mode is unknown', async () => {
+    mocks.target = {
+      ...(mocks.target as Record<string, unknown>),
+      record: { authMode: 'unknown' },
+    };
+    mocks.begin.mockResolvedValue({ status: 'no-authorization-required' });
+
+    const response = await GET(request(`?connectorId=${ENCODED_ID}&mode=json`));
+
+    expect(response.status).toBe(200);
+    expect(mocks.begin).toHaveBeenCalled();
   });
 });

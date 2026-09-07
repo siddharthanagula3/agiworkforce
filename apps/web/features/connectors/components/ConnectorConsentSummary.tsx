@@ -29,7 +29,7 @@ export function ConnectorConsentSummary({ className }: { className?: string }) {
   return (
     <div
       className={
-        className ?? 'rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-left'
+        className ?? 'rounded-xl border border-warning-fill/20 bg-warning-fill/5 p-3.5 text-left'
       }
     >
       <div className="mb-2 flex items-center gap-2">
@@ -39,7 +39,7 @@ export function ConnectorConsentSummary({ className }: { className?: string }) {
       <ul className="space-y-1.5">
         {POINTS.map((point) => (
           <li key={point.title} className="flex items-start gap-2 text-xs text-muted-foreground">
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/50" />
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning-fill/50" />
             <span>
               <span className="font-medium text-foreground">{point.title}.</span> {point.body}
             </span>
