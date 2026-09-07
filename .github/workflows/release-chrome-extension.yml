@@ -49,7 +49,7 @@ jobs:
       VITE_AGI_WEB_API_BASE_URL: ${{ vars.AGI_WEB_API_BASE_URL || 'https://agiworkforce.com' }}
     steps:
       - name: Checkout the selected release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
@@ -93,12 +93,12 @@ jobs:
           done
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -134,7 +134,7 @@ jobs:
         run: node apps/extension/e2e/smoke.mjs "dist/chrome/${ARCHIVE_NAME}"
 
       - name: Upload verified Chrome package
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: chrome-extension-${{ steps.metadata.outputs.version }}
           path: dist/chrome/
@@ -159,7 +159,7 @@ jobs:
       ARCHIVE_PATH: dist/chrome/${{ needs.package.outputs.archive }}
     steps:
       - name: Checkout the exact packaged release source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ needs.package.outputs.tag }}

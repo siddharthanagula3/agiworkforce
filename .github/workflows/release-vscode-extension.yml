@@ -38,7 +38,7 @@ jobs:
       vsix: ${{ steps.metadata.outputs.vsix }}
     steps:
       - name: Checkout the selected release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
@@ -71,12 +71,12 @@ jobs:
           echo "vsix=agi-workforce-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -116,7 +116,7 @@ jobs:
         run: xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration:vsix
 
       - name: Upload verified VSIX
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: vscode-extension-${{ steps.metadata.outputs.version }}
           path: dist/vscode/
@@ -141,18 +141,18 @@ jobs:
       VSIX_PATH: dist/vscode/${{ needs.package.outputs.vsix }}
     steps:
       - name: Checkout the exact packaged release source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ needs.package.outputs.tag }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
