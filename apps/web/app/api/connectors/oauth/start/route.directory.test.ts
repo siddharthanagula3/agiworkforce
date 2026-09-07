@@ -14,6 +14,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   ConnectorOAuthStoreUnavailableError: class extends Error {},
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
@@ -22,6 +23,9 @@ vi.mock('@/lib/connectors/mcp-discovery', () => ({
   beginMcpAuthorization: (...a: unknown[]) => mocks.begin(...a),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+  findDirectoryTargetByRemoteUrl: vi.fn(async () => null),
+  isDirectoryServerId: vi.fn(() => false),
+  normalizeRemoteUrl: vi.fn((url: string) => url),
   resolveDirectoryTarget: async () => mocks.target,
 }));
 

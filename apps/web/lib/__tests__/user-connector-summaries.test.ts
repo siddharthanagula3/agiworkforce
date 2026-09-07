@@ -35,6 +35,8 @@ vi.mock('@agiworkforce/mcp', () => ({
 
 const openCredential = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/custom-connector-crypto', () => ({
+  decryptConnectorToken: vi.fn(),
+  encryptConnectorToken: vi.fn(),
   openCustomConnectorCredential: openCredential,
 }));
 

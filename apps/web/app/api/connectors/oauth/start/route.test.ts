@@ -22,6 +22,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization: (...a: unknown[]) => mocks.createPending(...a),
   upsertConnectorOAuthGrant: vi.fn(),

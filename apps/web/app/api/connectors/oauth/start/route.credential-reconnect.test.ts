@@ -15,12 +15,15 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   ConnectorOAuthStoreUnavailableError: class extends Error {},
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
 }));
 vi.mock('@/lib/connectors/mcp-discovery', () => ({ beginMcpAuthorization: vi.fn() }));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+  isDirectoryServerId: vi.fn(() => false),
+  normalizeRemoteUrl: vi.fn((url: string) => url),
   resolveDirectoryTarget: vi.fn(async () => null),
   findDirectoryTargetByRemoteUrl: (...a: unknown[]) => mocks.targetByUrl(...a),
 }));
