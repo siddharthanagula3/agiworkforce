@@ -5,6 +5,7 @@ const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  transaction: vi.fn(),
   killE2BSession: vi.fn(),
   unpublishForConversations: vi.fn(),
 }));
@@ -12,7 +13,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: mocks.query },
+    db: {
+      query: mocks.query,
+      transaction: (run: (tx: unknown) => Promise<unknown>) => {
+        mocks.transaction();
+        return run({ query: mocks.query });
+      },
+    },
     userId: 'user-1',
     organizationId: null,
   })),
@@ -114,5 +121,38 @@ describe('DELETE /api/chat/conversations/[id]', () => {
 
     expect(response.status).toBe(500);
     expect(mocks.killE2BSession).not.toHaveBeenCalled();
+  });
+
+  it('marks the row deleted and revokes its pages in one transaction', async () => {
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
+
+    await DELETE(request(), context);
+
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    const [pendingSql, pendingParams] = mocks.query.mock.calls[1]!;
+    expect(pendingSql).toContain('published_artifacts');
+    expect(pendingSql).toContain('deleted_at is not null');
+    expect(pendingParams).toEqual(['user-1', null, CONVERSATION_ID]);
+  });
+
+  it('finishes an unrevoked publication when the delete is retried', async () => {
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
+    mocks.unpublishForConversations.mockRejectedValueOnce(new Error('db down'));
+
+    const failed = await DELETE(request(), context);
+    expect(failed.status).toBe(500);
+
+    mocks.query.mockReset();
+    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]);
+    mocks.unpublishForConversations.mockResolvedValue(['tokenaaaaaaaaaaaaaaaaaaa']);
+
+    const retried = await DELETE(request(), context);
+
+    expect(retried.status).toBe(200);
+    expect(mocks.unpublishForConversations).toHaveBeenLastCalledWith(expect.anything(), {
+      userId: 'user-1',
+      conversationIds: [CONVERSATION_ID],
+    });
   });
 });
