@@ -49,6 +49,7 @@ const chatComposerMocks = vi.hoisted(() => ({
     toolConnectorIds: {} as Record<string, string>,
   },
   memoryCapabilityEnabled: true,
+  memoryCapabilityListeners: new Set<() => void>(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -84,6 +85,12 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 
 vi.mock('@/lib/runtime/memory-capability', () => ({
   isMemoryCapabilityEnabled: () => Promise.resolve(chatComposerMocks.memoryCapabilityEnabled),
+  subscribeMemoryCapability: (listener: () => void) => {
+    chatComposerMocks.memoryCapabilityListeners.add(listener);
+    return () => {
+      chatComposerMocks.memoryCapabilityListeners.delete(listener);
+    };
+  },
 }));
 
 vi.mock('./DragDropOverlay', () => ({
@@ -164,6 +171,7 @@ describe('ChatComposerNew', () => {
     chatComposerMocks.connectors.sources = {};
     chatComposerMocks.connectors.customNames = {};
     chatComposerMocks.memoryCapabilityEnabled = true;
+    chatComposerMocks.memoryCapabilityListeners.clear();
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
@@ -1225,6 +1233,27 @@ describe('ChatComposerNew', () => {
 
     act(() => {
       useChatStore.getState().setMemoryEnabled(false, conversationId);
+    });
+
+    expect(await screen.findByTestId('memory-indicator')).toHaveTextContent('Memory off');
+  });
+
+  it('follows a memory capability change without being remounted', async () => {
+    const conversationId = 'memory-capability-change-conversation';
+    chatComposerMocks.memoryCapabilityEnabled = false;
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+
+    act(() => {
+      useChatStore.getState().setMemoryEnabled(false, conversationId);
+    });
+    await waitFor(() => {
+      expect(chatComposerMocks.memoryCapabilityListeners.size).toBe(1);
+    });
+    expect(screen.queryByTestId('memory-indicator')).not.toBeInTheDocument();
+
+    chatComposerMocks.memoryCapabilityEnabled = true;
+    act(() => {
+      for (const listener of chatComposerMocks.memoryCapabilityListeners) listener();
     });
 
     expect(await screen.findByTestId('memory-indicator')).toHaveTextContent('Memory off');
