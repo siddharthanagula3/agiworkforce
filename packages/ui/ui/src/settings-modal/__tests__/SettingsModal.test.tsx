@@ -395,6 +395,22 @@ describe('SettingsModal nav (web IA)', () => {
     ]);
   });
 
+  /**
+   * The phone nav is one horizontal strip. While the headings were desktop
+   * only, Skills, Connectors, Plugins and Memory ran on from the Settings
+   * entries with nothing marking where one group ended.
+   */
+  it('keeps the group headings at phone width', () => {
+    renderModal();
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    for (const label of within(nav).getAllByTestId(NAV_GROUP_LABEL_TESTID)) {
+      expect(label.className).not.toContain('hidden');
+      expect(label.className).toContain('whitespace-nowrap');
+      expect(label.className).toContain('shrink-0');
+    }
+  });
+
   it('drops a group heading when the search filter empties it', () => {
     renderModal();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
