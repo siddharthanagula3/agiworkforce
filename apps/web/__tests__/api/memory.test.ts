@@ -371,7 +371,10 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('insert into user_memories'),
+        expect.arrayContaining(['Trimmed content', 'health']),
+      );
     });
 
     it('should store null category when category is not provided', async () => {

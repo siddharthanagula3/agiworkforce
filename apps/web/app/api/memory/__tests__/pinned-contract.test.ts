@@ -44,12 +44,16 @@ function row(overrides: Record<string, unknown> = {}) {
 
 const context = { params: Promise.resolve({ id: MEM_ID }) };
 
+function memoryRowCalls() {
+  return mocks.query.mock.calls.filter((call) => !String(call[0]).includes("settings -> 'memory'"));
+}
+
 function sql(callIndex = 0): string {
-  return String(mocks.query.mock.calls[callIndex]?.[0] ?? '');
+  return String(memoryRowCalls()[callIndex]?.[0] ?? '');
 }
 
 function params(callIndex = 0): unknown[] {
-  return (mocks.query.mock.calls[callIndex]?.[1] ?? []) as unknown[];
+  return (memoryRowCalls()[callIndex]?.[1] ?? []) as unknown[];
 }
 
 describe('/api/memory pinned contract', () => {
@@ -101,7 +105,7 @@ describe('/api/memory pinned contract', () => {
   });
 
   it('PUT /api/memory/[id] updates content and pin state together', async () => {
-    mocks.query.mockResolvedValueOnce([row({ content: 'new text', pinned: false })]);
+    mocks.query.mockResolvedValue([row({ content: 'new text', pinned: false })]);
 
     const res = await PUT(
       new NextRequest(`http://localhost:3000/api/memory/${MEM_ID}`, {
@@ -144,7 +148,7 @@ describe('/api/memory pinned contract', () => {
   });
 
   it('POST /api/memory persists and returns the requested pin state', async () => {
-    mocks.query.mockResolvedValueOnce([row({ pinned: true })]);
+    mocks.query.mockResolvedValue([row({ pinned: true })]);
 
     const res = await CREATE(
       new NextRequest('http://localhost:3000/api/memory', {
