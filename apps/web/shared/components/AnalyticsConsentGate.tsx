@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { GoogleAnalytics } from './GoogleAnalytics';
+import { GoogleAnalytics, setGoogleAnalyticsCollection } from './GoogleAnalytics';
 import {
   COOKIE_CONSENT_UPDATED_EVENT,
   isAnalyticsAllowed,
@@ -18,7 +18,13 @@ export function AnalyticsConsentGate({ trackingId, nonce }: AnalyticsConsentGate
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    const sync = () => setAllowed(isAnalyticsAllowed(readCookiePreferences()));
+    // Unmounting the tags does not unload a gtag.js that already ran, so the
+    // measurement id's own collection switch is what stops the next event.
+    const sync = () => {
+      const nextAllowed = isAnalyticsAllowed(readCookiePreferences());
+      setGoogleAnalyticsCollection(trackingId, nextAllowed);
+      setAllowed(nextAllowed);
+    };
     sync();
 
     window.addEventListener(COOKIE_CONSENT_UPDATED_EVENT, sync);
@@ -27,7 +33,7 @@ export function AnalyticsConsentGate({ trackingId, nonce }: AnalyticsConsentGate
       window.removeEventListener(COOKIE_CONSENT_UPDATED_EVENT, sync);
       window.removeEventListener('storage', sync);
     };
-  }, []);
+  }, [trackingId]);
 
   if (!allowed) return null;
 

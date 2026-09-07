@@ -126,9 +126,9 @@ export async function recordCookieConsentOnServer(record: CookieConsentRecord): 
   }
 }
 
-export function writeCookiePreferences(preferences: CookiePreferences): void {
+function storeCookieConsentRecord(record: CookieConsentRecord): void {
   if (typeof window === 'undefined') return;
-  const record = buildCookieConsentRecord(preferences);
+  const preferences: CookiePreferences = { necessary: true, analytics: record.analytics };
   try {
     window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify(record));
   } catch {
@@ -136,10 +136,25 @@ export function writeCookiePreferences(preferences: CookiePreferences): void {
     // still applies for this page, and the banner returns next visit rather
     // than pretending a choice was recorded.
   }
-  void recordCookieConsentOnServer(record);
   window.dispatchEvent(
     new CustomEvent<CookiePreferences>(COOKIE_CONSENT_UPDATED_EVENT, { detail: preferences }),
   );
+}
+
+export function writeCookiePreferences(preferences: CookiePreferences): void {
+  if (typeof window === 'undefined') return;
+  const record = buildCookieConsentRecord(preferences);
+  storeCookieConsentRecord(record);
+  void recordCookieConsentOnServer(record);
+}
+
+// The consent centre writes its own ledger row through /api/consent, so this
+// applies the same decision to the browser the gate reads without posting it
+// twice.
+export function applyAnalyticsConsentLocally(granted: boolean): void {
+  if (typeof window === 'undefined') return;
+  if (readCookiePreferences()?.analytics === granted) return;
+  storeCookieConsentRecord(buildCookieConsentRecord({ necessary: true, analytics: granted }));
 }
 
 export function isAnalyticsAllowed(preferences: CookiePreferences | null): boolean {

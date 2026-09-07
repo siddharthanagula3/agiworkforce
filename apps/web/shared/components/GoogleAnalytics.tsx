@@ -11,6 +11,14 @@ declare global {
   }
 }
 
+const GA_DISABLE_FLAG_PREFIX = 'ga-disable-';
+
+export function setGoogleAnalyticsCollection(trackingId: string, enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  (window as unknown as Record<string, unknown>)[`${GA_DISABLE_FLAG_PREFIX}${trackingId}`] =
+    !enabled;
+}
+
 interface GoogleAnalyticsProps {
   trackingId: string;
   nonce?: string;
