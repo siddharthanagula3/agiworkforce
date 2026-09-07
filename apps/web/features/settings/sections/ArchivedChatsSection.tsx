@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfirm } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { toWebConversation } from '@/lib/hooks/useConversations';
 import {
   applyBulkConversationAction,
   deleteManagedConversation,
@@ -51,7 +52,7 @@ export function ArchivedChatsSection() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const updateConversationInStore = useChatStore((state) => state.updateConversation);
+  const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
   const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
@@ -99,14 +100,21 @@ export function ArchivedChatsSection() {
     }
   };
 
+  const dropFromList = (id: string) => {
+    setConversations((current) => current.filter((conversation) => conversation.id !== id));
+    // The row left the server's archived list too, so every later row moved down
+    // one. Holding the old offset would step over the row that took its place.
+    setNextOffset((offset) => Math.max(0, offset - 1));
+  };
+
   const handleRestore = async (conversation: ArchivedConversationSummary) => {
     setActionId(conversation.id);
     setError(null);
     setNotice(null);
     try {
-      await restoreArchivedConversation(conversation.id);
-      setConversations((current) => current.filter(({ id }) => id !== conversation.id));
-      updateConversationInStore(conversation.id, { isArchived: false });
+      const restored = await restoreArchivedConversation(conversation.id);
+      dropFromList(conversation.id);
+      upsertConversationInStore(toWebConversation(restored));
       setNotice(`Restored “${conversation.title}”.`);
     } catch (caught) {
       setError(toUserMessage(caught, 'Failed to restore archived chat'));
@@ -129,7 +137,7 @@ export function ArchivedChatsSection() {
     setNotice(null);
     try {
       await deleteManagedConversation(conversation.id);
-      setConversations((current) => current.filter(({ id }) => id !== conversation.id));
+      dropFromList(conversation.id);
       deleteConversationFromStore(conversation.id);
       if (activeConversationId === conversation.id) router.replace('/chat');
       setNotice(`Deleted “${conversation.title}”.`);
