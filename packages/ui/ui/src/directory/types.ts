@@ -78,8 +78,34 @@ export interface DirectoryGroup {
   heading: string;
 }
 
+export type DirectoryManageColumn = 'name' | 'author' | 'skills' | 'updated';
+
+export interface DirectoryManageRow {
+  id: string;
+  name: string;
+  slashName?: boolean;
+  author?: string;
+  skillCount?: number;
+  updatedAt?: string;
+}
+
+export interface DirectoryManageAction {
+  id: string;
+  label: string;
+  onSelect: () => void;
+}
+
+export interface DirectoryManageSection {
+  rows: readonly DirectoryManageRow[];
+  loading?: boolean;
+  error?: string | null;
+  actions?: readonly DirectoryManageAction[];
+  retry?: () => Promise<void> | void;
+}
+
 export interface DirectorySection {
   entries: readonly DirectoryEntry[];
+  manage?: DirectoryManageSection;
   groups?: readonly DirectoryGroup[];
   installable?: boolean;
   loading?: boolean;

@@ -11,6 +11,12 @@ import { useDirectoryAdapter } from '../hooks/useDirectoryAdapter';
 import { DEFAULT_DIRECTORY_QUERY } from '../services/connectors-directory';
 import { DEFAULT_PLUGIN_QUERY } from '../services/plugins-directory';
 
+const routerPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush, replace: vi.fn() }),
+  usePathname: () => '/chat',
+}));
+
 vi.mock('@features/skills/services/skills-catalog', () => ({
   invalidateSkillsCatalog: vi.fn(),
 }));
@@ -745,6 +751,63 @@ function installationOf(pluginKey: string) {
     updatedAt: '2026-09-06T00:00:00.000Z',
   };
 }
+
+describe('the plugins installed table', () => {
+  it('is empty and not loading once the install state says nothing is installed', async () => {
+    stubPluginRoutes();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    await waitFor(() => expect(result.current.plugins?.manage?.loading).toBe(false));
+    expect(result.current.plugins?.manage?.rows).toEqual([]);
+  });
+
+  it('lists an installed plugin with its author, skill count and install date', async () => {
+    stubPluginRoutes({
+      'GET /api/plugins/marketplace-installations': () =>
+        json({ installations: [installationOf('frontend-design')] }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    await waitFor(() => expect(result.current.plugins?.manage?.rows).toHaveLength(1));
+    expect(result.current.plugins?.manage?.rows[0]).toMatchObject({
+      id: 'frontend-design',
+      author: 'Anthropic',
+      updatedAt: '2026-09-06T00:00:00.000Z',
+    });
+  });
+
+  it('keeps its callbacks stable when the router object is recreated', async () => {
+    stubPluginRoutes();
+    const { result, rerender } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    await waitFor(() => expect(result.current.plugins?.manage?.loading).toBe(false));
+    const before = result.current.loadSection;
+    rerender();
+    expect(result.current.loadSection).toBe(before);
+  });
+
+  it('sends Create with AGI to the composer with a prefilled prompt', async () => {
+    routerPush.mockClear();
+    stubPluginRoutes();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    await waitFor(() => expect(result.current.plugins?.manage?.actions).toBeDefined());
+    const action = result.current.plugins?.manage?.actions?.[0];
+    expect(action?.label).toBe('Create with AGI');
+    act(() => action?.onSelect());
+    expect(routerPush).toHaveBeenCalledWith(
+      '/chat?starterPrompt=Build%20a%20plugin%20for%20me%3A%20',
+    );
+  });
+});
 
 describe('useDirectoryAdapter plugins', () => {
   it('primes the built-in and partner packs once, pages the marketplace and groups them', async () => {

@@ -10,6 +10,8 @@ import { isDirectoryActionNotice } from './action-notice';
 import { AddMarketplaceDialog } from './AddMarketplaceDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
 import {
+  ADD_MARKETPLACE_ACTION_ID,
+  ADD_MARKETPLACE_LABEL,
   CONNECTOR_POPULAR_HEADING,
   CUSTOM_BADGE,
   DIRECTORY_CATALOG_HEADINGS,
@@ -33,7 +35,9 @@ import {
   MARKETPLACE_REFRESHING_LABEL,
   MARKETPLACE_REFRESH_LABEL,
 } from './constants';
+import { DirectoryBackLink } from './DirectoryDetailHeader';
 import { DirectoryGrid } from './DirectoryGrid';
+import { DirectoryManageView } from './DirectoryManageView';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
 import { DirectoryToolbar } from './DirectoryToolbar';
 import { selectDirectoryEntries, toggleFilterValue } from './filtering';
@@ -104,6 +108,7 @@ function DirectorySectionPanel({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
   const openChangeRef = useRef(onOpenEntryChange);
   openChangeRef.current = onOpenEntryChange;
@@ -315,8 +320,31 @@ function DirectorySectionPanel({
     );
   }
 
+  function renderIndex() {
+    const manage = data.manage;
+    if (!manage || browsing) return renderCatalog();
+    const marketplaceAction = showAddMarketplace
+      ? [
+          {
+            id: ADD_MARKETPLACE_ACTION_ID,
+            label: ADD_MARKETPLACE_LABEL,
+            onSelect: () => setMarketplaceOpen(true),
+          },
+        ]
+      : [];
+    return (
+      <DirectoryManageView
+        section={section}
+        view={{ ...manage, actions: [...marketplaceAction, ...(manage.actions ?? [])] }}
+        onBrowse={() => setBrowsing(true)}
+        onOpen={setEntryId}
+        headerActions={headerActions}
+      />
+    );
+  }
+
   function renderBody() {
-    if (!entryId) return renderCatalog();
+    if (!entryId) return renderIndex();
     if (detailLoading && !detail) {
       return (
         <div className="flex justify-center py-16">
@@ -428,7 +456,7 @@ function DirectorySectionPanel({
         </>
       );
     }
-    return renderCatalog();
+    return renderIndex();
   }
 
   function renderRemoteFooter() {
@@ -479,6 +507,7 @@ function DirectorySectionPanel({
       groups.length > 0 ? null : groupedAbove || data.catalogHeading ? catalogHeading : null;
     return (
       <div className="flex flex-col gap-5">
+        {data.manage ? <DirectoryBackLink onBack={() => setBrowsing(false)} /> : null}
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold text-foreground">
             {DIRECTORY_SECTION_LABELS[section]}
