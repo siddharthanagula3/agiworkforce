@@ -451,6 +451,7 @@ function DirectorySectionPanel({
                     adapter.setPluginSkillEnabled?.(detail.id, skill, enabled),
                 }
               : {})}
+            {...(adapter.openConnector ? { onOpenConnector: adapter.openConnector } : {})}
             busy={busy}
           />
         </>

@@ -7,17 +7,26 @@ import type { ReactNode } from 'react';
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
 import { Switch } from '../primitives/Switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../primitives/Tabs';
 import {
+  CONNECT_LABEL,
   INSTALLED_LABEL,
   INSTALL_LABEL,
+  PLUGIN_CONNECTORS_TAB_COPY,
+  PLUGIN_CONNECTORS_TAB_EMPTY,
+  PLUGIN_CONNECTORS_TAB_LABEL,
   PLUGIN_CONNECTOR_CONNECTED_LABEL,
   PLUGIN_CONNECTOR_MISSING_LABEL,
+  PLUGIN_LAST_UPDATED_LABEL,
+  PLUGIN_SKILLS_TAB_COPY,
+  PLUGIN_SKILLS_TAB_EMPTY,
+  PLUGIN_SKILLS_TAB_LABEL,
+  PLUGIN_SKILL_SLASH_PREFIX,
+  PLUGIN_SOURCE_LABEL,
+  PLUGIN_TABS_LABEL,
   PLUGIN_ENABLED_HINT,
   PLUGIN_ENABLED_LABEL,
-  PLUGIN_SETTINGS_CONNECTORS_LABEL,
-  PLUGIN_SETTINGS_HEADING,
   PLUGIN_SETTINGS_LOADING_LABEL,
-  PLUGIN_SETTINGS_SKILLS_HINT,
   PLUGIN_SKILL_TOGGLE_PREFIX,
   PLUGIN_AGENTS_LABEL,
   PLUGIN_COMMANDS_LABEL,
@@ -56,6 +65,7 @@ import {
   DETAIL_HEADER_BAND,
   DETAIL_HEADING,
   DETAIL_LABEL,
+  DIRECTORY_CREATE_BUTTON,
   DIRECTORY_FOCUS_RING,
   DIRECTORY_ICON_BUTTON,
 } from './styles';
@@ -66,6 +76,12 @@ import type {
 } from './types';
 
 const EMPTY_VALUES: readonly string[] = [];
+
+function formatUpdatedAt(value: string | undefined): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+}
 const CHIP_CLASS = 'rounded-full bg-muted px-2.5 py-0.5 text-xs text-foreground';
 const MONO_CHIP_CLASS =
   'truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs text-foreground';
@@ -93,9 +109,10 @@ function MonoList({ values }: { values: readonly string[] }) {
 
 function componentRows(
   components: DirectoryPluginComponents,
+  skillsListedElsewhere: boolean,
 ): { label: string; body: ReactNode }[] {
   const rows: { label: string; body: ReactNode }[] = [];
-  if (components.skills.length > 0) {
+  if (components.skills.length > 0 && !skillsListedElsewhere) {
     rows.push({ label: PLUGIN_SKILLS_LABEL, body: <MonoList values={components.skills} /> });
   }
   if (components.commands > 0) {
@@ -126,8 +143,14 @@ function componentRows(
   return rows;
 }
 
-function ComponentsSummary({ components }: { components: DirectoryPluginComponents }) {
-  const rows = componentRows(components);
+function ComponentsSummary({
+  components,
+  skillsListedElsewhere,
+}: {
+  components: DirectoryPluginComponents;
+  skillsListedElsewhere: boolean;
+}) {
+  const rows = componentRows(components, skillsListedElsewhere);
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
@@ -240,12 +263,95 @@ function EnabledRow({
   );
 }
 
-function SettingsSection({
+const TAB_SKILLS = 'skills';
+const TAB_CONNECTORS = 'connectors';
+
+function SkillRows({
   settings,
   onSetSkillEnabled,
 }: {
   settings: DirectoryPluginSettings;
   onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
+}) {
+  if (settings.skills.length === 0) {
+    return <p className="text-sm text-muted-foreground">{PLUGIN_SKILLS_TAB_EMPTY}</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {settings.skills.map((skill) => {
+        const switchId = `plugin-skill-${settings.pluginId}-${skill.name}`;
+        return (
+          <li key={skill.name} className={SETTINGS_ROW_CLASS}>
+            <label htmlFor={switchId} className="min-w-0 flex-1">
+              <span className="block truncate font-mono text-xs text-foreground">
+                {`${PLUGIN_SKILL_SLASH_PREFIX}${skill.name}`}
+              </span>
+              {skill.description ? (
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {skill.description}
+                </span>
+              ) : null}
+            </label>
+            <Switch
+              id={switchId}
+              checked={skill.enabled}
+              disabled={settings.saving || !onSetSkillEnabled}
+              onCheckedChange={(checked) => void onSetSkillEnabled?.(skill.name, checked)}
+              aria-label={`${PLUGIN_SKILL_TOGGLE_PREFIX} ${skill.name}`}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ConnectorRows({
+  settings,
+  onOpenConnector,
+}: {
+  settings: DirectoryPluginSettings;
+  onOpenConnector?: (connectorId: string) => void;
+}) {
+  if (settings.connectors.length === 0) {
+    return <p className="text-sm text-muted-foreground">{PLUGIN_CONNECTORS_TAB_EMPTY}</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {settings.connectors.map((connector) => (
+        <li key={connector.id} className={SETTINGS_ROW_CLASS}>
+          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{connector.name}</span>
+          {connector.connected ? (
+            <span className="shrink-0 text-xs text-success-text">
+              {PLUGIN_CONNECTOR_CONNECTED_LABEL}
+            </span>
+          ) : onOpenConnector ? (
+            <button
+              type="button"
+              onClick={() => onOpenConnector(connector.id)}
+              className={cn(DIRECTORY_CREATE_BUTTON, 'shrink-0')}
+            >
+              {CONNECT_LABEL}
+            </button>
+          ) : (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {PLUGIN_CONNECTOR_MISSING_LABEL}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ContentsTabs({
+  settings,
+  onSetSkillEnabled,
+  onOpenConnector,
+}: {
+  settings: DirectoryPluginSettings;
+  onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
+  onOpenConnector?: (connectorId: string) => void;
 }) {
   if (settings.loading) {
     return (
@@ -266,57 +372,20 @@ function SettingsSection({
   }
   if (settings.skills.length === 0 && settings.connectors.length === 0) return null;
   return (
-    <section className="flex flex-col gap-3">
-      <h4 className={DETAIL_HEADING}>{PLUGIN_SETTINGS_HEADING}</h4>
-      {settings.skills.length > 0 ? (
-        <>
-          <p className="text-xs text-muted-foreground">{PLUGIN_SETTINGS_SKILLS_HINT}</p>
-          <ul className="flex flex-col gap-2">
-            {settings.skills.map((skill) => {
-              const switchId = `plugin-skill-${settings.pluginId}-${skill.name}`;
-              return (
-                <li key={skill.name} className={SETTINGS_ROW_CLASS}>
-                  <label
-                    htmlFor={switchId}
-                    className="min-w-0 flex-1 truncate font-mono text-xs text-foreground"
-                  >
-                    {skill.name}
-                  </label>
-                  <Switch
-                    id={switchId}
-                    checked={skill.enabled}
-                    disabled={settings.saving || !onSetSkillEnabled}
-                    onCheckedChange={(checked) => void onSetSkillEnabled?.(skill.name, checked)}
-                    aria-label={`${PLUGIN_SKILL_TOGGLE_PREFIX} ${skill.name}`}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      ) : null}
-      {settings.connectors.length > 0 ? (
-        <DetailRow label={PLUGIN_SETTINGS_CONNECTORS_LABEL}>
-          <ul className="flex flex-col gap-1.5">
-            {settings.connectors.map((connector) => (
-              <li key={connector.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-foreground">{connector.name}</span>
-                <span
-                  className={cn(
-                    'shrink-0 text-xs',
-                    connector.connected ? 'text-success-text' : 'text-muted-foreground',
-                  )}
-                >
-                  {connector.connected
-                    ? PLUGIN_CONNECTOR_CONNECTED_LABEL
-                    : PLUGIN_CONNECTOR_MISSING_LABEL}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </DetailRow>
-      ) : null}
-    </section>
+    <Tabs defaultValue={settings.skills.length > 0 ? TAB_SKILLS : TAB_CONNECTORS}>
+      <TabsList aria-label={PLUGIN_TABS_LABEL}>
+        <TabsTrigger value={TAB_SKILLS}>{PLUGIN_SKILLS_TAB_LABEL}</TabsTrigger>
+        <TabsTrigger value={TAB_CONNECTORS}>{PLUGIN_CONNECTORS_TAB_LABEL}</TabsTrigger>
+      </TabsList>
+      <TabsContent value={TAB_SKILLS} className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">{PLUGIN_SKILLS_TAB_COPY}</p>
+        <SkillRows settings={settings} onSetSkillEnabled={onSetSkillEnabled} />
+      </TabsContent>
+      <TabsContent value={TAB_CONNECTORS} className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">{PLUGIN_CONNECTORS_TAB_COPY}</p>
+        <ConnectorRows settings={settings} onOpenConnector={onOpenConnector} />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -331,6 +400,7 @@ export function PluginDetailView({
   settings,
   onSetEnabled,
   onSetSkillEnabled,
+  onOpenConnector,
   busy,
 }: {
   detail: DirectoryPluginDetail;
@@ -343,6 +413,7 @@ export function PluginDetailView({
   settings?: DirectoryPluginSettings;
   onSetEnabled?: (enabled: boolean) => Promise<void> | void;
   onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
+  onOpenConnector?: (connectorId: string) => void;
   busy?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -369,6 +440,8 @@ export function PluginDetailView({
       row.href.length > 0 && rows.findIndex((r) => r.href === row.href) === index,
   );
   const showCli = !installed && !installable;
+  const updated = formatUpdatedAt(detail.updatedAt);
+  const showsTabs = installed && settings !== undefined;
 
   return (
     <div ref={rootRef} className="flex flex-col gap-5">
@@ -421,15 +494,21 @@ export function PluginDetailView({
         />
       ) : null}
 
-      {installed && settings ? (
-        <SettingsSection settings={settings} onSetSkillEnabled={onSetSkillEnabled} />
+      {showsTabs ? (
+        <ContentsTabs
+          settings={settings}
+          onSetSkillEnabled={onSetSkillEnabled}
+          onOpenConnector={onOpenConnector}
+        />
       ) : null}
 
       <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
         {detail.description}
       </p>
 
-      {detail.components ? <ComponentsSummary components={detail.components} /> : null}
+      {detail.components ? (
+        <ComponentsSummary components={detail.components} skillsListedElsewhere={showsTabs} />
+      ) : null}
 
       {detail.examplePrompts.length > 0 ? (
         <section className="flex flex-col gap-3">
@@ -444,9 +523,24 @@ export function PluginDetailView({
         </section>
       ) : null}
 
-      {worksWith.length > 0 || detail.version || moreInfo.length > 0 ? (
+      {worksWith.length > 0 ||
+      detail.version ||
+      detail.sourceLabel ||
+      updated ||
+      moreInfo.length > 0 ? (
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
+            {detail.sourceLabel ? (
+              <DetailRow label={PLUGIN_SOURCE_LABEL}>
+                {detail.sourceUrl ? (
+                  <OutboundLink href={detail.sourceUrl} onOpenHref={onOpenHref}>
+                    {detail.sourceLabel}
+                  </OutboundLink>
+                ) : (
+                  detail.sourceLabel
+                )}
+              </DetailRow>
+            ) : null}
             {worksWith.length > 0 ? (
               <DetailRow label={PLUGIN_WORKS_WITH_LABEL}>
                 <ul className="flex flex-wrap gap-1.5">
@@ -463,6 +557,7 @@ export function PluginDetailView({
                 <span className="font-mono text-xs">{detail.version}</span>
               </DetailRow>
             ) : null}
+            {updated ? <DetailRow label={PLUGIN_LAST_UPDATED_LABEL}>{updated}</DetailRow> : null}
           </div>
           {moreInfo.length > 0 ? (
             <DetailRow label={PLUGIN_MORE_INFO_LABEL}>
