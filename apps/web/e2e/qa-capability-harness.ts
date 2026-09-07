@@ -140,8 +140,8 @@ export async function apiCall(
       };
       if (i?.method && i.method !== 'GET') {
         headers['Content-Type'] = 'application/json';
-        const csrfResponse = await fetch('/api/csrf-token').then((r) => (r.ok ? r.json() : null));
-        const csrf = (csrfResponse as { csrfToken?: string } | null)?.csrfToken;
+        const csrfResponse = await fetch('/api/csrf').then((r) => (r.ok ? r.json() : null));
+        const csrf = (csrfResponse as { token?: string } | null)?.token;
         if (csrf) headers['x-csrf-token'] = csrf;
       }
       if (i?.idempotencyKey) headers['Idempotency-Key'] = i.idempotencyKey;
