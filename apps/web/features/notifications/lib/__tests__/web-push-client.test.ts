@@ -13,6 +13,7 @@ const {
 } = await import('../web-push-client');
 
 const ENDPOINT = 'https://push.example.test/push/abc';
+const NEXT_ENDPOINT = 'https://push.example.test/push/xyz';
 const PUBLIC_KEY =
   'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
 
@@ -179,5 +180,61 @@ describe('disableWebPush', () => {
     const remove = mocks.fetch.mock.calls.find((call) => call[1]?.method === 'DELETE')!;
     expect(JSON.parse(remove[1].body)).toEqual({ endpoint: ENDPOINT });
     expect(live.unsubscribe).toHaveBeenCalled();
+  });
+
+  it('drops the browser endpoint even when the removal call throws', async () => {
+    const live = subscription();
+    installBrowser({ permission: 'granted', existing: live });
+    mocks.fetch.mockImplementation(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === 'DELETE') throw new Error('offline');
+      return { ok: true, json: async () => ({ publicKey: PUBLIC_KEY }) };
+    });
+
+    await expect(disableWebPush()).resolves.toBe(false);
+    expect(live.unsubscribe).toHaveBeenCalled();
+  });
+
+  it('drops the browser endpoint even when the server refuses the removal', async () => {
+    const live = subscription();
+    installBrowser({ permission: 'granted', existing: live });
+    mocks.fetch.mockImplementation(async (_url: string, init?: { method?: string }) =>
+      init?.method === 'DELETE'
+        ? { ok: false, status: 500 }
+        : { ok: true, json: async () => ({ publicKey: PUBLIC_KEY }) },
+    );
+
+    await expect(disableWebPush()).resolves.toBe(false);
+    expect(live.unsubscribe).toHaveBeenCalled();
+  });
+
+  it('never hands the signed out endpoint to the next account on this browser', async () => {
+    const previous = subscription();
+    const fresh = subscription({
+      endpoint: NEXT_ENDPOINT,
+      toJSON: () => ({ endpoint: NEXT_ENDPOINT, keys: { p256dh: 'p', auth: 'a' } }),
+    } as Partial<PushSubscription>);
+    let held: PushSubscription | null = previous;
+    (previous.unsubscribe as unknown as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      held = null;
+      return true;
+    });
+    const pushManager = installBrowser({
+      permission: 'granted',
+      existing: previous,
+      subscribe: vi.fn().mockResolvedValue(fresh),
+    });
+    pushManager.getSubscription.mockImplementation(async () => held);
+    mocks.fetch.mockImplementation(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === 'DELETE') throw new Error('offline');
+      return { ok: true, status: 200, json: async () => ({ publicKey: PUBLIC_KEY }) };
+    });
+
+    await disableWebPush();
+    await expect(enableWebPush()).resolves.toBe('enabled');
+
+    const posted = mocks.fetch.mock.calls
+      .filter((call) => call[1]?.method === 'POST')
+      .map((call) => JSON.parse(call[1].body).endpoint);
+    expect(posted).toEqual([NEXT_ENDPOINT]);
   });
 });
