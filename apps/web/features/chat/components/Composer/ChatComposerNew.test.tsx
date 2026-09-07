@@ -845,8 +845,15 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('menu', { name: 'Connectors' })).toBeInTheDocument();
     expect(screen.getByText('No connectors connected yet.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage in Settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('connectors');
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByText('Connectors'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+    expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('connectors');
+    expect(window.location.hash).toBe('#settings/customize-connectors/new');
+    window.location.hash = '';
   });
 
   it('lists a connected connector with a checkbox that disables it for this conversation only', () => {

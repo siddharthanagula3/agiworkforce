@@ -42,7 +42,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@shared/lib/utils';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
-import { buildSettingsBrowseHash } from '@/features/directory';
+import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
 import type { SkillItem } from '@features/chat/hooks/use-skills-list';
 import {
   loadPalettePlugins,
@@ -73,6 +73,8 @@ const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
   "Won't be saved to your history and skips memory for this turn.";
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
+const ROW_LABEL_BROWSE_CONNECTORS = 'Browse connectors';
+const ROW_LABEL_ADD_CUSTOM_CONNECTOR = 'Add custom connector';
 const ROW_LABEL_MANAGE_SKILLS = 'Manage skills';
 const ROW_LABEL_MANAGE_PLUGINS = 'Manage plugins';
 const ROW_LABEL_OPEN_PLUGIN = 'Open plugin';
@@ -131,6 +133,14 @@ function openDirectorySettings(props: ComposerPlusMenuProps, section: SettingsBr
     window.location.hash = buildSettingsBrowseHash(section);
   }
   props.onOpenSettings(section);
+}
+
+function openCustomConnectorForm(props: ComposerPlusMenuProps): void {
+  props.closeMenu();
+  if (typeof window !== 'undefined') {
+    window.location.hash = buildSettingsCustomConnectorHash();
+  }
+  props.onOpenSettings(SETTINGS_SECTION_CONNECTORS);
 }
 
 export type MediaAvailabilityStatus = 'loading' | 'ready' | 'error';
@@ -824,9 +834,17 @@ function ChatMenu(props: ComposerPlusMenuProps) {
             type="button"
             role="menuitem"
             onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
-            className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
+            className={SUBMENU_MANAGE_CLASS}
           >
-            {ROW_LABEL_MANAGE_CONNECTORS}
+            {ROW_LABEL_BROWSE_CONNECTORS}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openCustomConnectorForm(props)}
+            className={SUBMENU_MANAGE_CLASS}
+          >
+            {ROW_LABEL_ADD_CUSTOM_CONNECTOR}
           </button>
         </div>
       )}

@@ -7,6 +7,7 @@ import {
 
 import {
   buildSettingsBrowseHash,
+  buildSettingsCustomConnectorHash,
   buildSettingsHash,
   parseSettingsDirectoryHash,
   parseSettingsHash,
@@ -22,7 +23,7 @@ describe('every settings pane owns a hash', () => {
   it.each(EVERY_WEB_SECTION)('builds and parses the %s hash', (section) => {
     const hash = buildSettingsHash(section);
     expect(hash, `${section} has no hash slug`).not.toBeNull();
-    expect(parseSettingsHash(hash!)).toEqual({ section, entryId: null });
+    expect(parseSettingsHash(hash!)).toEqual({ section, entryId: null, custom: false });
   });
 
   it('names a slug for every section the web modal renders and no others', () => {
@@ -61,10 +62,15 @@ describe('parseSettingsHash', () => {
   });
 
   it('reads a pane the directory does not own', () => {
-    expect(parseSettingsHash('#settings/billing')).toEqual({ section: 'billing', entryId: null });
+    expect(parseSettingsHash('#settings/billing')).toEqual({
+      section: 'billing',
+      entryId: null,
+      custom: false,
+    });
     expect(parseSettingsHash('#settings/time-focus')).toEqual({
       section: 'time-focus',
       entryId: null,
+      custom: false,
     });
   });
 
@@ -72,6 +78,33 @@ describe('parseSettingsHash', () => {
     expect(parseSettingsHash('#settings/customize-connectors/browse/io.github%2Fslack')).toEqual({
       section: 'connectors',
       entryId: 'io.github/slack',
+      custom: false,
+    });
+  });
+});
+
+describe('the custom connector form owns a hash', () => {
+  it('builds the form hash under the connectors section', () => {
+    expect(buildSettingsCustomConnectorHash()).toBe('#settings/customize-connectors/new');
+  });
+
+  it('round trips the form hash', () => {
+    expect(parseSettingsHash(buildSettingsCustomConnectorHash())).toEqual({
+      section: 'connectors',
+      entryId: null,
+      custom: true,
+    });
+  });
+
+  it('leaves the section hash alone', () => {
+    expect(parseSettingsHash('#settings/customize-connectors')?.custom).toBe(false);
+    expect(parseSettingsHash('#settings/customize-connectors/browse/slack')?.custom).toBe(false);
+  });
+
+  it('reads as the plain section for the directory, which owns no form', () => {
+    expect(parseSettingsDirectoryHash(buildSettingsCustomConnectorHash())).toEqual({
+      section: 'connectors',
+      entryId: null,
     });
   });
 });

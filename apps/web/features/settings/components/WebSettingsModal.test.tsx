@@ -312,7 +312,10 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(await screen.findByRole('button', { name: 'Add custom connector' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Add custom connector' })).toBeTruthy();
+    expect(await screen.findByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
@@ -503,7 +506,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const fetchMock = stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Add custom connector' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add custom connector' }));
     fireEvent.change(screen.getByPlaceholderText('My connector'), {
       target: { value: 'My MCP' },
     });
