@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -16,31 +15,80 @@ import { getIdentityProvider } from '@/lib/server/identity';
 import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
 const PAGE_SIZE = 100;
-const MAX_SESSION_PAGES = 20;
 const REVOKE_BATCH_SIZE = 10;
+const MAX_REVOKE_PASSES = 200;
 
+export interface ActiveIdentitySessions {
+  sessions: IdentitySession[];
+  totalCount: number;
+  truncated: boolean;
+}
+
+/**
+ * One page, plus what the provider says the account holds. Walking every page
+ * used to end in a 503 with a Retry that could never succeed, and reading the
+ * pages instead of throwing merely traded that for a provider rate limit: on an
+ * account with three thousand sessions the twenty reads this took per view
+ * returned 429 and the pane failed again. The count carries the rest.
+ */
 export async function listActiveIdentitySessions(
   identity: IdentitySessionOperations,
   userId: string,
-): Promise<IdentitySession[]> {
-  const sessions: IdentitySession[] = [];
+): Promise<ActiveIdentitySessions> {
+  const response = await identity.listUserSessions(userId, {
+    status: SESSION_STATUS_ACTIVE,
+    limit: PAGE_SIZE,
+    offset: 0,
+  });
+  const sessions = [...response.sessions];
+  const totalCount = Math.max(response.totalCount, sessions.length);
 
-  for (let pageIndex = 0; pageIndex < MAX_SESSION_PAGES; pageIndex++) {
-    const response = await identity.listUserSessions(userId, {
+  return { sessions, totalCount, truncated: sessions.length < totalCount };
+}
+
+interface RevokeSweep {
+  revoked: string[];
+  failed: string[];
+  currentSession: IdentitySession | undefined;
+  incomplete: boolean;
+}
+
+async function revokeEveryOtherSession(
+  identity: IdentitySessionOperations,
+  userId: string,
+  currentSessionId: string | null,
+): Promise<RevokeSweep> {
+  const revoked: string[] = [];
+  const failed: string[] = [];
+  const attempted = new Set<string>();
+  let currentSession: IdentitySession | undefined;
+
+  // A revoked session leaves the active list, so the first page always holds
+  // the next batch of work and the whole account never has to be in memory.
+  // The attempted set stops a session the provider refuses to revoke from being
+  // retried for ever.
+  for (let pass = 0; pass < MAX_REVOKE_PASSES; pass++) {
+    const page = await identity.listUserSessions(userId, {
       status: SESSION_STATUS_ACTIVE,
       limit: PAGE_SIZE,
-      offset: pageIndex * PAGE_SIZE,
+      offset: 0,
     });
-    sessions.push(...response.sessions);
 
-    if (sessions.length >= response.totalCount || response.sessions.length < PAGE_SIZE) {
-      return sessions;
-    }
+    currentSession =
+      page.sessions.find((session) => session.id === currentSessionId) ?? currentSession;
+
+    const pending = page.sessions.filter(
+      (session) => session.id !== currentSessionId && !attempted.has(session.id),
+    );
+    if (pending.length === 0) return { revoked, failed, currentSession, incomplete: false };
+
+    for (const session of pending) attempted.add(session.id);
+    const outcome = await revokeInBatches(identity, pending);
+    revoked.push(...outcome.revoked);
+    failed.push(...outcome.failed);
   }
 
-  throw createError.serviceUnavailable(
-    'There are too many active sessions to manage safely. Please contact support.',
-  );
+  return { revoked, failed, currentSession, incomplete: true };
 }
 
 function toIsoTimestamp(timestamp: number | null): string | null {
@@ -98,7 +146,10 @@ async function handleList(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
-  const sessions = await listActiveIdentitySessions(getIdentityProvider(), userId);
+  const { sessions, totalCount, truncated } = await listActiveIdentitySessions(
+    getIdentityProvider(),
+    userId,
+  );
   const projected = sessions
     .map((session) => serializeSession(session, currentSessionId))
     .sort((left, right) => {
@@ -108,7 +159,9 @@ async function handleList(request: NextRequest) {
 
   return NextResponse.json({
     sessions: projected,
-    totalCount: projected.length,
+    totalCount,
+    returnedCount: projected.length,
+    truncated,
     currentSessionKnown: currentSessionId !== null,
   });
 }
@@ -123,12 +176,8 @@ async function handleRevokeAll(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   const identity = getIdentityProvider();
-  const sessions = await listActiveIdentitySessions(identity, userId);
-  const currentSession = currentSessionId
-    ? sessions.find((session) => session.id === currentSessionId)
-    : undefined;
-  const otherSessions = sessions.filter((session) => session.id !== currentSession?.id);
-  const result = await revokeInBatches(identity, otherSessions);
+  const result = await revokeEveryOtherSession(identity, userId, currentSessionId);
+  const currentSession = result.currentSession;
   await db.execute(
     `update device_refresh_tokens
         set revoked_at = coalesce(revoked_at, now())
@@ -137,16 +186,24 @@ async function handleRevokeAll(request: NextRequest) {
     [userId],
   );
 
-  if (result.failed.length > 0) {
+  if (result.failed.length > 0 || result.incomplete) {
     logger.error(
-      { userId, revokedCount: result.revoked.length, failedCount: result.failed.length },
+      {
+        userId,
+        revokedCount: result.revoked.length,
+        failedCount: result.failed.length,
+        incomplete: result.incomplete,
+      },
       'Some non-current sessions could not be revoked',
     );
     return NextResponse.json(
       {
-        error: currentSession
-          ? 'Some sessions could not be revoked. Your current session remains active.'
-          : 'Some sessions could not be revoked. Please try again.',
+        error:
+          result.failed.length === 0
+            ? 'Not every session ended in one pass. Run it again to finish the rest.'
+            : currentSession
+              ? 'Some sessions could not be revoked. Your current session remains active.'
+              : 'Some sessions could not be revoked. Please try again.',
         revokedCount: result.revoked.length,
         failedCount: result.failed.length,
       },

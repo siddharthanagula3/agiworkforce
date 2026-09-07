@@ -193,6 +193,61 @@ describe('/api/settings/sessions', () => {
       });
     });
 
+    it('lists what it can hold and reports the rest instead of failing on size', async () => {
+      const TOTAL = 2500;
+      mockGetSessionList.mockImplementation(
+        async ({ offset = 0, limit = 100 }: { offset?: number; limit?: number }) => ({
+          data: Array.from({ length: Math.max(0, Math.min(limit, TOTAL - offset)) }, (_, index) =>
+            session(`sess_${offset + index}`),
+          ),
+          totalCount: TOTAL,
+        }),
+      );
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as {
+        sessions: Array<Record<string, unknown>>;
+        totalCount: number;
+        returnedCount: number;
+        truncated: boolean;
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.truncated).toBe(true);
+      expect(body.totalCount).toBe(TOTAL);
+      expect(body.returnedCount).toBe(body.sessions.length);
+      expect(body.sessions.length).toBeGreaterThan(0);
+      expect(body.sessions.length).toBeLessThan(TOTAL);
+    });
+
+    it('revokes every other session on an account too large to list in one page', async () => {
+      const TOTAL = 2500;
+      const active = new Set(
+        Array.from({ length: TOTAL - 1 }, (_, index) => `sess_${index}`).concat('sess_current'),
+      );
+      mockGetSessionList.mockImplementation(async ({ limit = 100 }: { limit?: number }) => ({
+        data: [...active].slice(0, limit).map((id) => session(id)),
+        totalCount: active.size,
+      }));
+      mockRevokeSession.mockImplementation(async (id: string) => {
+        active.delete(id);
+        return { status: 'revoked' };
+      });
+
+      const response = await DELETE(
+        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        currentSessionRevoked: true,
+        revokedCount: TOTAL,
+      });
+      expect(active.size).toBe(0);
+    });
+
     it('rejects a cookie caller that has no Clerk session id', async () => {
       mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: null });
       mockGetSessionList.mockResolvedValue({ data: [], totalCount: 0 });
