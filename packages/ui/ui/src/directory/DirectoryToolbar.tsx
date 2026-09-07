@@ -242,7 +242,6 @@ export function DirectoryToolbar({
                   id={id}
                   checked={toggleValues[toggle.id] === true}
                   onCheckedChange={(checked) => onToggle?.(toggle.id, checked)}
-                  className="h-5 min-h-0 w-9 min-w-0 [&>span]:size-4 [&>span]:data-[state=checked]:translate-x-4"
                 />
                 <label htmlFor={id} className="text-xs text-muted-foreground">
                   {toggle.label}
