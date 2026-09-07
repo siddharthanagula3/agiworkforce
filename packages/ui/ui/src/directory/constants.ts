@@ -171,6 +171,10 @@ export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';
 
 export const CONNECTOR_COMMUNITY_NOTICE_SHORT =
   'Community connectors have passed automated checks only. They may not meet the quality of verified connectors.';
+export function connectorNotConnectedCopy(name: string): string {
+  return `You're not connected to ${name} yet.`;
+}
+
 export const CONNECTOR_TRUST_COPY =
   'Only use connectors from developers you trust. AGI does not control which tools a developer offers and cannot verify that they work as intended or will not change.';
 export const CONNECTOR_CATEGORIES_LABEL = 'Categories';
