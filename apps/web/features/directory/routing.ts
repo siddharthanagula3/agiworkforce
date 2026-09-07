@@ -45,6 +45,20 @@ export function buildSettingsBrowseHash(
   return `#${SETTINGS_PREFIX}/${slug}/${BROWSE_SEGMENT}/${encodeURIComponent(entryId)}`;
 }
 
+export function settingsHashForSection(section: string, currentHash: string): string | null {
+  const slug = (SETTINGS_SECTION_SLUGS as Record<string, string | undefined>)[section];
+  if (slug) return `#${SETTINGS_PREFIX}/${slug}`;
+  return parseSettingsDirectoryHash(currentHash) ? '' : null;
+}
+
+export function replaceSettingsHash(next: string): void {
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${window.location.search}${next}`,
+  );
+}
+
 export function skillFileDownloadHref(skillId: string, path: string): string {
   const encoded = path
     .split('/')

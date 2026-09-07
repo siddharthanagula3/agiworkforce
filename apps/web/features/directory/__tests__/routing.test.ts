@@ -3,9 +3,28 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSettingsBrowseHash,
   parseSettingsDirectoryHash,
+  settingsHashForSection,
   skillFileDownloadHref,
   SETTINGS_SECTION_SLUGS,
 } from '../routing';
+
+describe('settingsHashForSection', () => {
+  it('names the hash for a directory section', () => {
+    expect(settingsHashForSection('plugins', '#settings/customize-connectors')).toBe(
+      '#settings/customize-plugins',
+    );
+    expect(settingsHashForSection('skills', '')).toBe('#settings/customize-skills');
+  });
+
+  it('drops a directory hash when another section takes over', () => {
+    expect(settingsHashForSection('billing', '#settings/customize-connectors')).toBe('');
+  });
+
+  it('leaves a hash the directory does not own alone', () => {
+    expect(settingsHashForSection('billing', '#chat/thread-1')).toBeNull();
+    expect(settingsHashForSection('billing', '')).toBeNull();
+  });
+});
 
 describe('parseSettingsDirectoryHash', () => {
   it('ignores a hash that is not a settings link', () => {
