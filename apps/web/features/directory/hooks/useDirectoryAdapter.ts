@@ -80,6 +80,7 @@ import {
   connectorReauthorizationErrors,
   fetchConnectedConnectors,
   connectorConnectionState,
+  connectorsRequiredByPlugins,
   fetchConnectedRecordsMissingFrom,
   fetchConnectorDirectoryPage,
   fetchConnectorRecord,
@@ -312,6 +313,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const connectorInFlight = useRef<{ href: string; promise: Promise<void> } | null>(null);
   const connectorRegistryNotice = useRef<string | null>(null);
   const connectorSetup = useRef<Readonly<Record<string, ConnectorSetupRequirement>>>({});
+  const connectorPending = useRef<ReadonlySet<string>>(new Set());
   const connectorsQueried = useRef(false);
   const [credentialFormId, setCredentialFormId] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<DirectoryOpenEntry | null>(null);
@@ -469,6 +471,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         const records = page ? [...pinned, ...page.entries] : [];
         serverConnectedIds.current = connected.ids;
         connectorSetup.current = connected.setup;
+        connectorPending.current = connected.pending;
         connectorsQueried.current = true;
         const previousStats = connectorPageRef.current.stats;
         connectorPageRef.current = page
@@ -861,6 +864,22 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [connectedIds],
   );
 
+  /**
+   * The installed, enabled plugins and what each declares it needs. Read off
+   * the pages already loaded, so opening a connector costs no extra request.
+   */
+  const installedPluginRequirements = useCallback(() => {
+    const page = pluginPageRef.current;
+    const entries = [...page.builtin, ...page.partner, ...(page.marketplace?.entries ?? [])];
+    return entries.map((entry) => ({
+      name: entry.name,
+      enabled:
+        page.installs.builtinIds.get(entry.id) === true ||
+        page.installs.byEntryId.get(entry.id)?.enabled === true,
+      requiredConnectors: entry.requiredConnectors,
+    }));
+  }, []);
+
   const loadDetail = useCallback(
     async (section: DirectorySectionKey, id: string): Promise<DirectoryDetail | null> => {
       if (section === 'skills') {
@@ -868,19 +887,36 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         return fetchSkillDetail(id, skillCache.current, installedSkills.current);
       }
       if (section === 'connectors') {
+        const extras = {
+          pending: connectorPending.current,
+          requiredBy: connectorsRequiredByPlugins(installedPluginRequirements()),
+        };
         const curated = curatedRef.current.find((entry) => entry.id === id);
         if (curated) {
           return withRelatedConnectors(
-            toCuratedConnectorDetail(curated, connectedIds(), connectorSetup.current[id]?.message),
+            toCuratedConnectorDetail(
+              curated,
+              connectedIds(),
+              connectorSetup.current[id]?.message,
+              extras,
+            ),
           );
         }
         const cached = connectorPageRef.current.records.find((record) => record.id === id);
         const record = cached ?? (await fetchConnectorRecord(id));
-        return record ? withRelatedConnectors(toConnectorDetail(record, connectedIds())) : null;
+        return record
+          ? withRelatedConnectors(toConnectorDetail(record, connectedIds(), extras))
+          : null;
       }
       return loadPluginDetail(id);
     },
-    [withRelatedConnectors, connectedIds, loadPluginDetail, ensureSkillCatalog],
+    [
+      withRelatedConnectors,
+      connectedIds,
+      loadPluginDetail,
+      ensureSkillCatalog,
+      installedPluginRequirements,
+    ],
   );
 
   const connect = useCallback(

@@ -113,6 +113,30 @@ interface PendingAuthorizationRow {
   discovery_state: unknown;
 }
 
+/**
+ * The connectors an authorization was started for and never finished: a row
+ * that has not been consumed and has not expired. `createPendingAuthorization`
+ * writes it, `consumePendingAuthorization` clears it, so an unconsumed row is
+ * the whole of the evidence that someone walked away mid-flow.
+ */
+export async function listPendingConnectorIds(userId: string): Promise<string[]> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<{ connector_id: string }>(
+      `select distinct connector_id
+         from public.connector_oauth_authorizations
+        where user_id = $1
+          and consumed_at is null
+          and expires_at > now()`,
+      [userId],
+    );
+    return rows.map((row) => row.connector_id);
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+}
+
 export async function consumePendingAuthorization(
   state: string,
 ): Promise<PendingAuthorization | null> {

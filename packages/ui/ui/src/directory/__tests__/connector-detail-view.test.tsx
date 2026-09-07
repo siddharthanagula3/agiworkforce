@@ -230,3 +230,50 @@ describe('the never connected state', () => {
     expect(screen.queryByText(/not connected to/)).toBeNull();
   });
 });
+
+describe('the half finished authorization state', () => {
+  it('says the connection was started and never finished', () => {
+    renderDetail({ authorizationPending: true });
+    expect(
+      screen.getByText("You started connecting to Customerscore but didn't finish."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/not connected to/)).toBeNull();
+  });
+
+  it('names the installed plugins that need it', () => {
+    renderDetail({ authorizationPending: true, requiredByPlugins: ['Support Desk', 'Sales Ops'] });
+    expect(screen.getByText('This connector is required by the following plugins:')).toBeTruthy();
+    expect(screen.getByText('Support Desk')).toBeTruthy();
+    expect(screen.getByText('Sales Ops')).toBeTruthy();
+  });
+
+  it('names them on the never connected state too', () => {
+    renderDetail({ requiredByPlugins: ['Support Desk'] });
+    expect(screen.getByText("You're not connected to Customerscore yet.")).toBeTruthy();
+    expect(screen.getByText('This connector is required by the following plugins:')).toBeTruthy();
+  });
+
+  it('says nothing about plugins when none require it', () => {
+    renderDetail({ authorizationPending: true });
+    expect(screen.queryByText(/required by the following plugins/)).toBeNull();
+  });
+
+  it('drops the whole notice once the connection completes', () => {
+    renderDetail({ authorizationPending: true, connected: true, requiredByPlugins: ['Support'] });
+    expect(screen.queryByText(/didn't finish/)).toBeNull();
+    expect(screen.queryByText(/required by the following plugins/)).toBeNull();
+  });
+});
+
+describe('the connection path label', () => {
+  it('uses the path the connector actually offers when it has one', () => {
+    renderDetail({ connectLabel: 'Install the GitHub App' });
+    expect(screen.getByRole('button', { name: 'Install the GitHub App' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
+  });
+
+  it('falls back to Connect when it does not', () => {
+    renderDetail();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
+  });
+});
