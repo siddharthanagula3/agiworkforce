@@ -31,15 +31,21 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'leaving-user' })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: vi.fn(() => ({})) }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getIdentityProvider: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args),
 }));
-vi.mock('@/lib/server/request-context-cache', () => ({
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   invalidateActiveOrganizationCache: (...args: unknown[]) =>
     mockInvalidateActiveOrganizationCache(...args),
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveActiveOrganizationId: (...args: unknown[]) => mockResolveActiveOrganizationId(...args),
 }));
 vi.mock('@/lib/services/organization-membership-service', () => ({
