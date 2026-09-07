@@ -47,14 +47,15 @@ export function OnboardingWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const editedFields = useRef({ preferredName: false, workDescription: false });
 
   useEffect(() => {
     let cancelled = false;
     void loadOnboardingSeed().then((seed) => {
       if (cancelled) return;
       const fallbackName = user?.firstName || user?.fullName?.split(' ')[0] || '';
-      setPreferredName(seed.preferredName || fallbackName);
-      setWorkDescription(seed.workDescription);
+      if (!editedFields.current.preferredName) setPreferredName(seed.preferredName || fallbackName);
+      if (!editedFields.current.workDescription) setWorkDescription(seed.workDescription);
       setSeeded(true);
     });
     return () => {
@@ -137,7 +138,10 @@ export function OnboardingWizard() {
                   id="onboarding-name"
                   ref={nameInputRef}
                   value={preferredName}
-                  onChange={(event) => setPreferredName(event.target.value)}
+                  onChange={(event) => {
+                    editedFields.current.preferredName = true;
+                    setPreferredName(event.target.value);
+                  }}
                   placeholder="Your name"
                   maxLength={60}
                   autoComplete="given-name"
@@ -145,7 +149,13 @@ export function OnboardingWizard() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="onboarding-role">What best describes your work?</Label>
-                <Select value={workDescription} onValueChange={setWorkDescription}>
+                <Select
+                  value={workDescription}
+                  onValueChange={(value) => {
+                    editedFields.current.workDescription = true;
+                    setWorkDescription(value);
+                  }}
+                >
                   <SelectTrigger id="onboarding-role">
                     <SelectValue placeholder="Select one" />
                   </SelectTrigger>
