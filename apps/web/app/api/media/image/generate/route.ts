@@ -49,6 +49,8 @@ import {
   classifyError,
   parseRetryAfter,
   SPENDING_CAP_PROVIDER_HINT,
+  type ClassifiedError,
+  type ErrorCategory,
 } from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { IMAGE_GENERATION_PROVIDER_DEADLINE_MS } from '@/lib/deadline-policy';
@@ -147,6 +149,43 @@ async function throwImageProviderHttpError(response: Response, fallback: string)
     response.status,
     boundedImageRetryAfterSeconds(response),
   );
+}
+
+const IMAGE_FAILURE_COPY_BY_CATEGORY: Partial<
+  Record<ErrorCategory, (providerLabel: string) => string>
+> = {
+  api_timeout: () =>
+    'The image provider did not respond before the request deadline. Please try again.',
+  connection: (providerLabel) =>
+    `${providerLabel} could not be reached for image generation. Please try again in a moment.`,
+  rate_limit: () =>
+    'The image generation service is temporarily busy. Please try again in a few moments.',
+  safety: () =>
+    'Your prompt was flagged by our content safety filters. Please try a different prompt.',
+  content_blocked: () =>
+    'Your prompt was flagged by our content safety filters. Please try a different prompt.',
+  billing_exhausted: () =>
+    'There was a billing issue with the image generation service. Please contact support.',
+  auth: (providerLabel) =>
+    `${providerLabel} rejected this deployment's image generation credentials. Choose a different image model.`,
+  invalid_input: (providerLabel) =>
+    `${providerLabel} rejected this image request. Adjust the prompt, size or reference image and try again.`,
+  media_too_large: (providerLabel) =>
+    `${providerLabel} rejected the reference image as too large. Use a smaller image and try again.`,
+  invalid_model: () => 'The requested image model is not available for this provider.',
+  empty_response: (providerLabel) => `${providerLabel} returned no image. Please try again.`,
+  server_error: (providerLabel) =>
+    `${providerLabel} image generation failed on the provider side. Try again, or choose a different image model.`,
+};
+
+function describeImageFailure(
+  classified: ClassifiedError | undefined,
+  providerLabel: string,
+): string {
+  const copy = classified ? IMAGE_FAILURE_COPY_BY_CATEGORY[classified.category] : undefined;
+  return copy
+    ? copy(providerLabel)
+    : `${providerLabel} could not generate the image. Try again, or choose a different image model.`;
 }
 
 const IMAGE_ASPECT_RATIOS_BY_API: Record<ImageApi, ReadonlySet<ManagedMediaImageAspectRatio>> = {
@@ -1486,7 +1525,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     const classified = error instanceof Error ? classifyError(error) : undefined;
     const providerLabel = provider === 'google' ? 'Google' : provider;
 
-    let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
+    let friendlyMessage = describeImageFailure(classified, providerLabel);
     let suppressRetryAfter = false;
     if (classified?.category === 'quota_exhausted') {
       markProviderDegraded(provider, classified.category);
