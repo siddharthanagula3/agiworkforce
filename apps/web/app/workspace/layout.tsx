@@ -8,6 +8,7 @@ import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-term
 import { resolveOrgMembership, type OrgRole } from '@/lib/services/org-sharing-service';
 import { WorkspaceConsoleShell } from '@/features/workspace-console/components/WorkspaceConsoleShell';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export default async function WorkspaceConsoleLayout({ children }: { children: R
   const { subject: userId } = await getRequestIdentity();
 
   if (!userId) {
-    redirect('/login?redirectTo=/workspace');
+    redirect(sessionExpiredRedirect('/workspace'));
   }
 
   await requireCurrentTermsAcceptance(userId, '/workspace');

@@ -6,6 +6,7 @@ import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { isStripeCheckoutSessionId } from '@/lib/server/stripe-resource-ids';
 import { UpgradeWelcome } from './UpgradeWelcome';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 let stripeClient: Stripe | null = null;
 
@@ -28,7 +29,7 @@ export default async function BillingPage({
 
   const { subject: userId } = await getRequestIdentity();
   if (!userId) {
-    return redirect(`/login?redirectTo=${encodeURIComponent('/settings/billing')}`);
+    return redirect(sessionExpiredRedirect('/settings/billing'));
   }
 
   let session: Stripe.Checkout.Session;
