@@ -175,6 +175,13 @@ export function connectorNotConnectedCopy(name: string): string {
   return `You're not connected to ${name} yet.`;
 }
 
+export function connectorAuthorizationPendingCopy(name: string): string {
+  return `You started connecting to ${name} but didn't finish.`;
+}
+
+export const CONNECTOR_REQUIRED_BY_PLUGINS_COPY =
+  'This connector is required by the following plugins:';
+
 export const CONNECTOR_TRUST_COPY =
   'Only use connectors from developers you trust. AGI does not control which tools a developer offers and cannot verify that they work as intended or will not change.';
 export const CONNECTOR_CATEGORIES_LABEL = 'Categories';

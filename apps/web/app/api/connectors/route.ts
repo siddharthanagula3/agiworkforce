@@ -44,6 +44,7 @@ import {
   isConnectorTokenStorageAvailable,
 } from '@/lib/custom-connector-crypto';
 import { describeConnectorSetup, type ConnectorSetupKind } from '@/lib/connectors/oauth-setup';
+import { listPendingConnectorIds } from '@/lib/connectors/oauth-store';
 import {
   findDirectoryTargetByRemoteUrl,
   resolveDirectoryConnectAuthMode,
@@ -278,10 +279,20 @@ async function handleGetConnectors(request: NextRequest) {
         },
   );
 
+  /*
+   * Connectors whose authorization was started and never finished. Reported
+   * beside the connected list so the directory can tell a reader who walked
+   * away mid-flow apart from one who never began.
+   */
+  const pending = (await listPendingConnectorIds(userId).catch(() => [])).filter(
+    (connectorId) => !withHealth.some((entry) => entry.connectorId === connectorId),
+  );
+
   return NextResponse.json({
     connectors: withHealth,
     available,
     setup: describeCuratedSetup(availableSet),
+    pending,
   });
 }
 

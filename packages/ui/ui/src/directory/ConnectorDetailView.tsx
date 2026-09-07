@@ -32,7 +32,9 @@ import {
   CONNECTOR_TERMS_LINK_LABEL,
   CONNECTOR_TERMS_PREFIX,
   CONNECTOR_TOOLS_LABEL,
+  CONNECTOR_REQUIRED_BY_PLUGINS_COPY,
   CONNECTOR_TRUST_COPY,
+  connectorAuthorizationPendingCopy,
   connectorNotConnectedCopy,
   CONNECTOR_URL_LABEL,
   CONNECTOR_WEBSITE_LABEL,
@@ -252,6 +254,7 @@ export function ConnectorDetailView({
     detail.authorName && detail.authorName !== publisher && detail.authorName !== detail.name
       ? detail.authorName
       : null;
+  const requiredByPlugins = detail.requiredByPlugins ?? EMPTY_VALUES;
   const addedAt = formatAddedAt(detail.addedAt);
   const categories = detail.categories ?? EMPTY_VALUES;
   const related = detail.related ?? EMPTY_ENTRIES;
@@ -280,7 +283,9 @@ export function ConnectorDetailView({
               />
             ) : null
           }
-          primaryLabel={connected ? CONNECTED_LABEL : PRIMARY_LABEL_BY_MODE[mode]}
+          primaryLabel={
+            connected ? CONNECTED_LABEL : (detail.connectLabel ?? PRIMARY_LABEL_BY_MODE[mode])
+          }
           primaryDone={connected}
           onPrimary={actionable && !credentialForm ? primaryAction : undefined}
           statusNote={actionable || listed ? undefined : PRIMARY_LABEL_BY_MODE[mode]}
@@ -302,7 +307,21 @@ export function ConnectorDetailView({
 
       {!connected && !listed && actionable ? (
         <Notice>
-          <p>{connectorNotConnectedCopy(detail.name)}</p>
+          <p>
+            {detail.authorizationPending === true
+              ? connectorAuthorizationPendingCopy(detail.name)
+              : connectorNotConnectedCopy(detail.name)}
+          </p>
+          {requiredByPlugins.length > 0 ? (
+            <>
+              <p className="mt-2">{CONNECTOR_REQUIRED_BY_PLUGINS_COPY}</p>
+              <ul className="mt-1 list-disc pl-5">
+                {requiredByPlugins.map((plugin) => (
+                  <li key={plugin}>{plugin}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </Notice>
       ) : null}
 

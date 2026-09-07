@@ -5,6 +5,7 @@ import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 import {
   connectorConnectionState,
+  connectorsRequiredByPlugins,
   DEFAULT_DIRECTORY_QUERY,
   connectorDirectoryHref,
   connectorStateLabel,
@@ -841,5 +842,61 @@ describe('the connection filter', () => {
       'Official',
       'Community',
     ]);
+  });
+});
+
+describe('the half finished authorization state', () => {
+  it('marks a connector the account started connecting and never finished', () => {
+    const detail = toConnectorDetail(record({ id: 'io.acme/one' }), new Set(), {
+      pending: new Set(['io.acme/one']),
+    });
+    expect(detail.authorizationPending).toBe(true);
+  });
+
+  it('never marks one that is already connected', () => {
+    const detail = toConnectorDetail(record({ id: 'io.acme/one' }), new Set(['io.acme/one']), {
+      pending: new Set(['io.acme/one']),
+    });
+    expect(detail.authorizationPending).toBeUndefined();
+  });
+
+  it('leaves a connector with no pending authorization unmarked', () => {
+    expect(
+      toConnectorDetail(record(), new Set(), { pending: new Set() }).authorizationPending,
+    ).toBe(undefined);
+  });
+
+  it('names only the enabled installed plugins that require a connector', () => {
+    const byConnector = connectorsRequiredByPlugins([
+      { name: 'Support Desk', enabled: true, requiredConnectors: ['io.acme/one'] },
+      { name: 'Sales Ops', enabled: true, requiredConnectors: ['io.acme/one', 'io.acme/two'] },
+      { name: 'Disabled Pack', enabled: false, requiredConnectors: ['io.acme/one'] },
+    ]);
+    expect(byConnector['io.acme/one']).toEqual(['Support Desk', 'Sales Ops']);
+    expect(byConnector['io.acme/two']).toEqual(['Sales Ops']);
+    expect(byConnector['io.acme/three']).toBeUndefined();
+  });
+
+  it('carries the plugin names onto the detail', () => {
+    const detail = toConnectorDetail(record({ id: 'io.acme/one' }), new Set(), {
+      requiredBy: { 'io.acme/one': ['Support Desk'] },
+    });
+    expect(detail.requiredByPlugins).toEqual(['Support Desk']);
+  });
+});
+
+describe('the github connection path', () => {
+  it('names the app installation instead of a generic connect', () => {
+    const detail = toConnectorDetail(record({ id: 'github', name: 'GitHub' }), new Set());
+    expect(detail.connectLabel).toBe('Install the GitHub App');
+  });
+
+  it('says nothing once the account has connected it', () => {
+    const detail = toConnectorDetail(record({ id: 'github', name: 'GitHub' }), new Set(['github']));
+    expect(detail.connectLabel).toBeUndefined();
+  });
+
+  it('leaves every other connector to the generic label', () => {
+    expect(toConnectorDetail(record(), new Set()).connectLabel).toBeUndefined();
   });
 });
