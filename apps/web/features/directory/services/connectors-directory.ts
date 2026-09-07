@@ -185,12 +185,15 @@ export interface ConnectorSetupRequirement {
 export interface ConnectedConnectorsResponse {
   connectors: { connectorId: string; directoryId?: string | null }[];
   setup?: Readonly<Record<string, ConnectorSetupRequirement>>;
+  pending?: readonly string[];
 }
 
 export interface ConnectedConnectorsSnapshot {
   ids: Set<string>;
   directoryIds: Set<string>;
   setup: Readonly<Record<string, ConnectorSetupRequirement>>;
+  /** Connectors an authorization was started for and never finished. */
+  pending: Set<string>;
 }
 
 export function connectorIconHref(record: DirectoryRecord): string | null {
@@ -586,10 +589,61 @@ export async function fetchRelatedConnectors(
   }
 }
 
+/**
+ * Which installed, enabled plugins declare each connector as required. The
+ * detail names them so a reader who dropped out of a connection knows what
+ * stops working, rather than being asked to connect for no stated reason.
+ */
+export function connectorsRequiredByPlugins(
+  plugins: readonly { name: string; enabled: boolean; requiredConnectors: readonly string[] }[],
+): Record<string, string[]> {
+  const byConnector: Record<string, string[]> = {};
+  for (const plugin of plugins) {
+    if (!plugin.enabled) continue;
+    for (const connectorId of plugin.requiredConnectors) {
+      const names = byConnector[connectorId] ?? [];
+      if (!names.includes(plugin.name)) names.push(plugin.name);
+      byConnector[connectorId] = names;
+    }
+  }
+  return byConnector;
+}
+
+/**
+ * GitHub connects by installing our GitHub App, not by a plain authorization,
+ * which is why the connectors adapter and the API both special-case it. The
+ * button says so rather than promising a generic Connect.
+ */
+const GITHUB_CONNECTOR_ID = 'github';
+const GITHUB_APP_CONNECT_LABEL = 'Install the GitHub App';
+
+function connectorConnectLabel(id: string): { connectLabel?: string } {
+  return id === GITHUB_CONNECTOR_ID ? { connectLabel: GITHUB_APP_CONNECT_LABEL } : {};
+}
+
+export interface ConnectorDetailExtras {
+  pending?: ReadonlySet<string>;
+  requiredBy?: Readonly<Record<string, readonly string[]>>;
+}
+
+function connectorDetailExtras(
+  id: string,
+  connectedIds: ReadonlySet<string>,
+  extras: ConnectorDetailExtras,
+): Partial<DirectoryConnectorDetail> {
+  const requiredBy = extras.requiredBy?.[id] ?? [];
+  return {
+    ...(!connectedIds.has(id) ? connectorConnectLabel(id) : {}),
+    ...(!connectedIds.has(id) && extras.pending?.has(id) ? { authorizationPending: true } : {}),
+    ...(requiredBy.length > 0 ? { requiredByPlugins: requiredBy } : {}),
+  };
+}
+
 export function toCuratedConnectorDetail(
   connector: SettingsConnector,
   connectedIds: ReadonlySet<string>,
   setupMessage?: string,
+  extras: ConnectorDetailExtras = {},
 ): DirectoryConnectorDetail {
   const target = FIRST_PARTY_TARGETS_BY_ID.get(connector.id);
   const vendor = connector.publisher ?? connector.name;
@@ -615,6 +669,7 @@ export function toCuratedConnectorDetail(
     ...curatedSignIn(connector),
     termsHref: CONNECTOR_TERMS_PATH,
     connected: connectedIds.has(connector.id),
+    ...connectorDetailExtras(connector.id, connectedIds, extras),
     connectable: connector.canConnect === true,
     connectableMode: mode,
     ...(mode === NEEDS_SETUP_MODE
@@ -630,6 +685,7 @@ export function connectedConnectorIds(connected: readonly ConnectedConnector[]):
 export function toConnectorDetail(
   record: DirectoryRecord,
   connectedIds: ReadonlySet<string>,
+  extras: ConnectorDetailExtras = {},
 ): DirectoryConnectorDetail {
   return {
     kind: 'connector',
@@ -656,6 +712,7 @@ export function toConnectorDetail(
     ...(record.listingNote ? { listingNote: record.listingNote } : {}),
     termsHref: CONNECTOR_TERMS_PATH,
     connected: connectedIds.has(record.id),
+    ...connectorDetailExtras(record.id, connectedIds, extras),
     connectable: !CONNECTABLE_BLOCKED.has(record.connectable),
     connectableMode: record.connectable,
     ...(record.connectable === 'desktop-and-cli' ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {}),
@@ -667,7 +724,8 @@ export function toConnectorDetail(
 
 export async function fetchConnectedConnectors(): Promise<ConnectedConnectorsSnapshot> {
   const response = await fetch(CONNECTORS_PATH, { cache: 'no-store' });
-  if (!response.ok) return { ids: new Set(), directoryIds: new Set(), setup: {} };
+  if (!response.ok)
+    return { ids: new Set(), directoryIds: new Set(), setup: {}, pending: new Set() };
   const body = (await response.json()) as ConnectedConnectorsResponse;
   const connectors = body.connectors ?? [];
   return {
@@ -676,6 +734,7 @@ export async function fetchConnectedConnectors(): Promise<ConnectedConnectorsSna
       connectors.flatMap((connector) => (connector.directoryId ? [connector.directoryId] : [])),
     ),
     setup: body.setup ?? {},
+    pending: new Set(body.pending ?? []),
   };
 }
 

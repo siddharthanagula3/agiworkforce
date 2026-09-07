@@ -189,6 +189,12 @@ export interface DirectoryConnectorDetail {
   related?: readonly DirectoryEntry[];
   termsHref?: string;
   connected?: boolean;
+  /** An authorization was started for this connector and never finished. */
+  authorizationPending?: boolean;
+  /** Names the actual connection path when it is not a plain Connect. */
+  connectLabel?: string;
+  /** Installed plugins that declare this connector in their requirements. */
+  requiredByPlugins?: readonly string[];
   connectable?: boolean;
   connectableMode?: DirectoryConnectableMode;
   setupNotice?: string;

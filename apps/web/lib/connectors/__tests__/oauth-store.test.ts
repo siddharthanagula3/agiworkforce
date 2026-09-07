@@ -19,6 +19,7 @@ import {
   ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization,
   createPendingAuthorization,
+  listPendingConnectorIds,
   getConnectorOAuthGrant,
   getUserConnectorOAuthGrantSummaries,
   revokeConnectorOAuthGrant,
@@ -245,5 +246,29 @@ describe('grants', () => {
     await expect(getUserConnectorOAuthGrantSummaries('user-1')).resolves.toEqual([]);
     await expect(getConnectorOAuthGrant('user-1', 'linear')).resolves.toBeNull();
     await expect(revokeConnectorOAuthGrant('user-1', 'linear')).resolves.toBe(false);
+  });
+});
+
+describe('listing unfinished authorizations', () => {
+  it('asks only for rows that were never consumed and have not expired', async () => {
+    mockQuery.mockResolvedValue([{ connector_id: 'io.acme/one' }]);
+
+    expect(await listPendingConnectorIds('user_1')).toEqual(['io.acme/one']);
+
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain('consumed_at is null');
+    expect(sql).toContain('expires_at > now()');
+    expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user_1']);
+  });
+
+  /**
+   * A deployment whose migration has not run yet still has to render the
+   * connectors pane; an unfinished-connection hint is not worth a 500.
+   */
+  it('reports nothing rather than throwing when the table is absent', async () => {
+    mockQuery.mockRejectedValue(
+      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+    );
+    expect(await listPendingConnectorIds('user_1')).toEqual([]);
   });
 });

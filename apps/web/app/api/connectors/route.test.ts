@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   linkingAvailable: vi.fn(() => false),
   oauthConfiguredIds: vi.fn(() => new Set<string>()),
   oauthGrants: vi.fn(),
+  pendingConnectors: vi.fn(),
   disconnectOauth: vi.fn(),
   evictOauthCaches: vi.fn(),
   describeSetup: vi.fn(),
@@ -113,6 +114,7 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: (...args: unknown[]) => mocks.oauthGrants(...args),
+  listPendingConnectorIds: (...args: unknown[]) => mocks.pendingConnectors(...args),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   getConnectorOAuthGrant: vi.fn(),
   revokeConnectorOAuthGrant: vi.fn(),
@@ -189,6 +191,7 @@ function resetMocks(): void {
   mocks.linkingAvailable.mockReturnValue(false);
   mocks.oauthConfiguredIds.mockReturnValue(new Set<string>());
   mocks.oauthGrants.mockResolvedValue([]);
+  mocks.pendingConnectors.mockResolvedValue([]);
   mocks.disconnectOauth.mockResolvedValue(false);
   mocks.evictOauthCaches.mockResolvedValue(undefined);
   mocks.describeSetup.mockReturnValue(null);
@@ -919,5 +922,36 @@ describe('/api/connectors directory record response bodies, exact', () => {
       connectorId: 'notion',
       setup: requirement,
     });
+  });
+});
+
+describe('GET /api/connectors unfinished authorizations', () => {
+  beforeEach(resetMocks);
+
+  it('reports the connectors an authorization was started for and abandoned', async () => {
+    mocks.pendingConnectors.mockResolvedValue(['io.acme/one']);
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { pending: string[] };
+    expect(body.pending).toEqual(['io.acme/one']);
+  });
+
+  it('never reports one the account has since connected', async () => {
+    mocks.pendingConnectors.mockResolvedValue(['github']);
+    mocks.githubInstallations.mockResolvedValue([{ installationId: 1 }]);
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { pending: string[] };
+    expect(body.pending).toEqual([]);
+  });
+
+  /**
+   * The pane is worth more than the hint: a store that cannot answer must not
+   * take the connected list down with it.
+   */
+  it('still answers when the store cannot be read', async () => {
+    mocks.pendingConnectors.mockRejectedValue(new Error('down'));
+    const response = await GET(getRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { pending: string[] };
+    expect(body.pending).toEqual([]);
   });
 });
