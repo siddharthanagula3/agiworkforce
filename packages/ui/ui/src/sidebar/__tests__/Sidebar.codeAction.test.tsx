@@ -19,6 +19,7 @@ function renderSidebar(props: { collapsed?: boolean; onOpenCode?: () => void }) 
       mode="cloud"
       collapsed={props.collapsed ?? false}
       onNewChat={vi.fn()}
+      onOpenSearch={vi.fn()}
       onSelect={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}

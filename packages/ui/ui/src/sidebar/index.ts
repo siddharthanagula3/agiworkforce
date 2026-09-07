@@ -1,6 +1,5 @@
-export { Sidebar, type SidebarProps } from './Sidebar';
+export { Sidebar, MOBILE_NAV_DRAWER_WIDTH, type SidebarProps } from './Sidebar';
 export { SessionItem, type SessionItemProps, type SessionItemHandlers } from './SessionItem';
-export { SearchOverlay, type SearchOverlayProps } from './SearchOverlay';
 export {
   Menu,
   MenuItem,

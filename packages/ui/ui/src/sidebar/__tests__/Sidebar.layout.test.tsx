@@ -11,6 +11,7 @@ function renderSidebar() {
       sessions={[]}
       mode="cloud"
       onNewChat={vi.fn()}
+      onOpenSearch={vi.fn()}
       onSelect={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}
