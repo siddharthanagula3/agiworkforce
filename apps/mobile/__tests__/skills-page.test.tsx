@@ -150,6 +150,49 @@ describe('Mobile Skills screen', () => {
     useMobileSkillSelectionStore.setState({ selection: null });
   });
 
+  it('says what a skill needs and still lets it be used', async () => {
+    mockFetchManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'Documents',
+        description: 'Create and edit documents.',
+        source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
+        requiredTools: ['create_office_file'],
+      },
+    ]);
+    const screen = render(<SkillsScreen />);
+
+    expect(await screen.findByText('Needs create_office_file')).toBeTruthy();
+    expect(screen.getByLabelText('Use Documents in chat')).toBeTruthy();
+  });
+
+  it('shows no requirement line for a skill that declares none', async () => {
+    const screen = render(<SkillsScreen />);
+
+    await screen.findByText('Documents');
+    expect(screen.queryByText(/^Needs /)).toBeNull();
+  });
+
+  it('keeps a draft entry readable and unusable when it also declares a requirement', async () => {
+    mockFetchManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'Release helper',
+        description: 'Prepare a production handoff.',
+        source: 'workspace',
+        lifecycle: 'draft',
+        downloadable: false,
+        requiredTools: ['create_office_file'],
+      },
+    ]);
+    const screen = render(<SkillsScreen />);
+
+    expect(await screen.findByText('Release helper')).toBeTruthy();
+    expect(screen.getByLabelText('Release helper status: Coming later')).toBeTruthy();
+    expect(screen.getByText('Needs create_office_file')).toBeTruthy();
+    expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
+  });
+
   it('renders the real catalog with source badges and filters across metadata', async () => {
     const screen = render(<SkillsScreen />);
 

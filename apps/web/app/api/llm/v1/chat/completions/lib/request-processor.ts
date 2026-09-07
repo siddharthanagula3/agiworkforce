@@ -175,20 +175,17 @@ import {
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
-  hashSkillContent,
   matchSkillsForPrompt,
   SKILL_TOOL_NAME,
   type Skill,
 } from '@agiworkforce/skills';
 import {
-  filterSkillsByInstallOverrides,
-  getManagedSkillCatalog,
-  getManagedSkillCatalogForPlugins,
+  loadSelectableSkillCatalog,
+  memoizeAsync,
+  selectedSkillRequirementFailure,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
-import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
-import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble } from './capability-preamble';
@@ -504,34 +501,7 @@ export function resolveToolAwareTaskType(
   return classifiedTaskType;
 }
 
-const USER_SKILL_SOURCE = 'personal' satisfies Skill['source'];
-const USER_SKILL_FILE_PATH_PREFIX = 'user-skills';
-
-export function toManagedSkillFromUserSkill(record: UserSkillRecord): Skill {
-  return {
-    name: record.name,
-    description: record.description,
-    body: record.body,
-    contentHash: hashSkillContent(Buffer.from(record.body, 'utf8')),
-    filePath: `${USER_SKILL_FILE_PATH_PREFIX}/${record.id}`,
-    source: USER_SKILL_SOURCE,
-    metadata: {},
-    frontmatter: {},
-  };
-}
-
-export async function resolveManagedSkillCatalogWithUserFallback(
-  requestedSkillName: string,
-  managedCatalog: readonly Skill[],
-  params: { db: Parameters<typeof findUserSkillByName>[0]; userId: string },
-): Promise<readonly Skill[]> {
-  if (managedCatalog.some((skill) => skill.name === requestedSkillName)) return managedCatalog;
-  const userSkill = await findUserSkillByName(params.db, params.userId, requestedSkillName);
-  if (userSkill) return [...managedCatalog, toManagedSkillFromUserSkill(userSkill)];
-  const directorySkills = await listInstalledDirectorySkills(params.db, params.userId);
-  if (!directorySkills.some((skill) => skill.name === requestedSkillName)) return managedCatalog;
-  return [...managedCatalog, ...directorySkills];
-}
+export { toManagedSkillFromUserSkill } from '@/lib/services/user-skill-service';
 
 export function applyManagedSkillSelection(
   request: ChatCompletionRequest,
@@ -1907,6 +1877,9 @@ export async function processRequest(
       return new Map<string, boolean>();
     });
   skillInstallOverridesPromise.catch(() => {});
+  const loadEnabledPluginIds = memoizeAsync(async () =>
+    listEnabledPluginIds((await scopedDbPromise).db, userId),
+  );
 
   // safety legs so both keep seeing the caller's own words.
   const latestUserPrompt = extractTextContent(
@@ -2836,17 +2809,24 @@ export async function processRequest(
   }
 
   const preSkillMessageCount = chatRequest.messages.length;
+  let selectedSkill: Skill | null = null;
   const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> =>
     skillInstallOverridesPromise;
+  const loadSkillCatalog = async (
+    options: { includeNetworkBackedDirectorySkills?: boolean } = {},
+  ): Promise<Skill[]> =>
+    loadSelectableSkillCatalog({
+      db: (await scopedDbPromise).db,
+      userId,
+      loadEnabledPluginIds,
+      loadInstallOverrides: loadSkillInstallOverrides,
+      ...options,
+    });
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
     try {
-      managedSkillCatalog = await timePhase(CHAT_TURN_PHASE.skillCatalog, async () =>
-        getManagedSkillCatalogForPlugins(
-          await listEnabledPluginIds((await scopedDbPromise).db, userId),
-        ),
-      );
+      managedSkillCatalog = await timePhase(CHAT_TURN_PHASE.skillCatalog, loadSkillCatalog);
     } catch (error) {
       if (error instanceof SkillCatalogUnavailableError) {
         return {
@@ -2865,10 +2845,6 @@ export async function processRequest(
       }
       throw error;
     }
-    managedSkillCatalog = filterSkillsByInstallOverrides(
-      managedSkillCatalog,
-      await loadSkillInstallOverrides(),
-    );
     if (resolvedModelCaps?.tools === false) {
       return {
         ok: false,
@@ -2885,13 +2861,8 @@ export async function processRequest(
         ),
       };
     }
-    const skillCatalogForSelection = await timePhase(CHAT_TURN_PHASE.skillCatalog, async () =>
-      resolveManagedSkillCatalogWithUserFallback(requestedSkillName, managedSkillCatalog, {
-        db: (await scopedDbPromise).db,
-        userId,
-      }),
-    );
-    const selection = applyManagedSkillSelection(chatRequest, skillCatalogForSelection);
+    const selection = applyManagedSkillSelection(chatRequest, managedSkillCatalog);
+    selectedSkill = managedSkillCatalog.find((skill) => skill.name === requestedSkillName) ?? null;
     if (!selection.ok) {
       return {
         ok: false,
@@ -2914,11 +2885,7 @@ export async function processRequest(
         prompt: lastUserText,
         surface: chatSurface,
         toolsCapable: resolvedModelCaps?.tools !== false,
-        loadCatalog: async () =>
-          filterSkillsByInstallOverrides(
-            await getManagedSkillCatalog(),
-            await loadSkillInstallOverrides(),
-          ),
+        loadCatalog: () => loadSkillCatalog({ includeNetworkBackedDirectorySkills: false }),
       }),
     );
     if (offeredSkills.length > 0) {
@@ -2967,6 +2934,27 @@ export async function processRequest(
       };
     }
     applyManagedOfficeFileCreation(chatRequest);
+  }
+
+  const skillRequirement = selectedSkillRequirementFailure(
+    selectedSkill,
+    new Set((chatRequest.tools ?? []).map((tool) => tool.function.name)),
+  );
+  if (skillRequirement) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: skillRequirement.message,
+            type: 'invalid_request_error',
+            code: skillRequirement.code,
+            param: 'skill_name',
+          },
+        },
+        { status: 422 },
+      ),
+    };
   }
 
   const placesRequirement = resolvePlacesRequirement({

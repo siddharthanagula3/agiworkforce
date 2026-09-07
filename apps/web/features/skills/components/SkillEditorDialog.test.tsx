@@ -93,6 +93,45 @@ describe('SkillEditorDialog', () => {
     expect(screen.getByText('You already have a skill named "release-notes".')).toBeTruthy();
   });
 
+  it('fills every field from an imported SKILL.md instead of making the user retype it', async () => {
+    render(<SkillEditorDialog open mode="create" onOpenChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Import a SKILL.md file'), {
+      target: {
+        files: [
+          new File(
+            [
+              '---\nname: release-notes\ndescription: Draft release notes.\n---\n\nSummarize the diff.\n',
+            ],
+            'SKILL.md',
+            { type: 'text/markdown' },
+          ),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('release-notes'));
+    expect(screen.getByLabelText('Description')).toHaveValue('Draft release notes.');
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Summarize the diff.');
+  });
+
+  it('reports why an imported file is unusable and leaves the draft alone', async () => {
+    render(<SkillEditorDialog open mode="create" onOpenChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'kept-name' } });
+    fireEvent.change(screen.getByLabelText('Import a SKILL.md file'), {
+      target: {
+        files: [
+          new File(['# Just a heading\n\nSome prose.'], 'notes.md', { type: 'text/markdown' }),
+        ],
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByText(/no SKILL.md frontmatter/)).toBeTruthy();
+    expect(screen.getByLabelText('Name')).toHaveValue('kept-name');
+  });
+
   it('calls onOpenChange(false) when Cancel is clicked', () => {
     const onOpenChange = vi.fn();
     render(<SkillEditorDialog open mode="create" onOpenChange={onOpenChange} onSubmit={vi.fn()} />);

@@ -35,6 +35,10 @@ const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   extra: 'Added',
 };
 
+export function skillRequirementNote(tools: readonly string[] | undefined): string {
+  return tools?.length ? `Needs ${tools.join(', ')}` : '';
+}
+
 function SkillsHeader({ onBack }: { onBack: () => void }) {
   const colors = useThemeColors();
 
@@ -203,6 +207,7 @@ function SkillRow({
 }) {
   const colors = useThemeColors();
   const included = skill.lifecycle === 'included';
+  const requirementNote = skillRequirementNote(skill.requiredTools);
 
   return (
     <View
@@ -257,6 +262,14 @@ function SkillRow({
           <Text selectable style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
             {skill.description || 'No description provided.'}
           </Text>
+          {requirementNote ? (
+            <Text
+              accessibilityLabel={`${skill.name} ${requirementNote}`}
+              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
+            >
+              {requirementNote}
+            </Text>
+          ) : null}
           <View
             style={{
               marginTop: 3,

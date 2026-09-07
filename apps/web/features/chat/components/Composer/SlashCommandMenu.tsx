@@ -56,6 +56,13 @@ const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
 interface SkillMeta {
   name: string;
   description: string;
+  requiredTools?: readonly string[];
+}
+
+const REQUIREMENT_SEPARATOR = ' · ';
+
+function skillRequirementNote(tools: readonly string[] | undefined): string {
+  return tools?.length ? `Needs ${tools.join(', ')}` : '';
 }
 
 export interface SlashCommandMenuHandle {
@@ -117,26 +124,41 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
       );
 
       const skillSuggestions = skills
-        .map(
-          (skill): CommandSuggestion => ({
+        .map((skill): CommandSuggestion => {
+          const note = skillRequirementNote(skill.requiredTools);
+          return {
             id: `skill:${skill.name}`,
             command: `/${skill.name}`,
-            description: skill.description,
+            description: note
+              ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
+              : skill.description,
             icon: <Sparkles className="h-4 w-4 text-amber-400" />,
             isSkill: true,
-          }),
-        )
+          };
+        })
         .sort((left, right) => left.command.localeCompare(right.command));
 
       const normalizedQuery = query.toLowerCase();
-      return [...builtIns, ...custom, ...skillSuggestions].filter((suggestion) => {
-        const id = suggestion.id?.replace(/^skill:/, '') ?? suggestion.command.slice(1);
-        return (
-          normalizedQuery === '' ||
-          id.toLowerCase().startsWith(normalizedQuery) ||
-          suggestion.command.slice(1).toLowerCase().startsWith(normalizedQuery)
-        );
-      });
+      const all = [...builtIns, ...custom, ...skillSuggestions];
+      if (normalizedQuery === '') return all;
+
+      return all
+        .map((suggestion) => {
+          const name = (
+            suggestion.id?.replace(/^skill:/, '') ?? suggestion.command.slice(1)
+          ).toLowerCase();
+          const label = suggestion.command.slice(1).toLowerCase();
+          if (name.startsWith(normalizedQuery) || label.startsWith(normalizedQuery)) {
+            return { suggestion, rank: 0 };
+          }
+          if (name.includes(normalizedQuery) || label.includes(normalizedQuery)) {
+            return { suggestion, rank: 1 };
+          }
+          return null;
+        })
+        .filter((entry): entry is { suggestion: CommandSuggestion; rank: number } => entry !== null)
+        .sort((left, right) => left.rank - right.rank)
+        .map((entry) => entry.suggestion);
     }, [codeCommandAvailable, customCommands, imageCommandAvailable, platform, query, skills]);
 
     useEffect(() => {

@@ -5,8 +5,10 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
-  executeSkillTool,
+  describeSkillUnavailability,
+  executeSkillToolWithFiles,
   filterSkillsForProductAudience,
+  hashSkillContent,
   loadSkillsFromLayers,
   mergeSkills,
   parseSkillAudienceManifest,
@@ -15,11 +17,20 @@ import {
   type SkillAudienceManifest,
   type SkillLayer,
   type SkillSource,
+  type SkillToolFileAccess,
   type SkillToolResult,
   type SkillToolRuntimeContext,
 } from '@agiworkforce/skills';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { logger } from '@/lib/logger';
+import {
+  findUserSkillByName,
+  listUserSkillsAsManagedSkills,
+  toManagedSkillFromUserSkill,
+} from './user-skill-service';
 
 const SKILL_SOURCES = new Set<SkillSource>([
   'bundled',
@@ -45,6 +56,52 @@ export function isPluginOwnedSkill(skill: Skill): boolean {
 
 function isExecutableSkill(skill: Skill): boolean {
   return skill.frontmatter['draft'] !== true;
+}
+
+export function isDraftSkill(skill: Skill): boolean {
+  return !isExecutableSkill(skill);
+}
+
+export function withoutDraftSkills(skills: readonly Skill[]): Skill[] {
+  return skills.filter((skill) => !isDraftSkill(skill));
+}
+
+export function dedupeByFirstClaimedName<T extends { name: string }>(entries: readonly T[]): T[] {
+  const claimed = new Set<string>();
+  const kept: T[] = [];
+  for (const entry of entries) {
+    if (claimed.has(entry.name)) continue;
+    claimed.add(entry.name);
+    kept.push(entry);
+  }
+  return kept;
+}
+
+export function skillRequiredTools(skill: Skill): readonly string[] {
+  return skill.metadata.requires?.tools ?? [];
+}
+
+export const SKILL_REQUIREMENTS_UNMET_CODE = 'skill_requirements_unmet';
+
+export interface SkillRequirementFailure {
+  code: typeof SKILL_REQUIREMENTS_UNMET_CODE;
+  message: string;
+  missingTools: readonly string[];
+}
+
+export function selectedSkillRequirementFailure(
+  selected: Skill | null | undefined,
+  offeredToolNames: ReadonlySet<string>,
+): SkillRequirementFailure | null {
+  if (!selected) return null;
+  const missingTools =
+    describeSkillUnavailability(selected, { availableTools: offeredToolNames })?.missingTools ?? [];
+  if (missingTools.length === 0) return null;
+  return {
+    code: SKILL_REQUIREMENTS_UNMET_CODE,
+    message: `The ${selected.name} skill needs these turned on first: ${missingTools.join(', ')}.`,
+    missingTools,
+  };
 }
 
 export function filterSkillsByInstallOverrides(
@@ -272,10 +329,20 @@ export type SkillFileReadResult =
   | { ok: false; reason: 'too_large'; size: number }
   | { ok: false; reason: 'binary' };
 
-export async function readManagedSkillFile(
+export interface SkillFileBytes extends SkillFileEntry {
+  bytes: Buffer;
+  contentHash: string;
+}
+
+export type SkillFileBytesResult =
+  | { ok: true; file: SkillFileBytes }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'too_large'; size: number };
+
+export async function readManagedSkillFileBytes(
   skill: Skill,
   requestedPath: string,
-): Promise<SkillFileReadResult> {
+): Promise<SkillFileBytesResult> {
   const root = await skillPackageRealRoot(skill);
   if (root === null) return { ok: false, reason: 'not_found' };
 
@@ -297,9 +364,28 @@ export async function readManagedSkillFile(
     return { ok: false, reason: 'too_large', size: stats.size };
 
   const bytes = await readFile(realCandidate);
-  if (bytes.includes(0)) return { ok: false, reason: 'binary' };
+  return {
+    ok: true,
+    file: { path: fromRoot, size: stats.size, bytes, contentHash: hashSkillContent(bytes) },
+  };
+}
 
-  return { ok: true, file: { path: fromRoot, size: stats.size, content: bytes.toString('utf-8') } };
+export async function readManagedSkillFile(
+  skill: Skill,
+  requestedPath: string,
+): Promise<SkillFileReadResult> {
+  const result = await readManagedSkillFileBytes(skill, requestedPath);
+  if (!result.ok) return result;
+  if (result.file.bytes.includes(0)) return { ok: false, reason: 'binary' };
+
+  return {
+    ok: true,
+    file: {
+      path: result.file.path,
+      size: result.file.size,
+      content: result.file.bytes.toString('utf-8'),
+    },
+  };
 }
 
 export interface ExecuteManagedSkillToolOptions extends Pick<
@@ -312,28 +398,50 @@ export interface ExecuteManagedSkillToolOptions extends Pick<
 }
 
 const EMPTY_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
+const SKILL_ENTRY_FILE_NAME = 'SKILL.md';
+
+const managedSkillFileAccess: SkillToolFileAccess = {
+  async listFiles(skill) {
+    const files = await listManagedSkillFiles(skill);
+    if (files === null) return [];
+    return files.filter((file) => file.path !== SKILL_ENTRY_FILE_NAME);
+  },
+  async readFile(skill, requestedPath) {
+    const result = await readManagedSkillFile(skill, requestedPath);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    return { ok: true, path: result.file.path, content: result.file.content };
+  },
+};
+
+function skillToolRuntimeContext(options: ExecuteManagedSkillToolOptions): SkillToolRuntimeContext {
+  const { installOverrides: _installOverrides, ...runtimeOptions } = options;
+  return {
+    ...runtimeOptions,
+    availableEnvironmentVariables:
+      runtimeOptions.availableEnvironmentVariables ??
+      new Set(
+        Object.entries(process.env)
+          .filter((entry): entry is [string, string] => Boolean(entry[1]))
+          .map(([name]) => name),
+      ),
+    platform: runtimeOptions.platform ?? process.platform,
+  };
+}
 
 export async function executeManagedSkillTool(
   args: Record<string, unknown>,
   options: ExecuteManagedSkillToolOptions = {},
 ): Promise<SkillToolResult> {
-  const { installOverrides, ...runtimeOptions } = options;
-  const availableEnvironmentVariables =
-    runtimeOptions.availableEnvironmentVariables ??
-    new Set(
-      Object.entries(process.env)
-        .filter((entry): entry is [string, string] => Boolean(entry[1]))
-        .map(([name]) => name),
-    );
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalog(),
-    installOverrides ?? EMPTY_INSTALL_OVERRIDES,
+    options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
   );
-  return executeSkillTool(catalog, args, {
-    ...runtimeOptions,
-    availableEnvironmentVariables,
-    platform: runtimeOptions.platform ?? process.platform,
-  });
+  return executeSkillToolWithFiles(
+    catalog,
+    args,
+    skillToolRuntimeContext(options),
+    managedSkillFileAccess,
+  );
 }
 
 export async function executeManagedSkillToolForPlugins(
@@ -341,23 +449,16 @@ export async function executeManagedSkillToolForPlugins(
   args: Record<string, unknown>,
   options: ExecuteManagedSkillToolOptions = {},
 ): Promise<SkillToolResult> {
-  const { installOverrides, ...runtimeOptions } = options;
-  const availableEnvironmentVariables =
-    runtimeOptions.availableEnvironmentVariables ??
-    new Set(
-      Object.entries(process.env)
-        .filter((entry): entry is [string, string] => Boolean(entry[1]))
-        .map(([name]) => name),
-    );
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalogForPlugins(enabledPluginIds),
-    installOverrides ?? EMPTY_INSTALL_OVERRIDES,
+    options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
   );
-  return executeSkillTool(catalog, args, {
-    ...runtimeOptions,
-    availableEnvironmentVariables,
-    platform: runtimeOptions.platform ?? process.platform,
-  });
+  return executeSkillToolWithFiles(
+    catalog,
+    args,
+    skillToolRuntimeContext(options),
+    managedSkillFileAccess,
+  );
 }
 
 /**
@@ -373,4 +474,93 @@ export function invalidateManagedSkillCatalogCache(): void {
 
 export function resetManagedSkillCatalogCacheForTests(): void {
   invalidateManagedSkillCatalogCache();
+}
+
+export interface SelectableSkillCatalogParams {
+  db: DatabaseAdapter;
+  userId: string;
+  loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
+  loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
+  includeNetworkBackedDirectorySkills?: boolean;
+}
+
+const EMPTY_PLUGIN_IDS: ReadonlySet<string> = new Set();
+const NO_SKILLS: readonly Skill[] = [];
+
+async function readOptionalSkillSource<T>(
+  source: string,
+  fallback: T,
+  read: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    logger.warn({ error, source }, 'Optional skill source unavailable; continuing without it');
+    return fallback;
+  }
+}
+
+export async function loadSelectableSkillCatalog(
+  params: SelectableSkillCatalogParams,
+): Promise<Skill[]> {
+  const [enabledPluginIds, installOverrides] = await Promise.all([
+    readOptionalSkillSource('enabled-plugin-ids', EMPTY_PLUGIN_IDS, () =>
+      params.loadEnabledPluginIds(),
+    ),
+    readOptionalSkillSource('skill-install-overrides', EMPTY_INSTALL_OVERRIDES, () =>
+      params.loadInstallOverrides(),
+    ),
+  ]);
+  const managed = filterSkillsByInstallOverrides(
+    await getManagedSkillCatalogForPlugins(enabledPluginIds),
+    installOverrides,
+  );
+  const [userSkills, directorySkills] = await Promise.all([
+    readOptionalSkillSource('user-skills', NO_SKILLS, () =>
+      listUserSkillsAsManagedSkills(params.db, params.userId),
+    ),
+    params.includeNetworkBackedDirectorySkills === false
+      ? Promise.resolve(NO_SKILLS)
+      : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
+          listInstalledDirectorySkills(params.db, params.userId),
+        ),
+  ]);
+  return dedupeByFirstClaimedName([...managed, ...directorySkills, ...userSkills]);
+}
+
+export interface SkillDetailLookupParams {
+  db: DatabaseAdapter;
+  userId: string;
+  name: string;
+  loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
+}
+
+export async function findSelectableSkillByName(
+  params: SkillDetailLookupParams,
+): Promise<Skill | null> {
+  const enabledPluginIds = await readOptionalSkillSource(
+    'enabled-plugin-ids',
+    EMPTY_PLUGIN_IDS,
+    () => params.loadEnabledPluginIds(),
+  );
+  const managed = (await getManagedSkillDirectoryForPlugins(enabledPluginIds)).find(
+    (skill) => skill.name === params.name,
+  );
+  if (managed) return managed;
+
+  const directorySkills = await readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
+    listInstalledDirectorySkills(params.db, params.userId),
+  );
+  const installed = directorySkills.find((skill) => skill.name === params.name);
+  if (installed) return installed;
+
+  const authored = await readOptionalSkillSource('user-skills', null, () =>
+    findUserSkillByName(params.db, params.userId, params.name),
+  );
+  return authored ? toManagedSkillFromUserSkill(authored) : null;
+}
+
+export function memoizeAsync<T>(load: () => Promise<T>): () => Promise<T> {
+  let pending: Promise<T> | undefined;
+  return () => (pending ??= load());
 }

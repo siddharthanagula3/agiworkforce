@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { getModels } from '@agiworkforce/types';
+import { getModels, isManagedTrafficPermitted, isModelLive } from '@agiworkforce/types';
 
 import {
   apiCall,
@@ -14,7 +14,9 @@ import {
 const OUT_DIR = process.env['QA_OUT_DIR'] ?? path.resolve(__dirname, '../../../.qa-evidence');
 
 /** Cheapest tool-capable streaming chat model in the catalog; never a literal id. */
+// Managed-traffic filter first, or the cheapest route is one the surface refuses with 422.
 const TOOL_CAPABLE = getModels({ requireCapabilities: { tools: true, streaming: true } })
+  .filter((model) => isManagedTrafficPermitted(model.id) && isModelLive(model))
   .filter((model) => typeof model.inputCost === 'number' && (model.inputCost ?? 0) > 0)
   .sort((left, right) => (left.inputCost ?? Infinity) - (right.inputCost ?? Infinity));
 const QA_MODEL = process.env['QA_MODEL'];
@@ -48,6 +50,17 @@ interface SkillCase {
   id: string;
   prompt: string;
   expectedSkill: string | null;
+  expectsFileRead?: boolean;
+}
+
+function readSkillFilePaths(events: ReturnType<typeof extractRuntimeToolEvents>): string[] {
+  const paths: string[] = [];
+  for (const event of events) {
+    if (event.toolName !== 'skill') continue;
+    const args = event.args as { action?: string; path?: string } | null;
+    if (args?.action === 'read' && typeof args.path === 'string') paths.push(args.path);
+  }
+  return paths;
 }
 
 const SKILL_CASES: SkillCase[] = [
@@ -102,6 +115,13 @@ const SKILL_CASES: SkillCase[] = [
     prompt: 'Create a new reusable skill for performing a repository migration safely.',
     expectedSkill: 'skill-creator',
   },
+  {
+    id: 'copywriting',
+    prompt:
+      'Write the hero headline and subhead for a landing page, and use the copy frameworks reference to pick the structure.',
+    expectedSkill: 'copywriting',
+    expectsFileRead: true,
+  },
   { id: 'negative-arithmetic', prompt: 'What is 2 + 2?', expectedSkill: null },
   {
     id: 'negative-greeting',
@@ -117,6 +137,7 @@ interface CaseResult extends SkillCase {
   offeredSkillNames: string[];
   invokedTools: string[];
   loadedSkills: string[];
+  readSkillFiles: string[];
   verdict: 'PASS' | 'FAIL';
   note: string;
 }
@@ -151,18 +172,15 @@ test.describe('QA phase 3, real skill invocation from real prompts', () => {
       const events = extractRuntimeToolEvents(body);
       const invokedTools = invokedToolNames(events);
       const loadedSkills = loadedSkillNames(events);
+      const readSkillFiles = readSkillFilePaths(events);
       // The offer injects a system preamble listing the matched skills; the
       // skill tool itself only appears once at least one skill matched.
       const skillToolOffered = body.includes('"skill"') || invokedTools.includes('skill');
 
       const expected = testCase.expectedSkill;
-      const verdict: 'PASS' | 'FAIL' = expected
-        ? loadedSkills.includes(expected)
-          ? 'PASS'
-          : 'FAIL'
-        : loadedSkills.length === 0
-          ? 'PASS'
-          : 'FAIL';
+      const loadedExpected = expected ? loadedSkills.includes(expected) : loadedSkills.length === 0;
+      const readSatisfied = !testCase.expectsFileRead || readSkillFiles.length > 0;
+      const verdict: 'PASS' | 'FAIL' = loadedExpected && readSatisfied ? 'PASS' : 'FAIL';
 
       results.push({
         ...testCase,
@@ -172,9 +190,12 @@ test.describe('QA phase 3, real skill invocation from real prompts', () => {
         offeredSkillNames: [],
         invokedTools,
         loadedSkills,
+        readSkillFiles,
         verdict,
         note: expected
-          ? `expected skill ${expected}; loaded [${loadedSkills.join(', ') || 'none'}]`
+          ? `expected skill ${expected}; loaded [${loadedSkills.join(', ') || 'none'}]${
+              testCase.expectsFileRead ? `; read [${readSkillFiles.join(', ') || 'no file'}]` : ''
+            }`
           : `expected no skill; loaded [${loadedSkills.join(', ') || 'none'}]`,
       });
 
@@ -182,7 +203,7 @@ test.describe('QA phase 3, real skill invocation from real prompts', () => {
       writeFileSync(path.join(OUT_DIR, 'raw', `skill-${testCase.id}.sse.txt`), body);
 
       console.log(
-        `[qa] ${testCase.id.padEnd(24)} http=${response.status} tools=[${invokedTools.join(',')}] skills=[${loadedSkills.join(',')}] -> ${verdict}`,
+        `[qa] ${testCase.id.padEnd(24)} http=${response.status} tools=[${invokedTools.join(',')}] skills=[${loadedSkills.join(',')}] files=[${readSkillFiles.join(',')}] -> ${verdict}`,
       );
     }
 

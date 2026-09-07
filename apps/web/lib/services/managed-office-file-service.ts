@@ -17,7 +17,9 @@ import {
 import PptxGenJS from 'pptxgenjs';
 import { z } from 'zod';
 
-export const MANAGED_OFFICE_FILE_TOOL_NAME = 'create_office_file';
+import { MANAGED_OFFICE_FILE_TOOL_NAME } from '@agiworkforce/cloud-contracts';
+
+export { MANAGED_OFFICE_FILE_TOOL_NAME };
 
 export function isManagedOfficeFileTool(name: string): boolean {
   return name === MANAGED_OFFICE_FILE_TOOL_NAME;
