@@ -4,6 +4,8 @@ import {
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
+import { logger } from '@/lib/logger';
+import { getTraceContext } from '@/lib/observability/trace-context';
 
 export interface UpstreamErrorShape {
   status: number;
@@ -30,10 +32,35 @@ export function upstreamFailureCopy(
   return { message: mapped.message, code: mapped.code };
 }
 
+const REJECTION_CATEGORIES: ReadonlySet<ClassifiedError['category']> = new Set([
+  'invalid_input',
+  'client_error',
+]);
+const MAX_LOGGED_PROVIDER_MESSAGE_CHARS = 2_000;
+const PRODUCTION_ENV = 'production';
+
+function logProviderRejection(classified: ClassifiedError, provider: string): void {
+  if (!REJECTION_CATEGORIES.has(classified.category)) return;
+  logger.warn(
+    {
+      provider,
+      category: classified.category,
+      providerCode: classified.code,
+      status: classified.status,
+      requestId: getTraceContext()?.traceId,
+      ...(process.env['NODE_ENV'] === PRODUCTION_ENV
+        ? {}
+        : { providerMessage: classified.message.slice(0, MAX_LOGGED_PROVIDER_MESSAGE_CHARS) }),
+    },
+    '[upstream] provider rejected the request',
+  );
+}
+
 export function mapClassifiedUpstreamError(
   classified: ClassifiedError,
   provider: string,
 ): UpstreamErrorShape {
+  logProviderRejection(classified, provider);
   switch (classified.category) {
     case 'aborted':
       return {

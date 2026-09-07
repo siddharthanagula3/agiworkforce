@@ -27,7 +27,6 @@ export const GEMINI_SUPPORTED_SCHEMA_KEYWORDS = new Set([
   'items',
   'anyOf',
   'oneOf',
-  'allOf',
   'nullable',
   'propertyOrdering',
 ]);
@@ -37,6 +36,7 @@ export const GEMINI_SUPPORTED_SCHEMA_KEYWORDS = new Set([
  * allowlist above is what the cleaner actually enforces.
  */
 export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
+  'allOf',
   'patternProperties',
   'additionalProperties',
   '$schema',
@@ -64,12 +64,56 @@ export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
 
 const SCHEMA_META_KEYS = ['description', 'title', 'default'] as const;
 
+function defaultMatchesType(value: unknown, type: unknown, nullable: unknown): boolean {
+  if (type === undefined) {
+    return true;
+  }
+  const types = (Array.isArray(type) ? type : [type]).filter(
+    (entry): entry is string => typeof entry === 'string',
+  );
+  if (types.length === 0) {
+    return true;
+  }
+  if (value === null) {
+    return nullable === true || types.includes('null');
+  }
+  return types.some((entry) => {
+    switch (entry.toLowerCase()) {
+      case 'string':
+        return typeof value === 'string';
+      case 'number':
+        return typeof value === 'number';
+      case 'integer':
+        return typeof value === 'number' && Number.isInteger(value);
+      case 'boolean':
+        return typeof value === 'boolean';
+      case 'array':
+        return Array.isArray(value);
+      case 'object':
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+      default:
+        return true;
+    }
+  });
+}
+
+function sanitizeDefault(schema: Record<string, unknown>): Record<string, unknown> {
+  if (!('default' in schema)) {
+    return schema;
+  }
+  if (!defaultMatchesType(schema['default'], schema['type'], schema['nullable'])) {
+    delete schema['default'];
+  }
+  return schema;
+}
+
 function copySchemaMeta(from: Record<string, unknown>, to: Record<string, unknown>): void {
   for (const key of SCHEMA_META_KEYS) {
     if (key in from && from[key] !== undefined) {
       to[key] = from[key];
     }
   }
+  sanitizeDefault(to);
 }
 
 function tryFlattenLiteralAnyOf(variants: unknown[]): { type: string; enum: unknown[] } | null {
@@ -266,6 +310,61 @@ function simplifyUnionVariants(params: { obj: Record<string, unknown>; variants:
   return { variants: stripped ? nonNullVariants : variants };
 }
 
+function isObjectSchemaRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (record['type'] === 'object') {
+    return true;
+  }
+  if (record['type'] !== undefined) {
+    return false;
+  }
+  const properties = record['properties'];
+  return !!properties && typeof properties === 'object' && !Array.isArray(properties);
+}
+
+function mergeObjectSchemas(members: readonly Record<string, unknown>[]): Record<string, unknown> {
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+  let description: unknown;
+
+  for (const member of members) {
+    const memberProperties = member['properties'];
+    if (
+      memberProperties &&
+      typeof memberProperties === 'object' &&
+      !Array.isArray(memberProperties)
+    ) {
+      for (const [key, value] of Object.entries(memberProperties as Record<string, unknown>)) {
+        if (!(key in properties)) {
+          properties[key] = value;
+        }
+      }
+    }
+    if (Array.isArray(member['required'])) {
+      for (const key of member['required']) {
+        if (typeof key === 'string' && !required.includes(key)) {
+          required.push(key);
+        }
+      }
+    }
+    if (description === undefined && typeof member['description'] === 'string') {
+      description = member['description'];
+    }
+  }
+
+  const merged: Record<string, unknown> = { type: 'object', properties };
+  if (required.length > 0) {
+    merged['required'] = required;
+  }
+  if (description !== undefined) {
+    merged['description'] = description;
+  }
+  return merged;
+}
+
 function sanitizeRequiredFields(schema: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(schema['required'])) {
     return schema;
@@ -379,6 +478,12 @@ function cleanSchemaForGeminiWithDefs(
 
   const hasAnyOf = 'anyOf' in obj && Array.isArray(obj['anyOf']);
   const hasOneOf = 'oneOf' in obj && Array.isArray(obj['oneOf']);
+  const hasAllOf = 'allOf' in obj && Array.isArray(obj['allOf']);
+  const cleanedAllOf = hasAllOf
+    ? (obj['allOf'] as unknown[]).map((member) =>
+        cleanSchemaForGeminiWithDefs(member, nextDefs, refStack, depth + 1, budget),
+      )
+    : undefined;
   let cleanedAnyOf = hasAnyOf
     ? (obj['anyOf'] as unknown[]).map((variant) =>
         cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
@@ -471,29 +576,42 @@ function cleanSchemaForGeminiWithDefs(
         value.map((variant) =>
           cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
         );
-    } else if (key === 'allOf' && Array.isArray(value)) {
-      cleaned[key] = value.map((variant) =>
-        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
-      );
     } else {
       cleaned[key] = value;
+    }
+  }
+
+  if (hasAllOf) {
+    const members = cleanedAllOf ?? [];
+    if (members.length > 0 && members.every(isObjectSchemaRecord)) {
+      const merged = mergeObjectSchemas([cleaned, ...members]);
+      copySchemaMeta(obj, merged);
+      return sanitizeRequiredFields(sanitizeDefault(merged));
     }
   }
 
   if (cleaned['anyOf'] && Array.isArray(cleaned['anyOf'])) {
     const flattened = flattenUnionFallback(cleaned, cleaned['anyOf']);
     if (flattened) {
-      return sanitizeRequiredFields(flattened);
+      return sanitizeRequiredFields(sanitizeDefault(flattened));
     }
   }
   if (cleaned['oneOf'] && Array.isArray(cleaned['oneOf'])) {
     const flattened = flattenUnionFallback(cleaned, cleaned['oneOf']);
     if (flattened) {
-      return sanitizeRequiredFields(flattened);
+      return sanitizeRequiredFields(sanitizeDefault(flattened));
     }
   }
 
-  return sanitizeRequiredFields(cleaned);
+  return sanitizeRequiredFields(sanitizeDefault(cleaned));
+}
+
+function jsonTypeOf(value: unknown): string | undefined {
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (Array.isArray(value)) return 'array';
+  return undefined;
 }
 
 function flattenUnionFallback(
@@ -504,7 +622,13 @@ function flattenUnionFallback(
     (v): v is Record<string, unknown> => !!v && typeof v === 'object',
   );
   if (objects.length === 0) {
-    return undefined;
+    const merged: Record<string, unknown> = {};
+    const firstType = jsonTypeOf(variants[0]);
+    if (firstType) {
+      merged['type'] = firstType;
+    }
+    copySchemaMeta(obj, merged);
+    return merged;
   }
   const types = new Set(objects.map((v) => v['type']).filter(Boolean));
   if (objects.length === 1) {

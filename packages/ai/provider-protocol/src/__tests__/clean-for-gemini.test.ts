@@ -297,3 +297,244 @@ describe('cleanSchemaForGemini, only Gemini-known keywords survive', () => {
     walk(cleaned);
   });
 });
+
+const MICROSOFT_LEARN_SEARCH_SCHEMA = {
+  type: 'object',
+  properties: {
+    query: {
+      description:
+        'a query or topic about Microsoft/Azure products, services, platforms, developer tools, frameworks, or APIs',
+      type: 'string',
+      default: null,
+    },
+  },
+} as const;
+
+describe('cleanSchemaForGemini, a default the declared type cannot hold', () => {
+  it('drops the null default the Microsoft Learn tools declare on a string', () => {
+    const cleaned = cleanSchemaForGemini(MICROSOFT_LEARN_SEARCH_SCHEMA) as Record<string, unknown>;
+    const query = (cleaned['properties'] as Record<string, Record<string, unknown>>)['query'];
+
+    expect(query).toBeDefined();
+    expect(query).not.toHaveProperty('default');
+    expect(query?.['type']).toBe('string');
+    expect(query?.['description']).toContain('Microsoft/Azure products');
+  });
+
+  it('keeps a null default on a property the schema marks nullable', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: { a: { type: 'string', nullable: true, default: null } },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['a']?.['default']).toBeNull();
+  });
+
+  it('drops the null default when it narrows a nullable type union to one type', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: { b: { type: ['string', 'null'], default: null } },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['b']?.['type']).toBe('string');
+    expect(props['b']).not.toHaveProperty('default');
+  });
+
+  it('keeps every default whose value matches its declared type', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        text: { type: 'string', default: 'hi' },
+        count: { type: 'integer', default: 3 },
+        ratio: { type: 'number', default: 1.5 },
+        flag: { type: 'boolean', default: false },
+        list: { type: 'array', items: { type: 'string' }, default: [] },
+        bag: { type: 'object', default: {} },
+        untyped: { default: 'kept' },
+      },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['text']?.['default']).toBe('hi');
+    expect(props['count']?.['default']).toBe(3);
+    expect(props['ratio']?.['default']).toBe(1.5);
+    expect(props['flag']?.['default']).toBe(false);
+    expect(props['list']?.['default']).toEqual([]);
+    expect(props['bag']?.['default']).toEqual({});
+    expect(props['untyped']?.['default']).toBe('kept');
+  });
+
+  it('drops a default of the wrong shape, not only null', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        count: { type: 'integer', default: 1.5 },
+        text: { type: 'string', default: 7 },
+        list: { type: 'array', items: { type: 'string' }, default: 'nope' },
+      },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['count']).not.toHaveProperty('default');
+    expect(props['text']).not.toHaveProperty('default');
+    expect(props['list']).not.toHaveProperty('default');
+  });
+
+  it('drops it through a $ref and through a nullable union too', () => {
+    const cleaned = cleanSchemaForGemini({
+      $defs: { Q: { type: 'string', default: null } },
+      type: 'object',
+      properties: {
+        viaRef: { $ref: '#/$defs/Q' },
+        viaUnion: { anyOf: [{ type: 'string' }, { type: 'null' }], default: null },
+      },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['viaRef']).not.toHaveProperty('default');
+    expect(props['viaUnion']).not.toHaveProperty('default');
+  });
+});
+
+describe('cleanSchemaForGemini, allOf', () => {
+  function assertNoAllOf(node: unknown): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(assertNoAllOf);
+      return;
+    }
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      expect(key, 'allOf reached the request').not.toBe('allOf');
+      if (key === 'enum' || key === 'default') continue;
+      assertNoAllOf(value);
+    }
+  }
+
+  it('merges an allOf of object schemas into one object', () => {
+    const cleaned = cleanSchemaForGemini({
+      allOf: [
+        {
+          type: 'object',
+          description: 'the first description wins',
+          properties: { a: { type: 'string' } },
+          required: ['a'],
+        },
+        {
+          type: 'object',
+          description: 'ignored',
+          properties: { b: { type: 'integer' }, a: { type: 'boolean' } },
+          required: ['b', 'a'],
+        },
+      ],
+    }) as Record<string, unknown>;
+
+    expect(cleaned['type']).toBe('object');
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(props).sort()).toEqual(['a', 'b']);
+    expect(props['a']?.['type']).toBe('string');
+    expect(props['b']?.['type']).toBe('integer');
+    expect(cleaned['required']).toEqual(['a', 'b']);
+    expect(cleaned['description']).toBe('the first description wins');
+    assertNoAllOf(cleaned);
+  });
+
+  it('folds the parent object in and lets its own property win', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: { a: { type: 'string' } },
+      required: ['a'],
+      allOf: [{ type: 'object', properties: { a: { type: 'boolean' }, b: { type: 'string' } } }],
+    }) as Record<string, unknown>;
+
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['a']?.['type']).toBe('string');
+    expect(props['b']?.['type']).toBe('string');
+    expect(cleaned['required']).toEqual(['a']);
+    assertNoAllOf(cleaned);
+  });
+
+  it('drops an allOf that is not an intersection of objects', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        mixed: {
+          type: 'string',
+          allOf: [{ type: 'string' }, { type: 'object', properties: { a: { type: 'string' } } }],
+        },
+        empty: { type: 'string', allOf: [] },
+      },
+    }) as Record<string, unknown>;
+
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['mixed']?.['type']).toBe('string');
+    expect(props['mixed']).not.toHaveProperty('properties');
+    expect(props['empty']?.['type']).toBe('string');
+    assertNoAllOf(cleaned);
+  });
+
+  it('merges a nested allOf, including one reached through a $ref', () => {
+    const cleaned = cleanSchemaForGemini({
+      $defs: { Shared: { type: 'object', properties: { id: { type: 'string' } } } },
+      type: 'object',
+      properties: {
+        outer: {
+          allOf: [
+            { $ref: '#/$defs/Shared' },
+            {
+              type: 'object',
+              properties: {
+                inner: {
+                  allOf: [
+                    {
+                      type: 'object',
+                      properties: { deep: { type: 'string' } },
+                      required: ['deep'],
+                    },
+                    { type: 'object', properties: { also: { type: 'integer' } } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    }) as Record<string, unknown>;
+
+    const outer = (cleaned['properties'] as Record<string, Record<string, unknown>>)['outer'];
+    const outerProps = outer?.['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(outerProps).sort()).toEqual(['id', 'inner']);
+
+    const inner = outerProps['inner'];
+    expect(inner?.['type']).toBe('object');
+    const innerProps = inner?.['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(innerProps).sort()).toEqual(['also', 'deep']);
+    expect(inner?.['required']).toEqual(['deep']);
+    assertNoAllOf(cleaned);
+  });
+});
+
+describe('cleanSchemaForGemini, a union of non-object variants', () => {
+  it('collapses to the first variant type and never keeps the keyword', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        viaOneOf: { oneOf: ['a', 'b'], description: 'kept' },
+        viaAnyOf: { anyOf: [1, 'b'] },
+        viaBooleanSchema: { oneOf: [true] },
+        empty: { anyOf: [] },
+      },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+
+    expect(props['viaOneOf']).toEqual({ type: 'string', description: 'kept' });
+    expect(props['viaAnyOf']).toEqual({ type: 'number' });
+    expect(props['viaBooleanSchema']).toEqual({ type: 'boolean' });
+    expect(props['empty']).toEqual({});
+
+    const serialized = JSON.stringify(cleaned);
+    expect(serialized).not.toContain('oneOf');
+    expect(serialized).not.toContain('anyOf');
+  });
+});
