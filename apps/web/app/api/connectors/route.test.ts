@@ -726,6 +726,31 @@ describe('/api/connectors directory records', () => {
     expect(JSON.stringify(body)).not.toMatch(/token/i);
   });
 
+  it('reports a custom row whose sealed credential no longer opens as needing reconnection', async () => {
+    mocks.customConnectors.mockResolvedValue([
+      {
+        id: 'row-1',
+        shortId: 'abc123def0',
+        name: 'Tandem Docs MCP',
+        url: 'https://tandem.ac/mcp',
+        transport: 'streamable-http',
+        createdAt: '2026-09-05T00:00:00.000Z',
+        updatedAt: '2026-09-05T00:00:00.000Z',
+        credentialUnreadable: true,
+      },
+    ]);
+
+    const body = (await (await GET(getRequest())).json()) as {
+      connectors: Array<Record<string, unknown>>;
+    };
+
+    expect(body.connectors.find((c) => c['connectorId'] === OPEN_RECORD_ID)).toMatchObject({
+      source: 'custom',
+      needsReauthorization: true,
+      health: 'needs-reauthorization',
+    });
+  });
+
   it('names the missing env pair for every curated connector that needs setup', async () => {
     mocks.describeSetup.mockImplementation((connectorId: string, displayName?: string) =>
       connectorId === 'gmail'

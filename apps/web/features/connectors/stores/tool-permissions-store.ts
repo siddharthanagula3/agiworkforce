@@ -8,6 +8,18 @@ export type PermissionLevel = 'allow' | 'ask' | 'deny';
 
 export type ToolPermissionsMap = Record<string, Record<string, PermissionLevel>>;
 
+export const DEFAULT_PERMISSION_LEVEL: PermissionLevel = 'ask';
+
+const PERMISSIONS_PATH = '/api/connectors/permissions';
+const CSRF_HEADER = 'x-csrf-token';
+const JSON_CONTENT_TYPE = 'application/json';
+const SAME_ORIGIN: RequestCredentials = 'same-origin';
+
+export const PERMISSION_SAVE_FAILED_COPY =
+  'That permission was not saved, so the assistant still follows the level shown here. Try again.';
+export const PERMISSION_RESET_FAILED_COPY =
+  'These permissions were not reset, so the assistant still follows the levels shown here. Try again.';
+
 interface ServerPermission {
   connectorId: string;
   toolName: string;
@@ -16,6 +28,8 @@ interface ServerPermission {
 
 interface ToolPermissionsState {
   permissions: ToolPermissionsMap;
+  saving: Record<string, readonly string[]>;
+  saveError: Record<string, string>;
 }
 
 interface ToolPermissionsActions {
@@ -23,26 +37,38 @@ interface ToolPermissionsActions {
   getToolPermission: (connectorId: string, toolName: string) => PermissionLevel;
   getConnectorPermissions: (connectorId: string) => Record<string, PermissionLevel>;
   resetConnectorPermissions: (connectorId: string) => void;
+  isToolSaving: (connectorId: string, toolName: string) => boolean;
+  getSaveError: (connectorId: string) => string | null;
+  clearSaveError: (connectorId: string) => void;
   hydrateFromServer: () => Promise<void>;
 }
 
-async function persistPermissionToServer(
+type Store = ToolPermissionsState & ToolPermissionsActions;
+
+class PermissionWriteError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`connector permissions write failed: HTTP ${status}`);
+    this.name = 'PermissionWriteError';
+    this.status = status;
+  }
+}
+
+async function writePermissionToServer(
   connectorId: string,
   toolName: string,
   level: PermissionLevel,
 ): Promise<void> {
-  try {
-    const csrf = await getCsrfToken();
-    await fetch('/api/connectors/permissions', {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-      body: JSON.stringify({ connectorId, toolName, level }),
-    });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
-  } catch (err) {
-    logger.warn('[ToolPermissions] server persist failed (kept locally):', err);
-  }
+  const csrf = await getCsrfToken();
+  const response = await fetch(PERMISSIONS_PATH, {
+    method: 'PUT',
+    credentials: SAME_ORIGIN,
+    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrf },
+    body: JSON.stringify({ connectorId, toolName, level }),
+  });
+  if (!response.ok) throw new PermissionWriteError(response.status);
+  await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
 
 /**
@@ -52,21 +78,21 @@ async function persistPermissionToServer(
  * `allow` grant kept granting it.
  */
 async function clearConnectorPermissionsOnServer(connectorId: string): Promise<void> {
-  try {
-    const csrf = await getCsrfToken();
-    await fetch(`/api/connectors/permissions?connectorId=${encodeURIComponent(connectorId)}`, {
+  const csrf = await getCsrfToken();
+  const response = await fetch(
+    `${PERMISSIONS_PATH}?connectorId=${encodeURIComponent(connectorId)}`,
+    {
       method: 'DELETE',
-      credentials: 'same-origin',
-      headers: { 'x-csrf-token': csrf },
-    });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
-  } catch (err) {
-    logger.warn('[ToolPermissions] server reset failed (local cleared):', err);
-  }
+      credentials: SAME_ORIGIN,
+      headers: { [CSRF_HEADER]: csrf },
+    },
+  );
+  if (!response.ok) throw new PermissionWriteError(response.status);
+  await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
 
 async function fetchPermissionsFromServer(): Promise<ServerPermission[]> {
-  const res = await fetch('/api/connectors/permissions', { credentials: 'same-origin' });
+  const res = await fetch(PERMISSIONS_PATH, { credentials: SAME_ORIGIN });
   if (!res.ok) {
     throw Object.assign(new Error(`connector permissions fetch failed: HTTP ${res.status}`), {
       status: res.status,
@@ -76,26 +102,85 @@ async function fetchPermissionsFromServer(): Promise<ServerPermission[]> {
   return data.permissions ?? [];
 }
 
-export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermissionsActions>()(
+function withoutConnector(map: ToolPermissionsMap, connectorId: string): ToolPermissionsMap {
+  const next = { ...map };
+  delete next[connectorId];
+  return next;
+}
+
+function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in map)) return map;
+  const next = { ...map };
+  delete next[key];
+  return next;
+}
+
+function markSaving(
+  saving: Record<string, readonly string[]>,
+  connectorId: string,
+  toolName: string,
+): Record<string, readonly string[]> {
+  const current = saving[connectorId] ?? [];
+  if (current.includes(toolName)) return saving;
+  return { ...saving, [connectorId]: [...current, toolName] };
+}
+
+function unmarkSaving(
+  saving: Record<string, readonly string[]>,
+  connectorId: string,
+  toolName: string,
+): Record<string, readonly string[]> {
+  const current = saving[connectorId];
+  if (!current) return saving;
+  const remaining = current.filter((name) => name !== toolName);
+  return remaining.length === 0
+    ? withoutKey(saving, connectorId)
+    : { ...saving, [connectorId]: remaining };
+}
+
+export const useToolPermissionsStore = create<Store>()(
   persist(
     (set, get) => ({
       permissions: {},
+      saving: {},
+      saveError: {},
 
       setToolPermission: (connectorId, toolName, level) => {
+        const previous = get().permissions[connectorId]?.[toolName] ?? null;
         set((state) => ({
           permissions: {
             ...state.permissions,
-            [connectorId]: {
-              ...state.permissions[connectorId],
-              [toolName]: level,
-            },
+            [connectorId]: { ...state.permissions[connectorId], [toolName]: level },
           },
+          saving: markSaving(state.saving, connectorId, toolName),
+          saveError: withoutKey(state.saveError, connectorId),
         }));
-        void persistPermissionToServer(connectorId, toolName, level);
+
+        void writePermissionToServer(connectorId, toolName, level)
+          .then(() => {
+            set((state) => ({ saving: unmarkSaving(state.saving, connectorId, toolName) }));
+          })
+          .catch((err: unknown) => {
+            logger.warn('[ToolPermissions] server write refused, reverting:', err);
+            set((state) => {
+              const connector = { ...state.permissions[connectorId] };
+              if (previous === null) delete connector[toolName];
+              else connector[toolName] = previous;
+              const permissions =
+                Object.keys(connector).length === 0
+                  ? withoutConnector(state.permissions, connectorId)
+                  : { ...state.permissions, [connectorId]: connector };
+              return {
+                permissions,
+                saving: unmarkSaving(state.saving, connectorId, toolName),
+                saveError: { ...state.saveError, [connectorId]: PERMISSION_SAVE_FAILED_COPY },
+              };
+            });
+          });
       },
 
       getToolPermission: (connectorId, toolName) => {
-        return get().permissions[connectorId]?.[toolName] ?? 'ask';
+        return get().permissions[connectorId]?.[toolName] ?? DEFAULT_PERMISSION_LEVEL;
       },
 
       getConnectorPermissions: (connectorId) => {
@@ -103,12 +188,30 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
       },
 
       resetConnectorPermissions: (connectorId) => {
-        set((state) => {
-          const next = { ...state.permissions };
-          delete next[connectorId];
-          return { permissions: next };
+        const previous = get().permissions[connectorId];
+        if (!previous) return;
+        set((state) => ({
+          permissions: withoutConnector(state.permissions, connectorId),
+          saveError: withoutKey(state.saveError, connectorId),
+        }));
+
+        void clearConnectorPermissionsOnServer(connectorId).catch((err: unknown) => {
+          logger.warn('[ToolPermissions] server reset refused, restoring:', err);
+          set((state) => ({
+            permissions: { ...state.permissions, [connectorId]: previous },
+            saveError: { ...state.saveError, [connectorId]: PERMISSION_RESET_FAILED_COPY },
+          }));
         });
-        void clearConnectorPermissionsOnServer(connectorId);
+      },
+
+      isToolSaving: (connectorId, toolName) => {
+        return get().saving[connectorId]?.includes(toolName) ?? false;
+      },
+
+      getSaveError: (connectorId) => get().saveError[connectorId] ?? null,
+
+      clearSaveError: (connectorId) => {
+        set((state) => ({ saveError: withoutKey(state.saveError, connectorId) }));
       },
 
       hydrateFromServer: async () => {
@@ -136,6 +239,7 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
       name: 'agi-tool-permissions',
       version: 1,
       migrate: (persisted) => persisted,
+      partialize: (state) => ({ permissions: state.permissions }) as Store,
     },
   ),
 );

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   getSubscription: vi.fn(),
   connect: vi.fn(),
+  summaries: vi.fn(async (..._args: unknown[]) => [] as unknown[]),
+  directoryByUrl: vi.fn(async (..._args: unknown[]) => null as unknown),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -45,7 +47,10 @@ vi.mock('@/lib/custom-connector-crypto', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: vi.fn(),
-  getUserCustomConnectorSummaries: vi.fn(async () => []),
+  getUserCustomConnectorSummaries: (...args: unknown[]) => mocks.summaries(...args),
+}));
+vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+  findDirectoryTargetByRemoteUrl: (...args: unknown[]) => mocks.directoryByUrl(...args),
 }));
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
   getMcpStatelessRuntime: vi.fn(async () => ({})),
@@ -55,7 +60,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
 
-import { POST } from './route';
+import { GET, POST } from './route';
 
 function request() {
   return new NextRequest('http://localhost/api/connectors/custom', {
@@ -128,5 +133,48 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
     expect((await response.json()).error.message).toBe(
       'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.',
     );
+  });
+});
+
+describe('GET /api/connectors/custom directory linkage', () => {
+  const ROW = {
+    id: 'row-1',
+    shortId: 'abc123',
+    name: 'Sentry',
+    url: 'https://mcp.sentry.dev/mcp',
+    transport: 'streamable-http',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  function listRequest() {
+    return new NextRequest('http://localhost/api/connectors/custom');
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.summaries.mockResolvedValue([ROW]);
+  });
+
+  it('names the directory entry a linked row came from', async () => {
+    mocks.directoryByUrl.mockResolvedValue({ connectorId: 'io.sentry/mcp' });
+
+    const body = (await (await GET(listRequest())).json()) as {
+      connectors: { id: string; directoryId?: string }[];
+    };
+
+    expect(mocks.directoryByUrl).toHaveBeenCalledWith(ROW.url);
+    expect(body.connectors).toEqual([{ ...ROW, directoryId: 'io.sentry/mcp' }]);
+  });
+
+  it('leaves a hand-entered endpoint unlinked', async () => {
+    mocks.directoryByUrl.mockResolvedValue(null);
+
+    const body = (await (await GET(listRequest())).json()) as {
+      connectors: { directoryId?: string }[];
+    };
+
+    expect(body.connectors).toEqual([ROW]);
+    expect(body.connectors[0]).not.toHaveProperty('directoryId');
   });
 });

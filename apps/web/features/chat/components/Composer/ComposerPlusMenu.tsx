@@ -69,6 +69,9 @@ const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
   "Won't be saved to your history and skips memory for this turn.";
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
+const SETTINGS_SECTION_CONNECTORS = 'connectors';
+const SETTINGS_SECTION_SKILLS = 'skills';
+const SETTINGS_SECTION_PLUGINS = 'plugins';
 const CONNECTORS_EMPTY_COPY = 'No connectors connected yet.';
 const BADGE_CHECKING = 'Checking';
 const BADGE_RETRY = 'Retry';
@@ -100,16 +103,32 @@ const CHAT_PANEL_CLASS = 'w-64 p-1.5';
 const PALETTE_ITEM_SELECTOR =
   '[role="menuitem"], [role="menuitemcheckbox"], [data-composer-palette-search]';
 const CATALOG_RESULT_LIMIT = 5;
+const PALETTE_SEARCH_DEBOUNCE_MS = 250;
+
+type SettingsBrowseSection = Parameters<typeof buildSettingsBrowseHash>[0];
+
+function openDirectorySettings(props: ComposerPlusMenuProps, section: SettingsBrowseSection): void {
+  props.closeMenu();
+  if (typeof window !== 'undefined') {
+    window.location.hash = buildSettingsBrowseHash(section);
+  }
+  props.onOpenSettings(section);
+}
 
 export type MediaAvailabilityStatus = 'loading' | 'ready' | 'error';
 
 export interface ComposerPlusMenuConnector {
   id: string;
+  toolId?: string;
   label: string;
   name: string;
   iconBg: string;
   iconText: string;
   description?: string;
+}
+
+export function connectorToggleId(connector: ComposerPlusMenuConnector): string {
+  return connector.toolId ?? connector.id;
 }
 
 export interface ComposerPlusMenuFolder {
@@ -626,7 +645,8 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
 
 function ChatMenu(props: ComposerPlusMenuProps) {
   const { t } = useTranslation('v3');
-  const enabledConnector = (id: string) => !props.disabledConnectorIds.includes(id);
+  const enabledConnector = (connector: ComposerPlusMenuConnector) =>
+    !props.disabledConnectorIds.includes(connectorToggleId(connector));
 
   return (
     <>
@@ -663,10 +683,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       available via the @mention dropdown in the textarea. */}
       <button
         type="button"
-        onClick={() => {
-          props.closeMenu();
-          props.onOpenSettings('skills');
-        }}
+        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_SKILLS)}
         className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.selectedSkillName && 'text-primary')}
       >
         <Sparkles
@@ -705,9 +722,12 @@ function ChatMenu(props: ComposerPlusMenuProps) {
               <ConnectorCheckboxRow
                 key={connector.id}
                 label={connector.label}
-                checked={enabledConnector(connector.id)}
+                checked={enabledConnector(connector)}
                 onToggle={() =>
-                  props.onSetConnectorEnabled(connector.id, !enabledConnector(connector.id))
+                  props.onSetConnectorEnabled(
+                    connectorToggleId(connector),
+                    !enabledConnector(connector),
+                  )
                 }
               />
             ))
@@ -715,10 +735,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
           <button
             type="button"
             role="menuitem"
-            onClick={() => {
-              props.closeMenu();
-              props.onOpenSettings('connectors');
-            }}
+            onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
             className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
           >
             {ROW_LABEL_MANAGE_CONNECTORS}
@@ -728,10 +745,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
 
       <button
         type="button"
-        onClick={() => {
-          props.closeMenu();
-          props.onOpenSettings('plugins');
-        }}
+        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_PLUGINS)}
         className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
       >
         <PluginsGlyph className={GLYPH_CLASS} />
@@ -790,19 +804,29 @@ function WorkPalette(props: ComposerPlusMenuProps) {
   }, [props.open]);
 
   const searching = query.trim().length > 0;
+  const normalized = query.trim().toLowerCase();
+  const [debouncedTerm, setDebouncedTerm] = useState('');
 
   useEffect(() => {
-    if (!searching) return;
+    if (!searching) {
+      setDebouncedTerm('');
+      return undefined;
+    }
+    const id = window.setTimeout(() => setDebouncedTerm(normalized), PALETTE_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [searching, normalized]);
+
+  useEffect(() => {
+    if (!debouncedTerm) return undefined;
     let cancelled = false;
-    void loadPalettePlugins().then((entries) => {
+    void loadPalettePlugins(debouncedTerm).then((entries) => {
       if (!cancelled) setPlugins(entries);
     });
     return () => {
       cancelled = true;
     };
-  }, [searching]);
+  }, [debouncedTerm]);
 
-  const normalized = query.trim().toLowerCase();
   const matches = useCallback(
     (...parts: (string | undefined)[]) =>
       normalized.length === 0 ||
@@ -843,7 +867,8 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     [searching, plugins, matches],
   );
 
-  const enabledConnector = (id: string) => !props.disabledConnectorIds.includes(id);
+  const enabledConnector = (connector: ComposerPlusMenuConnector) =>
+    !props.disabledConnectorIds.includes(connectorToggleId(connector));
 
   const openPlugin = useCallback(
     (pluginId: string) => {
@@ -951,9 +976,12 @@ function WorkPalette(props: ComposerPlusMenuProps) {
           <PaletteConnectorRow
             key={connector.id}
             connector={connector}
-            checked={enabledConnector(connector.id)}
+            checked={enabledConnector(connector)}
             onToggle={() =>
-              props.onSetConnectorEnabled(connector.id, !enabledConnector(connector.id))
+              props.onSetConnectorEnabled(
+                connectorToggleId(connector),
+                !enabledConnector(connector),
+              )
             }
           />
         ))
@@ -961,10 +989,7 @@ function WorkPalette(props: ComposerPlusMenuProps) {
       <button
         type="button"
         role="menuitem"
-        onClick={() => {
-          props.closeMenu();
-          props.onOpenSettings('connectors');
-        }}
+        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
         className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
       >
         <ConnectorsGlyph className={GLYPH_CLASS} />

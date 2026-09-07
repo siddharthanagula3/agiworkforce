@@ -33,6 +33,22 @@ function sources(values: string[] | undefined, schemes: readonly string[]): stri
     .join(' ');
 }
 
+function appOrigin(): string | null {
+  const configured = process.env['NEXT_PUBLIC_APP_URL'];
+  if (!configured) return null;
+  try {
+    const origin = new URL(configured).origin;
+    return UNSAFE_CSP_TOKEN.test(origin) ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
+function frameAncestors(): string {
+  const origin = appOrigin();
+  return origin ? `frame-ancestors 'self' ${origin}` : "frame-ancestors 'self'";
+}
+
 function buildCsp(csp?: McpUiResourceCsp): string {
   const resources = sources(csp?.resourceDomains, ['https']);
   const connections = sources(csp?.connectDomains, ['https', 'wss']);
@@ -51,7 +67,7 @@ function buildCsp(csp?: McpUiResourceCsp): string {
     `base-uri ${bases || "'none'"}`,
     "object-src 'none'",
     "form-action 'none'",
-    "frame-ancestors 'self'",
+    frameAncestors(),
   ].join('; ');
 }
 
