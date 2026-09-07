@@ -85,7 +85,10 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@/lib/web-search-support';
-import { isMemoryCapabilityEnabled } from '@/lib/runtime/memory-capability';
+import {
+  isMemoryCapabilityEnabled,
+  subscribeMemoryCapability,
+} from '@/lib/runtime/memory-capability';
 import {
   BUILT_IN_SLASH_COMMANDS,
   decideComposerPaste,
@@ -799,11 +802,16 @@ const ChatComposerNewComponent = ({
   const [memoryCapabilityEnabled, setMemoryCapabilityEnabled] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    isMemoryCapabilityEnabled().then((enabled) => {
-      if (!cancelled) setMemoryCapabilityEnabled(enabled);
-    });
+    const read = () => {
+      void isMemoryCapabilityEnabled().then((enabled) => {
+        if (!cancelled) setMemoryCapabilityEnabled(enabled);
+      });
+    };
+    read();
+    const unsubscribe = subscribeMemoryCapability(read);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
   const connectedConnectorOptions = useMemo(
