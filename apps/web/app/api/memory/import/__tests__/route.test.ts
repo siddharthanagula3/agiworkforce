@@ -82,7 +82,7 @@ describe('POST /api/memory/import, dry-run', () => {
 
 describe('POST /api/memory/import, commit', () => {
   it('persists selected items with imported provenance and reports counts', async () => {
-    mocks.query.mockResolvedValueOnce([
+    mocks.query.mockResolvedValue([
       {
         id: '018f6f2a-0000-7000-8000-000000000010',
         content: 'Likes dark mode',

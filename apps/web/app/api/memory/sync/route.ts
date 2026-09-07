@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import {
   MemorySyncPushRequestSchema,
@@ -12,6 +11,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
 
 const MAX_MEMORIES_PULL = 1000;
 
@@ -127,10 +127,17 @@ async function handlePost(request: NextRequest) {
   }
   const { memories } = parsed.data;
 
+  const { allowed, rejected } = await partitionMemoryWrites(db, {
+    userId,
+    candidates: memories,
+    contentOf: (memory) => (memory.isDeleted === true ? '' : memory.content),
+  });
+  const refused = rejected.map(({ candidate, term }) => ({ id: candidate.id, term }));
+
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: MemoryDelta | null }> = [];
   try {
-    if (memories.length > 0) {
+    if (allowed.length > 0) {
       const rows = await db.query<{
         kind: 'applied' | 'conflict';
         id: string;
@@ -192,7 +199,7 @@ async function handlePost(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(memories)],
+        [userId, JSON.stringify(allowed)],
       );
       for (const row of rows) {
         if (row.kind === 'applied' && row.server_version !== null) {
@@ -209,7 +216,7 @@ async function handlePost(request: NextRequest) {
       conflict.current ? [conflict.current] : [],
     );
     const cursor = maxServerVersion('0', applied, conflictRows);
-    return NextResponse.json({ protocolVersion: 2, applied, conflicts, cursor });
+    return NextResponse.json({ protocolVersion: 2, applied, conflicts, rejected: refused, cursor });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync push failed');
     throw createError.internal('Failed to push memory changes');

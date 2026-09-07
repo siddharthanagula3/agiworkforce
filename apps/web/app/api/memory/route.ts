@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 
 type MemoryRow = UserMemoryRow & {
   pinned: boolean;
@@ -92,13 +93,16 @@ async function handleCreateMemory(request: NextRequest) {
   const validSources = ['mobile', 'desktop', 'web', 'auto'];
   const source = validSources.includes(body.source ?? '') ? body.source : 'web';
 
+  const content = body.content.trim();
+  await assertMemoryWriteAllowed(db, { userId, content });
+
   let row: MemoryRow;
   try {
     const [inserted] = await db.query<MemoryRow>(
       `insert into user_memories (user_id, content, category, source, pinned)
        values ($1, $2, $3, $4, $5)
        returning id, content, category, source, pinned, created_at, updated_at`,
-      [userId, body.content.trim(), body.category?.trim() ?? null, source, body.pinned === true],
+      [userId, content, body.category?.trim() ?? null, source, body.pinned === true],
     );
     if (!inserted) throw new Error('No row returned');
     row = inserted;

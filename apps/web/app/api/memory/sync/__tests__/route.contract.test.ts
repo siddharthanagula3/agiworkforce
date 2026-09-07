@@ -93,7 +93,7 @@ describe('POST /api/memory/sync { memories }, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against MemorySyncPushResponseSchema', async () => {
-    mockQuery.mockResolvedValueOnce([
+    mockQuery.mockResolvedValue([
       { kind: 'applied', id: MEM_ID, server_version: '9', current: null },
     ]);
 
