@@ -130,6 +130,7 @@ import {
   installSkill,
   removeSkill as removeSkillRequest,
   skillDescriptionsByName,
+  toSkillManageRows,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
@@ -139,6 +140,11 @@ const CHAT_PATH = '/chat';
 const COMPOSER_PROMPT_PARAM = 'starterPrompt';
 const PLUGIN_CREATE_WITH_AGI_LABEL = 'Create with AGI';
 const PLUGIN_CREATE_WITH_AGI_PROMPT = 'Build a plugin for me: ';
+const SKILL_CREATE_WITH_AGI_LABEL = 'Create with AGI';
+const SKILL_CREATE_WITH_AGI_PROMPT = 'Write a skill for me that ';
+const SKILL_CREATE_LABEL = 'Create a skill';
+const SKILL_CREATE_ACTION_ID = 'create-skill';
+const SKILL_COMPOSE_ACTION_ID = 'compose-skill';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
 const EMPTY_SKILL_DESCRIPTIONS: ReadonlyMap<string, string> = new Map();
 const EMPTY_CATALOG: readonly ManagedSkillSummary[] = [];
@@ -257,6 +263,21 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     ],
     [openComposerWithPrompt],
   );
+  const skillManageActions = useMemo<readonly DirectoryManageAction[]>(
+    () => [
+      ...(onCreateSkill
+        ? [{ id: SKILL_CREATE_ACTION_ID, label: SKILL_CREATE_LABEL, onSelect: onCreateSkill }]
+        : []),
+      {
+        id: SKILL_COMPOSE_ACTION_ID,
+        label: SKILL_CREATE_WITH_AGI_LABEL,
+        onSelect: () => openComposerWithPrompt(SKILL_CREATE_WITH_AGI_PROMPT),
+      },
+    ],
+    [onCreateSkill, openComposerWithPrompt],
+  );
+  const skillManageActionsRef = useRef<readonly DirectoryManageAction[]>(skillManageActions);
+  skillManageActionsRef.current = skillManageActions;
   const [skills, setSkills] = useState<DirectorySection>(EMPTY);
   const [connectors, setConnectors] = useState<DirectorySection>(initialConnectorSection);
   const [plugins, setPlugins] = useState<DirectorySection>(initialPluginSection);
@@ -322,8 +343,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       ]);
       skillCache.current = catalog;
       installedSkills.current = installed;
+      setSkillDescriptions(skillDescriptionsByName(catalog));
       setSkills({
         ...toSkillSection(catalog, installed),
+        manage: {
+          rows: toSkillManageRows(catalog, installed),
+          loading: false,
+          error: null,
+          actions: skillManageActionsRef.current,
+          retry: loadSkills,
+        },
         ...(createSkillLabel ? { createLabel: createSkillLabel } : {}),
         retry: loadSkills,
       });
@@ -332,10 +361,23 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ...prev,
         loading: false,
         error: SKILLS_FAILED_COPY,
+        manage: {
+          rows: prev.manage?.rows ?? [],
+          loading: false,
+          error: SKILLS_FAILED_COPY,
+          actions: skillManageActionsRef.current,
+          retry: loadSkills,
+        },
         retry: loadSkills,
       }));
     }
   }, [createSkillLabel]);
+
+  useEffect(() => {
+    setSkills((prev) =>
+      prev.manage ? { ...prev, manage: { ...prev.manage, actions: skillManageActions } } : prev,
+    );
+  }, [skillManageActions]);
 
   const retryConnectorsRef = useRef<(() => Promise<void>) | null>(null);
   const retryConnectors = useCallback(async () => {

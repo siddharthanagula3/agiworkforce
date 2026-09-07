@@ -92,7 +92,7 @@ describe('the plugins manage view', () => {
   it('offers the catalog from the empty state and from Browse', () => {
     renderPlugins({ rows: [] });
     expect(screen.getByText('No plugins yet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install', exact: true }));
     expect(screen.getByText('Manage tasks')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByText('No plugins yet')).toBeTruthy();

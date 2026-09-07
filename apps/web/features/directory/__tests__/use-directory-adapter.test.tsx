@@ -752,6 +752,121 @@ function installationOf(pluginKey: string) {
   };
 }
 
+describe('the skills installed table', () => {
+  function stubSkillRoutes(skills: unknown[], canAuthorSkills = true) {
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/skills/installs') {
+        return Promise.resolve(json({ installed: ['fixture-installed', 'fixture-from-plugin'] }));
+      }
+      if (input.startsWith('/api/skills')) {
+        return Promise.resolve(json({ skills, canAuthorSkills }));
+      }
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  const bundled = {
+    name: 'fixture-installed',
+    description: 'An installed fixture.',
+    source: 'bundled',
+    lifecycle: 'included',
+    downloadable: false,
+  };
+  const authored = {
+    name: 'fixture-authored',
+    description: 'An authored fixture.',
+    source: 'personal',
+    lifecycle: 'included',
+    downloadable: false,
+    editable: true,
+  };
+  const fromPlugin = {
+    name: 'fixture-from-plugin',
+    description: 'Arrived with a plugin.',
+    source: 'extra',
+    lifecycle: 'included',
+    downloadable: false,
+  };
+  const uninstalled = {
+    name: 'fixture-elsewhere',
+    description: 'Not installed here.',
+    source: 'bundled',
+    lifecycle: 'included',
+    downloadable: false,
+  };
+
+  it('lists what the account chose and leaves the bundled catalogue out', async () => {
+    stubSkillRoutes([bundled, authored, fromPlugin, uninstalled]);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.loadSection?.('skills');
+    });
+    await waitFor(() => expect(result.current.skills?.manage?.rows).toHaveLength(2));
+    expect(result.current.skills?.manage?.rows).toEqual([
+      { id: 'fixture-authored', name: 'fixture-authored', slashName: true, author: 'You' },
+      { id: 'fixture-from-plugin', name: 'fixture-from-plugin', slashName: true, author: 'Plugin' },
+    ]);
+  });
+
+  it('offers Create a skill only when the server allows authoring', async () => {
+    stubSkillRoutes([bundled]);
+    const { result, rerender } = renderHook(
+      (props: { onCreateSkill?: () => void }) => useDirectoryAdapter(props),
+      { initialProps: {} },
+    );
+    await act(async () => {
+      await result.current.loadSection?.('skills');
+    });
+    await waitFor(() => expect(result.current.skills?.manage?.actions).toBeDefined());
+    expect(result.current.skills?.manage?.actions?.map((action) => action.label)).toEqual([
+      'Create with AGI',
+    ]);
+
+    const onCreateSkill = vi.fn();
+    rerender({ onCreateSkill });
+    await waitFor(() =>
+      expect(result.current.skills?.manage?.actions?.map((action) => action.label)).toEqual([
+        'Create a skill',
+        'Create with AGI',
+      ]),
+    );
+    result.current.skills?.manage?.actions?.[0]?.onSelect();
+    expect(onCreateSkill).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends Create with AGI to the composer with the skill prompt', async () => {
+    routerPush.mockClear();
+    stubSkillRoutes([bundled]);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.loadSection?.('skills');
+    });
+    await waitFor(() => expect(result.current.skills?.manage?.actions).toBeDefined());
+    const compose = result.current.skills?.manage?.actions?.find(
+      (action) => action.label === 'Create with AGI',
+    );
+    act(() => compose?.onSelect());
+    expect(routerPush).toHaveBeenCalledWith(
+      '/chat?starterPrompt=Write%20a%20skill%20for%20me%20that%20',
+    );
+  });
+
+  it('carries a catalog failure onto the table with its retry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(json({}, 503))),
+    );
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.loadSection?.('skills');
+    });
+    await waitFor(() => expect(result.current.skills?.manage?.error).toBeTruthy());
+    expect(result.current.skills?.manage?.rows).toEqual([]);
+    expect(result.current.skills?.manage?.retry).toBeDefined();
+  });
+});
+
 describe('the plugins installed table', () => {
   it('is empty and not loading once the install state says nothing is installed', async () => {
     stubPluginRoutes();
