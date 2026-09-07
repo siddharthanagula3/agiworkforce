@@ -98,6 +98,21 @@ export function resolveDesktopReleaseRepository(
   };
 }
 
+export function resolveDesktopCloudReleaseRepository(
+  options: Pick<FetchDesktopReleaseOptions, 'owner' | 'repo'> = {},
+): { owner: string; repo: string } {
+  return {
+    owner:
+      options.owner?.trim() ||
+      getOptionalEnv('DESKTOP_CLOUD_GITHUB_OWNER')?.trim() ||
+      DEFAULT_DESKTOP_RELEASE_OWNER,
+    repo:
+      options.repo?.trim() ||
+      getOptionalEnv('DESKTOP_CLOUD_GITHUB_REPO')?.trim() ||
+      DEFAULT_DESKTOP_RELEASE_REPO,
+  };
+}
+
 const SEMVER_PATTERN =
   /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?(?:\+([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?$/;
 const MAX_RELEASE_PAGES = 10;

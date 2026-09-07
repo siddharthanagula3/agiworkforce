@@ -8,16 +8,13 @@ import { logger } from '@/lib/logger';
 import {
   DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestStableDesktopRelease,
+  resolveDesktopCloudReleaseRepository,
+  resolveDesktopReleaseRepository,
   selectDesktopInstallerAsset,
   type DesktopDownloadPlatform,
   type StableDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
 import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-url';
-
-const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
-const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
-const CLOUD_REPO_OWNER = process.env['DESKTOP_CLOUD_GITHUB_OWNER'] || 'siddharthanagula3';
-const CLOUD_REPO_NAME = process.env['DESKTOP_CLOUD_GITHUB_REPO'] || 'agiworkforce';
 
 function selectCloudMacInstallerAsset(
   release: StableDesktopRelease,
@@ -88,14 +85,12 @@ async function handleDownload(request: NextRequest) {
   const release =
     app === 'cloud'
       ? await fetchLatestStableDesktopRelease({
-          owner: CLOUD_REPO_OWNER,
-          repo: CLOUD_REPO_NAME,
+          ...resolveDesktopCloudReleaseRepository(),
           tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
           revalidateSeconds: 0,
         })
       : await fetchLatestStableDesktopRelease({
-          owner: REPO_OWNER,
-          repo: REPO_NAME,
+          ...resolveDesktopReleaseRepository(),
           revalidateSeconds: 0,
         });
   if (!release) return fallbackToStatic(platform, request, app);
