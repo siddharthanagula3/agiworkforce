@@ -216,7 +216,7 @@ const CAPABILITY_SENTENCE_END = '.';
 const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 const CUSTOM_CONNECTOR_CATEGORY = 'Custom';
 const CUSTOM_CONNECTOR_AUTH_TYPE = 'custom_mcp';
-const CUSTOM_CONNECTOR_ICON_BG = 'from-slate-500 to-slate-600';
+const CUSTOM_CONNECTOR_ICON_BG = 'from-muted to-muted';
 const CUSTOM_CONNECTOR_ICON_TEXT = 'MCP';
 
 function capabilityDescription(connector: (typeof CONNECTORS)[number]): string {
@@ -252,7 +252,7 @@ export interface ToolPermissionsConnector {
   iconBg: string;
 }
 
-const DIRECTORY_CONNECTOR_ICON_BG = 'from-slate-500 to-slate-600';
+const DIRECTORY_CONNECTOR_ICON_BG = 'from-muted to-muted';
 const MONOGRAM_LENGTH = 2;
 
 function toolPermissionsTargetFor(
