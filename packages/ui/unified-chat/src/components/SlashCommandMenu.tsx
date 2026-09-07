@@ -11,6 +11,30 @@ export interface CommandSuggestion {
   icon?: ReactNode;
   isSkill?: boolean;
   slashCommand?: SlashCommand;
+  /**
+   * Consecutive suggestions sharing a label render under one heading. Omit it
+   * and the suggestion renders loose, which is what every caller that never
+   * groups anything gets.
+   */
+  groupLabel?: string;
+}
+
+interface RenderSegment {
+  label?: string;
+  entries: { suggestion: CommandSuggestion; index: number }[];
+}
+
+function toSegments(suggestions: CommandSuggestion[]): RenderSegment[] {
+  const segments: RenderSegment[] = [];
+  suggestions.forEach((suggestion, index) => {
+    const current = segments[segments.length - 1];
+    if (current && current.label === suggestion.groupLabel) {
+      current.entries.push({ suggestion, index });
+      return;
+    }
+    segments.push({ label: suggestion.groupLabel, entries: [{ suggestion, index }] });
+  });
+  return segments;
 }
 
 export interface SlashCommandMenuProps {
@@ -41,52 +65,76 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           aria-label="Slash command suggestions"
         >
           <div className="max-h-72 overflow-y-auto">
-            {suggestions.map((suggestion, index) => (
-              <button
-                type="button"
-                key={suggestion.id ?? suggestion.command}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  onSelect(suggestion);
-                }}
-                onMouseEnter={() => onHover(index)}
-                role="option"
-                aria-selected={index === selectedIndex}
-                data-active={index === selectedIndex || undefined}
-                className={cn(
-                  'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0',
-                  index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  {suggestion.icon && (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
-                      {suggestion.icon}
-                    </span>
+            {toSegments(suggestions).map((segment, segmentIndex) => {
+              const rows = segment.entries.map(({ suggestion, index }) => (
+                <button
+                  type="button"
+                  key={suggestion.id ?? suggestion.command}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    onSelect(suggestion);
+                  }}
+                  onMouseEnter={() => onHover(index)}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  data-active={index === selectedIndex || undefined}
+                  className={cn(
+                    'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0',
+                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
                   )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm font-semibold text-primary">
-                        {suggestion.command}
-                      </code>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {suggestion.description}
+                >
+                  <div className="flex items-center gap-3">
+                    {suggestion.icon && (
+                      <span
+                        className="flex h-4 w-4 shrink-0 items-center justify-center"
+                        aria-hidden
+                      >
+                        {suggestion.icon}
                       </span>
-                    </div>
-                    {suggestion.example && (
-                      <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                        {suggestion.example}
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <code className="shrink-0 text-sm font-semibold text-primary">
+                          {suggestion.command}
+                        </code>
+                        <span
+                          title={suggestion.description}
+                          className="truncate text-xs text-[hsl(var(--muted-foreground))]"
+                        >
+                          {suggestion.description}
+                        </span>
                       </div>
+                      {suggestion.example && (
+                        <div className="truncate text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                          {suggestion.example}
+                        </div>
+                      )}
+                    </div>
+                    {suggestion.isSkill && (
+                      <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[12px] font-medium text-amber-400">
+                        skill
+                      </span>
                     )}
                   </div>
-                  {suggestion.isSkill && (
-                    <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[12px] font-medium text-amber-400">
-                      skill
-                    </span>
-                  )}
+                </button>
+              ));
+
+              if (!segment.label) {
+                return <React.Fragment key={`ungrouped-${segmentIndex}`}>{rows}</React.Fragment>;
+              }
+              return (
+                <div
+                  role="group"
+                  aria-label={segment.label}
+                  key={`${segment.label}-${segmentIndex}`}
+                >
+                  <div className="px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                    {segment.label}
+                  </div>
+                  {rows}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
           <div className="px-4 py-2 bg-[hsl(var(--muted))] border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
             Use arrow keys to navigate, Enter to select, Esc to close
