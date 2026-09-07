@@ -1670,8 +1670,9 @@ that scoping table is where those claims are sourced from.
    says the runbook is unreviewed, and delete the two pre-send notices from §4
    and §5.
 3. Drop the "not been reviewed by counsel" row from the runbook's Open gaps
-   table, close `L-9` in `DPDP_PROGRESS.md`, and close `DPDP-26` in
-   `docs/work/remediation-register.json`.
+   table and close `L-9` in `DPDP_PROGRESS.md`. The remediation register that
+   also carried `DPDP-26` was merged into `docs/agent-context/known-flaws.md`
+   on 2026-09-07 and deleted.
 4. Run `pnpm --filter @agiworkforce/web test app/__tests__/breach-runbook-counsel-gate.test.ts`.
    That test holds steps 2 and 3 together, a half-applied approval, where the
    header claims counsel signed off but the templates still carry the pending
@@ -1723,9 +1724,10 @@ The code side is done and no longer needs an engineer:
    the "DPDP grievance" subject and against what response target
    (`GRIEVANCE_RESPONSE_TARGET_DAYS`, published as 30 days, our commitment and
    not a statutory period).
-4. Close `F-1`, `F-2` and `F-4` in `DPDP_PROGRESS.md` and `DPDP-23` in
-   `docs/work/remediation-register.json`, then run
+4. Close `F-1`, `F-2` and `F-4` in `DPDP_PROGRESS.md`, then run
    `pnpm --filter @agiworkforce/web test lib/__tests__/legal-constants.grievance.test.tsx`.
+   `DPDP-23` lived in the remediation register, which was merged into
+   `docs/agent-context/known-flaws.md` on 2026-09-07 and deleted.
 
 ---
 

@@ -254,6 +254,6 @@ capitalized token in the subject, filenames included. Put those in the body.
 Lockfiles are never hand-edited, change the manifest and run the package
 manager. New root files must be registered in `scripts/check-repo-organization.mjs`.
 
-`docs/agent-context/known-flaws.md` records durable defects. Check it before
-reporting a bug as new, and update the existing entry rather than adding a
-duplicate.
+`docs/agent-context/known-flaws.md` is the register of open defects, one section
+per surface. Check it before reporting a bug as new, update the existing row
+rather than adding a duplicate, and delete a row in the commit that fixes it.
