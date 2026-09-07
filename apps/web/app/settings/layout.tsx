@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
   const requestedPath = requestHeaders.get('x-agi-pathname') ?? '/settings/general';
 
   if (!userId) {
-    return redirect(`/login?redirectTo=${encodeURIComponent(requestedPath)}`);
+    return redirect(sessionExpiredRedirect(requestedPath));
   }
 
   await requireCurrentTermsAcceptance(userId, requestedPath);

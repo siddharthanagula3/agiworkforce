@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { ChatStreamRuntimeProvider } from '@/features/chat/components/ChatStreamRuntimeProvider';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
   const redirectTo = requestedPath?.startsWith('/chat') ? requestedPath : '/chat';
 
   if (!userId) {
-    return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+    return redirect(sessionExpiredRedirect(redirectTo));
   }
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
