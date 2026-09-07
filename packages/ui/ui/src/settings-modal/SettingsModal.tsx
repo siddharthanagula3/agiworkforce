@@ -98,6 +98,8 @@ interface NavEntry {
   icon: LucideIcon;
 }
 
+export const NAV_GROUP_LABEL_TESTID = 'settings-nav-group-label';
+
 function matchesNavFilter(
   entry: { key: string; label: string; keywords?: string[] },
   filter: string,
@@ -2035,7 +2037,10 @@ export function SettingsModal({
                     className="flex flex-row gap-1 md:flex-col md:gap-0.5"
                   >
                     {group.label && (
-                      <div className="hidden px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block">
+                      <div
+                        data-testid={NAV_GROUP_LABEL_TESTID}
+                        className="hidden px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block"
+                      >
                         {group.label}
                       </div>
                     )}

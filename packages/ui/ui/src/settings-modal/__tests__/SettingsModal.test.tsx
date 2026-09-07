@@ -1,15 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { SettingsModal } from '../SettingsModal';
-import { SETTINGS_NAV_GROUPS_WEB } from '../../settings-nav';
+import { NAV_GROUP_LABEL_TESTID, SettingsModal } from '../SettingsModal';
+import {
+  SETTINGS_NAV_GROUPS_WEB,
+  SETTINGS_NAV_GROUP_CUSTOMIZE,
+  SETTINGS_NAV_GROUP_SETTINGS,
+} from '../../settings-nav';
 import type { SettingsDataAdapter } from '../types';
 
 /**
- * Settings modal shell + connectors/skills/plugins panes (founder spec
- * 2026-07-10): flat nav with Skills/Connectors/Plugins as plain items (NO
- * "Customize" group heading), connectors TABLE with All/Connected/Not
- * connected tabs and honest statuses, Add dropdown (Browse connectors / Add
- * custom connector), skills table, shared directory browse.
+ * Settings modal shell plus the connectors, skills and plugins panes: nav
+ * grouped under Settings and Customize, connectors table with All, Connected
+ * and Not connected tabs and honest statuses, Add dropdown (Browse connectors,
+ * Add custom connector), skills table, shared directory browse.
  */
 
 const adapter: SettingsDataAdapter = {
@@ -365,24 +368,47 @@ describe('SettingsModal nav (web IA)', () => {
     expect(within(nav).queryByText('No matches.')).toBeNull();
   });
 
-  it('renders Skills, Connectors, and Plugins as plain nav items with NO group headings', () => {
+  it('groups the nav under Settings and Customize', () => {
     renderModal();
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     expect(within(nav).getByRole('button', { name: 'Skills' })).toBeTruthy();
     expect(within(nav).getByRole('button', { name: 'Connectors' })).toBeTruthy();
     expect(within(nav).getByRole('button', { name: 'Plugins' })).toBeTruthy();
-    // Founder directive: the "Customize" heading is deliberately dropped, and
-    // the single flat group renders no heading at all.
-    expect(within(nav).queryByText('Customize')).toBeNull();
-    expect(SETTINGS_NAV_GROUPS_WEB).toHaveLength(1);
-    expect(SETTINGS_NAV_GROUPS_WEB[0]?.label).toBeUndefined();
-    const keys = SETTINGS_NAV_GROUPS_WEB[0]!.items.map((i) => i.key);
-    expect(keys).toContain('reflect');
-    expect(keys).toContain('time-focus');
-    const customizeRun = keys.indexOf('skills');
-    expect(customizeRun).toBeGreaterThan(keys.indexOf('time-focus'));
-    expect(keys.slice(customizeRun, customizeRun + 3)).toEqual(['skills', 'connectors', 'plugins']);
-    expect(keys[keys.length - 1]).toBe('help');
+    expect(
+      within(nav)
+        .getAllByTestId(NAV_GROUP_LABEL_TESTID)
+        .map((node) => node.textContent),
+    ).toEqual([SETTINGS_NAV_GROUP_SETTINGS, SETTINGS_NAV_GROUP_CUSTOMIZE]);
+
+    expect(SETTINGS_NAV_GROUPS_WEB.map((group) => group.label)).toEqual([
+      SETTINGS_NAV_GROUP_SETTINGS,
+      SETTINGS_NAV_GROUP_CUSTOMIZE,
+    ]);
+    const settingsKeys = SETTINGS_NAV_GROUPS_WEB[0]!.items.map((i) => i.key);
+    expect(settingsKeys).toContain('reflect');
+    expect(settingsKeys).toContain('time-focus');
+    expect(settingsKeys[settingsKeys.length - 1]).toBe('help');
+    expect(SETTINGS_NAV_GROUPS_WEB[1]!.items.map((i) => i.key)).toEqual([
+      'skills',
+      'connectors',
+      'plugins',
+    ]);
+  });
+
+  it('drops a group heading when the search filter empties it', () => {
+    renderModal();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
+      target: { value: 'plugins' },
+    });
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'Plugins' })).toBeTruthy();
+    expect(
+      within(nav)
+        .getAllByTestId(NAV_GROUP_LABEL_TESTID)
+        .map((node) => node.textContent),
+    ).toEqual([SETTINGS_NAV_GROUP_CUSTOMIZE]);
+    expect(within(nav).queryByRole('button', { name: 'Billing' })).toBeNull();
   });
 
   it('closes on Escape', () => {

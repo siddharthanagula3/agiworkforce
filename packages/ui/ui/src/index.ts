@@ -305,6 +305,8 @@ export {
   isSettingsNavKey,
   SETTINGS_NAV_GROUPS,
   SETTINGS_NAV_GROUPS_WEB,
+  SETTINGS_NAV_GROUP_CUSTOMIZE,
+  SETTINGS_NAV_GROUP_SETTINGS,
   SETTINGS_NAV_KEYWORDS,
   type SettingsNavEntry,
   type SettingsNavGroup,
