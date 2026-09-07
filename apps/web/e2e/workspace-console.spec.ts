@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
+import { signIn } from './qa-capability-harness';
 
 const CONSOLE_ROUTES = [
   '/workspace',
@@ -24,45 +24,15 @@ interface ClerkBrowser {
   setActive(options: { session: string }): Promise<void>;
 }
 
-async function mintSignInTicket(): Promise<string> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) {
-    throw new Error('CLERK_SECRET_KEY missing from process.env (.env.local not loaded)');
-  }
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('sign_in_tokens returned no token');
-  return json.token;
-}
-
 /**
- * Server-side `auth()` verifies the session's authorized party against
- * `CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s
- * origin. Against a localhost dev server that fallback is the production
- * origin, so every protected page redirects to sign-in no matter how valid the
- * browser session is. Run this suite with
+ * Sign-in comes from the shared harness, which revokes the session it creates
+ * when the run ends. Server-side `auth()` verifies the session's authorized
+ * party against `CLERK_AUTHORIZED_PARTIES`, which falls back to
+ * `NEXT_PUBLIC_APP_URL`'s origin. Against a localhost dev server that fallback
+ * is the production origin, so every protected page redirects to sign-in no
+ * matter how valid the browser session is. Run this suite with
  * `CLERK_AUTHORIZED_PARTIES=http://localhost:3000` on the SERVER process.
  */
-async function signIn(page: Page): Promise<void> {
-  const ticket = await mintSignInTicket();
-  await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-    { timeout: 20000 },
-  );
-  await page.evaluate(async (t) => {
-    const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
-    const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-    if (res.createdSessionId) await clerk.setActive({ session: res.createdSessionId });
-  }, ticket);
-  await page.waitForTimeout(2000);
-}
-
 async function authedFetch(page: Page, path: string): Promise<{ status: number; body: string }> {
   return page.evaluate(async (p) => {
     const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
