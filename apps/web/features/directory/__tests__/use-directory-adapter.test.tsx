@@ -1090,6 +1090,52 @@ describe('useDirectoryAdapter plugin settings and enable', () => {
     );
   });
 
+  it('reads each plugin skill description from the skill catalog', async () => {
+    stubInstalledBuiltin({
+      'GET /api/skills': () =>
+        json({
+          skills: [
+            {
+              name: 'data-pack',
+              description: 'Analyse datasets and write them up.',
+              source: 'bundled',
+              lifecycle: 'included',
+              downloadable: false,
+            },
+          ],
+          canAuthorSkills: false,
+        }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'data-pack');
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills).toEqual([
+        { name: 'data-pack', enabled: true, description: 'Analyse datasets and write them up.' },
+      ]),
+    );
+  });
+
+  it('leaves a skill description out when the catalog cannot be read', async () => {
+    stubInstalledBuiltin({ 'GET /api/skills': () => json({}, 503) });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'data-pack');
+    });
+    await waitFor(() => expect(result.current.pluginSettings?.skills).toHaveLength(1));
+    expect(result.current.pluginSettings?.skills[0]).toEqual({ name: 'data-pack', enabled: true });
+  });
+
+  it('sends Connect on a required connector to that connector detail', async () => {
+    stubInstalledBuiltin();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    result.current.openConnector?.('linear');
+    expect(window.location.hash).toBe('#settings/customize-connectors/browse/linear');
+  });
+
   it('refreshes a registered marketplace through its refresh route', async () => {
     const calls = stubPluginRoutes({
       'POST /api/plugins/marketplaces/source-1/refresh': () => json({ source: { id: 'source-1' } }),
