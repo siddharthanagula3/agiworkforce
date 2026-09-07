@@ -762,6 +762,27 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
     });
 
+    it('never echoes upstream provider error text into the chat', async () => {
+      const upstreamText = 'invalid_api_key: sk-live-abcdef project proj_9f8e7d has been suspended';
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers(),
+        json: async () => ({ error: { message: upstreamText } }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a storm', provider: 'openai' }));
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+      expect(data.success).toBe(false);
+      expect(String(data.error)).not.toContain('sk-live');
+      expect(String(data.error)).not.toContain('proj_9f8e7d');
+      expect(String(data.error)).not.toContain(upstreamText);
+      expect(String(data.error)).toMatch(/image/i);
+    });
+
     it('treats a provider response with zero usable images as failed work', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
