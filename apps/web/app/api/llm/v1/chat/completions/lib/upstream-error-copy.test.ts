@@ -6,6 +6,7 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 
 import { upstreamFailureCopy } from './upstream-error-copy';
+import { logger } from '@/lib/logger';
 
 const PROVIDER = 'anthropic';
 
@@ -58,5 +59,36 @@ describe('mapping a thrown provider failure to copy', () => {
     const copy = upstreamFailureCopy(Object.assign(new Error(''), { status: 402 }), PROVIDER);
 
     expect(copy.code).toBe('provider_billing_exhausted');
+  });
+});
+
+describe('a provider refusal is diagnosable from the log', () => {
+  const GEMINI_REJECTION =
+    '400 {"error":{"code":400,"message":"Invalid value at \'tools[0].function_declarations[0].parameters.properties[0].value.default\' (TYPE_STRING), null","status":"INVALID_ARGUMENT"}}';
+
+  it('writes the provider refusal at warn with the request id, and keeps it out of the copy', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    const copy = upstreamFailureCopy(
+      Object.assign(new Error(GEMINI_REJECTION), { status: 400 }),
+      'google',
+    );
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [fields] = warn.mock.calls[0] as [Record<string, unknown>, string];
+    expect(fields['provider']).toBe('google');
+    expect(String(fields['providerMessage'])).toContain('function_declarations');
+    expect(fields).toHaveProperty('requestId');
+    expect(copy.message).not.toContain('function_declarations');
+    warn.mockRestore();
+  });
+
+  it('says nothing for a failure that is not a refusal of what we sent', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    upstreamFailureCopy(new Error('socket hang up'), 'google');
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
