@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -31,6 +31,7 @@ export interface UseCapabilitiesPreferencesResult {
   savedAt: number | null;
   loadError: string | null;
   retry: () => void;
+  retrySave: (() => void) | null;
   setBoolean: (key: keyof CapabilitiesSettings, value: boolean) => void;
 }
 
@@ -41,6 +42,8 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [rejected, setRejected] = useState<CapabilitiesSettings | null>(null);
+  const acknowledged = useRef<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +53,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     )
       .then((value) => {
         if (cancelled) return;
+        acknowledged.current = value;
         setSettings(value);
         setLoadError(null);
       })
@@ -67,11 +71,17 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     setSettings(next);
     setSaving(true);
     setSaveError(null);
+    setRejected(null);
     try {
       await savePreferenceNamespace(CAPABILITIES_NAMESPACE, next);
+      acknowledged.current = next;
       resetMemoryCapabilityCache();
       setSavedAt(Date.now());
     } catch (error) {
+      // The optimistic value has to go back to what the server acknowledged, or
+      // the control keeps claiming a preference the account does not hold.
+      setSettings(acknowledged.current);
+      setRejected(next);
       setSaveError(toUserMessage(error, 'Failed to save settings'));
     } finally {
       setSaving(false);
@@ -87,5 +97,18 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
 
   const retry = useCallback(() => setReloadKey((value) => value + 1), []);
 
-  return { settings, saving, saveError, savedAt, loadError, retry, setBoolean };
+  const retrySave = useCallback(() => {
+    if (rejected) void persist(rejected);
+  }, [rejected, persist]);
+
+  return {
+    settings,
+    saving,
+    saveError,
+    savedAt,
+    loadError,
+    retry,
+    retrySave: rejected ? retrySave : null,
+    setBoolean,
+  };
 }
