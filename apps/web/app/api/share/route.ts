@@ -36,19 +36,39 @@ interface SanitizedMessages {
   secretMatchCount: number;
 }
 
-function sanitizeMessages(messages: Array<Record<string, unknown>>): SanitizedMessages {
-  const pathStripped = messages.map((msg) => {
-    if (msg['display_args'] && typeof msg['display_args'] === 'string') {
-      return {
-        ...msg,
-        display_args: (msg['display_args'] as string).replace(
-          /\/[^\s"']*(\/[^\s"']+)+/g,
-          '[local-path]',
-        ),
-      };
+const LOCAL_PATH_PATTERN = /\/[^\s"']*(\/[^\s"']+)+/g;
+const LOCAL_PATH_PLACEHOLDER = '[local-path]';
+const TOOL_CALL_FIELDS = ['tool_calls', 'toolCalls'] as const;
+
+function stripLocalPaths(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(LOCAL_PATH_PATTERN, LOCAL_PATH_PLACEHOLDER);
+  if (Array.isArray(value)) return value.map(stripLocalPaths);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        stripLocalPaths(entry),
+      ]),
+    );
+  }
+  return value;
+}
+
+function stripToolCallPaths(msg: Record<string, unknown>): Record<string, unknown> {
+  let next = msg;
+  if (typeof next['display_args'] === 'string') {
+    next = { ...next, display_args: stripLocalPaths(next['display_args']) };
+  }
+  for (const field of TOOL_CALL_FIELDS) {
+    if (Array.isArray(next[field])) {
+      next = { ...next, [field]: stripLocalPaths(next[field]) };
     }
-    return msg;
-  });
+  }
+  return next;
+}
+
+function sanitizeMessages(messages: Array<Record<string, unknown>>): SanitizedMessages {
+  const pathStripped = messages.map(stripToolCallPaths);
 
   const { value, detections } = redactSecretsFromValue(pathStripped);
   return {
@@ -82,7 +102,7 @@ async function handleCreateShare(request: NextRequest) {
   try {
     rawBody = await request.json();
   } catch {
-    // Empty body is fine - defaults applied by schema
+    rawBody = {};
   }
 
   const parsed = CreateShareSchema.safeParse(rawBody);
