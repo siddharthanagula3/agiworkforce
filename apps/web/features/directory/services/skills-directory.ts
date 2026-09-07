@@ -7,6 +7,7 @@ import type {
   DirectoryDetailFile,
   DirectoryEntry,
   DirectoryFilterGroup,
+  DirectoryManageRow,
   DirectorySection,
   DirectorySkillDetail,
   DirectorySourceChip,
@@ -38,6 +39,23 @@ import {
 import { DirectoryRequestError } from './request-error';
 
 const OWNED_SOURCES = new Set(['personal', 'project', 'workspace']);
+const BUNDLED_SOURCE = 'bundled';
+const PLUGIN_SOURCE = 'extra';
+const MANAGED_LOCAL_SOURCE = 'managed-local';
+const SKILL_AUTHOR_YOU = 'You';
+const SKILL_AUTHOR_AGI = 'AGI';
+const SKILL_AUTHOR_PLUGIN = 'Plugin';
+
+export function skillAuthor(source: string): string {
+  if (OWNED_SOURCES.has(source)) return SKILL_AUTHOR_YOU;
+  if (source === PLUGIN_SOURCE) return SKILL_AUTHOR_PLUGIN;
+  if (source === MANAGED_LOCAL_SOURCE) return SKILL_PUBLISHER_MANAGED;
+  return SKILL_AUTHOR_AGI;
+}
+
+export function isAccountChosenSkill(skill: ManagedSkillSummary): boolean {
+  return !isDraftSkill(skill) && skill.source !== BUNDLED_SOURCE;
+}
 const ENTRY_FILE = 'SKILL.md';
 const LICENSE_PREFIX = 'license';
 
@@ -117,6 +135,24 @@ function skillFilterGroups(
     });
   }
   return groups;
+}
+
+export function toSkillManageRows(
+  skills: readonly ManagedSkillSummary[],
+  installed: ReadonlySet<string>,
+): DirectoryManageRow[] {
+  return skills
+    .filter(
+      (skill) =>
+        isAccountChosenSkill(skill) && (isAuthoredSkill(skill) || installed.has(skill.name)),
+    )
+    .map((skill) => ({
+      id: skill.name,
+      name: skill.name,
+      slashName: true,
+      author: skillAuthor(skill.source),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function toSkillSection(
