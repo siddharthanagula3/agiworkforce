@@ -201,6 +201,7 @@ export interface DirectoryPluginComponents {
 export interface DirectoryPluginSkillSetting {
   name: string;
   enabled: boolean;
+  description?: string;
 }
 
 export interface DirectoryPluginConnectorSetting {
@@ -236,6 +237,9 @@ export interface DirectoryPluginDetail {
   repositoryUrl?: string | null;
   marketplaceName?: string | null;
   marketplaceUrl?: string | null;
+  sourceLabel?: string;
+  sourceUrl?: string | null;
+  updatedAt?: string;
   worksWith?: readonly string[];
   installed?: boolean;
   installable?: boolean;
@@ -303,4 +307,5 @@ export interface DirectoryAdapter {
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginSkillEnabled?: (id: string, skill: string, enabled: boolean) => Promise<void> | void;
+  openConnector?: (connectorId: string) => void;
 }

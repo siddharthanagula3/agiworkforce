@@ -133,6 +133,16 @@ export function toSkillSection(
   };
 }
 
+export function skillDescriptionsByName(
+  catalog: readonly ManagedSkillSummary[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    catalog
+      .filter((skill) => skill.description.length > 0)
+      .map((skill) => [skill.name, skill.description]),
+  );
+}
+
 export async function fetchSkillCatalog(): Promise<ManagedSkillSummary[]> {
   const response = await fetch(`${SKILLS_PATH}?${SKILL_CATALOG_PARAM}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`skill catalog failed: ${response.status}`);

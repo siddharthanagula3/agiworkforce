@@ -129,6 +129,7 @@ import {
   fetchSkillDetail,
   installSkill,
   removeSkill as removeSkillRequest,
+  skillDescriptionsByName,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
@@ -139,6 +140,8 @@ const COMPOSER_PROMPT_PARAM = 'starterPrompt';
 const PLUGIN_CREATE_WITH_AGI_LABEL = 'Create with AGI';
 const PLUGIN_CREATE_WITH_AGI_PROMPT = 'Build a plugin for me: ';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
+const EMPTY_SKILL_DESCRIPTIONS: ReadonlyMap<string, string> = new Map();
+const EMPTY_CATALOG: readonly ManagedSkillSummary[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
 
@@ -300,6 +303,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const [settingsTarget, setSettingsTarget] = useState<PluginInstallationTarget | null>(null);
   const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
   const [settingsSkills, setSettingsSkills] = useState<readonly string[]>(EMPTY_SKILL_NAMES);
+  const [skillDescriptions, setSkillDescriptions] =
+    useState<ReadonlyMap<string, string>>(EMPTY_SKILL_DESCRIPTIONS);
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const pluginSettingsState = usePluginsSettingsAdapter(settingsTarget, settingsEnabled);
 
@@ -719,8 +724,20 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     setSettingsEnabled(record ? pluginInstallationEnabled(record, installs) : true);
   }, []);
 
+  const ensureSkillDescriptions = useCallback(async () => {
+    if (skillCache.current.length > 0) {
+      setSkillDescriptions(skillDescriptionsByName(skillCache.current));
+      return;
+    }
+    const catalog = await fetchSkillCatalog().catch(() => EMPTY_CATALOG);
+    if (catalog.length === 0) return;
+    skillCache.current = catalog;
+    setSkillDescriptions(skillDescriptionsByName(catalog));
+  }, []);
+
   const loadPluginDetail = useCallback(
     async (id: string): Promise<DirectoryDetail | null> => {
+      void ensureSkillDescriptions();
       await primePlugins().catch(() => undefined);
       const page = pluginPageRef.current;
       const record = findPluginRecord(id);
@@ -740,7 +757,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       selectSettingsTarget(fetched, id);
       return toPluginDetail(fetched, pluginPageRef.current.installs);
     },
-    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget],
+    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget, ensureSkillDescriptions],
   );
 
   const loadSection = useCallback(
@@ -1037,7 +1054,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
     return {
       pluginId: settingsPluginId,
-      skills: settingsSkills.map((name) => ({ name, enabled: enabledSkills.has(name) })),
+      skills: settingsSkills.map((name) => {
+        const description = skillDescriptions.get(name);
+        return {
+          name,
+          enabled: enabledSkills.has(name),
+          ...(description ? { description } : {}),
+        };
+      }),
       connectors: (pluginSettingsState.settings?.connectors ?? []).map((connector) => ({
         id: connector.connectorId,
         name: connectorLabel(connector.connectorId),
@@ -1047,7 +1071,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       saving: pluginSettingsState.saving,
       error: pluginSettingsState.error,
     };
-  }, [settingsPluginId, settingsSkills, pluginSettingsState]);
+  }, [settingsPluginId, settingsSkills, pluginSettingsState, skillDescriptions]);
 
   const setPluginEnabled = useCallback(
     async (id: string, enabled: boolean) => {
@@ -1112,6 +1136,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [refreshUserMarketplaces],
   );
 
+  const openConnector = useCallback((connectorId: string) => {
+    if (typeof window === 'undefined') return;
+    window.location.hash = buildSettingsBrowseHash('connectors', connectorId);
+  }, []);
+
   const openSettings = useCallback(
     (section: DirectorySectionKey, id: string) => {
       if (section === 'skills') onEditSkill?.(id);
@@ -1166,6 +1195,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       ...(pluginSettings ? { pluginSettings } : {}),
       setPluginEnabled,
       setPluginSkillEnabled,
+      openConnector,
     }),
     [
       openEntry,
@@ -1196,6 +1226,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       pluginSettings,
       setPluginEnabled,
       setPluginSkillEnabled,
+      openConnector,
     ],
   );
 }

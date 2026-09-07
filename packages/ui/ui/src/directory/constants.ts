@@ -120,6 +120,18 @@ export const PLUGIN_INSTALL_COMMAND_LABEL = 'Install from the CLI';
 export const PLUGIN_INSTALL_COMMAND_COPY_LABEL = 'Copy install command';
 export const PLUGIN_COMMAND_COPIED_LABEL = 'Copied';
 export const PLUGIN_COMMAND_COPIED_RESET_MS = 2000;
+export const PLUGIN_SOURCE_LABEL = 'Source';
+export const PLUGIN_LAST_UPDATED_LABEL = 'Last updated';
+export const PLUGIN_TABS_LABEL = 'Plugin contents';
+export const PLUGIN_SKILLS_TAB_LABEL = 'Skills';
+export const PLUGIN_CONNECTORS_TAB_LABEL = 'Connectors';
+export const PLUGIN_SKILLS_TAB_COPY =
+  'Invoke by typing / in chat, or let AGI use them automatically for relevant tasks.';
+export const PLUGIN_CONNECTORS_TAB_COPY =
+  'Tools and data sources this plugin connects to. Connect each one so AGI can use it.';
+export const PLUGIN_SKILLS_TAB_EMPTY = 'This plugin ships no skills the web app can load.';
+export const PLUGIN_CONNECTORS_TAB_EMPTY = 'This plugin needs no connectors.';
+export const PLUGIN_SKILL_SLASH_PREFIX = '/';
 export const PLUGIN_MORE_INFO_LABEL = 'More info';
 export const PLUGIN_HOMEPAGE_LABEL = 'Homepage';
 export const PLUGIN_REPOSITORY_LABEL = 'Repository';
@@ -274,10 +286,6 @@ export const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
 
 export const PLUGIN_ENABLED_LABEL = 'Enabled';
 export const PLUGIN_ENABLED_HINT = 'Turn this off to keep the plugin installed without using it.';
-export const PLUGIN_SETTINGS_HEADING = 'What this plugin may use';
-export const PLUGIN_SETTINGS_SKILLS_HINT =
-  'Only the skills you leave on are offered to the assistant.';
-export const PLUGIN_SETTINGS_CONNECTORS_LABEL = 'Required connectors';
 export const PLUGIN_CONNECTOR_CONNECTED_LABEL = 'Connected';
 export const PLUGIN_CONNECTOR_MISSING_LABEL = 'Not connected';
 export const PLUGIN_SETTINGS_LOADING_LABEL = 'Loading plugin settings';

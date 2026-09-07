@@ -36,6 +36,10 @@ const detail: DirectoryPluginDetail = {
   installable: true,
 };
 
+function selectTab(name: string) {
+  fireEvent.mouseDown(screen.getByRole('tab', { name }), { button: 0 });
+}
+
 function renderDetail(
   patch: Partial<DirectoryPluginDetail> = {},
   props: Partial<Parameters<typeof PluginDetailView>[0]> = {},
@@ -187,11 +191,81 @@ describe('PluginDetailView installed controls', () => {
     expect(onSetSkillEnabled).toHaveBeenCalledExactlyOnceWith('design-review', true);
   });
 
-  it('says which required connectors are missing', () => {
+  it('says which required connectors are missing under the Connectors tab', () => {
     renderDetail({ installed: true }, { settings });
+    selectTab('Connectors');
     expect(screen.getByText('GitHub')).toBeTruthy();
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.getByText('Not connected')).toBeTruthy();
+  });
+
+  it('opens the Skills tab first and carries the leader copy on both', () => {
+    renderDetail({ installed: true }, { settings });
+    expect(screen.getByRole('tab', { name: 'Skills' }).getAttribute('data-state')).toBe('active');
+    expect(
+      screen.getByText(
+        'Invoke by typing / in chat, or let AGI use them automatically for relevant tasks.',
+      ),
+    ).toBeTruthy();
+    selectTab('Connectors');
+    expect(
+      screen.getByText(
+        'Tools and data sources this plugin connects to. Connect each one so AGI can use it.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('writes each skill as a slash command with its description', () => {
+    renderDetail(
+      { installed: true },
+      {
+        settings: {
+          ...settings,
+          skills: [
+            { name: 'frontend-design', enabled: true, description: 'Create distinctive pages.' },
+          ],
+        },
+      },
+    );
+    expect(screen.getByText('/frontend-design')).toBeTruthy();
+    expect(screen.getByText('Create distinctive pages.')).toBeTruthy();
+  });
+
+  it('offers Connect on a connector that is not connected and hands back its id', () => {
+    const onOpenConnector = vi.fn();
+    renderDetail({ installed: true }, { settings, onOpenConnector });
+    selectTab('Connectors');
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(onOpenConnector).toHaveBeenCalledExactlyOnceWith('linear');
+    expect(screen.queryByText('Not connected')).toBeNull();
+  });
+
+  it('drops the Includes skill chips once the tabs list the same skills', () => {
+    renderDetail({ installed: true }, { settings });
+    expect(screen.getByRole('heading', { name: 'Includes' })).toBeTruthy();
+    expect(screen.getByText('Commands').nextElementSibling?.textContent).toBe('2');
+    expect(screen.getByText('Hooks').nextElementSibling?.textContent).toBe('Included');
+    expect(screen.queryByText('frontend-design')).toBeNull();
+    expect(screen.getByText('/frontend-design')).toBeTruthy();
+  });
+
+  it('keeps the Includes skill chips when no tabs are shown', () => {
+    renderDetail({ installed: true });
+    expect(screen.queryByRole('tab', { name: 'Skills' })).toBeNull();
+    expect(screen.getByText('frontend-design')).toBeTruthy();
+    expect(screen.getByText('design-review')).toBeTruthy();
+  });
+
+  it('states the source and the last updated date as facts', () => {
+    renderDetail({
+      installed: true,
+      sourceLabel: 'Marketplace',
+      sourceUrl: 'https://github.com/example/plugins',
+      updatedAt: '2026-09-04T00:00:00.000Z',
+    });
+    expect(screen.getByText('Source')).toBeTruthy();
+    expect(screen.getByText('Last updated')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Marketplace/ }).length).toBeGreaterThan(0);
   });
 
   it('freezes the skill switches while a save is in flight', () => {
