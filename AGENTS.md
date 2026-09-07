@@ -197,7 +197,7 @@ or contradictory copies. Git carries history; the live tree does not.
 | Decision record                | `docs/decisions/`               |
 | Standards and conventions      | `docs/standards/`               |
 | Setup, commands, testing, CI   | `docs/development/`             |
-| Security                       | `docs/security/`                |
+| Security                       | `docs/security/security.md`     |
 | Platform and legal policy      | `docs/compliance/`              |
 | Operational procedure          | `docs/runbooks/`                |
 | Feature under development      | a directory under `docs/specs/` |

@@ -1,12 +1,13 @@
 {
   "version": 2,
-  "lastUpdated": "2026-08-28",
+  "lastUpdated": "2026-09-07",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "CLAUDE.md",
     "ARCHITECTURE.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
+    "docs/security/security.md",
     "docs/product/definition.md",
     "docs/product/requirements.md",
     "docs/work/implementation-status.md",
