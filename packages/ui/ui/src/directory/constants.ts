@@ -1,6 +1,7 @@
 import type {
   DirectoryBadgeKind,
   DirectoryConnectableMode,
+  DirectoryManageColumn,
   DirectorySectionKey,
   DirectorySortKey,
 } from './types';
@@ -188,6 +189,60 @@ export const SHOW_LESS_LABEL = 'Show less';
 export const CHIP_PREVIEW_COUNT = 12;
 
 export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not available yet.';
+
+export const DIRECTORY_BROWSE_LABEL = 'Browse';
+export const ADD_MARKETPLACE_ACTION_ID = 'add-marketplace';
+export const DIRECTORY_ADD_MENU_LABEL = 'Add';
+export const DIRECTORY_MANAGE_SLASH_PREFIX = '/';
+
+export const DIRECTORY_MANAGE_COLUMNS: Record<
+  DirectorySectionKey,
+  readonly DirectoryManageColumn[]
+> = {
+  skills: ['name', 'updated', 'author'],
+  connectors: ['name', 'updated'],
+  plugins: ['name', 'author', 'skills', 'updated'],
+};
+
+export const DIRECTORY_MANAGE_NAME_HEADINGS: Record<DirectorySectionKey, string> = {
+  skills: 'Skill',
+  connectors: 'Connector',
+  plugins: 'Plugin',
+};
+
+export const DIRECTORY_MANAGE_COLUMN_HEADINGS: Record<
+  Exclude<DirectoryManageColumn, 'name'>,
+  string
+> = {
+  author: 'Author',
+  skills: 'Skills',
+  updated: 'Last updated',
+};
+
+export const DIRECTORY_MANAGE_EMPTY_TITLES: Record<DirectorySectionKey, string> = {
+  skills: 'No skills yet',
+  connectors: 'No connectors yet',
+  plugins: 'No plugins yet',
+};
+
+export const DIRECTORY_MANAGE_EMPTY_BODIES: Record<DirectorySectionKey, string> = {
+  skills: 'Add skills to extend what AGI can do for you.',
+  connectors: 'Connect the tools and data sources you want AGI to reach.',
+  plugins: 'Install a plugin to give AGI a bundle of skills and connectors at once.',
+};
+
+export const DIRECTORY_MANAGE_EMPTY_ACTION_LABELS: Record<DirectorySectionKey, string> = {
+  skills: 'Add skill',
+  connectors: 'Add connector',
+  plugins: 'Install',
+};
+
+export const DIRECTORY_MANAGE_NO_MATCH_COPY = 'Nothing here matches this search.';
+export const DIRECTORY_MANAGE_META_SEPARATOR = '\u00b7';
+export const DIRECTORY_MANAGE_SKILL_COUNT_LABELS = { one: 'skill', other: 'skills' };
+export const DIRECTORY_MANAGE_SINGULAR_COUNT = 1;
+export const DIRECTORY_MANAGE_UNKNOWN_VALUE = '';
+export const DIRECTORY_MANAGE_ROW_ACTION_PREFIX = 'Manage';
 
 export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
 export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';

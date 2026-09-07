@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -16,6 +17,8 @@ import {
   type DirectoryAdapter,
   type DirectoryConnectorDetail,
   type DirectoryDetail,
+  type DirectoryManageAction,
+  type DirectoryManageSection,
   type DirectoryMarketplaceInput,
   type DirectoryOpenEntry,
   type DirectoryMarketplaceResult,
@@ -35,6 +38,7 @@ import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalo
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
+import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import type { PluginInstallationTarget } from '@/features/plugins/routes';
 
 import {
@@ -102,6 +106,7 @@ import {
   marketplaceRequest,
   pluginDirectoryHref,
   toPluginDetail,
+  toPluginManageRows,
   toPluginRequest,
   toPluginSection,
   toUserMarketplaceDetail,
@@ -129,6 +134,10 @@ import {
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
+const CHAT_PATH = '/chat';
+const COMPOSER_PROMPT_PARAM = 'starterPrompt';
+const PLUGIN_CREATE_WITH_AGI_LABEL = 'Create with AGI';
+const PLUGIN_CREATE_WITH_AGI_PROMPT = 'Build a plugin for me: ';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
@@ -225,6 +234,26 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     onConnectConnector,
     onDisconnectConnector,
   } = options;
+  const router = useRouter();
+  const { closeSettings } = useSettingsModal();
+  const composerHandoff = useRef({ router, closeSettings });
+  composerHandoff.current = { router, closeSettings };
+  const openComposerWithPrompt = useCallback((prompt: string) => {
+    composerHandoff.current.closeSettings();
+    composerHandoff.current.router.push(
+      `${CHAT_PATH}?${COMPOSER_PROMPT_PARAM}=${encodeURIComponent(prompt)}`,
+    );
+  }, []);
+  const pluginManageActions = useMemo<readonly DirectoryManageAction[]>(
+    () => [
+      {
+        id: COMPOSER_PROMPT_PARAM,
+        label: PLUGIN_CREATE_WITH_AGI_LABEL,
+        onSelect: () => openComposerWithPrompt(PLUGIN_CREATE_WITH_AGI_PROMPT),
+      },
+    ],
+    [openComposerWithPrompt],
+  );
   const [skills, setSkills] = useState<DirectorySection>(EMPTY);
   const [connectors, setConnectors] = useState<DirectorySection>(initialConnectorSection);
   const [plugins, setPlugins] = useState<DirectorySection>(initialPluginSection);
@@ -485,15 +514,30 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         installs: page.installs,
       });
       const notice = [page.installs.notice, pluginRegistryNotice.current].filter(Boolean).join(' ');
-      setPlugins({
+      const next: DirectorySection = {
         ...section,
         ...(notice ? { notice } : {}),
         ...(pluginRegistryNotice.current ? { noticeRetry: retryPlugins } : {}),
         retry: retryPlugins,
         ...patch,
-      });
+      };
+      const manage: DirectoryManageSection = {
+        rows: toPluginManageRows({
+          builtin: page.builtin,
+          partner: page.partner,
+          marketplace: page.marketplace?.entries ?? [],
+          details: [...pluginDetails.current.values()],
+          user: page.user,
+          installs: page.installs,
+        }),
+        loading: next.loading === true,
+        error: next.error ?? null,
+        actions: pluginManageActions,
+        retry: retryPlugins,
+      };
+      setPlugins({ ...next, manage });
     },
-    [retryPlugins],
+    [retryPlugins, pluginManageActions],
   );
 
   const primePlugins = useCallback((): Promise<void> => {
