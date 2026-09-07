@@ -1,4 +1,4 @@
-import type { Page, Request } from '@playwright/test';
+import { test, type Page, type Request } from '@playwright/test';
 
 export const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 
@@ -37,6 +37,73 @@ async function resolveSecondUserId(secret: string): Promise<string> {
 
 async function resolveIdentityUserId(identity: QaIdentity, secret: string): Promise<string> {
   return identity === 'primary' ? QA_USER : resolveSecondUserId(secret);
+}
+
+/**
+ * Sessions this process signed in. Every run used to leave one behind, and the
+ * QA account reached four figures of active sessions, which is what pushed the
+ * Account pane past its listing cap. Only ids minted here are ever revoked.
+ */
+const harnessSessionIds = new Set<string>();
+
+interface ClerkSessionHandle {
+  id: string;
+  userId: string | null;
+}
+
+async function readClerkSession(page: Page): Promise<ClerkSessionHandle | null> {
+  try {
+    return await page.evaluate(() => {
+      const clerk = (
+        window as unknown as {
+          Clerk?: { session?: { id?: string; user?: { id?: string } } };
+        }
+      ).Clerk;
+      const session = clerk?.session;
+      if (!session?.id) return null;
+      return { id: session.id, userId: session.user?.id ?? null };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function reuseHarnessSession(page: Page, userId: string): Promise<boolean> {
+  const session = await readClerkSession(page);
+  if (!session || session.userId !== userId) return false;
+  // Only a session this process minted counts as reusable. A session that was
+  // already here belongs to whoever created it and is never touched.
+  return harnessSessionIds.has(session.id);
+}
+
+export async function revokeHarnessSessions(): Promise<void> {
+  const secret = process.env['CLERK_SECRET_KEY'];
+  const sessionIds = [...harnessSessionIds];
+  harnessSessionIds.clear();
+  if (!secret) return;
+
+  for (const sessionId of sessionIds) {
+    try {
+      const res = await fetch(
+        `https://api.clerk.com/v1/sessions/${encodeURIComponent(sessionId)}/revoke`,
+        { method: 'POST', headers: { Authorization: `Bearer ${secret}` } },
+      );
+      if (!res.ok) {
+        console.warn(`[qa-harness] session revoke failed: HTTP ${res.status} ${await res.text()}`);
+      }
+    } catch (error) {
+      console.warn(`[qa-harness] session revoke failed: ${String(error)}`);
+    }
+  }
+}
+
+try {
+  test.afterAll(async () => {
+    await revokeHarnessSessions();
+  });
+} catch {
+  // Imported outside a Playwright spec, by the unit test that pins this
+  // teardown, so there is no suite to attach the hook to.
 }
 
 export async function mintSignInTicketFor(userId: string): Promise<string> {
@@ -95,15 +162,19 @@ export async function signInWithTicket(page: Page, ticket: string): Promise<void
     throw new Error(`Clerk ticket sign-in failed after retries: ${String(lastError)}`);
   }
   await page.waitForTimeout(1500);
+
+  const session = await readClerkSession(page);
+  if (session) harnessSessionIds.add(session.id);
 }
 
 export async function signIn(page: Page): Promise<void> {
-  await signInWithTicket(page, await mintSignInTicket());
+  await signInAs(page, 'primary');
 }
 
 export async function signInAs(page: Page, identity: QaIdentity): Promise<void> {
   const secret = requireClerkSecret();
   const userId = await resolveIdentityUserId(identity, secret);
+  if (await reuseHarnessSession(page, userId)) return;
   await signInWithTicket(page, await mintSignInTicketFor(userId));
 }
 
