@@ -3720,15 +3720,6 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [conversations, updateConversation],
   );
 
-  const handleStarSession = useCallback(
-    (id: string) => {
-      const convo = conversations.find((c) => c.id === id);
-      if (!convo) return;
-      void updateConversation(id, { starred: !convo.isStarred });
-    },
-    [conversations, updateConversation],
-  );
-
   const handleArchiveSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
@@ -4729,7 +4720,6 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onDelete: handleSidebarDelete,
     onRename: handleRenameSession,
     onTogglePin: handlePinSession,
-    onStar: handleStarSession,
     onArchive: handleArchiveSession,
     onShare: handleShareSession,
     onMoveToProject: handleMoveToProjectSession,
