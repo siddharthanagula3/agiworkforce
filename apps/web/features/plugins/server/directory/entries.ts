@@ -120,7 +120,7 @@ function capabilitiesFor(components: PluginRuntimeComponents): PluginCapability[
   return capabilities;
 }
 
-function lastSegment(path: string): string {
+export function lastSegment(path: string): string {
   const segments = path.replace(/\/+$/, '').split('/');
   return segments[segments.length - 1] ?? path;
 }

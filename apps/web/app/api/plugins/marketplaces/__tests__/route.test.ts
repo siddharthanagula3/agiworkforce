@@ -48,6 +48,7 @@ vi.mock('@/lib/services/plugin-marketplace-service', async () => {
 });
 
 import { NextRequest } from 'next/server';
+import { MARKETPLACE_UNAVAILABLE_MESSAGE } from '@/features/plugins/server/directory/constants';
 import { GET as getEntries } from '../entries/route';
 import { DELETE } from '../[id]/route';
 import { POST as refresh } from '../[id]/refresh/route';
@@ -122,6 +123,7 @@ describe('GET /api/plugins/marketplaces', () => {
       {
         ...SOURCE,
         id: 'shadow',
+        name: 'agi:installed:claude-plugins-official',
         repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
       },
     ]);
@@ -232,6 +234,50 @@ describe('POST /api/plugins/marketplaces/[id]/refresh', () => {
     );
     expect(response.status).toBe(404);
   });
+
+  it('404s on a malformed id without calling the service', async () => {
+    const response = await refresh(
+      postNoBody('/api/plugins/marketplaces/not-a-uuid/refresh'),
+      params('not-a-uuid'),
+    );
+    expect(response.status).toBe(404);
+    expect(refreshMarketplaceSourceMock).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 while the marketplace schema is absent', async () => {
+    refreshMarketplaceSourceMock.mockRejectedValue(undefinedTableError());
+    const response = await refresh(
+      postNoBody(`/api/plugins/marketplaces/${SOURCE_ID}/refresh`),
+      params(SOURCE_ID),
+    );
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(MARKETPLACE_UNAVAILABLE_MESSAGE);
+  });
+});
+
+describe('the marketplace-absent sentence reaches the reader', () => {
+  it.each([
+    [
+      'GET /api/plugins/marketplaces',
+      () => listMarketplaceSourcesMock.mockRejectedValue(undefinedTableError()),
+      async () => GET(get()),
+    ],
+    [
+      'DELETE /api/plugins/marketplaces/[id]',
+      () => deleteMarketplaceSourceMock.mockRejectedValue(undefinedTableError()),
+      async () => DELETE(del(`/api/plugins/marketplaces/${SOURCE_ID}`), params(SOURCE_ID)),
+    ],
+    [
+      'GET /api/plugins/marketplaces/entries',
+      () => listMarketplaceEntriesForUserMock.mockRejectedValue(undefinedTableError()),
+      async () => getEntries(get('/api/plugins/marketplaces/entries')),
+    ],
+  ])('%s says why rather than the generic 503 copy', async (_name, arrange, act) => {
+    arrange();
+    const response = await act();
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(MARKETPLACE_UNAVAILABLE_MESSAGE);
+  });
 });
 
 describe('GET /api/plugins/marketplaces/entries', () => {
@@ -241,6 +287,7 @@ describe('GET /api/plugins/marketplaces/entries', () => {
       {
         ...SOURCE,
         id: '99999999-9999-4999-8999-999999999999',
+        name: 'agi:installed:claude-plugins-official',
         repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
       },
     ]);
@@ -267,5 +314,45 @@ describe('GET /api/plugins/marketplaces/entries', () => {
     listMarketplaceEntriesForUserMock.mockRejectedValue(undefinedTableError());
     const response = await getEntries(get('/api/plugins/marketplaces/entries'));
     expect(response.status).toBe(503);
+  });
+});
+
+describe('a marketplace the account registered itself', () => {
+  const OFFICIAL_URL = 'https://github.com/anthropics/claude-plugins-official';
+
+  it('is listed even when it points at a repository the directory also crawls', async () => {
+    listMarketplaceSourcesMock.mockResolvedValue([
+      { ...SOURCE, id: 'mine', name: 'claude-plugins-official', repositoryUrl: OFFICIAL_URL },
+    ]);
+
+    const response = await GET(get());
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).sources.map((source: { id: string }) => source.id)).toEqual([
+      'mine',
+    ]);
+  });
+
+  it('shows its entries rather than an empty marketplace', async () => {
+    listMarketplaceSourcesMock.mockResolvedValue([
+      { ...SOURCE, id: 'mine', name: 'claude-plugins-official', repositoryUrl: OFFICIAL_URL },
+      {
+        ...SOURCE,
+        id: 'shadow',
+        name: 'agi:installed:claude-plugins-official',
+        repositoryUrl: OFFICIAL_URL,
+      },
+    ]);
+    listMarketplaceEntriesForUserMock.mockResolvedValue([
+      { id: 'frontend-design', sourceId: 'mine' },
+      { id: 'installed-only', sourceId: 'shadow' },
+    ]);
+
+    const response = await getEntries(get('/api/plugins/marketplaces/entries'));
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).entries.map((entry: { id: string }) => entry.id)).toEqual([
+      'frontend-design',
+    ]);
   });
 });

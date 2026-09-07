@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { isPluginId } from '@agiworkforce/types';
 import {
+  PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
+  PLUGIN_MARKETPLACE_MAX_PLUGINS,
+} from '@agiworkforce/cloud-contracts';
+import {
   CLAUDE_CLI_INSTALL_COMMAND,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
   GITHUB_HOST,
@@ -67,7 +71,7 @@ export const ClaudeMarketplaceManifestSchema = z
       .passthrough()
       .optional(),
     renames: z.record(z.string(), z.string()).optional(),
-    plugins: z.array(z.unknown()),
+    plugins: z.array(z.unknown()).max(PLUGIN_MARKETPLACE_MAX_PLUGINS),
   })
   .passthrough();
 
@@ -144,6 +148,15 @@ export function normalizeRepositoryUrl(url: string): string | null {
   return `https://${GITHUB_HOST}/${parsed.owner}/${parsed.repo}`;
 }
 
+const PARENT_SEGMENT = '..';
+const BACKSLASH = '\\';
+
+export function hasUnsafePathSegment(path: string): boolean {
+  return (
+    path.startsWith('/') || path.includes(BACKSLASH) || path.split('/').includes(PARENT_SEGMENT)
+  );
+}
+
 function normalizePath(path: string | undefined): string | null {
   if (!path) return null;
   const trimmed = path.trim().replace(RELATIVE_PREFIX, '').replace(TRAILING_SLASH, '');
@@ -156,11 +169,13 @@ export function resolvePluginSource(
 ): PluginSourceLocation | null {
   if (typeof source === 'string') {
     if (/^[a-z]+:/i.test(source)) return null;
+    const path = normalizePath(source);
+    if (path !== null && hasUnsafePathSegment(path)) return null;
     return {
       repositoryUrl: marketplace.repositoryUrl,
       ref: marketplace.ref,
       sha: null,
-      path: normalizePath(source),
+      path,
     };
   }
   const repositoryUrl =
@@ -170,11 +185,13 @@ export function resolvePluginSource(
         ? normalizeRepositoryUrl(source.url.replace(GIT_SUFFIX, ''))
         : null;
   if (!repositoryUrl) return null;
+  const path = normalizePath(source.path);
+  if (path !== null && hasUnsafePathSegment(path)) return null;
   return {
     repositoryUrl,
     ref: source.ref?.trim() || null,
     sha: source.sha?.trim() || null,
-    path: normalizePath(source.path),
+    path,
   };
 }
 
@@ -235,7 +252,18 @@ export async function fetchClaudeMarketplace(
       `${marketplace.name} manifest fetch failed (${response.status}).`,
     );
   }
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES) {
+    throw new ClaudeMarketplaceFetchError(
+      `${marketplace.name} manifest is larger than ${PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES} bytes.`,
+    );
+  }
   const rawText = await response.text();
+  if (rawText.length > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES) {
+    throw new ClaudeMarketplaceFetchError(
+      `${marketplace.name} manifest is larger than ${PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES} bytes.`,
+    );
+  }
   let json: unknown;
   try {
     json = JSON.parse(rawText);

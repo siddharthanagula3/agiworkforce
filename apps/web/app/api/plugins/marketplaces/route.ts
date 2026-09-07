@@ -9,7 +9,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { createError } from '@/lib/errors';
 import {
   PluginMarketplaceFetchError,
   PluginMarketplaceValidationError,
@@ -17,7 +16,8 @@ import {
   listMarketplaceSources,
   registerMarketplaceSource,
 } from '@/lib/services/plugin-marketplace-service';
-import { isDirectoryMarketplaceRepository } from '@/features/plugins/server/directory/official-marketplace';
+import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
+import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceSourceListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -41,15 +41,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     sources = await listMarketplaceSources(getNeonDb(), userId);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
-      throw createError.serviceUnavailable(
-        'The plugin marketplace is not available yet. Please try again later.',
-      );
+      throw marketplaceUnavailableError();
     }
     throw error;
   }
 
   const body: PluginMarketplaceSourceListResponse = {
-    sources: sources.filter((source) => !isDirectoryMarketplaceRepository(source.repositoryUrl)),
+    sources: sources.filter((source) => !isShadowSourceName(source.name)),
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
@@ -101,9 +99,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       );
     }
     if (isMissingPluginMarketplaceSchema(error)) {
-      throw createError.serviceUnavailable(
-        'The plugin marketplace is not available yet. Please try again later.',
-      );
+      throw marketplaceUnavailableError();
     }
     throw error;
   }

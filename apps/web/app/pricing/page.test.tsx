@@ -101,7 +101,6 @@ vi.mock('@/features/marketing/components/Reveal', () => ({
 vi.mock('@/features/marketing/components/WaitlistModal', () => ({
   WaitlistTrigger: ({ label }: { label: string }) => <button>{label}</button>,
 }));
-vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
 
 import PricingPage from './page';
 

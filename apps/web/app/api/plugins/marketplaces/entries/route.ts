@@ -7,13 +7,13 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { createError } from '@/lib/errors';
 import {
   isMissingPluginMarketplaceSchema,
   listMarketplaceEntriesForUser,
   listMarketplaceSources,
 } from '@/lib/services/plugin-marketplace-service';
-import { isDirectoryMarketplaceRepository } from '@/features/plugins/server/directory/official-marketplace';
+import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
+import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceEntryListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -33,17 +33,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     ]);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
-      throw createError.serviceUnavailable(
-        'The plugin marketplace is not available yet. Please try again later.',
-      );
+      throw marketplaceUnavailableError();
     }
     throw error;
   }
 
   const hiddenSourceIds = new Set(
-    sources
-      .filter((source) => isDirectoryMarketplaceRepository(source.repositoryUrl))
-      .map((source) => source.id),
+    sources.filter((source) => isShadowSourceName(source.name)).map((source) => source.id),
   );
   const body: PluginMarketplaceEntryListResponse = {
     entries: entries.filter((entry) => !hiddenSourceIds.has(entry.sourceId)),

@@ -28,6 +28,16 @@ export const PUBLISHER_KIND_PARTNER = 'partner';
 export const PUBLISHER_KIND_THIRD_PARTY = 'third-party';
 export const MARKETPLACE_EXTERNAL_PLUGINS_DIRECTORY = 'external_plugins';
 
+export const SHADOW_SOURCE_NAME_PREFIX = 'agi:installed:';
+
+export function shadowSourceName(marketplaceName: string): string {
+  return `${SHADOW_SOURCE_NAME_PREFIX}${marketplaceName}`;
+}
+
+export function isShadowSourceName(name: string): boolean {
+  return name.startsWith(SHADOW_SOURCE_NAME_PREFIX);
+}
+
 export const BRAND_NAME_PATTERN =
   /\b(?:Claude(?: Code| Desktop| desktop app| mobile app| for Chrome| Cowork| app)?|ChatGPT)\b/gu;
 export const BRAND_NAME_REPLACEMENT = 'the assistant';
@@ -110,6 +120,8 @@ export const RUNTIME_NOTE_NO_SKILLS =
   'This plugin ships slash commands or agents for the CLI and no skills the web app can load, so install it from the desktop app or the CLI.';
 
 export const INSTALLS_DISABLED_MESSAGE = 'Plugin installs are not enabled on this deployment yet';
+export const MARKETPLACE_UNAVAILABLE_MESSAGE =
+  'The plugin marketplace is not available yet. Please try again later.';
 export const INSTALL_SKILLS_UNAVAILABLE_MESSAGE =
   'None of this plugin skills could be fetched from its repository right now, so it was not installed.';
 export const INSTALL_BUILTIN_MESSAGE =
