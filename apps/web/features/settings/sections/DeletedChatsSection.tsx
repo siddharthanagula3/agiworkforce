@@ -43,7 +43,7 @@ export function DeletedChatsSection() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const addConversationToStore = useChatStore((state) => state.addConversation);
+  const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
 
   const loadFirstPage = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -95,7 +95,10 @@ export function DeletedChatsSection() {
     try {
       const restored = await restoreDeletedConversation(conversation.id);
       setConversations((current) => current.filter(({ id }) => id !== conversation.id));
-      addConversationToStore(toWebConversation(restored));
+      // The row left the server's deleted list too, so every later row moved down
+      // one. Holding the old offset would step over the row that took its place.
+      setNextOffset((offset) => Math.max(0, offset - 1));
+      upsertConversationInStore(toWebConversation(restored));
       setNotice(`Restored “${conversation.title}”.`);
     } catch (caught) {
       setError(toUserMessage(caught, 'Failed to restore deleted chat'));

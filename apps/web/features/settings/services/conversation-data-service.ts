@@ -127,7 +127,7 @@ export async function restoreDeletedConversation(id: string) {
   return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
 }
 
-export async function restoreArchivedConversation(id: string): Promise<void> {
+export async function restoreArchivedConversation(id: string) {
   const response = await fetch(managedCloudConversationPath(id), {
     method: 'PUT',
     credentials: 'include',
@@ -137,7 +137,7 @@ export async function restoreArchivedConversation(id: string): Promise<void> {
   if (!response.ok) {
     throw await responseError(response, 'Failed to restore archived chat');
   }
-  ManagedCloudUpdateConversationResponseSchema.parse(await response.json());
+  return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
 }
 
 export async function deleteManagedConversation(id: string): Promise<void> {

@@ -2,12 +2,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArchivedChatsSection } from './ArchivedChatsSection';
+import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
 
 const mocks = vi.hoisted(() => ({
   listArchived: vi.fn(),
   restoreArchived: vi.fn(),
+  listDeleted: vi.fn(),
+  restoreDeleted: vi.fn(),
   deleteConversation: vi.fn(),
   bulkAction: vi.fn(),
   listShares: vi.fn(),
@@ -37,6 +40,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('../services/conversation-data-service', () => ({
   listArchivedConversations: (...args: unknown[]) => mocks.listArchived(...args),
   restoreArchivedConversation: (...args: unknown[]) => mocks.restoreArchived(...args),
+  listDeletedConversations: (...args: unknown[]) => mocks.listDeleted(...args),
+  restoreDeletedConversation: (...args: unknown[]) => mocks.restoreDeleted(...args),
   deleteManagedConversation: (...args: unknown[]) => mocks.deleteConversation(...args),
   applyBulkConversationAction: (...args: unknown[]) => mocks.bulkAction(...args),
   fetchConversationHistoryStats: (...args: unknown[]) => mocks.historyStats(...args),
@@ -73,6 +78,19 @@ const archivedConversation = {
   updatedAt: '2026-07-02T00:00:00.000Z',
 };
 
+const restoredWire = {
+  id: 'conversation-1',
+  title: 'Archived planning',
+  model: 'auto',
+  project_id: null,
+  pinned: false,
+  starred: false,
+  archived: false,
+  is_temporary: false,
+  created_at: '2026-07-01T00:00:00.000Z',
+  updated_at: '2026-07-02T00:00:00.000Z',
+};
+
 const storeConversation = {
   id: 'conversation-1',
   title: 'Archived planning',
@@ -94,7 +112,13 @@ describe('Web conversation data settings', () => {
       hasMore: false,
       nextOffset: 1,
     });
-    mocks.restoreArchived.mockResolvedValue(undefined);
+    mocks.restoreArchived.mockResolvedValue(restoredWire);
+    mocks.listDeleted.mockResolvedValue({
+      conversations: [archivedConversation],
+      hasMore: false,
+      nextOffset: 1,
+    });
+    mocks.restoreDeleted.mockResolvedValue(restoredWire);
     mocks.deleteConversation.mockResolvedValue(undefined);
     mocks.bulkAction.mockResolvedValue(1);
     mocks.listShares.mockResolvedValue([]);
@@ -119,6 +143,70 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalledWith('conversation-1'));
     expect(screen.getByText('Restored “Archived planning”.')).toBeInTheDocument();
     expect(useChatStore.getState().conversations[0]?.isArchived).toBe(false);
+  });
+
+  it('puts a restored chat in the sidebar store even when it was never loaded there', async () => {
+    useChatStore.setState({ conversations: [] });
+
+    render(<ArchivedChatsSection />);
+
+    await screen.findByText('Archived planning');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(useChatStore.getState().conversations).toHaveLength(1));
+    const restored = useChatStore.getState().conversations[0];
+    expect(restored?.id).toBe('conversation-1');
+    expect(restored?.isArchived).toBe(false);
+  });
+
+  it('keeps the next page aligned after a restore removes a row', async () => {
+    mocks.listArchived.mockResolvedValue({
+      conversations: [archivedConversation],
+      hasMore: true,
+      nextOffset: 20,
+    });
+
+    render(<ArchivedChatsSection />);
+
+    await screen.findByText('Archived planning');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalled());
+
+    mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    await waitFor(() => expect(mocks.listArchived).toHaveBeenLastCalledWith(19));
+  });
+
+  it('restores a deleted chat once, without a duplicate sidebar row', async () => {
+    render(<DeletedChatsSection />);
+
+    await screen.findByText('Archived planning');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalledWith('conversation-1'));
+    const rows = useChatStore.getState().conversations.filter(({ id }) => id === 'conversation-1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.isArchived).toBe(false);
+  });
+
+  it('keeps the next deleted page aligned after a restore removes a row', async () => {
+    mocks.listDeleted.mockResolvedValue({
+      conversations: [archivedConversation],
+      hasMore: true,
+      nextOffset: 20,
+    });
+
+    render(<DeletedChatsSection />);
+
+    await screen.findByText('Archived planning');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalled());
+
+    mocks.listDeleted.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(19));
   });
 
   it('permanently deletes every archived chat only after confirmation', async () => {
