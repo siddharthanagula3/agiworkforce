@@ -11,6 +11,20 @@ import { unpublishArtifactsForConversations } from '@/lib/services/published-art
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
+const PENDING_REVOCATION_SQL = `
+  select c.id
+    from web_conversations c
+   where c.user_id = $1
+     and c.organization_id is not distinct from $2
+     and c.deleted_at is not null
+     and exists (
+       select 1
+         from public.published_artifacts pa
+        where pa.conversation_id = c.id
+          and pa.user_id = $1
+     )
+`;
+
 const BulkConversationActionSchema = z.object({
   action: z.enum(['archive_all', 'delete_all', 'delete_archived']),
 });
@@ -40,57 +54,60 @@ async function handleBulkConversationAction(request: NextRequest) {
   const isDelete = action !== 'archive_all';
   const archivedOnly = action === 'delete_archived';
 
+  const bulkUpdateSql = isDelete
+    ? `
+        update web_conversations
+           set deleted_at = now(), updated_at = now()
+         where user_id = $1
+           and organization_id is not distinct from $2
+           and deleted_at is null
+           ${archivedOnly ? 'and archived = true' : ''}
+         returning id
+      `
+    : `
+        update web_conversations
+           set archived = true, updated_at = now()
+         where user_id = $1
+           and organization_id is not distinct from $2
+           and deleted_at is null
+           and archived = false
+         returning id
+      `;
+
   let affected: Array<{ id: string }>;
   try {
-    affected = await db.query<{ id: string }>(
-      isDelete
-        ? `
-            update web_conversations
-               set deleted_at = now(), updated_at = now()
-             where user_id = $1
-               and organization_id is not distinct from $2
-               and deleted_at is null
-               ${archivedOnly ? 'and archived = true' : ''}
-             returning id
-          `
-        : `
-            update web_conversations
-               set archived = true, updated_at = now()
-             where user_id = $1
-               and organization_id is not distinct from $2
-               and deleted_at is null
-               and archived = false
-             returning id
-          `,
-      [userId, organizationId],
-    );
+    if (isDelete) {
+      // A soft delete never fires the 0095 FK cascade, so revocation must commit
+      // with it or the public token outlives the chat, and the pending sweep must
+      // stay unfiltered by this call so a retry finishes an earlier partial failure.
+      const outcome = await db.transaction(async (tx) => {
+        const deleted = await tx.query<{ id: string }>(bulkUpdateSql, [userId, organizationId]);
+        const pending = await tx.query<{ id: string }>(PENDING_REVOCATION_SQL, [
+          userId,
+          organizationId,
+        ]);
+        const revoked = await unpublishArtifactsForConversations(tx, {
+          userId,
+          conversationIds: pending.map(({ id }) => id),
+        });
+        return { deleted, revoked };
+      });
+      affected = outcome.deleted;
+      if (outcome.revoked.length > 0) {
+        logger.info(
+          { userId, action, revoked: outcome.revoked.length },
+          'Revoked published artifacts for bulk-deleted conversations',
+        );
+      }
+    } else {
+      affected = await db.query<{ id: string }>(bulkUpdateSql, [userId, organizationId]);
+    }
   } catch (error) {
     logger.error({ error, userId, action }, 'Failed to apply bulk conversation action');
     throw createError.internal('Failed to update conversations');
   }
 
   if (isDelete) {
-    // Soft delete leaves the 0095 FK cascade dormant, so a published artifact
-    // would keep serving its public token after its chat is gone.
-    try {
-      const revoked = await unpublishArtifactsForConversations(db, {
-        userId,
-        conversationIds: affected.map(({ id }) => id),
-      });
-      if (revoked.length > 0) {
-        logger.info(
-          { userId, action, revoked: revoked.length },
-          'Revoked published artifacts for bulk-deleted conversations',
-        );
-      }
-    } catch (error) {
-      logger.error(
-        { error, userId, action },
-        'Failed to revoke published artifacts during bulk conversation delete',
-      );
-      throw createError.internal('Failed to update conversations');
-    }
-
     await Promise.all(
       affected.map(async ({ id }) => {
         try {

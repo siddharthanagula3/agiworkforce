@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  transaction: vi.fn(),
   requireUser: vi.fn(async (..._args: unknown[]) => 'user-1'),
   killSession: vi.fn(async (..._args: unknown[]) => undefined),
   scope: vi.fn((userId: string, conversationId: string) => ({ userId, conversationId })),
@@ -12,7 +13,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: async (...args: unknown[]) => ({
-    db: { query: (...queryArgs: unknown[]) => mocks.query(...queryArgs) },
+    db: {
+      query: (...queryArgs: unknown[]) => mocks.query(...queryArgs),
+      transaction: (run: (tx: unknown) => Promise<unknown>) => {
+        mocks.transaction();
+        return run({ query: (...queryArgs: unknown[]) => mocks.query(...queryArgs) });
+      },
+    },
     userId: await mocks.requireUser(...args),
     organizationId: null,
   }),
@@ -128,5 +135,40 @@ describe('POST /api/chat/conversations/bulk', () => {
 
     expect(response.status).toBe(500);
     expect(mocks.killSession).not.toHaveBeenCalled();
+  });
+
+  it('marks the rows deleted and revokes their pages in one transaction', async () => {
+    mocks.query.mockResolvedValue([{ id: 'conversation-1' }]);
+
+    await post('delete_all');
+
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    const [pendingSql, pendingParams] = mocks.query.mock.calls[1]!;
+    expect(pendingSql).toContain('published_artifacts');
+    expect(pendingSql).toContain('deleted_at is not null');
+    expect(pendingParams).toEqual(['user-1', null]);
+  });
+
+  it('finishes an unrevoked publication on a retry instead of reporting success', async () => {
+    mocks.query.mockResolvedValue([{ id: 'conversation-1' }]);
+    mocks.unpublishForConversations.mockRejectedValueOnce(new Error('db down'));
+
+    const failed = await post('delete_all');
+    expect(failed.status).toBe(500);
+
+    mocks.query.mockReset();
+    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([{ id: 'conversation-1' }]);
+    mocks.unpublishForConversations.mockResolvedValue(['token-1']);
+
+    const retried = await post('delete_all');
+    const body = await retried.json();
+
+    expect(retried.status).toBe(200);
+    expect(body.affectedCount).toBe(0);
+    expect(mocks.unpublishForConversations).toHaveBeenLastCalledWith(expect.anything(), {
+      userId: 'user-1',
+      conversationIds: ['conversation-1'],
+    });
   });
 });
