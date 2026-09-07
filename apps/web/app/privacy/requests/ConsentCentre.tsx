@@ -4,6 +4,10 @@ import { useCallback, useEffect, useId, useState } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
+import {
+  ANALYTICS_CONSENT_PURPOSE,
+  applyAnalyticsConsentLocally,
+} from '@shared/lib/cookie-consent';
 import { Ledger, Prose, Stack, type LedgerRow } from '@/features/marketing/components/system';
 
 interface ConsentRecord {
@@ -50,6 +54,10 @@ export function ConsentCentre() {
         return;
       }
       const data = (await res.json()) as ConsentState;
+      const analytics = data.consents.find(
+        (record) => record.purpose === ANALYTICS_CONSENT_PURPOSE,
+      );
+      if (analytics) applyAnalyticsConsentLocally(analytics.granted);
       setState({ kind: 'ready', data });
     } catch {
       setState({ kind: 'error', message: 'Could not reach the server.' });
@@ -87,6 +95,7 @@ export function ConsentCentre() {
           return;
         }
 
+        if (purpose === ANALYTICS_CONSENT_PURPOSE) applyAnalyticsConsentLocally(granted);
         setNotice(granted ? 'Consent recorded.' : 'Withdrawal recorded.');
         await load();
       } catch {
