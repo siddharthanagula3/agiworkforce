@@ -67,8 +67,8 @@ async function api(
       let csrf: string | undefined;
       if (i?.method && i.method !== 'GET') {
         headers['Content-Type'] = 'application/json';
-        const c = await fetch('/api/csrf-token').then((r) => (r.ok ? r.json() : null));
-        csrf = (c as { csrfToken?: string } | null)?.csrfToken;
+        const c = await fetch('/api/csrf').then((r) => (r.ok ? r.json() : null));
+        csrf = (c as { token?: string } | null)?.token;
         if (csrf) headers['x-csrf-token'] = csrf;
       }
       // Managed Cloud chat requires an idempotency key so a retry cannot bill
