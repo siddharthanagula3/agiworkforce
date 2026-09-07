@@ -1,10 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Boxes, FileText, Loader2, MessageSquareText, Wrench } from 'lucide-react';
+import { AlertTriangle, Boxes, FileText, MessageSquareText, Wrench } from 'lucide-react';
+
+import { Spinner } from '@agiworkforce/ui';
 
 import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
 import { publishMcpContextSelection } from '../lib/mcp-context-selection';
+
+const CAPABILITY_DISCOVERY_COPY = 'Discovering live MCP capabilities…';
+
+function itemHint(item: { name: string; title?: string; description?: string }): string {
+  return item.description ?? item.title ?? item.name;
+}
+const NO_CAPABILITIES_COPY =
+  'This connector answered but offers no tools, resources or prompts yet. Nothing from it can be used in a conversation until it publishes some.';
+const PARTIAL_DISCOVERY_PREFIX = 'Unavailable during discovery:';
 
 function CapabilityGroup({
   title,
@@ -13,7 +24,7 @@ function CapabilityGroup({
   onSelect,
 }: {
   title: string;
-  items: Array<{ name: string; title?: string }>;
+  items: Array<{ name: string; title?: string; description?: string }>;
   icon: React.ReactNode;
   onSelect?: (item: { name: string; title?: string }) => void;
 }) {
@@ -25,18 +36,27 @@ function CapabilityGroup({
         {title} <span className="font-normal text-muted-foreground">({items.length})</span>
       </h4>
       <div className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
-        {items.map((item) => (
-          <button
-            type="button"
-            key={`${title}:${item.name}`}
-            title={item.name}
-            disabled={!onSelect}
-            onClick={() => onSelect?.(item)}
-            className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground enabled:hover:text-foreground"
-          >
-            {item.title ?? item.name}
-          </button>
-        ))}
+        {items.map((item) =>
+          onSelect ? (
+            <button
+              type="button"
+              key={`${title}:${item.name}`}
+              title={itemHint(item)}
+              onClick={() => onSelect(item)}
+              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
+            >
+              {item.name}
+            </button>
+          ) : (
+            <span
+              key={`${title}:${item.name}`}
+              title={itemHint(item)}
+              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground"
+            >
+              {item.name}
+            </span>
+          ),
+        )}
       </div>
     </section>
   );
@@ -56,8 +76,8 @@ export function ConnectorCapabilitiesPanel({
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border/80 px-3 py-3 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-        Discovering live MCP capabilities…
+        <Spinner size="sm" className="h-3.5 w-3.5" aria-label={CAPABILITY_DISCOVERY_COPY} />
+        {CAPABILITY_DISCOVERY_COPY}
       </div>
     );
   }
@@ -81,6 +101,12 @@ export function ConnectorCapabilitiesPanel({
   if (!catalog) return null;
 
   const modelTools = catalog.tools.filter((tool) => tool.visibility !== 'app');
+  const nothingPublished =
+    modelTools.length === 0 &&
+    catalog.resources.length === 0 &&
+    catalog.resourceTemplates.length === 0 &&
+    catalog.prompts.length === 0 &&
+    catalog.apps.length === 0;
   return (
     <div className="space-y-2" aria-label="Live MCP capabilities">
       <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -96,6 +122,11 @@ export function ConnectorCapabilitiesPanel({
           </span>
         ) : null}
       </div>
+      {nothingPublished ? (
+        <p className="rounded-lg border border-border/80 px-3 py-3 text-xs text-muted-foreground">
+          {NO_CAPABILITIES_COPY}
+        </p>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <CapabilityGroup title="Tools" items={modelTools} icon={<Wrench className="h-3 w-3" />} />
         <CapabilityGroup
@@ -200,7 +231,15 @@ export function ConnectorCapabilitiesPanel({
       ) : null}
       {catalog.discoveryErrors.length > 0 ? (
         <p className="text-[12px] text-muted-foreground">
-          Some capability groups were unavailable during discovery.
+          {PARTIAL_DISCOVERY_PREFIX}{' '}
+          {[...new Set(catalog.discoveryErrors.map((entry) => entry.capability))].join(', ')}.
+          <button
+            type="button"
+            onClick={retry}
+            className="ml-1 inline-flex min-h-6 items-center font-medium underline"
+          >
+            Retry discovery
+          </button>
         </p>
       ) : null}
     </div>

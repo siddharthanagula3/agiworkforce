@@ -12,7 +12,9 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import {
   evictCustomConnectorCaches,
   getUserCustomConnectorSummaries,
+  type UserCustomConnectorSummary,
 } from '@/lib/user-connector-tools';
+import { findDirectoryTargetByRemoteUrl } from '@/lib/connectors/mcp-directory-targets';
 import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
@@ -36,13 +38,21 @@ const AUTH_TOKEN_MAX_LENGTH = 4096;
 const AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
 const AUDIT_SOURCE = 'custom_mcp';
 
+async function withDirectoryLink(
+  summary: UserCustomConnectorSummary,
+): Promise<UserCustomConnectorSummary & { directoryId?: string }> {
+  const linked = await findDirectoryTargetByRemoteUrl(summary.url);
+  return linked ? { ...summary, directoryId: linked.connectorId } : summary;
+}
+
 async function handleGet(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET, `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const connectors = await getUserCustomConnectorSummaries(db, userId);
+  const summaries = await getUserCustomConnectorSummaries(db, userId);
+  const connectors = await Promise.all(summaries.map(withDirectoryLink));
 
   return NextResponse.json({ connectors });
 }

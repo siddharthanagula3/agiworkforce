@@ -20,6 +20,7 @@ export interface ConnectorStatus {
   connectedAtMap: Record<string, string>;
   sources: Record<string, ConnectorSource>;
   customNames: Record<string, string>;
+  toolConnectorIds: Record<string, string>;
   grantedScopes: Record<string, string[]>;
   needsReauthorizationIds: Set<string>;
   availableIds: Set<string>;
@@ -36,6 +37,7 @@ export interface ConnectorStatus {
 interface ConnectorsResponse {
   connectors: Array<{
     connectorId: string;
+    toolConnectorId?: string;
     connectedAt?: string;
     source?: ConnectorSource;
     name?: string;
@@ -284,6 +286,7 @@ export function useConnectors(): ConnectorStatus {
   const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});
   const [sources, setSources] = useState<Record<string, ConnectorSource>>({});
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
+  const [toolConnectorIds, setToolConnectorIds] = useState<Record<string, string>>({});
   const [grantedScopes, setGrantedScopes] = useState<Record<string, string[]>>({});
   const [needsReauthorizationIds, setNeedsReauthorizationIds] = useState<Set<string>>(new Set());
   const [availableIds, setAvailableIds] = useState<Set<string>>(new Set());
@@ -309,6 +312,7 @@ export function useConnectors(): ConnectorStatus {
       setConnectedAtMap({});
       setSources({});
       setCustomNames({});
+      setToolConnectorIds({});
       setGrantedScopes({});
       setNeedsReauthorizationIds(new Set());
       setAvailableIds(new Set());
@@ -331,6 +335,7 @@ export function useConnectors(): ConnectorStatus {
           const sourceMap: Record<string, ConnectorSource> = {};
           const nameMap: Record<string, string> = {};
           const scopeMap: Record<string, string[]> = {};
+          const toolIdMap: Record<string, string> = {};
           const staleIds = new Set<string>();
           for (const c of json.connectors) {
             if (c.connectedAt) atMap[c.connectorId] = c.connectedAt;
@@ -338,10 +343,12 @@ export function useConnectors(): ConnectorStatus {
             if (c.source === 'custom' && c.name) nameMap[c.connectorId] = c.name;
             if (c.scopes) scopeMap[c.connectorId] = c.scopes;
             if (c.needsReauthorization) staleIds.add(c.connectorId);
+            toolIdMap[c.connectorId] = c.toolConnectorId ?? c.connectorId;
           }
           setConnectedAtMap(atMap);
           setSources(sourceMap);
           setCustomNames(nameMap);
+          setToolConnectorIds(toolIdMap);
           setGrantedScopes(scopeMap);
           setNeedsReauthorizationIds(staleIds);
           setAvailableIds(new Set(json.available ?? []));
@@ -502,6 +509,7 @@ export function useConnectors(): ConnectorStatus {
     connectedAtMap,
     sources,
     customNames,
+    toolConnectorIds,
     grantedScopes,
     needsReauthorizationIds,
     availableIds,

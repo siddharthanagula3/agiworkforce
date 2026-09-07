@@ -117,6 +117,40 @@ describe('useConnectors, OAuth grants', () => {
     expect(result.current.availableIds.has('linear')).toBe(true);
   });
 
+  it('maps each display id to the id the chat tool loop uses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          connectors: [
+            { connectorId: 'linear', source: 'oauth' },
+            {
+              connectorId: 'io.sentry/mcp',
+              toolConnectorId: 'custom-abc123def0',
+              source: 'custom',
+              name: 'Sentry',
+            },
+            {
+              connectorId: 'ch.cowork24/booking',
+              toolConnectorId: 'dir-0123456789ab',
+              source: 'oauth',
+            },
+          ],
+          available: ['linear'],
+        }),
+      ),
+    );
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.toolConnectorIds).toEqual({
+      linear: 'linear',
+      'io.sentry/mcp': 'custom-abc123def0',
+      'ch.cowork24/booking': 'dir-0123456789ab',
+    });
+  });
+
   it('uses App Router navigation for a signed-out connector action', async () => {
     clerkUserState.isSignedIn = false;
     stubLocation('https://app.example.com/connectors?category=Developer');

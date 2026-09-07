@@ -46,6 +46,7 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
     connectedIds: new Set<string>(),
     sources: {} as Record<string, string>,
     customNames: {} as Record<string, string>,
+    toolConnectorIds: {} as Record<string, string>,
   }),
 }));
 

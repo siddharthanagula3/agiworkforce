@@ -6,14 +6,19 @@ vi.mock('@shared/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-import { useToolPermissionsStore } from '../tool-permissions-store';
+import {
+  useToolPermissionsStore,
+  PERMISSION_RESET_FAILED_COPY,
+  PERMISSION_SAVE_FAILED_COPY,
+} from '../tool-permissions-store';
 import { queryClient } from '@shared/stores/query-client';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
-  useToolPermissionsStore.setState({ permissions: {} });
+  useToolPermissionsStore.setState({ permissions: {}, saving: {}, saveError: {} });
   fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
   queryClient.clear();
 });
 
@@ -131,18 +136,136 @@ describe('reset revokes on the server, not just locally', () => {
     vi.unstubAllGlobals();
   });
 
-  it('still clears locally when the server call fails, and does not throw', async () => {
+  it('restores the verdicts and reports the failure when the server refuses the reset', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
         throw new Error('offline');
       }),
     );
-    useToolPermissionsStore.setState({ permissions: { notion: { search: 'deny' } } });
+    useToolPermissionsStore.setState({
+      permissions: { notion: { search: 'allow' } },
+      saving: {},
+      saveError: {},
+    });
     expect(() =>
       useToolPermissionsStore.getState().resetConnectorPermissions('notion'),
     ).not.toThrow();
-    expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe('ask');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe(
+        'allow',
+      );
+      expect(useToolPermissionsStore.getState().getSaveError('notion')).toBe(
+        PERMISSION_RESET_FAILED_COPY,
+      );
+    });
     vi.unstubAllGlobals();
+  });
+
+  it('restores the verdicts when the reset is rejected with a non-ok status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 403, json: async () => ({}) })),
+    );
+    useToolPermissionsStore.setState({
+      permissions: { linear: { create_issue: 'allow' } },
+      saving: {},
+      saveError: {},
+    });
+    useToolPermissionsStore.getState().resetConnectorPermissions('linear');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getToolPermission('linear', 'create_issue')).toBe(
+        'allow',
+      );
+      expect(useToolPermissionsStore.getState().getSaveError('linear')).toBe(
+        PERMISSION_RESET_FAILED_COPY,
+      );
+    });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('a refused write never leaves a verdict the server is not enforcing', () => {
+  it('reverts to the previous level and reports the failure on a non-ok PUT', async () => {
+    useToolPermissionsStore.setState({
+      permissions: { github: { create_issue: 'allow' } },
+      saving: {},
+      saveError: {},
+    });
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+
+    useToolPermissionsStore.getState().setToolPermission('github', 'create_issue', 'deny');
+    expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
+      'deny',
+    );
+
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
+        'allow',
+      );
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBe(
+        PERMISSION_SAVE_FAILED_COPY,
+      );
+    });
+  });
+
+  it('drops a first-time verdict entirely when the server refuses it', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+
+    useToolPermissionsStore.getState().setToolPermission('slack', 'post', 'allow');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getToolPermission('slack', 'post')).toBe('ask');
+      expect(useToolPermissionsStore.getState().getConnectorPermissions('slack')).toEqual({});
+    });
+  });
+
+  it('reverts on a network failure too', async () => {
+    useToolPermissionsStore.setState({
+      permissions: { notion: { search: 'deny' } },
+      saving: {},
+      saveError: {},
+    });
+    fetchMock.mockRejectedValue(new Error('offline'));
+
+    useToolPermissionsStore.getState().setToolPermission('notion', 'search', 'allow');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe('deny');
+    });
+  });
+
+  it('marks the tool as saving while the write is in flight and clears it after', async () => {
+    let release!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const inFlight = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      release = resolve;
+    });
+    fetchMock.mockReturnValue(inFlight);
+
+    useToolPermissionsStore.getState().setToolPermission('github', 'create_issue', 'allow');
+    expect(useToolPermissionsStore.getState().isToolSaving('github', 'create_issue')).toBe(true);
+
+    release({ ok: true, json: async () => ({}) });
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().isToolSaving('github', 'create_issue')).toBe(false);
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBeNull();
+    });
+  });
+
+  it('a later successful write clears the standing failure notice', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    useToolPermissionsStore.getState().setToolPermission('github', 'create_issue', 'deny');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBe(
+        PERMISSION_SAVE_FAILED_COPY,
+      );
+    });
+
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    useToolPermissionsStore.getState().setToolPermission('github', 'create_issue', 'deny');
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBeNull();
+      expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
+        'deny',
+      );
+    });
   });
 });
