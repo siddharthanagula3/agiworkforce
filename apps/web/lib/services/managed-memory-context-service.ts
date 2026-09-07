@@ -161,10 +161,17 @@ export async function loadSuppressedMemorySources(
   return normalizeSuppressedMemorySources(memory['suppressedSources']);
 }
 
-export function isMemoryExcluded(content: string, exclusions: readonly string[]): boolean {
-  if (exclusions.length === 0) return false;
+export function matchedMemoryExclusion(
+  content: string,
+  exclusions: readonly string[],
+): string | null {
+  if (exclusions.length === 0) return null;
   const haystack = content.toLowerCase();
-  return exclusions.some((term) => haystack.includes(term));
+  return exclusions.find((term) => haystack.includes(term)) ?? null;
+}
+
+export function isMemoryExcluded(content: string, exclusions: readonly string[]): boolean {
+  return matchedMemoryExclusion(content, exclusions) !== null;
 }
 
 export interface MemoryScope {

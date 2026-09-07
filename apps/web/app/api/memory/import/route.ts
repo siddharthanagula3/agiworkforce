@@ -16,6 +16,7 @@ import {
   parseImportedMemoryText,
 } from '@/lib/memory/import-parser';
 import { persistImportedMemories, type ImportMemoryDb } from '@/lib/memory/import-store';
+import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
 
 interface ImportRequestBody {
   mode?: string;
@@ -96,9 +97,15 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
 
   const { db, userId } = await getUserScopedDb(request);
 
+  const { allowed, rejected } = await partitionMemoryWrites(db, {
+    userId,
+    candidates: items,
+    contentOf: (item) => item,
+  });
+
   let result;
   try {
-    result = await persistImportedMemories(db, { userId, items, source: sourceValue });
+    result = await persistImportedMemories(db, { userId, items: allowed, source: sourceValue });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to import memories');
     throw createError.internal('Failed to import memories');
@@ -111,6 +118,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
       sourceValue,
       insertedCount: result.insertedCount,
       skippedDuplicateCount: result.skippedDuplicateCount,
+      excludedCount: rejected.length,
       memories: result.memories.map((row) => ({
         id: row.id,
         content: row.content,

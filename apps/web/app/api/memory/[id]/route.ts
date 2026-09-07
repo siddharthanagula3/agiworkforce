@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -80,7 +81,9 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     if (body.content.length > 10_000) {
       throw createError.validation('Content must be 10,000 characters or less');
     }
-    params.push(body.content.trim());
+    const content = body.content.trim();
+    await assertMemoryWriteAllowed(db, { userId, content });
+    params.push(content);
     assignments.push(`content = $${params.length}`);
   }
 
