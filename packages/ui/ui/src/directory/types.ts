@@ -35,6 +35,13 @@ export interface DirectoryFilterGroup {
   label: string;
   options: DirectoryFilterOption[];
   exclusive?: boolean;
+  /**
+   * Renders as a chip row above the list rather than inside the Filter by
+   * menu, for the one facet a reader is expected to switch constantly.
+   */
+  chips?: boolean;
+  /** Reads as selected while the group has no selection of its own. */
+  defaultValue?: string;
 }
 
 export type DirectoryFilterSelection = Readonly<Record<string, readonly string[]>>;
@@ -123,6 +130,10 @@ export interface DirectorySection {
   hasMore?: boolean;
   loadingMore?: boolean;
   countLabel?: string;
+  /** Overrides the section's default empty copy, for a filtered view whose
+   *  emptiness means something other than "nothing matched the search". */
+  emptyCopy?: string;
+  emptyHint?: string;
   catalogHeading?: string;
   toggles?: readonly DirectoryToggle[];
   toggleDefaults?: Readonly<Record<string, boolean>>;

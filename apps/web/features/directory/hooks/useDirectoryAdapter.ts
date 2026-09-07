@@ -79,6 +79,7 @@ import {
   connectorDirectoryIndexing,
   connectorReauthorizationErrors,
   fetchConnectedConnectors,
+  connectorConnectionState,
   fetchConnectedRecordsMissingFrom,
   fetchConnectorDirectoryPage,
   fetchConnectorRecord,
@@ -395,6 +396,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         connectedIds: connectedIds(),
         curated: curatedRef.current,
         request: toDirectoryRequest(connectorQueryRef.current),
+        connectionState: connectorConnectionState(connectorQueryRef.current),
         total: page.total,
         nextCursor: page.nextCursor,
         categories: page.categories,
@@ -405,10 +407,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ...connectorReauthorizationErrors(connectedRef.current),
         ...connectorErrors.current,
       };
-      const indexing = connectorDirectoryIndexing(page.stats);
+      /*
+       * The Connected view is built from the account's own connected records,
+       * which the adapter pins onto the first page, so a catalogue outage says
+       * nothing about it. Reporting one there tells the user their connectors
+       * are unavailable when they are not.
+       */
+      const catalogueDependent =
+        connectorConnectionState(connectorQueryRef.current) !== 'connected';
+      const indexing = catalogueDependent && connectorDirectoryIndexing(page.stats);
       const notice = [
         connectorsNoticeRef.current,
-        connectorRegistryNotice.current,
+        catalogueDependent ? connectorRegistryNotice.current : null,
         indexing ? CONNECTOR_INDEXING_NOTICE : null,
       ]
         .filter(Boolean)
@@ -418,7 +428,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         entries: withConnectorErrors(section.entries, errors),
         ...(connectorsErrorRef.current ? { error: connectorsErrorRef.current } : {}),
         ...(notice ? { notice } : {}),
-        ...(connectorRegistryNotice.current || indexing ? { noticeRetry: retryConnectors } : {}),
+        ...((catalogueDependent && connectorRegistryNotice.current) || indexing
+          ? { noticeRetry: retryConnectors }
+          : {}),
         retry: retryConnectors,
         ...patch,
       });

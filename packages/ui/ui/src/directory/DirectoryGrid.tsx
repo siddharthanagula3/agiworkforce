@@ -198,9 +198,13 @@ export function DirectoryGrid({
   onOpen,
   onInstall,
   onOpenSettings,
+  emptyCopy,
+  emptyHint,
 }: {
   section: DirectorySectionKey;
   entries: readonly DirectoryEntry[];
+  emptyCopy?: string;
+  emptyHint?: string;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => Promise<void> | void;
@@ -249,9 +253,12 @@ export function DirectoryGrid({
 
   if (entries.length === 0) {
     return (
-      <p className="py-16 text-center text-sm text-muted-foreground">
-        {DIRECTORY_EMPTY_COPY[section]}
-      </p>
+      <div className="py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          {emptyCopy ?? DIRECTORY_EMPTY_COPY[section]}
+        </p>
+        {emptyHint ? <p className="mt-1 text-xs text-muted-foreground">{emptyHint}</p> : null}
+      </div>
     );
   }
 

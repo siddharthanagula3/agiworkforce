@@ -147,7 +147,12 @@ describe('useDirectoryAdapter connectors paging', () => {
       loading: false,
     });
     expect(result.current.connectors?.entries[0]).toMatchObject({ id: 'a', installed: true });
-    expect(result.current.connectors?.filterGroups?.[0]?.options.map((o) => o.value)).toEqual([
+    expect(result.current.connectors?.filterGroups?.map((group) => group.id)).toEqual([
+      'connection',
+      'type',
+      'category',
+    ]);
+    expect(result.current.connectors?.filterGroups?.[2]?.options.map((o) => o.value)).toEqual([
       'Data',
       'Productivity',
     ]);
@@ -213,7 +218,7 @@ describe('useDirectoryAdapter connectors paging', () => {
       await result.current.queryEntries?.('connectors', {
         ...DEFAULT_DIRECTORY_QUERY,
         search: 'mail',
-        sourceId: 'community',
+        selection: { type: ['community'] },
         toggles: { 'include-local': true },
       });
     });

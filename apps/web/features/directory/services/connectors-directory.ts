@@ -1,7 +1,5 @@
 import {
   isUnverifiedCustomConnector,
-  DIRECTORY_SOURCE_ALL_ID,
-  DIRECTORY_SOURCE_ALL_LABEL,
   type ConnectedConnector,
   type DirectoryBadgeKind,
   type DirectoryConnectableMode,
@@ -11,7 +9,6 @@ import {
   type DirectoryQuery,
   type DirectorySection,
   type DirectorySortKey,
-  type DirectorySourceChip,
   type DirectoryToggle,
   type SettingsConnector,
 } from '@agiworkforce/ui';
@@ -133,12 +130,6 @@ const NEEDS_SETUP_MODE: DirectoryConnectableMode = 'needs-setup';
 export const CONNECTOR_SORT_OPTIONS: readonly DirectorySortKey[] = [
   DIRECTORY_SORT_POPULAR,
   DIRECTORY_SORT_NAME,
-];
-
-export const CONNECTOR_SOURCE_TABS: readonly DirectorySourceChip[] = [
-  { id: DIRECTORY_SOURCE_ALL_ID, label: DIRECTORY_SOURCE_ALL_LABEL },
-  { id: CONNECTOR_TAB_OFFICIAL_BADGE, label: CONNECTOR_TAB_OFFICIAL_LABEL },
-  { id: CONNECTOR_TAB_COMMUNITY_BADGE, label: CONNECTOR_TAB_COMMUNITY_LABEL },
 ];
 
 export const CONNECTOR_TOGGLES: readonly DirectoryToggle[] = [
@@ -327,11 +318,7 @@ export function toDirectoryRequest(
 ): ConnectorDirectoryRequest {
   const category = query.selection[CONNECTOR_CATEGORY_GROUP_ID]?.[0] ?? null;
   const includeLocal = query.toggles[CONNECTOR_INCLUDE_LOCAL_TOGGLE_ID] === true;
-  const badge =
-    query.sourceId === CONNECTOR_TAB_OFFICIAL_BADGE ||
-    query.sourceId === CONNECTOR_TAB_COMMUNITY_BADGE
-      ? query.sourceId
-      : null;
+  const badge = connectorTypeBadge(query);
   return {
     search: query.search.trim(),
     badge,
@@ -380,12 +367,68 @@ export function connectorDirectoryIndexing(stats?: ConnectorDirectoryStats): boo
   return stats?.bootstrapComplete === false;
 }
 
+export const CONNECTOR_STATE_GROUP_ID = 'connection';
+export const CONNECTOR_STATE_ALL = 'all';
+export const CONNECTOR_STATE_CONNECTED = 'connected';
+export const CONNECTOR_STATE_NOT_CONNECTED = 'not-connected';
+
+export type ConnectorConnectionState =
+  | typeof CONNECTOR_STATE_ALL
+  | typeof CONNECTOR_STATE_CONNECTED
+  | typeof CONNECTOR_STATE_NOT_CONNECTED;
+
+const CONNECTOR_STATE_FILTER: DirectoryFilterGroup = {
+  id: CONNECTOR_STATE_GROUP_ID,
+  label: 'Connection',
+  exclusive: true,
+  chips: true,
+  defaultValue: CONNECTOR_STATE_ALL,
+  options: [
+    { value: CONNECTOR_STATE_ALL, label: 'All' },
+    { value: CONNECTOR_STATE_CONNECTED, label: 'Connected' },
+    { value: CONNECTOR_STATE_NOT_CONNECTED, label: 'Not connected' },
+  ],
+};
+
+export const CONNECTOR_NONE_CONNECTED_COPY = 'No connectors connected yet.';
+export const CONNECTOR_NONE_CONNECTED_HINT = 'Choose All to browse the catalogue.';
+
+export const CONNECTOR_TYPE_GROUP_ID = 'type';
+
+/**
+ * The leaders keep verification alongside the other facets and reserve the
+ * chip row for connection state, so this is a Filter by group rather than a
+ * second chip row starting with its own All.
+ */
+const CONNECTOR_TYPE_FILTER: DirectoryFilterGroup = {
+  id: CONNECTOR_TYPE_GROUP_ID,
+  label: 'Type',
+  exclusive: true,
+  options: [
+    { value: CONNECTOR_TAB_OFFICIAL_BADGE, label: CONNECTOR_TAB_OFFICIAL_LABEL },
+    { value: CONNECTOR_TAB_COMMUNITY_BADGE, label: CONNECTOR_TAB_COMMUNITY_LABEL },
+  ],
+};
+
+export function connectorTypeBadge(query: DirectoryQuery): DirectoryBadge | null {
+  const value = query.selection[CONNECTOR_TYPE_GROUP_ID]?.[0];
+  return value === CONNECTOR_TAB_OFFICIAL_BADGE || value === CONNECTOR_TAB_COMMUNITY_BADGE
+    ? value
+    : null;
+}
+
+export function connectorConnectionState(query: DirectoryQuery): ConnectorConnectionState {
+  const value = query.selection[CONNECTOR_STATE_GROUP_ID]?.[0];
+  if (value === CONNECTOR_STATE_CONNECTED) return CONNECTOR_STATE_CONNECTED;
+  if (value === CONNECTOR_STATE_NOT_CONNECTED) return CONNECTOR_STATE_NOT_CONNECTED;
+  return CONNECTOR_STATE_ALL;
+}
+
 export function initialConnectorSection(): DirectorySection {
   return {
     entries: [],
     installable: true,
     remote: true,
-    sources: CONNECTOR_SOURCE_TABS,
     sortOptions: CONNECTOR_SORT_OPTIONS,
     toggles: CONNECTOR_TOGGLES,
     toggleDefaults: CONNECTOR_TOGGLE_DEFAULTS,
@@ -402,6 +445,7 @@ export interface ConnectorSectionInput {
   categories: readonly string[];
   stats?: ConnectorDirectoryStats;
   featuredLimit?: number;
+  connectionState?: ConnectorConnectionState;
 }
 
 export function toConnectorSection({
@@ -414,6 +458,7 @@ export function toConnectorSection({
   categories,
   stats,
   featuredLimit,
+  connectionState = CONNECTOR_STATE_ALL,
 }: ConnectorSectionInput): DirectorySection {
   const tabHeading = request.badge ? CONNECTOR_TAB_HEADINGS[request.badge] : undefined;
   const allTab = tabHeading === undefined;
@@ -439,14 +484,43 @@ export function toConnectorSection({
     ...curated.map((connector) => curatedDirectoryCategory(connector)),
   ]);
   const totalRecords = stats?.totalRecords;
+  const loaded = [...curatedEntries, ...registryEntries];
+  /*
+   * The directory request has no connected facet, so this is decided here.
+   * Connected is the whole connected set the adapter pins onto the first page,
+   * which is why it neither pages nor reports the catalogue total. Not
+   * connected keeps paging and drops the connected entries from the total it
+   * has actually seen, rather than claiming the catalogue is smaller than it is.
+   */
+  const connectedEntries = loaded.filter((entry) => entry.installed === true);
+  const entries =
+    connectionState === CONNECTOR_STATE_CONNECTED
+      ? connectedEntries
+      : connectionState === CONNECTOR_STATE_NOT_CONNECTED
+        ? loaded.filter((entry) => entry.installed !== true)
+        : loaded;
+  const catalogueTotal = total + curatedEntries.length;
+  const filteredTotal =
+    connectionState === CONNECTOR_STATE_CONNECTED
+      ? connectedEntries.length
+      : connectionState === CONNECTOR_STATE_NOT_CONNECTED
+        ? Math.max(0, catalogueTotal - connectedEntries.length)
+        : catalogueTotal;
+  const showCount = connectionState === CONNECTOR_STATE_ALL && typeof totalRecords === 'number';
+  const connectedEmpty = connectionState === CONNECTOR_STATE_CONNECTED;
   return {
     ...initialConnectorSection(),
-    entries: [...curatedEntries, ...registryEntries],
-    filterGroups: categoryFilter ? [categoryFilter] : [],
-    total: total + curatedEntries.length,
-    hasMore: nextCursor !== null,
-    ...(typeof totalRecords === 'number'
+    entries,
+    filterGroups: categoryFilter
+      ? [CONNECTOR_STATE_FILTER, CONNECTOR_TYPE_FILTER, categoryFilter]
+      : [CONNECTOR_STATE_FILTER, CONNECTOR_TYPE_FILTER],
+    total: filteredTotal,
+    hasMore: connectionState === CONNECTOR_STATE_CONNECTED ? false : nextCursor !== null,
+    ...(showCount
       ? { countLabel: connectorCountLabel(totalRecords, !connectorDirectoryIndexing(stats)) }
+      : {}),
+    ...(connectedEmpty
+      ? { emptyCopy: CONNECTOR_NONE_CONNECTED_COPY, emptyHint: CONNECTOR_NONE_CONNECTED_HINT }
       : {}),
     ...(tabHeading ? { catalogHeading: tabHeading } : {}),
   };

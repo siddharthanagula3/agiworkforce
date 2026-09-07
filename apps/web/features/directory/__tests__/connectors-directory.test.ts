@@ -4,6 +4,7 @@ import { SETTINGS_CONNECTORS } from '@features/settings/components/WebSettingsMo
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 import {
+  connectorConnectionState,
   DEFAULT_DIRECTORY_QUERY,
   connectorDirectoryHref,
   connectorStateLabel,
@@ -169,8 +170,8 @@ describe('directory requests', () => {
     const mapped = toDirectoryRequest(
       {
         search: '  gmail ',
-        sourceId: 'community',
-        selection: { category: ['Data'] },
+        sourceId: null,
+        selection: { category: ['Data'], type: ['community'] },
         sort: 'name',
         toggles: { 'include-local': true },
       },
@@ -312,14 +313,14 @@ describe('directory requests', () => {
 });
 
 describe('toConnectorSection', () => {
-  it('starts as a remote section with the three tabs, both sorts and the local toggle', () => {
+  /**
+   * Official and Community moved into the Filter by menu as a Type group: two
+   * stacked chip rows each beginning with All read as one control.
+   */
+  it('starts as a remote section with no source tabs, both sorts and the local toggle', () => {
     const initial = initialConnectorSection();
     expect(initial.remote).toBe(true);
-    expect(initial.sources?.map((source) => source.label)).toEqual([
-      'All',
-      'Official',
-      'Community',
-    ]);
+    expect(initial.sources).toBeUndefined();
     expect(initial.sortOptions).toEqual(['popular', 'name']);
     expect(initial.toggles?.map((toggle) => toggle.id)).toEqual(['include-local']);
     expect(initial.toggleDefaults).toEqual({ 'include-local': false });
@@ -329,15 +330,22 @@ describe('toConnectorSection', () => {
     const built = section([record()], new Set(), [], {
       categories: ['Productivity', 'Data'],
     });
-    expect(built.filterGroups?.map((group) => group.id)).toEqual(['category']);
-    expect(built.filterGroups?.[0]?.options.map((option) => option.value)).toEqual([
+    expect(built.filterGroups?.map((group) => group.id)).toEqual([
+      'connection',
+      'type',
+      'category',
+    ]);
+    expect(built.filterGroups?.[2]?.options.map((option) => option.value)).toEqual([
       'Data',
       'Productivity',
     ]);
   });
 
   it('hides the category filter when only one category exists', () => {
-    expect(section([record()], new Set()).filterGroups).toEqual([]);
+    expect(section([record()], new Set()).filterGroups?.map((group) => group.id)).toEqual([
+      'connection',
+      'type',
+    ]);
   });
 
   it('carries paging state and the directory count from the stats alone', () => {
@@ -520,10 +528,10 @@ describe('curated first party connectors', () => {
     expect(matchesCuratedConnector(custom, request())).toBe(true);
   });
 
-  it('sends the Official tab as the official badge the api indexes', () => {
-    expect(toDirectoryRequest({ ...DEFAULT_DIRECTORY_QUERY, sourceId: 'official' }).badge).toBe(
-      'official',
-    );
+  it('sends the Official type filter as the official badge the api indexes', () => {
+    expect(
+      toDirectoryRequest({ ...DEFAULT_DIRECTORY_QUERY, selection: { type: ['official'] } }).badge,
+    ).toBe('official');
   });
 
   it('leads the section with curated matches and drops a registry duplicate', () => {
@@ -535,7 +543,7 @@ describe('curated first party connectors', () => {
 
   it('folds curated categories into the filter', () => {
     const built = section([record()], new Set(), [curated()]);
-    expect(built.filterGroups?.[0]?.options.map((option) => option.value)).toEqual([
+    expect(built.filterGroups?.[2]?.options.map((option) => option.value)).toEqual([
       'Communication',
       'Data',
     ]);
@@ -736,5 +744,102 @@ describe('settings connector projection', () => {
   it('carries the vendor name as the publisher', () => {
     expect(projected('adobe')?.publisher).toBe('Adobe Creative Cloud');
     expect(projected('gmail')?.publisher).toBe('Gmail');
+  });
+});
+
+describe('the connection filter', () => {
+  const connected = new Set(['io.acme/one']);
+  const records = [record({ id: 'io.acme/one' }), record({ id: 'io.acme/two' })];
+
+  it('offers All, Connected and Not connected as a chip row', () => {
+    const group = section(records, connected).filterGroups?.[0];
+    expect(group?.id).toBe('connection');
+    expect(group?.chips).toBe(true);
+    expect(group?.exclusive).toBe(true);
+    expect(group?.options.map((option) => option.label)).toEqual([
+      'All',
+      'Connected',
+      'Not connected',
+    ]);
+  });
+
+  it('leaves every entry and the catalogue total alone on All', () => {
+    const built = section(records, connected, [], { total: 900, nextCursor: 'next' });
+    expect(built.entries.map((entry) => entry.id)).toEqual(['io.acme/one', 'io.acme/two']);
+    expect(built.total).toBe(900);
+    expect(built.hasMore).toBe(true);
+  });
+
+  /**
+   * The adapter pins the whole connected set onto the first page, so Connected
+   * is already complete and paging it would ask the catalogue for more of a
+   * list the account has finished.
+   */
+  it('shows only the connected set on Connected, counts it, and stops paging', () => {
+    const built = section(records, connected, [], {
+      total: 900,
+      nextCursor: 'next',
+      connectionState: 'connected',
+    });
+    expect(built.entries.map((entry) => entry.id)).toEqual(['io.acme/one']);
+    expect(built.total).toBe(1);
+    expect(built.hasMore).toBe(false);
+  });
+
+  it('drops the connected entries on Not connected and keeps paging', () => {
+    const built = section(records, connected, [], {
+      total: 900,
+      nextCursor: 'next',
+      connectionState: 'not-connected',
+    });
+    expect(built.entries.map((entry) => entry.id)).toEqual(['io.acme/two']);
+    expect(built.total).toBe(899);
+    expect(built.hasMore).toBe(true);
+  });
+
+  it('reads the state off the query the toolbar writes', () => {
+    expect(connectorConnectionState({ ...DEFAULT_DIRECTORY_QUERY })).toBe('all');
+    expect(
+      connectorConnectionState({
+        ...DEFAULT_DIRECTORY_QUERY,
+        selection: { connection: ['connected'] },
+      }),
+    ).toBe('connected');
+    expect(
+      connectorConnectionState({
+        ...DEFAULT_DIRECTORY_QUERY,
+        selection: { connection: ['nonsense'] },
+      }),
+    ).toBe('all');
+  });
+
+  it('sends nothing new to the server, since the request has no connected facet', () => {
+    const withFilter = toDirectoryRequest({
+      ...DEFAULT_DIRECTORY_QUERY,
+      selection: { connection: ['connected'] },
+    });
+    expect(withFilter).toEqual(toDirectoryRequest({ ...DEFAULT_DIRECTORY_QUERY }));
+  });
+  it('names the Connected empty state for a connection, not for a search', () => {
+    const built = section([], new Set(), [], { connectionState: 'connected' });
+    expect(built.emptyCopy).toBe('No connectors connected yet.');
+    expect(built.emptyHint).toBe('Choose All to browse the catalogue.');
+  });
+
+  it('leaves the search-style empty copy alone on the other two chips', () => {
+    expect(section([], new Set()).emptyCopy).toBeUndefined();
+    expect(
+      section([], new Set(), [], { connectionState: 'not-connected' }).emptyCopy,
+    ).toBeUndefined();
+  });
+
+  it('keeps the type facet out of the chip row', () => {
+    const groups = section([record()], new Set()).filterGroups ?? [];
+    expect(groups.find((group) => group.id === 'connection')?.chips).toBe(true);
+    expect(groups.find((group) => group.id === 'type')?.chips).toBeUndefined();
+    expect(groups.find((group) => group.id === 'type')?.options.map((o) => o.label)).toEqual([
+      'Official',
+      'Community',
+    ]);
   });
 });
