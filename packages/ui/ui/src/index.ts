@@ -267,12 +267,11 @@ export {
 } from './primitives';
 export {
   Sidebar,
+  MOBILE_NAV_DRAWER_WIDTH,
   type SidebarProps,
   SessionItem,
   type SessionItemProps,
   type SessionItemHandlers,
-  SearchOverlay,
-  type SearchOverlayProps,
   Menu,
   MenuItem,
   MenuSeparator,

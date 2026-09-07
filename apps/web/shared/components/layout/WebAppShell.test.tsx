@@ -90,15 +90,24 @@ vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
   KeyboardShortcutsDialog: () => null,
 }));
 
+vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
+  GlobalSearchDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="global-search-dialog" /> : null,
+}));
+
 vi.mock('@agiworkforce/ui', async () => {
   const React = await import('react');
   return {
+    MOBILE_NAV_DRAWER_WIDTH: 280,
     Sidebar: (props: {
       collapsed?: boolean;
       isLoading?: boolean;
       error?: string | null;
       onRetryLoad?: () => void;
       onOpenCode?: () => void;
+      onOpenSearch?: () => void;
+      showUsageWidget?: boolean;
+      budgetPercent?: number;
       footerSlot?: React.ReactNode;
     }) => (
       <div
@@ -117,6 +126,12 @@ vi.mock('@agiworkforce/ui', async () => {
             Code
           </button>
         )}
+        <button type="button" onClick={props.onOpenSearch}>
+          Search
+        </button>
+        <span data-testid="app-sidebar-usage" data-shown={String(props.showUsageWidget ?? false)}>
+          {props.budgetPercent ?? 0}
+        </span>
         {props.footerSlot}
       </div>
     ),
@@ -664,5 +679,31 @@ describe('WebAppShell responsive navigation', () => {
     act(() => setNarrowViewport(true));
     expect(screen.queryByTestId('app-sidebar')).toBeNull();
     expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
+  });
+  /**
+   * This shell used to pass no onOpenSearch, so the shared Sidebar fell back to
+   * its own client-only overlay: Projects, Library and Schedules searched the
+   * loaded page of conversations while chat searched the server.
+   */
+  it('searches through the same dialog the chat page uses', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.queryByTestId('global-search-dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByTestId('global-search-dialog')).toBeInTheDocument();
+  });
+
+  it('hands the sidebar the usage meter props', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar-usage')).toBeInTheDocument();
   });
 });

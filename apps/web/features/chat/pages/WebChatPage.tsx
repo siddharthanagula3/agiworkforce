@@ -109,6 +109,7 @@ import {
   Sheet,
   SheetContent,
   SheetTitle,
+  MOBILE_NAV_DRAWER_WIDTH,
   Sidebar,
   keepOpenForMenuEscape,
   useConfirm,
@@ -722,7 +723,6 @@ async function persistDefiniteVideoStartFailure(params: {
 }
 
 const MOBILE_NAV_DRAWER_ID = 'chat-mobile-navigation';
-const MOBILE_NAV_DRAWER_WIDTH = 280;
 
 // `highlightMessage` arrives verbatim from the URL, so matching on the dataset
 // value keeps a crafted id (quotes, brackets) out of a selector string it could

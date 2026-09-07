@@ -29,6 +29,7 @@ import {
   SheetContent,
   SheetTitle,
   Sidebar,
+  MOBILE_NAV_DRAWER_WIDTH,
   keepOpenForMenuEscape,
   useConfirm,
   type SidebarSession,
@@ -68,6 +69,8 @@ import {
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { CODE_ROUTES } from '@/features/code/code-surface';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { GlobalSearchDialog } from '@/features/chat/components/dialogs/GlobalSearchDialog';
+import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
 import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
@@ -109,6 +112,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   // Shared with WebChatPage's account menu (useUpgradePlanFlow) so the
   // dialog, mid-cycle confirm, and the real Stripe checkout call cannot
@@ -202,6 +206,20 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // ---- Session row handlers (navigation-focused) ----
   const handleNewChat = useCallback(() => router.push('/chat'), [router]);
   const handleOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
+  const handleOpenSearch = useCallback(() => {
+    setMobileNavOpen(false);
+    setSearchDialogOpen(true);
+  }, []);
+  const handleOpenUsage = useCallback(() => {
+    setMobileNavOpen(false);
+    openSettings('usage');
+  }, [openSettings]);
+
+  const { usage: managedUsageSummary } = useManagedUsageSummary();
+  const managedBudgetPercent = useMemo(
+    () => getWorstUsagePercent(managedUsageSummary),
+    [managedUsageSummary],
+  );
   const handleSelectSession = useCallback(
     (id: string) => router.push(`/chat/${encodeURIComponent(id)}`),
     [router],
@@ -450,6 +468,10 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
     onNewChat: handleNewChat,
     onOpenCode: handleOpenCode,
+    onOpenSearch: handleOpenSearch,
+    showUsageWidget: managedUsageSummary !== null,
+    budgetPercent: managedBudgetPercent,
+    onOpenUsage: handleOpenUsage,
     onSelect: handleSelectSession,
     onDelete: (id: string) => void handleDeleteSession(id),
     onRename: handleRenameSession,
@@ -483,6 +505,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
       {upgradeDialogs}
+      <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
         open={keyboardShortcutsOpen}
@@ -537,7 +560,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           <SheetContent
             id="webappshell-mobile-nav"
             side="left"
-            className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
+            style={{ width: MOBILE_NAV_DRAWER_WIDTH }}
+            className="max-w-[85vw] gap-0 overflow-y-auto p-0"
             data-testid="mobile-nav-drawer"
             onEscapeKeyDown={keepOpenForMenuEscape}
             onCloseAutoFocus={(event) => {
@@ -548,7 +572,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
             }}
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Sidebar {...sharedSidebarProps} collapsed={false} width={280} />
+            <Sidebar {...sharedSidebarProps} collapsed={false} width={MOBILE_NAV_DRAWER_WIDTH} />
           </SheetContent>
         </Sheet>
       )}
