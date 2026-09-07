@@ -81,8 +81,10 @@ test.describe('authenticated primary workflows', () => {
     await page.getByRole('button', { name: 'Recently deleted' }).click();
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
-    await expect(page.getByRole('button', { name: 'Back to library' })).toBeVisible();
-    await page.getByRole('button', { name: 'Back to library' }).click();
+    const recentlyDeleted = page.getByRole('button', { name: 'Recently deleted' });
+    await expect(recentlyDeleted).toHaveAttribute('aria-pressed', 'true');
+    await recentlyDeleted.click();
+    await expect(recentlyDeleted).toHaveAttribute('aria-pressed', 'false');
 
     await page.goto('/tasks');
     await page.waitForLoadState('networkidle');
