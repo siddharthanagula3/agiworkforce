@@ -30,7 +30,13 @@
       "kinds": ["script"]
     }
   ],
-  "knownContradictions": [],
+  "knownContradictions": [
+    {
+      "key": "md-path::docs/work/implementation-status.md::docs/security/artifact-runtime-bridge-review.md",
+      "owner": "Platform lead",
+      "reason": "The CAP-052 artifact runtime bridge review was merged into section 5 of docs/security/security.md and the standalone file deleted on 2026-09-07. The parity ledger line that cites the old path is another session's uncommitted edit and could not be changed in the same commit. Repoint that line at docs/security/security.md section 5 and delete this entry."
+    }
+  ],
   "debt": [
     "md-link::docs/architecture/desktop.md::cli.md",
     "md-link::docs/architecture/desktop.md::web.md",

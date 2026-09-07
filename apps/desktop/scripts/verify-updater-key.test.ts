@@ -109,7 +109,7 @@ describe('updater key custody is reachable from the release procedure', () => {
   });
 
   it('points the macOS runbook at a custody document that exists', () => {
-    const custodyPath = 'docs/security/tauri-updater-key-custody.md';
+    const custodyPath = 'docs/security/security.md';
     expect(macosRunbook).toContain(custodyPath);
     const custody = fs.readFileSync(path.join(repositoryRoot, custodyPath), 'utf8');
     for (const requirement of [
