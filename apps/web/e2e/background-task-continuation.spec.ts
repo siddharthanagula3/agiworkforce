@@ -1,6 +1,6 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
+import { signIn } from './qa-capability-harness';
 
 const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHECKPOINT_STATES = new Set([
@@ -33,63 +33,6 @@ interface CloudAgentRunSnapshot {
     usage?: { costCents: number | null } | undefined;
   };
   events: unknown[];
-}
-
-async function mintSignInTicket(): Promise<string> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) {
-    throw new Error('CLERK_SECRET_KEY missing from process.env (.env.local not loaded)');
-  }
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) {
-    throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  }
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('sign_in_tokens returned no token');
-  return json.token;
-}
-
-async function signInWithTicket(page: Page, ticket: string): Promise<void> {
-  let signedIn = false;
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 4 && !signedIn; attempt++) {
-    try {
-      await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => undefined);
-      await page.waitForFunction(
-        () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-        { timeout: 15000 },
-      );
-      await page.evaluate(async (t) => {
-        const clerk = (
-          window as unknown as {
-            Clerk: {
-              client: {
-                signIn: { create: (o: unknown) => Promise<{ createdSessionId?: string }> };
-              };
-              setActive: (o: unknown) => Promise<void>;
-            };
-          }
-        ).Clerk;
-        const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-        if (res.createdSessionId) {
-          await clerk.setActive({ session: res.createdSessionId });
-        }
-      }, ticket);
-      signedIn = true;
-    } catch (error) {
-      lastError = error;
-      await page.waitForTimeout(1500);
-    }
-  }
-  if (!signedIn) {
-    throw new Error(`Clerk ticket sign-in failed after retries: ${String(lastError)}`);
-  }
-  await page.waitForTimeout(1500);
 }
 
 async function cheapestReliableAgentModel(request: APIRequestContext): Promise<CatalogModel> {
@@ -167,8 +110,7 @@ test.describe('background task continuation', () => {
     test.setTimeout(300_000);
     const context = page.context();
 
-    const ticket = await mintSignInTicket();
-    await signInWithTicket(page, ticket);
+    await signIn(page);
 
     const model = await cheapestReliableAgentModel(context.request);
 

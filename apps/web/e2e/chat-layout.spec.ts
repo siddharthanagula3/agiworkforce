@@ -1,44 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
-
-async function mintSignInTicket(): Promise<string> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) {
-    throw new Error('CLERK_SECRET_KEY missing from process.env (.env.local not loaded)');
-  }
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('sign_in_tokens returned no token');
-  return json.token;
-}
-
-async function signIn(page: Page): Promise<void> {
-  const ticket = await mintSignInTicket();
-  await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-    { timeout: 30000 },
-  );
-  await page.evaluate(async (t) => {
-    const clerk = (
-      window as unknown as {
-        Clerk: {
-          client: { signIn: { create: (o: unknown) => Promise<{ createdSessionId?: string }> } };
-          setActive: (o: unknown) => Promise<void>;
-        };
-      }
-    ).Clerk;
-    const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-    if (res.createdSessionId) await clerk.setActive({ session: res.createdSessionId });
-  }, ticket);
-  await page.waitForTimeout(1500);
-}
+import { signIn } from './qa-capability-harness';
 
 test.describe('chat surface layout', () => {
   test.beforeEach(async ({ page }) => {

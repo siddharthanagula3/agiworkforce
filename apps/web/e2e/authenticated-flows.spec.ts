@@ -1,9 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { getModels, isExecutableImageModel } from '@agiworkforce/types';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
+import { signIn } from './qa-capability-harness';
+
 const LIVE_GOOGLE_IMAGE_MODEL = getModels({
   modelTypes: ['image'],
   requireCapabilities: { imageGen: true },
@@ -53,70 +54,11 @@ function assertGeneratedImageBytes(
   }
 }
 
-async function mintSignInTicket(): Promise<string> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) {
-    throw new Error('CLERK_SECRET_KEY missing from process.env (.env.local not loaded)');
-  }
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) {
-    throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  }
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('sign_in_tokens returned no token');
-  return json.token;
-}
-
-async function signInWithTicket(page: Page, ticket: string): Promise<void> {
-  let signedIn = false;
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 4 && !signedIn; attempt++) {
-    try {
-      await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => undefined);
-      await page.waitForFunction(
-        () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-        { timeout: 15000 },
-      );
-      await page.evaluate(async (t) => {
-        const clerk = (
-          window as unknown as {
-            Clerk: {
-              client: {
-                signIn: { create: (o: unknown) => Promise<{ createdSessionId?: string }> };
-              };
-              setActive: (o: unknown) => Promise<void>;
-            };
-          }
-        ).Clerk;
-        const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-        if (res.createdSessionId) {
-          await clerk.setActive({ session: res.createdSessionId });
-        }
-      }, ticket);
-      signedIn = true;
-    } catch (error) {
-      lastError = error;
-      await page.waitForTimeout(1500);
-    }
-  }
-  if (!signedIn) {
-    throw new Error(`Clerk ticket sign-in failed after retries: ${String(lastError)}`);
-  }
-
-  await page.waitForTimeout(1500);
-}
-
 test.describe('authenticated primary workflows', () => {
   test('signed-in user reaches cloud projects (not the sign-in gate) and the composer', async ({
     page,
   }) => {
-    const ticket = await mintSignInTicket();
-    await signInWithTicket(page, ticket);
+    await signIn(page);
 
     await page.goto('/chat/projects');
     await page.waitForLoadState('networkidle');
@@ -200,8 +142,7 @@ test.describe('authenticated primary workflows', () => {
       if (message.type() === 'error') consoleErrors.push(message.text());
     });
 
-    const ticket = await mintSignInTicket();
-    await signInWithTicket(page, ticket);
+    await signIn(page);
 
     const availabilityPromise = page.waitForResponse(
       (response) =>
@@ -330,8 +271,7 @@ test.describe('authenticated primary workflows', () => {
   });
 
   test('chat UI degrades gracefully when background sync fails', async ({ page }) => {
-    const ticket = await mintSignInTicket();
-    await signInWithTicket(page, ticket);
+    await signIn(page);
 
     await page.route('**/api/chat/sync**', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"forced"}' }),
@@ -345,8 +285,7 @@ test.describe('authenticated primary workflows', () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    const ticket = await mintSignInTicket();
-    await signInWithTicket(page, ticket);
+    await signIn(page);
 
     async function expectNoCriticalA11y(label: string) {
       const results = await new AxeBuilder({ page: page as never }).analyze();
