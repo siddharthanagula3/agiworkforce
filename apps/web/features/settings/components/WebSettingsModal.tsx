@@ -14,7 +14,13 @@ import type {
   SettingsNavGroupResolved,
   SettingsNavItem,
 } from '@agiworkforce/ui';
-import { replaceSettingsHash, settingsHashForSection } from '@/features/directory';
+import {
+  buildSettingsCustomConnectorHash,
+  buildSettingsHash,
+  parseSettingsHash,
+  replaceSettingsHash,
+  settingsHashForSection,
+} from '@/features/directory';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
 import { useSkillsSettingsAdapter } from '@/features/skills/hooks/use-skills-settings-adapter';
@@ -101,6 +107,7 @@ const VOICE_NAV_ITEM: SettingsNavItem = {
 };
 
 const VOICE_NAV_ANCHOR = 'notifications';
+const SETTINGS_SECTION_CONNECTORS = 'connectors';
 
 const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map((group) =>
   group.label === SETTINGS_NAV_GROUP_CUSTOMIZE
@@ -159,6 +166,26 @@ export function WebSettingsModal({
     setActiveSection(key);
     const next = settingsHashForSection(key, window.location.hash);
     if (next !== null) replaceSettingsHash(next);
+  }, []);
+
+  const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      const route = parseSettingsHash(window.location.hash);
+      setCustomConnectorOpen(route?.section === SETTINGS_SECTION_CONNECTORS && route.custom);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  const handleCustomConnectorOpenChange = useCallback((next: boolean) => {
+    setCustomConnectorOpen(next);
+    const hash = next
+      ? buildSettingsCustomConnectorHash()
+      : buildSettingsHash(SETTINGS_SECTION_CONNECTORS);
+    if (hash && window.location.hash !== hash) replaceSettingsHash(hash);
   }, []);
 
   // The `__session` cookie is a short-lived JWT that only a document request
@@ -224,6 +251,8 @@ export function WebSettingsModal({
           directoryAdapter={connectors.directoryAdapter}
           navBadges={connectors.navBadges}
           title="Settings"
+          openCustomConnector={customConnectorOpen}
+          onCustomConnectorOpenChange={handleCustomConnectorOpenChange}
         />
         <ToolPermissionsPanel
           connector={connectors.toolPermissionsConnector}
