@@ -153,6 +153,49 @@ describe('useDirectoryAdapter connectors paging', () => {
     expect(result.current.connectors?.loadingMore).toBe(false);
   });
 
+  it('pins a connected registry connector the first page did not carry', async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn((input: string) => {
+      calls.push(input);
+      if (input === '/api/connectors/directory/acme/learn') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ entry: record('acme/learn') }),
+        });
+      }
+      if (input.startsWith('/api/connectors/directory')) {
+        return Promise.resolve(page([record('a')], 1, null));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            connectors: [{ connectorId: 'acme/learn', directoryId: 'acme/learn' }],
+          }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(2));
+    expect(result.current.connectors?.entries[0]).toMatchObject({
+      id: 'acme/learn',
+      installed: true,
+    });
+
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', {
+        ...DEFAULT_DIRECTORY_QUERY,
+        search: 'a',
+      });
+    });
+    await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(1));
+    expect(calls.filter((call) => call === '/api/connectors/directory/acme/learn')).toHaveLength(1);
+  });
+
   it('sends the search, tab and toggle as api parameters and replaces the page', async () => {
     const calls = stubDirectory({
       '': page([record('a')], 1, null),

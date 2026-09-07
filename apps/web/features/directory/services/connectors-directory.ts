@@ -192,12 +192,13 @@ export interface ConnectorSetupRequirement {
 }
 
 export interface ConnectedConnectorsResponse {
-  connectors: { connectorId: string }[];
+  connectors: { connectorId: string; directoryId?: string | null }[];
   setup?: Readonly<Record<string, ConnectorSetupRequirement>>;
 }
 
 export interface ConnectedConnectorsSnapshot {
   ids: Set<string>;
+  directoryIds: Set<string>;
   setup: Readonly<Record<string, ConnectorSetupRequirement>>;
 }
 
@@ -592,12 +593,37 @@ export function toConnectorDetail(
 
 export async function fetchConnectedConnectors(): Promise<ConnectedConnectorsSnapshot> {
   const response = await fetch(CONNECTORS_PATH, { cache: 'no-store' });
-  if (!response.ok) return { ids: new Set(), setup: {} };
+  if (!response.ok) return { ids: new Set(), directoryIds: new Set(), setup: {} };
   const body = (await response.json()) as ConnectedConnectorsResponse;
+  const connectors = body.connectors ?? [];
   return {
-    ids: new Set((body.connectors ?? []).map((connector) => connector.connectorId)),
+    ids: new Set(connectors.map((connector) => connector.connectorId)),
+    directoryIds: new Set(
+      connectors.flatMap((connector) => (connector.directoryId ? [connector.directoryId] : [])),
+    ),
     setup: body.setup ?? {},
   };
+}
+
+export function isDefaultConnectorRequest(request: ConnectorDirectoryRequest): boolean {
+  return (
+    request.search === '' &&
+    request.badge === null &&
+    request.category === null &&
+    request.cursor === null
+  );
+}
+
+export async function fetchConnectedRecordsMissingFrom(
+  directoryIds: ReadonlySet<string>,
+  present: ReadonlySet<string>,
+): Promise<DirectoryRecord[]> {
+  const records = await Promise.all(
+    [...directoryIds]
+      .filter((id) => !present.has(id))
+      .map((id) => fetchConnectorRecord(id).catch(() => null)),
+  );
+  return records.filter((record): record is DirectoryRecord => record !== null);
 }
 
 export async function fetchConnectedConnectorIds(): Promise<Set<string>> {

@@ -6,6 +6,7 @@ import { useSession } from '@/lib/identity/client';
 import { Brain, Mic } from 'lucide-react';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsNavGroupResolved } from '@agiworkforce/ui';
+import { replaceSettingsHash, settingsHashForSection } from '@/features/directory';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
 import { useSkillsSettingsAdapter } from '@/features/skills/hooks/use-skills-settings-adapter';
@@ -152,6 +153,8 @@ export function WebSettingsModal({
 
   const handleSectionChange = useCallback((key: string) => {
     setActiveSection(key);
+    const next = settingsHashForSection(key, window.location.hash);
+    if (next !== null) replaceSettingsHash(next);
   }, []);
 
   // The `__session` cookie is a short-lived JWT that only a document request

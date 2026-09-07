@@ -73,7 +73,11 @@ function useDebouncedValue(value: string, delayMs: number): string {
   return debounced;
 }
 
-export function DirectoryPanel({
+export function DirectoryPanel(props: DirectoryPanelProps) {
+  return <DirectorySectionPanel key={props.section} {...props} />;
+}
+
+function DirectorySectionPanel({
   section,
   adapter,
   openEntryId,
