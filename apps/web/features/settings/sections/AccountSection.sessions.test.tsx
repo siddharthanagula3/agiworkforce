@@ -100,6 +100,47 @@ describe('AccountSection active sessions', () => {
     mockSignOut.mockResolvedValue(undefined);
   });
 
+  it('says how many sessions it is showing when the account has more than it can list', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({
+          sessions,
+          totalCount: 2500,
+          returnedCount: sessions.length,
+          truncated: true,
+        });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+    });
+
+    render(<AccountSection />);
+
+    expect(await screen.findByText(/Showing 2 of 2500 sessions\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Log out of all devices.*to end the ones not listed here/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Mobile Safari 19')).toBeInTheDocument();
+  });
+
+  it('says nothing about truncation when every session is listed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({
+          sessions,
+          totalCount: sessions.length,
+          returnedCount: sessions.length,
+          truncated: false,
+        });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+    });
+
+    render(<AccountSection />);
+
+    await screen.findByText('Mobile Safari 19');
+    expect(screen.queryByText(/Showing \d+ of \d+ sessions/)).not.toBeInTheDocument();
+  });
+
   it('shows account-wide device activity and revokes a single non-current session', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
