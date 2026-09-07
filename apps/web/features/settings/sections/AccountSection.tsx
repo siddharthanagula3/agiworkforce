@@ -41,6 +41,9 @@ function formatDateTime(value: Date | null | undefined): string {
   });
 }
 
+const SESSION_TRUNCATION_HINT =
+  'Use “Log out of all devices” above to end the ones not listed here.';
+
 interface AccountSession {
   id: string;
   status: string;
@@ -215,10 +218,12 @@ export function AccountSection() {
   const [showApiKeys, setShowApiKeys] = useState(false);
 
   const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [sessionTotalCount, setSessionTotalCount] = useState<number | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [sessionActionError, setSessionActionError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const sessionsTruncated = sessionTotalCount !== null && sessionTotalCount > sessions.length;
 
   const loadSessions = useCallback(async (signal?: AbortSignal) => {
     setSessionsLoading(true);
@@ -238,7 +243,11 @@ export function AccountSection() {
           ? (data as { sessions?: unknown }).sessions
           : null;
       if (!Array.isArray(rows)) throw new Error('The active-session response was invalid.');
-      if (!signal?.aborted) setSessions(rows as AccountSession[]);
+      const total = (data as { totalCount?: unknown }).totalCount;
+      if (!signal?.aborted) {
+        setSessions(rows as AccountSession[]);
+        setSessionTotalCount(typeof total === 'number' ? total : rows.length);
+      }
     } catch (error) {
       if (signal?.aborted) return;
       setSessionsError(
@@ -303,6 +312,7 @@ export function AccountSection() {
         }
 
         setSessions((current) => current.filter((row) => row.id !== session.id));
+        setSessionTotalCount((current) => (current === null ? current : Math.max(0, current - 1)));
       } catch (error) {
         if (sessionRevoked && session.isCurrent) {
           router.replace('/login');
@@ -686,6 +696,15 @@ export function AccountSection() {
             {sessionActionError ? (
               <p role="alert" style={{ ...errorTextStyle, padding: '12px 0 0' }}>
                 {sessionActionError}
+              </p>
+            ) : null}
+            {sessionsTruncated ? (
+              <p
+                role="status"
+                style={{ padding: '12px 0 0', fontSize: 12, color: 'var(--text-2)', margin: 0 }}
+              >
+                {`Showing ${sessions.length} of ${sessionTotalCount} sessions.`}{' '}
+                {SESSION_TRUNCATION_HINT}
               </p>
             ) : null}
             <p style={{ padding: '12px 0 0', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
