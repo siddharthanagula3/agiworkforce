@@ -235,3 +235,64 @@ describe('POST /api/share, secret redaction', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/share, local path redaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+  });
+
+  function insertedMessages(): Array<Record<string, unknown>> {
+    const call = mocks.query.mock.calls.find((c) =>
+      /insert into shared_sessions/i.test(String(c[0])),
+    );
+    if (!call) throw new Error('no insert into shared_sessions was issued');
+    return JSON.parse((call[1] as unknown[])[5] as string) as Array<Record<string, unknown>>;
+  }
+
+  it('scrubs local paths inside tool calls, where the viewer actually renders them', async () => {
+    await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Session',
+          messages: [
+            {
+              role: 'assistant',
+              content: 'Read the file.',
+              tool_calls: [
+                { tool_name: 'read_file', display_args: 'read /Users/alice/secrets/keys.txt' },
+                { tool_name: 'shell', display_args: { cwd: '/home/alice/repo', cmd: 'ls' } },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    const [message] = insertedMessages();
+    expect(JSON.stringify(message)).not.toContain('/Users/alice');
+    expect(JSON.stringify(message)).not.toContain('/home/alice');
+    expect(message?.['tool_calls']).toEqual([
+      { tool_name: 'read_file', display_args: 'read [local-path]' },
+      { tool_name: 'shell', display_args: { cwd: '[local-path]', cmd: 'ls' } },
+    ]);
+    expect(message?.['content']).toBe('Read the file.');
+  });
+
+  it('still scrubs a top-level display_args field', async () => {
+    await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Session',
+          messages: [{ role: 'assistant', content: 'x', display_args: 'open /var/tmp/a/b' }],
+        }),
+      }),
+    );
+
+    expect(insertedMessages()[0]?.['display_args']).toBe('open [local-path]');
+  });
+});
