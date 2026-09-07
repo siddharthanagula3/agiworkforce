@@ -395,6 +395,15 @@ function DirectorySectionPanel({
               onOpenSettings={openSettings}
               onCopyLink={copyLink}
               onDownloadFile={adapter.downloadSkillFile}
+              {...(adapter.setSkillEnabled
+                ? {
+                    onSetEnabled: (enabled: boolean) =>
+                      runAction(detail.id, () => adapter.setSkillEnabled?.(detail.id, enabled)),
+                  }
+                : {})}
+              {...(adapter.trySkillInChat
+                ? { onTryInChat: () => adapter.trySkillInChat?.(detail.id) }
+                : {})}
               busy={busy}
             />
           </>

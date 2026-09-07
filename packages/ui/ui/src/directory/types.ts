@@ -308,4 +308,6 @@ export interface DirectoryAdapter {
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginSkillEnabled?: (id: string, skill: string, enabled: boolean) => Promise<void> | void;
   openConnector?: (connectorId: string) => void;
+  setSkillEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
+  trySkillInChat?: (id: string) => void;
 }

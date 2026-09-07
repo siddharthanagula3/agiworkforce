@@ -36,6 +36,7 @@ import {
 } from '@features/connectors/hooks/use-connectors';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
@@ -135,7 +136,9 @@ import {
   uninstallSkill,
 } from '../services/skills-directory';
 
-const EMPTY: DirectorySection = { entries: [] };
+function initialSkillSection(): DirectorySection {
+  return { entries: [], manage: { rows: [], loading: true } };
+}
 const CHAT_PATH = '/chat';
 const COMPOSER_PROMPT_PARAM = 'starterPrompt';
 const PLUGIN_CREATE_WITH_AGI_LABEL = 'Create with AGI';
@@ -278,7 +281,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
   const skillManageActionsRef = useRef<readonly DirectoryManageAction[]>(skillManageActions);
   skillManageActionsRef.current = skillManageActions;
-  const [skills, setSkills] = useState<DirectorySection>(EMPTY);
+  const [skills, setSkills] = useState<DirectorySection>(initialSkillSection);
   const [connectors, setConnectors] = useState<DirectorySection>(initialConnectorSection);
   const [plugins, setPlugins] = useState<DirectorySection>(initialPluginSection);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
@@ -766,20 +769,24 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     setSettingsEnabled(record ? pluginInstallationEnabled(record, installs) : true);
   }, []);
 
-  const ensureSkillDescriptions = useCallback(async () => {
+  const ensureSkillCatalog = useCallback(async () => {
     if (skillCache.current.length > 0) {
       setSkillDescriptions(skillDescriptionsByName(skillCache.current));
       return;
     }
-    const catalog = await fetchSkillCatalog().catch(() => EMPTY_CATALOG);
+    const [catalog, installed] = await Promise.all([
+      fetchSkillCatalog().catch(() => EMPTY_CATALOG),
+      fetchInstalledSkillNames().catch(() => new Set<string>()),
+    ]);
     if (catalog.length === 0) return;
     skillCache.current = catalog;
+    installedSkills.current = installed;
     setSkillDescriptions(skillDescriptionsByName(catalog));
   }, []);
 
   const loadPluginDetail = useCallback(
     async (id: string): Promise<DirectoryDetail | null> => {
-      void ensureSkillDescriptions();
+      void ensureSkillCatalog();
       await primePlugins().catch(() => undefined);
       const page = pluginPageRef.current;
       const record = findPluginRecord(id);
@@ -799,7 +806,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       selectSettingsTarget(fetched, id);
       return toPluginDetail(fetched, pluginPageRef.current.installs);
     },
-    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget, ensureSkillDescriptions],
+    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget, ensureSkillCatalog],
   );
 
   const loadSection = useCallback(
@@ -844,8 +851,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const loadDetail = useCallback(
     async (section: DirectorySectionKey, id: string): Promise<DirectoryDetail | null> => {
-      if (section === 'skills')
+      if (section === 'skills') {
+        await ensureSkillCatalog();
         return fetchSkillDetail(id, skillCache.current, installedSkills.current);
+      }
       if (section === 'connectors') {
         const curated = curatedRef.current.find((entry) => entry.id === id);
         if (curated) {
@@ -859,7 +868,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       }
       return loadPluginDetail(id);
     },
-    [withRelatedConnectors, connectedIds, loadPluginDetail],
+    [withRelatedConnectors, connectedIds, loadPluginDetail, ensureSkillCatalog],
   );
 
   const connect = useCallback(
@@ -1178,6 +1187,20 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [refreshUserMarketplaces],
   );
 
+  const setSkillEnabled = useCallback(
+    (id: string, enabled: boolean) => runSkillInstall(id, enabled),
+    [runSkillInstall],
+  );
+
+  const trySkillInChat = useCallback(
+    (id: string) => {
+      useChatStore.getState().setComposerToggles({ selectedSkillName: id });
+      closeSettings();
+      composerHandoff.current.router.push(CHAT_PATH);
+    },
+    [closeSettings],
+  );
+
   const openConnector = useCallback((connectorId: string) => {
     if (typeof window === 'undefined') return;
     window.location.hash = buildSettingsBrowseHash('connectors', connectorId);
@@ -1238,6 +1261,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       setPluginEnabled,
       setPluginSkillEnabled,
       openConnector,
+      setSkillEnabled,
+      trySkillInChat,
     }),
     [
       openEntry,
@@ -1269,6 +1294,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       setPluginEnabled,
       setPluginSkillEnabled,
       openConnector,
+      setSkillEnabled,
+      trySkillInChat,
     ],
   );
 }
