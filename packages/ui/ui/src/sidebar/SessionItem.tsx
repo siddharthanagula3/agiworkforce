@@ -41,9 +41,6 @@ export interface SessionItemHandlers {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onTogglePin?: (id: string) => void;
-  /** Threaded through from the host; the row menu itself only offers Pin,
-   *  the leaders' single affordance. Not read by this component. */
-  onStar?: (id: string) => void;
   onArchive?: (id: string) => void;
   onRestore?: (id: string) => void;
   onShare?: (id: string) => void;

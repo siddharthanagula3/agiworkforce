@@ -130,7 +130,6 @@ export function Sidebar(props: SidebarProps) {
     onRename,
     onDelete,
     onTogglePin,
-    onStar,
     onArchive,
     onRestore,
     onShare,
@@ -368,7 +367,6 @@ export function Sidebar(props: SidebarProps) {
             onRename={onRename}
             onDelete={onDelete}
             onTogglePin={onTogglePin}
-            onStar={onStar}
             onArchive={onArchive}
             onRestore={onRestore}
             onShare={onShare}
@@ -391,7 +389,6 @@ export function Sidebar(props: SidebarProps) {
       onRename,
       onDelete,
       onTogglePin,
-      onStar,
       onArchive,
       onRestore,
       onShare,

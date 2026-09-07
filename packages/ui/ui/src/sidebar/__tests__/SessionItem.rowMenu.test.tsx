@@ -36,7 +36,6 @@ function renderRowMenu(overrides: Partial<SidebarProps> = {}) {
       onRename={vi.fn()}
       onDelete={vi.fn()}
       onTogglePin={vi.fn()}
-      onStar={vi.fn()}
       onArchive={vi.fn()}
       onShare={vi.fn()}
       onMarkUnread={vi.fn()}
