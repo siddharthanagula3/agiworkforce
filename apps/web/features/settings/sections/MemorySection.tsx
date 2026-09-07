@@ -13,6 +13,9 @@ import {
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
+const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
+const SAVE_RETRY_LABEL = 'Try again';
+const CONTROL_HEIGHT = 30;
 
 function memoryRow(title: string, description: string, control: ReactNode) {
   return (
@@ -37,7 +40,7 @@ function memoryRow(title: string, description: string, control: ReactNode) {
 }
 
 export function MemorySection() {
-  const { settings, loadError, setBoolean } = useCapabilitiesPreferences();
+  const { settings, saveError, retrySave, loadError, setBoolean } = useCapabilitiesPreferences();
   const memoryCount = useMemoryStore(selectMemoryCount);
   const clearAllMemories = useMemoryStore((s) => s.clear);
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
@@ -95,6 +98,46 @@ export function MemorySection() {
           padding: 16,
         }}
       >
+        {saveError ? (
+          <div
+            role="alert"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              padding: '10px 16px',
+              border: '1px solid var(--settings-destructive)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--settings-destructive-text)',
+              fontSize: 13,
+            }}
+          >
+            <span>{`${SAVE_FAILED_MESSAGE} ${saveError}`}</span>
+            {retrySave ? (
+              <button
+                type="button"
+                onClick={retrySave}
+                style={{
+                  height: CONTROL_HEIGHT,
+                  padding: '0 10px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: 'var(--settings-destructive-text)',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-destructive)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {SAVE_RETRY_LABEL}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         {memoryRow(
           'Persistent memory',
           'Allow AGI to remember details across conversations',
@@ -123,7 +166,7 @@ export function MemorySection() {
               type="button"
               onClick={importDialog.open}
               style={{
-                height: 30,
+                height: CONTROL_HEIGHT,
                 padding: '0 10px',
                 fontSize: 12,
                 fontWeight: 500,
@@ -143,7 +186,7 @@ export function MemorySection() {
               onClick={onManageMemories}
               disabled={memoryCount === 0}
               style={{
-                height: 30,
+                height: CONTROL_HEIGHT,
                 padding: '0 10px',
                 fontSize: 12,
                 fontWeight: 500,
@@ -164,7 +207,7 @@ export function MemorySection() {
               onClick={onClearAll}
               disabled={memoryCount === 0}
               style={{
-                height: 30,
+                height: CONTROL_HEIGHT,
                 padding: '0 10px',
                 fontSize: 12,
                 fontWeight: 500,
