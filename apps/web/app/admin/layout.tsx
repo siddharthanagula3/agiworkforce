@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { assertAccountActive } from '@/lib/api-auth';
 import { getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 import { logger } from '@/lib/logger';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
@@ -16,7 +17,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const { subject: userId } = await getRequestIdentity();
 
   if (!userId) {
-    return redirect('/login?redirectTo=/admin');
+    return redirect(sessionExpiredRedirect('/admin'));
   }
 
   await requireCurrentTermsAcceptance(userId, '/admin');

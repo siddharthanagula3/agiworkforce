@@ -7,6 +7,7 @@ import {
 
 import { UpgradeOrderScreen } from './UpgradeOrderScreen';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 export default async function UpgradePlanPage({
   params,
@@ -24,7 +25,7 @@ export default async function UpgradePlanPage({
   if (!(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(plan)) notFound();
 
   const { subject: userId } = await getRequestIdentity();
-  if (!userId) redirect(`/login?redirectTo=${encodeURIComponent(`/upgrade/${plan}`)}`);
+  if (!userId) redirect(sessionExpiredRedirect(`/upgrade/${plan}`));
 
   return (
     <main className="min-h-screen">
