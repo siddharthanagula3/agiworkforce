@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
   Search,
@@ -47,6 +47,9 @@ import {
 } from './custom-mcp-json-import';
 
 const ADD_CUSTOM_CONNECTOR_LABEL = 'Add custom connector';
+const BROWSE_CONNECTORS_LABEL = 'Browse connectors';
+const CONNECTORS_ADD_MENU_LABEL = 'Add';
+const DIRECTORY_SEARCH_SELECTOR = 'input[type="search"]';
 
 const UNKNOWN_VERSION_PLACEHOLDER = '\u2013';
 
@@ -1839,6 +1842,12 @@ export interface SettingsModalProps {
   navBadges?: Partial<Record<string, SettingsNavBadge>>;
   /** Modal title (default: "Settings") */
   title?: string;
+  /**
+   * Opens the custom connector form as soon as the pane mounts, so a link can
+   * address the form itself and not just the Connectors pane behind it.
+   */
+  openCustomConnector?: boolean;
+  onCustomConnectorOpenChange?: (open: boolean) => void;
 }
 
 export function SettingsModal({
@@ -1859,10 +1868,37 @@ export function SettingsModal({
   renderConnectorScopes,
   navBadges,
   title,
+  openCustomConnector,
+  onCustomConnectorOpenChange,
 }: SettingsModalProps) {
   const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
-  const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
+  const [customConnectorOpen, setCustomConnectorOpen] = useState(Boolean(openCustomConnector));
+  const paneRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setCustomConnectorOpen(Boolean(openCustomConnector));
+  }, [openCustomConnector]);
+
+  const changeCustomConnectorOpen = useCallback(
+    (next: boolean) => {
+      setCustomConnectorOpen(next);
+      onCustomConnectorOpenChange?.(next);
+    },
+    [onCustomConnectorOpenChange],
+  );
+
+  /**
+   * The catalogue is the pane behind the form, so browsing it is leaving the
+   * form and landing on its search field. The header this runs from is only
+   * rendered on the index, never over an open detail.
+   */
+  const browseDirectory = useCallback(() => {
+    changeCustomConnectorOpen(false);
+    window.requestAnimationFrame(() => {
+      paneRef.current?.querySelector<HTMLInputElement>(DIRECTORY_SEARCH_SELECTOR)?.focus();
+    });
+  }, [changeCustomConnectorOpen]);
 
   // Grouped nav (preferred): filter items within each group, dropping groups
   // that end up empty so headers never orphan.
@@ -1911,21 +1947,47 @@ export function SettingsModal({
     ) {
       if (activeSection === 'connectors' && customConnectorOpen && adapter?.addCustomConnector) {
         return (
-          <AddCustomConnectorForm adapter={adapter} onBack={() => setCustomConnectorOpen(false)} />
+          <AddCustomConnectorForm
+            adapter={adapter}
+            onBack={() => changeCustomConnectorOpen(false)}
+          />
         );
       }
       const customAction =
-        activeSection === 'connectors' && adapter?.addCustomConnector ? (
-          <button
-            type="button"
-            onClick={() => setCustomConnectorOpen(true)}
-            className={cn(
-              'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
-              FOCUS_RING,
+        activeSection === 'connectors' ? (
+          <Menu
+            align="end"
+            portalled={false}
+            menuClassName="w-52"
+            trigger={({ toggle, open: menuOpen }) => (
+              <button
+                type="button"
+                onClick={toggle}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className={cn(
+                  'inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
+                  FOCUS_RING,
+                )}
+              >
+                {CONNECTORS_ADD_MENU_LABEL}
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
             )}
           >
-            {ADD_CUSTOM_CONNECTOR_LABEL}
-          </button>
+            {({ close }) => (
+              <>
+                <MenuItem close={close} onSelect={browseDirectory}>
+                  {BROWSE_CONNECTORS_LABEL}
+                </MenuItem>
+                {adapter?.addCustomConnector ? (
+                  <MenuItem close={close} onSelect={() => changeCustomConnectorOpen(true)}>
+                    {ADD_CUSTOM_CONNECTOR_LABEL}
+                  </MenuItem>
+                ) : null}
+              </>
+            )}
+          </Menu>
         ) : null;
       return (
         sectionContent[activeSection] ?? (
@@ -2099,7 +2161,9 @@ export function SettingsModal({
           {/* Bound the measure: without it the same pane renders 576px wide in
               the Cloud shell and 720px in the Local one, and grows unbounded
               with the window. */}
-          <div className="mx-auto w-full max-w-[672px]">{renderSection()}</div>
+          <div ref={paneRef} className="mx-auto w-full max-w-[672px]">
+            {renderSection()}
+          </div>
         </main>
       </DialogContent>
     </Dialog>

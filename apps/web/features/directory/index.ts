@@ -1,6 +1,7 @@
 export { useDirectoryAdapter } from './hooks/useDirectoryAdapter';
 export {
   buildSettingsBrowseHash,
+  buildSettingsCustomConnectorHash,
   buildSettingsHash,
   parseSettingsDirectoryHash,
   parseSettingsHash,

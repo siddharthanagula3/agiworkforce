@@ -897,6 +897,83 @@ describe('Customize panels render the directory', () => {
     expect(screen.queryByPlaceholderText('Search connectors')).toBeNull();
   });
 
+  const connectorsDirectory = {
+    sections: ['connectors'] as const,
+    connectors: { entries: [], sortOptions: ['name'] as const },
+  };
+
+  it('offers Browse connectors and Add custom connector under one Add menu', () => {
+    renderModal(
+      { activeSection: 'connectors', directoryAdapter: connectorsDirectory },
+      { addCustomConnector: vi.fn() },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Add custom connector' })).toBeTruthy();
+  });
+
+  it('drops Add custom connector when the surface cannot create one', () => {
+    renderModal(
+      { activeSection: 'connectors', directoryAdapter: connectorsDirectory },
+      { addCustomConnector: undefined },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
+  });
+
+  it('opens the custom connector form from the Add menu and reports it', () => {
+    const onCustomConnectorOpenChange = vi.fn();
+    renderModal(
+      {
+        activeSection: 'connectors',
+        directoryAdapter: connectorsDirectory,
+        onCustomConnectorOpenChange,
+      },
+      { addCustomConnector: vi.fn() },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    expect(onCustomConnectorOpenChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByPlaceholderText('Search connectors')).toBeNull();
+  });
+
+  it('opens the custom connector form straight from a link', () => {
+    renderModal(
+      {
+        activeSection: 'connectors',
+        directoryAdapter: connectorsDirectory,
+        openCustomConnector: true,
+      },
+      { addCustomConnector: vi.fn() },
+    );
+
+    expect(screen.queryByPlaceholderText('Search connectors')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Add custom connector/ })).toBeTruthy();
+  });
+
+  it('reports the form closing so the link can stop naming it', () => {
+    const onCustomConnectorOpenChange = vi.fn();
+    renderModal(
+      {
+        activeSection: 'connectors',
+        directoryAdapter: connectorsDirectory,
+        openCustomConnector: true,
+        onCustomConnectorOpenChange,
+      },
+      { addCustomConnector: vi.fn() },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+
+    expect(onCustomConnectorOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByPlaceholderText('Search connectors')).toBeTruthy();
+  });
+
   it('renders the directory for a section the adapter does serve', () => {
     renderModal({
       activeSection: 'plugins',

@@ -145,7 +145,8 @@ describe('ComposerPlusMenu, chat mode', () => {
     renderMenu({ connectorsSubmenuOpen: true });
 
     expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Manage in Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add custom connector' })).toBeInTheDocument();
   });
 
   it('lists the skills under the Skills row and selects one', () => {
@@ -239,9 +240,21 @@ describe('ComposerPlusMenu, chat mode', () => {
     window.location.hash = '';
     const { props } = renderMenu({ connectorsSubmenuOpen: true });
 
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage in Settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
 
     expect(window.location.hash).toBe('#settings/customize-connectors');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('connectors');
+    expect(props.closeMenu).toHaveBeenCalled();
+    window.location.hash = '';
+  });
+
+  it('addresses the custom connector form itself, not the pane behind it', () => {
+    window.location.hash = '';
+    const { props } = renderMenu({ connectorsSubmenuOpen: true });
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    expect(window.location.hash).toBe('#settings/customize-connectors/new');
     expect(props.onOpenSettings).toHaveBeenCalledWith('connectors');
     expect(props.closeMenu).toHaveBeenCalled();
     window.location.hash = '';

@@ -9,6 +9,7 @@ import { SKILLS_PATH } from './constants';
 
 const SETTINGS_PREFIX = 'settings';
 const BROWSE_SEGMENT = 'browse';
+const CUSTOM_SEGMENT = 'new';
 
 export const SETTINGS_SECTION_SLUGS: Record<DirectorySectionKey, string> = {
   skills: 'customize-skills',
@@ -41,6 +42,7 @@ export const SETTINGS_SECTION_HASH_SLUGS: Readonly<Record<string, string>> = Obj
 export interface SettingsRoute {
   section: string;
   entryId: string | null;
+  custom: boolean;
 }
 
 export interface SettingsDirectoryRoute {
@@ -56,9 +58,11 @@ export function parseSettingsHash(hash: string): SettingsRoute | null {
   if (!slug) return null;
   const section = SLUG_TO_SECTION.get(slug);
   if (!section) return null;
-  if (segments[2] !== BROWSE_SEGMENT) return { section, entryId: null };
+  const detail = segments[2];
+  if (detail === CUSTOM_SEGMENT) return { section, entryId: null, custom: true };
+  if (detail !== BROWSE_SEGMENT) return { section, entryId: null, custom: false };
   const id = segments.slice(3).join('/');
-  return { section, entryId: id ? decodeURIComponent(id) : null };
+  return { section, entryId: id ? decodeURIComponent(id) : null, custom: false };
 }
 
 export function parseSettingsDirectoryHash(hash: string): SettingsDirectoryRoute | null {
@@ -79,6 +83,10 @@ export function buildSettingsBrowseHash(
 export function buildSettingsHash(section: string): string | null {
   const slug = SECTION_TO_SLUG.get(section);
   return slug ? `#${SETTINGS_PREFIX}/${slug}` : null;
+}
+
+export function buildSettingsCustomConnectorHash(): string {
+  return `#${SETTINGS_PREFIX}/${SETTINGS_SECTION_SLUGS.connectors}/${CUSTOM_SEGMENT}`;
 }
 
 export function settingsHashForSection(section: string, currentHash: string): string | null {
