@@ -20,6 +20,31 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const DELETE_CONVERSATION_SQL = `
+  update web_conversations
+     set deleted_at = now(), updated_at = now()
+   where id = $1
+     and user_id = $2
+     and organization_id is not distinct from $3
+     and deleted_at is null
+  returning id
+`;
+
+const PENDING_REVOCATION_SQL = `
+  select c.id
+    from web_conversations c
+   where c.id = $3
+     and c.user_id = $1
+     and c.organization_id is not distinct from $2
+     and c.deleted_at is not null
+     and exists (
+       select 1
+         from public.published_artifacts pa
+        where pa.conversation_id = c.id
+          and pa.user_id = $1
+     )
+`;
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleGetConversation(request: NextRequest, context: RouteContext) {
@@ -246,48 +271,46 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   const { id } = await context.params;
 
   let deletedConversation: { id: string } | undefined;
+  let revokedCount = 0;
   try {
-    [deletedConversation] = await db.query<{ id: string }>(
-      `
-        update web_conversations
-        set deleted_at = now(), updated_at = now()
-        where id = $1
-          and user_id = $2
-          and organization_id is not distinct from $3
-          and deleted_at is null
-        returning id
-      `,
-      [id, userId, organizationId],
-    );
+    // A soft delete never fires the 0095 FK cascade, so revocation must commit
+    // with it or the public token outlives the chat, and the pending sweep must
+    // stay unfiltered by this call so a retry finishes an earlier partial failure.
+    const outcome = await db.transaction(async (tx) => {
+      const [row] = await tx.query<{ id: string }>(DELETE_CONVERSATION_SQL, [
+        id,
+        userId,
+        organizationId,
+      ]);
+      const pending = await tx.query<{ id: string }>(PENDING_REVOCATION_SQL, [
+        userId,
+        organizationId,
+        id,
+      ]);
+      const revoked = pending.length
+        ? await unpublishArtifactsForConversations(tx, {
+            userId,
+            conversationIds: pending.map(({ id: pendingId }) => pendingId),
+          })
+        : [];
+      return { row, revoked };
+    });
+    deletedConversation = outcome.row;
+    revokedCount = outcome.revoked.length;
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');
     throw createError.internal('Failed to delete conversation');
   }
 
-  if (!deletedConversation) {
+  if (!deletedConversation && revokedCount === 0) {
     throw createError.notFound('Conversation not found');
   }
 
-  // A published artifact outlives the chat it came from unless it is revoked
-  // here: the FK cascade in 0095 never fires because this delete is a soft
-  // delete, so the public token would keep serving the content indefinitely.
-  try {
-    const revoked = await unpublishArtifactsForConversations(db, {
-      userId,
-      conversationIds: [id],
-    });
-    if (revoked.length > 0) {
-      logger.info(
-        { conversationId: id, revoked: revoked.length },
-        'Revoked published artifacts for deleted conversation',
-      );
-    }
-  } catch (error) {
-    logger.error(
-      { error, conversationId: id },
-      'Failed to revoke published artifacts for deleted conversation',
+  if (revokedCount > 0) {
+    logger.info(
+      { conversationId: id, revoked: revokedCount },
+      'Revoked published artifacts for deleted conversation',
     );
-    throw createError.internal('Failed to delete conversation');
   }
 
   // TTL (session-store.ts) is the safety net if this ever throws.
