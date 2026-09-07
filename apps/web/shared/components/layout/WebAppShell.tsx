@@ -244,13 +244,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     },
     [conversations, updateConversation],
   );
-  const handleStarSession = useCallback(
-    (id: string) => {
-      const convo = conversations.find((c) => c.id === id);
-      if (convo) void updateConversation(id, { starred: !convo.isStarred });
-    },
-    [conversations, updateConversation],
-  );
   const handleArchiveSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
@@ -476,7 +469,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     onDelete: (id: string) => void handleDeleteSession(id),
     onRename: handleRenameSession,
     onTogglePin: handlePinSession,
-    onStar: handleStarSession,
     onArchive: handleArchiveSession,
     onMarkUnread: handleMarkUnreadSession,
     onMoveToProject: handleMoveToProjectSession,
