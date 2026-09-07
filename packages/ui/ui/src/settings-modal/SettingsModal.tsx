@@ -2102,7 +2102,7 @@ export function SettingsModal({
                     {group.label && (
                       <div
                         data-testid={NAV_GROUP_LABEL_TESTID}
-                        className="hidden px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block"
+                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block"
                       >
                         {group.label}
                       </div>
