@@ -37,7 +37,7 @@ export const RELEASES: readonly Release[] = [
     headline: 'Local, BYOK, and cloud trust boundary · live',
     body: [
       'Fail-closed egress separation enforced across all six surfaces: local mode makes no network call to us, BYOK traffic goes straight to the provider you configured, managed cloud is metered against your plan.',
-      'Canonical security policy published in SECURITY.md, naming the trust-boundary model and its known gaps.',
+      'Canonical security policy published on our security page, naming the trust-boundary model and its known gaps.',
     ],
   },
   {
