@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getRequestIdentity } from '@/lib/server/identity';
@@ -32,6 +33,9 @@ const signalingResponseSchema = z.object({
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse as NextResponse;
+
   const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -100,7 +104,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
 
-  // The initiator keeps its own token; the QR carries the peer's.
   const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
 
   return NextResponse.json({
