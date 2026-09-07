@@ -121,3 +121,50 @@ describe('AddMarketplaceDialog', () => {
     await waitFor(() => expect(onRemove).toHaveBeenCalledWith('source-1'));
   });
 });
+
+describe('removing a marketplace from the dialog', () => {
+  async function openResultStep(onRemove: (id: string) => Promise<void>) {
+    render(
+      <AddMarketplaceDialog
+        open
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(RESULT)}
+        onRemove={onRemove}
+      />,
+    );
+    await openRepositoryForm();
+    fireEvent.change(screen.getByLabelText('Repository url'), { target: { value: REPO_URL } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync marketplace' }));
+    await screen.findByText('Example marketplace');
+  }
+
+  async function confirmRemove() {
+    fireEvent.click(screen.getByRole('button', { name: 'Remove marketplace' }));
+    const buttons = await screen.findAllByRole('button', { name: 'Remove marketplace' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+  }
+
+  it('shows the failure and keeps the marketplace listed when the remove fails', async () => {
+    const scheduled = vi.spyOn(globalThis, 'queueMicrotask').mockImplementation(() => undefined);
+    const onRemove = vi.fn(async () => {
+      throw new Error('The remove request could not be sent.');
+    });
+
+    await openResultStep(onRemove);
+    await confirmRemove();
+
+    await waitFor(() => expect(onRemove).toHaveBeenCalledWith('source-1'));
+    expect((await screen.findByRole('alert')).textContent).toContain('could not be sent');
+    expect(screen.getByText('Example marketplace')).toBeTruthy();
+    scheduled.mockRestore();
+  });
+
+  it('closes on a successful remove and shows no error', async () => {
+    const onRemove = vi.fn(async () => undefined);
+    await openResultStep(onRemove);
+    await confirmRemove();
+
+    await waitFor(() => expect(onRemove).toHaveBeenCalledWith('source-1'));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+});

@@ -32,6 +32,7 @@ import {
   CONNECTORS_PATH,
   CONNECTOR_CATEGORY_GROUP_ID,
   CONNECTOR_CATEGORY_GROUP_LABEL,
+  CONNECTOR_COUNT_INDEXING_SUFFIX,
   CONNECTOR_COUNT_SUFFIX,
   CONNECTOR_DIRECTORY_PATH,
   CONNECTOR_ICON_PATH,
@@ -369,8 +370,13 @@ export async function fetchConnectorDirectoryPage(
   };
 }
 
-export function connectorCountLabel(count: number): string {
-  return `${count.toLocaleString()} ${CONNECTOR_COUNT_SUFFIX}`;
+export function connectorCountLabel(count: number, bootstrapComplete = true): string {
+  const suffix = bootstrapComplete ? CONNECTOR_COUNT_SUFFIX : CONNECTOR_COUNT_INDEXING_SUFFIX;
+  return `${count.toLocaleString()} ${suffix}`;
+}
+
+export function connectorDirectoryIndexing(stats?: ConnectorDirectoryStats): boolean {
+  return stats?.bootstrapComplete === false;
 }
 
 export function initialConnectorSection(): DirectorySection {
@@ -438,7 +444,9 @@ export function toConnectorSection({
     filterGroups: categoryFilter ? [categoryFilter] : [],
     total: total + curatedEntries.length,
     hasMore: nextCursor !== null,
-    ...(typeof totalRecords === 'number' ? { countLabel: connectorCountLabel(totalRecords) } : {}),
+    ...(typeof totalRecords === 'number'
+      ? { countLabel: connectorCountLabel(totalRecords, !connectorDirectoryIndexing(stats)) }
+      : {}),
     ...(tabHeading ? { catalogHeading: tabHeading } : {}),
   };
 }

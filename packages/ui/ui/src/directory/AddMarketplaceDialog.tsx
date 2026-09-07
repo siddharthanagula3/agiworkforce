@@ -32,6 +32,7 @@ import {
   ADD_MARKETPLACE_SUBMIT_LABEL,
   ADD_MARKETPLACE_SYNCED_LABEL,
   ADD_MARKETPLACE_URL_LABEL,
+  MARKETPLACE_REMOVE_FAILED_COPY,
   MARKETPLACE_SYNC_FAILED_COPY,
 } from './constants';
 import { DIRECTORY_FOCUS_RING } from './styles';
@@ -122,14 +123,23 @@ export function AddMarketplaceDialog({
 
   const requestRemove = () => {
     if (!result || !onRemove) return;
+    const sourceId = result.id;
     confirm({
       title: ADD_MARKETPLACE_REMOVE_CONFIRM_TITLE,
       description: ADD_MARKETPLACE_REMOVE_CONFIRM_BODY,
       confirmLabel: ADD_MARKETPLACE_REMOVE_LABEL,
       destructive: true,
       onConfirm: async () => {
-        await onRemove(result.id);
-        close();
+        setBusy(true);
+        setError(null);
+        try {
+          await onRemove(sourceId);
+          close();
+        } catch (caught) {
+          setError(toUserMessage(caught, MARKETPLACE_REMOVE_FAILED_COPY));
+        } finally {
+          setBusy(false);
+        }
       },
     });
   };
@@ -243,6 +253,11 @@ export function AddMarketplaceDialog({
           {step === 'result' && result ? (
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-foreground">{result.name}</p>
+              {error ? (
+                <p role="alert" className="text-xs text-danger">
+                  {error}
+                </p>
+              ) : null}
               {result.entries.length === 0 ? (
                 <p className="text-xs text-muted-foreground">{ADD_MARKETPLACE_EMPTY_LABEL}</p>
               ) : (

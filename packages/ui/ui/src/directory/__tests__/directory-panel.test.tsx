@@ -383,6 +383,30 @@ describe('DirectoryPanel detail', () => {
     expect(await screen.findByRole('heading', { name: 'Customerscore' })).toBeTruthy();
   });
 
+  it('opens the entry the adapter deep link names', async () => {
+    renderPanel(
+      'connectors',
+      { openEntry: { section: 'connectors', entryId: 'com.microsoft/microsoft-learn-mcp' } },
+      {},
+    );
+    expect(await screen.findByRole('heading', { name: 'Customerscore' })).toBeTruthy();
+  });
+
+  it('ignores a deep link aimed at another section', async () => {
+    renderPanel('connectors', { openEntry: { section: 'skills', entryId: 'canvas-design' } }, {});
+    expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Customerscore' })).toBeNull();
+  });
+
+  it('lets an explicit prop win over the adapter deep link', async () => {
+    renderPanel(
+      'connectors',
+      { openEntry: { section: 'connectors', entryId: 'somewhere-else' } },
+      { openEntryId: 'customerscore' },
+    );
+    expect(await screen.findByRole('heading', { name: 'Customerscore' })).toBeTruthy();
+  });
+
   it('offers Install on a skill the account removed and Uninstall once installed', async () => {
     const install = vi.fn();
     renderPanel('skills', { install });
@@ -900,5 +924,47 @@ describe('DirectoryPanel plugin groups', () => {
     expect(copyValue).toHaveBeenCalledWith(
       'claude plugin install superpowers@claude-plugins-official',
     );
+  });
+});
+
+describe('DirectoryPanel marketplace refresh', () => {
+  const withSources = (refreshMarketplace?: DirectoryAdapter['refreshMarketplace']) => ({
+    plugins: {
+      installable: true,
+      entries: [{ id: 'productivity', name: 'Productivity', description: 'Manage tasks' }],
+      sortOptions: ['name'] as const,
+      sources: [
+        { id: 'builtin', label: 'Built in' },
+        { id: 'source-1', label: 'Acme tools', removable: true },
+      ],
+    },
+    ...(refreshMarketplace ? { refreshMarketplace } : {}),
+  });
+
+  it('offers no refresh until one of the account’s own marketplaces is selected', () => {
+    renderPanel('plugins', withSources(vi.fn()) as Partial<DirectoryAdapter>);
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+  });
+
+  it('refreshes the selected marketplace by its id', async () => {
+    const refreshMarketplace = vi.fn(async () => undefined);
+    renderPanel('plugins', withSources(refreshMarketplace) as Partial<DirectoryAdapter>);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Acme tools' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }));
+
+    await waitFor(() => expect(refreshMarketplace).toHaveBeenCalledExactlyOnceWith('source-1'));
+  });
+
+  it('reports a failed refresh instead of leaving the button spinning', async () => {
+    const refreshMarketplace = vi.fn(async () => {
+      throw new Error('Marketplace unreachable.');
+    });
+    renderPanel('plugins', withSources(refreshMarketplace) as Partial<DirectoryAdapter>);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Acme tools' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Marketplace unreachable.');
   });
 });

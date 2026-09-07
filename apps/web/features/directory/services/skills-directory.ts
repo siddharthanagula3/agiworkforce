@@ -1,4 +1,5 @@
 import {
+  MANAGED_SKILL_LIFECYCLES,
   ManagedSkillsResponseSchema,
   type ManagedSkillSummary,
 } from '@agiworkforce/cloud-contracts';
@@ -54,11 +55,18 @@ export function isAuthoredSkill(skill: ManagedSkillSummary): boolean {
   return OWNED_SOURCES.has(skill.source);
 }
 
+const DRAFT_LIFECYCLE = MANAGED_SKILL_LIFECYCLES[1];
+
+export function isDraftSkill(skill: ManagedSkillSummary): boolean {
+  return skill.lifecycle === DRAFT_LIFECYCLE;
+}
+
 export function toSkillEntry(
   skill: ManagedSkillSummary,
   installed: ReadonlySet<string>,
 ): DirectoryEntry {
-  const isInstalled = isAuthoredSkill(skill) || installed.has(skill.name);
+  const draft = isDraftSkill(skill);
+  const isInstalled = !draft && (isAuthoredSkill(skill) || installed.has(skill.name));
   return {
     id: skill.name,
     name: skill.name,
@@ -67,6 +75,7 @@ export function toSkillEntry(
     description: skill.description,
     sourceId: skillSourceId(skill.source),
     installed: isInstalled,
+    ...(draft ? { installable: false, statusLabel: SKILL_LIFECYCLE_DRAFT_LABEL } : {}),
     ...(skill.editable ? { editable: true } : {}),
     facets: {
       [SKILL_LIFECYCLE_GROUP_ID]: [skill.lifecycle],
@@ -92,8 +101,8 @@ function skillFilterGroups(
       id: SKILL_LIFECYCLE_GROUP_ID,
       label: SKILL_LIFECYCLE_GROUP_LABEL,
       options: [
-        { value: 'included', label: SKILL_LIFECYCLE_INCLUDED_LABEL },
-        { value: 'draft', label: SKILL_LIFECYCLE_DRAFT_LABEL },
+        { value: MANAGED_SKILL_LIFECYCLES[0], label: SKILL_LIFECYCLE_INCLUDED_LABEL },
+        { value: DRAFT_LIFECYCLE, label: SKILL_LIFECYCLE_DRAFT_LABEL },
       ],
     });
   }
@@ -158,6 +167,22 @@ export async function uninstallSkill(name: string, csrfToken: string): Promise<v
   if (!response.ok) {
     throw new DirectoryRequestError(response.status, `skill uninstall failed: ${response.status}`);
   }
+}
+
+export async function deleteAuthoredSkill(name: string, csrfToken: string): Promise<void> {
+  const response = await fetch(`${SKILLS_PATH}/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+    headers: { 'x-csrf-token': csrfToken },
+  });
+  if (!response.ok) {
+    throw new DirectoryRequestError(response.status, `skill delete failed: ${response.status}`);
+  }
+}
+
+export async function removeSkill(skill: ManagedSkillSummary, csrfToken: string): Promise<void> {
+  return isAuthoredSkill(skill)
+    ? deleteAuthoredSkill(skill.name, csrfToken)
+    : uninstallSkill(skill.name, csrfToken);
 }
 
 function filesPath(name: string): string {
