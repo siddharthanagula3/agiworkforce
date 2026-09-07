@@ -9,7 +9,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { refreshMarketplaceSource } from '@/lib/services/plugin-marketplace-service';
+import {
+  isMissingPluginMarketplaceSchema,
+  refreshMarketplaceSource,
+} from '@/lib/services/plugin-marketplace-service';
+import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +37,13 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
     );
   }
 
-  const source = await refreshMarketplaceSource(getNeonDb(), userId, params.data.id);
+  let source;
+  try {
+    source = await refreshMarketplaceSource(getNeonDb(), userId, params.data.id);
+  } catch (error) {
+    if (isMissingPluginMarketplaceSchema(error)) throw marketplaceUnavailableError();
+    throw error;
+  }
   if (!source) {
     return NextResponse.json(
       { error: { code: 'MARKETPLACE_SOURCE_NOT_FOUND', message: 'Marketplace source not found.' } },

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getNeonDbMock, listMock, getEntryMock } = vi.hoisted(() => ({
+const { getNeonDbMock, listMock, getEntryMock, findDirectoryEntryMock } = vi.hoisted(() => ({
   getNeonDbMock: vi.fn(),
   listMock: vi.fn(),
   getEntryMock: vi.fn(),
+  findDirectoryEntryMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -12,6 +13,7 @@ vi.mock('@/lib/services/plugin-registry-service', () => ({
   listPluginRegistryEntries: listMock,
   getPluginRegistryEntry: getEntryMock,
 }));
+vi.mock('./directory/catalog', () => ({ findDirectoryEntry: findDirectoryEntryMock }));
 
 import { loadPluginCatalog, loadPluginEntry } from './registry-source';
 
@@ -20,6 +22,7 @@ const ENTRY = { id: 'github-automation', name: 'GitHub Automation' };
 beforeEach(() => {
   vi.clearAllMocks();
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
+  findDirectoryEntryMock.mockResolvedValue(null);
 });
 
 describe('loadPluginCatalog', () => {
@@ -56,9 +59,37 @@ describe('loadPluginEntry', () => {
     });
   });
 
-  it('reports missing for an unknown id', async () => {
+  it('reports missing only when neither the registry nor the directory has the id', async () => {
     getEntryMock.mockResolvedValue(null);
     await expect(loadPluginEntry('nope')).resolves.toEqual({ status: 'missing' });
+  });
+
+  it('falls back to the directory for an id the registry does not publish', async () => {
+    const directoryEntry = {
+      id: 'frontend-design',
+      name: 'Frontend Design',
+      slug: 'frontend-design',
+    };
+    getEntryMock.mockResolvedValue(null);
+    findDirectoryEntryMock.mockResolvedValue(directoryEntry);
+
+    await expect(loadPluginEntry('frontend-design')).resolves.toEqual({
+      status: 'ok',
+      entry: directoryEntry,
+      manifest: null,
+    });
+  });
+
+  it('prefers the registry row and never asks the directory when one exists', async () => {
+    getEntryMock.mockResolvedValue({ entry: ENTRY, manifest: null });
+    await loadPluginEntry('github-automation');
+    expect(findDirectoryEntryMock).not.toHaveBeenCalled();
+  });
+
+  it('reports unavailable when the directory read itself throws', async () => {
+    getEntryMock.mockResolvedValue(null);
+    findDirectoryEntryMock.mockRejectedValue(new Error('snapshot store down'));
+    await expect(loadPluginEntry('superpowers')).resolves.toEqual({ status: 'unavailable' });
   });
 
   it('never reports a missing entry when the registry is merely down', async () => {

@@ -20,7 +20,11 @@ import {
   RUNTIME_NOTE_SOURCE_UNKNOWN,
   RUNTIME_NOTE_STDIO_MCP,
 } from './constants';
-import { parseGithubRepository, type DirectoryFetch } from './official-marketplace';
+import {
+  hasUnsafePathSegment,
+  parseGithubRepository,
+  type DirectoryFetch,
+} from './official-marketplace';
 import type {
   PluginInspectionRecord,
   PluginMcpServerSummary,
@@ -42,6 +46,7 @@ const TRAILING_SLASH = /\/+$/;
 const MCP_TRANSPORT_SSE = 'sse';
 const MCP_TRANSPORT_HTTP = 'http';
 const MCP_TRANSPORT_STDIO = 'stdio';
+const TRUNCATED_TREE_REASON = 'repository tree truncated before any skill was seen';
 
 export interface GithubTreeEntry {
   path: string;
@@ -129,11 +134,17 @@ export async function fetchRepositoryTree(
   return { status: 'ok', tree: { sha: body.sha, entries, truncated: body.truncated === true } };
 }
 
+function encodePathSegments(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
 export function rawFileUrl(location: PluginSourceLocation, relativePath: string): string | null {
   const repository = parseGithubRepository(location.repositoryUrl);
   if (!repository) return null;
-  const prefix = location.path ? `${location.path}/` : '';
-  return `${GITHUB_RAW_BASE_URL}/${repository.owner}/${repository.repo}/${encodeURIComponent(treeRef(location))}/${prefix}${relativePath}`;
+  if (hasUnsafePathSegment(relativePath)) return null;
+  if (location.path !== null && hasUnsafePathSegment(location.path)) return null;
+  const prefix = location.path ? `${encodePathSegments(location.path)}/` : '';
+  return `${GITHUB_RAW_BASE_URL}/${repository.owner}/${repository.repo}/${encodeURIComponent(treeRef(location))}/${prefix}${encodePathSegments(relativePath)}`;
 }
 
 function normalizeRelative(path: string): string {
@@ -360,6 +371,9 @@ export async function inspectPluginSource(
     skillNames.set(name, metadataSkills.skillPaths[index] ?? '');
   });
   const skills = [...skillNames.keys()].sort();
+  if (tree.truncated && skills.length === 0) {
+    return { status: 'failed', reason: TRUNCATED_TREE_REASON };
+  }
   const components: PluginRuntimeComponents = {
     skills,
     skillPaths: skills.map((name) => skillNames.get(name) ?? ''),

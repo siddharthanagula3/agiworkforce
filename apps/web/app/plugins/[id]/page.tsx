@@ -10,7 +10,7 @@ import {
   MarketingFooter,
   Prose,
 } from '@/features/marketing/components/system';
-import { loadPluginEntry } from '@/features/plugins/server/registry-source';
+import { detailInstallCommand, loadPluginEntry } from '@/features/plugins/server/registry-source';
 import {
   isPluginEntryInstallable,
   isPluginEntryWebInstallable,
@@ -24,16 +24,21 @@ interface Props {
 
 export const dynamic = 'force-dynamic';
 
+const UNBREAKABLE_TEXT = { overflowWrap: 'anywhere' } as const;
+const INSTALL_PINNED_TITLE = 'From the CLI, with the checksum pinned.';
+const INSTALL_CLI_TITLE = 'From the CLI.';
+
 function sourceLabel(source: PluginRegistryEntry['source']): string {
   if (source === 'builtin') return 'Built-in';
   if (source === 'marketplace') return 'Marketplace';
   return 'Custom';
 }
 
-function statusLabel(entry: PluginRegistryEntry): string {
+function statusLabel(entry: PluginRegistryEntry, cliCommand: string | null): string {
   if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
   if (isPluginEntryInstallable(entry)) return 'Installable';
   if (entry.status === 'deprecated') return 'Deprecated: do not install';
+  if (cliCommand !== null) return 'Desktop and CLI';
   return 'Declared: not installable yet';
 }
 
@@ -87,6 +92,12 @@ export default async function PluginDetailPage({ params }: Props) {
   const { entry, manifest } = result;
   const installable = isPluginEntryInstallable(entry);
   const webInstallable = isPluginEntryWebInstallable(entry);
+  const installCommand =
+    installable && entry.distribution
+      ? `agi plugin install ${entry.distribution.manifestUrl}${
+          entry.distribution.sha256 ? ` --integrity sha256:${entry.distribution.sha256}` : ''
+        }`
+      : detailInstallCommand(entry);
 
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -107,6 +118,11 @@ export default async function PluginDetailPage({ params }: Props) {
                   <strong>Published. Install it with the AGI CLI (see below).</strong>
                 ) : entry.status === 'deprecated' ? (
                   <strong>Deprecated. This pack should no longer be installed.</strong>
+                ) : installCommand !== null ? (
+                  <strong>
+                    The web app cannot run this one. Install it from the desktop app or the CLI with
+                    the command below.
+                  </strong>
                 ) : (
                   <strong>
                     Listed in the registry, with no published artifact yet. There is nothing to
@@ -117,8 +133,8 @@ export default async function PluginDetailPage({ params }: Props) {
               <ButtonRow>
                 {webInstallable ? (
                   <Button href="/apps">Open Plugin settings</Button>
-                ) : !installable ? (
-                  <Button href="/plugins#request-access">Request marketplace access</Button>
+                ) : installCommand === null ? (
+                  <Button href="/plugins#install">How installation works</Button>
                 ) : null}
                 <Button href="/plugins" variant="secondary">
                   Back to plugins
@@ -139,7 +155,7 @@ export default async function PluginDetailPage({ params }: Props) {
                         value: `${entry.publisher.name}${entry.publisher.kind === 'first-party' ? ' (first-party)' : ' (third-party)'}`,
                       },
                       { label: 'Version', value: `v${entry.version}` },
-                      { label: 'Status', value: statusLabel(entry) },
+                      { label: 'Status', value: statusLabel(entry, installCommand) },
                     ]}
                   />
                 </div>
@@ -173,7 +189,7 @@ export default async function PluginDetailPage({ params }: Props) {
                 { label: 'Version', value: `v${entry.version}` },
                 { label: 'Category', value: entry.category },
                 { label: 'Source', value: sourceLabel(entry.source) },
-                { label: 'Status', value: statusLabel(entry) },
+                { label: 'Status', value: statusLabel(entry, installCommand) },
                 {
                   label: 'Integrity',
                   value: entry.integrity.sha256
@@ -185,13 +201,13 @@ export default async function PluginDetailPage({ params }: Props) {
           </div>
         </section>
 
-        {installable && entry.distribution ? (
+        {installCommand ? (
           <section className="agi-lp-section" aria-labelledby="agi-plugin-install-title">
             <div className="agi-ds-container">
               <div className="agi-lp-heading">
                 <Eyebrow>Install</Eyebrow>
                 <h2 className="agi-ds-h2" id="agi-plugin-install-title">
-                  From the CLI, with the checksum pinned.
+                  {entry.distribution ? INSTALL_PINNED_TITLE : INSTALL_CLI_TITLE}
                 </h2>
               </div>
               <Ledger
@@ -200,12 +216,8 @@ export default async function PluginDetailPage({ params }: Props) {
                   {
                     label: 'Command',
                     value: (
-                      <code>
-                        {`agi plugin install ${entry.distribution.manifestUrl}${
-                          entry.distribution.sha256
-                            ? ` --integrity sha256:${entry.distribution.sha256}`
-                            : ''
-                        }`}
+                      <code data-testid="plugin-install-command" style={UNBREAKABLE_TEXT}>
+                        {installCommand}
                       </code>
                     ),
                   },

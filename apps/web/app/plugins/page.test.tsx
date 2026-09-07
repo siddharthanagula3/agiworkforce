@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
 
 const loadPluginCatalogMock = vi.hoisted(() => vi.fn());
+const useCurrentUserMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/plugins/server/registry-source', () => ({
   loadPluginCatalog: loadPluginCatalogMock,
@@ -11,7 +12,7 @@ vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <div />,
 }));
-vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
+vi.mock('@/lib/identity/client', () => ({ useCurrentUser: useCurrentUserMock }));
 
 import PluginsPage from './page';
 
@@ -44,6 +45,8 @@ function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntr
 
 beforeEach(() => {
   loadPluginCatalogMock.mockReset();
+  useCurrentUserMock.mockReset();
+  useCurrentUserMock.mockReturnValue({ isLoaded: true, isSignedIn: false, user: null });
 });
 
 describe('PluginsPage availability claim', () => {
@@ -88,5 +91,40 @@ describe('PluginsPage availability claim', () => {
     render(await PluginsPage());
 
     expect(screen.getByText(/1 of 2 packs are installable today/i)).toBeInTheDocument();
+  });
+});
+
+describe('PluginsPage closing call to action', () => {
+  it('sends a signed-out reader to sign up rather than to a waitlist', async () => {
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    expect(screen.getByRole('link', { name: 'Sign up to install' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fapps',
+    );
+    expect(screen.queryByText(/get notified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/when installation opens/i)).not.toBeInTheDocument();
+  });
+
+  it('sends a signed-in reader straight to the plugins settings', async () => {
+    useCurrentUserMock.mockReturnValue({ isLoaded: true, isSignedIn: true, user: { id: 'u1' } });
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    expect(screen.getByRole('link', { name: 'Open plugin settings' })).toHaveAttribute(
+      'href',
+      '/apps',
+    );
+  });
+
+  it('says hosted installation is live rather than promising it later', async () => {
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    expect(screen.getByText(/hosted installation is live/i)).toBeInTheDocument();
   });
 });

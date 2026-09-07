@@ -15,7 +15,7 @@ import {
   isPluginEntryWebInstallable,
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
-import { WaitlistForm } from '../byok/WaitlistForm';
+import { PluginsCta } from './PluginsCta';
 
 export const metadata = buildMetadata({
   title: 'Plugins',
@@ -165,17 +165,19 @@ export default async function PluginsPage() {
           </div>
         </section>
 
-        <section className="agi-lp-close" aria-labelledby="agi-plugins-cta-title">
+        <section className="agi-lp-close" id="install" aria-labelledby="agi-plugins-cta-title">
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-ds-h2" id="agi-plugins-cta-title">
-                Get notified <em className="agi-ds-accent">when installation opens.</em>
+                Install a pack <em className="agi-ds-accent">from the catalogue.</em>
               </h2>
               <Prose size="lg">
-                Leave your email and we will tell you when hosted marketplace installation is live.
-                Local skills and desktop workflows do not depend on it.
+                Hosted installation is live. A pack marked Available on Web installs into your
+                account from the plugins section of Settings, and its skills join the assistant on
+                your next message. The rest are installed from the desktop app or the CLI with the
+                command shown on the pack.
               </Prose>
-              <WaitlistForm source="other" ctaLabel="Request marketplace access" />
+              <PluginsCta />
             </div>
           </div>
         </section>

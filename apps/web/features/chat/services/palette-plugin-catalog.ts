@@ -9,12 +9,29 @@ export interface PalettePlugin {
   description: string;
 }
 
-let cached: PalettePlugin[] | null = null;
-let inFlight: Promise<PalettePlugin[]> | null = null;
+const TOP_PAGE_KEY = '';
+const MAX_CACHED_TERMS = 32;
+
+const cached = new Map<string, PalettePlugin[]>();
+const inFlight = new Map<string, Promise<PalettePlugin[]>>();
 
 export function invalidatePalettePlugins(): void {
-  cached = null;
-  inFlight = null;
+  cached.clear();
+  inFlight.clear();
+}
+
+function remember(key: string, entries: PalettePlugin[]): void {
+  if (cached.size >= MAX_CACHED_TERMS) {
+    const oldest = cached.keys().next();
+    if (!oldest.done) cached.delete(oldest.value);
+  }
+  cached.set(key, entries);
+}
+
+function paletteHref(term: string): string {
+  const params = new URLSearchParams({ limit: String(DIRECTORY_PAGE_SIZE) });
+  if (term) params.set('search', term);
+  return `${PLUGINS_PATH}?${params.toString()}`;
 }
 
 /**
@@ -24,10 +41,15 @@ export function invalidatePalettePlugins(): void {
  * that, and a failed read is not worth a notice inside a menu, so it resolves
  * empty and the next search retries.
  */
-export function loadPalettePlugins(): Promise<PalettePlugin[]> {
-  if (cached) return Promise.resolve(cached);
-  if (inFlight) return inFlight;
-  inFlight = fetch(`${PLUGINS_PATH}?limit=${DIRECTORY_PAGE_SIZE}`, {
+export function loadPalettePlugins(query = ''): Promise<PalettePlugin[]> {
+  const term = query.trim().toLowerCase();
+  const key = term || TOP_PAGE_KEY;
+  const hit = cached.get(key);
+  if (hit) return Promise.resolve(hit);
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const request = fetch(paletteHref(term), {
     credentials: 'same-origin',
     cache: 'no-store',
   })
@@ -39,12 +61,13 @@ export function loadPalettePlugins(): Promise<PalettePlugin[]> {
         name: entry.name,
         description: entry.description,
       }));
-      cached = entries;
+      remember(key, entries);
       return entries;
     })
     .catch(() => [])
     .finally(() => {
-      inFlight = null;
+      inFlight.delete(key);
     });
-  return inFlight;
+  inFlight.set(key, request);
+  return request;
 }

@@ -130,7 +130,7 @@ describe('installDirectoryPlugin', () => {
     );
     expect(sourceInsert?.[1]).toEqual([
       'user-1',
-      'claude-plugins-official',
+      'agi:installed:claude-plugins-official',
       'https://github.com/anthropics/claude-plugins-official',
       null,
       'active',

@@ -7,6 +7,13 @@ import { z } from 'zod';
  */
 export const PLUGIN_MARKETPLACE_MANIFEST_PATH = '.agiworkforce/marketplace.json';
 
+export const PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH = '.claude-plugin/marketplace.json';
+
+export const PLUGIN_MARKETPLACE_MANIFEST_PATHS = [
+  PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH,
+  PLUGIN_MARKETPLACE_MANIFEST_PATH,
+] as const;
+
 const MARKETPLACE_PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const MARKETPLACE_SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
@@ -15,7 +22,11 @@ const MARKETPLACE_NAME_MAX_LENGTH = 200;
 const MARKETPLACE_DESCRIPTION_MAX_LENGTH = 2000;
 const MARKETPLACE_LIST_ITEM_MAX_LENGTH = 200;
 const MARKETPLACE_LIST_MAX_ITEMS = 50;
-const MARKETPLACE_PLUGINS_MAX_COUNT = 100;
+export const PLUGIN_MARKETPLACE_MAX_PLUGINS = 2_000;
+
+export const PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES = 2_000_000;
+
+const MARKETPLACE_PLUGINS_MAX_COUNT = PLUGIN_MARKETPLACE_MAX_PLUGINS;
 
 const marketplaceStringListSchema = z
   .array(z.string().trim().min(1).max(MARKETPLACE_LIST_ITEM_MAX_LENGTH))

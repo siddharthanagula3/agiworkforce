@@ -61,10 +61,8 @@ describe('listInstalledDirectorySkills', () => {
   it('returns only the enabled skills of directory installations as extra-source skills', async () => {
     const db = database([ROW]);
     const skills = await listInstalledDirectorySkills(db, 'user-1');
-    expect(db.query.mock.calls[0]![1]).toEqual([
-      'user-1',
-      ['https://github.com/anthropics/claude-plugins-official'],
-    ]);
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1']);
+    expect(String(db.query.mock.calls[0]![0])).toContain('sources.user_id = $1');
     expect(skills).toHaveLength(1);
     expect(skills[0]).toMatchObject({
       name: 'background-removal',
@@ -123,5 +121,187 @@ describe('findInstalledDirectorySkill', () => {
     await expect(
       findInstalledDirectorySkill(database([ROW]), 'user-1', 'vectorize'),
     ).resolves.toBeNull();
+  });
+});
+
+const OWN_SOURCE_ROW = {
+  plugin_key: 'acme-support',
+  installed_version: '1.2.0',
+  enabled_skills: ['triage-ticket'],
+  declared_skills: ['triage-ticket', 'draft-reply'],
+  content_hash: 'c'.repeat(64),
+  repository_url: 'https://github.com/acme/tools',
+  ref: 'main',
+};
+
+describe('an install from the account own registered marketplace', () => {
+  it('serves that entry skills from that entry own repository', async () => {
+    mocks.readInstalledSkills.mockResolvedValueOnce(null);
+    const requested: string[] = [];
+    const fetchImpl = vi.fn(async (input: string) => {
+      requested.push(input);
+      return new Response('---\nname: triage-ticket\n---\nTriage it.', { status: 200 });
+    });
+
+    const skills = await listInstalledDirectorySkills(
+      database([OWN_SOURCE_ROW]),
+      'user-1',
+      fetchImpl,
+    );
+
+    expect(
+      requested.some((url) => url.includes('/acme/tools/main/skills/triage-ticket/SKILL.md')),
+    ).toBe(true);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({
+      name: 'triage-ticket',
+      body: 'Triage it.',
+      source: 'extra',
+      filePath: 'plugins/acme-support/skills/triage-ticket/SKILL.md',
+    });
+  });
+
+  it('never borrows another repository location when a snapshot id happens to collide', async () => {
+    mocks.readInstalledSkills.mockResolvedValueOnce(null);
+    const requested: string[] = [];
+    const fetchImpl = vi.fn(async (input: string) => {
+      requested.push(input);
+      return new Response('---\nname: triage-ticket\n---\nTriage it.', { status: 200 });
+    });
+
+    await listInstalledDirectorySkills(database([OWN_SOURCE_ROW]), 'user-1', fetchImpl);
+
+    expect(requested.every((url) => url.includes('/acme/tools/'))).toBe(true);
+    expect(requested.some((url) => url.includes('/adobe/'))).toBe(false);
+  });
+
+  it('uses the inspected paths when the account registered a marketplace we already know', async () => {
+    mocks.readInstalledSkills.mockResolvedValueOnce(null);
+    const requested: string[] = [];
+    const fetchImpl = vi.fn(async (input: string) => {
+      requested.push(input);
+      return new Response('---\nname: background-removal\n---\nRemove it.', { status: 200 });
+    });
+
+    const skills = await listInstalledDirectorySkills(
+      database([
+        {
+          ...OWN_SOURCE_ROW,
+          plugin_key: 'adobe-for-creativity',
+          enabled_skills: ['background-removal'],
+          declared_skills: ['background-removal'],
+          repository_url: 'https://github.com/anthropics/claude-plugins-official',
+        },
+      ]),
+      'user-1',
+      fetchImpl,
+    );
+
+    expect(requested.some((url) => url.includes('skills/background-removal/SKILL.md'))).toBe(true);
+    expect(skills.map((skill) => skill.name)).toEqual(['background-removal']);
+  });
+
+  it('serves only the skills the installation has enabled', async () => {
+    mocks.readInstalledSkills.mockResolvedValue([
+      { name: 'triage-ticket', description: '', body: 'A', path: 'skills/triage-ticket/SKILL.md' },
+      { name: 'draft-reply', description: '', body: 'B', path: 'skills/draft-reply/SKILL.md' },
+    ]);
+    const skills = await listInstalledDirectorySkills(database([OWN_SOURCE_ROW]), 'user-1');
+    expect(skills.map((skill) => skill.name)).toEqual(['triage-ticket']);
+  });
+
+  it('serves nothing when the entry declares no skills of its own', async () => {
+    const skills = await listInstalledDirectorySkills(
+      database([{ ...OWN_SOURCE_ROW, declared_skills: [] }]),
+      'user-1',
+    );
+    expect(skills).toEqual([]);
+  });
+
+  it('refuses a declared name that would climb out of the plugin directory', async () => {
+    mocks.readInstalledSkills.mockResolvedValueOnce(null);
+    const requested: string[] = [];
+    const fetchImpl = vi.fn(async (input: string) => {
+      requested.push(input);
+      return new Response('', { status: 404 });
+    });
+
+    await listInstalledDirectorySkills(
+      database([{ ...OWN_SOURCE_ROW, declared_skills: ['../../etc/passwd'] }]),
+      'user-1',
+      fetchImpl,
+    );
+
+    expect(requested).toEqual([]);
+  });
+});
+
+function scopedDatabase(
+  rowsByUser: Readonly<Record<string, unknown[]>>,
+): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
+  const db = {
+    query: vi.fn(async (_sql: string, params: unknown[]) => {
+      const callerId = params[0];
+      return typeof callerId === 'string' ? (rowsByUser[callerId] ?? []) : [];
+    }),
+    execute: vi.fn(),
+  };
+  return db as unknown as DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
+}
+
+describe('one account own-source install never resolves for another account', () => {
+  const ownedByA = { ...OWN_SOURCE_ROW, plugin_key: 'acme-support' };
+  const ownedByB = {
+    ...OWN_SOURCE_ROW,
+    plugin_key: 'globex-support',
+    enabled_skills: ['escalate'],
+    declared_skills: ['escalate'],
+    repository_url: 'https://github.com/globex/tools',
+  };
+
+  beforeEach(() => {
+    mocks.readInstalledSkills.mockResolvedValue([
+      { name: 'triage-ticket', description: '', body: 'A', path: 'skills/triage-ticket/SKILL.md' },
+      { name: 'escalate', description: '', body: 'B', path: 'skills/escalate/SKILL.md' },
+    ]);
+  });
+
+  it('serves each account only its own install', async () => {
+    const db = scopedDatabase({ 'user-a': [ownedByA], 'user-b': [ownedByB] });
+
+    await expect(
+      listInstalledDirectorySkills(db, 'user-a').then((skills) =>
+        skills.map((skill) => skill.filePath),
+      ),
+    ).resolves.toEqual(['plugins/acme-support/skills/triage-ticket/SKILL.md']);
+
+    await expect(
+      listInstalledDirectorySkills(db, 'user-b').then((skills) =>
+        skills.map((skill) => skill.filePath),
+      ),
+    ).resolves.toEqual(['plugins/globex-support/skills/escalate/SKILL.md']);
+  });
+
+  it('serves nothing to an account with no install of its own', async () => {
+    const db = scopedDatabase({ 'user-a': [ownedByA] });
+    await expect(listInstalledDirectorySkills(db, 'user-b')).resolves.toEqual([]);
+  });
+
+  it('passes the caller id as the only scoping parameter on every read', async () => {
+    const db = scopedDatabase({ 'user-a': [ownedByA] });
+    await listInstalledDirectorySkills(db, 'user-b');
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-b']);
+    const sql = String(db.query.mock.calls[0]![0]);
+    expect(sql).toContain('installation.user_id = $1');
+    expect(sql).toContain('sources.user_id = $1');
+  });
+
+  it('never resolves another account skill by name through the chat lookup', async () => {
+    const db = scopedDatabase({ 'user-a': [ownedByA], 'user-b': [ownedByB] });
+
+    await expect(findInstalledDirectorySkill(db, 'user-b', 'triage-ticket')).resolves.toBeNull();
+    await expect(findInstalledDirectorySkill(db, 'user-a', 'triage-ticket')).resolves.toMatchObject(
+      { name: 'triage-ticket' },
+    );
   });
 });

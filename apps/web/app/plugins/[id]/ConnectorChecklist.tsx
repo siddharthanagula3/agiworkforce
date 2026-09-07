@@ -9,48 +9,58 @@ import { Prose } from '@/features/marketing/components/system';
 
 const CONNECTORS_BY_ID = new Map(CONNECTORS.map((connector) => [connector.id, connector]));
 
+const STATUS_UNREADABLE_COPY =
+  'Your connections could not be read just now, so this list shows what the pack needs rather than what you have already connected.';
+
 export function ConnectorChecklist({ connectorIds }: { connectorIds: string[] }) {
-  const { connectedIds, loading: connectorsLoading } = useConnectors();
+  const { connectedIds, loading: connectorsLoading, error } = useConnectors();
 
   if (connectorIds.length === 0) {
     return <Prose>This plugin does not require any connectors.</Prose>;
   }
 
   return (
-    <ul className="agi-ds-ledger" aria-label="Required connectors">
-      {connectorIds.map((connectorId) => {
-        const connected = !connectorsLoading && connectedIds.has(connectorId);
-        const connector = CONNECTORS_BY_ID.get(connectorId);
-        return (
-          <li key={connectorId} className="agi-ds-ledger-row">
-            <span
-              className="agi-ds-ledger-label"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            >
-              {connected ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-              ) : (
-                <Circle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              )}
-              {connector ? (
-                <OfficialConnectorLogo connector={connector} className="h-6 w-6 rounded-md" />
-              ) : null}
-              <span>{connector?.name ?? connectorId}</span>
-            </span>
-            <span className="agi-ds-ledger-value">
-              {connectorsLoading ? (
-                'Checking…'
-              ) : connected ? (
-                'Connected'
-              ) : (
-                <Link href="/connectors" className="agi-ds-link">
-                  Connect
-                </Link>
-              )}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      {error ? (
+        <p className="agi-ds-prose" data-size="sm" role="status">
+          {STATUS_UNREADABLE_COPY}
+        </p>
+      ) : null}
+      <ul className="agi-ds-ledger" aria-label="Required connectors">
+        {connectorIds.map((connectorId) => {
+          const connected = !connectorsLoading && connectedIds.has(connectorId);
+          const connector = CONNECTORS_BY_ID.get(connectorId);
+          return (
+            <li key={connectorId} className="agi-ds-ledger-row">
+              <span
+                className="agi-ds-ledger-label"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              >
+                {connected ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+                {connector ? (
+                  <OfficialConnectorLogo connector={connector} className="h-6 w-6 rounded-md" />
+                ) : null}
+                <span>{connector?.name ?? connectorId}</span>
+              </span>
+              <span className="agi-ds-ledger-value">
+                {connectorsLoading ? (
+                  'Checking…'
+                ) : connected ? (
+                  'Connected'
+                ) : (
+                  <Link href="/connectors" className="agi-ds-link">
+                    Connect
+                  </Link>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

@@ -308,6 +308,16 @@ describe('GET /api/plugins/marketplace-installations/[id]/settings', () => {
     );
     expect(response.status).toBe(404);
   });
+
+  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
+    getMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
+    const response = await getSettings(
+      get(`/api/plugins/marketplace-installations/${INSTALLATION_ID}/settings`),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
+  });
 });
 
 describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
@@ -335,5 +345,17 @@ describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
     );
     expect(response.status).toBe(400);
     expect(updateMarketplaceInstallationSettingsMock).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
+    updateMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
+    const response = await patchSettings(
+      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}/settings`, {
+        enabledSkills: [],
+      }),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
   });
 });

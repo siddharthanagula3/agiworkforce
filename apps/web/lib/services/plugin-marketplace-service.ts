@@ -1,10 +1,24 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
+import { ZodError } from 'zod';
+import {
+  parseClaudeMarketplaceManifest,
+  type ClaudeMarketplacePlugin,
+} from '@/features/plugins/server/directory/official-marketplace';
+import {
+  displayVersion,
+  lastSegment,
+  neutralizeCopy,
+} from '@/features/plugins/server/directory/entries';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   PLUGIN_MARKETPLACE_MANIFEST_PATH,
+  PLUGIN_MARKETPLACE_MANIFEST_PATHS,
+  PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
+  PLUGIN_MARKETPLACE_MAX_PLUGINS,
+  PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH,
   PluginMarketplaceManifestSchema,
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
@@ -14,10 +28,15 @@ import {
 
 import { logger } from '@/lib/logger';
 import { isKnownConnectorId } from '@/lib/connectors/catalog';
-import { getManagedSkillDirectory } from '@/lib/services/skill-catalog-service';
 
 const GITHUB_REPOSITORY_URL_PATTERN =
   /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
+const MANIFEST_TOO_LARGE_MESSAGE = `The marketplace manifest is larger than ${PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES} bytes.`;
+const MANIFEST_TOO_MANY_PLUGINS_MESSAGE = `A marketplace manifest may declare at most ${PLUGIN_MARKETPLACE_MAX_PLUGINS} plugins.`;
+const STANDARD_NAME_MAX_CHARS = 200;
+const STANDARD_DESCRIPTION_MAX_CHARS = 2_000;
+const STANDARD_LIST_MAX_ITEMS = 50;
+
 const REF_PATTERN = /^[A-Za-z0-9._/-]{1,200}$/;
 const GITHUB_API_USER_AGENT = 'agiworkforce-plugin-marketplace';
 const MARKETPLACE_FETCH_TIMEOUT_MS = 10_000;
@@ -157,8 +176,45 @@ async function resolveDefaultBranch(owner: string, repo: string): Promise<string
   return body.default_branch;
 }
 
-export function buildManifestRawUrl(owner: string, repo: string, ref: string): string {
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${PLUGIN_MARKETPLACE_MANIFEST_PATH}`;
+export function buildManifestRawUrl(
+  owner: string,
+  repo: string,
+  ref: string,
+  manifestPath: string = PLUGIN_MARKETPLACE_MANIFEST_PATH,
+): string {
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${manifestPath}`;
+}
+
+function standardManifestPlugin(plugin: ClaudeMarketplacePlugin): PluginMarketplaceManifestPlugin {
+  const description = neutralizeCopy(plugin.description ?? '').slice(
+    0,
+    STANDARD_DESCRIPTION_MAX_CHARS,
+  );
+  return {
+    id: plugin.name,
+    name: (plugin.displayName?.trim() || plugin.name).slice(0, STANDARD_NAME_MAX_CHARS),
+    description: description.length > 0 ? description : plugin.name,
+    version: displayVersion(plugin.version, null),
+    skills: [...new Set((plugin.skills ?? []).map(lastSegment))].slice(0, STANDARD_LIST_MAX_ITEMS),
+    connectors: [],
+    agents: [],
+    examplePrompts: [],
+    permissions: [],
+  };
+}
+
+export function declaredPluginCount(json: unknown): number {
+  if (!json || typeof json !== 'object') return 0;
+  const plugins = (json as { plugins?: unknown }).plugins;
+  return Array.isArray(plugins) ? plugins.length : 0;
+}
+
+export function standardManifestToInternal(json: unknown): PluginMarketplaceManifest {
+  const parsed = parseClaudeMarketplaceManifest(json);
+  return PluginMarketplaceManifestSchema.parse({
+    name: parsed.name,
+    plugins: parsed.plugins.map(standardManifestPlugin),
+  });
 }
 
 interface FetchedManifest {
@@ -182,50 +238,80 @@ export async function fetchMarketplaceManifest(
   }
 
   const resolvedRef = ref ?? (await resolveDefaultBranch(parsed.owner, parsed.repo));
-  const manifestUrl = buildManifestRawUrl(parsed.owner, parsed.repo, resolvedRef);
 
-  const response = await fetch(manifestUrl, {
-    headers: { 'User-Agent': GITHUB_API_USER_AGENT },
-    signal: AbortSignal.timeout(MARKETPLACE_FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) {
+  let found: { path: string; rawText: string } | null = null;
+  for (const manifestPath of PLUGIN_MARKETPLACE_MANIFEST_PATHS) {
+    const response = await fetch(
+      buildManifestRawUrl(parsed.owner, parsed.repo, resolvedRef, manifestPath),
+      {
+        headers: { 'User-Agent': GITHUB_API_USER_AGENT },
+        signal: AbortSignal.timeout(MARKETPLACE_FETCH_TIMEOUT_MS),
+      },
+    );
+    if (response.ok) {
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (
+        Number.isFinite(declaredLength) &&
+        declaredLength > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES
+      ) {
+        throw new PluginMarketplaceValidationError([MANIFEST_TOO_LARGE_MESSAGE]);
+      }
+      const rawText = await response.text();
+      if (rawText.length > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES) {
+        throw new PluginMarketplaceValidationError([MANIFEST_TOO_LARGE_MESSAGE]);
+      }
+      found = { path: manifestPath, rawText };
+      break;
+    }
+  }
+  if (!found) {
     throw new PluginMarketplaceFetchError(
-      `No marketplace manifest found at ${PLUGIN_MARKETPLACE_MANIFEST_PATH} on ${parsed.owner}/${parsed.repo}@${resolvedRef} (${response.status}).`,
+      `No marketplace manifest found at ${PLUGIN_MARKETPLACE_MANIFEST_PATHS.join(' or ')} on ${parsed.owner}/${parsed.repo}@${resolvedRef}.`,
     );
   }
 
-  const rawText = await response.text();
+  const { path: manifestPath, rawText } = found;
+  const standard = manifestPath === PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH;
+
   let json: unknown;
   try {
     json = JSON.parse(rawText);
   } catch {
     throw new PluginMarketplaceValidationError(['The marketplace manifest is not valid JSON.']);
   }
+  if (declaredPluginCount(json) > PLUGIN_MARKETPLACE_MAX_PLUGINS) {
+    throw new PluginMarketplaceValidationError([MANIFEST_TOO_MANY_PLUGINS_MESSAGE]);
+  }
 
-  const result = PluginMarketplaceManifestSchema.safeParse(json);
-  if (!result.success) {
-    throw new PluginMarketplaceValidationError(
-      result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
-    );
+  let manifest: PluginMarketplaceManifest;
+  try {
+    manifest = standard
+      ? standardManifestToInternal(json)
+      : PluginMarketplaceManifestSchema.parse(json);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new PluginMarketplaceValidationError(['The marketplace manifest is not valid JSON.']);
+    }
+    if (error instanceof ZodError) {
+      throw new PluginMarketplaceValidationError(
+        error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+      );
+    }
+    throw new PluginMarketplaceValidationError([
+      error instanceof Error ? error.message : 'The marketplace manifest is not valid.',
+    ]);
   }
 
   const contentHash = createHash('sha256').update(rawText).digest('hex');
-  return { manifest: result.data, contentHash, resolvedRef };
+  return { manifest, contentHash, resolvedRef };
 }
 
 export async function validateManifestAgainstCatalog(
   manifest: PluginMarketplaceManifest,
 ): Promise<string[]> {
-  const skillDirectory = await getManagedSkillDirectory();
-  const liveSkillNames = new Set(skillDirectory.map((skill) => skill.name));
   const issues: string[] = [];
 
   for (const plugin of manifest.plugins) {
-    for (const skill of plugin.skills) {
-      if (!liveSkillNames.has(skill)) {
-        issues.push(`${plugin.id} references unknown skill "${skill}"`);
-      }
-    }
     for (const connector of plugin.connectors) {
       if (!isKnownConnectorId(connector)) {
         issues.push(`${plugin.id} references unknown connector "${connector}"`);
@@ -289,17 +375,22 @@ async function replaceSourceEntries(
   }
 }
 
+export function canonicalRepositoryUrl(repositoryUrl: string): string {
+  const parsed = parseGithubRepositoryUrl(repositoryUrl);
+  return parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : repositoryUrl.trim();
+}
+
 async function findExistingSource(
   db: DatabaseAdapter,
   userId: string,
   repositoryUrl: string,
-  ref: string | null,
 ): Promise<{ id: string } | null> {
   const rows = await db.query<{ id: string }>(
     `select id from public.plugin_marketplace_sources
-      where user_id = $1 and repository_url = $2 and ref is not distinct from $3
+      where user_id = $1 and lower(repository_url) = lower($2)
+      order by created_at asc
       limit 1`,
-    [userId, repositoryUrl, ref],
+    [userId, repositoryUrl],
   );
   return rows[0] ?? null;
 }
@@ -327,7 +418,8 @@ export async function registerMarketplaceSource(
   }
 
   const sourceName = input.name?.trim() || manifest.name;
-  const existing = await findExistingSource(db, userId, input.repositoryUrl, requestedRef);
+  const canonicalUrl = canonicalRepositoryUrl(input.repositoryUrl);
+  const existing = await findExistingSource(db, userId, canonicalUrl);
 
   const sourceId = await db.transaction(async (tx) => {
     let id: string;
@@ -335,10 +427,10 @@ export async function registerMarketplaceSource(
       id = existing.id;
       await tx.execute(
         `update public.plugin_marketplace_sources
-            set name = $2, status = 'active', last_error = null,
-                content_hash = $3, last_synced_at = now(), updated_at = now()
+            set name = $2, repository_url = $3, ref = $4, status = 'active', last_error = null,
+                content_hash = $5, last_synced_at = now(), updated_at = now()
           where id = $1`,
-        [id, sourceName, contentHash],
+        [id, sourceName, canonicalUrl, requestedRef, contentHash],
       );
     } else {
       const rows = await tx.query<{ id: string }>(
@@ -346,7 +438,7 @@ export async function registerMarketplaceSource(
            (user_id, name, repository_url, ref, status, content_hash, last_synced_at)
          values ($1, $2, $3, $4, 'active', $5, now())
          returning id`,
-        [userId, sourceName, input.repositoryUrl, requestedRef, contentHash],
+        [userId, sourceName, canonicalUrl, requestedRef, contentHash],
       );
       const inserted = rows[0];
       if (!inserted)
