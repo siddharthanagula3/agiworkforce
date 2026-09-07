@@ -32,6 +32,10 @@ const APP_ROOT = appRoot();
 const REMOVAL_PATHS = [
   { file: 'app/api/settings/team/[memberId]/route.ts', what: 'an admin removing a member' },
   {
+    file: 'app/api/settings/organization/leave/route.ts',
+    what: 'a member leaving a workspace themselves',
+  },
+  {
     file: 'lib/server/scim/scim-provisioning-service.ts',
     what: 'SCIM deactivating or deleting a user',
   },
@@ -94,8 +98,22 @@ describe('deprovision covers every removal path', () => {
   it('member removal reports what it could not reach', () => {
     // A deprovision that silently half-succeeded is worse than one that failed
     // loudly: the administrator walks away believing the person is cut off.
-    const text = source('app/api/settings/team/[memberId]/route.ts');
-    expect(text).toMatch(/warnings/);
-    expect(text).toMatch(/deprovision\.errors/);
+    for (const file of [
+      'app/api/settings/team/[memberId]/route.ts',
+      'app/api/settings/organization/leave/route.ts',
+    ]) {
+      const text = source(file);
+      expect(text, `${file} hides what deprovision could not revoke`).toMatch(/warnings/);
+      expect(text, `${file} hides what deprovision could not revoke`).toMatch(
+        /deprovision\.errors/,
+      );
+    }
+  });
+
+  it('self-leave drops the cached active organization before it reports success', () => {
+    // The membership row is gone, but a warm instance keeps resolving the old
+    // workspace from `request-context-cache` until the entry is dropped.
+    const text = source('app/api/settings/organization/leave/route.ts');
+    expect(text).toMatch(/invalidateActiveOrganizationCache\(/);
   });
 });
