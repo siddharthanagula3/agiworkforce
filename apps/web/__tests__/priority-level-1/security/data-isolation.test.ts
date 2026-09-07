@@ -21,7 +21,11 @@ vi.mock('@/lib/server/rls-db', () => ({
       db: {
         query: (...args: unknown[]) => mockQuery(...args),
         execute: (...args: unknown[]) => mockExecute(...args),
-        transaction: vi.fn(),
+        transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+          run({
+            query: (...args: unknown[]) => mockQuery(...args),
+            execute: (...args: unknown[]) => mockExecute(...args),
+          }),
       },
       userId,
       organizationId: null,
