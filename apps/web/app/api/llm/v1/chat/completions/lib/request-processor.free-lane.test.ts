@@ -18,6 +18,19 @@ const FREE_SLOTS = [
 ] as const satisfies readonly RoutingSlot[];
 
 /**
+ * Every slot a pool record claims, verified or not. The Model Studio
+ * allocations claim the reasoning slots and stay unverified until the founder
+ * records the review, so the lane looks at those slots and refuses their
+ * routes as `not_verified_free`; only the FREE_SLOTS models may be served.
+ */
+const POOL_CLAIMED_SLOTS = [
+  ...FREE_SLOTS,
+  'reasoning_balanced',
+  'reasoning_economy',
+  'reasoning_premium',
+] as const satisfies readonly RoutingSlot[];
+
+/**
  * Every plan tier `resolveAutoRoute` folds into the `free` ceiling.
  *
  * `normalizeTier` (auto.ts) maps `basic` and `hobby` onto `free`, and its
@@ -61,7 +74,7 @@ function plan(
 
 describe('the lane preference is derived from the pool config', () => {
   it('names exactly the slots the pool records claim', () => {
-    expect([...freeLanePreferredSlots()].sort()).toEqual([...FREE_SLOTS].sort());
+    expect([...freeLanePreferredSlots()].sort()).toEqual([...POOL_CLAIMED_SLOTS].sort());
   });
 });
 
