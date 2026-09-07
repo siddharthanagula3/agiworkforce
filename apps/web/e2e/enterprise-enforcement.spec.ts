@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
+import { signIn } from './qa-capability-harness';
+
 /**
  * Proves the whole loop for each control: an administrator changes it through
  * the real API, the change lands in the real database, and the RUNTIME refuses
@@ -14,36 +16,11 @@ import { test, expect, type Page } from '@playwright/test';
  * carrying every migration, with a seeded workspace whose owner holds an
  * enterprise entitlement. See apps/web/db/neon/verify/README.md.
  */
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
-
 interface ClerkBrowser {
   loaded?: boolean;
   client: { signIn: { create(o: unknown): Promise<{ createdSessionId?: string }> } };
   session?: { getToken(): Promise<string | null> };
   setActive(o: { session: string }): Promise<void>;
-}
-
-async function signIn(page: Page): Promise<void> {
-  const secret = process.env['CLERK_SECRET_KEY'];
-  if (!secret) throw new Error('CLERK_SECRET_KEY missing (.env.local not loaded)');
-  const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
-  });
-  if (!res.ok) throw new Error(`sign_in_tokens failed: HTTP ${res.status}`);
-  const ticket = ((await res.json()) as { token?: string }).token;
-  await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
-    { timeout: 20000 },
-  );
-  await page.evaluate(async (t) => {
-    const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
-    const r = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
-    if (r.createdSessionId) await clerk.setActive({ session: r.createdSessionId });
-    await new Promise((x) => setTimeout(x, 1500));
-  }, ticket);
 }
 
 async function api(
