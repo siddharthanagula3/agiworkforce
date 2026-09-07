@@ -68,7 +68,16 @@ export function DirectoryToolbar({
   toggleValues?: Readonly<Record<string, boolean>>;
   onToggle?: (id: string, checked: boolean) => void;
 }) {
-  const activeFilterCount = countActiveFilters(selection);
+  const chipGroups = filterGroups.filter((group) => group.chips === true);
+  const menuGroups = filterGroups.filter((group) => group.chips !== true);
+  // The chip row shows its own state, so its selection must not also count
+  // toward the Filter by badge.
+  const menuSelection = Object.fromEntries(
+    Object.entries(selection).filter(([groupId]) =>
+      menuGroups.some((group) => group.id === groupId),
+    ),
+  );
+  const activeFilterCount = countActiveFilters(menuSelection);
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
@@ -126,7 +135,7 @@ export function DirectoryToolbar({
               {countLabel}
             </span>
           ) : null}
-          {filterGroups.length > 0 ? (
+          {menuGroups.length > 0 ? (
             <Menu
               align="end"
               trigger={({ open, toggle }) => (
@@ -147,7 +156,7 @@ export function DirectoryToolbar({
             >
               {({ close }) => (
                 <>
-                  {filterGroups.map((group, index) => (
+                  {menuGroups.map((group, index) => (
                     <div key={group.id}>
                       {index > 0 ? <MenuSeparator /> : null}
                       <p className="px-3 py-1.5 text-xs text-muted-foreground">{group.label}</p>
@@ -231,6 +240,41 @@ export function DirectoryToolbar({
           ) : null}
         </div>
       </div>
+
+      {chipGroups.map((group) => (
+        <div
+          key={group.id}
+          role="tablist"
+          aria-label={group.label}
+          className="flex flex-wrap items-center gap-1"
+        >
+          {group.options.map((option) => {
+            const chosen = selection[group.id] ?? [];
+            const selected =
+              chosen.length === 0
+                ? option.value === group.defaultValue
+                : chosen.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => onToggleFilter(group.id, option.value)}
+                className={cn(
+                  DIRECTORY_CHIP,
+                  selected
+                    ? 'bg-muted font-semibold text-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  DIRECTORY_FOCUS_RING,
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      ))}
 
       {toggles.length > 0 ? (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">

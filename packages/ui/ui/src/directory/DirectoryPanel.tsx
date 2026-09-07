@@ -54,6 +54,7 @@ import type {
   DirectorySortKey,
 } from './types';
 
+const NO_FILTERS: DirectoryFilterSelection = {};
 const EMPTY_ENTRIES: readonly DirectoryEntry[] = [];
 const EMPTY_GROUPS: readonly DirectoryGroup[] = [];
 const EMPTY_TOGGLES: Readonly<Record<string, boolean>> = {};
@@ -93,7 +94,22 @@ function DirectorySectionPanel({
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, DIRECTORY_SEARCH_DEBOUNCE_MS);
   const [sourceId, setSourceId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<DirectoryFilterSelection>({});
+  const [selection, setSelection] = useState<DirectoryFilterSelection>(NO_FILTERS);
+  const previousSectionRef = useRef(section);
+
+  /**
+   * One panel instance serves every section, so a filter chosen in one section
+   * would otherwise still be applied after switching to another, where its
+   * group does not exist and nothing on screen explains the missing rows. The
+   * guard keeps the first render out of it: resetting on mount would hand the
+   * memoised query a new identity and cost a second first-page request.
+   */
+  useEffect(() => {
+    if (previousSectionRef.current === section) return;
+    previousSectionRef.current = section;
+    setSelection(NO_FILTERS);
+    setSourceId(null);
+  }, [section]);
   const [sort, setSort] = useState<DirectorySortKey>(data.sortOptions?.[0] ?? 'name');
   const [toggleOverrides, setToggleOverrides] = useState<Readonly<Record<string, boolean>>>({});
   const deepLinkedEntryId =
@@ -647,6 +663,8 @@ function DirectorySectionPanel({
                 loading={data.loading}
                 error={data.error ?? null}
                 onRetry={data.retry}
+                {...(data.emptyCopy ? { emptyCopy: data.emptyCopy } : {})}
+                {...(data.emptyHint ? { emptyHint: data.emptyHint } : {})}
                 {...gridActions}
               />
             </section>

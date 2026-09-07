@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DirectoryActionNotice } from '../action-notice';
@@ -730,6 +730,50 @@ describe('DirectoryPanel remote section', () => {
         expect.objectContaining({ toggles: { 'include-local': true } }),
       ),
     );
+  });
+
+  /**
+   * The connection facet is the one a reader switches constantly, so it is a
+   * chip row above the list rather than a line inside the Filter by menu, and
+   * it travels in the same query selection every other facet uses.
+   */
+  it('renders a chips filter group as a chip row and sends it through the query', async () => {
+    const queryEntries = vi.fn();
+    const adapter = remoteAdapter({ queryEntries });
+    adapter.connectors = {
+      ...adapter.connectors!,
+      filterGroups: [
+        {
+          id: 'connection',
+          label: 'Connection',
+          exclusive: true,
+          chips: true,
+          options: [
+            { value: 'all', label: 'All' },
+            { value: 'connected', label: 'Connected' },
+            { value: 'not-connected', label: 'Not connected' },
+          ],
+        },
+      ],
+    };
+    render(<DirectoryPanel section="connectors" adapter={adapter} />);
+    await waitFor(() => expect(queryEntries).toHaveBeenCalledTimes(1));
+
+    const chips = screen.getByRole('tablist', { name: 'Connection' });
+    expect(within(chips).getByRole('tab', { name: 'Connected' })).toBeTruthy();
+    // A chip group states itself, so it must not also sit in the Filter menu.
+    expect(screen.queryByRole('button', { name: /Filter by/ })).toBeNull();
+
+    fireEvent.click(within(chips).getByRole('tab', { name: 'Connected' }));
+    await waitFor(() =>
+      expect(queryEntries).toHaveBeenLastCalledWith(
+        'connectors',
+        expect.objectContaining({ selection: { connection: ['connected'] } }),
+      ),
+    );
+    expect(
+      within(chips).getByRole('tab', { name: 'Connected' }).getAttribute('aria-selected'),
+    ).toBe('true');
   });
 
   it('shows the directory count from the toolbar and the page position', async () => {
