@@ -27,6 +27,12 @@ interface PendingConfirm extends ConfirmActionRequest {
   key: number;
 }
 
+export function reportUncaughtConfirmError(error: unknown): void {
+  queueMicrotask(() => {
+    throw error;
+  });
+}
+
 /**
  * One confirmation surface for irreversible actions. Before this, ten
  * destructive controls across settings, workspace and chat fired their
@@ -61,6 +67,10 @@ export function useConfirmAction(): {
     }
   }, [pending, close]);
 
+  const runAndReport = React.useCallback(() => {
+    void run().catch(reportUncaughtConfirmError);
+  }, [run]);
+
   const dialog = pending ? (
     <AlertDialog
       key={pending.key}
@@ -80,7 +90,7 @@ export function useConfirmAction(): {
             disabled={busy}
             onClick={(event) => {
               event.preventDefault();
-              void run();
+              runAndReport();
             }}
             className={cn(
               pending.destructive !== false &&

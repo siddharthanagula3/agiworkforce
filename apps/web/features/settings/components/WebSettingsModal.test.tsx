@@ -85,7 +85,7 @@ function stubFetch({
   let skillCatalogAttempt = 0;
   let pluginCatalogAttempt = 0;
   let installationsRequests = 0;
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url === '/api/skills/installs') {
       return {
@@ -137,15 +137,13 @@ function stubFetch({
       return { ok: true, json: async () => ({ installations: [] }) } as Response;
     }
     if (url.includes('/api/plugins')) {
-      const isLegacyPluginRequest = init?.credentials === 'include';
-      const isMarketplacePage = url.includes('source=marketplace');
-      if (!isLegacyPluginRequest && isMarketplacePage) {
+      if (url.includes('source=marketplace')) {
         pluginCatalogAttempt += 1;
         if (pluginCatalogFailAttempts.includes(pluginCatalogAttempt)) {
           return { ok: false, status: 503, json: async () => ({}) } as Response;
         }
       }
-      const entries = isLegacyPluginRequest || url.includes('source=partner') ? plugins : [];
+      const entries = url.includes('source=partner') ? plugins : [];
       return {
         ok: true,
         status: 200,

@@ -31,6 +31,7 @@ export {
 } from './constants';
 export type {
   DirectoryAdapter,
+  DirectoryOpenEntry,
   DirectoryBadgeKind,
   DirectoryConnectableMode,
   DirectoryConnectorDetail,
@@ -45,8 +46,11 @@ export type {
   DirectoryMarketplaceInput,
   DirectoryMarketplaceResult,
   DirectoryPluginComponents,
+  DirectoryPluginConnectorSetting,
   DirectoryPluginDetail,
   DirectoryPluginMcpServer,
+  DirectoryPluginSettings,
+  DirectoryPluginSkillSetting,
   DirectoryQuery,
   DirectorySection,
   DirectorySectionKey,

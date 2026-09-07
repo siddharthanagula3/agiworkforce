@@ -137,3 +137,83 @@ describe('PluginDetailView', () => {
     expect(screen.getByText('CLI')).toBeTruthy();
   });
 });
+
+describe('PluginDetailView installed controls', () => {
+  const settings = {
+    pluginId: 'frontend-design',
+    skills: [
+      { name: 'frontend-design', enabled: true },
+      { name: 'design-review', enabled: false },
+    ],
+    connectors: [
+      { id: 'github', name: 'GitHub', connected: true },
+      { id: 'linear', name: 'Linear', connected: false },
+    ],
+    loading: false,
+    saving: false,
+    error: null,
+  };
+
+  it('offers no enable switch until the plugin is installed', () => {
+    renderDetail({ installed: false }, { onSetEnabled: vi.fn() });
+    expect(screen.queryByRole('switch', { name: 'Enabled' })).toBeNull();
+  });
+
+  it('shows the stored enable position and reports a change once', () => {
+    const onSetEnabled = vi.fn();
+    renderDetail({ installed: true, enabled: false }, { onSetEnabled });
+    const toggle = screen.getByRole('switch', { name: 'Enabled' });
+    expect(toggle.getAttribute('data-state')).toBe('unchecked');
+    fireEvent.click(toggle);
+    expect(onSetEnabled).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('treats a missing enabled field as on rather than off', () => {
+    renderDetail({ installed: true }, { onSetEnabled: vi.fn() });
+    expect(screen.getByRole('switch', { name: 'Enabled' }).getAttribute('data-state')).toBe(
+      'checked',
+    );
+  });
+
+  it('lists each declared skill at its stored position and reports a change', () => {
+    const onSetSkillEnabled = vi.fn();
+    renderDetail({ installed: true }, { settings, onSetSkillEnabled });
+    expect(
+      screen.getByRole('switch', { name: 'Use frontend-design' }).getAttribute('data-state'),
+    ).toBe('checked');
+    const off = screen.getByRole('switch', { name: 'Use design-review' });
+    expect(off.getAttribute('data-state')).toBe('unchecked');
+    fireEvent.click(off);
+    expect(onSetSkillEnabled).toHaveBeenCalledExactlyOnceWith('design-review', true);
+  });
+
+  it('says which required connectors are missing', () => {
+    renderDetail({ installed: true }, { settings });
+    expect(screen.getByText('GitHub')).toBeTruthy();
+    expect(screen.getByText('Connected')).toBeTruthy();
+    expect(screen.getByText('Not connected')).toBeTruthy();
+  });
+
+  it('freezes the skill switches while a save is in flight', () => {
+    renderDetail(
+      { installed: true },
+      { settings: { ...settings, saving: true }, onSetSkillEnabled: vi.fn() },
+    );
+    expect(screen.getByRole('switch', { name: 'Use design-review' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  it('shows a failed settings read as an alert instead of an empty skill list', () => {
+    renderDetail(
+      { installed: true },
+      { settings: { ...settings, skills: [], connectors: [], error: 'Could not read settings.' } },
+    );
+    expect(screen.getByRole('alert').textContent).toContain('Could not read settings.');
+  });
+
+  it('renders the version the adapter supplies', () => {
+    renderDetail({ version: '2.1.0' });
+    expect(screen.getByText('2.1.0')).toBeTruthy();
+  });
+});

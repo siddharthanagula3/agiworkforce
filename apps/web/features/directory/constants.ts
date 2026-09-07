@@ -1,3 +1,10 @@
+import {
+  PLUGINS_API_PATH,
+  PLUGIN_INSTALLATIONS_API_PATH,
+  PLUGIN_MARKETPLACES_API_PATH,
+  PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH,
+} from '@/features/plugins/routes';
+
 export const DIRECTORY_SOURCE_AGI = 'agi';
 export const DIRECTORY_SOURCE_YOURS = 'yours';
 export const DIRECTORY_SOURCE_PARTNERS = 'partners';
@@ -123,6 +130,9 @@ export const CONNECTOR_STATE_NEEDS_SETUP = 'Needs setup';
 export const CONNECTOR_STATE_DESKTOP_AND_CLI = 'Desktop and CLI';
 
 export const CONNECTOR_COUNT_SUFFIX = 'connectors';
+export const CONNECTOR_COUNT_INDEXING_SUFFIX = 'connectors indexed so far';
+export const CONNECTOR_INDEXING_NOTICE =
+  'The connector directory is still being indexed, so a search can miss a server that has not been crawled yet.';
 export const CONNECTOR_SETUP_NOTICE_REGISTRY =
   'This connector does not say how it authenticates, so it cannot be connected from the browser yet.';
 export const CONNECTOR_SETUP_NOTICE_CURATED_PREFIX = 'Connecting';
@@ -145,8 +155,13 @@ export const MARKETPLACE_FAILED_COPY = 'That marketplace could not be synced.';
 export const CONNECT_FAILED_COPY = 'Could not start this connection. Try again later.';
 export const SKILL_INSTALL_FAILED_COPY = 'Could not install this skill. Try again.';
 export const SKILL_UNINSTALL_FAILED_COPY = 'Could not remove this skill. Try again.';
+export const SKILL_DELETE_FAILED_COPY = 'Could not delete this skill. Try again.';
 export const PLUGIN_INSTALL_FAILED_COPY = 'Could not install this plugin. Try again.';
 export const PLUGIN_UNINSTALL_FAILED_COPY = 'Could not uninstall this plugin. Try again.';
+export const PLUGIN_ENABLE_FAILED_COPY = 'Could not change this plugin. Try again.';
+export const MARKETPLACE_REFRESH_FAILED_COPY = 'Could not refresh this marketplace. Try again.';
+export const MARKETPLACE_REMOVE_UNSENT_COPY =
+  'The remove request could not be sent. Check your connection and try again.';
 export const RATE_LIMITED_COPY = 'Too many requests. Wait a minute and try again.';
 export const RATE_LIMITED_STATUS = 429;
 export const CONNECTOR_REAUTHORIZATION_COPY = 'Needs to be reconnected.';
@@ -170,11 +185,11 @@ export const DIRECTORY_QUERY_CURSOR = 'cursor';
 export const SKILLS_PATH = '/api/skills';
 export const SKILL_INSTALLS_PATH = '/api/skills/installs';
 export const SKILL_CATALOG_PARAM = 'catalog=all';
-export const PLUGINS_PATH = '/api/plugins';
-export const PLUGIN_INSTALLATIONS_PATH = '/api/plugins/installations';
-export const PLUGIN_MARKETPLACES_PATH = '/api/plugins/marketplaces';
-export const PLUGIN_MARKETPLACE_ENTRIES_PATH = '/api/plugins/marketplaces/entries';
-export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = '/api/plugins/marketplace-installations';
+export const PLUGINS_PATH = PLUGINS_API_PATH;
+export const PLUGIN_INSTALLATIONS_PATH = PLUGIN_INSTALLATIONS_API_PATH;
+export const PLUGIN_MARKETPLACES_PATH = PLUGIN_MARKETPLACES_API_PATH;
+export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
+export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;
 
 export const ADD_MARKETPLACE_TRIGGER_LABEL = 'Add marketplace';
 export const MARKETPLACE_TRIGGER_CLASS =

@@ -28,6 +28,11 @@ import type {
   PluginSourceFacet,
   PluginWorksWith,
 } from '@/features/plugins/server/directory/types';
+import {
+  PLUGIN_TARGET_BUILTIN,
+  PLUGIN_TARGET_MARKETPLACE,
+  type PluginInstallationTarget,
+} from '@/features/plugins/routes';
 
 import {
   CSRF_HEADER,
@@ -107,7 +112,7 @@ export interface PluginMarketplacePage {
 }
 
 export interface PluginInstallState {
-  builtinIds: ReadonlySet<string>;
+  builtinIds: ReadonlyMap<string, boolean>;
   byPluginKey: ReadonlyMap<string, PluginMarketplaceInstallation>;
   byEntryId: ReadonlyMap<string, PluginMarketplaceInstallation>;
   notice: string | null;
@@ -119,7 +124,7 @@ export interface UserMarketplaceState {
 }
 
 export const EMPTY_INSTALL_STATE: PluginInstallState = {
-  builtinIds: new Set(),
+  builtinIds: new Map(),
   byPluginKey: new Map(),
   byEntryId: new Map(),
   notice: null,
@@ -264,12 +269,14 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
     fetch(PLUGIN_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
     fetch(PLUGIN_MARKETPLACE_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
   ]);
-  const builtinIds = new Set<string>();
+  const builtinIds = new Map<string, boolean>();
   if (builtin?.ok) {
     const body = (await builtin.json().catch(() => ({}))) as {
-      installations?: { pluginId: string }[];
+      installations?: { pluginId: string; enabled?: boolean }[];
     };
-    for (const installation of body.installations ?? []) builtinIds.add(installation.pluginId);
+    for (const installation of body.installations ?? []) {
+      builtinIds.set(installation.pluginId, installation.enabled !== false);
+    }
   }
   const byPluginKey = new Map<string, PluginMarketplaceInstallation>();
   const byEntryId = new Map<string, PluginMarketplaceInstallation>();
@@ -400,6 +407,28 @@ function toComponents(entry: PluginDirectoryEntry): DirectoryPluginComponents {
   };
 }
 
+export function pluginInstallationEnabled(
+  entry: PluginDirectoryEntry,
+  installs: PluginInstallState,
+): boolean {
+  return entry.sourceFacet === PLUGIN_SOURCE_BUILTIN
+    ? (installs.builtinIds.get(entry.id) ?? true)
+    : (installs.byPluginKey.get(entry.id)?.enabled ?? true);
+}
+
+export function pluginInstallationTarget(
+  entry: PluginDirectoryEntry,
+  installs: PluginInstallState,
+): PluginInstallationTarget | null {
+  if (entry.sourceFacet === PLUGIN_SOURCE_BUILTIN) {
+    return installs.builtinIds.has(entry.id)
+      ? { kind: PLUGIN_TARGET_BUILTIN, pluginId: entry.id }
+      : null;
+  }
+  const installation = installs.byPluginKey.get(entry.id);
+  return installation ? { kind: PLUGIN_TARGET_MARKETPLACE, installationId: installation.id } : null;
+}
+
 export function toPluginDetail(
   entry: PluginDirectoryEntry,
   installs: PluginInstallState,
@@ -413,6 +442,8 @@ export function toPluginDetail(
     publisher: entry.publisher.name,
     description: entry.description,
     verified: entry.verified,
+    version: entry.version,
+    ...(installed ? { enabled: pluginInstallationEnabled(entry, installs) } : {}),
     ...(entry.installs === null ? {} : { installCount: entry.installs }),
     examplePrompts: entry.examplePrompts,
     components: toComponents(entry),

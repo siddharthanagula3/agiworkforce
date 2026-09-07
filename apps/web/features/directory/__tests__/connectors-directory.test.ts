@@ -386,6 +386,20 @@ describe('toConnectorSection', () => {
     expect(section([record()], new Set()).countLabel).toBeUndefined();
   });
 
+  it('says the count is only what has been indexed while the crawl is running', () => {
+    const built = section([record()], new Set(), [curated()], {
+      stats: { totalRecords: 412, bootstrapComplete: false },
+    });
+    expect(built.countLabel).toBe('412 connectors indexed so far');
+  });
+
+  it('states a plain count once the crawl has finished', () => {
+    const built = section([record()], new Set(), [curated()], {
+      stats: { totalRecords: 17_204, bootstrapComplete: true },
+    });
+    expect(built.countLabel).toBe('17,204 connectors');
+  });
+
   it('declares connectors installable so the card offers Connect', () => {
     expect(section([record()], new Set()).installable).toBe(true);
   });

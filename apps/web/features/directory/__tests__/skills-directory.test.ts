@@ -9,6 +9,7 @@ import {
   installSkill,
   isAuthoredSkill,
   skillPublisher,
+  removeSkill,
   toSkillEntry,
   toSkillSection,
   uninstallSkill,
@@ -80,6 +81,13 @@ describe('toSkillEntry', () => {
     const entry = toSkillEntry(skill({ name: 'mine', source: 'personal' }), new Set());
     expect(entry.sourceId).toBe('yours');
     expect(entry.installed).toBe(true);
+  });
+
+  it('offers no install control for a draft, which can never be executed', () => {
+    const entry = toSkillEntry(skill({ name: 'later', lifecycle: 'draft' }), new Set(['later']));
+    expect(entry.installed).toBe(false);
+    expect(entry.installable).toBe(false);
+    expect(entry.statusLabel).toBe('Coming later');
   });
 
   it('never invents an install count or an updated date', () => {
@@ -162,6 +170,33 @@ describe('install state requests', () => {
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': CSRF },
       body: JSON.stringify({ name: 'canvas-design' }),
     });
+  });
+
+  it('deletes an authored skill through the skill route, not the install route', async () => {
+    const fetchMock = jsonOnce({});
+    vi.stubGlobal('fetch', fetchMock);
+    await removeSkill(skill({ name: 'mine', source: 'personal' }), CSRF);
+    expect(fetchMock).toHaveBeenCalledWith('/api/skills/mine', {
+      method: 'DELETE',
+      headers: { 'x-csrf-token': CSRF },
+    });
+  });
+
+  it('removes a managed skill through the install route, which only uninstalls it', async () => {
+    const fetchMock = jsonOnce({ installed: [] });
+    vi.stubGlobal('fetch', fetchMock);
+    await removeSkill(skill(), CSRF);
+    expect(fetchMock).toHaveBeenCalledWith('/api/skills/installs/canvas-design', {
+      method: 'DELETE',
+      headers: { 'x-csrf-token': CSRF },
+    });
+  });
+
+  it('reports a failed delete with its status rather than swallowing it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    await expect(removeSkill(skill({ name: 'mine', source: 'personal' }), CSRF)).rejects.toThrow(
+      /404/,
+    );
   });
 
   it('deletes the named install with the csrf token', async () => {

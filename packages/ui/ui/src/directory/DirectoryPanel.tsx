@@ -25,8 +25,13 @@ import {
   DIRECTORY_SHOWING_PREFIX,
   GENERIC_ERROR_COPY,
   INSTALL_CONFIRM_CANCEL_LABEL,
+  DELETE_SKILL_CONFIRM_DESCRIPTION,
+  DELETE_SKILL_CONFIRM_LABEL,
+  DELETE_SKILL_CONFIRM_TITLE,
   INSTALL_CONFIRM_TITLE_PREFIX,
   INSTALL_LABEL,
+  MARKETPLACE_REFRESHING_LABEL,
+  MARKETPLACE_REFRESH_LABEL,
 } from './constants';
 import { DirectoryGrid } from './DirectoryGrid';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
@@ -83,7 +88,10 @@ export function DirectoryPanel({
   const [selection, setSelection] = useState<DirectoryFilterSelection>({});
   const [sort, setSort] = useState<DirectorySortKey>(data.sortOptions?.[0] ?? 'name');
   const [toggleOverrides, setToggleOverrides] = useState<Readonly<Record<string, boolean>>>({});
-  const [entryId, setEntryId] = useState<string | null>(openEntryId ?? null);
+  const deepLinkedEntryId =
+    adapter.openEntry?.section === section ? adapter.openEntry.entryId : null;
+  const requestedEntryId = openEntryId ?? deepLinkedEntryId;
+  const [entryId, setEntryId] = useState<string | null>(requestedEntryId);
   const [detail, setDetail] = useState<DirectoryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -92,13 +100,14 @@ export function DirectoryPanel({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
   const openChangeRef = useRef(onOpenEntryChange);
   openChangeRef.current = onOpenEntryChange;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setEntryId(openEntryId ?? null);
-  }, [openEntryId]);
+    setEntryId(requestedEntryId);
+  }, [requestedEntryId]);
 
   useEffect(() => {
     openChangeRef.current?.(entryId);
@@ -107,6 +116,28 @@ export function DirectoryPanel({
   }, [entryId]);
 
   const showAddMarketplace = section === 'plugins' && adapter.addMarketplace !== undefined;
+
+  const refreshableSourceId =
+    sourceId !== null &&
+    data.sources?.some((source) => source.id === sourceId && source.removable === true)
+      ? sourceId
+      : null;
+
+  const runMarketplaceRefresh = useCallback(
+    async (id: string) => {
+      if (!adapter.refreshMarketplace) return;
+      setRefreshingSourceId(id);
+      setActionError(null);
+      try {
+        await adapter.refreshMarketplace(id);
+      } catch (caught: unknown) {
+        setActionError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+      } finally {
+        setRefreshingSourceId(null);
+      }
+    },
+    [adapter],
+  );
 
   const loadSection = adapter.loadSection;
   useEffect(() => {
@@ -306,6 +337,18 @@ export function DirectoryPanel({
       const remove = adapter.uninstall
         ? () => void runAction(detail.id, adapter.uninstall)
         : undefined;
+      const deleteEntry =
+        adapter.deleteEntry && detail.kind === 'skill' && detail.editable === true
+          ? () =>
+              confirm({
+                title: DELETE_SKILL_CONFIRM_TITLE,
+                description: DELETE_SKILL_CONFIRM_DESCRIPTION,
+                confirmLabel: DELETE_SKILL_CONFIRM_LABEL,
+                cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+                destructive: true,
+                onConfirm: () => runAction(detail.id, adapter.deleteEntry),
+              })
+          : undefined;
 
       if (detail.kind === 'skill') {
         return (
@@ -316,6 +359,7 @@ export function DirectoryPanel({
               onBack={back}
               onInstall={install}
               onUninstall={remove}
+              onDelete={deleteEntry}
               onOpenSettings={openSettings}
               onCopyLink={copyLink}
               onDownloadFile={adapter.downloadSkillFile}
@@ -349,6 +393,8 @@ export function DirectoryPanel({
           </>
         );
       }
+      const settings =
+        adapter.pluginSettings?.pluginId === detail.id ? adapter.pluginSettings : undefined;
       return (
         <>
           {renderActionError()}
@@ -360,6 +406,19 @@ export function DirectoryPanel({
             onCopyLink={copyLink}
             onCopyValue={adapter.copyValue}
             onOpenHref={adapter.openHref}
+            {...(settings ? { settings } : {})}
+            {...(adapter.setPluginEnabled
+              ? {
+                  onSetEnabled: (enabled: boolean) =>
+                    adapter.setPluginEnabled?.(detail.id, enabled),
+                }
+              : {})}
+            {...(adapter.setPluginSkillEnabled
+              ? {
+                  onSetSkillEnabled: (skill: string, enabled: boolean) =>
+                    adapter.setPluginSkillEnabled?.(detail.id, skill, enabled),
+                }
+              : {})}
             busy={busy}
           />
         </>
@@ -421,6 +480,19 @@ export function DirectoryPanel({
             {DIRECTORY_SECTION_LABELS[section]}
           </h2>
           <div className="flex shrink-0 items-center gap-2">
+            {refreshableSourceId && adapter.refreshMarketplace ? (
+              <button
+                type="button"
+                onClick={() => void runMarketplaceRefresh(refreshableSourceId)}
+                disabled={refreshingSourceId !== null}
+                className={cn(DIRECTORY_CREATE_BUTTON, 'disabled:opacity-50')}
+              >
+                {refreshingSourceId === refreshableSourceId ? (
+                  <Spinner size="sm" aria-label={MARKETPLACE_REFRESHING_LABEL} />
+                ) : null}
+                {MARKETPLACE_REFRESH_LABEL}
+              </button>
+            ) : null}
             {adapter.createEntry && data.createLabel ? (
               <button
                 type="button"

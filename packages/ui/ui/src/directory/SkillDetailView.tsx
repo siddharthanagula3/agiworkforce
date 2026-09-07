@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
 import {
   DIRECTORY_LOADING_LABEL,
@@ -15,13 +16,18 @@ import {
 import { DirectoryBackLink, DirectoryDetailHeader } from './DirectoryDetailHeader';
 import { isTextFile } from './highlight';
 import { SkillFileBody, SkillFileTree } from './SkillFileViewer';
+import { DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectorySkillDetail } from './types';
+
+const SKILL_DELETE_LABEL = 'Delete skill';
+const SKILL_DELETE_HINT = 'Deleting removes this skill for good. It cannot be recovered.';
 
 export function SkillDetailView({
   detail,
   onBack,
   onInstall,
   onUninstall,
+  onDelete,
   onOpenSettings,
   onCopyLink,
   onCopyContent,
@@ -32,6 +38,7 @@ export function SkillDetailView({
   onBack: () => void;
   onInstall?: () => void;
   onUninstall?: () => void;
+  onDelete?: () => void;
   onOpenSettings?: () => void;
   onCopyLink?: () => void;
   onCopyContent?: (content: string) => void;
@@ -140,6 +147,23 @@ export function SkillDetailView({
           ) : null}
         </section>
       </div>
+
+      {editable && onDelete ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+          <p className="text-sm text-muted-foreground">{SKILL_DELETE_HINT}</p>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={busy}
+            className={cn(
+              'inline-flex min-h-9 shrink-0 items-center rounded-md border border-border px-3 text-sm text-danger transition-colors motion-reduce:transition-none hover:bg-muted disabled:opacity-50',
+              DIRECTORY_FOCUS_RING,
+            )}
+          >
+            {SKILL_DELETE_LABEL}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
