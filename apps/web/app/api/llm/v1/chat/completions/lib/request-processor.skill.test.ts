@@ -1,26 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { Skill } from '@agiworkforce/skills';
 import type { UserSkillRecord } from '@/lib/services/user-skill-service';
 
-vi.mock('@/lib/services/user-skill-service', () => ({
-  findUserSkillByName: vi.fn(),
-}));
-vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
-  listInstalledDirectorySkills: vi.fn(async () => []),
-}));
-
-import { findUserSkillByName } from '@/lib/services/user-skill-service';
-import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import {
   applyManagedSkillSelection,
   ChatCompletionRequestSchema,
   collectManagedPromptMaterials,
-  resolveManagedSkillCatalogWithUserFallback,
   toManagedSkillFromUserSkill,
 } from './request-processor';
-
-const mockedFindUserSkillByName = vi.mocked(findUserSkillByName);
 
 function userSkillRecord(overrides: Partial<UserSkillRecord> = {}): UserSkillRecord {
   return {
@@ -33,8 +21,6 @@ function userSkillRecord(overrides: Partial<UserSkillRecord> = {}): UserSkillRec
     ...overrides,
   };
 }
-
-const fakeDb = {} as Parameters<typeof findUserSkillByName>[0];
 
 function skill(overrides: Partial<Skill> = {}): Skill {
   return {
@@ -122,94 +108,7 @@ describe('managed Skill request contract', () => {
   });
 });
 
-describe('user-owned skill fallback', () => {
-  it('leaves the managed catalog untouched when the name already resolves there', async () => {
-    mockedFindUserSkillByName.mockClear();
-    const managedCatalog = [skill()];
-
-    const result = await resolveManagedSkillCatalogWithUserFallback(
-      'design-review',
-      managedCatalog,
-      {
-        db: fakeDb,
-        userId: 'user-1',
-      },
-    );
-
-    expect(result).toBe(managedCatalog);
-    expect(mockedFindUserSkillByName).not.toHaveBeenCalled();
-  });
-
-  it("resolves a chat turn's selected skill from the caller's own skills when absent from the managed catalog", async () => {
-    mockedFindUserSkillByName.mockClear();
-    mockedFindUserSkillByName.mockResolvedValueOnce(userSkillRecord());
-    const managedCatalog = [skill()];
-
-    const catalog = await resolveManagedSkillCatalogWithUserFallback(
-      'my-standup-notes',
-      managedCatalog,
-      { db: fakeDb, userId: 'user-1' },
-    );
-
-    expect(mockedFindUserSkillByName).toHaveBeenCalledWith(fakeDb, 'user-1', 'my-standup-notes');
-    expect(catalog).toHaveLength(2);
-    expect(catalog).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'design-review' })]),
-    );
-
-    const request = ChatCompletionRequestSchema.parse({
-      model: 'test-model',
-      messages: [{ role: 'user', content: 'Format my notes' }],
-      skill_name: 'my-standup-notes',
-    });
-    expect(applyManagedSkillSelection(request, catalog)).toEqual({ ok: true });
-    expect(JSON.stringify(request.messages)).not.toContain('MY STANDUP SKILL BODY');
-  });
-
-  it('falls back to the installed directory skills after the account skills', async () => {
-    mockedFindUserSkillByName.mockClear();
-    mockedFindUserSkillByName.mockResolvedValueOnce(null);
-    const directorySkill = { ...skill(), name: 'background-removal', source: 'extra' as const };
-    vi.mocked(listInstalledDirectorySkills).mockResolvedValueOnce([directorySkill]);
-    const managedCatalog = [skill()];
-
-    const catalog = await resolveManagedSkillCatalogWithUserFallback(
-      'background-removal',
-      managedCatalog,
-      { db: fakeDb, userId: 'user-1' },
-    );
-
-    expect(listInstalledDirectorySkills).toHaveBeenCalledWith(fakeDb, 'user-1');
-    expect(catalog.map((entry) => entry.name)).toEqual([skill().name, 'background-removal']);
-  });
-
-  it('keeps the not-found result when the name matches neither catalog', async () => {
-    mockedFindUserSkillByName.mockClear();
-    mockedFindUserSkillByName.mockResolvedValueOnce(null);
-    const managedCatalog = [skill()];
-
-    const catalog = await resolveManagedSkillCatalogWithUserFallback(
-      'nowhere-skill',
-      managedCatalog,
-      {
-        db: fakeDb,
-        userId: 'user-1',
-      },
-    );
-    expect(catalog).toBe(managedCatalog);
-
-    const request = ChatCompletionRequestSchema.parse({
-      model: 'test-model',
-      messages: [{ role: 'user', content: 'Format my notes' }],
-      skill_name: 'nowhere-skill',
-    });
-    expect(applyManagedSkillSelection(request, catalog)).toEqual({
-      ok: false,
-      code: 'skill_not_found',
-      message: 'The selected skill is not available.',
-    });
-  });
-
+describe('user-owned skill conversion', () => {
   it('carries the record body and a personal source into the converted catalog entry', () => {
     const converted = toManagedSkillFromUserSkill(userSkillRecord());
 

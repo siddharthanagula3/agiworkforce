@@ -10,6 +10,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { ManagedSkillsResponseSchema } from '@agiworkforce/cloud-contracts';
 import { SkillDraftBodySchema } from './skill-draft-schema';
 import {
+  dedupeByFirstClaimedName,
   findManagedDirectorySkillByName,
   getManagedSkillDirectoryForPlugins,
   invalidateManagedSkillCatalogCache,
@@ -56,8 +57,8 @@ async function handleListSkills(request: NextRequest) {
   let body;
   try {
     body = ManagedSkillsResponseSchema.parse({
-      skills: [
-        ...[...skills, ...directorySkills].map((s) => ({
+      skills: dedupeByFirstClaimedName([
+        ...dedupeByFirstClaimedName([...skills, ...directorySkills]).map((s) => ({
           name: s.name,
           description: s.description,
           source: s.source,
@@ -69,9 +70,12 @@ async function handleListSkills(request: NextRequest) {
           ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
             ? { version: s.frontmatter['version'].trim() }
             : {}),
+          ...(s.metadata.requires?.tools?.length
+            ? { requiredTools: s.metadata.requires.tools }
+            : {}),
         })),
         ...userSkills,
-      ],
+      ]),
     });
   } catch (error) {
     invalidateManagedSkillCatalogCache();

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { hashSkillContent, type Skill } from '@agiworkforce/skills';
 import { validateSkillDraft, type SkillDraft } from '@agiworkforce/skills/validation';
 import { createError } from '@/lib/errors';
 import { userSkillAuthoringEnabled } from './user-skill-authoring';
@@ -68,6 +69,37 @@ function requireUserSkillAuthoringEnabled(): void {
   if (!userSkillAuthoringEnabled()) {
     throw createError.notFound(USER_SKILL_AUTHORING_DISABLED_MESSAGE);
   }
+}
+
+const USER_SKILL_SOURCE = 'personal' satisfies Skill['source'];
+const USER_SKILL_FILE_PATH_PREFIX = 'user-skills';
+
+export function toManagedSkillFromUserSkill(record: UserSkillRecord): Skill {
+  return {
+    name: record.name,
+    description: record.description,
+    body: record.body,
+    contentHash: hashSkillContent(Buffer.from(record.body, 'utf8')),
+    filePath: `${USER_SKILL_FILE_PATH_PREFIX}/${record.id}`,
+    source: USER_SKILL_SOURCE,
+    metadata: {},
+    frontmatter: {},
+  };
+}
+
+export async function listUserSkillsAsManagedSkills(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<Skill[]> {
+  if (!userSkillAuthoringEnabled()) return [];
+  const rows = await db.query<UserSkillRow>(
+    `select id, name, description, body, created_at, updated_at
+       from user_skills
+      where user_id = $1
+      order by name asc`,
+    [userId],
+  );
+  return rows.map((row) => toManagedSkillFromUserSkill(toRecord(row)));
 }
 
 export function toUserSkillSummary(record: UserSkillRecord): UserSkillSummary {

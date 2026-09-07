@@ -10,11 +10,10 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { SkillDraftBodySchema } from '../skill-draft-schema';
 import {
   findManagedDirectorySkillByName,
-  getManagedSkillCatalogForPlugins,
+  findSelectableSkillByName,
 } from '@/lib/services/skill-catalog-service';
 import {
   deleteUserSkill,
-  findUserSkillByName,
   toUserSkillSummary,
   updateUserSkill,
 } from '@/lib/services/user-skill-service';
@@ -39,19 +38,17 @@ async function handleGetBody(request: NextRequest, context: { params: Promise<{ 
   const { userId } = await getClerkAuthUser(request);
   const name = requireSkillName((await context.params).name);
 
-  const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
-  const managed = (await getManagedSkillCatalogForPlugins(enabledPluginIds)).find(
-    (candidate) => candidate.name === name,
-  );
-  if (managed) {
-    return NextResponse.json({ body: managed.body });
-  }
-
-  const own = await findUserSkillByName(getNeonDb(), userId, name);
-  if (!own) {
+  const db = getNeonDb();
+  const skill = await findSelectableSkillByName({
+    db,
+    userId,
+    name,
+    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+  });
+  if (!skill) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
-  return NextResponse.json({ body: own.body });
+  return NextResponse.json({ body: skill.body });
 }
 
 async function handleUpdateSkill(

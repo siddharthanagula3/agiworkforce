@@ -10,6 +10,7 @@ export const MANAGED_SKILL_SOURCES = [
 ] as const;
 
 export const MANAGED_SKILL_LIFECYCLES = ['included', 'draft'] as const;
+export const MANAGED_OFFICE_FILE_TOOL_NAME = 'create_office_file';
 
 export const ManagedSkillSourceSchema = z.enum(MANAGED_SKILL_SOURCES);
 export const ManagedSkillLifecycleSchema = z.enum(MANAGED_SKILL_LIFECYCLES);
@@ -33,6 +34,7 @@ export const ManagedSkillSummarySchema = z
      * heard of editing renders exactly as before.
      */
     editable: z.boolean().optional(),
+    requiredTools: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {

@@ -51,18 +51,26 @@ export { formatSkillsForPrompt } from './format';
 export type { FormatSkillsOptions } from './format';
 export {
   createSkillToolDefinition,
+  describeSkillUnavailability,
   executeSkillTool,
+  executeSkillToolWithFiles,
   formatSkillsForToolPrompt,
   isSkillAvailable,
   DEFAULT_SKILL_TOOL_MAX_OUTPUT_BYTES,
+  SKILL_FILE_INVENTORY_LIMIT,
   SKILL_TOOL_NAME,
 } from './tool';
 export type {
   FormatSkillsForToolPromptOptions,
+  SkillFileInventoryEntry,
+  SkillFileReadOutcome,
+  SkillRequirementKind,
   SkillToolDefinition,
+  SkillToolFileAccess,
   SkillToolResult,
   SkillToolResultCode,
   SkillToolRuntimeContext,
+  SkillUnavailability,
 } from './tool';
 export {
   matchSkillsForPrompt,
@@ -72,10 +80,11 @@ export {
 export type { MatchSkillsForPromptOptions, SkillRelevanceMatch } from './relevance';
 export {
   buildSkillMarkdown,
+  parseSkillDraftFromMarkdown,
   validateSkillDraft,
   SKILL_DRAFT_NAME_PATTERN,
   SKILL_DRAFT_NAME_MAX_LENGTH,
   SKILL_DRAFT_DESCRIPTION_MAX_LENGTH,
   SKILL_DRAFT_BODY_MAX_LENGTH,
 } from './validation';
-export type { SkillDraft, SkillDraftValidationResult } from './validation';
+export type { SkillDraft, SkillDraftParseResult, SkillDraftValidationResult } from './validation';

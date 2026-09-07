@@ -9,7 +9,10 @@ import {
 } from '@features/skills/services/skills-catalog';
 import { SKILL_CATALOG_CHANGED_EVENT } from '@shared/events/skill-catalog-events';
 
-export type SkillItem = Pick<ManagedSkillSummary, 'name' | 'description' | 'source'>;
+export type SkillItem = Pick<
+  ManagedSkillSummary,
+  'name' | 'description' | 'source' | 'requiredTools'
+>;
 
 export interface UseSkillsListResult {
   skills: SkillItem[];

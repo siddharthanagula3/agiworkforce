@@ -93,6 +93,12 @@ describe('/api/skills/installs', () => {
       '---\nname: literature-review\ndescription: Survey sources.\nplugin: research-pack\n---\nBody',
       'utf-8',
     );
+    await mkdir(join(root, 'unreleased-fixture'), { recursive: true });
+    await writeFile(
+      join(root, 'unreleased-fixture', 'SKILL.md'),
+      '---\nname: unreleased-fixture\ndescription: Not shipped yet.\ndraft: true\n---\nBody',
+      'utf-8',
+    );
     process.env['SKILLS_LAYERS'] = JSON.stringify([{ rootDir: root, source: 'personal' }]);
     resetManagedSkillCatalogCacheForTests();
     Object.assign(sharedDb, fakeDb());
@@ -139,6 +145,26 @@ describe('/api/skills/installs', () => {
   it('DELETE rejects a plugin-owned skill name', async () => {
     const res = await uninstallSkill(deleteRequest('literature-review'), {
       params: Promise.resolve({ name: 'literature-review' }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('never reports a draft skill as installed, because it can never be executed', async () => {
+    const res = await listInstalls(getRequest());
+    const body = (await res.json()) as { installed: string[] };
+    expect(body.installed).not.toContain('unreleased-fixture');
+  });
+
+  it('POST refuses a draft skill instead of storing an override that changes nothing', async () => {
+    const res = await installSkill(postRequest({ name: 'unreleased-fixture' }));
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toContain('not available yet');
+  });
+
+  it('DELETE refuses a draft skill', async () => {
+    const res = await uninstallSkill(deleteRequest('unreleased-fixture'), {
+      params: Promise.resolve({ name: 'unreleased-fixture' }),
     });
     expect(res.status).toBe(409);
   });

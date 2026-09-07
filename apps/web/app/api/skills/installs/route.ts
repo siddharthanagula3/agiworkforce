@@ -10,7 +10,9 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   getManagedSkillDirectoryForPlugins,
+  isDraftSkill,
   isPluginOwnedSkill,
+  withoutDraftSkills,
 } from '@/lib/services/skill-catalog-service';
 import {
   resolveInstalledManagedSkillNames,
@@ -38,7 +40,11 @@ async function handleListInstalls(request: NextRequest) {
 
   const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
-  const installed = await resolveInstalledManagedSkillNames(db, userId, directory);
+  const installed = await resolveInstalledManagedSkillNames(
+    db,
+    userId,
+    withoutDraftSkills(directory),
+  );
   return NextResponse.json({ installed });
 }
 
@@ -64,9 +70,16 @@ async function handleInstallSkill(request: NextRequest) {
   if (isPluginOwnedSkill(skill)) {
     throw createError.conflict(`"${skill.name}" is controlled by its plugin installation.`);
   }
+  if (isDraftSkill(skill)) {
+    throw createError.conflict(`"${skill.name}" is not available yet.`);
+  }
 
   await setSkillInstallOverride(db, userId, skill.name, true);
-  const installed = await resolveInstalledManagedSkillNames(db, userId, directory);
+  const installed = await resolveInstalledManagedSkillNames(
+    db,
+    userId,
+    withoutDraftSkills(directory),
+  );
   return NextResponse.json({ installed });
 }
 

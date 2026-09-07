@@ -1504,6 +1504,13 @@ async function runMcpTool(
       : await executeManagedSkillTool(toolCall.args, { availableTools });
     if (result.code === 'skill_not_found' && userId) {
       const requestedSkillName = skillLoadRequestedName(toolCall.args);
+      const directorySkill = requestedSkillName
+        ? await findInstalledDirectorySkill(getNeonDb(), userId, requestedSkillName)
+        : null;
+      if (directorySkill) {
+        const fallback = executeSkillTool([directorySkill], toolCall.args, { availableTools });
+        return { content: fallback.content, isError: fallback.isError };
+      }
       const userSkill = requestedSkillName
         ? await findUserSkillByName(getNeonDb(), userId, requestedSkillName)
         : null;
@@ -1511,13 +1518,6 @@ async function runMcpTool(
         const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
           availableTools,
         });
-        return { content: fallback.content, isError: fallback.isError };
-      }
-      const directorySkill = requestedSkillName
-        ? await findInstalledDirectorySkill(getNeonDb(), userId, requestedSkillName)
-        : null;
-      if (directorySkill) {
-        const fallback = executeSkillTool([directorySkill], toolCall.args, { availableTools });
         return { content: fallback.content, isError: fallback.isError };
       }
     }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { SlashCommandMenu } from './SlashCommandMenu';
@@ -51,6 +51,50 @@ describe('SlashCommandMenu media admission', () => {
       </CapabilityProvider>,
     );
     expect(screen.getByText('/code')).toBeInTheDocument();
+  });
+
+  it('finds a compound skill name by a word inside it, ranked after prefix matches', () => {
+    render(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu
+          {...baseProps}
+          query="seo"
+          skills={[
+            { name: 'ai-seo', description: 'Optimise for AI answer engines.' },
+            { name: 'seo-audit', description: 'Audit a site for search.' },
+            { name: 'programmatic-seo', description: 'Build pages at scale.' },
+            { name: 'copywriting', description: 'Write landing copy.' },
+          ]}
+        />
+      </CapabilityProvider>,
+    );
+
+    const listed = screen.getAllByText(/^\//).map((node) => node.textContent);
+    expect(listed).toEqual(['/seo-audit', '/ai-seo', '/programmatic-seo']);
+  });
+
+  it('says what a skill needs without making it unselectable', () => {
+    const onSkillSelect = vi.fn();
+    render(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu
+          {...baseProps}
+          query="document"
+          onSkillSelect={onSkillSelect}
+          skills={[
+            {
+              name: 'document-creation',
+              description: 'Create polished Word documents.',
+              requiredTools: ['create_office_file'],
+            },
+          ]}
+        />
+      </CapabilityProvider>,
+    );
+
+    expect(screen.getByText(/Needs create_office_file/)).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('option', { name: /document-creation/ }));
+    expect(onSkillSelect).toHaveBeenCalledWith('document-creation');
   });
 
   it('describes /code by what selecting it does', () => {

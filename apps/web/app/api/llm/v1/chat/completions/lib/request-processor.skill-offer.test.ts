@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   reserveManagedUsage: vi.fn(),
   managedSkillCatalog: vi.fn(),
   enabledPluginIds: vi.fn(),
+  catalogParams: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -57,6 +58,16 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
     ...actual,
     getManagedSkillCatalog: mocks.managedSkillCatalog,
     getManagedSkillCatalogForPlugins: mocks.managedSkillCatalog,
+    loadSelectableSkillCatalog: async (params: {
+      loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
+      loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
+      includeNetworkBackedDirectorySkills?: boolean;
+    }) =>
+      mocks.catalogParams(params) ??
+      actual.filterSkillsByInstallOverrides(
+        await mocks.managedSkillCatalog(await params.loadEnabledPluginIds()),
+        await params.loadInstallOverrides(),
+      ),
   };
 });
 
@@ -100,9 +111,14 @@ function catalogSkill(name: string, description: string): Skill {
   };
 }
 
+const OFFICE_TOOL_NAME = 'create_office_file';
 const CATALOG = [
   catalogSkill('design-review', 'Review interface polish before a release.'),
   catalogSkill('sales-forecast', 'Model quarterly pipeline revenue.'),
+  {
+    ...catalogSkill('document-creation', 'Draft a formatted document.'),
+    metadata: { requires: { tools: [OFFICE_TOOL_NAME] } },
+  },
 ];
 
 function chatRequestFor(key: string, content: string, body: Record<string, unknown> = {}) {
@@ -329,5 +345,65 @@ describe('per-user skill install overrides', () => {
     );
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('selected skill requirements', () => {
+  it('refuses a selected skill whose declared tool the turn never offers', async () => {
+    const result = await processRequest(
+      chatRequestFor('skill-requirements-1', 'Draft the offer letter.', {
+        skill_name: 'document-creation',
+        office_creation: false,
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(422);
+    const body = await result.response.json();
+    expect(body.error.code).toBe('skill_requirements_unmet');
+    expect(body.error.param).toBe('skill_name');
+    expect(body.error.message).toContain(OFFICE_TOOL_NAME);
+  });
+
+  it('allows the same skill once office creation is on', async () => {
+    const result = await processRequest(
+      chatRequestFor('skill-requirements-2', 'Draft the offer letter.', {
+        skill_name: 'document-creation',
+        office_creation: true,
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatRequest.tools?.map((tool) => tool.function.name)).toContain(OFFICE_TOOL_NAME);
+  });
+});
+
+describe('directory skills on the implicit offer path', () => {
+  it('keeps the network-backed directory lookup off a turn that selects no skill', async () => {
+    await processRequest(
+      chatRequestFor('skill-offer-network-1', 'Review the interface polish for this release.'),
+      auth(),
+    );
+
+    expect(mocks.catalogParams).toHaveBeenCalledWith(
+      expect.objectContaining({ includeNetworkBackedDirectorySkills: false }),
+    );
+  });
+
+  it('keeps the full catalogue for an explicit selection', async () => {
+    await processRequest(
+      chatRequestFor('skill-offer-network-2', 'Review the interface polish.', {
+        skill_name: 'design-review',
+      }),
+      auth(),
+    );
+
+    expect(mocks.catalogParams).toHaveBeenCalledWith(
+      expect.not.objectContaining({ includeNetworkBackedDirectorySkills: false }),
+    );
   });
 });
