@@ -2,12 +2,12 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronRight, Plug, Search } from '@agiworkforce/icons';
-import { Popover, PopoverContent, PopoverTrigger, Spinner, Switch } from '@agiworkforce/ui';
+import { Popover, PopoverContent, PopoverTrigger, Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash } from '@/features/directory';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { connectorToggleId, type ComposerPlusMenuConnector } from './ComposerPlusMenu';
+import { ConnectorToggleRow } from './ConnectorToggleRow';
 
 export const COMPOSER_CONNECTORS_MENU_TESTID = 'composer-connectors-menu';
 export const COMPOSER_CONNECTORS_SEARCH_LABEL = 'Search connectors';
@@ -17,9 +17,7 @@ export const COMPOSER_CONNECTORS_EMPTY_COPY = 'No connectors are connected yet.'
 const MENU_LABEL = 'Connectors';
 const NO_MATCH_COPY = 'No connected connector matches that search.';
 const LOADING_LABEL = 'Loading connectors';
-const TOGGLE_LABEL_PREFIX = 'Use';
 const SETTINGS_SECTION = 'connectors';
-const TOGGLE_ID_PREFIX = 'composer-connector';
 
 const PANEL_CLASS = 'w-[min(20rem,calc(100vw-1rem))] rounded-xl p-1.5';
 const SEARCH_WRAP_CLASS = 'relative px-1 pb-1.5 pt-1';
@@ -28,9 +26,6 @@ const SEARCH_INPUT_CLASS =
 const ROW_CLASS = 'flex min-h-10 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm';
 const ROW_BUTTON_CLASS =
   'text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const LOGO_CLASS = 'h-6 w-6 rounded-md border-border shadow-none';
-const SWITCH_CLASS =
-  'h-5 min-h-0 w-9 min-w-0 [&>span]:size-4 [&>span]:data-[state=checked]:translate-x-4';
 const DIVIDER_CLASS = 'my-1 border-t border-border';
 const NOTE_CLASS = 'px-2 py-3 text-center text-xs text-muted-foreground';
 
@@ -125,28 +120,21 @@ export function ComposerPluginsMenu({
         ) : visible.length === 0 ? (
           <p className={NOTE_CLASS}>{NO_MATCH_COPY}</p>
         ) : (
-          <ul className="flex flex-col">
+          <div role="menu" aria-label={MENU_LABEL} className="flex flex-col">
             {visible.map((connector) => {
               const toggleId = connectorToggleId(connector);
               const enabled = !disabledConnectorIds.includes(toggleId);
-              const switchId = `${TOGGLE_ID_PREFIX}-${connector.id}`;
               return (
-                <li key={connector.id} className={ROW_CLASS}>
-                  <OfficialConnectorLogo connector={connector} className={LOGO_CLASS} />
-                  <label htmlFor={switchId} className="min-w-0 flex-1 truncate text-foreground">
-                    {connector.label}
-                  </label>
-                  <Switch
-                    id={switchId}
-                    checked={enabled}
-                    onCheckedChange={(checked) => onSetConnectorEnabled(toggleId, checked)}
-                    aria-label={`${TOGGLE_LABEL_PREFIX} ${connector.label}`}
-                    className={SWITCH_CLASS}
-                  />
-                </li>
+                <ConnectorToggleRow
+                  key={connector.id}
+                  connector={connector}
+                  label={connector.label}
+                  checked={enabled}
+                  onToggle={() => onSetConnectorEnabled(toggleId, !enabled)}
+                />
               );
             })}
-          </ul>
+          </div>
         )}
 
         <div className={DIVIDER_CLASS} />

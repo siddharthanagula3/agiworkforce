@@ -144,7 +144,10 @@ describe('ComposerPlusMenu, chat mode', () => {
   it('lists connected connectors only once the Connectors row is expanded', () => {
     renderMenu({ connectorsSubmenuOpen: true });
 
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).toBeInTheDocument();
+    const row = screen.getByRole('menuitemcheckbox', { name: 'Gmail' });
+    expect(row).toBeInTheDocument();
+    // The same fragment the AGI Work bar popover asserts: one row component.
+    expect(row.className).toContain('items-center gap-3 rounded-lg py-2 pr-3');
     expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Add custom connector' })).toBeInTheDocument();
   });
