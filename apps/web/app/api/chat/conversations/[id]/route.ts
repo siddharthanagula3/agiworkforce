@@ -273,9 +273,6 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   let deletedConversation: { id: string } | undefined;
   let revokedCount = 0;
   try {
-    // A soft delete never fires the 0095 FK cascade, so revocation must commit
-    // with it or the public token outlives the chat, and the pending sweep must
-    // stay unfiltered by this call so a retry finishes an earlier partial failure.
     const outcome = await db.transaction(async (tx) => {
       const [row] = await tx.query<{ id: string }>(DELETE_CONVERSATION_SQL, [
         id,

@@ -41,6 +41,7 @@ const sidebarProps = {
   onSelect: () => {},
   onRename: () => {},
   onDelete: () => {},
+  onOpenSearch: () => {},
 };
 
 describe('shared UI i18n', () => {
