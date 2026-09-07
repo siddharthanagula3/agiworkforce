@@ -674,7 +674,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await screen.findByText('/fixture-authored-skill');
     expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Settings fixture-authored-skill' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Remove fixture-authored-skill' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Manage fixture-authored-skill' })).toBeTruthy();
   });
 
   it('shows New skill when the server enables skill authoring', async () => {

@@ -74,6 +74,7 @@ export const NEW_BADGE_LABEL = 'New';
 
 export const ADD_LABEL = 'Add';
 export const SETTINGS_LABEL = 'Settings';
+export const MANAGE_LABEL = 'Manage';
 export const REMOVE_LABEL = 'Remove';
 export const INSTALL_LABEL = 'Install';
 export const UNINSTALL_LABEL = 'Uninstall';
@@ -95,11 +96,6 @@ export const CARD_INSTALL_LABELS: Record<DirectorySectionKey, string> = {
   skills: ADD_LABEL,
   connectors: ADD_LABEL,
   plugins: INSTALL_LABEL,
-};
-export const CARD_REMOVE_LABELS: Record<DirectorySectionKey, string> = {
-  skills: REMOVE_LABEL,
-  connectors: REMOVE_LABEL,
-  plugins: UNINSTALL_LABEL,
 };
 export const DIRECTORY_COUNT_SUFFIXES: Partial<Record<DirectorySectionKey, string>> = {
   plugins: 'installs',

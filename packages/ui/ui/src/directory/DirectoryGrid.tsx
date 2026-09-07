@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleCheck, Download, Minus, Plus, Settings as SettingsIcon } from 'lucide-react';
+import { CircleCheck, Download, Plus, Settings as SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
@@ -8,7 +8,7 @@ import { Spinner } from '../primitives/Spinner';
 import { ConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   CARD_INSTALL_LABELS,
-  CARD_REMOVE_LABELS,
+  MANAGE_LABEL,
   CONNECTED_GLYPH_LABEL,
   CONNECTOR_CARD_ACTION_LABELS,
   DIRECTORY_COUNT_SUFFIXES,
@@ -86,24 +86,20 @@ export function DirectoryCard({
   onOpen,
   onInstall,
   onOpenSettings,
-  onRemove,
 }: {
   section: DirectorySectionKey;
   entry: DirectoryEntry;
   onOpen: (id: string) => void;
   onInstall?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
-  onRemove?: (id: string) => void;
 }) {
   const count = formatInstallCount(entry.installCount);
   const countSuffix = DIRECTORY_COUNT_SUFFIXES[section];
   const publisher = entry.publisher === entry.name ? undefined : entry.publisher;
   const connectedGlyph = section === CONNECTED_GLYPH_SECTION && entry.installed === true;
   const editable = entry.editable === true && onOpenSettings !== undefined;
-  const installedAction = editable ? onOpenSettings : (onRemove ?? onOpenSettings);
-  const installedLabel =
-    installedAction === onOpenSettings ? SETTINGS_LABEL : CARD_REMOVE_LABELS[section];
-  const InstalledIcon = installedAction === onOpenSettings ? SettingsIcon : Minus;
+  const installedAction = editable ? onOpenSettings : onOpen;
+  const installedLabel = editable ? SETTINGS_LABEL : MANAGE_LABEL;
   const addLabel = entry.connectableMode
     ? CONNECTOR_CARD_ACTION_LABELS[entry.connectableMode]
     : CARD_INSTALL_LABELS[section];
@@ -113,7 +109,7 @@ export function DirectoryCard({
     : entry.installable === false
       ? undefined
       : onInstall;
-  const TrailingIcon = entry.installed ? InstalledIcon : Plus;
+  const TrailingIcon = entry.installed ? SettingsIcon : Plus;
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
   const hasMeta = pills.length > 0 || publisher || count;
 
@@ -202,7 +198,6 @@ export function DirectoryGrid({
   onOpen,
   onInstall,
   onOpenSettings,
-  onRemove,
 }: {
   section: DirectorySectionKey;
   entries: readonly DirectoryEntry[];
@@ -212,7 +207,6 @@ export function DirectoryGrid({
   onOpen: (id: string) => void;
   onInstall?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
-  onRemove?: (id: string) => void;
 }) {
   if (loading && entries.length === 0) {
     return (
@@ -271,7 +265,6 @@ export function DirectoryGrid({
           onOpen={onOpen}
           onInstall={onInstall}
           onOpenSettings={onOpenSettings}
-          onRemove={onRemove}
         />
       ))}
     </div>
