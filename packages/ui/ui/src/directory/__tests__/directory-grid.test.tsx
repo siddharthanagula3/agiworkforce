@@ -40,11 +40,12 @@ describe('DirectoryGrid', () => {
     expect(onInstall).toHaveBeenCalledWith('canvas-design');
   });
 
-  it('offers a remove control when installed with no settings pane', () => {
-    const onRemove = vi.fn();
-    renderGrid({ entries: [{ ...skill, installed: true }], onInstall: vi.fn(), onRemove });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove canvas-design' }));
-    expect(onRemove).toHaveBeenCalledWith('canvas-design');
+  it('offers a manage gear once installed, which opens the detail', () => {
+    const onOpen = vi.fn();
+    renderGrid({ entries: [{ ...skill, installed: true }], onInstall: vi.fn(), onOpen });
+    expect(screen.queryByRole('button', { name: 'Add canvas-design' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Manage canvas-design' }));
+    expect(onOpen).toHaveBeenCalledWith('canvas-design');
   });
 
   it('swaps the add control for a settings control once an editable skill is installed', () => {
@@ -61,13 +62,14 @@ describe('DirectoryGrid', () => {
     expect(onInstall).not.toHaveBeenCalled();
   });
 
-  it('offers Remove, not Settings, for an installed skill the account cannot edit', () => {
+  it('offers Manage, not Settings, for an installed skill the account cannot edit', () => {
     const onOpenSettings = vi.fn();
-    const onRemove = vi.fn();
-    renderGrid({ entries: [{ ...skill, installed: true }], onOpenSettings, onRemove });
+    const onOpen = vi.fn();
+    renderGrid({ entries: [{ ...skill, installed: true }], onOpenSettings, onOpen });
     expect(screen.queryByRole('button', { name: 'Settings canvas-design' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove canvas-design' }));
-    expect(onRemove).toHaveBeenCalledWith('canvas-design');
+    fireEvent.click(screen.getByRole('button', { name: 'Manage canvas-design' }));
+    expect(onOpen).toHaveBeenCalledWith('canvas-design');
+    expect(onOpenSettings).not.toHaveBeenCalled();
   });
 
   it('disables the trailing control while a mutation is in flight', () => {
@@ -161,15 +163,13 @@ describe('DirectoryGrid', () => {
   });
 
   it('shows a green check instead of a control for a connected connector', () => {
-    const onRemove = vi.fn();
     renderGrid({
       section: 'connectors',
       entries: [{ id: 'slack', name: 'Slack', description: 'Chat', installed: true }],
       onInstall: vi.fn(),
-      onRemove,
     });
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Remove Slack' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manage Slack' })).toBeNull();
   });
 
   it('renders Official and Community as pills and Custom for user-added servers', () => {
@@ -241,9 +241,9 @@ describe('DirectoryGrid', () => {
     expect(screen.getByText('XY')).toBeTruthy();
   });
 
-  it('labels a plugin card Install and Uninstall with a tooltip', () => {
+  it('labels a plugin card Install before and Manage after, each with a tooltip', () => {
     const onInstall = vi.fn();
-    const onRemove = vi.fn();
+    const onOpen = vi.fn();
     renderGrid({
       section: 'plugins',
       entries: [
@@ -251,16 +251,16 @@ describe('DirectoryGrid', () => {
         { id: 'superpowers', name: 'Superpowers', description: 'Skills', installed: true },
       ],
       onInstall,
-      onRemove,
+      onOpen,
     });
     const install = screen.getByRole('button', { name: 'Install Frontend Design' });
     expect(install.getAttribute('title')).toBe('Install');
     fireEvent.click(install);
     expect(onInstall).toHaveBeenCalledWith('frontend-design');
-    const uninstall = screen.getByRole('button', { name: 'Uninstall Superpowers' });
-    expect(uninstall.getAttribute('title')).toBe('Uninstall');
-    fireEvent.click(uninstall);
-    expect(onRemove).toHaveBeenCalledWith('superpowers');
+    const manage = screen.getByRole('button', { name: 'Manage Superpowers' });
+    expect(manage.getAttribute('title')).toBe('Manage');
+    fireEvent.click(manage);
+    expect(onOpen).toHaveBeenCalledWith('superpowers');
   });
 
   it('writes a plugin install count as a sentence with the publisher and verified glyph', () => {
