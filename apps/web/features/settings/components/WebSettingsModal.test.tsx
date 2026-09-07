@@ -700,12 +700,14 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
   it('shows a plugin loading failure and retries instead of presenting a fake directory', async () => {
     stubFetch({ pluginCatalogFailAttempts: [2] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="plugins" />);
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(await screen.findByRole('button', { name: 'Browse' }));
     await screen.findByText('GitHub Automation');
 
-    const { fireEvent } = await import('@testing-library/react');
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
     fireEvent.click(within(nav).getByRole('button', { name: 'Plugins' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Browse' }));
 
     expect(await screen.findByText('The plugin catalog is unavailable right now.')).toBeTruthy();
 

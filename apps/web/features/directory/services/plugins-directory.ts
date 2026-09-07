@@ -3,7 +3,11 @@ import type {
   PluginMarketplaceInstallation,
   PluginMarketplaceSourceSummary,
 } from '@agiworkforce/cloud-contracts';
-import { isPluginEntryWebInstallable, type PluginRegistryEntry } from '@agiworkforce/types';
+import {
+  isPluginEntryWebInstallable,
+  type PluginInstallation,
+  type PluginRegistryEntry,
+} from '@agiworkforce/types';
 import {
   DIRECTORY_SOURCE_ALL_ID,
   DIRECTORY_SOURCE_ALL_LABEL,
@@ -13,6 +17,7 @@ import {
   type DirectoryEntry,
   type DirectoryFilterGroup,
   type DirectoryGroup,
+  type DirectoryManageRow,
   type DirectoryPluginComponents,
   type DirectoryPluginDetail,
   type DirectoryQuery,
@@ -112,6 +117,7 @@ export interface PluginMarketplacePage {
 }
 
 export interface PluginInstallState {
+  builtin: readonly PluginInstallation[];
   builtinIds: ReadonlyMap<string, boolean>;
   byPluginKey: ReadonlyMap<string, PluginMarketplaceInstallation>;
   byEntryId: ReadonlyMap<string, PluginMarketplaceInstallation>;
@@ -124,6 +130,7 @@ export interface UserMarketplaceState {
 }
 
 export const EMPTY_INSTALL_STATE: PluginInstallState = {
+  builtin: [],
   builtinIds: new Map(),
   byPluginKey: new Map(),
   byEntryId: new Map(),
@@ -269,12 +276,14 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
     fetch(PLUGIN_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
     fetch(PLUGIN_MARKETPLACE_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
   ]);
+  const builtinInstallations: PluginInstallation[] = [];
   const builtinIds = new Map<string, boolean>();
   if (builtin?.ok) {
     const body = (await builtin.json().catch(() => ({}))) as {
-      installations?: { pluginId: string; enabled?: boolean }[];
+      installations?: PluginInstallation[];
     };
     for (const installation of body.installations ?? []) {
+      builtinInstallations.push(installation);
       builtinIds.set(installation.pluginId, installation.enabled !== false);
     }
   }
@@ -293,7 +302,7 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
     const body = await readErrorBody(marketplace);
     if (body.error?.code === PLUGIN_INSTALLS_DISABLED_CODE) notice = body.error.message ?? null;
   }
-  return { builtinIds, byPluginKey, byEntryId, notice };
+  return { builtin: builtinInstallations, builtinIds, byPluginKey, byEntryId, notice };
 }
 
 async function readOptional<T>(path: string): Promise<T | null> {
@@ -384,6 +393,81 @@ export function toUserMarketplaceEntry(
     updatedAt: entry.updatedAt,
     facets: {},
   };
+}
+
+export interface PluginManageInput {
+  builtin: readonly PluginDirectoryEntry[];
+  partner: readonly PluginDirectoryEntry[];
+  marketplace: readonly PluginDirectoryEntry[];
+  details: readonly PluginDirectoryEntry[];
+  user: UserMarketplaceState;
+  installs: PluginInstallState;
+}
+
+function findRecord(input: PluginManageInput, id: string): PluginDirectoryEntry | undefined {
+  return (
+    input.builtin.find((entry) => entry.id === id) ??
+    input.partner.find((entry) => entry.id === id) ??
+    input.marketplace.find((entry) => entry.id === id) ??
+    input.details.find((entry) => entry.id === id)
+  );
+}
+
+function recordManageRow(
+  record: PluginDirectoryEntry,
+  updatedAt: string | undefined,
+): DirectoryManageRow {
+  return {
+    id: record.id,
+    name: record.name,
+    author: record.publisher.name,
+    skillCount: record.runtime.components.skills.length,
+    ...((updatedAt ?? record.updatedAt) ? { updatedAt: updatedAt ?? record.updatedAt } : {}),
+  };
+}
+
+export function toPluginManageRows(input: PluginManageInput): DirectoryManageRow[] {
+  const rows: DirectoryManageRow[] = [];
+  const seen = new Set<string>();
+  const push = (row: DirectoryManageRow) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id);
+    rows.push(row);
+  };
+
+  for (const installation of input.installs.builtin) {
+    const record = findRecord(input, installation.pluginId);
+    push(
+      record
+        ? recordManageRow(record, installation.updatedAt)
+        : {
+            id: installation.pluginId,
+            name: installation.pluginId,
+            updatedAt: installation.updatedAt,
+          },
+    );
+  }
+
+  for (const installation of input.installs.byPluginKey.values()) {
+    const record = findRecord(input, installation.pluginKey);
+    if (record) {
+      push(recordManageRow(record, installation.updatedAt));
+      continue;
+    }
+    const entry = input.user.entries.find((candidate) => candidate.id === installation.entryId);
+    const source = entry
+      ? input.user.sources.find((candidate) => candidate.id === entry.sourceId)
+      : undefined;
+    push({
+      id: entry?.id ?? installation.entryId,
+      name: entry?.name ?? installation.pluginKey,
+      ...(source ? { author: source.name } : {}),
+      skillCount: entry?.declaredSkills.length ?? installation.enabledSkills.length,
+      updatedAt: installation.updatedAt,
+    });
+  }
+
+  return rows.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function worksWithLabels(values: readonly string[]): string[] {
@@ -518,6 +602,7 @@ export function pluginWorksWithFilter(stats: PluginDirectoryStats | null): Direc
 export function initialPluginSection(): DirectorySection {
   return {
     entries: [],
+    manage: { rows: [], loading: true },
     installable: true,
     remote: true,
     sources: pluginSourceChips([]),

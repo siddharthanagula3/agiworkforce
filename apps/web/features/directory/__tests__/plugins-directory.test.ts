@@ -20,6 +20,7 @@ import {
   toDirectoryShape,
   toPluginDetail,
   toPluginEntry,
+  toPluginManageRows,
   toPluginRequest,
   toPluginSection,
   uninstallPlugin,
@@ -681,5 +682,107 @@ describe('uninstallPlugin', () => {
     await expect(
       uninstallPlugin({ kind: 'installation', installationId: 'missing' }, 'token'),
     ).rejects.toThrow('Could not uninstall this plugin. Try again.');
+  });
+});
+
+describe('the installed table rows', () => {
+  const manageInput = (patch: Record<string, unknown> = {}) => ({
+    builtin: [builtinEntry()],
+    partner: [partnerEntry()],
+    marketplace: [directoryEntry()],
+    details: [],
+    user: EMPTY_USER_MARKETPLACES,
+    installs: EMPTY_INSTALL_STATE,
+    ...patch,
+  });
+
+  it('is empty when nothing is installed', () => {
+    expect(toPluginManageRows(manageInput())).toEqual([]);
+  });
+
+  it('reads the author, skill count and install date of a built-in pack', () => {
+    const rows = toPluginManageRows(
+      manageInput({
+        installs: installs({
+          builtin: [
+            {
+              pluginId: 'data-pack',
+              installedVersion: '1.0.0',
+              enabled: true,
+              installedAt: '2026-09-01T00:00:00.000Z',
+              updatedAt: '2026-09-04T00:00:00.000Z',
+            },
+          ],
+          builtinIds: new Map([['data-pack', true]]),
+        }),
+      }),
+    );
+    expect(rows).toEqual([
+      {
+        id: 'data-pack',
+        name: 'Data Pack',
+        author: 'AGI',
+        skillCount: 1,
+        updatedAt: '2026-09-04T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('reads a marketplace install from the directory record', () => {
+    const rows = toPluginManageRows(manageInput({ installs: installedByKey('frontend-design') }));
+    expect(rows).toEqual([
+      {
+        id: 'frontend-design',
+        name: 'Frontend Design',
+        author: 'Anthropic',
+        skillCount: 1,
+        updatedAt: '2026-09-06T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('falls back to the user marketplace entry when no directory record matches', () => {
+    const rows = toPluginManageRows(
+      manageInput({
+        marketplace: [],
+        user: { sources: [userSource()], entries: [userEntry()] },
+        installs: installs({
+          byPluginKey: new Map([
+            ['reviewer', installation({ pluginKey: 'reviewer', entryId: 'entry-9' })],
+          ]),
+        }),
+      }),
+    );
+    expect(rows).toEqual([
+      {
+        id: 'entry-9',
+        name: 'Reviewer',
+        author: 'Team marketplace',
+        skillCount: 1,
+        updatedAt: '2026-09-06T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('lists one row per plugin, sorted by name', () => {
+    const rows = toPluginManageRows(
+      manageInput({
+        installs: installs({
+          builtin: [
+            {
+              pluginId: 'data-pack',
+              installedVersion: '1.0.0',
+              enabled: true,
+              installedAt: '2026-09-01T00:00:00.000Z',
+              updatedAt: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          builtinIds: new Map([['data-pack', true]]),
+          byPluginKey: new Map([['frontend-design', installation()]]),
+          byEntryId: new Map([['entry-1', installation()]]),
+        }),
+      }),
+    );
+    expect(rows.map((row) => row.id)).toEqual(['data-pack', 'frontend-design']);
   });
 });

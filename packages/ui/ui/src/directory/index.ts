@@ -1,6 +1,7 @@
 export { DirectoryPanel, type DirectoryPanelProps } from './DirectoryPanel';
 export { DirectoryToolbar } from './DirectoryToolbar';
 export { DirectoryGrid, DirectoryCard } from './DirectoryGrid';
+export { DirectoryManageView } from './DirectoryManageView';
 export { DirectoryBadge, DirectoryBadges } from './DirectoryBadges';
 export { SkillDetailView } from './SkillDetailView';
 export { SkillFileTree, SkillFileBody, CodeBlock, RenderedBody } from './SkillFileViewer';
@@ -42,6 +43,10 @@ export type {
   DirectoryFilterOption,
   DirectoryFilterSelection,
   DirectoryGroup,
+  DirectoryManageAction,
+  DirectoryManageColumn,
+  DirectoryManageRow,
+  DirectoryManageSection,
   DirectoryMarketplaceEntry,
   DirectoryMarketplaceInput,
   DirectoryMarketplaceResult,
