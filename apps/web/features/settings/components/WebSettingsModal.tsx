@@ -4,8 +4,16 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { Brain, Mic } from 'lucide-react';
-import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
-import type { SettingsDataAdapter, SettingsNavGroupResolved } from '@agiworkforce/ui';
+import {
+  SettingsModal,
+  SETTINGS_NAV_GROUPS_WEB,
+  SETTINGS_NAV_GROUP_CUSTOMIZE,
+} from '@agiworkforce/ui';
+import type {
+  SettingsDataAdapter,
+  SettingsNavGroupResolved,
+  SettingsNavItem,
+} from '@agiworkforce/ui';
 import { replaceSettingsHash, settingsHashForSection } from '@/features/directory';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
@@ -78,35 +86,31 @@ const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
   Object.entries(SECTION_TO_SEGMENT).map(([k, v]) => [v, k]),
 );
 
-const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
-  (group) => ({
-    ...group,
-    items: group.items.flatMap((item) => {
-      if (item.key === 'capabilities') {
-        return [
-          item,
-          {
-            key: 'memory' as const,
-            label: 'Memory',
-            icon: Brain,
-            keywords: ['facts', 'remember', 'personalization', 'manage memories'],
-          },
-        ];
-      }
-      if (item.key === 'notifications') {
-        return [
-          item,
-          {
-            key: 'voice' as const,
-            label: 'Voice',
-            icon: Mic,
-            keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
-          },
-        ];
-      }
-      return [item];
-    }),
-  }),
+const MEMORY_NAV_ITEM: SettingsNavItem = {
+  key: 'memory',
+  label: 'Memory',
+  icon: Brain,
+  keywords: ['facts', 'remember', 'personalization', 'manage memories'],
+};
+
+const VOICE_NAV_ITEM: SettingsNavItem = {
+  key: 'voice',
+  label: 'Voice',
+  icon: Mic,
+  keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
+};
+
+const VOICE_NAV_ANCHOR = 'notifications';
+
+const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map((group) =>
+  group.label === SETTINGS_NAV_GROUP_CUSTOMIZE
+    ? { ...group, items: [...group.items, MEMORY_NAV_ITEM] }
+    : {
+        ...group,
+        items: group.items.flatMap((item) =>
+          item.key === VOICE_NAV_ANCHOR ? [item, VOICE_NAV_ITEM] : [item],
+        ),
+      },
 );
 
 // ---------------------------------------------------------------------------

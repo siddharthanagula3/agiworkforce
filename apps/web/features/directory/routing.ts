@@ -1,5 +1,10 @@
 import type { DirectorySectionKey } from '@agiworkforce/ui';
 
+import {
+  WEB_SETTINGS_BUILT_IN_SECTIONS,
+  WEB_SETTINGS_CONTENT_SECTIONS,
+} from '@/features/settings/lib/web-settings-sections';
+
 import { SKILLS_PATH } from './constants';
 
 const SETTINGS_PREFIX = 'settings';
@@ -11,19 +16,39 @@ export const SETTINGS_SECTION_SLUGS: Record<DirectorySectionKey, string> = {
   plugins: 'customize-plugins',
 };
 
-const SLUG_TO_SECTION = new Map<string, DirectorySectionKey>(
-  Object.entries(SETTINGS_SECTION_SLUGS).map(([section, slug]) => [
-    slug,
-    section as DirectorySectionKey,
-  ]),
+/**
+ * Derived from the sections the web modal can render, so a new pane cannot ship
+ * without a hash. The directory sections override their identity slug with the
+ * `customize-` form their detail links already use, leaving one hash per pane.
+ */
+const SECTION_TO_SLUG: ReadonlyMap<string, string> = new Map<string, string>([
+  ...[...WEB_SETTINGS_CONTENT_SECTIONS, ...WEB_SETTINGS_BUILT_IN_SECTIONS].map(
+    (section) => [section, section] as const,
+  ),
+  ...Object.entries(SETTINGS_SECTION_SLUGS),
+]);
+
+const SLUG_TO_SECTION: ReadonlyMap<string, string> = new Map(
+  [...SECTION_TO_SLUG].map(([section, slug]) => [slug, section]),
 );
+
+const DIRECTORY_SECTIONS: ReadonlySet<string> = new Set(Object.keys(SETTINGS_SECTION_SLUGS));
+
+export const SETTINGS_SECTION_HASH_SLUGS: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(SECTION_TO_SLUG),
+);
+
+export interface SettingsRoute {
+  section: string;
+  entryId: string | null;
+}
 
 export interface SettingsDirectoryRoute {
   section: DirectorySectionKey;
   entryId: string | null;
 }
 
-export function parseSettingsDirectoryHash(hash: string): SettingsDirectoryRoute | null {
+export function parseSettingsHash(hash: string): SettingsRoute | null {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
   const segments = raw.split('/').filter(Boolean);
   if (segments[0] !== SETTINGS_PREFIX) return null;
@@ -36,6 +61,12 @@ export function parseSettingsDirectoryHash(hash: string): SettingsDirectoryRoute
   return { section, entryId: id ? decodeURIComponent(id) : null };
 }
 
+export function parseSettingsDirectoryHash(hash: string): SettingsDirectoryRoute | null {
+  const route = parseSettingsHash(hash);
+  if (!route || !DIRECTORY_SECTIONS.has(route.section)) return null;
+  return { section: route.section as DirectorySectionKey, entryId: route.entryId };
+}
+
 export function buildSettingsBrowseHash(
   section: DirectorySectionKey,
   entryId?: string | null,
@@ -45,10 +76,15 @@ export function buildSettingsBrowseHash(
   return `#${SETTINGS_PREFIX}/${slug}/${BROWSE_SEGMENT}/${encodeURIComponent(entryId)}`;
 }
 
+export function buildSettingsHash(section: string): string | null {
+  const slug = SECTION_TO_SLUG.get(section);
+  return slug ? `#${SETTINGS_PREFIX}/${slug}` : null;
+}
+
 export function settingsHashForSection(section: string, currentHash: string): string | null {
-  const slug = (SETTINGS_SECTION_SLUGS as Record<string, string | undefined>)[section];
-  if (slug) return `#${SETTINGS_PREFIX}/${slug}`;
-  return parseSettingsDirectoryHash(currentHash) ? '' : null;
+  const next = buildSettingsHash(section);
+  if (next) return next;
+  return parseSettingsHash(currentHash) ? '' : null;
 }
 
 export function replaceSettingsHash(next: string): void {

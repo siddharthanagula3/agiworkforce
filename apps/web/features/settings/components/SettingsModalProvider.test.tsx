@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,9 +8,9 @@ const dynamicState = vi.hoisted(() => ({
 
 vi.mock('next/dynamic', () => ({
   default: () =>
-    function WebSettingsModalStub() {
+    function WebSettingsModalStub({ initialSection }: { initialSection?: string }) {
       dynamicState.renderCount += 1;
-      return <div data-testid="web-settings-modal" />;
+      return <div data-testid="web-settings-modal" data-section={initialSection} />;
     },
 }));
 
@@ -141,7 +141,7 @@ describe('SettingsModalProvider settings hash', () => {
     expect(window.location.pathname).toBe('/chat');
   });
 
-  it('stays closed for a hash the directory does not own', () => {
+  it('stays closed for a hash the settings modal does not own', () => {
     setHash('#chat/thread-1');
     render(
       <SettingsModalProvider>
@@ -149,5 +149,49 @@ describe('SettingsModalProvider settings hash', () => {
       </SettingsModalProvider>,
     );
     expect(screen.queryByTestId('web-settings-modal')).toBeNull();
+  });
+
+  it.each(['billing', 'memory', 'time-focus', 'voice'])(
+    'opens the %s pane a deep link names',
+    (section) => {
+      setHash(`#settings/${section}`);
+      render(
+        <SettingsModalProvider>
+          <Harness />
+        </SettingsModalProvider>,
+      );
+      expect(screen.getByTestId('web-settings-modal')).toHaveAttribute('data-section', section);
+    },
+  );
+
+  it('follows a hash change to another pane while the modal is open', () => {
+    setHash('#settings/billing');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    expect(screen.getByTestId('web-settings-modal')).toHaveAttribute('data-section', 'billing');
+
+    act(() => {
+      setHash('#settings/customize-skills');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(screen.getByTestId('web-settings-modal')).toHaveAttribute('data-section', 'skills');
+  });
+
+  it('drops a pane hash when the modal closes', async () => {
+    const user = userEvent.setup();
+    setHash('#settings/usage');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: /close settings/i }));
+    expect(screen.queryByTestId('web-settings-modal')).toBeNull();
+    expect(window.location.hash).toBe('');
+    expect(window.location.pathname).toBe('/chat');
   });
 });

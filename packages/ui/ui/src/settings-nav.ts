@@ -251,8 +251,12 @@ export interface SettingsNavGroupResolved {
   items: SettingsNavItem[];
 }
 
+export const SETTINGS_NAV_GROUP_SETTINGS = 'Settings';
+export const SETTINGS_NAV_GROUP_CUSTOMIZE = 'Customize';
+
 export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
   {
+    label: SETTINGS_NAV_GROUP_SETTINGS,
     items: [
       {
         key: 'general',
@@ -271,10 +275,15 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'notifications', label: 'Notifications', icon: Bell },
       { key: 'reflect', label: 'Reflect', icon: Activity },
       { key: 'time-focus', label: 'Time and focus', icon: Clock3 },
+      { key: 'help', label: 'Help', icon: LifeBuoy },
+    ],
+  },
+  {
+    label: SETTINGS_NAV_GROUP_CUSTOMIZE,
+    items: [
       { key: 'skills', label: 'Skills', icon: BookOpen },
       { key: 'connectors', label: 'Connectors', icon: Plug },
       { key: 'plugins', label: 'Plugins', icon: Puzzle },
-      { key: 'help', label: 'Help', icon: LifeBuoy },
     ],
   },
 ];
