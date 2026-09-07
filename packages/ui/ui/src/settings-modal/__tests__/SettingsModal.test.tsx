@@ -942,6 +942,29 @@ describe('Customize panels render the directory', () => {
     expect(screen.queryByPlaceholderText('Search connectors')).toBeNull();
   });
 
+  /**
+   * Radix dismisses the dialog from its own document-level Escape listener,
+   * registered when the dialog mounted and so ahead of any menu's. Without
+   * keepOpenForMenuEscape, Escape over an open menu tore the whole of Settings
+   * down and the menu was never the thing that closed.
+   */
+  it('closes an open menu on Escape and the dialog only on the next one', () => {
+    const { onClose } = renderModal(
+      { activeSection: 'connectors', directoryAdapter: connectorsDirectory },
+      { addCustomConnector: vi.fn() },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem', { name: 'Browse connectors' })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it('opens the custom connector form straight from a link', () => {
     renderModal(
       {
