@@ -27,7 +27,6 @@ import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/Tooltip';
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
-import { SearchOverlay } from './SearchOverlay';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
@@ -38,6 +37,9 @@ import type {
   SidebarSession,
   SidebarTemporalGroup,
 } from './types';
+
+/** The phone drawer both web hosts open the sidebar in. */
+export const MOBILE_NAV_DRAWER_WIDTH = 280;
 
 export interface SidebarProps extends SessionItemHandlers {
   sessions: SidebarSession[];
@@ -63,7 +65,7 @@ export interface SidebarProps extends SessionItemHandlers {
    */
   onOpenCode?: () => void;
   onToggleCollapse?: () => void;
-  onOpenSearch?: () => void;
+  onOpenSearch: () => void;
   onOpenUsage?: () => void;
 
   onProjectOpen?: (projectId: string) => void;
@@ -144,8 +146,6 @@ export function Sidebar(props: SidebarProps) {
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 
-  const [internalSearchOpen, setInternalSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<SidebarTemporalGroup>>(
     new Set(DEFAULT_EXPANDED),
@@ -177,11 +177,6 @@ export function Sidebar(props: SidebarProps) {
     ? unpinnedProjects
     : unpinnedProjects.slice(0, PROJECTS_SHOW_LIMIT);
 
-  const handleOpenSearch = useCallback(() => {
-    if (onOpenSearch) onOpenSearch();
-    else setInternalSearchOpen(true);
-  }, [onOpenSearch]);
-
   const projectNameById = useMemo(() => {
     const map = new Map<string, string>();
     projects.forEach((p) => map.set(p.id, p.name));
@@ -194,18 +189,14 @@ export function Sidebar(props: SidebarProps) {
   );
 
   const filtered = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    let base = showArchived
+    const base = showArchived
       ? sessions.filter((s) => s.archived === true)
       : sessions.filter((s) => !s.archived);
     if (organizeMode === 'by-project' && projectListEnabled) {
-      base = base.filter((s) => !s.projectId);
+      return base.filter((s) => !s.projectId);
     }
-    if (!term) return base;
-    return base.filter((s) =>
-      `${s.title ?? ''} ${s.lastMessage ?? s.preview ?? ''}`.toLowerCase().includes(term),
-    );
-  }, [sessions, searchQuery, showArchived, organizeMode, projectListEnabled]);
+    return base;
+  }, [sessions, showArchived, organizeMode, projectListEnabled]);
 
   const pinned = useMemo(
     () =>
@@ -305,7 +296,6 @@ export function Sidebar(props: SidebarProps) {
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
-      if (internalSearchOpen) return;
       if (visible.length === 0) return;
       // A row's own "..." menu owns arrow/home/end navigation while it is
       // open (see Menu.tsx) - without this guard, this bubble-phase list
@@ -345,7 +335,7 @@ export function Sidebar(props: SidebarProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [internalSearchOpen, visible, focusedIndex, onSelect, rowButtonAt]);
+  }, [visible, focusedIndex, onSelect, rowButtonAt]);
 
   const handleListFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-sidebar-session-index]');
@@ -457,11 +447,7 @@ export function Sidebar(props: SidebarProps) {
             {onOpenCode && (
               <RailButton label={codeLabel} icon={TerminalSquare} onClick={onOpenCode} />
             )}
-            <RailButton
-              label={tCommon('search', 'Search')}
-              icon={Search}
-              onClick={handleOpenSearch}
-            />
+            <RailButton label={tCommon('search', 'Search')} icon={Search} onClick={onOpenSearch} />
             {resolvedNavItems.map((item) => (
               <RailButton
                 key={item.id}
@@ -484,21 +470,6 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <>
-      {!onOpenSearch && (
-        <SearchOverlay
-          open={internalSearchOpen}
-          query={searchQuery}
-          onQueryChange={setSearchQuery}
-          results={filtered}
-          activeSessionId={activeSessionId}
-          onSelect={onSelect}
-          onClose={() => {
-            setInternalSearchOpen(false);
-            setSearchQuery('');
-          }}
-        />
-      )}
-
       <nav
         aria-label={t('sidebar.navLabel', 'Chat history')}
         className={cn(
@@ -558,7 +529,7 @@ export function Sidebar(props: SidebarProps) {
           </div>
           <button
             type="button"
-            onClick={handleOpenSearch}
+            onClick={onOpenSearch}
             className="flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
           >
             <Search className="h-4 w-4" />

@@ -25,6 +25,7 @@ function renderSidebar(overrides: {
       error={overrides.error ?? null}
       {...(overrides.onRetryLoad ? { onRetryLoad: overrides.onRetryLoad } : {})}
       onNewChat={vi.fn()}
+      onOpenSearch={vi.fn()}
       onSelect={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}

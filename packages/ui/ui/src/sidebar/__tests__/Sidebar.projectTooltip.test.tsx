@@ -12,6 +12,7 @@ function renderSidebar(overrides: Partial<SidebarProps> = {}) {
       sessions={sessions}
       projects={projects}
       onNewChat={vi.fn()}
+      onOpenSearch={vi.fn()}
       onSelect={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}

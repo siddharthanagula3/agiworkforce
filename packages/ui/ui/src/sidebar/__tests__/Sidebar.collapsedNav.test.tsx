@@ -25,6 +25,7 @@ describe('collapsed sidebar keeps its destinations', () => {
         projects={[]}
         navItems={navItems}
         onNewChat={vi.fn()}
+        onOpenSearch={vi.fn()}
         onSelect={vi.fn()}
         onRename={vi.fn()}
         onDelete={vi.fn()}

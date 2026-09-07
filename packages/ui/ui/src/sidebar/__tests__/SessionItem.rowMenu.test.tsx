@@ -31,6 +31,7 @@ function renderRowMenu(overrides: Partial<SidebarProps> = {}) {
       sessions={[session]}
       projects={projects}
       onNewChat={vi.fn()}
+      onOpenSearch={vi.fn()}
       onSelect={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}

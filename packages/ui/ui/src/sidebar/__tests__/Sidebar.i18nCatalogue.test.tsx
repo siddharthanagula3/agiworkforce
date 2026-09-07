@@ -33,6 +33,7 @@ describe('Sidebar resolves sidebar.* keys from the real catalogue', () => {
       <Sidebar
         sessions={[]}
         onNewChat={() => {}}
+        onOpenSearch={() => {}}
         onSelect={() => {}}
         onRename={() => {}}
         onDelete={() => {}}
