@@ -16,6 +16,7 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -43,7 +44,11 @@ async function handleExportUserData(request: NextRequest) {
       'User requested GDPR data export',
     );
 
-    const exportData = await collectUserData({ id: userId, email }, scopedDbFor);
+    const exportData = await collectUserData(
+      { id: userId, email },
+      scopedDbFor,
+      exportOrigin(request),
+    );
 
     await recordAuditEvent({
       userId,
@@ -226,9 +231,10 @@ const projectKnowledgeFileExportSchema = z.object({
 
 /**
  * Metadata, not bytes. The export is a JSON download and inlining media would
- * make it unusable; `storage_url` is the durable location the user can fetch
- * each file from, which is what makes this an access answer rather than a list
- * of things they cannot reach.
+ * make it unusable. `storage_url` is a private object-storage key that resolves
+ * for nobody on its own, so each row is served with a `download_url` on the
+ * account's authenticated media route, and `export_metadata.media_downloads`
+ * states what that link needs and whether it expires.
  */
 const mediaAssetExportSchema = z.object({
   id: z.string(),
@@ -333,9 +339,28 @@ async function queryExportRowsAcrossWorkspaces<T>(params: {
   return collected;
 }
 
+const MEDIA_DOWNLOAD_FIELD = 'download_url';
+
+const MEDIA_DOWNLOADS_DOCUMENTATION = {
+  url_field: MEDIA_DOWNLOAD_FIELD,
+  authorization:
+    'Open the link while signed in as this account. Media that belongs to a workspace also needs membership of that workspace.',
+  expires_at: null,
+  expiry:
+    'These links do not expire. Each request is authorised on its own, so the export stays usable and stays private if the file is copied.',
+  storage_url:
+    'A private object-storage key kept for reference. It is not a download link and resolves for nobody on its own.',
+} as const;
+
+function exportOrigin(request: NextRequest): string {
+  const configured = (process.env['NEXT_PUBLIC_APP_URL'] ?? '').trim().replace(/\/$/, '');
+  return configured || request.nextUrl.origin;
+}
+
 async function collectUserData(
   user: { id: string; email?: string },
   scopedDbFor: (organizationId: string | null) => DatabaseAdapter,
+  origin: string,
 ): Promise<Record<string, unknown>> {
   const db = scopedDbFor(null);
   let workspaces: (string | null)[] = [null];
@@ -345,6 +370,7 @@ async function collectUserData(
       export_timestamp: new Date().toISOString(),
       gdpr_article: 'Article 20 - Right to Data Portability',
       format_version: '1.0',
+      media_downloads: MEDIA_DOWNLOADS_DOCUMENTATION,
     },
     account: {
       id: user.id,
@@ -595,7 +621,10 @@ async function collectUserData(
     section: 'media_assets',
     userId: user.id,
   });
-  exportData['media_assets'] = mediaAssets;
+  exportData['media_assets'] = mediaAssets.map((asset) => ({
+    ...asset,
+    [MEDIA_DOWNLOAD_FIELD]: `${origin}${authenticatedMediaUrl(asset.id)}`,
+  }));
 
   const memories = await queryExportRowsAcrossWorkspaces({
     scopedDbFor,
