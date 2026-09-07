@@ -48,6 +48,10 @@ import {
   loadPalettePlugins,
   type PalettePlugin,
 } from '@features/chat/services/palette-plugin-catalog';
+import {
+  loadInstalledPlugins,
+  type InstalledPlugin,
+} from '@features/chat/services/installed-plugins';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 
 export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
@@ -69,10 +73,24 @@ const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
   "Won't be saved to your history and skips memory for this turn.";
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
+const ROW_LABEL_MANAGE_SKILLS = 'Manage skills';
+const ROW_LABEL_MANAGE_PLUGINS = 'Manage plugins';
+const ROW_LABEL_OPEN_PLUGIN = 'Open plugin';
+const SKILLS_EMPTY_COPY = 'No skills of your own yet.';
+const CATALOG_SKILL_SOURCE = 'bundled';
+const PLUGINS_EMPTY_COPY = 'No plugins installed yet.';
+const PLUGINS_LOADING_LABEL = 'Loading plugins';
 const SETTINGS_SECTION_CONNECTORS = 'connectors';
 const SETTINGS_SECTION_SKILLS = 'skills';
 const SETTINGS_SECTION_PLUGINS = 'plugins';
 const CONNECTORS_EMPTY_COPY = 'No connectors connected yet.';
+const SUBMENU_ROW_CLASS =
+  'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
+const NESTED_ROW_CLASS =
+  'flex w-full items-center gap-3 rounded-lg py-2 pl-12 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
+const SUBMENU_EMPTY_CLASS = 'px-3 py-2 pl-8 text-[12px] text-muted-foreground';
+const SUBMENU_MANAGE_CLASS =
+  'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60';
 const BADGE_CHECKING = 'Checking';
 const BADGE_RETRY = 'Retry';
 const BADGE_UNAVAILABLE = 'Unavailable';
@@ -647,6 +665,41 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   const { t } = useTranslation('v3');
   const enabledConnector = (connector: ComposerPlusMenuConnector) =>
     !props.disabledConnectorIds.includes(connectorToggleId(connector));
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
+  const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[] | null>(null);
+  const skillNames = useMemo(
+    () => new Set(props.skills.map((skill) => skill.name)),
+    [props.skills],
+  );
+  const ownSkills = useMemo(
+    () => props.skills.filter((skill) => skill.source !== CATALOG_SKILL_SOURCE),
+    [props.skills],
+  );
+
+  useEffect(() => {
+    if (!pluginsOpen || installedPlugins !== null) return;
+    let cancelled = false;
+    void loadInstalledPlugins().then((entries) => {
+      if (!cancelled) setInstalledPlugins(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pluginsOpen, installedPlugins]);
+
+  const selectSkill = (name: string) => {
+    props.onSelectSkill(name);
+    props.closeMenu();
+  };
+  const openPlugin = (pluginId: string) => {
+    props.closeMenu();
+    if (typeof window !== 'undefined') {
+      window.location.hash = buildSettingsBrowseHash(SETTINGS_SECTION_PLUGINS, pluginId);
+    }
+    props.onOpenSettings(SETTINGS_SECTION_PLUGINS);
+  };
 
   return (
     <>
@@ -678,12 +731,10 @@ function ChatMenu(props: ComposerPlusMenuProps) {
 
       <div className={DIVIDER_CLASS} />
 
-      {/* Skills, Connectors and Plugins are ENTRIES here, not inline lists
-      (founder directive 2026-07-10). Per-message skill selection stays
-      available via the @mention dropdown in the textarea. */}
       <button
         type="button"
-        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_SKILLS)}
+        onClick={() => setSkillsOpen((open) => !open)}
+        aria-expanded={skillsOpen}
         className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.selectedSkillName && 'text-primary')}
       >
         <Sparkles
@@ -693,8 +744,45 @@ function ChatMenu(props: ComposerPlusMenuProps) {
           )}
         />
         <span className="flex-1 text-left">{props.selectedSkillName ?? ROW_LABEL_SKILLS}</span>
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            skillsOpen && 'rotate-90',
+          )}
+        />
       </button>
+      {skillsOpen && (
+        <div role="menu" aria-label={ROW_LABEL_SKILLS} className="space-y-0.5 pb-1">
+          {ownSkills.length === 0 ? (
+            <p className={SUBMENU_EMPTY_CLASS}>{SKILLS_EMPTY_COPY}</p>
+          ) : (
+            ownSkills.map((skill) => (
+              <button
+                key={skill.name}
+                type="button"
+                role="menuitem"
+                title={skill.description}
+                onClick={() => selectSkill(skill.name)}
+                className={cn(
+                  SUBMENU_ROW_CLASS,
+                  props.selectedSkillName === skill.name && 'text-primary',
+                )}
+              >
+                <Sparkles className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+                <span className="flex-1 truncate">{skill.name}</span>
+              </button>
+            ))
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openDirectorySettings(props, SETTINGS_SECTION_SKILLS)}
+            className={SUBMENU_MANAGE_CLASS}
+          >
+            {ROW_LABEL_MANAGE_SKILLS}
+          </button>
+        </div>
+      )}
 
       <button
         type="button"
@@ -745,13 +833,89 @@ function ChatMenu(props: ComposerPlusMenuProps) {
 
       <button
         type="button"
-        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_PLUGINS)}
+        onClick={() => setPluginsOpen((open) => !open)}
+        aria-expanded={pluginsOpen}
         className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
       >
         <PluginsGlyph className={GLYPH_CLASS} />
         <span className="flex-1 text-left">{ROW_LABEL_PLUGINS}</span>
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            pluginsOpen && 'rotate-90',
+          )}
+        />
       </button>
+      {pluginsOpen && (
+        <div role="menu" aria-label={ROW_LABEL_PLUGINS} className="space-y-0.5 pb-1">
+          {installedPlugins === null ? (
+            <div className="flex justify-center py-2">
+              <Spinner size="sm" aria-label={PLUGINS_LOADING_LABEL} />
+            </div>
+          ) : installedPlugins.length === 0 ? (
+            <p className={SUBMENU_EMPTY_CLASS}>{PLUGINS_EMPTY_COPY}</p>
+          ) : (
+            installedPlugins.map((plugin) => {
+              const expanded = expandedPluginId === plugin.id;
+              const pluginSkills = plugin.skills.filter((name) => skillNames.has(name));
+              return (
+                <React.Fragment key={plugin.id}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-expanded={expanded}
+                    onClick={() => setExpandedPluginId(expanded ? null : plugin.id)}
+                    className={SUBMENU_ROW_CLASS}
+                  >
+                    <span className="flex-1 truncate">{plugin.name}</span>
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                        expanded && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  {expanded &&
+                    (pluginSkills.length > 0 ? (
+                      pluginSkills.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => selectSkill(name)}
+                          className={cn(
+                            NESTED_ROW_CLASS,
+                            props.selectedSkillName === name && 'text-primary',
+                          )}
+                        >
+                          <Sparkles className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+                          <span className="flex-1 truncate">{name}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => openPlugin(plugin.id)}
+                        className={cn(NESTED_ROW_CLASS, 'text-muted-foreground')}
+                      >
+                        {ROW_LABEL_OPEN_PLUGIN}
+                      </button>
+                    ))}
+                </React.Fragment>
+              );
+            })
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openDirectorySettings(props, SETTINGS_SECTION_PLUGINS)}
+            className={SUBMENU_MANAGE_CLASS}
+          >
+            {ROW_LABEL_MANAGE_PLUGINS}
+          </button>
+        </div>
+      )}
 
       <div className={DIVIDER_CLASS} />
 
