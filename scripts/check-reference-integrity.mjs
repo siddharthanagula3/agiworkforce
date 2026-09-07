@@ -61,11 +61,7 @@ function vendoredSkillPrefixes() {
 }
 
 const EXCLUDED_PREFIXES = ['audit/', 'node_modules/', ...vendoredSkillPrefixes()];
-// The remediation register is a 991 KB machine-generated ledger of historical
-// findings; every path it cites is evidence of where a defect was, not a live
-// reference. Excluding the file rather than all of docs/work keeps the rest of
-// the tier validated.
-const EXCLUDED_EXACT = new Set(['docs/work/remediation-register.json']);
+const EXCLUDED_EXACT = new Set();
 
 const TEST_PATH = /(?:^|\/)__tests__\/|\.(?:test|spec|stories|bench)\.[cm]?[jt]sx?$/;
 
