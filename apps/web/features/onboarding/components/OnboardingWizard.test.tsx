@@ -53,6 +53,25 @@ describe('OnboardingWizard', () => {
     expect(await screen.findByDisplayValue('Sid')).toBeInTheDocument();
   });
 
+  it('never overwrites a name the user typed while the stored seed was still loading', async () => {
+    const user = userEvent.setup();
+    let resolveSeed: (seed: { preferredName: string; workDescription: string }) => void = () => {};
+    mocks.loadSeed.mockReturnValue(
+      new Promise<{ preferredName: string; workDescription: string }>((resolve) => {
+        resolveSeed = resolve;
+      }),
+    );
+
+    render(<OnboardingWizard />);
+    const nameInput = screen.getByLabelText('Preferred name');
+    await user.type(nameInput, 'Grace');
+
+    resolveSeed({ preferredName: 'Stored Name', workDescription: 'Design / UX' });
+
+    await waitFor(() => expect(screen.getByLabelText('Preferred name')).toHaveFocus());
+    expect(nameInput).toHaveValue('Grace');
+  });
+
   it('advances to the use-case step and finishes with the chosen use case', async () => {
     const user = userEvent.setup();
     render(<OnboardingWizard />);
