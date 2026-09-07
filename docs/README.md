@@ -9,7 +9,7 @@ exactly one home; this directory holds the rows that live under `docs/`.
 | `architecture/`  | How the system is built and why                 |
 | `development/`   | How to work in the repository                   |
 | `standards/`     | Rules the code follows                          |
-| `security/`      | Security model, threat models, reviews          |
+| `security/`      | One security document: `security/security.md`   |
 | `compliance/`    | Verified platform and legal obligations         |
 | `decisions/`     | Architecture decision records                   |
 | `runbooks/`      | Operational procedures                          |

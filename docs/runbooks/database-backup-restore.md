@@ -2,11 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-05
+Last updated: 2026-09-07
 
 Neon's point-in-time branch is the recovery mechanism today; there is no
 separate `pg_dump` schedule, and until this document existed no restore had
-ever been exercised end to end. `docs/security/key-rotation.md:169-179`
+ever been exercised end to end. Section 3 of `docs/security/security.md`
 already describes what a restore needs from the encryption key ring; this
 document describes the restore itself. Two drills prove it works:
 `scripts/db-restore-drill.mjs` exercises Neon's own branch-from-timestamp API
@@ -116,14 +116,13 @@ point is caught before it overwrites the only copy of production.
 
 A restored row is encrypted under whatever key was active in the environment
 at the moment the recovery point was written, not the key active now. This is
-exactly what `docs/security/key-rotation.md:184-191` ("Restoring a database
-backup") already covers: put that old key into `<NAME>_RETIRED` under the id
-the restored rows carry, then run `scripts/reencrypt.mjs`'s sweep to bring
-them forward. Skipping that step leaves `connector_oauth_grants`,
-`user_custom_connectors`, `github_installations`, and `user_two_factor` rows
-permanently unreadable. Read `docs/security/key-rotation.md`'s "Accepted
-risk: no KMS, no escrow" section before promoting a restore that crosses a
-rotation boundary.
+exactly what the "Restoring a database backup" part of section 3 of
+`docs/security/security.md` already covers: put that old key into
+`<NAME>_RETIRED` under the id the restored rows carry, then run
+`scripts/reencrypt.mjs`'s sweep to bring them forward. Skipping that step
+leaves `connector_oauth_grants`, `user_custom_connectors`,
+`github_installations`, and `user_two_factor` rows permanently unreadable. Read the "Accepted risk: no KMS, no escrow" part of
+that same section before promoting a restore that crosses a rotation boundary.
 
 ## The host-neutral drill: proving a Postgres host swap is real
 
@@ -209,9 +208,9 @@ Postgres 17 over plain TCP with the tenant scope enforced.
    variable is the whole change. A Postgres target that will serve an edge
    runtime still needs the Neon driver, which is the one capability the plain
    driver does not have.
-3. **Rotate credentials** for the new host and store them the way
-   `docs/security/key-rotation.md`'s custody inventory expects; never reuse a
-   Neon-scoped credential against a different host.
+3. **Rotate credentials** for the new host and store them the way section 3 of
+   `docs/security/security.md` expects; never reuse a Neon-scoped credential
+   against a different host.
 4. **Run this drill against the new host** with `AGI_RESTORE_DRILL_SOURCE_URL`
    pointed at the current production database and `AGI_RESTORE_DRILL_TARGET_ADMIN_URL`
    at the new host's maintenance database. A pass proves the schema, the core
@@ -245,7 +244,7 @@ scratch database. Record every real run here.
 `NEON_PROJECT_ID` are not currently provisioned in any environment this
 repository controls, so `scripts/db-restore-drill.mjs` cannot run until an
 operator creates a scoped Neon API key and records where it lives, the same
-way `docs/security/tauri-updater-key-custody.md`'s custody inventory tracks
+way the custody inventory in section 4 of `docs/security/security.md` tracks
 the updater signing key. The logical drill has no such blocker: it ran
 against local Postgres 17 the same day this section was written, and runs
 weekly in CI against a disposable `postgres:17` container.
@@ -264,9 +263,9 @@ weekly in CI against a disposable `postgres:17` container.
   host it is pointed at, but a managed host's TLS, pooling and connection
   ceiling are unmeasured until a real target exists.
 
-Related: `docs/security/key-rotation.md` for what a restore does to encrypted
-columns, `docs/runbooks/incident-response.md` for what paged this in the first
-place, `apps/web/db/neon/verify/README.md` for standing up a throwaway
+Related: section 3 of `docs/security/security.md` for what a restore does to
+encrypted columns, `docs/runbooks/incident-response.md` for what paged this in
+the first place, `apps/web/db/neon/verify/README.md` for standing up a throwaway
 Postgres to test migration SQL directly (a different tool for a different
 question, it never talks to Neon's API), `scripts/lib/restore-drill-core.mjs`
 for the table list and checks both drills share, and

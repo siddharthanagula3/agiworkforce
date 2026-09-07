@@ -4,11 +4,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-const RUNBOOK_PATH = path.join(REPO_ROOT, 'docs', 'security', 'key-rotation.md');
+const RUNBOOK_PATH = path.join(REPO_ROOT, 'docs', 'security', 'security.md');
 const RUNBOOK = readFileSync(RUNBOOK_PATH, 'utf8');
 
-const CADENCE_HEADING = '## Rotation cadence';
-const RISK_HEADING = '## Accepted risk: no KMS, no escrow';
+const CADENCE_HEADING = '### Rotation cadence';
+const RISK_HEADING = '### Accepted risk: no KMS, no escrow';
 
 const KEY_ENVS = [
   'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
@@ -21,7 +21,7 @@ function section(heading: string): string {
   const start = RUNBOOK.indexOf(heading);
   expect(start, `${RUNBOOK_PATH} must contain the section "${heading}"`).toBeGreaterThan(-1);
   const after = RUNBOOK.slice(start + heading.length);
-  const next = after.search(/^## /m);
+  const next = after.search(/^#{2,3} /m);
   return next === -1 ? after : after.slice(0, next);
 }
 
@@ -42,7 +42,7 @@ describe('key rotation runbook is one procedure, not three loose pieces', () => 
   it('names the sweep and the runbook step each cadence entry executes', () => {
     const cadence = section(CADENCE_HEADING);
     expect(cadence).toContain('scripts/reencrypt.mjs');
-    expect(cadence).toContain('## Rotating a key');
+    expect(cadence).toContain('Rotating a key');
   });
 
   it('records the accepted risk here rather than deferring it to a plan file', () => {

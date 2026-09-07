@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-28
+Last updated: 2026-09-07
 
 ## Reporting a vulnerability
 
@@ -31,26 +31,12 @@ infrastructure we do not operate.
 
 ## Security model
 
-Details live in `docs/security/`. The properties that matter most:
+`docs/security/security.md` is the single security document. It holds the agent
+authority and connector matrix, the OAuth scope ceilings, the encryption key
+rotation procedure, the desktop updater key custody procedure, and the gaps each
+of those records rather than papers over. Local, BYOK and Managed Cloud are
+separate trust boundaries there, security behavior fails closed, tenant data is
+isolated per user, and secrets never enter the repository.
 
-- **Local, BYOK and Managed Cloud are separate trust boundaries.** Nothing may
-  silently route a Local chat, file, or session to BYOK or managed cloud. A
-  Local-to-BYOK move is an explicit fork with consent and a visible provider
-  label. A finding that crosses a boundary silently is high severity by default.
-- **Security behavior fails closed.** Desktop egress funnels through
-  `apps/desktop/src/lib/egressGuard.ts`; Rust transports must use the host-owned
-  egress policy rather than constructing their own client.
-- **Tenant data is isolated per user**, by row level security or by an
-  app-enforced owner predicate on every statement.
-- **Secrets never enter the repository.** The migration runner reads its
-  connection string from the environment and never prints it.
-
-Enforced by `check:trust-boundaries`, `check:rust-egress-boundary`,
-`check:db-isolation`, `check:secrets`, `check:secrets:history`, a per-surface
-`trust-boundary.test.ts`, and CodeQL.
-
-## Operational response
-
-`docs/runbooks/` holds the incident procedures, including personal-data breach
-handling and key rotation. Supply-chain posture is enforced by `deny.toml` for
-Cargo and by the license and lockfile guards for npm.
+`docs/runbooks/incident-response.md` holds the operational response, and
+`apps/extension/docs/threat-model.md` holds the browser extension threat model.
