@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 114 of 200 database-backed hosted API route files. Counted against the 200 route files that reach the database; the other 93 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 86 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-05.',
+      'Partial: 114 of 200 database-backed hosted API route files. Counted against the 200 route files that reach the database; the other 94 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 86 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-06.',
   },
   {
     label: 'Authentication and CSRF',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-06',
+                        value:
+                          'Re-measured after the operator route-economics endpoint shipped. It reads the model registry and the free-pool document and touches no database, so the routes excluded from both sides moved from 93 to 94. The row-level-isolation count stays at 114 of 200 and the owner-connection count at 86.',
+                      },
                       {
                         label: '2026-09-06',
                         value:
