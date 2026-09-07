@@ -148,6 +148,8 @@ export const ADD_MARKETPLACE_REMOVE_CONFIRM_BODY =
 
 export const GENERIC_ERROR_COPY = 'Something went wrong. Try again.';
 export const MARKETPLACE_SYNC_FAILED_COPY = 'That marketplace could not be synced.';
+export const MARKETPLACE_REMOVE_FAILED_COPY =
+  'That marketplace could not be removed. It is still listed.';
 
 export const INSTALL_COUNT_FLOOR = 10;
 
@@ -190,6 +192,11 @@ export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not availab
 export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
 export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';
 
+export const DELETE_SKILL_CONFIRM_TITLE = 'Delete skill?';
+export const DELETE_SKILL_CONFIRM_DESCRIPTION =
+  'This removes it from your account. Chats that already used it are not affected.';
+export const DELETE_SKILL_CONFIRM_LABEL = 'Delete';
+
 export const CONNECTOR_ADD_API_KEY_LABEL = 'Add API key';
 export const CONNECTOR_CARD_ACTION_LABELS: Record<DirectoryConnectableMode, string> = {
   connect: 'Connect',
@@ -209,3 +216,16 @@ export const DIRECTORY_LOADING_MORE_LABEL = 'Loading more';
 export const DIRECTORY_SHOWING_PREFIX = 'Showing';
 export const DIRECTORY_SHOWING_OF = 'of';
 export const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
+
+export const PLUGIN_ENABLED_LABEL = 'Enabled';
+export const PLUGIN_ENABLED_HINT = 'Turn this off to keep the plugin installed without using it.';
+export const PLUGIN_SETTINGS_HEADING = 'What this plugin may use';
+export const PLUGIN_SETTINGS_SKILLS_HINT =
+  'Only the skills you leave on are offered to the assistant.';
+export const PLUGIN_SETTINGS_CONNECTORS_LABEL = 'Required connectors';
+export const PLUGIN_CONNECTOR_CONNECTED_LABEL = 'Connected';
+export const PLUGIN_CONNECTOR_MISSING_LABEL = 'Not connected';
+export const PLUGIN_SETTINGS_LOADING_LABEL = 'Loading plugin settings';
+export const PLUGIN_SKILL_TOGGLE_PREFIX = 'Use';
+export const MARKETPLACE_REFRESH_LABEL = 'Refresh';
+export const MARKETPLACE_REFRESHING_LABEL = 'Refreshing marketplace';

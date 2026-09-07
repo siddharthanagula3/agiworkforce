@@ -295,7 +295,8 @@ describe('toPluginEntry', () => {
       statusLabel: 'Installed',
     });
     expect(
-      toPluginEntry(builtinEntry(), installs({ builtinIds: new Set(['data-pack']) })).installed,
+      toPluginEntry(builtinEntry(), installs({ builtinIds: new Map([['data-pack', true]]) }))
+        .installed,
     ).toBe(true);
     expect(toPluginEntry(builtinEntry(), installedByKey('data-pack')).installed).toBe(false);
   });
@@ -509,7 +510,7 @@ describe('fetchPluginInstallState', () => {
       ),
     );
     const state = await fetchPluginInstallState();
-    expect(state.builtinIds).toEqual(new Set(['data-pack']));
+    expect(state.builtinIds).toEqual(new Map([['data-pack', true]]));
     expect(state.byPluginKey.get('frontend-design')?.id).toBe('inst-1');
     expect(state.byEntryId.get('entry-1')?.id).toBe('inst-1');
     expect(state.notice).toBeNull();

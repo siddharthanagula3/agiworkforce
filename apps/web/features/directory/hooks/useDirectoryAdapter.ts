@@ -17,7 +17,9 @@ import {
   type DirectoryConnectorDetail,
   type DirectoryDetail,
   type DirectoryMarketplaceInput,
+  type DirectoryOpenEntry,
   type DirectoryMarketplaceResult,
+  type DirectoryPluginSettings,
   type DirectoryQuery,
   type DirectorySection,
   type DirectorySectionKey,
@@ -32,25 +34,36 @@ import {
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
+import type { PluginInstallationTarget } from '@/features/plugins/routes';
 
-import { buildSettingsBrowseHash, skillFileDownloadHref } from '../routing';
+import {
+  buildSettingsBrowseHash,
+  parseSettingsDirectoryHash,
+  skillFileDownloadHref,
+} from '../routing';
 
 import {
   CONNECTORS_FAILED_COPY,
   CONNECTORS_PATH,
+  CONNECTOR_INDEXING_NOTICE,
   CONNECT_FAILED_COPY,
   CSRF_HEADER,
   JSON_CONTENT_TYPE,
   MARKETPLACE_FAILED_COPY,
+  MARKETPLACE_REFRESH_FAILED_COPY,
+  MARKETPLACE_REMOVE_UNSENT_COPY,
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_UNINSTALL_FAILED_COPY,
+  PLUGIN_ENABLE_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_MARKETPLACE,
   PLUGIN_SOURCE_PARTNER,
   SKILLS_FAILED_COPY,
   SKILL_INSTALL_FAILED_COPY,
+  SKILL_DELETE_FAILED_COPY,
   SKILL_UNINSTALL_FAILED_COPY,
 } from '../constants';
 import { DirectoryRequestError, describeActionFailure } from '../services/request-error';
@@ -58,6 +71,7 @@ import {
   DEFAULT_DIRECTORY_QUERY,
   connectedConnectorIds,
   connectorDirectoryHref,
+  connectorDirectoryIndexing,
   connectorReauthorizationErrors,
   fetchConnectedConnectors,
   fetchConnectorDirectoryPage,
@@ -96,6 +110,8 @@ import {
   type PluginInstallState,
   type PluginInstallTarget,
   type PluginMarketplacePage,
+  pluginInstallationEnabled,
+  pluginInstallationTarget,
   type PluginUninstallOutcome,
   type PluginUninstallTarget,
   type UserMarketplaceState,
@@ -105,11 +121,13 @@ import {
   fetchSkillCatalog,
   fetchSkillDetail,
   installSkill,
+  removeSkill as removeSkillRequest,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
+const EMPTY_SKILL_NAMES: readonly string[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
 
@@ -237,6 +255,22 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const connectorSetup = useRef<Readonly<Record<string, ConnectorSetupRequirement>>>({});
   const connectorsQueried = useRef(false);
   const [credentialFormId, setCredentialFormId] = useState<string | null>(null);
+  const [openEntry, setOpenEntry] = useState<DirectoryOpenEntry | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      const route = parseSettingsDirectoryHash(window.location.hash);
+      setOpenEntry(route?.entryId ? { section: route.section, entryId: route.entryId } : null);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+  const [settingsTarget, setSettingsTarget] = useState<PluginInstallationTarget | null>(null);
+  const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
+  const [settingsSkills, setSettingsSkills] = useState<readonly string[]>(EMPTY_SKILL_NAMES);
+  const [settingsEnabled, setSettingsEnabled] = useState(true);
+  const pluginSettingsState = usePluginsSettingsAdapter(settingsTarget, settingsEnabled);
 
   const connectedIds = useCallback(
     () => new Set([...serverConnectedIds.current, ...connectedConnectorIds(connectedRef.current)]),
@@ -290,7 +324,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ...connectorReauthorizationErrors(connectedRef.current),
         ...connectorErrors.current,
       };
-      const notice = [connectorsNoticeRef.current, connectorRegistryNotice.current]
+      const indexing = connectorDirectoryIndexing(page.stats);
+      const notice = [
+        connectorsNoticeRef.current,
+        connectorRegistryNotice.current,
+        indexing ? CONNECTOR_INDEXING_NOTICE : null,
+      ]
         .filter(Boolean)
         .join(' ');
       setConnectors({
@@ -298,7 +337,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         entries: withConnectorErrors(section.entries, errors),
         ...(connectorsErrorRef.current ? { error: connectorsErrorRef.current } : {}),
         ...(notice ? { notice } : {}),
-        ...(connectorRegistryNotice.current ? { noticeRetry: retryConnectors } : {}),
+        ...(connectorRegistryNotice.current || indexing ? { noticeRetry: retryConnectors } : {}),
         retry: retryConnectors,
         ...patch,
       });
@@ -612,11 +651,21 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [publishPlugins],
   );
 
+  const selectSettingsTarget = useCallback((record: PluginDirectoryEntry | null, id: string) => {
+    const installs = pluginPageRef.current.installs;
+    const target = record ? pluginInstallationTarget(record, installs) : null;
+    setSettingsPluginId(target ? id : null);
+    setSettingsTarget(target);
+    setSettingsSkills(record ? record.declaredSkills : EMPTY_SKILL_NAMES);
+    setSettingsEnabled(record ? pluginInstallationEnabled(record, installs) : true);
+  }, []);
+
   const loadPluginDetail = useCallback(
     async (id: string): Promise<DirectoryDetail | null> => {
       await primePlugins().catch(() => undefined);
       const page = pluginPageRef.current;
       const record = findPluginRecord(id);
+      selectSettingsTarget(record ?? null, id);
       if (record) return toPluginDetail(record, page.installs);
       const userEntry = findUserEntry(id);
       if (userEntry) {
@@ -629,9 +678,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const fetched = await fetchPluginDirectoryEntry(id);
       if (!fetched) return null;
       pluginDetails.current.set(id, fetched);
+      selectSettingsTarget(fetched, id);
       return toPluginDetail(fetched, pluginPageRef.current.installs);
     },
-    [primePlugins, findPluginRecord, findUserEntry],
+    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget],
   );
 
   const loadSection = useCallback(
@@ -843,6 +893,29 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [findPluginRecord, refreshPluginInstalls],
   );
 
+  const runSkillDelete = useCallback(
+    async (id: string) => {
+      const summary = skillCache.current.find((entry) => entry.name === id);
+      if (!summary) throw describeActionFailure(null, SKILL_DELETE_FAILED_COPY);
+      try {
+        await removeSkillRequest(summary, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(caught, SKILL_DELETE_FAILED_COPY);
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await loadSkills();
+    },
+    [loadSkills],
+  );
+
+  const deleteEntry = useCallback(
+    async (section: DirectorySectionKey, id: string) => {
+      if (section === 'skills') return runSkillDelete(id);
+    },
+    [runSkillDelete],
+  );
+
   const uninstall = useCallback(
     async (section: DirectorySectionKey, id: string) => {
       if (section === 'skills') return runSkillInstall(id, false);
@@ -898,14 +971,83 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [refreshUserMarketplaces],
   );
 
+  const pluginSettings = useMemo<DirectoryPluginSettings | undefined>(() => {
+    if (!settingsPluginId) return undefined;
+    const enabledSkills = new Set(pluginSettingsState.settings?.enabledSkills ?? []);
+    const connectorLabel = (connectorId: string): string =>
+      curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
+    return {
+      pluginId: settingsPluginId,
+      skills: settingsSkills.map((name) => ({ name, enabled: enabledSkills.has(name) })),
+      connectors: (pluginSettingsState.settings?.connectors ?? []).map((connector) => ({
+        id: connector.connectorId,
+        name: connectorLabel(connector.connectorId),
+        connected: connector.connected,
+      })),
+      loading: pluginSettingsState.loading,
+      saving: pluginSettingsState.saving,
+      error: pluginSettingsState.error,
+    };
+  }, [settingsPluginId, settingsSkills, pluginSettingsState]);
+
+  const setPluginEnabled = useCallback(
+    async (id: string, enabled: boolean) => {
+      if (settingsPluginId !== id || !settingsTarget) throw new Error(PLUGIN_ENABLE_FAILED_COPY);
+      await pluginSettingsState.setEnabled(enabled);
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshPluginInstalls();
+    },
+    [settingsPluginId, settingsTarget, pluginSettingsState, refreshPluginInstalls],
+  );
+
+  const setPluginSkillEnabled = useCallback(
+    async (id: string, skill: string, enabled: boolean) => {
+      if (settingsPluginId !== id || !settingsTarget) throw new Error(PLUGIN_ENABLE_FAILED_COPY);
+      await pluginSettingsState.setSkillEnabled(skill, enabled);
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+    },
+    [settingsPluginId, settingsTarget, pluginSettingsState],
+  );
+
+  const refreshMarketplace = useCallback(
+    async (id: string) => {
+      const response = await postJson(
+        `${PLUGIN_MARKETPLACES_PATH}/${encodeURIComponent(id)}/refresh`,
+        {},
+      );
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+        throw new Error(body.error?.message ?? MARKETPLACE_REFRESH_FAILED_COPY);
+      }
+      await refreshUserMarketplaces();
+      await loadPlugins();
+    },
+    [refreshUserMarketplaces, loadPlugins],
+  );
+
   const removeMarketplace = useCallback(
     async (id: string) => {
-      const csrfToken = await getCsrfToken();
-      const response = await fetch(`${PLUGIN_MARKETPLACES_PATH}/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: { [CSRF_HEADER]: csrfToken },
-      });
-      if (!response.ok) throw new Error(MARKETPLACE_FAILED_COPY);
+      let csrfToken: string;
+      try {
+        csrfToken = await getCsrfToken();
+      } catch {
+        throw new Error(MARKETPLACE_REMOVE_UNSENT_COPY);
+      }
+      let response: Response;
+      try {
+        response = await fetch(`${PLUGIN_MARKETPLACES_PATH}/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { [CSRF_HEADER]: csrfToken },
+        });
+      } catch {
+        throw new Error(MARKETPLACE_REMOVE_UNSENT_COPY);
+      }
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+        throw new Error(body.error?.message ?? MARKETPLACE_FAILED_COPY);
+      }
       await refreshUserMarketplaces();
     },
     [refreshUserMarketplaces],
@@ -928,6 +1070,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   return useMemo(
     () => ({
       sections: SECTIONS,
+      openEntry,
       skills,
       connectors,
       plugins,
@@ -937,6 +1080,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       loadDetail,
       install,
       uninstall,
+      deleteEntry,
       requestCredentials,
       renderCredentialForm,
       ...(onEditSkill ? { openSettings } : {}),
@@ -959,8 +1103,13 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       openHref,
       addMarketplace,
       removeMarketplace,
+      refreshMarketplace,
+      ...(pluginSettings ? { pluginSettings } : {}),
+      setPluginEnabled,
+      setPluginSkillEnabled,
     }),
     [
+      openEntry,
       skills,
       connectors,
       plugins,
@@ -970,6 +1119,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       loadDetail,
       install,
       uninstall,
+      deleteEntry,
       requestCredentials,
       renderCredentialForm,
       openSettings,
@@ -983,6 +1133,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       openHref,
       addMarketplace,
       removeMarketplace,
+      refreshMarketplace,
+      pluginSettings,
+      setPluginEnabled,
+      setPluginSkillEnabled,
     ],
   );
 }

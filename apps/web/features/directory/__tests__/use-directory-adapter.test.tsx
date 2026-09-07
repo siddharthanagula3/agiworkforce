@@ -2,7 +2,7 @@ import { act, render, renderHook, screen, waitFor } from '@testing-library/react
 import { isValidElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DirectoryActionNotice } from '@agiworkforce/ui';
+import { DirectoryActionNotice, type DirectoryMarketplaceResult } from '@agiworkforce/ui';
 
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type { PluginDirectoryEntry } from '@/features/plugins/server/directory/types';
@@ -52,7 +52,12 @@ function record(id: string, patch: Partial<DirectoryRecord> = {}): DirectoryReco
   };
 }
 
-function page(entries: DirectoryRecord[], total: number, nextCursor: string | null) {
+function page(
+  entries: DirectoryRecord[],
+  total: number,
+  nextCursor: string | null,
+  stats: Record<string, unknown> = {},
+) {
   return {
     ok: true,
     json: () =>
@@ -61,7 +66,7 @@ function page(entries: DirectoryRecord[], total: number, nextCursor: string | nu
         total,
         nextCursor,
         categories: ['Data', 'Productivity'],
-        stats: { totalRecords: total },
+        stats: { totalRecords: total, ...stats },
       }),
   };
 }
@@ -274,6 +279,81 @@ describe('useDirectoryAdapter connectors paging', () => {
         'The connector directory is unavailable right now.',
       ),
     );
+  });
+});
+
+describe('useDirectoryAdapter settings deep link', () => {
+  const REGISTRY_ID = 'com.microsoft/microsoft-learn-mcp';
+
+  function setHash(hash: string): void {
+    window.location.hash = hash;
+  }
+
+  afterEach(() => {
+    setHash('');
+  });
+
+  it('carries the entry a registry-id deep link names', () => {
+    setHash(`#settings/customize-connectors/browse/${encodeURIComponent(REGISTRY_ID)}`);
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    expect(result.current.openEntry).toEqual({ section: 'connectors', entryId: REGISTRY_ID });
+  });
+
+  it('reads an unencoded slash in the hash the same way', () => {
+    setHash(`#settings/customize-connectors/browse/${REGISTRY_ID}`);
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    expect(result.current.openEntry).toEqual({ section: 'connectors', entryId: REGISTRY_ID });
+  });
+
+  it('carries no entry for a section link with no id', () => {
+    setHash('#settings/customize-connectors');
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    expect(result.current.openEntry).toBeNull();
+  });
+
+  it('follows a later hash change', async () => {
+    const { result } = renderHook(() => useDirectoryAdapter());
+    expect(result.current.openEntry).toBeNull();
+
+    await act(async () => {
+      setHash(`#settings/customize-skills/browse/canvas-design`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(result.current.openEntry).toEqual({ section: 'skills', entryId: 'canvas-design' });
+  });
+});
+
+describe('useDirectoryAdapter directory still indexing', () => {
+  it('says the directory is still indexing and offers a refresh', async () => {
+    stubDirectory({ '': page([record('a')], 412, null, { bootstrapComplete: false }) });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(1));
+
+    expect(result.current.connectors?.countLabel).toBe('412 connectors indexed so far');
+    expect(result.current.connectors?.notice).toContain('still being indexed');
+    expect(typeof result.current.connectors?.noticeRetry).toBe('function');
+    expect(result.current.connectors?.error).toBeUndefined();
+  });
+
+  it('says nothing once the crawl has finished', async () => {
+    stubDirectory({ '': page([record('a')], 17_204, null, { bootstrapComplete: true }) });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(1));
+
+    expect(result.current.connectors?.countLabel).toBe('17,204 connectors');
+    expect(result.current.connectors?.notice).toBeUndefined();
   });
 });
 
@@ -809,5 +889,262 @@ describe('useDirectoryAdapter plugins', () => {
     const detail = await result.current.loadDetail?.('plugins', 'elsewhere');
     expect(detail).toMatchObject({ kind: 'plugin', id: 'elsewhere', installable: true });
     expect(await result.current.loadDetail?.('plugins', 'missing')).toBeNull();
+  });
+});
+
+describe('useDirectoryAdapter plugin settings and enable', () => {
+  const SETTINGS = {
+    pluginId: 'data-pack',
+    enabledSkills: ['data-pack'],
+    examplePrompts: [],
+    connectors: [{ connectorId: 'github', connected: false }],
+    agents: [],
+  };
+
+  function stubInstalledBuiltin(overrides: Record<string, RouteHandler> = {}) {
+    return stubPluginRoutes({
+      'GET /api/plugins/installations': () =>
+        json({
+          installations: [
+            {
+              pluginId: 'data-pack',
+              installedVersion: '1.0.0',
+              enabled: false,
+              installedAt: '2026-09-06T00:00:00.000Z',
+              updatedAt: '2026-09-06T00:00:00.000Z',
+            },
+          ],
+        }),
+      'GET /api/plugins/data-pack/settings': () => json({ settings: SETTINGS }),
+      ...overrides,
+    });
+  }
+
+  it('carries the stored enable position and the declared skills onto the detail', async () => {
+    stubInstalledBuiltin();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    let detail;
+    await act(async () => {
+      detail = await result.current.loadDetail?.('plugins', 'data-pack');
+    });
+
+    expect(detail).toMatchObject({ installed: true, enabled: false, version: '1.0.0' });
+    await waitFor(() =>
+      expect(result.current.pluginSettings).toMatchObject({
+        pluginId: 'data-pack',
+        skills: [{ name: 'data-pack', enabled: true }],
+        connectors: [{ id: 'github', connected: false }],
+      }),
+    );
+  });
+
+  it('patches the installation when the enable switch moves', async () => {
+    const calls = stubInstalledBuiltin({
+      'PATCH /api/plugins/installations/data-pack': () =>
+        json({ installation: { pluginId: 'data-pack', enabled: true } }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'data-pack');
+    });
+
+    await act(async () => {
+      await result.current.setPluginEnabled?.('data-pack', true);
+    });
+
+    expect(calls).toContain('PATCH /api/plugins/installations/data-pack');
+  });
+
+  it('patches the settings route when a skill is turned off', async () => {
+    const calls = stubInstalledBuiltin({
+      'PATCH /api/plugins/data-pack/settings': () =>
+        json({ settings: { ...SETTINGS, enabledSkills: [] } }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'data-pack');
+    });
+    await waitFor(() => expect(result.current.pluginSettings?.skills).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.setPluginSkillEnabled?.('data-pack', 'data-pack', false);
+    });
+
+    expect(calls).toContain('PATCH /api/plugins/data-pack/settings');
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills).toEqual([
+        { name: 'data-pack', enabled: false },
+      ]),
+    );
+  });
+
+  it('refreshes a registered marketplace through its refresh route', async () => {
+    const calls = stubPluginRoutes({
+      'POST /api/plugins/marketplaces/source-1/refresh': () => json({ source: { id: 'source-1' } }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    await act(async () => {
+      await result.current.refreshMarketplace?.('source-1');
+    });
+
+    expect(calls).toContain('POST /api/plugins/marketplaces/source-1/refresh');
+  });
+});
+
+describe('adding a marketplace surfaces it immediately', () => {
+  const SOURCE = {
+    id: 'source-1',
+    name: 'claude-plugins-official',
+    repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
+    ref: 'main',
+    status: 'active' as const,
+    lastError: null,
+    contentHash: 'a'.repeat(64),
+    entryCount: 2,
+    lastSyncedAt: '2026-09-07T00:00:00.000Z',
+    createdAt: '2026-09-07T00:00:00.000Z',
+    updatedAt: '2026-09-07T00:00:00.000Z',
+  };
+  const ENTRIES = [
+    {
+      id: 'entry-1',
+      sourceId: 'source-1',
+      pluginKey: 'frontend-design',
+      name: 'Frontend Design',
+      description: 'Design interfaces.',
+      version: '0.0.0',
+      declaredSkills: ['frontend-design'],
+      requiredConnectors: [],
+      agents: [],
+      examplePrompts: [],
+      permissions: [],
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    },
+    {
+      id: 'entry-2',
+      sourceId: 'source-1',
+      pluginKey: 'superpowers',
+      name: 'Superpowers',
+      description: 'Do more.',
+      version: '0.0.0',
+      declaredSkills: [],
+      requiredConnectors: [],
+      agents: [],
+      examplePrompts: [],
+      permissions: [],
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    },
+  ];
+
+  function stubAfterAdd() {
+    let added = false;
+    return stubPluginRoutes({
+      'POST /api/plugins/marketplaces': () => {
+        added = true;
+        return json({ source: { id: SOURCE.id, name: SOURCE.name } }, 201);
+      },
+      'GET /api/plugins/marketplaces': () => json({ sources: added ? [SOURCE] : [] }),
+      'GET /api/plugins/marketplaces/entries': () => json({ entries: added ? ENTRIES : [] }),
+    });
+  }
+
+  it('returns the new marketplace entries to the dialog', async () => {
+    stubAfterAdd();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    let added: DirectoryMarketplaceResult | undefined;
+    await act(async () => {
+      added = await result.current.addMarketplace?.({
+        repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
+      });
+    });
+
+    expect(added).toMatchObject({ id: 'source-1', name: 'claude-plugins-official' });
+    expect(added?.entries.map((entry) => entry.name)).toEqual(['Frontend Design', 'Superpowers']);
+  });
+
+  it('adds a removable source chip to the plugins section', async () => {
+    stubAfterAdd();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    expect(result.current.plugins?.sources?.some((source) => source.id === 'source-1')).toBe(false);
+
+    await act(async () => {
+      await result.current.addMarketplace?.({
+        repositoryUrl: 'https://github.com/anthropics/claude-plugins-official',
+      });
+    });
+
+    await waitFor(() => {
+      const chip = result.current.plugins?.sources?.find((source) => source.id === 'source-1');
+      expect(chip).toMatchObject({ label: 'claude-plugins-official', removable: true });
+    });
+  });
+});
+
+describe('removing a marketplace reports what happened', () => {
+  it('reports an unsent request when the csrf token cannot be read', async () => {
+    stubPluginRoutes();
+    const { getCsrfToken } = await import('@/lib/client/csrf');
+    vi.mocked(getCsrfToken).mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await expect(result.current.removeMarketplace?.('source-1')).rejects.toThrow(
+      /could not be sent/i,
+    );
+  });
+
+  it('reports an unsent request when the delete never reaches the server', async () => {
+    stubPluginRoutes({
+      'DELETE /api/plugins/marketplaces/source-1': () => {
+        throw new Error('network down');
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await expect(result.current.removeMarketplace?.('source-1')).rejects.toThrow(
+      /could not be sent/i,
+    );
+  });
+
+  it('repeats the server sentence when the delete is refused', async () => {
+    stubPluginRoutes({
+      'DELETE /api/plugins/marketplaces/source-1': () =>
+        json({ error: { message: 'Marketplace source not found.' } }, 404),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await expect(result.current.removeMarketplace?.('source-1')).rejects.toThrow(
+      'Marketplace source not found.',
+    );
+  });
+
+  it('resolves and refreshes the list when the delete succeeds', async () => {
+    const calls = stubPluginRoutes({
+      'DELETE /api/plugins/marketplaces/source-1': () => json({}, 204),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await act(async () => {
+      await result.current.removeMarketplace?.('source-1');
+    });
+
+    expect(calls).toContain('DELETE /api/plugins/marketplaces/source-1');
+    expect(calls.filter((call) => call === 'GET /api/plugins/marketplaces')).not.toHaveLength(0);
   });
 });

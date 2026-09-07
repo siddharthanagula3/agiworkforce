@@ -172,6 +172,26 @@ export interface DirectoryPluginComponents {
   lspServers: readonly string[];
 }
 
+export interface DirectoryPluginSkillSetting {
+  name: string;
+  enabled: boolean;
+}
+
+export interface DirectoryPluginConnectorSetting {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
+export interface DirectoryPluginSettings {
+  pluginId: string;
+  skills: readonly DirectoryPluginSkillSetting[];
+  connectors: readonly DirectoryPluginConnectorSetting[];
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+}
+
 export interface DirectoryPluginDetail {
   kind: 'plugin';
   id: string;
@@ -181,6 +201,7 @@ export interface DirectoryPluginDetail {
   verified?: boolean;
   installCount?: number;
   version?: string;
+  enabled?: boolean;
   examplePrompts: readonly string[];
   components?: DirectoryPluginComponents;
   installCommand?: string | null;
@@ -218,7 +239,13 @@ export interface DirectoryMarketplaceResult {
   entries: readonly DirectoryMarketplaceEntry[];
 }
 
+export interface DirectoryOpenEntry {
+  section: DirectorySectionKey;
+  entryId: string;
+}
+
 export interface DirectoryAdapter {
+  openEntry?: DirectoryOpenEntry | null;
   sections: readonly DirectorySectionKey[];
   skills?: DirectorySection;
   connectors?: DirectorySection;
@@ -229,6 +256,7 @@ export interface DirectoryAdapter {
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
   install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  deleteEntry?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   createEntry?: (section: DirectorySectionKey) => void;
   renderDetailFooter?: (
@@ -244,5 +272,9 @@ export interface DirectoryAdapter {
   downloadSkillFile?: (skillId: string, path: string) => Promise<void> | void;
   addMarketplace?: (input: DirectoryMarketplaceInput) => Promise<DirectoryMarketplaceResult>;
   removeMarketplace?: (id: string) => Promise<void>;
+  refreshMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;
+  pluginSettings?: DirectoryPluginSettings;
+  setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
+  setPluginSkillEnabled?: (id: string, skill: string, enabled: boolean) => Promise<void> | void;
 }
