@@ -17,12 +17,17 @@ vi.mock('next/dynamic', () => ({
 import { SettingsModalProvider, useSettingsModal } from './SettingsModalProvider';
 
 function Harness() {
-  const { openSettings } = useSettingsModal();
+  const { openSettings, closeSettings } = useSettingsModal();
 
   return (
-    <button type="button" onClick={() => openSettings('billing')}>
-      Open settings
-    </button>
+    <>
+      <button type="button" onClick={() => openSettings('billing')}>
+        Open settings
+      </button>
+      <button type="button" onClick={closeSettings}>
+        Close settings
+      </button>
+    </>
   );
 }
 
@@ -120,6 +125,20 @@ describe('SettingsModalProvider settings hash', () => {
       </SettingsModalProvider>,
     );
     expect(screen.getByTestId('web-settings-modal')).toBeVisible();
+  });
+
+  it('drops the directory hash when the modal closes', async () => {
+    const user = userEvent.setup();
+    setHash('#settings/customize-plugins');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: /close settings/i }));
+    expect(screen.queryByTestId('web-settings-modal')).toBeNull();
+    expect(window.location.hash).toBe('');
+    expect(window.location.pathname).toBe('/chat');
   });
 
   it('stays closed for a hash the directory does not own', () => {

@@ -74,8 +74,10 @@ import {
   connectorDirectoryIndexing,
   connectorReauthorizationErrors,
   fetchConnectedConnectors,
+  fetchConnectedRecordsMissingFrom,
   fetchConnectorDirectoryPage,
   fetchConnectorRecord,
+  isDefaultConnectorRequest,
   fetchRelatedConnectors,
   initialConnectorSection,
   toConnectorDetail,
@@ -356,19 +358,32 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const seq = connectorRequestSeq.current;
       setConnectors((prev) => ({ ...prev, loading: true, error: null }));
       try {
+        const request = toDirectoryRequest(query);
         const [page, connected] = await Promise.all([
-          fetchConnectorDirectoryPage(toDirectoryRequest(query)).catch(() => null),
+          fetchConnectorDirectoryPage(request).catch(() => null),
           fetchConnectedConnectors(),
         ]);
         if (seq !== connectorRequestSeq.current) return;
+        const pinned =
+          page && isDefaultConnectorRequest(request)
+            ? await fetchConnectedRecordsMissingFrom(
+                connected.directoryIds,
+                new Set([
+                  ...page.entries.map((entry) => entry.id),
+                  ...curatedRef.current.map((connector) => connector.id),
+                ]),
+              )
+            : [];
+        if (seq !== connectorRequestSeq.current) return;
+        const records = page ? [...pinned, ...page.entries] : [];
         serverConnectedIds.current = connected.ids;
         connectorSetup.current = connected.setup;
         connectorsQueried.current = true;
         const previousStats = connectorPageRef.current.stats;
         connectorPageRef.current = page
           ? {
-              records: page.entries,
-              firstPageCount: page.entries.length,
+              records,
+              firstPageCount: records.length,
               nextCursor: page.nextCursor,
               total: page.total,
               categories: page.categories ?? [],
