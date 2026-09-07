@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { useMemoryStore } from '@agiworkforce/unified-chat';
@@ -56,6 +56,25 @@ describe('MemorySection top-level settings entry', () => {
         expect.objectContaining({ memory: true }),
       ),
     );
+  });
+
+  it('keeps the acknowledged state and offers a retry when a save is rejected', async () => {
+    savePreferenceNamespace.mockRejectedValueOnce(new Error('Network unreachable'));
+    const user = userEvent.setup();
+    render(<MemorySection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Persistent memory' });
+    await user.click(toggle);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Your memory settings were not saved, so nothing changed.');
+    await waitFor(() => expect(toggle).not.toBeChecked());
+
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows a live count of saved memories', () => {
