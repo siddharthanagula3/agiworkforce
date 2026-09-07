@@ -44,6 +44,8 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [reloadKey, setReloadKey] = useState(0);
   const [rejected, setRejected] = useState<CapabilitiesSettings | null>(null);
   const acknowledged = useRef<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
+  const latestChoice = useRef(0);
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -67,30 +69,38 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     };
   }, [reloadKey]);
 
-  const persist = useCallback(async (next: CapabilitiesSettings) => {
+  const persist = useCallback((next: CapabilitiesSettings) => {
+    const choice = (latestChoice.current += 1);
     setSettings(next);
     setSaving(true);
     setSaveError(null);
     setRejected(null);
-    try {
-      await savePreferenceNamespace(CAPABILITIES_NAMESPACE, next);
-      acknowledged.current = next;
-      resetMemoryCapabilityCache();
-      setSavedAt(Date.now());
-    } catch (error) {
-      // The optimistic value has to go back to what the server acknowledged, or
-      // the control keeps claiming a preference the account does not hold.
-      setSettings(acknowledged.current);
-      setRejected(next);
-      setSaveError(toUserMessage(error, 'Failed to save settings'));
-    } finally {
-      setSaving(false);
-    }
+    // One write at a time, newest choice wins. Two toggles in quick succession
+    // used to race in the transport, and the namespace is written whole, so the
+    // request that happened to land last decided what the account held.
+    writeQueue.current = writeQueue.current.then(async () => {
+      if (choice !== latestChoice.current) return;
+      try {
+        await savePreferenceNamespace(CAPABILITIES_NAMESPACE, next);
+        acknowledged.current = next;
+        resetMemoryCapabilityCache();
+        setSavedAt(Date.now());
+      } catch (error) {
+        if (choice !== latestChoice.current) return;
+        // The optimistic value has to go back to what the server acknowledged,
+        // or the control keeps claiming a preference the account does not hold.
+        setSettings(acknowledged.current);
+        setRejected(next);
+        setSaveError(toUserMessage(error, 'Failed to save settings'));
+      } finally {
+        if (choice === latestChoice.current) setSaving(false);
+      }
+    });
   }, []);
 
   const setBoolean = useCallback(
     (key: keyof CapabilitiesSettings, value: boolean) => {
-      void persist({ ...settings, [key]: value });
+      persist({ ...settings, [key]: value });
     },
     [settings, persist],
   );
@@ -98,7 +108,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const retry = useCallback(() => setReloadKey((value) => value + 1), []);
 
   const retrySave = useCallback(() => {
-    if (rejected) void persist(rejected);
+    if (rejected) persist(rejected);
   }, [rejected, persist]);
 
   return {
