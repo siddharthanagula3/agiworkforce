@@ -5,7 +5,7 @@ import path from 'node:path';
 const API_ROOT = path.resolve(import.meta.dirname, '../../app/api');
 
 const MUTATING = /export\s+(?:const|async\s+function)\s+(POST|PUT|PATCH|DELETE)\b/;
-const COOKIE_AUTH = /getClerkAuthUser\s*\(/;
+const COOKIE_AUTH = /getClerkAuthUser\s*\(|getRequestIdentity\s*\(/;
 const CSRF = /requireCsrfToken|withCsrf/;
 const RETIRED = /ENDPOINT_RETIRED|status:\s*410/;
 
