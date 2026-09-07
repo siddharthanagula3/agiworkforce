@@ -33,6 +33,7 @@ import {
   CONNECTOR_TERMS_PREFIX,
   CONNECTOR_TOOLS_LABEL,
   CONNECTOR_TRUST_COPY,
+  connectorNotConnectedCopy,
   CONNECTOR_URL_LABEL,
   CONNECTOR_WEBSITE_LABEL,
   CONNECT_LABEL,
@@ -296,6 +297,12 @@ export function ConnectorDetailView({
       {listed ? (
         <Notice>
           <p>{detail.listingNote}</p>
+        </Notice>
+      ) : null}
+
+      {!connected && !listed && actionable ? (
+        <Notice>
+          <p>{connectorNotConnectedCopy(detail.name)}</p>
         </Notice>
       ) : null}
 

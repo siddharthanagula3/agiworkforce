@@ -203,3 +203,30 @@ describe('ConnectorDetailView anatomy', () => {
     expect(screen.getByRole('button', { name: 'Tool permissions' })).toBeTruthy();
   });
 });
+
+describe('the never connected state', () => {
+  /**
+   * The detail opened straight into a description and a Connect button, with
+   * nothing saying which side of the connection the reader was on.
+   */
+  it('says so when the connector is connectable and not connected', () => {
+    renderDetail();
+    expect(screen.getByText("You're not connected to Customerscore yet.")).toBeTruthy();
+  });
+
+  it('says nothing of the sort once it is connected', () => {
+    renderDetail({ connected: true });
+    expect(screen.queryByText(/not connected to/)).toBeNull();
+  });
+
+  it('leaves a connector that cannot be connected here to its own notice', () => {
+    renderDetail({ connectableMode: 'desktop-and-cli', desktopHref: 'https://desktop.invalid' });
+    expect(screen.queryByText(/not connected to/)).toBeNull();
+  });
+
+  it('leaves a listed-only connector to its listing note', () => {
+    renderDetail({ listingNote: 'Listed for reference only.' });
+    expect(screen.getByText('Listed for reference only.')).toBeTruthy();
+    expect(screen.queryByText(/not connected to/)).toBeNull();
+  });
+});
