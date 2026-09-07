@@ -292,9 +292,6 @@ function DirectorySectionPanel({
     ...(adapter.openSettings && data.installable
       ? { onOpenSettings: (id: string) => void adapter.openSettings?.(section, id) }
       : {}),
-    ...(adapter.uninstall && data.installable
-      ? { onRemove: (id: string) => void runAction(id, adapter.uninstall) }
-      : {}),
   };
 
   function renderActionError() {
