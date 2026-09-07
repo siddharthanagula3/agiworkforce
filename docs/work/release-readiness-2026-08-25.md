@@ -3,7 +3,7 @@
 Status: ACTIVE, release-execution session
 Owner: Release lead (orchestrator)
 Branch: `release/readiness-2026-08-25`
-Last updated: 2026-08-26
+Last updated: 2026-09-07
 
 The one consolidated task list for taking every supported app to public release.
 It supersedes the scattered control docs; every item here is grounded in code,
@@ -80,6 +80,78 @@ wire it in, or cut it for release. None is currently reachable by users.
 - Desktop: `agent-collaboration`, `background-tasks`, `simple-mode`, `ArtifactsGallery`/`ArtifactCategoryFilter`, `MCP*` manager UIs, `TitleBar`, checkpoint Tauri commands, `local-llm` (llama-cpp-2) feature, `DocumentWorkspace`/PDFViewer, Discord/Signal/Telegram + Gmail OAuth messaging clients.
 - Web: `MaxUpgradePrompt`, in-progress media cards (`ImageGenCard`/`VideoGenCard`), offline message queue (consumer/UI built, zero producers), built `403`/`session-expired` pages not linked from the flows that trigger them, `founder`/`blog` pages absent from nav + hard-coded off.
 - Mobile: `InviteCodeModal` (REL-069), billing/connector placeholders behind disabled flags.
+
+---
+
+## Open launch items folded in from the remediation register (2026-09-07)
+
+The remediation register and the audit remediation ledger were merged into
+`docs/agent-context/known-flaws.md` and deleted. That register is a code-defect
+register, so the launch-readiness items those two files carried, the ones whose
+blocking fact lives in a dashboard, an account or a store console rather than in
+this repository, land here instead. Ids are the originals so older citations
+still resolve by search. Items already tracked above as `REL-002`, `REL-010`,
+`REL-011`, `REL-016`, `REL-019` and `REL-077`, and the R2 public-bucket and
+sandbox-origin items already in the manual checklist, are not repeated. Pure
+status assertions with no action, and items confirmed done on 2026-09-07, were
+dropped rather than copied.
+
+### Billing and Stripe
+
+| ID      | Action                                                                                                                                           | Owner    | How to confirm                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------- |
+| BILL-01 | Take the production Stripe account out of test mode and reconcile the live Price catalogue with the prices the pricing page publishes.           | Founder  | Stripe Dashboard in live mode lists an active Price for every plan the pricing page shows.                 |
+| BILL-02 | Create the four missing Price ids and set their environment variables, so Team checkout stops failing closed.                                    | Founder  | The four price variables are set in the production environment and a Team checkout reaches Stripe.         |
+| BILL-03 | Set the Stripe Tax dashboard preconditions the code already assumes: origin address, tax registrations, product tax codes.                       | Founder  | Stripe Tax shows a registration for each jurisdiction sold into, and a test checkout returns non-zero tax. |
+| BILL-38 | Decide what happens to the two INR prices above the RBI Rs 15,000 e-mandate ceiling: a lower price, manual renewal, or no INR sale at that tier. | Founder  | Every published INR price is at or under the ceiling, or the tier is documented as manual renewal.         |
+| BILL-40 | Create active INR Stripe Prices, or stop publishing INR pricing.                                                                                 | Founder  | Stripe lists an active INR Price for each plan the pricing page shows in INR.                              |
+| BILL-43 | Answer the Razorpay sales and tax questions before any Razorpay code is written.                                                                 | Founder  | A written decision names the merchant of record and how GST is collected.                                  |
+| BILL-45 | Prove the pre-execution credit reservation sweep runs in production. The migrations are applied; the cron cadence is what is unverified.         | Operator | The cron log shows the credit reconciliation running and clearing stale reservations.                      |
+| BILL-46 | Redeploy production so the configured managed video generation storage takes effect, then verify one generation end to end.                      | Operator | A video generation completes and its file is readable from the configured bucket.                          |
+
+### Stores and release credentials
+
+| ID       | Action                                                                                                                                         | Owner   | How to confirm                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| MOB-02   | Complete the iOS Issuer ID and the Android Play Console setup that block store submission.                                                     | Founder | App Store Connect shows an API key with an Issuer ID, and the Play Console holds a created app record.                 |
+| MOB-07   | Create the store in-app-purchase products the built native path expects, and finish the tax and banking paperwork. Product ids are `REL-016`.  | Founder | Both stores list the product ids the app requests and each shows a submittable state.                                  |
+| MOB-15   | Produce a signed mobile build and confirm cloud sign-in and iOS launch on it.                                                                  | Founder | A signed build installs on a device and reaches a signed-in cloud chat.                                                |
+| MOB-18   | Certify the newest iOS and Android device matrix. It cannot be done without hardware.                                                          | Founder | A recorded run on each device class in the matrix.                                                                     |
+| MOB-29   | Replace the dangling review-notes reference and the literal founder-phone placeholder in the store listing metadata.                           | Founder | The store listing shows a real contact number and no placeholder text.                                                 |
+| INFRA-17 | Provision publishing credentials and environments for the five release surfaces that have none.                                                | Founder | Each release workflow has a GitHub environment holding its publishing credential.                                      |
+| SEC-39   | Escrow the desktop updater signing key offline and name a recovery holder. Both copies that exist today are day-to-day copies.                 | Founder | The custody inventory in `docs/security/security.md` section 4 has no unfilled row and the restore drill has been run. |
+| INFRA-19 | Add the mobile release workflow's missing store artefacts: privacy manifest, data-safety form, device matrix, phased rollout, crash telemetry. | Founder | The Play Console data-safety form is submitted and App Store Connect accepts the privacy manifest.                     |
+
+### Vendor and provider configuration
+
+| ID       | Action                                                                                                                                | Owner    | How to confirm                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| CONN-04  | Ask the six MCP vendors that refuse dynamic client registration for a registered client, or drop those connectors from the catalogue. | Founder  | Each of the six either holds client credentials in the operator configuration or no longer lists as connectable. |
+| INFRA-42 | Store an account-scoped Cloudflare token so the R2 CORS policy can be reapplied from the repository.                                  | Founder  | The token exists in the deployment environment and the CORS apply step runs.                                     |
+| INFRA-21 | Remove the vestigial `gateway.agiworkforce.com` alias. Checked 2026-09-07: it still resolves and answers 404.                         | Operator | The hostname no longer resolves.                                                                                 |
+| DPDP-57  | Confirm the Vercel and Neon log retention windows against the investigation window the breach runbook assumes.                        | Founder  | Each vendor's retention setting is recorded beside the window the runbook assumes.                               |
+
+### Infrastructure
+
+| ID       | Action                                                                                                                                                                                   | Owner    | How to confirm                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| INFRA-04 | Configure a repository ruleset on main: required review, a required CI check, no force push, no deletion. Checked 2026-09-07: the rulesets list is empty and main carries no protection. | Founder  | The repository rulesets page lists a rule targeting main, and an unreviewed push to main is refused. |
+| INFRA-43 | Turn on object-bucket versioning. The restore runbook exists, but the bucket keeps no versions to restore from.                                                                          | Operator | The bucket settings show versioning enabled.                                                         |
+| INFRA-51 | Schedule the video-generation reconciliation sweep. It exists and nothing runs it, so an abandoned job stays queued and fully billed.                                                    | Operator | A cron entry invokes the sweep and the cron log shows it running.                                    |
+| INFRA-54 | Provision error tracking for the signaling server, which reports to nothing today.                                                                                                       | Operator | The signaling service reports to an error tracker and a test error arrives.                          |
+
+### Compliance
+
+| ID      | Action                                                                                                                                              | Owner   | How to confirm                                                                                 |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| DPDP-04 | Decide the verifiable parental consent mechanism. Web has no age gate and the mobile one is self-declared and clearable by the child.               | Founder | A written decision names the mechanism, and the gate cannot be cleared by the child alone.     |
+| DPDP-22 | Determine Significant Data Fiduciary status. If notified, a named India data protection officer, a DPIA and an independent audit are all required.  | Founder | A written determination exists, with the officer named and an audit plan if the answer is yes. |
+| DPDP-23 | Name an individual Grievance Officer, confirm the notice address, and create the privacy and grievance mailboxes.                                   | Founder | The published notice names a person and mail to both addresses is delivered.                   |
+| DPDP-26 | Have counsel review the breach-notification templates, which are engineer-drafted from statute. The steps are in `docs/work/founder-assistance.md`. | Founder | The runbook header names the reviewing counsel and the pre-send notices are gone.              |
+| DPDP-32 | Verify enterprise single sign-on against a live SAML instance and a live OIDC instance. It is marketed and has never been tested against either.    | Founder | A sign-in completes against a real identity provider for each protocol.                        |
+| DPDP-48 | Decide the commercial-tier dispute-resolution stance. Without one, consumer arbitration terms apply to every paying tier.                           | Founder | The terms state the commercial stance, or a signed master agreement covers it.                 |
+| DPDP-50 | Decide whether the single worldwide Terms and Privacy under Texas law need EEA, UK and Switzerland variants.                                        | Founder | Either a written decision that one document suffices, or the variants are published.           |
+| DPDP-53 | Name an incident commander and an on-call rota for data-breach response. The founder is the default for every incident today.                       | Founder | `docs/runbooks/incident-response.md` names a commander and a rota with at least two people.    |
 
 ---
 
