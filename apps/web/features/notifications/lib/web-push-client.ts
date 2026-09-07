@@ -149,15 +149,26 @@ export async function disableWebPush(): Promise<boolean> {
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) return true;
 
+  let removedOnServer = false;
   try {
     const response = await fetch(SUBSCRIPTION_ENDPOINT, {
       method: 'DELETE',
       headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ endpoint: subscription.endpoint }),
     });
+    removedOnServer = response.ok;
+  } catch {
+    removedOnServer = false;
+  }
+
+  // The endpoint belongs to the browser profile, not to the session, so it is
+  // dropped whatever the server said: a kept one delivers the signed-out
+  // account's notifications to whoever signs in next. A row left behind is
+  // pruned on its first failed delivery.
+  try {
     await subscription.unsubscribe();
-    return response.ok;
   } catch {
     return false;
   }
+  return removedOnServer;
 }
