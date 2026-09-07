@@ -20,7 +20,7 @@ const TOPICS = [
   },
   {
     title: 'Security postures',
-    body: 'What the trust boundary enforces, what it does not, and the gaps we name in SECURITY.md rather than leave for someone else to find.',
+    body: 'What the trust boundary enforces, what it does not, and the gaps we name on our security page rather than leave for someone else to find.',
   },
   {
     title: 'Design notes',
