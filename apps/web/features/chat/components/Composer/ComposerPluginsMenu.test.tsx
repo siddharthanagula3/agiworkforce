@@ -46,24 +46,37 @@ function renderMenu(overrides: Partial<ComposerPluginsMenuProps> = {}) {
   return props;
 }
 
+/** The class fragment both composer surfaces get from ConnectorToggleRow. */
+const SHARED_CONNECTOR_ROW_CLASS = 'items-center gap-3 rounded-lg py-2 pr-3';
+
 describe('ComposerPluginsMenu populated', () => {
-  it('lists the connected connectors with their logo and an enabled toggle', () => {
+  /**
+   * The rows are the plus menu's rows. Both surfaces write the same
+   * conversation state, so a switch here and a checkbox there read as two
+   * different settings.
+   */
+  it('lists the connected connectors as the same checkbox rows the plus menu uses', () => {
     renderMenu();
     expect(screen.getByLabelText(COMPOSER_CONNECTORS_SEARCH_LABEL)).toBeTruthy();
-    expect(screen.getByTestId('logo-gmail')).toBeTruthy();
-    expect(screen.getByRole('switch', { name: 'Use Gmail' }).getAttribute('aria-checked')).toBe(
-      'true',
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Gmail' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Notion' })).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' }).className).toContain(
+      SHARED_CONNECTOR_ROW_CLASS,
     );
-    expect(screen.getByRole('switch', { name: 'Use Notion' })).toBeTruthy();
+    // The leaders' palettes carry the vendor mark; the shared row keeps it.
+    expect(screen.getByTestId('logo-gmail')).toBeTruthy();
   });
 
   it('reflects a connector the chat has disabled and toggles it back through the store', () => {
     const props = renderMenu({ disabledConnectorIds: ['notion'] });
-    const toggle = screen.getByRole('switch', { name: 'Use Notion' });
+    const toggle = screen.getByRole('menuitemcheckbox', { name: 'Notion' });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(toggle);
     expect(props.onSetConnectorEnabled).toHaveBeenCalledWith('notion', true);
-    fireEvent.click(screen.getByRole('switch', { name: 'Use Gmail' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Gmail' }));
     expect(props.onSetConnectorEnabled).toHaveBeenCalledWith('gmail', false);
   });
 
@@ -81,7 +94,7 @@ describe('ComposerPluginsMenu populated', () => {
       disabledConnectorIds: ['custom-abc123def0'],
     });
 
-    const toggle = screen.getByRole('switch', { name: 'Use Sentry' });
+    const toggle = screen.getByRole('menuitemcheckbox', { name: 'Sentry' });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(toggle);
     expect(props.onSetConnectorEnabled).toHaveBeenCalledWith('custom-abc123def0', true);
@@ -92,8 +105,8 @@ describe('ComposerPluginsMenu populated', () => {
     fireEvent.change(screen.getByLabelText(COMPOSER_CONNECTORS_SEARCH_LABEL), {
       target: { value: 'not' },
     });
-    expect(screen.queryByRole('switch', { name: 'Use Gmail' })).toBeNull();
-    expect(screen.getByRole('switch', { name: 'Use Notion' })).toBeTruthy();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Gmail' })).toBeNull();
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Notion' })).toBeTruthy();
   });
 
   it('opens the connectors directory from the Add connectors row', async () => {
