@@ -298,13 +298,20 @@ export async function previewBulkUsageReset(): Promise<BulkResetPreview> {
 
 export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPreview> {
   const db = getNeonDb();
-  const affected = await db.query<{ id: string; user_id: string; credits_used_cents: number }>(
-    `update public.token_credits
+  const affected = await db.query<{ id: string; user_id: string; cleared_cents: number }>(
+    `with before as (
+       select id, user_id, credits_used_cents
+         from public.token_credits
+        where period_end > now() and credits_used_cents > 0
+          for update
+     )
+     update public.token_credits tc
         set credits_used_cents = 0,
             flagship_used_today_cents = 0,
             updated_at = now()
-      where period_end > now() and credits_used_cents > 0
-      returning id, user_id, credits_used_cents`,
+       from before
+      where tc.id = before.id
+      returning tc.id, tc.user_id, before.credits_used_cents as cleared_cents`,
   );
 
   if (affected.length === 0) return { affectedUsers: 0, clearedCents: 0 };
@@ -315,7 +322,7 @@ export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPrev
     values.push(
       row.user_id,
       row.id,
-      Number(row.credits_used_cents) || 0,
+      Number(row.cleared_cents) || 0,
       JSON.stringify({ reason: 'operator_bulk_reset', actor_id: actorId }),
     );
     return `($${base + 1}, $${base + 2}, 'reset', $${base + 3}, $${base + 4})`;
@@ -330,7 +337,7 @@ export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPrev
 
   return {
     affectedUsers: affected.length,
-    clearedCents: affected.reduce((sum, r) => sum + (Number(r.credits_used_cents) || 0), 0),
+    clearedCents: affected.reduce((sum, r) => sum + (Number(r.cleared_cents) || 0), 0),
   };
 }
 
