@@ -43,6 +43,7 @@ import { cn } from '@shared/lib/utils';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
+import { ConnectorToggleRow } from './ConnectorToggleRow';
 import type { SkillItem } from '@features/chat/hooks/use-skills-list';
 import {
   loadPalettePlugins,
@@ -325,37 +326,6 @@ function MenuToggleRow({
  * replace that one -- both run on every keypress -- and would fight it for
  * which "next item" wins.
  */
-function ConnectorCheckboxRow({
-  label,
-  checked,
-  onToggle,
-}: {
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitemcheckbox"
-      aria-checked={checked}
-      onClick={onToggle}
-      className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-sm transition-colors hover:bg-muted/60"
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-          checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
-        )}
-      >
-        {checked && <Check className="h-3 w-3" />}
-      </span>
-      <span className="flex-1 truncate text-left">{label}</span>
-    </button>
-  );
-}
-
 /** A connected connector as the AGI Work palette shows it: mark, name, capability line. */
 function PaletteConnectorRow({
   connector,
@@ -817,8 +787,10 @@ function ChatMenu(props: ComposerPlusMenuProps) {
             </p>
           ) : (
             props.connectors.map((connector) => (
-              <ConnectorCheckboxRow
+              <ConnectorToggleRow
                 key={connector.id}
+                indented
+                connector={connector}
                 label={connector.label}
                 checked={enabledConnector(connector)}
                 onToggle={() =>
