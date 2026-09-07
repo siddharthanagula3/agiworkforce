@@ -811,16 +811,20 @@ describe('ChatComposerNew', () => {
     expect(screen.getByText('Plugins')).toBeInTheDocument();
   });
 
-  it('plus-menu entries open the settings modal at their pane (no inline lists, no fake toggles)', () => {
+  it('the Skills and Plugins rows expand submenus whose Manage rows open the settings pane', async () => {
     chatComposerMocks.openSettings.mockClear();
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Skills'));
+    expect(chatComposerMocks.openSettings).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage skills' }));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('skills');
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Plugins'));
+    expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('skills');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Manage plugins' }));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('plugins');
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));

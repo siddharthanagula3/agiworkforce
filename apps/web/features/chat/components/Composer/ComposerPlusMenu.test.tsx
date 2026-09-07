@@ -90,6 +90,7 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     skills: [
       { name: 'brand-voice', description: 'Rewrite copy in the house voice', source: 'personal' },
       { name: 'sql-review', description: 'Review a query plan', source: 'personal' },
+      { name: 'ads', description: 'Plan a paid campaign', source: 'bundled' },
     ],
     onSelectSkill: vi.fn(),
     folders: [
@@ -147,11 +148,23 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.getByRole('menuitem', { name: 'Manage in Settings' })).toBeInTheDocument();
   });
 
-  it('makes the Skills entry bookmarkable the same way', () => {
+  it('lists the skills under the Skills row and selects one', () => {
+    const { props } = renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(screen.queryByRole('menuitem', { name: 'ads' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'brand-voice' }));
+
+    expect(props.onSelectSkill).toHaveBeenCalledWith('brand-voice');
+    expect(props.closeMenu).toHaveBeenCalled();
+  });
+
+  it('makes the Skills settings bookmarkable from the Manage skills row', () => {
     window.location.hash = '';
     const { props } = renderMenu();
 
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage skills' }));
 
     expect(window.location.hash).toBe('#settings/customize-skills');
     expect(props.onOpenSettings).toHaveBeenCalledWith('skills');
@@ -159,16 +172,67 @@ describe('ComposerPlusMenu, chat mode', () => {
     window.location.hash = '';
   });
 
-  it('makes the Plugins entry bookmarkable the same way', () => {
+  it('lists the installed plugins with the skills they carry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        if (input.includes('marketplace-installations')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ installations: [] }) });
+        }
+        if (input.endsWith('/installations')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ installations: [{ pluginId: 'data-pack', enabled: true }] }),
+          });
+        }
+        if (input.endsWith('/data-pack')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                entry: {
+                  id: 'data-pack',
+                  name: 'Data Pack',
+                  source: 'builtin',
+                  publisher: { kind: 'builtin' },
+                  webInstallable: true,
+                  declaredSkills: ['sql-review', 'not-installed'],
+                },
+              }),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+      }),
+    );
+    const { props } = renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Plugins' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Data Pack' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'sql-review' }));
+
+    expect(props.onSelectSkill).toHaveBeenCalledWith('sql-review');
+    expect(screen.queryByRole('menuitem', { name: 'not-installed' })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('makes the Plugins settings bookmarkable from the Manage plugins row', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) })),
+    );
     window.location.hash = '';
     const { props } = renderMenu();
 
     fireEvent.click(screen.getByRole('button', { name: 'Plugins' }));
+    expect(await screen.findByText('No plugins installed yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage plugins' }));
 
     expect(window.location.hash).toBe('#settings/customize-plugins');
     expect(props.onOpenSettings).toHaveBeenCalledWith('plugins');
     expect(props.closeMenu).toHaveBeenCalled();
     window.location.hash = '';
+    vi.unstubAllGlobals();
   });
 
   it('makes the settings it opens bookmarkable by setting the hash', () => {
