@@ -59,6 +59,14 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
     ...actual,
     getManagedSkillCatalog: mocks.managedSkillCatalog,
     getManagedSkillCatalogForPlugins: mocks.managedSkillCatalog,
+    loadSelectableSkillCatalog: async (params: {
+      loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
+      loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
+    }) =>
+      actual.filterSkillsByInstallOverrides(
+        await mocks.managedSkillCatalog(await params.loadEnabledPluginIds()),
+        await params.loadInstallOverrides(),
+      ),
   };
 });
 

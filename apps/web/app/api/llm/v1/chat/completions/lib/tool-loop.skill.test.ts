@@ -26,7 +26,10 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
 }));
 
 const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));
-vi.mock('@/lib/services/user-skill-service', () => userSkillService);
+vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
+  findUserSkillByName: userSkillService.findUserSkillByName,
+}));
 
 const directorySkills = vi.hoisted(() => ({
   findInstalledDirectorySkill: vi.fn(async () => null as Skill | null),

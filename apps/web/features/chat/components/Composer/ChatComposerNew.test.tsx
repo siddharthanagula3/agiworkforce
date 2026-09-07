@@ -30,7 +30,7 @@ const chatComposerMocks = vi.hoisted(() => ({
         description: 'Backend implementation support',
         source: 'bundled',
       },
-    ],
+    ] as Array<{ name: string; description: string; source: string; requiredTools?: string[] }>,
     loading: false,
     error: null as string | null,
   },
@@ -46,6 +46,7 @@ const chatComposerMocks = vi.hoisted(() => ({
     connectedIds: new Set<string>(),
     sources: {} as Record<string, string>,
     customNames: {} as Record<string, string>,
+    toolConnectorIds: {} as Record<string, string>,
   },
   memoryCapabilityEnabled: true,
 }));
@@ -337,6 +338,43 @@ describe('ChatComposerNew', () => {
         expect.objectContaining({ workMode: 'agiwork', projectId: 'proj-2' }),
       );
     });
+  });
+
+  it('turns Office files on when a skill that needs it is picked', async () => {
+    const conversationId = 'skill-requirement-conversation';
+    useModelStore.getState().setSelectedModelId('auto');
+    chatComposerMocks.skillResult.skills = [
+      {
+        name: 'document-creation',
+        description: 'Create documents.',
+        source: 'bundled',
+        requiredTools: ['create_office_file'],
+      },
+    ];
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, '@docu');
+    fireEvent.click(await screen.findByText('document-creation'));
+
+    await waitFor(() => {
+      expect(useChatStore.getState().getComposerToggles(conversationId)).toMatchObject({
+        officeCreationEnabled: true,
+      });
+    });
+  });
+
+  it('leaves the toggles alone for a skill that declares nothing', async () => {
+    const conversationId = 'skill-no-requirement-conversation';
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, '@back');
+    fireEvent.click(await screen.findByText('backend-engineer'));
+
+    expect(
+      useChatStore.getState().getComposerToggles(conversationId).officeCreationEnabled,
+    ).not.toBe(true);
   });
 
   it('sends the exact selected skill name without downloading its body', async () => {
@@ -1060,7 +1098,7 @@ describe('ChatComposerNew', () => {
     const bar = screen.getByTestId('composer-work-bar');
     expect(within(bar).getByRole('button', { name: /project or folder/i })).toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Files' })).toBeInTheDocument();
-    expect(within(bar).getByRole('button', { name: 'Plugins' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Connectors' })).toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: 'Open desktop app' })).not.toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: /add scope/i })).not.toBeInTheDocument();
   });

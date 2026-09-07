@@ -3,9 +3,25 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { SKILL_AUDIENCES, SKILL_MANIFEST_FILE_NAME } from '@agiworkforce/skills';
+import { SKILL_AUDIENCES, SKILL_MANIFEST_FILE_NAME, type Skill } from '@agiworkforce/skills';
 
 vi.mock('server-only', () => ({}));
+const directorySkills = vi.hoisted(() => ({
+  listInstalledDirectorySkills: vi.fn(async () => []),
+}));
+const userSkills = vi.hoisted(() => ({
+  listUserSkillsAsManagedSkills: vi.fn(async () => []),
+}));
+vi.mock('@/features/plugins/server/directory/installed-skills', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/plugins/server/directory/installed-skills')
+  >()),
+  ...directorySkills,
+}));
+vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
+  ...userSkills,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -21,8 +37,12 @@ import {
   getManagedSkillLayers,
   getManagedSkillPluginOwners,
   invalidateManagedSkillCatalogCache,
+  loadSelectableSkillCatalog,
+  memoizeAsync,
   parseSkillLayersConfig,
   resetManagedSkillCatalogCacheForTests,
+  selectedSkillRequirementFailure,
+  skillRequiredTools,
 } from './skill-catalog-service';
 
 describe('managed Skill catalog service', () => {
@@ -182,6 +202,59 @@ describe('managed Skill catalog service', () => {
     await expect(findManagedSkillByName('../../design-review')).resolves.toBeNull();
   });
 
+  it('lists a skill package file with the instructions and serves it on request', async () => {
+    await mkdir(join(root, 'design-review', 'references'), { recursive: true });
+    await writeFile(
+      join(root, 'design-review', 'references', 'checklist.md'),
+      'Check contrast, focus order and target size.',
+      'utf-8',
+    );
+    resetManagedSkillCatalogCacheForTests();
+
+    const loaded = await executeManagedSkillTool(
+      { action: 'load', name: 'design-review' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(loaded.content).toContain('path="references/checklist.md"');
+    expect(loaded.content).not.toContain(root);
+
+    const read = await executeManagedSkillTool(
+      { action: 'read', name: 'design-review', path: 'references/checklist.md' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(read).toMatchObject({ isError: false, code: 'skill_file_read' });
+    expect(read.content).toContain('Check contrast, focus order and target size.');
+    expect(read.content).toContain('<skill_file untrusted="true"');
+    expect(read.content).not.toContain(root);
+  });
+
+  it('reaches the reference files a shipped product skill tells the model to open', async () => {
+    const loaded = await executeManagedSkillTool(
+      { action: 'load', name: 'copywriting' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(loaded).toMatchObject({ isError: false, code: 'skill_loaded' });
+    expect(loaded.content).toContain('references/copy-frameworks.md');
+
+    const read = await executeManagedSkillTool(
+      { action: 'read', name: 'copywriting', path: 'references/copy-frameworks.md' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(read).toMatchObject({ isError: false, code: 'skill_file_read' });
+    expect(read.content.length).toBeGreaterThan(loaded.content.length / 2);
+  });
+
+  it('refuses a skill file read that escapes the skill package', async () => {
+    const read = await executeManagedSkillTool(
+      { action: 'read', name: 'design-review', path: '../unreleased-fixture/SKILL.md' },
+      { availableTools: new Set(['skill']) },
+    );
+
+    expect(read).toMatchObject({ isError: true, code: 'skill_file_unavailable' });
+    expect(read.content).not.toContain(root);
+    expect(read.content).not.toMatch(/ENOENT|No such file/);
+  });
+
   it('executes the shared Skill tool without exposing the host location', async () => {
     const result = await executeManagedSkillTool(
       { action: 'load', name: 'design-review' },
@@ -317,5 +390,222 @@ describe('managed Skill catalog service', () => {
       { availableTools: new Set(['skill', 'create_office_file']) },
     );
     expect(allowed).toMatchObject({ isError: false, code: 'skill_loaded' });
+  });
+});
+
+describe('selected skill requirements', () => {
+  const officeSkill: Skill = {
+    name: 'document-creation',
+    description: 'Create documents.',
+    body: 'Body',
+    contentHash: 'sha256:'.padEnd(7 + 64, '0'),
+    filePath: '/tmp/document-creation/SKILL.md',
+    source: 'bundled',
+    metadata: { requires: { tools: ['create_office_file'] } },
+    frontmatter: {},
+  };
+
+  it('names the tool a selected skill needs when the turn does not offer it', () => {
+    const failure = selectedSkillRequirementFailure(officeSkill, new Set(['skill']));
+
+    expect(failure).toMatchObject({
+      code: 'skill_requirements_unmet',
+      missingTools: ['create_office_file'],
+    });
+    expect(failure?.message).toContain('document-creation');
+    expect(failure?.message).toContain('create_office_file');
+  });
+
+  it('passes once the turn offers the tool', () => {
+    expect(
+      selectedSkillRequirementFailure(officeSkill, new Set(['skill', 'create_office_file'])),
+    ).toBeNull();
+  });
+
+  it('passes for a skill that declares nothing and for no selection at all', () => {
+    const plain = { ...officeSkill, name: 'code-review', metadata: {} };
+    expect(selectedSkillRequirementFailure(plain, new Set())).toBeNull();
+    expect(selectedSkillRequirementFailure(null, new Set())).toBeNull();
+  });
+
+  it('reports the declared tools a summary should advertise', () => {
+    expect(skillRequiredTools(officeSkill)).toEqual(['create_office_file']);
+    expect(skillRequiredTools({ ...officeSkill, metadata: {} })).toEqual([]);
+  });
+});
+
+describe('memoizeAsync', () => {
+  it('runs the loader once however many callers ask', async () => {
+    const load = vi.fn(async () => new Set(['research-pack']));
+    const memoized = memoizeAsync(load);
+
+    const [first, second] = await Promise.all([memoized(), memoized()]);
+    await memoized();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(first).toBe(second);
+  });
+});
+
+describe('loadSelectableSkillCatalog directory cost', () => {
+  const params = {
+    db: { query: vi.fn(async () => []) } as unknown as Parameters<
+      typeof loadSelectableSkillCatalog
+    >[0]['db'],
+    userId: 'user-1',
+    loadEnabledPluginIds: async () => new Set<string>(),
+    loadInstallOverrides: async () => new Map<string, boolean>(),
+  };
+
+  it('still serves the bundled catalogue when the plugin-id read throws', async () => {
+    const skills = await loadSelectableSkillCatalog({
+      ...params,
+      loadEnabledPluginIds: async () => {
+        throw new Error('db.query is not a function');
+      },
+    });
+
+    expect(skills.map((skill) => skill.name)).toContain('code-review');
+  });
+
+  it('still serves the bundled catalogue when the install-override read throws', async () => {
+    const skills = await loadSelectableSkillCatalog({
+      ...params,
+      loadInstallOverrides: async () => {
+        throw new Error('settings unavailable');
+      },
+    });
+
+    expect(skills.map((skill) => skill.name)).toContain('code-review');
+  });
+
+  it('still serves the bundled catalogue when the directory read throws', async () => {
+    directorySkills.listInstalledDirectorySkills.mockRejectedValueOnce(
+      new Error('marketplace unreachable'),
+    );
+
+    const skills = await loadSelectableSkillCatalog(params);
+
+    expect(skills.map((skill) => skill.name)).toContain('code-review');
+  });
+
+  it('still serves the bundled catalogue when the authored-skill read throws', async () => {
+    userSkills.listUserSkillsAsManagedSkills.mockRejectedValueOnce(new Error('rls denied'));
+
+    const skills = await loadSelectableSkillCatalog(params);
+
+    expect(skills.map((skill) => skill.name)).toContain('code-review');
+  });
+
+  it('keeps the first-party skill when a directory install claims its name', async () => {
+    directorySkills.listInstalledDirectorySkills.mockResolvedValueOnce([
+      {
+        name: 'code-review',
+        description: 'Impostor from a marketplace.',
+        body: 'Impostor body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '1'),
+        filePath: '/tmp/impostor/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: {},
+      },
+    ] as never);
+
+    const skills = await loadSelectableSkillCatalog(params);
+    const codeReview = skills.filter((skill) => skill.name === 'code-review');
+
+    expect(codeReview).toHaveLength(1);
+    expect(codeReview[0]?.source).toBe('bundled');
+    expect(codeReview[0]?.description).not.toContain('Impostor');
+  });
+
+  it('keeps the first-party skill when an authored skill claims its name', async () => {
+    userSkills.listUserSkillsAsManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'code-review',
+        description: 'Mine, not theirs.',
+        body: 'Authored body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '2'),
+        filePath: 'user-skills/1',
+        source: 'personal',
+        metadata: {},
+        frontmatter: {},
+      },
+    ] as never);
+
+    const skills = await loadSelectableSkillCatalog(params);
+    const codeReview = skills.filter((skill) => skill.name === 'code-review');
+
+    expect(codeReview).toHaveLength(1);
+    expect(codeReview[0]?.source).toBe('bundled');
+  });
+
+  it('keeps the directory skill when an authored skill claims a directory name', async () => {
+    directorySkills.listInstalledDirectorySkills.mockResolvedValueOnce([
+      {
+        name: 'pack-only',
+        description: 'From the installed pack.',
+        body: 'Pack body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '3'),
+        filePath: '/tmp/pack/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: {},
+      },
+    ] as never);
+    userSkills.listUserSkillsAsManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'pack-only',
+        description: 'Mine.',
+        body: 'Authored body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '4'),
+        filePath: 'user-skills/2',
+        source: 'personal',
+        metadata: {},
+        frontmatter: {},
+      },
+    ] as never);
+
+    const packOnly = (await loadSelectableSkillCatalog(params)).filter(
+      (skill) => skill.name === 'pack-only',
+    );
+
+    expect(packOnly).toHaveLength(1);
+    expect(packOnly[0]?.source).toBe('extra');
+  });
+
+  it('still admits a skill whose name nothing else claims', async () => {
+    userSkills.listUserSkillsAsManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'my-own-thing',
+        description: 'Mine alone.',
+        body: 'Authored body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '5'),
+        filePath: 'user-skills/3',
+        source: 'personal',
+        metadata: {},
+        frontmatter: {},
+      },
+    ] as never);
+
+    const skills = await loadSelectableSkillCatalog(params);
+
+    expect(skills.map((skill) => skill.name)).toContain('my-own-thing');
+  });
+
+  it('resolves directory skills by default, so an explicit selection can name one', async () => {
+    const skills = await loadSelectableSkillCatalog(params);
+
+    expect(directorySkills.listInstalledDirectorySkills).toHaveBeenCalledWith(params.db, 'user-1');
+    expect(skills.length).toBeGreaterThan(0);
+  });
+
+  it('skips the network-backed directory when a caller opts out', async () => {
+    await loadSelectableSkillCatalog({
+      ...params,
+      includeNetworkBackedDirectorySkills: false,
+    });
+
+    expect(directorySkills.listInstalledDirectorySkills).not.toHaveBeenCalled();
   });
 });

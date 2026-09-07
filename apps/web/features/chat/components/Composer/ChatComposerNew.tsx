@@ -106,7 +106,10 @@ import {
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
-import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+} from '@agiworkforce/cloud-contracts';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 import {
   getImageAspectOptionsForModel,
@@ -204,10 +207,15 @@ const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
  */
 const QUEUED_ROW_LEAD = 'Queued';
 
+type SkillToolToggle = 'officeCreationEnabled' | 'codeExecutionEnabled';
+const SKILL_TOOL_TOGGLES: Readonly<Record<string, SkillToolToggle>> = {
+  [MANAGED_OFFICE_FILE_TOOL_NAME]: 'officeCreationEnabled',
+};
+
 const WORK_BAR_LABELS = {
   project: 'Project',
   files: 'Files',
-  plugins: 'Plugins',
+  plugins: 'Connectors',
 } as const;
 
 const WORK_BAR_CONNECTOR_MARKS = 3;
@@ -640,6 +648,7 @@ const ChatComposerNewComponent = ({
     connectedIds: connectedConnectorIds,
     sources: connectorSources,
     customNames: connectorCustomNames,
+    toolConnectorIds,
     loading: connectorsLoading,
   } = useConnectors();
   // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
@@ -808,6 +817,7 @@ const ChatComposerNewComponent = ({
               : (known?.name ?? id);
           return {
             id,
+            toolId: toolConnectorIds[id] ?? id,
             label,
             name: label,
             iconBg: known?.iconBg ?? CONNECTOR_MARK_FALLBACK_BG,
@@ -816,7 +826,7 @@ const ChatComposerNewComponent = ({
           };
         })
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [connectedConnectorIds, connectorSources, connectorCustomNames],
+    [connectedConnectorIds, connectorSources, connectorCustomNames, toolConnectorIds],
   );
 
   const [showProjectPicker, setShowProjectPicker] = useState(false);
@@ -1873,12 +1883,31 @@ const ChatComposerNewComponent = ({
     }, 0);
   }, [message, mentionStartIndex]);
 
+  const enableSkillRequirements = useCallback(
+    (skill: SkillItem) => {
+      const needed = new Set(
+        (skill.requiredTools ?? []).flatMap((tool) => {
+          const toggle = SKILL_TOOL_TOGGLES[tool];
+          return toggle ? [toggle] : [];
+        }),
+      );
+      if (needed.has('officeCreationEnabled') && modelSupportsOfficeCreation) {
+        setComposerToggles({ officeCreationEnabled: true });
+      }
+      if (needed.has('codeExecutionEnabled')) {
+        setComposerToggles({ codeExecutionEnabled: true });
+      }
+    },
+    [modelSupportsOfficeCreation, setComposerToggles],
+  );
+
   const handleMentionSelect = useCallback(
     (skill: SkillItem) => {
       replaceMentionToken();
       setSelectedSkillName(skill.name);
+      enableSkillRequirements(skill);
     },
-    [replaceMentionToken, setSelectedSkillName],
+    [replaceMentionToken, setSelectedSkillName, enableSkillRequirements],
   );
 
   const handleMentionProjectSelect = useCallback(
@@ -2071,13 +2100,20 @@ const ChatComposerNewComponent = ({
       const skill = availableSkills.find((candidate) => candidate.name === skillName);
       if (!skill) return;
       setSelectedSkillName(skill.name);
+      enableSkillRequirements(skill);
       // AUDIT-FIX CMP-8: keep whatever the user already typed after the
       // command token instead of wiping the input (see handleSlashSelect).
       writeComposerMessage(stripSlashCommandToken(messageRef.current));
       setShowSlashMenu(false);
       setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
     },
-    [availableSkills, setSelectedSkillName, writeComposerMessage, focusComposer],
+    [
+      availableSkills,
+      setSelectedSkillName,
+      enableSkillRequirements,
+      writeComposerMessage,
+      focusComposer,
+    ],
   );
 
   /**

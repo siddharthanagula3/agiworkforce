@@ -57,6 +57,48 @@ describe('mobile Skills service', () => {
     });
   });
 
+  it('carries the new optional requiredTools field through unchanged', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      skills: [
+        {
+          name: 'document-creation',
+          description: 'Create documents.',
+          source: 'bundled',
+          lifecycle: 'included',
+          downloadable: true,
+          requiredTools: ['create_office_file'],
+        },
+      ],
+    });
+
+    await expect(fetchManagedSkills()).resolves.toEqual([
+      {
+        name: 'document-creation',
+        description: 'Create documents.',
+        source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
+        requiredTools: ['create_office_file'],
+      },
+    ]);
+  });
+
+  it('still parses a payload from a deployment that does not report requirements', () => {
+    expect(
+      parseManagedSkillsResponse({
+        skills: [
+          {
+            name: 'code-review',
+            description: 'Review a diff.',
+            source: 'bundled',
+            lifecycle: 'included',
+            downloadable: true,
+          },
+        ],
+      })[0],
+    ).not.toHaveProperty('requiredTools');
+  });
+
   it.each([
     null,
     {},

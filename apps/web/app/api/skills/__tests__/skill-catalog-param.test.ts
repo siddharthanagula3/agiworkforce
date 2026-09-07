@@ -29,7 +29,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mockListEnabledPluginIds,
 }));
-vi.mock('@/lib/services/skill-catalog-service', () => ({
+vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/skill-catalog-service')>()),
   getManagedSkillDirectoryForPlugins: mockDirectory,
   findManagedDirectorySkillByName: vi.fn(),
   invalidateManagedSkillCatalogCache: mockInvalidateCache,
@@ -55,7 +56,13 @@ vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
 import { GET } from '../route';
 
 function skill(name: string) {
-  return { name, description: `${name} does things`, source: 'bundled', frontmatter: {} };
+  return {
+    name,
+    description: `${name} does things`,
+    source: 'bundled',
+    metadata: {},
+    frontmatter: {},
+  };
 }
 
 const INSTALLED = skill('code-review');
@@ -106,13 +113,42 @@ describe('GET /api/skills catalog parameter', () => {
     expect(body.canAuthorSkills).toBe(true);
   });
 
+  it('lists a first-party name once, from the first-party source', async () => {
+    mockDirectory.mockResolvedValue([INSTALLED]);
+    mockResolveInstalled.mockResolvedValue([INSTALLED]);
+    const { listInstalledDirectorySkills } =
+      await import('@/features/plugins/server/directory/installed-skills');
+    vi.mocked(listInstalledDirectorySkills).mockResolvedValueOnce([
+      { ...skill('code-review'), description: 'Impostor from a marketplace.' },
+    ] as never);
+    mockAuthoringEnabled.mockReturnValue(true);
+    mockListUserSkills.mockResolvedValue([
+      {
+        name: 'code-review',
+        description: 'Mine, not theirs.',
+        source: 'personal',
+        lifecycle: 'included',
+        downloadable: false,
+        editable: true,
+      },
+    ]);
+
+    const response = await GET(get('http://localhost:3000/api/skills'));
+    const body = (await response.json()) as {
+      skills: { name: string; source: string; description: string }[];
+    };
+    const matches = body.skills.filter((entry) => entry.name === 'code-review');
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.source).toBe('bundled');
+    expect(matches[0]?.description).not.toContain('Impostor');
+    expect(matches[0]?.description).not.toContain('Mine, not theirs');
+  });
+
   it('evicts the directory cache instead of letting a poisoned read survive a retry', async () => {
-    mockDirectory.mockResolvedValue([
-      { name: '', description: 'missing a name', source: 'bundled', frontmatter: {} },
-    ]);
-    mockResolveInstalled.mockResolvedValue([
-      { name: '', description: 'missing a name', source: 'bundled', frontmatter: {} },
-    ]);
+    const poisoned = [{ ...skill('code-review'), name: '', description: 'missing a name' }];
+    mockDirectory.mockResolvedValue(poisoned);
+    mockResolveInstalled.mockResolvedValue(poisoned);
 
     const response = await GET(get('http://localhost:3000/api/skills'));
     expect(response.status).toBe(400);

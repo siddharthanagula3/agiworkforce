@@ -40,6 +40,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     .mockResolvedValue({ db: { query: vi.fn() }, userId: 'user_test', organizationId: null }),
 }));
 
+vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  listInstalledDirectorySkills: vi.fn(async () => []),
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({ query: vi.fn().mockResolvedValue([]) })),
 }));
@@ -177,6 +180,78 @@ describe('skills API security contract', () => {
       expect(names).not.toContain(developerSkill);
     }
     expect(names).toContain('code-review');
+  });
+
+  it('serves the body of a catalogued draft so its browse detail is not a dead end', async () => {
+    const draftDir = join(tempSkillsRoot!, 'unreleased-fixture');
+    await mkdir(draftDir, { recursive: true });
+    await writeFile(
+      join(draftDir, 'SKILL.md'),
+      [
+        '---',
+        'name: unreleased-fixture',
+        'description: Not shipped yet.',
+        'draft: true',
+        '---',
+        '',
+        'Draft body.',
+      ].join('\n'),
+      'utf-8',
+    );
+    resetManagedSkillCatalogCacheForTests();
+
+    const response = await getSkillBody(request('/api/skills/unreleased-fixture'), {
+      params: Promise.resolve({ name: 'unreleased-fixture' }),
+    });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { body: string }).body).toContain('Draft body.');
+  });
+
+  it("serves the body of an installed plugin's skill, which the list route already shows", async () => {
+    const { listInstalledDirectorySkills } =
+      await import('@/features/plugins/server/directory/installed-skills');
+    vi.mocked(listInstalledDirectorySkills).mockResolvedValue([
+      {
+        name: 'frontend-design',
+        description: 'Design guidance from an installed plugin.',
+        body: 'Installed plugin body.',
+        contentHash: 'sha256:'.padEnd(7 + 64, '7'),
+        filePath: 'plugins/design-pack/skills/frontend-design/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: { plugin: 'design-pack' },
+      },
+    ] as never);
+
+    const response = await getSkillBody(request('/api/skills/frontend-design'), {
+      params: Promise.resolve({ name: 'frontend-design' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { body: string }).body).toContain('Installed plugin body.');
+  });
+
+  it('never reaches the filesystem for an installed plugin skill, whose path is synthetic', async () => {
+    const { listInstalledDirectorySkills } =
+      await import('@/features/plugins/server/directory/installed-skills');
+    vi.mocked(listInstalledDirectorySkills).mockResolvedValue([
+      {
+        name: 'frontend-design',
+        description: 'Design guidance from an installed plugin.',
+        body: 'Installed plugin body.',
+        contentHash: 'sha256:'.padEnd(7 + 64, '7'),
+        filePath: 'plugins/design-pack/skills/frontend-design/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: { plugin: 'design-pack' },
+      },
+    ] as never);
+
+    await expect(
+      downloadSkill(request('/api/skills/frontend-design/download'), {
+        params: Promise.resolve({ name: 'frontend-design' }),
+      }),
+    ).rejects.toThrow('not found');
   });
 
   it('refuses a developer skill body and download to an end user', async () => {
