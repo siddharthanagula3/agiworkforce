@@ -31,6 +31,10 @@
       "schedule": "45 * * * *"
     },
     {
+      "path": "/api/cron/reap-code-turns",
+      "schedule": "5,20,35,50 * * * *"
+    },
+    {
       "path": "/api/cron/purge-deleted-media",
       "schedule": "0 4 * * *"
     },

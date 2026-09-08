@@ -476,6 +476,13 @@ describe('Cloud Code turn stops when the reader asks it to', () => {
     }
   });
 
+  it('blames the connection, not the reader, when nobody asked for the stop', async () => {
+    const db = trackedDb();
+    const record = await runTurnOn(db, 'cancelled');
+    expect(terminalTurnUpdate(db)?.[5]).toMatch(/connection to this turn dropped/i);
+    expect(record.errorMessage).toMatch(/connection to this turn dropped/i);
+  });
+
   it('settles a stopped turn as delivered rather than forfeiting the work it did', async () => {
     const db = trackedDb();
     await runTurnOn(db, 'cancelled');

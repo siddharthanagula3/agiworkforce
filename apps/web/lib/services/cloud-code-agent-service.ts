@@ -56,7 +56,7 @@ const MAX_STEP_OUTPUT_LENGTH = 100_000;
  * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
  * cannot import this, the three values are kept in step by hand.
  */
-const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
+export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
 
 /**
  * What an agent turn is actually allowed to spend, and why it is not
@@ -415,7 +415,7 @@ function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
  * `errorMessage` unset for the non-`error` stop reasons, which would persist a
  * failed turn with a null explanation.
  */
-function terminalErrorMessage(result: CloudCodeAgentResult): string | null {
+function terminalErrorMessage(result: CloudCodeAgentResult, stoppedByUser: boolean): string | null {
   if (result.errorMessage) return result.errorMessage.slice(0, 2000);
   switch (result.stopReason) {
     case 'timeout':
@@ -425,7 +425,11 @@ function terminalErrorMessage(result: CloudCodeAgentResult): string | null {
     case 'denied':
       return 'Agent turn stopped: a required command was denied.';
     case 'cancelled':
-      return 'You stopped this turn. Nothing further was run.';
+      // Both end as `cancelled`, and they are not the same event to a reader:
+      // one they asked for, one happened to them.
+      return stoppedByUser
+        ? 'You stopped this turn. Nothing further was run.'
+        : 'The connection to this turn dropped before it finished, so it stopped where it was.';
     default:
       return null;
   }
@@ -671,6 +675,7 @@ async function runClaimedAgentTurn(
 
   const state = turnStateFor(result.stopReason);
   const cumulativeSteps = initialStepIndex + result.stepsUsed;
+  const stoppedByUser = deadline.cancelled();
 
   // The terminal row and the settlement are two writes that must both happen.
   // The row used to be written first and un-guarded, so a failure there returned
@@ -691,7 +696,7 @@ async function runClaimedAgentTurn(
         cumulativeSteps,
         result.stopReason === 'awaiting_approval' ? null : result.stopReason,
         result.finalMessage.slice(0, 100_000) || null,
-        terminalErrorMessage(result),
+        terminalErrorMessage(result, stoppedByUser),
         owner.userId,
         result.usage.inputTokens,
         result.usage.outputTokens,
@@ -754,7 +759,7 @@ async function runClaimedAgentTurn(
 
   // The same explanation that went into the row, so a client that only reads the
   // response is not left with a bare `timeout` and no words.
-  const errorMessage = terminalErrorMessage(result);
+  const errorMessage = terminalErrorMessage(result, stoppedByUser);
 
   return {
     turnId,

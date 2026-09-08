@@ -124,6 +124,13 @@ export interface CloudCodeAgentTurnRecord {
   /** Tokens this turn reported, summed from what each step's provider call returned. */
   inputTokens: number;
   outputTokens: number;
+  /**
+   * When the reader asked this turn to stop. A stopped turn and a turn whose
+   * connection dropped both end as `cancelled`, and this is what tells them
+   * apart: null means nobody asked, so the turn ended for a reason the reader
+   * did not choose.
+   */
+  cancelRequestedAt: string | null;
   finalMessage: string;
   errorMessage: string | null;
   createdAt: string;
