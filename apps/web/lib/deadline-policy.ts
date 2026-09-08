@@ -9,6 +9,10 @@ export const TOOL_CALL_DEADLINE_MS = 120_000;
 
 export const PROVIDER_STREAM_DEADLINE_MS = CHAT_TOOL_LOOP_BUDGET_MS;
 
+export const TURN_FIRST_TOKEN_BUDGET_MS = 40_000;
+
+export const PROVIDER_FIRST_TOKEN_DEADLINE_MS = 25_000;
+
 export const CLOUD_CODE_TURN_BUDGET_MS = 10 * 60_000;
 
 export const CLOUD_CODE_COMMAND_DEADLINE_MS = 60_000;
@@ -71,6 +75,18 @@ export const DEADLINE_HIERARCHY = [
     parentMs: CHAT_TOOL_LOOP_BUDGET_MS,
     child: 'chat tool call',
     childMs: TOOL_CALL_DEADLINE_MS,
+  },
+  {
+    parent: 'chat tool loop budget',
+    parentMs: CHAT_TOOL_LOOP_BUDGET_MS,
+    child: 'turn first token budget',
+    childMs: TURN_FIRST_TOKEN_BUDGET_MS,
+  },
+  {
+    parent: 'turn first token budget',
+    parentMs: TURN_FIRST_TOKEN_BUDGET_MS,
+    child: 'provider first token',
+    childMs: PROVIDER_FIRST_TOKEN_DEADLINE_MS,
   },
   {
     parent: 'cloud code turn budget',
