@@ -213,8 +213,8 @@ under `apps/web/e2e/`. Echo suppression relies entirely on the browser's
 `echoCancellation` constraint, with no code confirming it cancels synthesized
 speech. Mobile STT is genuinely on-device with live partial results and is the
 strongest voice implementation in the repository.
-**Measured 2026-09-08:** a two-sentence answer, routed by Auto to the fastest
-tier model (Gemini 3.5 Flash-Lite), took **6.0s** from send to response
+**Measured 2026-09-08:** a two-sentence answer, routed by Auto to its fastest
+tier model, took **6.0s** from send to response
 complete. Because `tts.speak()` only fires on `replyComplete`, that 6.0s is the
 time to first audio for that turn. A live voice mode starts speaking in a few
 hundred milliseconds.
@@ -428,7 +428,9 @@ account's endpoint policy rather than assuming every listed endpoint is
 reachable, or a first refusal should take the route out of service for a window
 the way route health does for other classes.
 **Evidence:** dev server log 2026-09-08 22:20:07 and 22:54:35 UTC, provider
-`openrouter`, model `gpt-5.6-sol`, three occurrences within the minute.
+`openrouter`, three occurrences within the minute. The model is named in the
+log, not here: a concrete id in this file would go stale and would defeat
+`check:model-id-literals`.
 **Not an environment failure:** the setting is ours, on our own account, and so
 is the catalog entry. No user can resolve it.
 **User impact:** a model in the picker that never answers on the first attempt.
@@ -450,9 +452,8 @@ provider-native search, which is every ordinary function tool. Every candidate
 on a different provider is then skipped with "provider-native tools cannot
 transfer providers", a message that describes the opposite of the predicate.
 **Current behavior (observed live 2026-09-08):** a turn whose route was refused
-outright rotated through its whole fallback list and skipped every candidate,
-including `claude-opus-5` and `gemini-3.5-flash-lite`, because a function tool
-was attached. The turn failed with no answer despite Auto having working routes
+outright rotated through its whole fallback list and skipped every candidate, on two
+different providers, because a function tool was attached. The turn failed with no answer despite Auto having working routes
 available.
 **Why it might be deliberate:** a mid-turn provider switch could invalidate
 tool-call ids already in the transcript. That would justify the restriction from
