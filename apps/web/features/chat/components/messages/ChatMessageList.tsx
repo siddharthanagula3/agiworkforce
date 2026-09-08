@@ -19,6 +19,7 @@ import {
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { formatUsageResetIn } from '@agiworkforce/types';
+import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
@@ -701,7 +702,13 @@ const MessageRow = memo(function MessageRow({
     [branchGroup, message.id, onSwitchBranch],
   );
 
-  if (paywall) {
+  // An account-wide block is stated once, on the composer, and stays there
+  // until the account state changes. Repeating it here left a card behind in
+  // whichever transcript happened to hit the limit and said nothing in any
+  // other conversation, which is the whole defect. Per-turn refusals, the ones
+  // a different request can answer, keep their card on the turn that caused
+  // them.
+  if (paywall && !isAccountWideUsageBlock(paywall)) {
     // The card takes the turn's place in the transcript, so it takes the
     // transcript's column too. Rendered bare it spanned the full surface.
     // 206px past the message and composer edges on either side.

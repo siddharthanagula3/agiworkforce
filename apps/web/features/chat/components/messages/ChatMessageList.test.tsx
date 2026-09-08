@@ -504,7 +504,11 @@ describe('ChatMessageList actions', () => {
     );
   });
 
-  it('carries the exact persisted tier and account-aware usage destination', () => {
+  // WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01: spent account capacity is not a
+  // property of the turn that happened to hit it. It is stated once on the
+  // composer and stays there, so the transcript no longer keeps a card that
+  // said nothing in any other conversation.
+  it('leaves account-wide spent capacity to the composer instead of carding one turn', () => {
     const onPaywallUpgrade = vi.fn();
     const messages = [
       makeMessage({
@@ -530,10 +534,43 @@ describe('ChatMessageList actions', () => {
         onPaywallUpgrade={onPaywallUpgrade}
       />,
     );
-    expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
+
+    expect(screen.queryByRole('button', { name: 'View usage' })).toBeNull();
+    expect(screen.queryByText('Your Max 15x usage for this billing period is used up.')).toBeNull();
+  });
+
+  // The other half of the same rule: a refusal a different request can answer
+  // still belongs to the turn that caused it.
+  it('still cards a refusal the next request could answer, with its own recovery', () => {
+    const onPaywallUpgrade = vi.fn();
+    const messages = [
+      makeMessage({
+        id: 'flagship-weekly',
+        role: 'assistant',
+        content: '\u200b',
+        metadata: {
+          paywall: {
+            feature: 'rolling_capacity',
+            requiredTier: 'max_15x',
+            reason: 'You have used your weekly capacity for the most capable models.',
+            recoveryAction: 'view_usage',
+            showUpgradeCta: true,
+            suggestStandardModel: true,
+          },
+        },
+      }),
+    ];
+
+    render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="max_15x"
+        onPaywallUpgrade={onPaywallUpgrade}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'View usage' }));
 
-    expect(onPaywallUpgrade).toHaveBeenCalledWith('max-usage-exhausted', 'max_15x', 'view_usage');
+    expect(onPaywallUpgrade).toHaveBeenCalledWith('flagship-weekly', 'max_15x', 'view_usage');
   });
 
   it('calls onDelete with correct messageId', () => {
