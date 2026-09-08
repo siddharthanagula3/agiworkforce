@@ -685,6 +685,60 @@ requireIncludes(
   'apps/desktop/src-tauri/isolation/isolation-hook.js',
   "window, '__TAURI_ISOLATION_HOOK__'",
 );
+/**
+ * Every native lane is main-only, and nothing said so.
+ *
+ * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke` and `windows-smoke`
+ * all carry `github.ref == 'refs/heads/main'`, so `cargo test` at any scope,
+ * every crate under `crates/*`, and macOS and Windows compilation happen after
+ * a merge rather than at review. That is a deliberate, commented cost decision:
+ * a full native build is the slowest thing in CI by an order of magnitude, and
+ * the production promotion still waits on a green run of the same commit.
+ *
+ * It is asserted here because it was invisible. The guardrail layer pinned the
+ * `native_changed` half and not the `github.ref` half, so the trade-off could
+ * be widened or narrowed with nothing failing either way, and a reader of these
+ * checks would conclude native code was gated on pull requests. Pinning it
+ * makes the four move together and makes a change to any of them deliberate.
+ *
+ * Changing this is a CI spend decision, not a code fix. What it would cost is
+ * one native build per pull request that touches Rust; what it buys is catching
+ * a native regression at review rather than at merge. Recorded as `AGI-5`.
+ */
+const NATIVE_MAIN_ONLY_JOBS = [
+  'rust-desktop-cli',
+  'clippy-all-features',
+  'macos-smoke',
+  'windows-smoke',
+];
+const NATIVE_MAIN_ONLY_CONDITION =
+  "if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'";
+
+function requireNativeLanesAgree() {
+  const relativePath = '.github/workflows/ci.yml';
+  if (!exists(relativePath)) {
+    errors.push(`Missing required CI file: ${relativePath}`);
+    return;
+  }
+  const body = readText(relativePath);
+  const conditions = body.split('\n').filter((line) => line.trim() === NATIVE_MAIN_ONLY_CONDITION);
+  if (conditions.length !== NATIVE_MAIN_ONLY_JOBS.length) {
+    errors.push(
+      `${relativePath} must gate exactly ${NATIVE_MAIN_ONLY_JOBS.length} native lanes ` +
+        `(${NATIVE_MAIN_ONLY_JOBS.join(', ')}) on ${JSON.stringify(NATIVE_MAIN_ONLY_CONDITION)}; ` +
+        `found ${conditions.length}. Moving a native lane onto pull requests is a CI spend ` +
+        `decision: change this list in the same commit and say what it costs.`,
+    );
+  }
+  for (const job of NATIVE_MAIN_ONLY_JOBS) {
+    if (!body.includes(`  ${job}:`)) {
+      errors.push(`${relativePath} no longer defines the native lane ${job}`);
+    }
+  }
+}
+
+requireNativeLanesAgree();
+
 requireNotIncludes('.github/workflows/ci.yml', '--filter web');
 
 const actionPins = spawnSync('bash', ['scripts/check-action-pins.sh'], {
