@@ -29,6 +29,19 @@ export const OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS = Math.floor(
   MIN_OPERATION_LEASE_SECONDS / OPERATION_LEASE_RENEWAL_SAFETY_DIVISOR,
 );
 
+const LEASE_HEARTBEAT_GRACE_INTERVALS = 4;
+
+export const DEAD_HOLDER_SILENCE_MS =
+  OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS *
+  LEASE_HEARTBEAT_GRACE_INTERVALS *
+  MILLISECONDS_PER_SECOND;
+
+function holderIsStillAlive(updatedAt: string, nowMs: number): boolean {
+  const lastHeartbeatMs = Date.parse(updatedAt);
+  if (!Number.isFinite(lastHeartbeatMs)) return true;
+  return nowMs - lastHeartbeatMs <= DEAD_HOLDER_SILENCE_MS;
+}
+
 function clampLeaseSeconds(leaseSeconds: number | undefined): number {
   return Math.min(
     MAX_OPERATION_LEASE_SECONDS,
@@ -260,7 +273,9 @@ export async function claimCloudAgentExecutionOperation(
     const leaseExpiresAt = operation.leaseExpiresAt
       ? Date.parse(operation.leaseExpiresAt)
       : Number.NEGATIVE_INFINITY;
-    if (leaseExpiresAt > now.getTime()) return { disposition: 'in_progress' };
+    if (leaseExpiresAt > now.getTime() && holderIsStillAlive(operation.updatedAt, now.getTime())) {
+      return { disposition: 'in_progress' };
+    }
 
     if (operation.retrySafety === 'unsafe') {
       const unknownRows = await tx.query<CloudAgentExecutionOperationRow>(
