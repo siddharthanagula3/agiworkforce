@@ -2947,13 +2947,13 @@ const ChatComposerNewComponent = ({
       {trialExhausted && (
         <div
           role="alert"
-          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
+          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-warning-fill/40 bg-warning-fill/10 px-3 py-2 text-xs text-warning-text"
         >
           <span>Free usage limit reached. Upgrade to continue.</span>
           <button
             type="button"
             onClick={onUpgradeRequest}
-            className="shrink-0 rounded-sm font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-amber-200 dark:hover:text-amber-50"
+            className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
           >
             Upgrade
           </button>
@@ -2964,7 +2964,7 @@ const ChatComposerNewComponent = ({
         <div
           role="alert"
           data-testid="composer-usage-block"
-          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
+          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-warning-fill/40 bg-warning-fill/10 px-3 py-2 text-xs text-warning-text"
         >
           <span className="min-w-0">
             {usageBlock.reason}
@@ -2976,7 +2976,7 @@ const ChatComposerNewComponent = ({
             <button
               type="button"
               onClick={usageBlock.onRecover}
-              className="shrink-0 rounded-sm font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-amber-200 dark:hover:text-amber-50"
+              className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
             >
               {usageBlock.actionLabel}
             </button>

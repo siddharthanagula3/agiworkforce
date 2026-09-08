@@ -40,7 +40,7 @@ interface CreateFormState {
 
 const EMPTY_FORM: CreateFormState = { name: '', sampleText: '', instruction: '' };
 
-const FIELD_LABEL_CLASS = 'block text-[11px] font-medium text-muted-foreground';
+const FIELD_LABEL_CLASS = 'block text-xs font-medium text-muted-foreground';
 const FIELD_CLASS =
   'w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30';
 
@@ -306,8 +306,7 @@ export function StyleSelector() {
                       type="button"
                       onClick={(e) => handleDelete(e, custom.id)}
                       className={cn(
-                        'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100',
-                        isSelected && 'opacity-100',
+                        'shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-danger',
                       )}
                       aria-label={`Delete ${custom.name}`}
                     >

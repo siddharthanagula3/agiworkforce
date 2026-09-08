@@ -676,7 +676,11 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByText(/\d[\d,.]*\s*(tokens?|prompts?)/i)).not.toBeInTheDocument();
 
     const usageAlert = screen.getByRole('alert');
-    expect(usageAlert).toHaveClass('border-amber-300', 'bg-amber-50', 'text-amber-950');
+    expect(usageAlert).toHaveClass(
+      'border-warning-fill/40',
+      'bg-warning-fill/10',
+      'text-warning-text',
+    );
 
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
