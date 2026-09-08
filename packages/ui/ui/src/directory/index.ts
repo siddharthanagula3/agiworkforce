@@ -10,6 +10,8 @@ export type { HighlightKind, HighlightToken } from './highlight';
 export { ConnectorDetailView } from './ConnectorDetailView';
 export { PluginDetailView } from './PluginDetailView';
 export { AddMarketplaceDialog } from './AddMarketplaceDialog';
+export { UploadFileDialog } from './UploadFileDialog';
+export { CreatePluginDialog } from './CreatePluginDialog';
 export { DirectoryActionNotice, isDirectoryActionNotice } from './action-notice';
 export {
   buildFileTree,
@@ -53,6 +55,8 @@ export type {
   DirectoryPluginComponents,
   DirectoryPluginConnectorSetting,
   DirectoryPluginDetail,
+  DirectoryPluginDraft,
+  DirectoryPluginDraftSkill,
   DirectoryPluginMcpServer,
   DirectoryPluginSettings,
   DirectoryPluginSkillSetting,
@@ -63,4 +67,5 @@ export type {
   DirectorySortKey,
   DirectorySourceChip,
   DirectoryToggle,
+  DirectoryUploadResult,
 } from './types';

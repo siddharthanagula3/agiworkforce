@@ -188,6 +188,21 @@ export const SKILL_CATALOG_PARAM = 'catalog=all';
 export const PLUGINS_PATH = PLUGINS_API_PATH;
 export const PLUGIN_INSTALLATIONS_PATH = PLUGIN_INSTALLATIONS_API_PATH;
 export const PLUGIN_MARKETPLACES_PATH = PLUGIN_MARKETPLACES_API_PATH;
+export const PLUGIN_UPLOADS_PATH = `${PLUGINS_API_PATH}/uploads`;
+export const PLUGIN_AUTHORED_PATH = `${PLUGINS_API_PATH}/authored`;
+export const UPLOAD_FILE_FIELD = 'file';
+export const PLUGIN_UPLOAD_FAILED_COPY = 'That plugin could not be uploaded.';
+export const PLUGIN_CREATE_FAILED_COPY = 'That plugin could not be created.';
+export const SKILL_UPLOAD_FAILED_COPY = 'That skill could not be uploaded.';
+export const UPLOAD_PLUGIN_DONE_TITLE = 'Plugin installed';
+export const UPLOAD_SKILL_DONE_TITLE = 'Skill added';
+export const CREATE_PLUGIN_DONE_TITLE = 'Plugin created';
+
+export function uploadSkillCountLine(count: number): string {
+  return count === 1
+    ? '1 skill is now available in chat.'
+    : `${count} skills are now available in chat.`;
+}
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;
 
