@@ -23,6 +23,8 @@ import {
   toPluginManageRows,
   toPluginRequest,
   toPluginSection,
+  toUserMarketplaceDetail,
+  pluginSourceChips,
   uninstallPlugin,
   withInstallBlock,
   type PluginInstallState,
@@ -785,5 +787,88 @@ describe('the installed table rows', () => {
       }),
     );
     expect(rows.map((row) => row.id)).toEqual(['data-pack', 'frontend-design']);
+  });
+});
+
+describe('a source the account supplied is read honestly by every consumer', () => {
+  function uploadedSource(): PluginMarketplaceSourceSummary {
+    return {
+      ...userSource(),
+      id: 'source-upload',
+      name: 'release-notes-pack',
+      kind: 'upload',
+      repositoryUrl: null,
+    };
+  }
+
+  function uploadedEntry(): PluginMarketplaceEntry {
+    return {
+      id: 'entry-upload',
+      sourceId: 'source-upload',
+      pluginKey: 'release-notes-pack',
+      name: 'release-notes-pack',
+      description: 'Turns a changelog into release notes',
+      version: '1.2.0',
+      declaredSkills: ['draft-release-notes'],
+      requiredConnectors: [],
+      agents: [],
+      examplePrompts: [],
+      permissions: [],
+      contentHash: 'c'.repeat(64),
+      createdAt: '2026-09-07T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    };
+  }
+
+  it('offers no refresh on its filter chip, and still offers remove', () => {
+    const chips = pluginSourceChips([userSource(), uploadedSource()]);
+    const repository = chips.find((chip) => chip.id === 'source-9');
+    const uploaded = chips.find((chip) => chip.id === 'source-upload');
+    expect(repository).toMatchObject({ removable: true, refreshable: true });
+    expect(uploaded).toMatchObject({ removable: true, refreshable: false });
+  });
+
+  it('shows no repository link on its detail', () => {
+    const detail = toUserMarketplaceDetail(uploadedEntry(), uploadedSource(), installs());
+    expect(detail.repositoryUrl).toBeNull();
+    expect(detail.sourceUrl).toBeNull();
+    expect(detail.sourceLabel).toBe('release-notes-pack');
+  });
+
+  it('still links the detail of a repository-backed source', () => {
+    const detail = toUserMarketplaceDetail(
+      { ...uploadedEntry(), sourceId: 'source-9' },
+      userSource(),
+      installs(),
+    );
+    expect(detail.repositoryUrl).toBe('https://github.com/example/team-plugins');
+    expect(detail.sourceUrl).toBe('https://github.com/example/team-plugins');
+  });
+
+  it('names it as the author on the installed table', () => {
+    const rows = toPluginManageRows({
+      builtin: [],
+      partner: [],
+      marketplace: [],
+      details: [],
+      user: { sources: [uploadedSource()], entries: [uploadedEntry()] },
+      installs: installs({
+        byPluginKey: new Map([
+          [
+            'release-notes-pack',
+            installation({ pluginKey: 'release-notes-pack', entryId: 'entry-upload' }),
+          ],
+        ]),
+      }),
+    });
+    expect(rows).toEqual([
+      {
+        id: 'entry-upload',
+        name: 'release-notes-pack',
+        author: 'release-notes-pack',
+        skillCount: 1,
+        updatedAt: expect.any(String),
+      },
+    ]);
   });
 });

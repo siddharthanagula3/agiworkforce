@@ -59,6 +59,7 @@ import {
   PLUGIN_INSTALLS_DISABLED_STATUS,
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
+  PLUGIN_SOURCE_KIND_REPOSITORY,
   PLUGIN_MARKETPLACE_ENTRIES_PATH,
   PLUGIN_MARKETPLACE_INSTALLATIONS_PATH,
   PLUGIN_MESSAGE_STATUSES,
@@ -589,7 +590,12 @@ export function pluginSourceChips(
       id: facet,
       label: PLUGIN_SOURCE_TAB_LABELS[facet] ?? facet,
     })),
-    ...sources.map((source) => ({ id: source.id, label: source.name, removable: true })),
+    ...sources.map((source) => ({
+      id: source.id,
+      label: source.name,
+      removable: true,
+      refreshable: source.kind === PLUGIN_SOURCE_KIND_REPOSITORY,
+    })),
   ];
 }
 

@@ -162,7 +162,7 @@ function DirectorySectionPanel({
 
   const refreshableSourceId =
     sourceId !== null &&
-    data.sources?.some((source) => source.id === sourceId && source.removable === true)
+    data.sources?.some((source) => source.id === sourceId && source.refreshable === true)
       ? sourceId
       : null;
 
