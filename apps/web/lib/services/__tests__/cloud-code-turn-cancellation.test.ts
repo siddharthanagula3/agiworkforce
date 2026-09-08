@@ -6,7 +6,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { runCloudCodeAgentTurn, type CloudCodeToolRunner } from '../cloud-code-agent-loop';
+import {
+  cloudCodeToolRetrySafety,
+  runCloudCodeAgentTurn,
+  type CloudCodeToolRunner,
+} from '../cloud-code-agent-loop';
 import {
   isCloudCodeTurnCancellationRequested,
   requestCloudCodeTurnCancellation,
@@ -229,5 +233,111 @@ describe('requestCloudCodeTurnCancellation', () => {
         TURN_ID,
       ),
     ).resolves.toBe(false);
+  });
+});
+
+describe('the loop performs provider and tool calls through an injectable executor', () => {
+  it('performs them directly when no executor is given, which is the inline path', async () => {
+    const toolRunner = runner();
+    const result = await runCloudCodeAgentTurn({
+      adapter: adapterYielding([
+        toolCallChunks(['call-1']),
+        [{ type: 'text-delta', delta: 'done' } as StreamChunk],
+      ]),
+      model: 'test-model',
+      goal: 'do the thing',
+      runner: toolRunner,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.stopReason).toBe('done');
+    expect(toolRunner.runCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes the provider call through the executor with a stable key', async () => {
+    const providerExecutor = vi.fn(async (request) => request.execute());
+    await runCloudCodeAgentTurn({
+      adapter: adapterYielding([[{ type: 'text-delta', delta: 'done' } as StreamChunk]]),
+      model: 'test-model',
+      goal: 'do the thing',
+      runner: runner(),
+      signal: new AbortController().signal,
+      providerExecutor,
+    });
+
+    expect(providerExecutor).toHaveBeenCalledTimes(1);
+    expect(providerExecutor.mock.calls[0]?.[0]).toMatchObject({
+      operationKey: 'provider:0',
+      step: 0,
+    });
+  });
+
+  it('routes a tool call through the executor and classifies its retry safety', async () => {
+    const toolExecutor = vi.fn(async (request) => request.execute());
+    await runCloudCodeAgentTurn({
+      adapter: adapterYielding([
+        toolCallChunks(['call-1']),
+        [{ type: 'text-delta', delta: 'done' } as StreamChunk],
+      ]),
+      model: 'test-model',
+      goal: 'do the thing',
+      runner: runner(),
+      signal: new AbortController().signal,
+      toolExecutor,
+    });
+
+    expect(toolExecutor.mock.calls[0]?.[0]).toMatchObject({
+      operationKey: 'tool:1:call-1',
+      toolName: 'run_command',
+      retrySafety: 'unsafe',
+    });
+  });
+
+  it('lets the executor answer from a record instead of running the tool again', async () => {
+    const toolRunner = runner();
+    const result = await runCloudCodeAgentTurn({
+      adapter: adapterYielding([
+        toolCallChunks(['call-1']),
+        [{ type: 'text-delta', delta: 'done' } as StreamChunk],
+      ]),
+      model: 'test-model',
+      goal: 'do the thing',
+      runner: toolRunner,
+      signal: new AbortController().signal,
+      toolExecutor: async () => ({ output: 'replayed from the ledger', isError: false }),
+    });
+
+    expect(result.stopReason).toBe('done');
+    expect(toolRunner.runCommand).not.toHaveBeenCalled();
+  });
+
+  it('calls a refusal a refusal, without recording it as a step that touched anything', async () => {
+    const toolExecutor = vi.fn(async (request) => request.execute());
+    await runCloudCodeAgentTurn({
+      adapter: adapterYielding([
+        [
+          { type: 'tool-use-start', toolUseId: 'call-x', name: 'not_a_tool' },
+          { type: 'tool-use-delta', toolUseId: 'call-x', deltaJson: '{}' },
+          { type: 'tool-use-end', toolUseId: 'call-x' },
+        ] as StreamChunk[],
+        [{ type: 'text-delta', delta: 'done' } as StreamChunk],
+      ]),
+      model: 'test-model',
+      goal: 'do the thing',
+      runner: runner(),
+      signal: new AbortController().signal,
+      toolExecutor,
+    });
+
+    expect(toolExecutor).not.toHaveBeenCalled();
+  });
+});
+
+describe('retry safety of a Code tool', () => {
+  it('is safe for a read and unsafe for anything that runs in the workspace', () => {
+    expect(cloudCodeToolRetrySafety('read_file')).toBe('safe');
+    expect(cloudCodeToolRetrySafety('list_files')).toBe('safe');
+    expect(cloudCodeToolRetrySafety('run_command')).toBe('unsafe');
+    expect(cloudCodeToolRetrySafety('execute_code')).toBe('unsafe');
   });
 });
