@@ -211,12 +211,6 @@ const BUDGETS = [
     why: 'HARD-005 follow-up, Google operations host needs a declaration of its own.',
   },
   {
-    file: 'apps/web/app/api/control-plane/status/route.ts',
-    max: 1,
-    residue: true,
-    why: 'HARD-005 follow-up, status probe host duplicated from the provider registry.',
-  },
-  {
     file: 'apps/web/lib/web-search/web-search-tool.ts',
     max: 1,
     residue: true,
