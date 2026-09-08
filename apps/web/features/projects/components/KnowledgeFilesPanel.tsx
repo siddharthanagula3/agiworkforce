@@ -163,7 +163,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                     style={{
                       color:
                         storage.usedBytes / storage.limitBytes >= 0.9
-                          ? 'var(--agi-amber)'
+                          ? 'var(--color-primary)'
                           : undefined,
                     }}
                   >
@@ -173,7 +173,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                 </>
               ) : null}
               {files.length >= MAX_PROJECT_KNOWLEDGE_FILES && (
-                <span style={{ color: 'var(--agi-amber)', marginLeft: 6 }}>
+                <span style={{ color: 'var(--color-primary)', marginLeft: 6 }}>
                   &middot; full, remove one to add another
                 </span>
               )}
@@ -280,12 +280,14 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
           }}
           style={{
-            border: `2px dashed ${isDragging ? 'var(--agi-amber)' : 'var(--agi-rule-strong)'}`,
+            border: `2px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
             borderRadius: 12,
             padding: '32px 16px',
             textAlign: 'center',
             cursor: 'pointer',
-            background: isDragging ? 'var(--agi-amber-soft)' : 'transparent',
+            background: isDragging
+              ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)'
+              : 'transparent',
             transition: 'border-color 0.15s, background 0.15s',
           }}
         >
@@ -430,7 +432,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           onDrop={handleDrop}
           style={{
             marginTop: 8,
-            border: `1px dashed ${isDragging ? 'var(--agi-amber)' : 'var(--agi-rule)'}`,
+            border: `1px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule)'}`,
             borderRadius: 8,
             padding: '8px 12px',
             textAlign: 'center',

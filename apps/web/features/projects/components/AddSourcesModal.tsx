@@ -222,11 +222,13 @@ export function AddSourcesModal({
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 style={{
-                  border: `2px dashed ${isDragging ? 'var(--agi-amber)' : 'var(--agi-rule-strong)'}`,
+                  border: `2px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
                   borderRadius: 12,
                   padding: '28px 16px',
                   textAlign: 'center',
-                  background: isDragging ? 'var(--agi-amber-soft)' : 'var(--agi-bg-2)',
+                  background: isDragging
+                    ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)'
+                    : 'var(--agi-bg-2)',
                   transition: 'border-color 0.15s, background 0.15s',
                   marginBottom: 20,
                 }}
@@ -325,7 +327,7 @@ export function AddSourcesModal({
                     border: 'none',
                     padding: 0,
                     fontSize: 12,
-                    color: 'var(--agi-amber)',
+                    color: 'var(--color-primary)',
                     cursor: 'pointer',
                     textDecoration: 'underline',
                     display: 'inline-flex',
@@ -445,7 +447,7 @@ export function AddSourcesModal({
                     border: 'none',
                     background:
                       textContent.trim() && !isUploading && !isSubmitting
-                        ? 'var(--agi-amber)'
+                        ? 'var(--color-primary)'
                         : 'var(--agi-bg-3)',
                     color:
                       textContent.trim() && !isUploading && !isSubmitting
@@ -506,8 +508,11 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
         gap: 8,
         padding: '14px 8px 12px',
         borderRadius: 12,
-        border: `1px solid ${hovered && !disabled ? 'var(--agi-amber)' : 'var(--agi-rule-strong)'}`,
-        background: hovered && !disabled ? 'var(--agi-amber-soft)' : 'var(--agi-bg-2)',
+        border: `1px solid ${hovered && !disabled ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
+        background:
+          hovered && !disabled
+            ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)'
+            : 'var(--agi-bg-2)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'border-color 0.15s, background 0.15s',
@@ -515,7 +520,7 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
         width: '100%',
       }}
     >
-      <span style={{ color: hovered && !disabled ? 'var(--agi-amber)' : 'var(--agi-ink-2)' }}>
+      <span style={{ color: hovered && !disabled ? 'var(--color-primary)' : 'var(--agi-ink-2)' }}>
         {icon}
       </span>
       <span
@@ -532,8 +537,8 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
         <span
           style={{
             fontSize: 12,
-            color: 'var(--agi-amber)',
-            background: 'var(--agi-amber-soft)',
+            color: 'var(--color-primary)',
+            background: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
             borderRadius: 9999,
             padding: '1px 6px',
             fontWeight: 500,

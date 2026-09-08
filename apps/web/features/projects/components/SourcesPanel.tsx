@@ -325,8 +325,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                 padding: '10px 22px',
                 borderRadius: 9999,
                 border: 'none',
-                background: 'var(--agi-amber)',
-                color: 'var(--agi-bg)',
+                background: 'var(--color-primary)',
+                color: 'var(--color-primary-foreground)',
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -371,9 +371,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                   style={{
                     padding: '4px 12px',
                     borderRadius: 9999,
-                    border: '1px solid var(--agi-amber)',
+                    border: '1px solid var(--color-primary)',
                     background: 'transparent',
-                    color: 'var(--agi-amber)',
+                    color: 'var(--color-primary)',
                     fontSize: 12,
                     fontWeight: 500,
                     cursor: 'pointer',
@@ -602,7 +602,7 @@ function DropOverlay({ onDrop }: { onDrop: (file: File) => void }) {
       }}
       style={{
         marginTop: 8,
-        border: `1px dashed ${isDragging ? 'var(--agi-amber)' : 'var(--agi-rule)'}`,
+        border: `1px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule)'}`,
         borderRadius: 8,
         padding: '8px 12px',
         textAlign: 'center',
