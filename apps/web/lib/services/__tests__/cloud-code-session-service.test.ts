@@ -20,14 +20,21 @@ vi.mock('@/lib/e2b/session-store', () => ({
     result: await critical(),
   })),
 }));
-vi.mock('@/lib/github-app', () => ({
-  isGitHubAppConfigured: vi.fn(() => true),
-  isGitHubInstallationLinkingAvailable: vi.fn(() => true),
-  getInstallationAccessToken: vi.fn(),
-  getPrDiff: vi.fn(),
-  postIssueComment: vi.fn(),
-  postPrReview: vi.fn(),
-}));
+vi.mock('@/lib/github-app', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/github-app')>();
+  return {
+    ...actual,
+    isGitHubAppConfigured: vi.fn(() => true),
+    isGitHubInstallationLinkingAvailable: vi.fn(() => true),
+    getInstallationAccessToken: vi.fn(),
+    getPrDiff: vi.fn(),
+    postIssueComment: vi.fn(),
+    postPrReview: vi.fn(),
+    createGitHubPullRequest: vi.fn(),
+    findOpenGitHubPullRequest: vi.fn(),
+    getGitHubRepositoryDefaultBranch: vi.fn(),
+  };
+});
 vi.mock('@/lib/user-connector-tools', () => ({
   getUserGithubInstallations: vi.fn(async () => []),
 }));
@@ -78,6 +85,12 @@ type StoredRow = {
   extra_hosts: unknown;
   state: unknown;
   workspace_path: unknown;
+  working_branch: string | null;
+  pull_request_url: string | null;
+  pull_request_number: number | null;
+  archived_at: string | null;
+  context_input_tokens: number;
+  context_output_tokens: number;
   last_error: unknown;
   run_lease_token: string | null;
   run_lease_expires_at: string | null;
@@ -588,6 +601,12 @@ function createFakeDb(): FakeDb {
         state: 'provisioning',
         workspace_path: params[6],
         extra_hosts: params[9],
+        working_branch: null,
+        pull_request_url: null,
+        pull_request_number: null,
+        archived_at: null,
+        context_input_tokens: 0,
+        context_output_tokens: 0,
         last_error: null,
         run_lease_token: null,
         run_lease_expires_at: null,
@@ -1092,7 +1111,16 @@ function gitExecutor() {
         stderr: '',
         exitCode: 0,
       })),
+      createBranch: vi.fn(async (_input: { path: string; branch: string }) => ({
+        ok: true,
+        output: '',
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      })),
       add: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
+      status: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
+      diff: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
       commit: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
       push: vi.fn(async () => ({
         ok: true,
@@ -1199,6 +1227,30 @@ describe('commitAndPushCloudCodeSession', () => {
     );
     expect(result.session.state).toBe('ready');
     expect(result.push.stdout).toBe('pushed');
+  });
+
+  it('works on a branch of its own and pushes that branch, never the base', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    const workingBranch = executor.git.createBranch.mock.calls[0]![0].branch;
+    expect(workingBranch.startsWith('agi/')).toBe(true);
+
+    const result = await commitAndPushCloudCodeSession(
+      db,
+      OWNER,
+      sessionId,
+      PLAN_TIER,
+      'fix things',
+    );
+
+    expect(result.session.workingBranch).toBe(workingBranch);
+    expect(executor.git.push).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: workingBranch }),
+    );
   });
 
   it('rejects an empty commit message', async () => {

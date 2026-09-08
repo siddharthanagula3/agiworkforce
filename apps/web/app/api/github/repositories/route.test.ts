@@ -28,7 +28,11 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/e2b/gate', () => ({ e2bProvisioningReady: mockE2bReady }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mockKeyValueStore }));
+vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueStore: mockKeyValueStore,
+  getKeyValueRateLimiter: vi.fn(() => null),
+  getKeyValueProvider: vi.fn(() => 'memory'),
+}));
 vi.mock('@/lib/github-app', () => ({
   isGitHubAppConfigured: mockAppConfigured,
   isGitHubInstallationLinkingAvailable: mockLinkingAvailable,
