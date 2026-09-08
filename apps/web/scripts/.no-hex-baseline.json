@@ -38,18 +38,6 @@
       "literal": "#c4bcac"
     },
     {
-      "file": "app/api/projects/[id]/duplicate/route.ts",
-      "line": 88,
-      "rule": "hex",
-      "literal": "#3b82f6"
-    },
-    {
-      "file": "app/api/projects/route.ts",
-      "line": 117,
-      "rule": "hex",
-      "literal": "#3b82f6"
-    },
-    {
       "file": "app/billing/UpgradeWelcome.tsx",
       "line": 91,
       "rule": "hex",
@@ -342,12 +330,6 @@
       "line": 66,
       "rule": "hex",
       "literal": "#2eb88a"
-    },
-    {
-      "file": "lib/services/notification-email-service.ts",
-      "line": 62,
-      "rule": "hex",
-      "literal": "#666"
     },
     {
       "file": "features/chat/chat-interface.css",
@@ -1248,6 +1230,18 @@
       "line": 72,
       "rule": "rgb",
       "literal": "rgba("
+    },
+    {
+      "file": "lib/projects.ts",
+      "line": 92,
+      "rule": "hex",
+      "literal": "#3b82f6"
+    },
+    {
+      "file": "lib/services/notification-email-service.ts",
+      "line": 62,
+      "rule": "hex",
+      "literal": "#666"
     }
   ]
 }
