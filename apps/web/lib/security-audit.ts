@@ -222,6 +222,13 @@ export type AuditEventType =
   | 'api_key_revoked'
   | 'connector_added'
   | 'connector_removed'
+  /**
+   * A setting on an already-connected connector changed. Distinct from adding
+   * or removing one: the grant is unchanged, but what the product does with it
+   * is not, and enabling an automation that posts to a third party on the
+   * account's behalf is exactly what the trail has to show.
+   */
+  | 'connector_setting_changed'
   | 'member_invited'
   | 'member_role_changed'
   | 'member_removed'
@@ -494,6 +501,7 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'api_key';
     case 'connector_added':
     case 'connector_removed':
+    case 'connector_setting_changed':
       return 'connector';
     case 'member_invited':
     case 'member_role_changed':

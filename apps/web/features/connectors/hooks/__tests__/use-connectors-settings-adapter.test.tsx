@@ -272,3 +272,100 @@ describe('github disconnect partial state', () => {
     );
   });
 });
+
+describe('github pull request review setting', () => {
+  const INSTALLATIONS = [
+    {
+      id: 'row-1',
+      installation_id: 111,
+      account_login: 'acme',
+      account_type: 'Organization',
+      created_at: '2026-01-01T00:00:00.000Z',
+      pr_review_enabled: false,
+    },
+  ];
+
+  function stubGithubFetch(patchOk: boolean, patchBody: { error?: string } = {}) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, init });
+        if (url.includes('/api/github/installations')) {
+          if (init?.method === 'PATCH') {
+            return patchOk
+              ? { ok: true, status: 200, json: async () => ({}) }
+              : { ok: false, status: 500, json: async () => patchBody };
+          }
+          return { ok: true, status: 200, json: async () => ({ installations: INSTALLATIONS }) };
+        }
+        if (url.includes('/api/connectors/custom')) {
+          return { ok: true, status: 200, json: async () => ({ connectors: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => CONNECTED_BODY };
+      }),
+    );
+    return calls;
+  }
+
+  function githubFooter(): ReactNode {
+    return footerFor({ connected: true, name: 'GitHub' }, 'github');
+  }
+
+  it('offers a per-installation toggle in the github connector detail', async () => {
+    stubGithubFetch(true);
+    renderAdapter();
+
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+    await waitFor(() => {
+      render(<>{githubFooter()}</>);
+      expect(screen.getByTestId('github-pr-review-111')).toBeTruthy();
+    });
+    expect(screen.getByTestId('github-pr-review-111')).not.toBeChecked();
+  });
+
+  it('writes the setting through the installations route with the csrf header', async () => {
+    const calls = stubGithubFetch(true);
+    renderAdapter();
+
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+    await waitFor(() => {
+      render(<>{githubFooter()}</>);
+      expect(screen.getByTestId('github-pr-review-111')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('github-pr-review-111'));
+
+    await waitFor(() => {
+      const patch = calls.find((call) => call.init?.method === 'PATCH');
+      expect(patch).toBeDefined();
+      expect(JSON.parse(String(patch?.init?.body))).toEqual({
+        installationId: 111,
+        prReviewEnabled: true,
+      });
+    });
+    const { getCsrfToken } = await import('@/lib/client/csrf');
+    expect(getCsrfToken).toHaveBeenCalled();
+  });
+
+  it('puts the toggle back when the write is refused, instead of showing it on', async () => {
+    stubGithubFetch(false, { error: 'Installation not found' });
+    renderAdapter();
+
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+    await waitFor(() => {
+      render(<>{githubFooter()}</>);
+      expect(screen.getByTestId('github-pr-review-111')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('github-pr-review-111'));
+
+    await waitFor(() => {
+      render(<>{githubFooter()}</>);
+      for (const box of screen.getAllByTestId('github-pr-review-111')) {
+        expect(box).not.toBeChecked();
+      }
+    });
+  });
+});
