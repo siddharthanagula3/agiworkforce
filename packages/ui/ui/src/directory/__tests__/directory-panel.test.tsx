@@ -979,7 +979,8 @@ describe('DirectoryPanel marketplace refresh', () => {
       sortOptions: ['name'] as const,
       sources: [
         { id: 'builtin', label: 'Built in' },
-        { id: 'source-1', label: 'Acme tools', removable: true },
+        { id: 'source-1', label: 'Acme tools', removable: true, refreshable: true },
+        { id: 'source-2', label: 'release-notes-pack', removable: true, refreshable: false },
       ],
     },
     ...(refreshMarketplace ? { refreshMarketplace } : {}),
@@ -988,6 +989,20 @@ describe('DirectoryPanel marketplace refresh', () => {
   it('offers no refresh until one of the account’s own marketplaces is selected', () => {
     renderPanel('plugins', withSources(vi.fn()) as Partial<DirectoryAdapter>);
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+  });
+
+  it('offers no refresh for a source the account supplied, which has nothing to re-fetch', async () => {
+    const refreshMarketplace = vi.fn(async () => undefined);
+    renderPanel('plugins', withSources(refreshMarketplace) as Partial<DirectoryAdapter>);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'release-notes-pack' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: 'release-notes-pack' }).getAttribute('aria-selected'),
+      ).toBe('true'),
+    );
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(refreshMarketplace).not.toHaveBeenCalled();
   });
 
   it('refreshes the selected marketplace by its id', async () => {
