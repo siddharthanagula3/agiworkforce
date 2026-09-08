@@ -11,6 +11,7 @@ import {
 import { logger } from '@/lib/logger';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 import { MAX_KNOWLEDGE_FILES } from '@/lib/services/project-context-service';
 import {
   extractProjectKnowledgeFile,
@@ -66,14 +67,20 @@ function isSchemaNotReady(error: unknown): boolean {
   return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
-async function handleListKnowledgeFiles(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
-
-  const { db, userId, organizationId } = await getUserScopedDb(request);
-  const { id: projectId } = await context.params;
-
-  const [project] = await db.query<{ id: string }>(
+/**
+ * Migration 0090 grants an organization member SELECT on the knowledge files of
+ * a project shared with them, and restricts every write to the owner. The
+ * database is the authority here, and this read has to match it: filtering the
+ * lookup by `user_id` refused the read the policy allows, so a shared project
+ * opened to a sources panel that could never load.
+ */
+async function selectReadableProject(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  projectId: string,
+  userId: string,
+  organizationId: string | null,
+): Promise<{ id: string } | undefined> {
+  const [owned] = await db.query<{ id: string }>(
     `select id
        from user_projects
       where id = $1
@@ -84,6 +91,35 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
       limit 1`,
     [projectId, userId, organizationId],
   );
+  if (owned || !organizationId) return owned;
+
+  const sharedScope = await resolveSharedProjectScope(db, userId);
+  if (sharedScope?.organizationId !== organizationId || sharedScope.projectIds.length === 0) {
+    return undefined;
+  }
+
+  const [shared] = await db.query<{ id: string }>(
+    `select id
+       from user_projects
+      where id = $1
+        and id = any($2::uuid[])
+        and organization_id is not distinct from $3::uuid
+        and is_archived = false
+        and deleted_at is null
+      limit 1`,
+    [projectId, sharedScope.projectIds, organizationId],
+  );
+  return shared;
+}
+
+async function handleListKnowledgeFiles(request: NextRequest, context: RouteContext) {
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { id: projectId } = await context.params;
+
+  const project = await selectReadableProject(db, projectId, userId, organizationId);
 
   if (!project) {
     throw createError.notFound('Project not found');

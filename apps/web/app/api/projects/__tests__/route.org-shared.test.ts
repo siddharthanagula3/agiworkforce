@@ -42,6 +42,7 @@ import { GET as GET_PROJECT } from '../[id]/route';
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SHARED_PROJECT = '33333333-3333-4333-8333-333333333333';
 const FOREIGN_PROJECT = '55555555-5555-4555-8555-555555555555';
+const OWNED_PROJECT = '66666666-6666-4666-8666-666666666666';
 
 function projectRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -217,5 +218,62 @@ describe('GET /api/projects/[id] · shared project detail', () => {
 
     expect(mockRlsQuery).toHaveBeenCalledTimes(1);
     expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('the payload says which projects the caller may write', () => {
+  function detailRequest(id: string): never {
+    return new Request(`http://localhost:3000/api/projects/${id}`) as never;
+  }
+
+  it('marks a shared row shared and an owned row owned in the list body', async () => {
+    mockResolveSharedProjectScope.mockResolvedValue({
+      organizationId: ORG,
+      projectIds: [SHARED_PROJECT],
+    });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
+    mockRlsQuery.mockResolvedValue([
+      projectRow({ is_org_shared: true }),
+      projectRow({ id: OWNED_PROJECT, user_id: 'member-1', is_org_shared: false }),
+    ]);
+
+    const response = await LIST_PROJECTS(listRequest());
+    const body = (await response.json()) as {
+      projects: { id: string; isOrgShared: boolean }[];
+    };
+
+    expect(body.projects.find((p) => p.id === SHARED_PROJECT)?.isOrgShared).toBe(true);
+    expect(body.projects.find((p) => p.id === OWNED_PROJECT)?.isOrgShared).toBe(false);
+  });
+
+  it('marks the detail body shared when the row came from the shared read', async () => {
+    mockResolveSharedProjectScope.mockResolvedValue({
+      organizationId: ORG,
+      projectIds: [SHARED_PROJECT],
+    });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
+    mockRlsQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([projectRow({ is_org_shared: true })]);
+
+    const response = await GET_PROJECT(detailRequest(SHARED_PROJECT), {
+      params: Promise.resolve({ id: SHARED_PROJECT }),
+    });
+    const body = (await response.json()) as { project: { isOrgShared: boolean } };
+
+    expect(response.status).toBe(200);
+    expect(body.project.isOrgShared).toBe(true);
+  });
+
+  it('marks an owned detail body not shared', async () => {
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
+    mockRlsQuery.mockResolvedValueOnce([projectRow({ id: OWNED_PROJECT, user_id: 'member-1' })]);
+
+    const response = await GET_PROJECT(detailRequest(OWNED_PROJECT), {
+      params: Promise.resolve({ id: OWNED_PROJECT }),
+    });
+    const body = (await response.json()) as { project: { isOrgShared: boolean } };
+
+    expect(body.project.isOrgShared).toBe(false);
   });
 });
