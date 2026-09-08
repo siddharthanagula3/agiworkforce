@@ -100,6 +100,105 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   });
 }
 
+/**
+ * pr_review_enabled gates the webhook's pull-request review branch. It defaults
+ * to false and nothing wrote it, so that branch could never run for anyone.
+ *
+ * review_model is deliberately not writable here: the webhook resolves the
+ * review model from the catalog rather than from this column, so a value stored
+ * against the installation would be a setting nothing reads.
+ */
+export async function PATCH(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  let userId: string;
+  let db: ScopedDb;
+  try {
+    ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let body: { installationId?: unknown; prReviewEnabled?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+
+  const { installationId, prReviewEnabled } = body;
+  if (
+    typeof installationId !== 'number' ||
+    !Number.isSafeInteger(installationId) ||
+    installationId <= 0
+  ) {
+    return NextResponse.json(
+      { error: 'installationId must be a positive integer' },
+      { status: 400 },
+    );
+  }
+  if (typeof prReviewEnabled !== 'boolean') {
+    return NextResponse.json({ error: 'prReviewEnabled must be a boolean' }, { status: 400 });
+  }
+
+  let updated:
+    | Pick<GitHubInstallationRow, 'installation_id' | 'pr_review_enabled' | 'account_login'>
+    | undefined;
+  try {
+    [updated] = await db.query<
+      Pick<GitHubInstallationRow, 'installation_id' | 'pr_review_enabled' | 'account_login'>
+    >(
+      `update github_installations
+          set pr_review_enabled = $1
+        where installation_id = $2
+          and user_id = $3
+          and ownership_verified_at is not null
+        returning installation_id, pr_review_enabled, account_login`,
+      [prReviewEnabled, installationId, userId],
+    );
+  } catch (err) {
+    logger.error({ err, userId, installationId }, 'Failed to update GitHub installation settings');
+    return NextResponse.json({ error: 'Failed to save the setting' }, { status: 500 });
+  }
+
+  if (!updated) {
+    return NextResponse.json({ error: 'Installation not found' }, { status: 404 });
+  }
+
+  logger.info(
+    { userId, installationId, prReviewEnabled },
+    'GitHub pull request review setting updated',
+  );
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_setting_changed',
+    request,
+    severity: 'warning',
+    detail: {
+      resourceType: 'github_installation',
+      resourceId: String(installationId),
+      resourceName: updated.account_login,
+      connectorId: 'github',
+      source: 'github',
+      changedKeys: ['prReviewEnabled'],
+      status: prReviewEnabled ? 'enabled' : 'disabled',
+    },
+  });
+
+  return NextResponse.json({
+    installationId: Number(updated.installation_id),
+    prReviewEnabled: updated.pr_review_enabled,
+  });
+}
+
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
