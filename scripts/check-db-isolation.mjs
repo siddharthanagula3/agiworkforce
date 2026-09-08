@@ -190,6 +190,17 @@ const ALLOWLIST = [
       'constrain by. createApiKey/listApiKeys/revokeApiKey stay policed.',
   },
   {
+    match: /lib\/services\/cloud-agent-run-reaper\.ts$/,
+    tables: ['cloud_agent_runs'],
+    functions: ['reapOrphanedCloudAgentRuns'],
+    reason:
+      'a fleet-wide cron sweep with no caller to constrain by: it ends runs whose workflow ' +
+      'invocation was killed before it could settle them, selected by age alone. The same shape ' +
+      'as reapStuckCloudCodeTurns. Stated here because the statement would otherwise pass on the ' +
+      '`user_id` in its RETURNING clause, which is a wording accident and not a scope. Every ' +
+      'other statement over cloud_agent_runs stays policed.',
+  },
+  {
     match: /lib\/services\/cloud-code-agent-service\.ts$/,
     tables: ['cloud_code_agent_turns'],
     functions: ['executePersistedAgentTurn'],
