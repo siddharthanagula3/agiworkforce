@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -35,7 +35,7 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 
 const CONVERSATION_ID = 'conv-1';
 const REASON = 'Your plan usage for this billing period is used up.';
-const RESET_LABEL = 'Resets in 3 days';
+const RESET_AT = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
 const ACTION_LABEL = 'Buy credits';
 
 function input() {
@@ -56,7 +56,7 @@ describe('WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01 · composer', () => {
         conversationId={CONVERSATION_ID}
         usageBlock={{
           reason: REASON,
-          resetLabel: RESET_LABEL,
+          resetAt: RESET_AT,
           actionLabel: ACTION_LABEL,
           onRecover,
         }}
@@ -65,7 +65,7 @@ describe('WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01 · composer', () => {
 
     const banner = screen.getByTestId('composer-usage-block');
     expect(banner.textContent).toContain(REASON);
-    expect(banner.textContent).toContain(RESET_LABEL);
+    expect(banner.textContent).toMatch(/Resets in (3 hours|2 hr 59 min)\./);
 
     fireEvent.click(screen.getByRole('button', { name: ACTION_LABEL }));
     expect(onRecover).toHaveBeenCalledTimes(1);
@@ -88,6 +88,33 @@ describe('WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01 · composer', () => {
     expect(onSend).not.toHaveBeenCalled();
     expect(onRecover).toHaveBeenCalledTimes(1);
     expect(input()).toHaveValue('one more question');
+  });
+
+  // The leader's usage states name the wait, and a wait formatted once and left
+  // alone stops being true while the banner is still on screen.
+  it('keeps the wait current instead of freezing it at the moment of refusal', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <ChatComposerNew
+          onSend={vi.fn()}
+          conversationId={CONVERSATION_ID}
+          usageBlock={{ reason: REASON, resetAt: new Date(Date.now() + 3_600_000).toISOString() }}
+        />,
+      );
+
+      expect(screen.getByTestId('composer-usage-block').textContent).toMatch(/Resets in 1 hour\./);
+
+      act(() => {
+        vi.advanceTimersByTime(31 * 60 * 1000);
+      });
+
+      expect(screen.getByTestId('composer-usage-block').textContent).toMatch(
+        /Resets in 29 min\.|Resets in 28 min\./,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('stays out of the way when the account has capacity', () => {
