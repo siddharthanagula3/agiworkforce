@@ -63,6 +63,10 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     reap-agent-runs end a turn whose invocation died so it reads as ended
   //     and its reservation is released within the lease window plus one
   //     sweep, which is what "still running" means on the page.
+  //     recover-reservations returns the quota a dead turn's reservation
+  //     still holds, and the promise is the rolling limit itself: a user
+  //     told they have reached it must get their allowance back in minutes,
+  //     not on the next daily accounting sweep.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -78,6 +82,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/reclaim-sandboxes',
     '/api/cron/reap-code-turns',
     '/api/cron/reap-agent-runs',
+    '/api/cron/recover-reservations',
   ]);
   const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
