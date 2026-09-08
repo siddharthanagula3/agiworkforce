@@ -45,8 +45,11 @@ dedicated adversarial pass, a real result, not a coverage gap.
 | W1-04 | per-unit quota TOCTOU (bounded 7–11 req)                           | low | DECISION (F4), needs Postgres run                             |
 | W2-02 | Chinese-HQ provider consent gate not enforced server-side          | med | DECISION (F7), partial; changes paid routing                  |
 
-Patch files: `CLAUDE-SECURITY-20260826-{WAVE1-web,WAVE2-server}/patches/`. F3 was
-rejected and superseded by the W1-01 commit above.
+F3 was rejected and superseded by the W1-01 commit above. The patch files lived
+in local `CLAUDE-SECURITY-20260826-*/patches/` scan directories, which were
+never committed and have been removed; every FIXED row above cites the commit
+that carries the change instead. W2-02 survived re-verification against current
+source on 2026-09-08 and is now `AGI-22` in `ACTIVE_ISSUES.md`.
 
 ---
 
