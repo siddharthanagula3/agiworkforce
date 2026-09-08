@@ -137,6 +137,12 @@ export function SandboxedIframe({
   useEffect(() => {
     if (!sandboxOrigin) return undefined;
     const onMessage = (event: MessageEvent) => {
+      // Origin alone is not enough, which the sandbox document says in its own
+      // listener: any window that can reach this one can post to it, so a
+      // nested frame or an opener on the sandbox origin would otherwise drive
+      // the error text this renders. The fallback listener below already did
+      // this; the primary one did not.
+      if (!event.source || event.source !== iframeRef.current?.contentWindow) return;
       if (!isFromSandbox(event)) return;
       const data = event.data as SandboxIncomingMessage | undefined;
       if (!data || typeof data !== 'object') return;
