@@ -91,6 +91,8 @@ import {
   Share2,
   PanelsTopLeft,
   Bell,
+  CircleAlert,
+  RefreshCw,
   X as XIcon,
   ChevronUp,
   EyeOff,
@@ -166,6 +168,8 @@ import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
+import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
+import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
   WorkSessionPanel,
@@ -4539,6 +4543,28 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     transcriptMounted: !isConversationTranscriptPending && !isEmptyChat,
     paywallOwnsTurn: showsInlinePaywall,
   });
+  const lastChatMessage = chatMessages[chatMessages.length - 1];
+  const turnErrorNotice = useTurnErrorNotice({
+    lastMessage: lastChatMessage,
+    isLoading: isLoading && !isStreaming,
+    turnError: turnFailureNotice.placement === 'inline' ? turnFailureNotice.message : null,
+  });
+  const turnErrorNoticeElement =
+    turnErrorNotice && lastChatMessage ? (
+      <TranscriptNotice
+        role="alert"
+        tone="danger"
+        icon={CircleAlert}
+        className="mb-2"
+        message={turnErrorNotice}
+        action={{
+          label: 'Retry',
+          ariaLabel: 'Retry this turn',
+          icon: RefreshCw,
+          onClick: () => void handleRegenerateMessage(lastChatMessage.id),
+        }}
+      />
+    ) : null;
 
   // Count distinct research sources across all messages for the toggle badge.
   // Metadata may contain a flat result list or a legacy SearchResponse object.
@@ -5153,11 +5179,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         onPaywallDismiss={handlePaywallDismiss}
                         onRegenerateWithModel={handleRegenerateWithModel}
                         regenerateModelOptions={regenerateModelOptions}
-                        turnError={
-                          turnFailureNotice.placement === 'inline'
-                            ? turnFailureNotice.message
-                            : null
-                        }
+                        turnErrorActive={turnErrorNotice !== null}
                       />
                     </InteractiveCardResumeProvider>
                   </MessageInlineEditProvider>
@@ -5172,6 +5194,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     active={composerToggles?.workMode === AGI_WORK_MODE}
                     onReviewApprovals={handleReviewApprovals}
                   />
+                  {turnErrorNoticeElement}
                   {voiceModeActive ? (
                     <VoiceModeSurface variant={VOICE_SURFACE_VARIANT.chat} {...voiceSurfaceProps} />
                   ) : (

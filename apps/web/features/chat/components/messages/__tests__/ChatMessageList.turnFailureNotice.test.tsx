@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { ChatMessageList } from '../ChatMessageList';
 
-const SEND_FAILURE = 'Could not start the conversation.';
 const GENERIC_NOTICE = /returned no response for this turn/i;
 
 function trailingUserTurn(ageMs: number): ChatMessage[] {
@@ -17,40 +16,59 @@ function trailingUserTurn(ageMs: number): ChatMessage[] {
   ] as unknown as ChatMessage[];
 }
 
-function renderTranscript(props: { messages: ChatMessage[]; turnError?: string | null }) {
+function answeredTurn(): ChatMessage[] {
+  return [
+    {
+      id: 'user-1',
+      role: 'user',
+      content: 'Why does the sky look blue?',
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+    },
+    {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'Shorter wavelengths scatter more, so the sky reads blue from the ground.',
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      metadata: { truncated: true },
+    },
+  ] as unknown as ChatMessage[];
+}
+
+function renderTranscript(props: { messages: ChatMessage[]; turnErrorActive?: boolean }) {
   return render(
     <ChatMessageList
       messages={props.messages}
       onRegenerate={vi.fn()}
-      turnError={props.turnError}
+      onSendMessage={vi.fn()}
+      enableFollowUpSuggestions
+      turnErrorActive={props.turnErrorActive}
     />,
   );
 }
 
 describe('transcript turn-failure notice', () => {
-  it('states the send failure inline as soon as the turn fails', () => {
-    renderTranscript({ messages: trailingUserTurn(0), turnError: SEND_FAILURE });
-
-    expect(screen.getByText(SEND_FAILURE)).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Retry this turn' })).not.toBeNull();
-  });
-
-  it('carries exactly one failure notice for one failed send', () => {
-    renderTranscript({ messages: trailingUserTurn(0), turnError: SEND_FAILURE });
-
-    expect(screen.queryAllByText(SEND_FAILURE)).toHaveLength(1);
-    expect(screen.queryByText(GENERIC_NOTICE)).toBeNull();
-  });
-
-  it('stays quiet while a fresh turn is still within the grace period', () => {
-    renderTranscript({ messages: trailingUserTurn(0) });
+  it('leaves the failed turn to the notice above the composer', () => {
+    renderTranscript({ messages: trailingUserTurn(120_000), turnErrorActive: true });
 
     expect(screen.queryByText(GENERIC_NOTICE)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry this turn' })).toBeNull();
   });
 
-  it('falls back to the generic incomplete-turn copy once the grace period lapses', () => {
+  it('says nothing of its own once the grace period lapses', () => {
     renderTranscript({ messages: trailingUserTurn(120_000) });
 
-    expect(screen.getByText(GENERIC_NOTICE)).not.toBeNull();
+    expect(screen.queryByText(GENERIC_NOTICE)).toBeNull();
+  });
+
+  it('offers follow-up questions on a turn no notice owns', () => {
+    renderTranscript({ messages: answeredTurn() });
+
+    expect(screen.queryByTestId('follow-up-suggestions-shell')).not.toBeNull();
+  });
+
+  it('offers no follow-up questions while the turn error notice is on screen', () => {
+    renderTranscript({ messages: answeredTurn(), turnErrorActive: true });
+
+    expect(screen.queryByTestId('follow-up-suggestions-shell')).toBeNull();
   });
 });

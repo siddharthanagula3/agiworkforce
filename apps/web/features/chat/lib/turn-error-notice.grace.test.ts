@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INCOMPLETE_TURN_GRACE_MS, isWithinIncompleteTurnGracePeriod } from '../ChatMessageList';
+import { INCOMPLETE_TURN_GRACE_MS, isWithinIncompleteTurnGracePeriod } from './turn-error-notice';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 
 function userMessage(createdAt: string | undefined): ChatMessage {
