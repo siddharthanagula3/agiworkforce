@@ -293,6 +293,27 @@ export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
 const MIN_DISCOUNT_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(['min_discount_unavailable']);
 export const MIN_DISCOUNT_UNAVAILABLE_CODE = 'min_discount_unavailable';
 
+/**
+ * A routing marketplace refuses a model because none of the endpoints behind it
+ * satisfy the data policy the ACCOUNT is configured to require, rather than
+ * serving it from an endpoint that does not.
+ *
+ * Observed as an OpenRouter 404: "0 endpoints out of 1 requested are available
+ * matching your guardrail restrictions and data policy ... ZDR violation
+ * (account settings)". Read as a plain `client_error` it was neither retried
+ * nor rotated, so a model in the picker failed every single time it was chosen
+ * and the user was told the request had been rejected, which implicates the
+ * request rather than the configuration.
+ *
+ * Same shape as `min_discount_unavailable` above and classified the same way:
+ * the route has no supply on terms we accept, the provider is not down, and the
+ * request moves on to a route that does. Never retryable on the same route,
+ * which would fail identically for as long as the setting stands.
+ */
+export const DATA_POLICY_NO_ENDPOINT_CODE = 'data_policy_no_endpoint';
+const DATA_POLICY_MARKERS = ['data policy', 'guardrail restrictions', 'data-retention policy'];
+const NO_ENDPOINT_PATTERN = /\b(?:no|0|zero)\s+endpoints\b|\bendpoints\s+out\s+of\b/;
+
 function errorCodeFields(e: SDKErrorLike): string[] {
   return [e.name, e.code, e.type, e.error?.type, e.error?.code, e.error?.status]
     .filter((raw): raw is string => typeof raw === 'string')
@@ -307,6 +328,14 @@ function matchesAllocationQuotaExhausted(e: SDKErrorLike, lowerMessage: string):
 function matchesMinimumDiscountUnavailable(e: SDKErrorLike, lowerMessage: string): boolean {
   if (errorCodeFields(e).some((code) => MIN_DISCOUNT_UNAVAILABLE_CODES.has(code))) return true;
   return [...MIN_DISCOUNT_UNAVAILABLE_CODES].some((code) => lowerMessage.includes(code));
+}
+
+function matchesDataPolicyExclusion(lowerMessage: string): boolean {
+  // A vendor-specific phrase on its own, because it names the cause exactly and
+  // appears without the endpoint count in some responses.
+  if (lowerMessage.includes('zdr violation')) return true;
+  if (!DATA_POLICY_MARKERS.some((marker) => lowerMessage.includes(marker))) return false;
+  return NO_ENDPOINT_PATTERN.test(lowerMessage);
 }
 
 function matchesSpendingCapExhausted(lowerMessage: string): boolean {
@@ -524,6 +553,17 @@ export function classifyError(err: unknown): ClassifiedError {
     return {
       category: 'capacity_off_switch',
       code: MIN_DISCOUNT_UNAVAILABLE_CODE,
+      retryable: false,
+      fallbackable: true,
+      ...(typeof status === 'number' ? { status } : {}),
+      message,
+    };
+  }
+
+  if (matchesDataPolicyExclusion(lower)) {
+    return {
+      category: 'capacity_off_switch',
+      code: DATA_POLICY_NO_ENDPOINT_CODE,
       retryable: false,
       fallbackable: true,
       ...(typeof status === 'number' ? { status } : {}),
