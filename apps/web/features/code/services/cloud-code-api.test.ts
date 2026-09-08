@@ -227,3 +227,87 @@ describe('cloudCodeApi', () => {
     await expect(api.list()).rejects.toMatchObject({ message: 'HTTP 429', status: 429 });
   });
 });
+
+describe('cloudCodeApi session lifecycle', () => {
+  function apiWith(body: unknown, status = 200) {
+    const fetchImpl = vi.fn(async (_url: string, _init?: RequestInit) => json(body, status));
+    return {
+      fetchImpl,
+      api: createCloudCodeApi({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        getCsrfToken: async () => 'csrf-code',
+      }),
+    };
+  }
+
+  it('closes through the close route, not through DELETE', async () => {
+    const { api, fetchImpl } = apiWith({ session: { ...session, state: 'closed' } });
+    await api.close(session.id);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `/api/code/sessions/${session.id}/close`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('renames through PATCH with the new title', async () => {
+    const { api, fetchImpl } = apiWith({ session: { ...session, title: 'Renamed' } });
+    await expect(api.rename(session.id, 'Renamed')).resolves.toMatchObject({ title: 'Renamed' });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `/api/code/sessions/${session.id}`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ title: 'Renamed' }) }),
+    );
+  });
+
+  it('archives and unarchives through the same PATCH', async () => {
+    const { api, fetchImpl } = apiWith({ session });
+    await api.setArchived(session.id, true);
+    await api.setArchived(session.id, false);
+    expect(fetchImpl.mock.calls.map((call) => call[1]?.body)).toEqual([
+      JSON.stringify({ archived: true }),
+      JSON.stringify({ archived: false }),
+    ]);
+  });
+
+  it('deletes through DELETE and accepts only an honest confirmation', async () => {
+    const { api, fetchImpl } = apiWith({ deleted: true });
+    await expect(api.deleteSession(session.id)).resolves.toBeUndefined();
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `/api/code/sessions/${session.id}`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+
+    const refused = apiWith({ deleted: false });
+    await expect(refused.api.deleteSession(session.id)).rejects.toThrow(/invalid response/i);
+  });
+
+  it('asks for one status of sessions when the filter is not all', async () => {
+    const listBody = {
+      availability: {
+        deploymentEnabled: true,
+        storageReady: true,
+        planEntitled: true,
+        planTier: 'pro',
+        maxSessions: 5,
+      },
+      sessions: [],
+    };
+    const { api, fetchImpl } = apiWith(listBody);
+    await api.list('archived');
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/code/sessions?status=archived',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('stops a turn through the cancel route', async () => {
+    const { api, fetchImpl } = apiWith({
+      turnId: '22222222-2222-4222-8222-222222222222',
+      requestedAt: '2026-09-07T20:00:00Z',
+    });
+    await api.cancelAgentTurn(session.id);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `/api/code/sessions/${session.id}/agent/cancel`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});

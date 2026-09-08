@@ -9,6 +9,7 @@ import {
   type CloudCodeAgentTurnRecord,
   type CloudCodeSession,
   type CloudCodeSessionListResponse,
+  type CloudCodeSessionStatusFilter,
   type CloudCodeTerminalEntry,
   type CreateCloudCodeSessionInput,
   type RunCloudCodeCommandResponse,
@@ -128,6 +129,7 @@ const sessionDetailSchema = z.object({
 });
 
 const sessionOnlySchema = z.object({ session: sessionSchema });
+const deletedSchema = z.object({ deleted: z.literal(true) });
 const commandSchema = z.object({ session: sessionSchema, terminalEntry: terminalEntrySchema });
 
 const commitResultSchema = z.object({
@@ -227,7 +229,10 @@ interface CloudCodeApiDependencies {
 }
 
 export interface CloudCodeApi {
-  list(signal?: AbortSignal): Promise<CloudCodeSessionListResponse>;
+  list(
+    status?: CloudCodeSessionStatusFilter,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeSessionListResponse>;
   listRepositories(search?: string, signal?: AbortSignal): Promise<CloudCodeRepositoryList>;
   get(
     sessionId: string,
@@ -249,6 +254,13 @@ export interface CloudCodeApi {
   changes(sessionId: string, signal?: AbortSignal): Promise<CloudCodeChanges>;
   createPullRequest(sessionId: string, signal?: AbortSignal): Promise<CloudCodePullRequest>;
   close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
+  rename(sessionId: string, title: string, signal?: AbortSignal): Promise<CloudCodeSession>;
+  setArchived(
+    sessionId: string,
+    archived: boolean,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeSession>;
+  deleteSession(sessionId: string, signal?: AbortSignal): Promise<void>;
   commit(sessionId: string, message: string, signal?: AbortSignal): Promise<CloudCodeCommitResult>;
   startAgentTurn(
     sessionId: string,
@@ -336,8 +348,9 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
   }
 
   return {
-    list(signal) {
-      return request('/api/code/sessions', { signal }, listSchema);
+    list(status, signal) {
+      const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+      return request(`/api/code/sessions${query}`, { signal }, listSchema);
     },
     listRepositories(search, signal) {
       const query = search ? `?search=${encodeURIComponent(search)}` : '';
@@ -390,11 +403,44 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
     },
     async close(sessionId, signal) {
       const body = await request(
-        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
-        { method: 'DELETE', headers: await mutationHeaders(), signal },
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/close`,
+        { method: 'POST', headers: await mutationHeaders(), signal },
         sessionOnlySchema,
       );
       return body.session;
+    },
+    async rename(sessionId, title, signal) {
+      const body = await request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
+        {
+          method: 'PATCH',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ title }),
+          signal,
+        },
+        sessionOnlySchema,
+      );
+      return body.session;
+    },
+    async setArchived(sessionId, archived, signal) {
+      const body = await request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
+        {
+          method: 'PATCH',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ archived }),
+          signal,
+        },
+        sessionOnlySchema,
+      );
+      return body.session;
+    },
+    async deleteSession(sessionId, signal) {
+      await request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
+        { method: 'DELETE', headers: await mutationHeaders(), signal },
+        deletedSchema,
+      );
     },
     async commit(sessionId, message, signal) {
       return request(
