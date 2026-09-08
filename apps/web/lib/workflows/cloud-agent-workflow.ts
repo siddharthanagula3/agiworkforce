@@ -5,6 +5,7 @@ import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { FatalError, RetryableError, getWritable } from 'workflow';
+import { createBoundedDurableWriter } from './durable-stream-write';
 
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
 import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
@@ -300,10 +301,22 @@ function workflowContinuation(
   );
 }
 
-async function openCloudAgentWorkflowStream(): Promise<void> {
+function reportUnreadableStream(runId: string, site: string): () => void {
+  return () => {
+    logger.warn(
+      { runId, site },
+      'The durable stream stopped taking events; the journal keeps them and the run settles anyway',
+    );
+  };
+}
+
+async function openCloudAgentWorkflowStream(runId: string): Promise<void> {
   const writer = getWritable<Uint8Array>().getWriter();
   try {
-    await writer.write(new TextEncoder().encode(DURABLE_STREAM_OPEN_FRAME));
+    const stream = createBoundedDurableWriter(writer, {
+      onUnreadable: reportUnreadableStream(runId, 'open'),
+    });
+    await stream.write(new TextEncoder().encode(DURABLE_STREAM_OPEN_FRAME));
   } finally {
     writer.releaseLock();
   }
@@ -314,7 +327,7 @@ export async function executeCloudAgentWorkflowInvocation(
 ): Promise<WorkflowInvocationResult> {
   'use step';
 
-  await openCloudAgentWorkflowStream();
+  await openCloudAgentWorkflowStream(rawInput.runId);
 
   const input = parseCloudAgentWorkflowInput(rawInput);
   const db = getNeonDb();
@@ -431,10 +444,15 @@ export async function executeCloudAgentWorkflowInvocation(
 
   const journal = createCloudAgentEventJournal({ db, userId: input.userId, runId: input.runId });
   const writer = getWritable<Uint8Array>().getWriter();
+  const stream = createBoundedDurableWriter(writer, {
+    onUnreadable: reportUnreadableStream(input.runId, 'projection'),
+  });
   try {
     for await (const chunk of generator) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
-        await writer.write(new TextEncoder().encode(projected.sse));
+        // Journalled before it is put on the wire: the journal is what a
+        // reattaching client replays, and it is the only one of the two that
+        // still works once the reader is gone.
         if (projected.envelope) {
           await journal.append(projected.envelope);
           if (projected.envelope.event.type === 'error') reportedFailure = true;
@@ -442,6 +460,7 @@ export async function executeCloudAgentWorkflowInvocation(
             lastTaskState = projected.envelope.event.state;
           }
         }
+        await stream.write(new TextEncoder().encode(projected.sse));
       }
     }
     await journal.flush();
@@ -514,27 +533,41 @@ export async function failCloudAgentWorkflow(
     emitter.emitWithEnvelope({ type: 'stop', reason: 'error' }),
   ];
 
+  // Journal, then settle, then the wire. The settle is what transitions the run,
+  // persists the assistant row and releases the reservation, and it used to sit
+  // behind three writes to a stream whose reader may already be gone, which is
+  // how a failed run stayed `running` until someone cancelled it by hand.
+  for (const emitted of events) {
+    await appendCloudAgentEvent(db, {
+      userId: input.userId,
+      runId: input.runId,
+      envelope: emitted.envelope,
+    });
+  }
+
+  await settleWorkflowInvocation(input, 'failed');
+
   const writer = getWritable<Uint8Array>().getWriter();
   try {
+    const stream = createBoundedDurableWriter(writer, {
+      onUnreadable: reportUnreadableStream(input.runId, 'failure'),
+    });
     for (const emitted of events) {
-      await writer.write(new TextEncoder().encode(emitted.sse));
-      await appendCloudAgentEvent(db, {
-        userId: input.userId,
-        runId: input.runId,
-        envelope: emitted.envelope,
-      });
+      await stream.write(new TextEncoder().encode(emitted.sse));
     }
   } finally {
     writer.releaseLock();
   }
-  await settleWorkflowInvocation(input, 'failed');
 }
 
-export async function closeCloudAgentWorkflowStream(): Promise<void> {
+export async function closeCloudAgentWorkflowStream(runId: string): Promise<void> {
   'use step';
   const writer = getWritable<Uint8Array>().getWriter();
-  await writer.write(new TextEncoder().encode('data: [DONE]\n\n'));
-  await writer.close();
+  const stream = createBoundedDurableWriter(writer, {
+    onUnreadable: reportUnreadableStream(runId, 'close'),
+  });
+  await stream.write(new TextEncoder().encode('data: [DONE]\n\n'));
+  await stream.close();
 }
 
 export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Promise<void> {
@@ -548,13 +581,13 @@ export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Pro
         input = result.input;
         continue;
       }
-      await closeCloudAgentWorkflowStream();
+      await closeCloudAgentWorkflowStream(input.runId);
       return;
     }
   } catch (error) {
     const failure = upstreamFailureCopy(error, input.processed.provider);
     await failCloudAgentWorkflow(input, failure.message, failure.code);
-    await closeCloudAgentWorkflowStream();
+    await closeCloudAgentWorkflowStream(input.runId);
     throw error;
   }
 }
