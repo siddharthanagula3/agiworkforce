@@ -22,17 +22,16 @@ import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 /**
  * The SQL ceiling, not the default of 100.
  *
- * This drain is the only caller of `recover_stale_managed_usage_requests`, so
- * its batch size is the platform's entire refund rate for reservations leaked
- * by a killed turn, and this route runs once a day. At 100 the backlog grows
- * monotonically past roughly a thousand daily-active users, and the visible
- * symptom is a user who sent three messages being told their rolling limit is
- * reached. `process_credit_settlement_queue` clamps to 500 itself; asking for
- * more would be silently ignored.
+ * `process_credit_settlement_queue` clamps to 500 itself; asking for more
+ * would be silently ignored.
  *
- * The cadence is the other half and it is not settable from here:
- * `vercel.json` schedules this at `30 0 * * *`, and the function's own comment
- * in migration 0056 claims it runs every minute. It should be sub-hourly.
+ * This route is no longer the only caller of
+ * `recover_stale_managed_usage_requests`. It runs once a day, which was far
+ * too slow to be a reservation's only path back to the user's quota, so
+ * `/api/cron/recover-reservations` now owns that cadence at four times an
+ * hour. The drain here is the daily backstop that runs alongside Stripe
+ * reconciliation, and both are safe to overlap: rows are taken with
+ * `for update skip locked` and settlement is idempotent by key.
  */
 const SETTLEMENT_DRAIN_BATCH = 500;
 
