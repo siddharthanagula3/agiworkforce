@@ -169,6 +169,8 @@ const pullRequestSchema = z.object({
 const turnCancellationSchema = z.object({
   turnId: z.string(),
   requestedAt: z.string(),
+  /** Optional on the wire: the surface does not need it, an operator reading a log does. */
+  durable: z.boolean().optional(),
 });
 
 const pendingApprovalSchema = z.object({
