@@ -1002,24 +1002,27 @@ const MessageBubbleComponent = function MessageBubble({
   // Once the closing fence arrives, extractArtifacts sees the completed block,
   // the persisted artifact lands under the SAME deterministic id, and the
   // streaming overlay clears, a seamless handoff to the Preview tab.
-  const streamingBlock = useMemo(() => {
-    if (isUser || !message.isStreaming) return null;
+  // Computed WITHOUT the streaming guard. Gating it on `message.isStreaming`
+  // threw away the one fact that separates a turn that finished from a turn
+  // that was stopped: whether the trailing fence ever closed. The sync hook
+  // publishes only while streaming, and reads the same block afterwards to
+  // decide whether anything was left half-written.
+  const trailingArtifactBlock = useMemo(() => {
+    if (isUser) return null;
     const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
     if (!block || !isRenderableArtifact(block.language, block.content)) return null;
     return block;
-  }, [isUser, message.isStreaming, message.content, messageCodeBlocks]);
+  }, [isUser, message.content, messageCodeBlocks]);
 
-  const completedArtifactIds = useMemo(
-    () => extractedArtifacts.map((artifact) => artifact.id),
-    [extractedArtifacts],
-  );
+  // What the transcript hides while it is being written: only meaningful for a
+  // turn that is actually streaming.
+  const streamingBlock = message.isStreaming ? trailingArtifactBlock : null;
 
   useStreamingArtifactSync({
     messageId: message.id,
     conversationId: artifactConversationId,
     isStreaming: Boolean(message.isStreaming),
-    block: streamingBlock,
-    completedArtifactIds,
+    block: trailingArtifactBlock,
   });
 
   // ── Tool/provider-generated files (`x_generated_files` → metadata) ────────

@@ -29,6 +29,11 @@ import { ArtifactPrivacyNotice } from '@/features/onboarding/components/Artifact
 import { useUIStore } from '@shared/stores/layout-store';
 import { TASK_DOCK_ARTIFACTS_LABEL, TASK_DOCK_LABEL } from '../../lib/agi-work';
 
+const ARTIFACT_CONFLICT_NOTICE =
+  'Someone else changed this artifact first, so their version is shown. Your edit is kept as the latest version.';
+const ARTIFACT_CONFLICT_KEEP_MINE = 'Keep my edit';
+const ARTIFACT_CONFLICT_KEEP_THEIRS = 'Keep theirs';
+
 function ArtifactTab({
   artifact,
   isSelected,
@@ -214,6 +219,8 @@ export function ArtifactsPanel() {
     selectedArtifactId,
     panelOpen,
     cloudSyncStatus,
+    artifactConflicts,
+    resolveArtifactConflict,
     cloudSyncError,
     persistenceDegraded,
     selectArtifact,
@@ -270,6 +277,8 @@ export function ArtifactsPanel() {
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
+
+  const selectedConflict = selectedArtifact ? artifactConflicts[selectedArtifact.id] : undefined;
 
   const streamingArtifact =
     streaming &&
@@ -552,6 +561,39 @@ export function ArtifactsPanel() {
                 )}
               </div>
             </div>
+
+            {/* A push the server refused. Saying so is the point: the panel is
+                showing someone else's version and the edit it replaced is one
+                click away, where before both facts were invisible. */}
+            {selectedConflict && (
+              <div
+                className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2"
+                style={{
+                  borderColor: 'var(--chat-warning-border)',
+                  background: 'var(--chat-warning-bg)',
+                  color: 'var(--chat-warning-fg)',
+                }}
+                data-testid="artifact-conflict-notice"
+              >
+                <span className="min-w-0 text-xs">{ARTIFACT_CONFLICT_NOTICE}</span>
+                <div className="ml-auto flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => resolveArtifactConflict(selectedConflict.id, 'mine')}
+                    className="inline-flex min-h-6 items-center px-1 text-xs font-semibold underline underline-offset-2"
+                  >
+                    {ARTIFACT_CONFLICT_KEEP_MINE}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => resolveArtifactConflict(selectedConflict.id, 'theirs')}
+                    className="inline-flex min-h-6 items-center px-1 text-xs underline underline-offset-2"
+                  >
+                    {ARTIFACT_CONFLICT_KEEP_THEIRS}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Content */}
             <div className="flex flex-1 flex-col overflow-hidden bg-background">
