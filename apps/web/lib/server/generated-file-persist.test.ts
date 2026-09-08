@@ -38,6 +38,31 @@ describe('persistGeneratedFileBytes', () => {
     insertMediaAsset.mockReset().mockResolvedValue('asset_9');
   });
 
+  it('keeps writing the wire and metadata key every other surface reads', async () => {
+    const outcome = await persistGeneratedFileBytes({
+      userId: 'user_1',
+      organizationId,
+      data: Buffer.from('<html><body>hi</body></html>', 'utf8'),
+      mimeType: 'text/html',
+      filename: 'index.html',
+      provider: 'e2b',
+      origin: 'e2b-execution',
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.file.surface).toBe('artifact');
+    expect(insertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // The client surface and the presentation target sit in one payload.
+        // This is the pair that used to share a name.
+        sourceSurface: 'web',
+        metadata: expect.objectContaining({ surface: 'artifact' }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it('persists bytes, catalogs them, and returns a same-origin wire uri + true sha256', async () => {
     const data = Buffer.from('col_a,col_b\n1,2\n3,4\n', 'utf8');
     const expectedHash = createHash('sha256').update(data).digest('hex');
@@ -248,7 +273,7 @@ describe('classifyGeneratedFile', () => {
       ['config.yaml', 'application/yaml'],
     ] as const) {
       expect(classifyGeneratedFile(name, mime)).toEqual({
-        surface: 'artifact',
+        presentation: 'artifact',
         previewable: true,
       });
     }
@@ -262,46 +287,58 @@ describe('classifyGeneratedFile', () => {
       ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
       ['table.csv', 'text/csv'],
     ] as const) {
-      expect(classifyGeneratedFile(name, mime)).toEqual({ surface: 'file', previewable: true });
+      expect(classifyGeneratedFile(name, mime)).toEqual({
+        presentation: 'file',
+        previewable: true,
+      });
     }
   });
 
   it('classifies raster images/charts as previewable files, not artifacts (ChatGPT/Claude parity)', () => {
     expect(classifyGeneratedFile('chart.png', 'image/png')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: true,
     });
     expect(classifyGeneratedFile('photo.jpg', 'image/jpeg')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: true,
     });
   });
 
   it('classifies svg as artifact even though its mime is image/*', () => {
-    expect(classifyGeneratedFile('logo.svg', 'image/svg+xml').surface).toBe('artifact');
-    expect(classifyGeneratedFile('noext-svg', 'image/svg+xml').surface).toBe('artifact');
+    expect(classifyGeneratedFile('logo.svg', 'image/svg+xml').presentation).toBe('artifact');
+    expect(classifyGeneratedFile('noext-svg', 'image/svg+xml').presentation).toBe('artifact');
   });
 
   it('classifies archives and unknown binaries as non-previewable files', () => {
     expect(classifyGeneratedFile('bundle.zip', 'application/zip')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: false,
     });
     expect(classifyGeneratedFile('mystery.bin', 'application/octet-stream')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: false,
     });
   });
 
   it('falls back to mime for extension-less names (csv beats generic text)', () => {
     expect(classifyGeneratedFile('output', 'text/csv')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: true,
     });
-    expect(classifyGeneratedFile('output', 'text/plain').surface).toBe('artifact');
+    expect(classifyGeneratedFile('output', 'text/plain').presentation).toBe('artifact');
     expect(classifyGeneratedFile('output', 'application/pdf')).toEqual({
-      surface: 'file',
+      presentation: 'file',
       previewable: true,
     });
+  });
+});
+
+describe('surface means a client everywhere else, so the classifier does not use the word', () => {
+  it('classifies into presentation, not surface', () => {
+    const classification = classifyGeneratedFile('index.html', 'text/html');
+
+    expect(classification).toEqual({ presentation: 'artifact', previewable: true });
+    expect(Object.keys(classification)).not.toContain('surface');
   });
 });
