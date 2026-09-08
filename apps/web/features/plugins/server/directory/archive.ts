@@ -35,7 +35,6 @@ import { displayVersion, lastSegment, neutralizeCopy } from './entries';
 import { parsePluginMetadata } from './inspection';
 import { parseClaudeMarketplaceManifest } from './official-marketplace';
 import { parseSkillFile } from './skill-files';
-import type { InstalledDirectorySkill } from './types';
 
 const PATH_SEPARATOR = '/';
 const WINDOWS_SEPARATOR = '\\';
@@ -49,12 +48,19 @@ const PLUGIN_KEY_EDGE_TRIM = /^[^a-z0-9]+|[^a-z0-9._-]+$/g;
 const SKILL_FILE_SUFFIX = `${PATH_SEPARATOR}${CLAUDE_SKILL_FILE_NAME}`;
 const RELATIVE_SOURCE_PREFIX = /^\.\/+/;
 
+export interface UploadedSkill {
+  name: string;
+  description: string;
+  path: string;
+  content: string;
+}
+
 export interface UploadedPlugin {
   key: string;
   name: string;
   description: string;
   version: string;
-  skills: InstalledDirectorySkill[];
+  skills: UploadedSkill[];
 }
 
 export interface UploadedPluginArchive {
@@ -213,21 +219,22 @@ async function readSkills(
   members: Map<string, ArchiveMember>,
   paths: readonly string[],
   pluginName: string,
-): Promise<InstalledDirectorySkill[]> {
+): Promise<UploadedSkill[]> {
   if (paths.length > PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL) {
     throw new PluginArchiveError([
       uploadTooManySkillsMessage(pluginName, PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
     ]);
   }
-  const skills: InstalledDirectorySkill[] = [];
+  const skills: UploadedSkill[] = [];
   const seen = new Set<string>();
   for (const path of paths) {
     const member = members.get(path);
     if (!member) continue;
-    const skill = parseSkillFile(path, await readText(member));
+    const content = await readText(member);
+    const skill = parseSkillFile(path, content);
     if (!skill || seen.has(skill.name)) continue;
     seen.add(skill.name);
-    skills.push(skill);
+    skills.push({ name: skill.name, description: skill.description, path: skill.path, content });
   }
   return skills;
 }

@@ -209,7 +209,13 @@ describe('POST /api/plugins/uploads', () => {
       plugins: [
         expect.objectContaining({
           key: 'my-plugin',
-          skills: [expect.objectContaining({ name: 'summarise', body: 'Do it.' })],
+          skills: [
+            expect.objectContaining({
+              name: 'summarise',
+              path: 'skills/summarise/SKILL.md',
+              content: skillFile('summarise', 'Summarise things', 'Do it.'),
+            }),
+          ],
         }),
       ],
     });
