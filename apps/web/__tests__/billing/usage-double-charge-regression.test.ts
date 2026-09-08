@@ -25,11 +25,10 @@ describe('usage double-charge regression (call-path removal)', () => {
   });
 
   it('usage/cost report endpoints do not sum abs(amount_cents) (counts refunds as charges)', () => {
-    const reportFiles = [
-      'app/api/usage/providers/route.ts',
-      'app/api/usage/analytics/route.ts',
-      'app/api/billing/analytics/route.ts',
-    ];
+    // The three legacy report routes this used to name were deleted with the
+    // rest of the callerless set; /api/usage is the one that survives and the
+    // one the usage pane reads.
+    const reportFiles = ['app/api/usage/route.ts'];
     for (const f of reportFiles) {
       expect(read(f), `${f} must not sum abs(amount_cents) for cost`).not.toMatch(
         /sum\(\s*abs\(amount_cents\)\s*\)/,

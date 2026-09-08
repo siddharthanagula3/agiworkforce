@@ -82,30 +82,24 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/plugins/marketplaces/entries', why: 'plugins directory work in flight' },
   { url: '/api/plugins/uploads', why: 'plugins directory work in flight' },
 
-  // Live handlers with no caller anywhere. Each is a candidate for deletion and
-  // none has been deleted yet, because a route that answers with real data is
-  // not proved dead by the absence of a string.
-  { url: '/api/billing/analytics', why: 'no caller; named in audit/inventory.json' },
-  { url: '/api/usage/analytics', why: 'no caller; the usage pane reads a different route' },
-  { url: '/api/usage/history', why: 'no caller; named in audit/inventory.json' },
-  { url: '/api/usage/providers', why: 'no caller' },
-  { url: '/api/debug/llm-status', why: 'no caller; a debug surface, first deletion candidate' },
-  { url: '/api/voice/health', why: 'no caller; shaped like an uptime probe' },
-  { url: '/api/releases/check', why: 'no caller; shaped like a desktop update check' },
-  { url: '/api/webhook-diagnostic', why: 'no caller; named only in CHANGELOG.md' },
+  // Live handlers with no caller, kept for a stated reason. The other nine of
+  // this group were deleted; each of these four is here because deleting it
+  // would cost more than it saves.
   {
-    url: '/api/settings/organization/seats',
-    why: 'no caller; named in docs/specs/teams-enterprise.md',
+    url: '/api/releases/check',
+    why: 'no caller, but one of its cases also covers the live nightly manifest route; removing it safely is its own change',
   },
-  { url: '/api/settings/organization/audit/destination', why: 'no caller' },
   {
     url: '/api/settings/organization/deletion/cancel',
-    why: 'no caller; the deletion request half has one and this half does not',
+    why: 'no caller, but it cancels the deletion POST /api/settings/organization schedules; deleting the cancel and leaving the request is a regression',
   },
-  { url: '/api/llm/v1/route/preview', why: 'no caller; routing is out of scope this wave' },
+  {
+    url: '/api/llm/v1/route/preview',
+    why: 'no caller; routing is out of scope this wave under decision D-34',
+  },
   {
     url: '/api/me/routing-preferences',
-    why: 'no caller; WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01',
+    why: 'no caller; WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01 owns it and routing is out of scope under D-34',
   },
 ];
 
