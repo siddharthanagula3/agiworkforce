@@ -18,6 +18,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('../services/cloud-tasks-client', () => ({
   createWebCloudTasksClient: () => ({ listRuns, getRun }),
+  setWebCloudTaskArchived: vi.fn(),
 }));
 
 import { TasksPage } from './TasksPage';
