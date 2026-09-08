@@ -16,6 +16,7 @@ import {
 } from '@/features/settings/services/user-preferences';
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -71,6 +72,14 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   );
 
   logger.info({ userId, count: newCodes.length }, '2FA backup codes regenerated');
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'two_factor_backup_codes_regenerated',
+    severity: 'warning',
+    request,
+    detail: { resourceType: 'two_factor', count: newCodes.length, source: 'totp_code' },
+  });
 
   return NextResponse.json({ backup_codes: newCodes });
 }

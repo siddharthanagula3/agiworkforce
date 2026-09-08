@@ -235,7 +235,9 @@ export type AuditEventType =
   | 'organization_deletion_cancelled'
   | 'organization_deletion_blocked'
   | 'organization_deletion_completed'
+  | 'two_factor_enabled'
   | 'two_factor_disabled'
+  | 'two_factor_backup_codes_regenerated'
   | 'admin_policy_changed'
   | 'retention_sweep_completed'
   | 'legal_hold_created'
@@ -511,7 +513,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'organization_deletion_blocked':
     case 'organization_deletion_completed':
       return 'organization';
+    case 'two_factor_enabled':
     case 'two_factor_disabled':
+    case 'two_factor_backup_codes_regenerated':
       return 'two_factor';
     case 'admin_policy_changed':
       return 'organization_policy';
