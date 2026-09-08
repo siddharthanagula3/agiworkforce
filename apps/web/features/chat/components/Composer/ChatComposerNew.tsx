@@ -2516,17 +2516,42 @@ const ChatComposerNewComponent = ({
    * user just left, and on the unsaved surface that is the previous new chat's
    * text; restoring it here would hand it forward and undo the rule the mount
    * path applies.
+   *
+   * Live typing DEFERS the handback rather than dropping it. Marking the draft
+   * seen and returning stranded it: the slot still held the text but this
+   * effect could never fire for it again, and the next send's
+   * `clearComposerState` deleted it, so a send that failed while the user was
+   * already typing their next thought lost that message with no notice. The
+   * handback is held against the conversation it was written for and applied
+   * the moment the composer is empty again.
    */
   const seenParkedDraftRef = useRef(parkedDraft);
+  const deferredHandbackRef = useRef<{ conversationId: string | null; content: string } | null>(
+    null,
+  );
   useEffect(() => {
-    if (parkedDraft === seenParkedDraftRef.current) return;
-    seenParkedDraftRef.current = parkedDraft;
-    setSendPendingFlag(false);
-    if (!parkedDraft || messageRef.current.trim()) return;
-    writeComposerMessage(parkedDraft);
+    if (parkedDraft !== seenParkedDraftRef.current) {
+      seenParkedDraftRef.current = parkedDraft;
+      setSendPendingFlag(false);
+      if (parkedDraft) {
+        deferredHandbackRef.current = {
+          conversationId: conversationId ?? null,
+          content: parkedDraft,
+        };
+      }
+    }
+    const deferred = deferredHandbackRef.current;
+    if (!deferred) return;
+    if (deferred.conversationId !== (conversationId ?? null)) {
+      deferredHandbackRef.current = null;
+      return;
+    }
+    if (messageRef.current.trim()) return;
+    deferredHandbackRef.current = null;
+    writeComposerMessage(deferred.content);
     setLocalNotice(RESTORED_DRAFT_NOTICE);
     clearDraftContent(conversationId);
-  }, [clearDraftContent, conversationId, parkedDraft, writeComposerMessage]);
+  }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
 
   /**
    * A send the guard refused is parked in the store under its own fingerprint,
