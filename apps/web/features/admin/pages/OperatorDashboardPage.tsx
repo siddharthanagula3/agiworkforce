@@ -31,6 +31,23 @@ type Tab = (typeof TABS)[number];
 
 const DATABASE_VIEWS: readonly Tab[] = ['overview', 'feedback', 'users'];
 
+const DEFAULT_TAB: Tab = 'overview';
+
+function isTab(value: string): value is Tab {
+  return (TABS as readonly string[]).includes(value);
+}
+
+/**
+ * The tab lives in the location hash so another console can link straight at a
+ * control. The admin console lists content takedown and the privacy queues
+ * among its controls, and a link that lands on the overview tab is a pointer
+ * the reader has to finish themselves.
+ */
+function tabFromHash(hash: string): Tab {
+  const value = hash.replace(/^#/, '');
+  return isTab(value) ? value : DEFAULT_TAB;
+}
+
 /**
  * A 30-day signup sparkline drawn from the series the API returns. Inline SVG
  * rather than a chart dependency: one polyline is the whole requirement, and a
@@ -88,7 +105,21 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 export function OperatorDashboardPage() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(DEFAULT_TAB);
+
+  useEffect(() => {
+    const applyHash = () => setTab(tabFromHash(window.location.hash));
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
+  const selectTab = useCallback((value: Tab) => {
+    setTab(value);
+    const url = new URL(window.location.href);
+    url.hash = value;
+    window.history.replaceState(null, '', url);
+  }, []);
   const [overview, setOverview] = useState<OperatorOverview | null>(null);
   const [feedback, setFeedback] = useState<FeedbackRow[] | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
@@ -264,7 +295,7 @@ export function OperatorDashboardPage() {
             key={value}
             role="tab"
             aria-selected={tab === value}
-            onClick={() => setTab(value)}
+            onClick={() => selectTab(value)}
             className={`rounded-full border px-4 py-1.5 text-sm capitalize transition-colors ${
               tab === value
                 ? 'border-primary bg-primary/10'

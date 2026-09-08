@@ -92,6 +92,22 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: false,
   },
   {
+    name: 'Content takedown',
+    href: '/operator#content',
+    service: 'GET/POST /api/admin/takedown',
+    detail:
+      'Look a share link up and unpublish it, with the reason and the reviewer recorded. This is the control the report queue sends you to.',
+    external: true,
+  },
+  {
+    name: 'Privacy requests and erasures',
+    href: '/operator#privacy',
+    service: 'GET /api/admin/privacy/requests, POST /api/admin/privacy/erasures',
+    detail:
+      'Access, export and deletion requests with their due dates, and erasure of an anonymous visitor record that carries no account to act on.',
+    external: true,
+  },
+  {
     name: 'Directory sync (SCIM 2.0)',
     href: '/admin/directory-sync',
     service: '/api/admin/directory-sync',
