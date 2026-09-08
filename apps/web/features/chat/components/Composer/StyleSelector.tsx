@@ -9,6 +9,7 @@ import {
   Sparkles,
   LayoutList,
   Plus,
+  Pencil,
   Trash2,
   Check,
   X,
@@ -39,6 +40,10 @@ interface CreateFormState {
 
 const EMPTY_FORM: CreateFormState = { name: '', sampleText: '', instruction: '' };
 
+const FIELD_LABEL_CLASS = 'block text-[11px] font-medium text-muted-foreground';
+const FIELD_CLASS =
+  'w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30';
+
 export function StyleSelector() {
   const {
     style,
@@ -49,14 +54,18 @@ export function StyleSelector() {
     setLength,
     setActiveCustomStyle,
     addCustomStyle,
+    updateCustomStyle,
     deleteCustomStyle,
   } = useStyleStore();
   const [open, setOpen] = React.useState(false);
   const [showCreateForm, setShowCreateForm] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CreateFormState>(EMPTY_FORM);
   const ref = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const formRef = React.useRef<HTMLDivElement>(null);
+  const fieldId = React.useId();
 
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -64,11 +73,20 @@ export function StyleSelector() {
       if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
       setShowCreateForm(false);
+      setEditingId(null);
       setForm(EMPTY_FORM);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // The menu is height-clamped to the space above the composer and scrolls, so
+  // opening the form at the bottom of a full list leaves its fields out of
+  // sight. Bring them to the reader rather than leaving them to find them.
+  React.useEffect(() => {
+    if (!showCreateForm) return;
+    formRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [showCreateForm, editingId]);
 
   const isActive = style !== DEFAULT_PRESET_STYLE || length !== 'brief';
 
@@ -95,6 +113,22 @@ export function StyleSelector() {
   function handleDelete(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     deleteCustomStyle(id);
+    if (editingId === id) {
+      setEditingId(null);
+      setShowCreateForm(false);
+      setForm(EMPTY_FORM);
+    }
+  }
+
+  function handleEdit(e: React.MouseEvent, custom: CustomStyle) {
+    e.stopPropagation();
+    setEditingId(custom.id);
+    setShowCreateForm(true);
+    setForm({
+      name: custom.name,
+      sampleText: custom.sampleText,
+      instruction: custom.instruction,
+    });
   }
 
   function handleSampleChange(value: string) {
@@ -113,14 +147,21 @@ export function StyleSelector() {
     const instruction = form.instruction.trim();
     const sampleText = form.sampleText.trim();
     if (!name || !instruction) return;
-    addCustomStyle(name, instruction, sampleText);
+    if (editingId) {
+      updateCustomStyle(editingId, { name, instruction, sampleText });
+      setActiveCustomStyle(editingId);
+    } else {
+      addCustomStyle(name, instruction, sampleText);
+    }
     setShowCreateForm(false);
+    setEditingId(null);
     setForm(EMPTY_FORM);
     setOpen(false);
   }
 
   function handleCancelCreate() {
     setShowCreateForm(false);
+    setEditingId(null);
     setForm(EMPTY_FORM);
   }
 
@@ -230,39 +271,50 @@ export function StyleSelector() {
               {customStyles.map((custom) => {
                 const isSelected = style === 'custom' && activeCustomStyleId === custom.id;
                 return (
-                  <button
+                  <div
                     key={custom.id}
-                    onClick={() => handleSelectCustom(custom)}
                     className={cn(
-                      'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                      'group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                       isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
                     )}
                   >
-                    <Palette className="h-4 w-4 shrink-0 opacity-60" />
-                    <div className="flex-1 truncate text-left">
-                      <div className="truncate font-medium">{custom.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {custom.instruction}
-                      </div>
-                    </div>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => handleDelete(e, custom.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ')
-                          handleDelete(e as unknown as React.MouseEvent, custom.id);
-                      }}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCustom(custom)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <Palette className="h-4 w-4 shrink-0 opacity-60" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{custom.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {custom.instruction}
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleEdit(e, custom)}
                       className={cn(
-                        'ml-auto rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-danger group-hover:opacity-100',
+                        'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
+                        isSelected && 'opacity-100',
+                      )}
+                      aria-label={`Edit ${custom.name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, custom.id)}
+                      className={cn(
+                        'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100',
                         isSelected && 'opacity-100',
                       )}
                       aria-label={`Delete ${custom.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </span>
+                    </button>
                     {isSelected && <div className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -278,35 +330,57 @@ export function StyleSelector() {
               <span>Create Custom Style</span>
             </button>
           ) : (
-            <div className="mt-1 space-y-2 rounded-lg border border-border/50 bg-muted/30 p-3">
-              <div className="text-xs font-medium text-foreground">New Custom Style</div>
+            <div
+              ref={formRef}
+              className="mt-1 space-y-2 rounded-lg border border-border/50 bg-muted/30 p-3"
+            >
+              <div className="text-xs font-medium text-foreground">
+                {editingId ? 'Edit Custom Style' : 'New Custom Style'}
+              </div>
 
-              {/* Name */}
-              <input
-                type="text"
-                placeholder="Style name"
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                className="w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
+              {/* A placeholder is not a label: it is gone the moment there is a
+                  value, which is every moment of the edit form. */}
+              <div className="space-y-1">
+                <label htmlFor={`${fieldId}-name`} className={FIELD_LABEL_CLASS}>
+                  Name
+                </label>
+                <input
+                  id={`${fieldId}-name`}
+                  type="text"
+                  placeholder="Style name"
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className={FIELD_CLASS}
+                />
+              </div>
 
-              {/* Writing sample */}
-              <textarea
-                placeholder="Paste a writing sample and we'll match its tone..."
-                value={form.sampleText}
-                onChange={(e) => handleSampleChange(e.target.value)}
-                rows={3}
-                className="w-full resize-none rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
+              <div className="space-y-1">
+                <label htmlFor={`${fieldId}-sample`} className={FIELD_LABEL_CLASS}>
+                  Writing sample
+                </label>
+                <textarea
+                  id={`${fieldId}-sample`}
+                  placeholder="Paste a writing sample and we'll match its tone..."
+                  value={form.sampleText}
+                  onChange={(e) => handleSampleChange(e.target.value)}
+                  rows={3}
+                  className={cn(FIELD_CLASS, 'resize-none')}
+                />
+              </div>
 
-              {/* Instruction */}
-              <textarea
-                placeholder="Style instruction (e.g. 'Write like a pirate')"
-                value={form.instruction}
-                onChange={(e) => setForm((prev) => ({ ...prev, instruction: e.target.value }))}
-                rows={2}
-                className="w-full resize-none rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
+              <div className="space-y-1">
+                <label htmlFor={`${fieldId}-instruction`} className={FIELD_LABEL_CLASS}>
+                  Style instruction
+                </label>
+                <textarea
+                  id={`${fieldId}-instruction`}
+                  placeholder="Style instruction (e.g. 'Write like a pirate')"
+                  value={form.instruction}
+                  onChange={(e) => setForm((prev) => ({ ...prev, instruction: e.target.value }))}
+                  rows={2}
+                  className={cn(FIELD_CLASS, 'resize-none')}
+                />
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2">
@@ -316,7 +390,7 @@ export function StyleSelector() {
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Save
+                  {editingId ? 'Save changes' : 'Save'}
                 </button>
                 <button
                   onClick={handleCancelCreate}
