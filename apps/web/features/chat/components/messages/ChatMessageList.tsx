@@ -101,7 +101,7 @@ function streamErrorReason(message: ChatMessage): string {
 }
 
 const TURN_NOTICE_LINK_CLASS =
-  'flex min-h-6 min-w-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline';
+  'flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 const SWITCH_MODEL_ACTION_LABEL = 'Switch model';
 const SWITCH_MODEL_ACTION_ARIA = 'Open the model picker';
 const RETRY_ACTION_LABEL = 'Retry';

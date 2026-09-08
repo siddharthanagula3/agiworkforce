@@ -141,6 +141,7 @@ import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChat
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
 import { hasWebSearchSources } from '../../types/message-metadata';
+import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
@@ -1439,6 +1440,20 @@ const MessageBubbleComponent = function MessageBubble({
   const voiceModeActive = useVoiceModeActive();
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
+  /**
+   * A turn the user stopped before its first token has no words and no media.
+   * Copy, the two ratings and Read aloud all act on that text, so on this turn
+   * they act on nothing; the notice above the composer is the statement, and
+   * Regenerate, the variant pager and the message menu still apply.
+   */
+  const hasReadableTurn =
+    isUser ||
+    hasVisibleContent(message.content) ||
+    Boolean(message.attachments?.length) ||
+    Boolean(message.metadata?.imageUrl) ||
+    Boolean(message.metadata?.videoUrl) ||
+    Boolean(message.metadata?.generatedFiles?.length) ||
+    Boolean(message.metadata?.documentData);
   const answeredByModelId = !isUser ? (message.model ?? message.metadata?.model) : undefined;
   const answeredByLabel = answeredByModelId
     ? getManagedModelPresentationLabel(answeredByModelId, {
@@ -2484,26 +2499,28 @@ const MessageBubbleComponent = function MessageBubble({
                     </Tooltip>
                   )}
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                        onClick={handleCopy}
-                        aria-label={copied ? 'Message copied' : 'Copy message'}
-                      >
-                        {copied ? (
-                          <Check className={ACTION_ICON_SIZE} aria-hidden="true" />
-                        ) : (
-                          <Copy className={ACTION_ICON_SIZE} aria-hidden="true" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Copy</TooltipContent>
-                  </Tooltip>
+                  {hasReadableTurn && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                          onClick={handleCopy}
+                          aria-label={copied ? 'Message copied' : 'Copy message'}
+                        >
+                          {copied ? (
+                            <Check className={ACTION_ICON_SIZE} aria-hidden="true" />
+                          ) : (
+                            <Copy className={ACTION_ICON_SIZE} aria-hidden="true" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copy</TooltipContent>
+                    </Tooltip>
+                  )}
 
-                  {!isUser && (
+                  {!isUser && hasReadableTurn && (
                     <>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -2697,7 +2714,7 @@ const MessageBubbleComponent = function MessageBubble({
                         )}
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {!isUser && isReadAloudSupported && onReadAloud && (
+                      {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
                         <DropdownMenuCheckboxItem
                           checked={isReadingAloud}
                           onCheckedChange={() => onReadAloud(message.id, message.content)}
