@@ -16,7 +16,7 @@ const OperationStatusSchema = z.enum(['running', 'completed', 'failed', 'outcome
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
 const MIN_OPERATION_LEASE_SECONDS = 60;
-const MAX_OPERATION_LEASE_SECONDS = 300;
+export const MAX_OPERATION_LEASE_SECONDS = 300;
 const DEFAULT_OPERATION_LEASE_SECONDS = 240;
 const MAX_OPERATION_REPLAY_ATTEMPTS = 5;
 const OPERATION_REPLAY_LIMIT_ERROR = {
