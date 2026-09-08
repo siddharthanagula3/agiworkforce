@@ -512,6 +512,11 @@ interface Message {
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
+    /**
+     * The client's post-stream metadata save failed. What is on screen is
+     * richer than what a reload will show, and the notice below says so.
+     */
+    metadataNotSaved?: true;
   };
 }
 
@@ -2437,6 +2442,16 @@ const MessageBubbleComponent = function MessageBubble({
                 cited={citedSources}
                 more={moreSources}
                 query={searchQuery}
+              />
+            </div>
+          )}
+
+          {!isUser && message.metadata?.metadataNotSaved && (
+            <div className="mt-2">
+              <TranscriptNotice
+                tone="neutral"
+                icon={CircleAlert}
+                message="The tool steps and reasoning shown here were not saved. The answer and its sources will still be here after a reload; the rest of this turn will not."
               />
             </div>
           )}

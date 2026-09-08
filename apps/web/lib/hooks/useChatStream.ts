@@ -1684,7 +1684,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           updateMessage(assistantMessageId, { id: saved.id }, conversationId);
         }
       })
-      .catch((err) => notifyPersistenceFailure('assistant', err));
+      .catch((err) => {
+        notifyPersistenceFailure('assistant', err);
+        // The retries inside saveMessageToDb are spent. Everything the reader
+        // can see that is not the answer text, the tool timeline, the reasoning
+        // blocks, the generated-file list, exists only in this tab now, and a
+        // reload will show an answer that looks as though it never had any of
+        // it. Say so, rather than let them find out.
+        if (!hasMeaningfulMetadata) return;
+        const current = findConversationMessage(conversationId, assistantMessageId);
+        updateMessage(
+          assistantMessageId,
+          { metadata: { ...current?.metadata, metadataNotSaved: true } },
+          conversationId,
+        );
+      });
   };
 
   if (!response.body) {
