@@ -10,9 +10,13 @@ import {
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
   type CloudCodeAgentTurnRecord,
+  type CloudCodeChangeState,
+  type CloudCodeChangedFile,
   type CloudCodeNetworkAccess,
   type CloudCodeNotebookFile,
+  type CloudCodePullRequestResponse,
   type CloudCodeSession,
+  type CloudCodeSessionChanges,
   type CloudCodeTerminalEntry,
   type CreateCloudCodeSessionInput,
   type NotebookCellLanguage,
@@ -38,9 +42,14 @@ import {
 import { providerProxyBaseUrl } from '@/lib/e2b/provider-proxy';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import {
+  GitHubPullRequestError,
+  createGitHubPullRequest,
+  findOpenGitHubPullRequest,
+  getGitHubRepositoryDefaultBranch,
   getInstallationAccessToken,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
+  type GitHubPullRequest,
 } from '@/lib/github-app';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 
@@ -52,6 +61,7 @@ const MAX_COMMIT_MESSAGE_LENGTH = 2_000;
 const MAX_NOTEBOOK_CELL_CODE_LENGTH = 50_000;
 const MAX_NOTEBOOK_UPLOAD_BYTES = 10 * 1024 * 1024;
 const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
+const GIT_DEFAULT_REMOTE = 'origin';
 const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
 const DEFAULT_WORKSPACE_PATH = '/home/user';
 const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
@@ -1724,4 +1734,307 @@ export async function closeCloudCodeSession(
     managedCloudCodeSessionScope(owner.userId, sessionId, session.networkAccess, planTier),
   );
   return updateSessionState(db, owner, sessionId, 'closed', null);
+}
+
+const GIT_PORCELAIN_RENAME_SEPARATOR = ' -> ';
+const GIT_PORCELAIN_PATH_INDEX = 3;
+const MAX_DIFF_LENGTH = 200_000;
+const CHANGED_FILE_LIMIT = 500;
+const UNTRACKED_PORCELAIN_CODE = '?';
+const CONFLICT_PORCELAIN_CODES = new Set(['U', 'AA', 'DD']);
+
+function porcelainState(codes: string): CloudCodeChangeState {
+  if (codes.startsWith(UNTRACKED_PORCELAIN_CODE)) return 'untracked';
+  if (
+    CONFLICT_PORCELAIN_CODES.has(codes) ||
+    codes.includes('U') ||
+    codes === 'AA' ||
+    codes === 'DD'
+  ) {
+    return 'conflicted';
+  }
+  const primary = codes.trim().charAt(0);
+  if (primary === 'A') return 'added';
+  if (primary === 'D') return 'deleted';
+  if (primary === 'R' || primary === 'C') return 'renamed';
+  return 'modified';
+}
+
+function unquotePorcelainPath(value: string): string {
+  if (!value.startsWith('"') || !value.endsWith('"') || value.length < 2) return value;
+  try {
+    return JSON.parse(value) as string;
+  } catch {
+    return value.slice(1, -1);
+  }
+}
+
+/**
+ * Porcelain v1 is two status characters, a space, then the path, and a rename
+ * carries both paths. The new path is the one the reader is looking at, so a
+ * rename is reported under it.
+ */
+export function parseGitPorcelainStatus(output: string): CloudCodeChangedFile[] {
+  const files: CloudCodeChangedFile[] = [];
+  for (const line of output.split('\n')) {
+    if (line.length <= GIT_PORCELAIN_PATH_INDEX) continue;
+    const codes = line.slice(0, 2);
+    const rest = line.slice(GIT_PORCELAIN_PATH_INDEX);
+    const separator = rest.indexOf(GIT_PORCELAIN_RENAME_SEPARATOR);
+    const rawPath =
+      separator >= 0 ? rest.slice(separator + GIT_PORCELAIN_RENAME_SEPARATOR.length) : rest;
+    const path = unquotePorcelainPath(rawPath.trim());
+    if (!path) continue;
+    files.push({ path, state: porcelainState(codes) });
+    if (files.length >= CHANGED_FILE_LIMIT) break;
+  }
+  return files;
+}
+
+function sessionBaseRef(session: CloudCodeSession): string {
+  return session.repositoryBranch
+    ? `${GIT_DEFAULT_REMOTE}/${session.repositoryBranch}`
+    : `${GIT_DEFAULT_REMOTE}/HEAD`;
+}
+
+function assertSessionAcceptsWork(session: CloudCodeSession, verb: string): void {
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError(`Closed Code sessions cannot ${verb}`);
+  }
+  if (session.archivedAt) {
+    throw new CloudCodeConflictError(
+      `This Code session is archived. Unarchive it to ${verb} in this session.`,
+    );
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+}
+
+export async function readCloudCodeSessionChanges(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  planTier: string,
+): Promise<CloudCodeSessionChanges> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  assertSessionAcceptsWork(session, 'show changes');
+  if (!session.repositoryUrl) {
+    return {
+      session,
+      base: null,
+      workingBranch: session.workingBranch,
+      files: [],
+      diff: '',
+      diffTruncated: false,
+    };
+  }
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor?.git) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const workspacePath = claim.session.workspacePath;
+    const status = await executor.git.status({ path: workspacePath });
+    if (!status.ok) {
+      throw new CloudCodeUnavailableError(
+        status.error || status.stderr || 'Workspace status could not be read',
+      );
+    }
+    const requestedBase = sessionBaseRef(claim.session);
+    let base: string | null = requestedBase;
+    let diff = await executor.git.diff({ path: workspacePath, baseRef: requestedBase });
+    if (!diff.ok) {
+      base = null;
+      diff = await executor.git.diff({ path: workspacePath });
+    }
+    if (!diff.ok) {
+      throw new CloudCodeUnavailableError(
+        diff.error || diff.stderr || 'Workspace diff could not be read',
+      );
+    }
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    return {
+      session: released,
+      base,
+      workingBranch: released.workingBranch,
+      files: parseGitPorcelainStatus(status.stdout),
+      diff: diff.stdout.slice(0, MAX_DIFF_LENGTH),
+      diffTruncated: diff.stdout.length > MAX_DIFF_LENGTH,
+    };
+  } catch (error) {
+    await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+const MAX_PULL_REQUEST_BODY_LENGTH = 60_000;
+const PULL_REQUEST_EXISTS_MARKER = 'a pull request already exists';
+const PULL_REQUEST_NO_COMMITS_MARKER = 'no commits between';
+const GITHUB_UNPROCESSABLE_STATUS = 422;
+const PULL_REQUEST_FALLBACK_BODY = 'Opened from an AGI Code session.';
+
+async function lastTurnSummary(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<string> {
+  const scoped = ownerSql(owner, 2);
+  const rows = await db.query<{ final_message: string | null; goal: string }>(
+    `select final_message, goal
+       from cloud_code_agent_turns
+      where session_id = $1 and ${scoped.clause}
+      order by created_at desc
+      limit 1`,
+    [sessionId, ...scoped.params],
+  );
+  const row = rows[0];
+  const summary = row?.final_message?.trim() || row?.goal?.trim() || '';
+  return (summary || PULL_REQUEST_FALLBACK_BODY).slice(0, MAX_PULL_REQUEST_BODY_LENGTH);
+}
+
+async function recordPullRequest(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  pullRequest: GitHubPullRequest,
+): Promise<CloudCodeSession> {
+  const scoped = ownerSql(owner, 4);
+  const rows = await db.query<SessionRow>(
+    `update cloud_code_sessions
+        set pull_request_url = $2, pull_request_number = $3, updated_at = now()
+      where id = $1 and ${scoped.clause}
+      returning *`,
+    [sessionId, pullRequest.url, pullRequest.number, ...scoped.params],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudCodeNotFoundError();
+  return mapCloudCodeSession(row);
+}
+
+/**
+ * Opens the pull request for the session's working branch, once.
+ *
+ * Idempotent on three levels, because the caller can retry and because a
+ * response can be lost after GitHub has already acted: a session that already
+ * records a pull request answers from the row without calling GitHub, a
+ * refusal that says one already exists is resolved by looking it up, and the
+ * looked-up pull request is recorded so the next call takes the first path.
+ */
+export async function openCloudCodeSessionPullRequest(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodePullRequestResponse> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  assertSessionAcceptsWork(session, 'open a pull request');
+  if (session.pullRequestUrl && session.pullRequestNumber) {
+    return {
+      session,
+      url: session.pullRequestUrl,
+      number: session.pullRequestNumber,
+      alreadyOpen: true,
+    };
+  }
+  if (!session.repositoryUrl) {
+    throw new CloudCodeValidationError('Code session has no repository to open a pull request on');
+  }
+  if (!session.workingBranch) {
+    throw new CloudCodeValidationError(
+      'Code session has no working branch to open a pull request from',
+    );
+  }
+  const parsed = parseGithubRepositoryUrl(session.repositoryUrl);
+  if (!parsed) {
+    throw new CloudCodeValidationError('Code session repository is not a GitHub repository');
+  }
+  const credential = await resolveGithubCloneCredential(owner.userId, session.repositoryUrl);
+  if (!credential) {
+    throw new CloudCodeValidationError(
+      'No connected GitHub installation can open a pull request on this repository',
+    );
+  }
+
+  const token = credential.password;
+  const base =
+    session.repositoryBranch ??
+    (await getGitHubRepositoryDefaultBranch(token, parsed.owner, parsed.repo));
+
+  let pullRequest: GitHubPullRequest;
+  try {
+    pullRequest = await createGitHubPullRequest(token, {
+      owner: parsed.owner,
+      repo: parsed.repo,
+      title: session.title,
+      body: await lastTurnSummary(db, owner, sessionId),
+      head: session.workingBranch,
+      base,
+    });
+  } catch (error) {
+    if (!(error instanceof GitHubPullRequestError)) throw error;
+    const detail = error.detail.toLowerCase();
+    if (
+      error.status === GITHUB_UNPROCESSABLE_STATUS &&
+      detail.includes(PULL_REQUEST_EXISTS_MARKER)
+    ) {
+      const existing = await findOpenGitHubPullRequest(
+        token,
+        parsed.owner,
+        parsed.repo,
+        session.workingBranch,
+      );
+      if (!existing) throw error;
+      return {
+        session: await recordPullRequest(db, owner, sessionId, existing),
+        url: existing.url,
+        number: existing.number,
+        alreadyOpen: true,
+      };
+    }
+    if (
+      error.status === GITHUB_UNPROCESSABLE_STATUS &&
+      detail.includes(PULL_REQUEST_NO_COMMITS_MARKER)
+    ) {
+      throw new CloudCodeConflictError(
+        'This session has pushed no commits yet, so there is nothing to open a pull request for.',
+      );
+    }
+    throw new CloudCodeUnavailableError('GitHub refused to open the pull request');
+  }
+
+  return {
+    session: await recordPullRequest(db, owner, sessionId, pullRequest),
+    url: pullRequest.url,
+    number: pullRequest.number,
+    alreadyOpen: false,
+  };
 }

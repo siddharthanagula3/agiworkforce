@@ -36,6 +36,14 @@ export interface E2BGitExecutor {
   /** Creates the branch and checks it out, so later commits land on it. */
   createBranch(input: { path: string; branch: string }): Promise<CommandExecutionResult>;
   add(input: { path: string; all?: boolean }): Promise<CommandExecutionResult>;
+  /** Porcelain status of the working tree, including untracked files. */
+  status(input: { path: string }): Promise<CommandExecutionResult>;
+  /**
+   * Unified diff of the working tree against `baseRef`, or against the last
+   * commit when no base is given. Reads only: it stages nothing and commits
+   * nothing, so untracked files are absent here and appear in `status`.
+   */
+  diff(input: { path: string; baseRef?: string }): Promise<CommandExecutionResult>;
   commit(input: {
     path: string;
     message: string;

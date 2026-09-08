@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import {
   CLOUD_CODE_AGENT_STOP_REASONS,
+  CLOUD_CODE_CHANGE_STATES,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATES,
   type CloudCodeAgentTurnRecord,
@@ -139,6 +140,27 @@ const commitResultSchema = z.object({
   }),
 });
 
+const changedFileSchema = z.object({
+  path: z.string(),
+  state: z.enum(CLOUD_CODE_CHANGE_STATES),
+});
+
+const changesSchema = z.object({
+  session: sessionSchema,
+  base: z.string().nullable(),
+  workingBranch: z.string().nullable(),
+  files: z.array(changedFileSchema),
+  diff: z.string(),
+  diffTruncated: z.boolean().default(false),
+});
+
+const pullRequestSchema = z.object({
+  session: sessionSchema,
+  url: z.string(),
+  number: z.number().int().positive(),
+  alreadyOpen: z.boolean(),
+});
+
 const pendingApprovalSchema = z.object({
   stepIndex: z.number().int().nonnegative(),
   toolUseId: z.string(),
@@ -176,6 +198,8 @@ export type CloudCodeAgentApproval = z.infer<typeof agentApprovalsSchema>['appro
 export type CloudCodeApprovalDecision = 'approve' | 'reject';
 export type CloudCodeCommitResult = z.infer<typeof commitResultSchema>;
 export type CloudCodeRepository = z.infer<typeof repositorySchema>;
+export type CloudCodeChanges = z.infer<typeof changesSchema>;
+export type CloudCodePullRequest = z.infer<typeof pullRequestSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof repositoryListSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
@@ -216,6 +240,8 @@ export interface CloudCodeApi {
     command: string,
     signal?: AbortSignal,
   ): Promise<RunCloudCodeCommandResponse>;
+  changes(sessionId: string, signal?: AbortSignal): Promise<CloudCodeChanges>;
+  createPullRequest(sessionId: string, signal?: AbortSignal): Promise<CloudCodePullRequest>;
   close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
   commit(sessionId: string, message: string, signal?: AbortSignal): Promise<CloudCodeCommitResult>;
   startAgentTurn(
@@ -335,6 +361,20 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
           signal,
         },
         commandSchema,
+      );
+    },
+    changes(sessionId, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/changes`,
+        { signal },
+        changesSchema,
+      );
+    },
+    async createPullRequest(sessionId, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/pull-request`,
+        { method: 'POST', headers: await mutationHeaders(), signal },
+        pullRequestSchema,
       );
     },
     async close(sessionId, signal) {

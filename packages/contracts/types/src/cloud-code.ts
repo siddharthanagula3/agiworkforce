@@ -127,6 +127,45 @@ export interface CloudCodeAgentTurnRecord {
   steps: CloudCodeAgentStep[];
 }
 
+export const CLOUD_CODE_CHANGE_STATES = [
+  'added',
+  'modified',
+  'deleted',
+  'renamed',
+  'untracked',
+  'conflicted',
+] as const;
+export type CloudCodeChangeState = (typeof CLOUD_CODE_CHANGE_STATES)[number];
+
+export interface CloudCodeChangedFile {
+  path: string;
+  state: CloudCodeChangeState;
+}
+
+/**
+ * What the Changes panel draws. `base` is the ref the diff was taken against,
+ * null when the sandbox could only compare against its own last commit, which
+ * the panel says rather than implying a comparison it did not make. Untracked
+ * files appear in `files` and not in `diff`, because reading the changes must
+ * not stage anything.
+ */
+export interface CloudCodeSessionChanges {
+  session: CloudCodeSession;
+  base: string | null;
+  workingBranch: string | null;
+  files: CloudCodeChangedFile[];
+  diff: string;
+  diffTruncated: boolean;
+}
+
+export interface CloudCodePullRequestResponse {
+  session: CloudCodeSession;
+  url: string;
+  number: number;
+  /** True when the pull request already existed and nothing new was opened. */
+  alreadyOpen: boolean;
+}
+
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;
   storageReady: boolean;

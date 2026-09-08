@@ -508,6 +508,150 @@ export async function listInstallationRepositories(
   };
 }
 
+const MAX_GITHUB_ERROR_LENGTH = 500;
+
+/**
+ * Carries GitHub's own status and body so the caller can tell a refusal it can
+ * answer (a pull request that already exists, a head with no commits on it)
+ * from one it cannot.
+ */
+export class GitHubPullRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`GitHub refused the pull request: ${status}`);
+    this.name = 'GitHubPullRequestError';
+  }
+}
+
+const gitHubRepositorySchema = z.object({
+  default_branch: z.string().min(1).max(255),
+});
+
+const gitHubPullRequestSchema = z.object({
+  number: z.number().int().positive(),
+  html_url: z.string().url(),
+});
+
+export interface GitHubPullRequest {
+  number: number;
+  url: string;
+}
+
+export interface CreateGitHubPullRequestInput {
+  owner: string;
+  repo: string;
+  title: string;
+  body: string;
+  head: string;
+  base: string;
+}
+
+export async function getGitHubRepositoryDefaultBranch(
+  token: string,
+  owner: string,
+  repo: string,
+): Promise<string> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const response = await fetch(
+    buildGitHubApiUrl(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`),
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+      },
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to read the repository default branch: ${response.status}`);
+  }
+  const parsed = gitHubRepositorySchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('GitHub repository response was invalid');
+  }
+  return parsed.data.default_branch;
+}
+
+/**
+ * The pull request already open from `head`, if there is one. GitHub refuses a
+ * second pull request for the same head with a 422 that carries no id, so this
+ * is what turns that refusal into the caller's own already-open answer instead
+ * of an error the reader cannot act on.
+ */
+export async function findOpenGitHubPullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  head: string,
+): Promise<GitHubPullRequest | null> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const response = await fetch(
+    buildGitHubApiUrl(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=open&head=${encodeURIComponent(`${owner}:${head}`)}`,
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+      },
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to look up an open pull request: ${response.status}`);
+  }
+  const parsed = z.array(gitHubPullRequestSchema).safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('GitHub pull request listing response was invalid');
+  }
+  const match = parsed.data[0];
+  return match ? { number: match.number, url: match.html_url } : null;
+}
+
+export async function createGitHubPullRequest(
+  token: string,
+  input: CreateGitHubPullRequestInput,
+): Promise<GitHubPullRequest> {
+  validateGitHubPathSegment(input.owner, 'owner');
+  validateGitHubPathSegment(input.repo, 'repo');
+  const response = await fetch(
+    buildGitHubApiUrl(
+      `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/pulls`,
+    ),
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+      },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        head: input.head,
+        base: input.base,
+      }),
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new GitHubPullRequestError(response.status, detail.slice(0, MAX_GITHUB_ERROR_LENGTH));
+  }
+  const parsed = gitHubPullRequestSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('GitHub pull request response was invalid');
+  }
+  return { number: parsed.data.number, url: parsed.data.html_url };
+}
+
 export async function getPrDiff(
   token: string,
   owner: string,
