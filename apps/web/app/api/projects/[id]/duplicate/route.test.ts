@@ -29,7 +29,8 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/projects', () => ({
+vi.mock('@/lib/projects', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   mapProjectRow: (row: Record<string, unknown>) => ({ id: row['id'], name: row['name'] }),
 }));
 
