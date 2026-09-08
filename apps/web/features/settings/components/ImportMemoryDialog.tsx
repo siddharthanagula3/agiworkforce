@@ -53,6 +53,7 @@ interface CommitResponse {
   sourceValue: string;
   insertedCount: number;
   skippedDuplicateCount: number;
+  excludedCount: number;
   memories: ImportedMemory[];
 }
 
@@ -235,6 +236,14 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
     return `Imported ${count} ${noun} from ${commitResult.sourceName}.`;
   }, [commitResult]);
 
+  const excludedSummary = useMemo(() => {
+    const count = commitResult?.excludedCount ?? 0;
+    if (count === 0) return null;
+    const noun = count === 1 ? 'memory' : 'memories';
+    const verb = count === 1 ? 'was' : 'were';
+    return `${count} ${noun} matched a term on your never remember list and ${verb} not saved.`;
+  }, [commitResult]);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -406,6 +415,7 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
                 this source and were not duplicated.
               </p>
             )}
+            {excludedSummary && <p className="text-xs text-muted-foreground">{excludedSummary}</p>}
           </div>
         )}
 
