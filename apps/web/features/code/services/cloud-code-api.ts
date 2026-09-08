@@ -118,6 +118,7 @@ const agentTurnRecordSchema = z.object({
   stepsUsed: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative().default(0),
   outputTokens: z.number().int().nonnegative().default(0),
+  cancelRequestedAt: z.string().nullable().default(null),
   finalMessage: z.string(),
   errorMessage: z.string().nullable(),
   createdAt: z.string(),

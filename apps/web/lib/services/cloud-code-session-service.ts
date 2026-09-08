@@ -231,6 +231,7 @@ interface AgentTurnRow extends Record<string, unknown> {
   steps_used: number;
   input_tokens?: number | string | null;
   output_tokens?: number | string | null;
+  cancel_requested_at?: string | Date | null;
   final_message: string | null;
   error_message: string | null;
   created_at: string | Date;
@@ -378,7 +379,7 @@ export async function listCloudCodeAgentTurns(
   const scoped = ownerSql(owner, 2);
   const turnRows = await db.query<AgentTurnRow>(
     `select id, goal, state, stop_reason, steps_used, input_tokens, output_tokens,
-            final_message, error_message, created_at
+            cancel_requested_at, final_message, error_message, created_at
        from cloud_code_agent_turns
       where session_id = $1 and ${scoped.clause}
       order by created_at asc
@@ -418,6 +419,7 @@ export async function listCloudCodeAgentTurns(
     stepsUsed: row.steps_used,
     inputTokens: countValue(row.input_tokens),
     outputTokens: countValue(row.output_tokens),
+    cancelRequestedAt: row.cancel_requested_at ? iso(row.cancel_requested_at) : null,
     finalMessage: row.final_message ?? '',
     errorMessage: row.error_message,
     createdAt: iso(row.created_at),
