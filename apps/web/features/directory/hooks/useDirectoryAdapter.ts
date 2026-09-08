@@ -22,8 +22,10 @@ import {
   type DirectoryMarketplaceInput,
   type DirectoryOpenEntry,
   type DirectoryMarketplaceResult,
+  type DirectoryPluginDraft,
   type DirectoryPluginSettings,
   type DirectoryQuery,
+  type DirectoryUploadResult,
   type DirectorySection,
   type DirectorySectionKey,
   type SettingsConnector,
@@ -62,7 +64,18 @@ import {
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_ENABLE_FAILED_COPY,
+  CREATE_PLUGIN_DONE_TITLE,
+  PLUGIN_AUTHORED_PATH,
+  PLUGIN_CREATE_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
+  PLUGIN_UPLOADS_PATH,
+  PLUGIN_UPLOAD_FAILED_COPY,
+  SKILLS_PATH,
+  SKILL_UPLOAD_FAILED_COPY,
+  UPLOAD_FILE_FIELD,
+  UPLOAD_PLUGIN_DONE_TITLE,
+  UPLOAD_SKILL_DONE_TITLE,
+  uploadSkillCountLine,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_MARKETPLACE,
   PLUGIN_SOURCE_PARTNER,
@@ -384,6 +397,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       prev.manage ? { ...prev, manage: { ...prev.manage, actions: skillManageActions } } : prev,
     );
   }, [skillManageActions]);
+
+  useEffect(() => {
+    setPlugins((prev) =>
+      prev.manage ? { ...prev, manage: { ...prev.manage, actions: pluginManageActions } } : prev,
+    );
+  }, [pluginManageActions]);
 
   const retryConnectorsRef = useRef<(() => Promise<void>) | null>(null);
   const retryConnectors = useCallback(async () => {
@@ -1146,6 +1165,81 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [refreshUserMarketplaces],
   );
 
+  const postFile = useCallback(async (path: string, file: File): Promise<Response> => {
+    const csrfToken = await getCsrfToken();
+    const form = new FormData();
+    form.set(UPLOAD_FILE_FIELD, file);
+    return fetch(path, { method: 'POST', headers: { [CSRF_HEADER]: csrfToken }, body: form });
+  }, []);
+
+  const readInstallResponse = useCallback(
+    async (response: Response, failureCopy: string, title: string) => {
+      const body = (await response.json().catch(() => ({}))) as {
+        plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
+        error?: { message?: string };
+      };
+      if (!response.ok) throw new Error(body.error?.message ?? failureCopy);
+      const skillCount = (body.plugins ?? []).reduce(
+        (total, plugin) => total + plugin.skills.length,
+        0,
+      );
+      return {
+        title,
+        lines: [
+          ...(body.plugins ?? []).map((plugin) => plugin.name),
+          uploadSkillCountLine(skillCount),
+        ],
+      };
+    },
+    [],
+  );
+
+  const uploadPluginArchive = useCallback(
+    async (file: File): Promise<DirectoryUploadResult> => {
+      const response = await postFile(PLUGIN_UPLOADS_PATH, file);
+      const result = await readInstallResponse(
+        response,
+        PLUGIN_UPLOAD_FAILED_COPY,
+        UPLOAD_PLUGIN_DONE_TITLE,
+      );
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return result;
+    },
+    [postFile, readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
+  const createPlugin = useCallback(
+    async (draft: DirectoryPluginDraft): Promise<DirectoryUploadResult> => {
+      const response = await postJson(PLUGIN_AUTHORED_PATH, draft);
+      const result = await readInstallResponse(
+        response,
+        PLUGIN_CREATE_FAILED_COPY,
+        CREATE_PLUGIN_DONE_TITLE,
+      );
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return result;
+    },
+    [readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
+  const uploadSkillFile = useCallback(
+    async (file: File): Promise<DirectoryUploadResult> => {
+      const response = await postFile(SKILLS_PATH, file);
+      const body = (await response.json().catch(() => ({}))) as {
+        skill?: { name: string };
+        error?: { message?: string };
+      };
+      if (!response.ok || !body.skill) {
+        throw new Error(body.error?.message ?? SKILL_UPLOAD_FAILED_COPY);
+      }
+      await loadSection('skills');
+      return { title: UPLOAD_SKILL_DONE_TITLE, lines: [`/${body.skill.name}`] };
+    },
+    [loadSection, postFile],
+  );
+
   const pluginSettings = useMemo<DirectoryPluginSettings | undefined>(() => {
     if (!settingsPluginId) return undefined;
     const enabledSkills = new Set(pluginSettingsState.settings?.enabledSkills ?? []);
@@ -1305,6 +1399,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       addMarketplace,
       removeMarketplace,
       refreshMarketplace,
+      uploadPluginArchive,
+      createPlugin,
+      uploadSkillFile,
       ...(pluginSettings ? { pluginSettings } : {}),
       setPluginEnabled,
       setPluginSkillEnabled,
@@ -1338,6 +1435,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       addMarketplace,
       removeMarketplace,
       refreshMarketplace,
+      uploadPluginArchive,
+      createPlugin,
+      uploadSkillFile,
       pluginSettings,
       setPluginEnabled,
       setPluginSkillEnabled,

@@ -395,6 +395,8 @@ export {
   type DirectoryPluginComponents,
   type DirectoryPluginConnectorSetting,
   type DirectoryPluginDetail,
+  type DirectoryPluginDraft,
+  type DirectoryPluginDraftSkill,
   type DirectoryPluginMcpServer,
   type DirectoryPluginSettings,
   type DirectoryPluginSkillSetting,
@@ -406,4 +408,5 @@ export {
   type DirectorySourceChip,
   type DirectoryToggle,
   type DirectoryTreeNode,
+  type DirectoryUploadResult,
 } from './directory';

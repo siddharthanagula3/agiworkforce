@@ -291,6 +291,23 @@ export interface DirectoryOpenEntry {
   entryId: string;
 }
 
+export interface DirectoryUploadResult {
+  title: string;
+  lines: readonly string[];
+}
+
+export interface DirectoryPluginDraftSkill {
+  name: string;
+  description: string;
+  body: string;
+}
+
+export interface DirectoryPluginDraft {
+  name: string;
+  description: string;
+  skills: readonly DirectoryPluginDraftSkill[];
+}
+
 export interface DirectoryAdapter {
   openEntry?: DirectoryOpenEntry | null;
   sections: readonly DirectorySectionKey[];
@@ -321,6 +338,9 @@ export interface DirectoryAdapter {
   removeMarketplace?: (id: string) => Promise<void>;
   refreshMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;
+  uploadPluginArchive?: (file: File) => Promise<DirectoryUploadResult>;
+  uploadSkillFile?: (file: File) => Promise<DirectoryUploadResult>;
+  createPlugin?: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginSkillEnabled?: (id: string, skill: string, enabled: boolean) => Promise<void> | void;
