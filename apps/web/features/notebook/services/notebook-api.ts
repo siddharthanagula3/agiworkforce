@@ -31,6 +31,7 @@ const sessionSchema = z.object({
   state: z.enum(CLOUD_CODE_SESSION_STATES),
   workspacePath: z.string(),
   workingBranch: z.string().nullable().default(null),
+  baseBranch: z.string().nullable().default(null),
   pullRequestUrl: z.string().nullable().default(null),
   pullRequestNumber: z.number().int().nullable().default(null),
   archivedAt: z.string().nullable().default(null),

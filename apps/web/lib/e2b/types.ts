@@ -36,6 +36,8 @@ export interface E2BGitExecutor {
   /** Creates the branch and checks it out, so later commits land on it. */
   createBranch(input: { path: string; branch: string }): Promise<CommandExecutionResult>;
   add(input: { path: string; all?: boolean }): Promise<CommandExecutionResult>;
+  /** The branch currently checked out, which after a clone is what it cloned. */
+  currentBranch(input: { path: string }): Promise<CommandExecutionResult>;
   /** Porcelain status of the working tree, including untracked files. */
   status(input: { path: string }): Promise<CommandExecutionResult>;
   /**

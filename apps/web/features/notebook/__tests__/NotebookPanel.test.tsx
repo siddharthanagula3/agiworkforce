@@ -16,6 +16,7 @@ const session: CloudCodeSession = {
   state: 'ready',
   workspacePath: '/home/user',
   workingBranch: null,
+  baseBranch: null,
   pullRequestUrl: null,
   pullRequestNumber: null,
   archivedAt: null,
