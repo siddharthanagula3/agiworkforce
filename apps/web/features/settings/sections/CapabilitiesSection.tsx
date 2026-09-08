@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
-import { SettingsSectionLink } from '../components/SettingsSectionLink';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
@@ -75,28 +74,6 @@ export function CapabilitiesSection() {
       <ToolApprovalDefaultsPanel />
 
       <LockdownModePanel />
-
-      <p className="text-xs text-muted-foreground">
-        Memory has moved to{' '}
-        <SettingsSectionLink
-          section="memory"
-          className="text-[var(--chat-accent-primary-text)] hover:underline"
-        >
-          Memory
-        </SettingsSectionLink>
-        .
-      </p>
-
-      <p className="text-xs text-muted-foreground">
-        Skills have moved to{' '}
-        <SettingsSectionLink
-          section="skills"
-          className="text-[var(--chat-accent-primary-text)] hover:underline"
-        >
-          Customize → Skills
-        </SettingsSectionLink>
-        .
-      </p>
 
       <p className="text-xs text-muted-foreground">
         Running models on your own provider keys is a Desktop, CLI and VS Code feature. Hosted web
