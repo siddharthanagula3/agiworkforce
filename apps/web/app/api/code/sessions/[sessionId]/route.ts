@@ -12,11 +12,13 @@ import {
   CloudCodeNotFoundError,
   CloudCodeUnavailableError,
   CloudCodeValidationError,
-  closeCloudCodeSession,
+  deleteCloudCodeSession,
   getCloudCodeSession,
   isCloudCodeSchemaUnavailable,
   listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
+  renameCloudCodeSession,
+  setCloudCodeSessionArchived,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
@@ -39,6 +41,19 @@ function rethrowCloudCodeError(error: unknown): never {
   throw error;
 }
 
+async function requestObject(request: NextRequest): Promise<Record<string, unknown>> {
+  let value: unknown;
+  try {
+    value = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON request body');
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw createError.validation('Request body must be an object');
+  }
+  return value as Record<string, unknown>;
+}
+
 async function handleGet(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
@@ -57,6 +72,38 @@ async function handleGet(request: NextRequest, context: RouteContext) {
   }
 }
 
+async function handlePatch(request: NextRequest, context: RouteContext) {
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (limited) return limited;
+  const csrfError = await requireCsrfToken(request, userId);
+  if (csrfError) return csrfError as NextResponse;
+
+  const body = await requestObject(request);
+  const { sessionId } = await context.params;
+  const owner = { userId, organizationId };
+  const hasTitle = body['title'] !== undefined;
+  const hasArchived = body['archived'] !== undefined;
+  if (!hasTitle && !hasArchived) {
+    throw createError.validation('Send a "title" to rename, or "archived" to archive or unarchive');
+  }
+  if (hasArchived && typeof body['archived'] !== 'boolean') {
+    throw createError.validation('"archived" must be true or false');
+  }
+
+  try {
+    let session = hasTitle
+      ? await renameCloudCodeSession(db, owner, sessionId, body['title'])
+      : await getCloudCodeSession(db, owner, sessionId);
+    if (hasArchived) {
+      session = await setCloudCodeSessionArchived(db, owner, sessionId, body['archived'] === true);
+    }
+    return NextResponse.json({ session });
+  } catch (error) {
+    rethrowCloudCodeError(error);
+  }
+}
+
 async function handleDelete(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
@@ -67,13 +114,13 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
   const subscription = await SubscriptionService.getSubscription(db, userId);
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
-    return NextResponse.json({
-      session: await closeCloudCodeSession(db, { userId, organizationId }, sessionId, planTier),
-    });
+    await deleteCloudCodeSession(db, { userId, organizationId }, sessionId, planTier);
+    return NextResponse.json({ deleted: true });
   } catch (error) {
     rethrowCloudCodeError(error);
   }
 }
 
 export const GET = withErrorHandler(handleGet);
+export const PATCH = withErrorHandler(handlePatch);
 export const DELETE = withErrorHandler(handleDelete);
