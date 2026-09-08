@@ -97,20 +97,25 @@ describe('useStreamingArtifactSync', () => {
     expect(useStreamingArtifactStore.getState().streaming).toBeNull();
   });
 
+  // MessageBubble stops deriving a block the instant streaming ends, so the
+  // stopped turn arrives here as `isStreaming: false, block: null`, exactly the
+  // shape a finished turn arrives in. A test that kept handing the same block
+  // across the transition passed against a hook that was doing nothing in the
+  // browser.
   it('keeps what arrived when the stream is stopped mid-artifact', () => {
-    const block = blockFor('```html\n<div>partial');
     const { rerender } = renderHook(
-      ({ isStreaming }: { isStreaming: boolean }) =>
+      ({ isStreaming, block }: { isStreaming: boolean; block: TrailingUnclosedBlock | null }) =>
         useStreamingArtifactSync({
           messageId: MESSAGE_ID,
           conversationId: CONVERSATION_ID,
           isStreaming,
           block,
+          completedArtifactIds: [],
         }),
-      { initialProps: { isStreaming: true } },
+      { initialProps: { isStreaming: true, block: blockFor('```html\n<div>partial') } },
     );
 
-    rerender({ isStreaming: false });
+    rerender({ isStreaming: false, block: null });
 
     const expectedId = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
     const kept = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID);
@@ -123,17 +128,38 @@ describe('useStreamingArtifactSync', () => {
 
   it('leaves the completed artifact to the message parser when the fence closes', () => {
     const { rerender } = renderHook(
-      ({ block }: { block: TrailingUnclosedBlock | null }) =>
+      ({ isStreaming, block }: { isStreaming: boolean; block: TrailingUnclosedBlock | null }) =>
         useStreamingArtifactSync({
           messageId: MESSAGE_ID,
           conversationId: CONVERSATION_ID,
-          isStreaming: true,
+          isStreaming,
           block,
+          completedArtifactIds: [],
         }),
-      { initialProps: { block: blockFor('```html\n<div>hi</div>') } },
+      { initialProps: { isStreaming: true, block: blockFor('```html\n<div>hi</div>') } },
     );
 
-    rerender({ block: null });
+    rerender({ isStreaming: true, block: null });
+    rerender({ isStreaming: false, block: null });
+
+    expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)).toHaveLength(0);
+  });
+
+  it('keeps nothing when the last chunk both closes the fence and ends the turn', () => {
+    const expectedId = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
+    const { rerender } = renderHook(
+      ({ isStreaming, block }: { isStreaming: boolean; block: TrailingUnclosedBlock | null }) =>
+        useStreamingArtifactSync({
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          isStreaming,
+          block,
+          completedArtifactIds: isStreaming ? [] : [expectedId],
+        }),
+      { initialProps: { isStreaming: true, block: blockFor('```html\n<div>hi') } },
+    );
+
+    rerender({ isStreaming: false, block: null });
 
     expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)).toHaveLength(0);
   });
