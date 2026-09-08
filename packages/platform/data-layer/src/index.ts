@@ -28,3 +28,14 @@ export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
 
 export { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
 export { PostgresDatabaseAdapter, type PostgresDatabaseAdapterConfig } from './adapters/postgres';
+
+export {
+  assertDatabaseEnvironmentIsolation,
+  isLoopbackConnectionString,
+  resolveRuntimeEnvironment,
+  REMOTE_DATABASE_OVERRIDE_VALUE,
+  REMOTE_DATABASE_OVERRIDE_VAR,
+  type DatabaseEnvironmentIsolationOptions,
+  type IsolationEnvironment,
+  type RuntimeEnvironment,
+} from './environment-isolation';

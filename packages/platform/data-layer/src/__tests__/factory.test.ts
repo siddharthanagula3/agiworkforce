@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseClient,
+  REMOTE_DATABASE_OVERRIDE_VALUE,
+  REMOTE_DATABASE_OVERRIDE_VAR,
   createAuthClient,
   createRealtimeClient,
   DataLayerConfigError,
@@ -20,11 +22,20 @@ const ENV_KEYS = [
   'CLERK_SECRET_KEY',
   'CLERK_JWT_KEY',
   'CLERK_AUTHORIZED_PARTIES',
+  REMOTE_DATABASE_OVERRIDE_VAR,
 ];
+
+// The connection strings below name fictional remote hosts, because the subject
+// under test is provider selection and TLS enforcement, not where the database
+// lives. `assertDatabaseEnvironmentIsolation` would otherwise refuse every one
+// of them under NODE_ENV=test, so this suite takes the override deliberately.
+// The guard's own matrix is covered in environment-isolation.test.ts, and the
+// last case here proves the factory still calls it.
 
 beforeEach(() => {
   for (const k of ENV_KEYS) SAVED_ENV[k] = process.env[k];
   for (const k of ENV_KEYS) delete process.env[k];
+  process.env[REMOTE_DATABASE_OVERRIDE_VAR] = REMOTE_DATABASE_OVERRIDE_VALUE;
 });
 
 afterEach(() => {
@@ -121,6 +132,12 @@ describe('createDatabaseClient', () => {
   it('throws when Neon provider chosen without connection string', () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
     expect(() => createDatabaseClient()).toThrow(DataLayerConfigError);
+  });
+
+  it('refuses a remote database under a test runtime without the override', () => {
+    delete process.env[REMOTE_DATABASE_OVERRIDE_VAR];
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db?sslmode=require';
+    expect(() => createDatabaseClient()).toThrow(/not a loopback/);
   });
 });
 
