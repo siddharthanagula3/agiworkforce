@@ -99,14 +99,8 @@ export function CapabilitiesSection() {
       </p>
 
       <p className="text-xs text-muted-foreground">
-        Running models on your own provider keys?{' '}
-        <a
-          href="/settings/byok"
-          className="inline-block min-h-6 py-0.5 text-[var(--chat-accent-primary-text)] hover:underline"
-        >
-          API keys (BYOK)
-        </a>
-        .
+        Running models on your own provider keys is a Desktop, CLI and VS Code feature. Hosted web
+        is Managed Cloud only and never stores a provider key of yours.
       </p>
     </div>
   );
