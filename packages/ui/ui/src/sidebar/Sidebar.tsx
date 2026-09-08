@@ -25,6 +25,7 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { Spinner } from '../primitives/Spinner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/Tooltip';
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
@@ -48,6 +49,14 @@ export interface SidebarProps extends SessionItemHandlers {
   isLoading?: boolean;
   error?: string | null;
   onRetryLoad?: () => void;
+
+  /**
+   * More conversations exist beyond the page already handed to `sessions`.
+   * Omitted by a host that loads the whole list, and the control never renders.
+   */
+  hasMoreSessions?: boolean;
+  isLoadingMoreSessions?: boolean;
+  onLoadMoreSessions?: () => void;
 
   className?: string;
   collapsed?: boolean;
@@ -100,6 +109,9 @@ export function Sidebar(props: SidebarProps) {
     isLoading = false,
     error = null,
     onRetryLoad,
+    hasMoreSessions = false,
+    isLoadingMoreSessions = false,
+    onLoadMoreSessions,
     className,
     collapsed = false,
     width = 260,
@@ -817,6 +829,27 @@ export function Sidebar(props: SidebarProps) {
                   </div>
                 );
               })}
+
+              {/* The list is one page of a longer history. Without this the
+                rest of it was unreachable: the route has always returned
+                `hasMore` and `nextOffset` and nothing rendered them. Archived
+                is its own filtered view, so it pages through the same control
+                rather than a second one. */}
+              {hasMoreSessions && onLoadMoreSessions && hasMatchingConversations && (
+                <div className="mb-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onLoadMoreSessions}
+                    disabled={isLoadingMoreSessions}
+                    className="inline-flex min-h-6 items-center gap-1.5 px-1 text-xs text-[hsl(var(--primary))] hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-70"
+                  >
+                    {isLoadingMoreSessions && <Spinner size="sm" />}
+                    {isLoadingMoreSessions
+                      ? t('sidebar.loadingConversations', 'Loading conversations')
+                      : t('showMore', 'Show more')}
+                  </button>
+                </div>
+              )}
 
               {/* Loading skeleton, only while the list is genuinely empty so far,
                 so a background refetch on an already-populated list never
