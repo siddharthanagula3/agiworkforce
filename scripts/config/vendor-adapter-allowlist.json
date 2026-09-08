@@ -2,7 +2,10 @@
   "schemaVersion": 1,
   "vendors": [
     {
-      "packages": ["@upstash/redis", "@upstash/ratelimit"],
+      "packages": [
+        "@upstash/redis",
+        "@upstash/ratelimit"
+      ],
       "port": "@agiworkforce/key-value",
       "files": [
         {
@@ -13,7 +16,10 @@
       ]
     },
     {
-      "packages": ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
+      "packages": [
+        "@aws-sdk/client-s3",
+        "@aws-sdk/s3-request-presigner"
+      ],
       "port": "@agiworkforce/object-storage",
       "files": [
         {
@@ -29,7 +35,9 @@
       ]
     },
     {
-      "packages": ["@neondatabase/serverless"],
+      "packages": [
+        "@neondatabase/serverless"
+      ],
       "port": "@agiworkforce/data-layer",
       "files": [
         {
@@ -65,7 +73,9 @@
       ]
     },
     {
-      "packages": ["pg"],
+      "packages": [
+        "pg"
+      ],
       "port": "@agiworkforce/data-layer",
       "files": [
         {
@@ -87,6 +97,11 @@
           "path": "apps/web/scripts/route-cache-observability-report.mjs",
           "owner": false,
           "reason": "an out-of-band report script that runs outside a request and holds its own client rather than the port instance."
+        },
+        {
+          "path": "apps/web/scripts/managed-usage-lease-probe.mjs",
+          "owner": false,
+          "reason": "the independent check on the managed-usage lease lifecycle SQL, for the same reason as the RLS probe beside it: routing it through the adapter would make it confirm the premise it exists to test, and it never runs inside a request."
         }
       ]
     }

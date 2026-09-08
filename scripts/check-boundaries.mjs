@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const errors = [];
@@ -176,12 +177,44 @@ function validateIdentitySdkAllowlist(allowlist) {
 
 const workspacePackages = new Map();
 
-function walk(dir, files = []) {
+/**
+ * Paths git is told to ignore, so a generated bundle cannot fail this check.
+ *
+ * `ignoredParts` is a directory-name list, and it cannot cover a build artifact
+ * written INTO the source tree. `next dev` with the workflow devkit emits a
+ * 10.5 MB bundle at `apps/web/app/.well-known/workflow/v1/flow/route.js`, which
+ * inlines every dependency it saw, `@upstash/redis` among them. It is ignored
+ * by a `.gitignore` beside it and never reaches CI, so this guard failed only
+ * on a developer's machine, on a file nobody wrote and nobody can fix. Asking
+ * git is the same thing `check-repo-organization.mjs` does, and for the same
+ * reason.
+ *
+ * One `git check-ignore` call for the whole tree rather than one per file: the
+ * per-file form costs a process spawn each and this walk sees thousands.
+ */
+function gitIgnoredPaths(dir) {
+  const listed = spawnSync(
+    'git',
+    ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '--', dir],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (listed.status !== 0 || !listed.stdout) return new Set();
+  return new Set(
+    listed.stdout
+      .split('\n')
+      .map((line) => line.trim().replace(/\/$/, ''))
+      .filter(Boolean)
+      .map((relative) => path.resolve(root, relative)),
+  );
+}
+
+function walk(dir, files = [], ignored = gitIgnoredPaths(dir)) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (ignoredParts.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
+    if (ignored.has(fullPath)) continue;
     if (entry.isDirectory()) {
-      walk(fullPath, files);
+      walk(fullPath, files, ignored);
       continue;
     }
     if (sourceExtensions.has(path.extname(entry.name))) {
