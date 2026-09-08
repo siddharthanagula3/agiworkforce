@@ -738,6 +738,11 @@ export async function startCloudCodeAgentTurn(
   if (session.state === 'closed') {
     throw new CloudCodeConflictError('Closed Code sessions cannot run agent turns');
   }
+  if (session.archivedAt) {
+    throw new CloudCodeConflictError(
+      'This Code session is archived. Unarchive it to run agent turns in this session.',
+    );
+  }
   // `running` falls through on purpose: claimCloudCodeSessionForRun is what
   // adjudicates it, rejecting a live lease and reclaiming an expired one. A
   // pre-check that rejected every `running` session would leave a turn killed

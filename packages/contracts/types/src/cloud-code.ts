@@ -166,6 +166,14 @@ export interface CloudCodePullRequestResponse {
   alreadyOpen: boolean;
 }
 
+/**
+ * The Recents filter. `open` is everything a reader can still work in, `closed`
+ * and `archived` are the two ways a session leaves that set, and they are
+ * separate because closing is final and archiving is not.
+ */
+export const CLOUD_CODE_SESSION_STATUS_FILTERS = ['open', 'closed', 'archived', 'all'] as const;
+export type CloudCodeSessionStatusFilter = (typeof CLOUD_CODE_SESSION_STATUS_FILTERS)[number];
+
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;
   storageReady: boolean;

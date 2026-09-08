@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_AGENT_STOP_REASONS,
   CLOUD_CODE_NETWORK_ACCESS,
+  CLOUD_CODE_SESSION_STATUS_FILTERS,
   NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
   type CloudCodeAgentStep,
@@ -17,6 +18,7 @@ import {
   type CloudCodePullRequestResponse,
   type CloudCodeSession,
   type CloudCodeSessionChanges,
+  type CloudCodeSessionStatusFilter,
   type CloudCodeTerminalEntry,
   type CreateCloudCodeSessionInput,
   type NotebookCellLanguage,
@@ -641,15 +643,34 @@ function cloudCodeQuotaLockKey(owner: CloudCodeOwner): string {
   return `${owner.organizationId ?? '-'}:${owner.userId}`;
 }
 
+const SESSION_STATUS_PREDICATES: Record<CloudCodeSessionStatusFilter, string> = {
+  all: 'true',
+  open: "archived_at is null and state <> 'closed'",
+  closed: "archived_at is null and state = 'closed'",
+  archived: 'archived_at is not null',
+};
+
+export function asCloudCodeSessionStatusFilter(value: unknown): CloudCodeSessionStatusFilter {
+  if (value === undefined || value === null || value === '') return 'all';
+  if ((CLOUD_CODE_SESSION_STATUS_FILTERS as readonly unknown[]).includes(value)) {
+    return value as CloudCodeSessionStatusFilter;
+  }
+  throw new CloudCodeValidationError(
+    `status must be one of ${CLOUD_CODE_SESSION_STATUS_FILTERS.join(', ')}`,
+  );
+}
+
 export async function listCloudCodeSessions(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
+  status: CloudCodeSessionStatusFilter = 'all',
 ): Promise<CloudCodeSession[]> {
   const scoped = ownerSql(owner, 1);
   const rows = await db.query<SessionRow>(
     `select *
        from cloud_code_sessions
       where ${scoped.clause}
+        and ${SESSION_STATUS_PREDICATES[status]}
       order by updated_at desc
       limit 100`,
     scoped.params,
@@ -1198,6 +1219,7 @@ export async function runCloudCodeCommand(
   if (session.state === 'closed') {
     throw new CloudCodeConflictError('Closed Code sessions cannot run commands');
   }
+  assertSessionIsNotArchived(session, 'run commands');
   if (session.state === 'provisioning') {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
@@ -1646,6 +1668,7 @@ export async function commitAndPushCloudCodeSession(
   if (session.state === 'closed') {
     throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
   }
+  assertSessionIsNotArchived(session, 'commit and push');
   if (session.state === 'provisioning') {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
@@ -2037,4 +2060,115 @@ export async function openCloudCodeSessionPullRequest(
     number: pullRequest.number,
     alreadyOpen: false,
   };
+}
+
+function assertSessionIsNotArchived(session: CloudCodeSession, action: string): void {
+  if (!session.archivedAt) return;
+  throw new CloudCodeConflictError(
+    `This Code session is archived. Unarchive it to ${action} in this session.`,
+  );
+}
+
+export async function renameCloudCodeSession(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  titleValue: unknown,
+): Promise<CloudCodeSession> {
+  const title = typeof titleValue === 'string' ? titleValue.trim() : '';
+  if (!title || title.length > MAX_TITLE_LENGTH || title.includes('\0')) {
+    throw new CloudCodeValidationError(
+      `Title must be 1-${MAX_TITLE_LENGTH} characters and contain no null bytes`,
+    );
+  }
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot be renamed');
+  }
+  assertSessionIsNotArchived(session, 'rename it');
+
+  const scoped = ownerSql(owner, 3);
+  const rows = await db.query<SessionRow>(
+    `update cloud_code_sessions
+        set title = $2, updated_at = now()
+      where id = $1 and ${scoped.clause}
+      returning *`,
+    [sessionId, title, ...scoped.params],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudCodeNotFoundError();
+  return mapCloudCodeSession(row);
+}
+
+/**
+ * Archiving is reversible and keeps the session listed, which is why it is a
+ * timestamp rather than a state. A turn holding the run lease is refused rather
+ * than archived from underneath: the turn would keep running against a session
+ * the reader believes is put away.
+ */
+export async function setCloudCodeSessionArchived(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  archived: boolean,
+): Promise<CloudCodeSession> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot be archived or unarchived');
+  }
+  if (archived && session.state === 'running') {
+    throw new CloudCodeConflictError(
+      'This Code session has a turn running. Stop the turn before archiving it.',
+    );
+  }
+  if (archived === Boolean(session.archivedAt)) return session;
+
+  const scoped = ownerSql(owner, 3);
+  const rows = await db.query<SessionRow>(
+    `update cloud_code_sessions
+        set archived_at = case when $2 then now() else null end, updated_at = now()
+      where id = $1 and ${scoped.clause}
+      returning *`,
+    [sessionId, archived, ...scoped.params],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudCodeNotFoundError();
+  return mapCloudCodeSession(row);
+}
+
+/**
+ * Removes the session and everything recorded under it, for good.
+ *
+ * The sandbox is killed first: an archived session that was never closed still
+ * holds one, and a deleted row is a row nothing will ever reclaim from.
+ *
+ * One owner-scoped delete removes the rest. Terminal entries and agent turns
+ * cascade from the session (0075, 0082), and steps and approvals cascade from
+ * the turn, so a single statement is both complete and atomic. The cascade
+ * chain is pinned by a test beside the migrations, because losing one of those
+ * clauses would turn this into a partial delete nobody notices.
+ */
+export async function deleteCloudCodeSession(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  planTier: string,
+): Promise<void> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state !== 'closed' && !session.archivedAt) {
+    throw new CloudCodeConflictError(
+      'Close or archive this Code session before deleting it, so nothing is running when it goes.',
+    );
+  }
+  await killE2BSession(
+    managedCloudCodeSessionScope(owner.userId, sessionId, session.networkAccess, planTier),
+  );
+  const scoped = ownerSql(owner, 2);
+  const rows = await db.query<{ id: string }>(
+    `delete from cloud_code_sessions
+      where id = $1 and ${scoped.clause}
+      returning id`,
+    [sessionId, ...scoped.params],
+  );
+  if (!rows[0]) throw new CloudCodeNotFoundError();
 }

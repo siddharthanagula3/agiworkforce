@@ -8,6 +8,7 @@ import {
   getPlanMaxSandboxes,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
+  type CloudCodeSessionStatusFilter,
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -24,6 +25,7 @@ import { harnessTemplates, listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
+  asCloudCodeSessionStatusFilter,
   CloudCodeConflictError,
   CloudCodeLimitError,
   CloudCodeNotFoundError,
@@ -84,10 +86,17 @@ async function handleList(request: NextRequest) {
 
   const planTier = await resolvePlan(db, userId);
   const maxSessions = getPlanMaxSandboxes(planTier);
+  let status: CloudCodeSessionStatusFilter;
+  try {
+    status = asCloudCodeSessionStatusFilter(request.nextUrl.searchParams.get('status'));
+  } catch (error) {
+    if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
+    throw error;
+  }
   let storageReady = true;
   let sessions: CloudCodeSession[];
   try {
-    sessions = await listCloudCodeSessions(db, { userId, organizationId });
+    sessions = await listCloudCodeSessions(db, { userId, organizationId }, status);
   } catch (error) {
     if (!isCloudCodeSchemaUnavailable(error)) throw error;
     storageReady = false;
