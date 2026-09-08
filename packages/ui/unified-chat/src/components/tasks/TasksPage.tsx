@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { ListChecks, Loader2, MessageSquare, RotateCcw, ShieldQuestion, X } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  RotateCcw,
+  ShieldQuestion,
+  X,
+} from 'lucide-react';
 import {
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   type CloudAgentRun,
@@ -17,6 +26,7 @@ import {
   type AgentTaskState,
   type AgiWorkRerunGoal,
   formatTaskCost,
+  isArchivableState,
   isCancellableState,
   isLiveTaskState,
   taskStateLabel,
@@ -24,7 +34,7 @@ import {
   workModeLabel,
 } from './task-display';
 
-type TaskFilter = 'active' | 'all';
+type TaskFilter = 'active' | 'all' | 'archived';
 
 const ALL_STATES: AgentTaskState[] = [
   'queued',
@@ -40,10 +50,19 @@ const ALL_STATES: AgentTaskState[] = [
 
 const PAGE_SIZE = 25;
 
+const ARCHIVED_STATES: AgentTaskState[] = ['archived'];
+
 const FILTERS: Array<{ id: TaskFilter; label: string }> = [
   { id: 'active', label: 'Active' },
   { id: 'all', label: 'All' },
+  { id: 'archived', label: 'Archived' },
 ];
+
+function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
+  if (filter === 'all') return ALL_STATES;
+  if (filter === 'archived') return ARCHIVED_STATES;
+  return undefined;
+}
 
 interface TaskJournalSnapshot extends CloudAgentRunSnapshotPage {
   truncated: boolean;
@@ -133,6 +152,12 @@ export interface TasksTransport {
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
+  /**
+   * Shelve a finished run, or bring one back. Optional because a surface that
+   * cannot reach the archive route must not paint the control: an Archive
+   * button that does nothing is worse than no button.
+   */
+  setRunArchived?(runId: string, archived: boolean): Promise<CloudAgentRun>;
 }
 
 export interface TasksPageProps {
@@ -148,6 +173,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
   const [guidanceByRunId, setGuidanceByRunId] = useState<Record<string, string>>({});
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId);
@@ -166,7 +192,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       setError(null);
       try {
         const page = await getClient().listRuns({
-          states: nextFilter === 'all' ? ALL_STATES : undefined,
+          states: statesForFilter(nextFilter),
           cursor: cursor ?? undefined,
           limit: PAGE_SIZE,
         });
@@ -265,6 +291,42 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       }
     },
     [getClient, transport],
+  );
+
+  const handleArchive = useCallback(
+    async (run: CloudAgentRun, archived: boolean) => {
+      const setArchived = transport.setRunArchived;
+      if (!setArchived) return;
+      setArchivingId(run.id);
+      try {
+        const updated = await setArchived(run.id, archived);
+        // The row leaves the list it is filtered out of, so reconcile against
+        // the filter rather than patching a row that no longer belongs here.
+        setRuns((prev) =>
+          prev
+            .map((r) => (r.id === run.id ? mergeRun(r, updated) : r))
+            .filter((r) => {
+              if (filter === 'archived') return r.state === 'archived';
+              if (filter === 'active') return r.state !== 'archived';
+              return true;
+            }),
+        );
+        if (selectedRunId === run.id) setSelectedRunId(null);
+      } catch (err) {
+        console.error('[Tasks] Failed to change task archive state:', err);
+        transport.notifyError(
+          toUserMessageWithStatus(
+            err,
+            archived
+              ? 'Could not archive that task. Nothing changed.'
+              : 'Could not restore that task. It is still archived.',
+          ),
+        );
+      } finally {
+        setArchivingId(null);
+      }
+    },
+    [filter, selectedRunId, transport],
   );
 
   const handleApproval = useCallback(
@@ -386,12 +448,14 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            No {filter === 'active' ? 'active ' : ''}tasks yet
+            No {filter === 'all' ? '' : `${filter} `}tasks yet
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Runs from AGI Work, Research, and long tool sessions show up here.
+            {filter === 'archived'
+              ? 'A finished task moves here when you archive it, and stays until you restore it.'
+              : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
           </p>
-          {transport.startWork ? (
+          {transport.startWork && filter !== 'archived' ? (
             <Button size="sm" onClick={transport.startWork}>
               Start AGI Work
             </Button>
@@ -487,6 +551,40 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           ) : (
                             <>
                               <X className="mr-1 h-3.5 w-3.5" /> Stop
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
+                      {transport.setRunArchived && run.state === 'archived' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={archivingId === run.id}
+                          onClick={() => void handleArchive(run, false)}
+                        >
+                          {archivingId === run.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <ArchiveRestore className="mr-1 h-3.5 w-3.5" /> Restore
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
+                      {transport.setRunArchived && isArchivableState(run.state) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={archivingId === run.id}
+                          onClick={() => void handleArchive(run, true)}
+                        >
+                          {archivingId === run.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <Archive className="mr-1 h-3.5 w-3.5" /> Archive
                             </>
                           )}
                         </Button>
