@@ -18,11 +18,31 @@ const SettingsPatchSchema = z.object({
     .optional(),
   settings: z.record(z.string(), z.unknown()).optional(),
   value: z.unknown().optional(),
+  patch: z.record(z.string(), z.unknown()).optional(),
+  expectedVersion: z.string().nullable().optional(),
 });
 
 type UserSettingsRow = {
   settings: Record<string, unknown> | null;
+  updated_at?: string | Date | null;
 };
+
+interface StoredSettings {
+  settings: Record<string, unknown>;
+  version: string | null;
+}
+
+function toVersion(value: string | Date | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function namespaceObject(settings: Record<string, unknown>, namespace: string) {
+  const value = settings[namespace];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 const PG_UNDEFINED_TABLE = '42P01';
 
@@ -37,13 +57,13 @@ function isUndefinedTable(error: unknown): boolean {
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
-async function readSettings(db: ScopedDb, userId: string): Promise<Record<string, unknown>> {
+async function readSettings(db: ScopedDb, userId: string): Promise<StoredSettings> {
   try {
     const [row] = await db.query<UserSettingsRow>(
-      'select settings from public.user_settings where user_id = $1 limit 1',
+      'select settings, updated_at from public.user_settings where user_id = $1 limit 1',
       [userId],
     );
-    return row?.settings ?? {};
+    return { settings: row?.settings ?? {}, version: toVersion(row?.updated_at) };
   } catch (error) {
     if (isUndefinedTable(error)) {
       logger.error({ error, userId }, 'user_settings table is missing; run migrations');
@@ -59,13 +79,16 @@ async function handleGet(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const namespace = new URL(request.url).searchParams.get('namespace');
-  const settings = await readSettings(db, userId);
+  const stored = await readSettings(db, userId);
 
   if (namespace) {
-    return NextResponse.json({ settings: settings[namespace] ?? {} });
+    return NextResponse.json({
+      settings: stored.settings[namespace] ?? {},
+      version: stored.version,
+    });
   }
 
-  return NextResponse.json({ settings });
+  return NextResponse.json({ settings: stored.settings, version: stored.version });
 }
 
 async function handlePut(request: NextRequest) {
@@ -87,18 +110,28 @@ async function handlePut(request: NextRequest) {
   if (!parsed.namespace && !parsed.settings) {
     throw createError.validation('namespace or settings is required');
   }
-
-  const delta: Record<string, unknown> = parsed.namespace
-    ? { [parsed.namespace]: parsed.value ?? parsed.settings ?? {} }
-    : (parsed.settings ?? {});
+  if (parsed.patch && !parsed.namespace) {
+    throw createError.validation('patch requires a namespace');
+  }
 
   const current = await readSettings(db, userId);
-  const estimated = { ...current, ...delta };
+  const expectedVersion = parsed.expectedVersion ?? null;
+
+  const delta: Record<string, unknown> = parsed.namespace
+    ? {
+        [parsed.namespace]: parsed.patch
+          ? { ...namespaceObject(current.settings, parsed.namespace), ...parsed.patch }
+          : (parsed.value ?? parsed.settings ?? {}),
+      }
+    : (parsed.settings ?? {});
+
+  const estimated = { ...current.settings, ...delta };
   if (JSON.stringify(estimated).length > 100_000) {
     throw createError.validation('Settings payload is too large');
   }
 
   let merged: Record<string, unknown> = estimated;
+  let version: string | null = current.version;
   try {
     const [row] = await db.query<UserSettingsRow>(
       `insert into public.user_settings (user_id, settings, updated_at)
@@ -106,10 +139,13 @@ async function handlePut(request: NextRequest) {
        on conflict (user_id)
        do update set settings = user_settings.settings || excluded.settings,
                      updated_at = excluded.updated_at
-       returning settings`,
-      [userId, JSON.stringify(delta)],
+       where $3::text is null or user_settings.updated_at::text = $3::text
+       returning settings, updated_at`,
+      [userId, JSON.stringify(delta), expectedVersion],
     );
+    if (!row && expectedVersion !== null) return settingsVersionConflict(db, userId, parsed);
     if (row?.settings) merged = row.settings;
+    version = toVersion(row?.updated_at) ?? version;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
@@ -119,7 +155,26 @@ async function handlePut(request: NextRequest) {
     await invalidateActiveOrganizationCache(userId);
   }
 
-  return NextResponse.json({ settings: merged });
+  return NextResponse.json({ settings: merged, version });
+}
+
+async function settingsVersionConflict(
+  db: ScopedDb,
+  userId: string,
+  parsed: z.infer<typeof SettingsPatchSchema>,
+): Promise<NextResponse> {
+  const latest = await readSettings(db, userId);
+  return NextResponse.json(
+    {
+      error: {
+        code: 'SETTINGS_VERSION_CONFLICT',
+        message: 'These settings changed elsewhere. Nothing was saved; reload and choose again.',
+      },
+      settings: parsed.namespace ? (latest.settings[parsed.namespace] ?? {}) : latest.settings,
+      version: latest.version,
+    },
+    { status: 412 },
+  );
 }
 
 export const GET = withErrorHandler(handleGet);
