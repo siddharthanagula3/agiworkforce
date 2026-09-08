@@ -3,17 +3,22 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
+  Archive,
+  ArchiveRestore,
   Download,
   LibraryBig,
   Link2,
   MoreHorizontal,
+  Pencil,
   Terminal,
+  Trash2,
   type Icon,
 } from '@agiworkforce/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -41,18 +46,28 @@ const OPEN_IN_LINKS: readonly MenuLink[] = [
 export interface CodeSessionMenuProps {
   verbose: boolean;
   closed: boolean;
+  archived: boolean;
+  deletable: boolean;
   onOpenTerminal: () => void;
   onSetVerbose: (verbose: boolean) => void;
   onEditEnvironment: () => void;
+  onRename: () => void;
+  onSetArchived: (archived: boolean) => void;
+  onDeleteSession: () => void;
   onCloseSession: () => void;
 }
 
 export function CodeSessionMenu({
   verbose,
   closed,
+  archived,
+  deletable,
   onOpenTerminal,
   onSetVerbose,
   onEditEnvironment,
+  onRename,
+  onSetArchived,
+  onDeleteSession,
   onCloseSession,
 }: CodeSessionMenuProps) {
   const [copied, setCopied] = useState(false);
@@ -98,6 +113,11 @@ export function CodeSessionMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        <DropdownMenuItem onSelect={onRename}>
+          <Pencil size={MENU_GLYPH_SIZE} aria-hidden="true" />
+          <span className={styles['menuRowLabel']}>{CODE_COPY.rename}</span>
+        </DropdownMenuItem>
+
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className={styles['menuRowLabel']}>{CODE_COPY.transcriptView}</span>
@@ -134,9 +154,36 @@ export function CodeSessionMenu({
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem onSelect={() => onSetArchived(!archived)}>
+          {archived ? (
+            <ArchiveRestore size={MENU_GLYPH_SIZE} aria-hidden="true" />
+          ) : (
+            <Archive size={MENU_GLYPH_SIZE} aria-hidden="true" />
+          )}
+          <span className={styles['menuRowLabel']}>
+            {archived ? CODE_COPY.unarchiveSession : CODE_COPY.archiveSession}
+          </span>
+        </DropdownMenuItem>
+
         <DropdownMenuItem disabled={closed} onSelect={onCloseSession}>
           <span className={styles['menuRowLabel']}>{CODE_COPY.closeSession}</span>
         </DropdownMenuItem>
+
+        <DropdownMenuItem
+          disabled={!deletable}
+          className={styles['menuRowDestructive']}
+          onSelect={onDeleteSession}
+        >
+          <Trash2 size={MENU_GLYPH_SIZE} aria-hidden="true" />
+          <span className={styles['menuRowLabel']}>{CODE_COPY.deleteSession}</span>
+        </DropdownMenuItem>
+
+        {!deletable && (
+          <DropdownMenuLabel className={styles['menuHint']}>
+            {CODE_COPY.deleteNeedsClosed}
+          </DropdownMenuLabel>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

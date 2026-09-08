@@ -347,7 +347,7 @@ export function CodeTranscript({
             {item.retryGoal && (
               <button
                 type="button"
-                className={styles['secondaryButton']}
+                className={`${styles['secondaryButton']} ${styles['retryButton']}`}
                 onClick={() => onRetryTask(item.retryGoal ?? '')}
               >
                 <RefreshCw size={ACTION_GLYPH_SIZE} aria-hidden="true" />
