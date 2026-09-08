@@ -79,3 +79,23 @@ export function describeFallbackReason(
         : 'This reply came from a different model than the one you picked.';
   }
 }
+
+export function fallbackStepLabel(
+  reason: string | null | undefined,
+  modelLabel?: string | null,
+): string | null {
+  const code = reason?.trim();
+  if (!code) return null;
+  const servedBy = modelLabel?.trim();
+  switch (code) {
+    case 'openrouter_route_failover':
+      return servedBy ? `Switched to a backup route for ${servedBy}` : 'Switched to a backup route';
+    case 'insufficient_credits':
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a cheaper model';
+    case 'research_unsupported_model':
+      return 'Switched to web search';
+    case 'managed_failover':
+    default:
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a backup model';
+  }
+}

@@ -76,10 +76,17 @@ import {
 } from '@/app/api/interactive-cards/response-contract';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import {
+  fallbackStepLabel,
   FALLBACK_REASON_HEADER,
   MOVED_FROM_MODEL_HEADER,
   MOVED_REASON_HEADER,
 } from '@/lib/chat-fallback-reason';
+import {
+  startTurnStartTicker,
+  turnStartSummary,
+  withTurnStartSummary,
+  type TurnStartTicker,
+} from './turnStartProgress';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
@@ -738,6 +745,8 @@ const DURABLE_RUN_POLL_INTERVAL_MS = 2_500;
 
 export const REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS = 1_500;
 
+const ROUTE_SWITCH_PROGRESS_ID = 'route-switch';
+
 function describeSettledInteractiveCard(card: InteractiveCard): string | null {
   if (!card.recognized || card.kind !== RESPONDABLE_INTERACTIVE_CARD_KIND) return null;
   const { questions, state } = card.body;
@@ -1149,6 +1158,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let localAgentEventSequence = 0;
   const applyLocalAgentEvent = (event: AgentEvent) => {
     if (sawRealAgentEvent) return;
+    closeFirstTokenWait();
     currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, {
       schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: conversationId,
@@ -1159,6 +1169,67 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     });
     patchMessageMeta({ agentActivity: currentAgentActivity });
   };
+
+  const waitingModelName = getModelMetadataById(model)?.name;
+  let firstTokenWaitStartedAtMs: number | null = null;
+  let firstTokenWaitTicker: TurnStartTicker | null = null;
+
+  function paintFirstTokenWait(): void {
+    if (firstTokenWaitStartedAtMs === null) return;
+    const next = withTurnStartSummary(
+      currentAgentActivity,
+      turnStartSummary('waiting', waitingModelName, Date.now() - firstTokenWaitStartedAtMs),
+    );
+    if (!next || next === currentAgentActivity) return;
+    currentAgentActivity = next;
+    patchMessageMeta({ agentActivity: currentAgentActivity });
+  }
+
+  function closeFirstTokenWait(): void {
+    firstTokenWaitTicker?.stop();
+    firstTokenWaitTicker = null;
+    firstTokenWaitStartedAtMs = null;
+  }
+
+  function appendRouteSwitchEntry(summary: string): void {
+    if (!currentAgentActivity) return;
+    const id = `progress:${ROUTE_SWITCH_PROGRESS_ID}`;
+    if (currentAgentActivity.entries.some((entry) => entry.id === id)) return;
+    const completedAtMs = Date.now();
+    currentAgentActivity = {
+      ...currentAgentActivity,
+      entries: [
+        ...currentAgentActivity.entries,
+        {
+          kind: 'progress',
+          id,
+          progressId: ROUTE_SWITCH_PROGRESS_ID,
+          summary,
+          status: 'completed',
+          startedAtMs: completedAtMs,
+          completedAtMs,
+        },
+      ],
+      updatedAtMs: completedAtMs,
+    };
+    patchMessageMeta({ agentActivity: currentAgentActivity });
+  }
+
+  function openFirstTokenWait(): void {
+    if (sawRealAgentEvent || firstTokenWaitStartedAtMs !== null) return;
+    if (streamFallbackReason) {
+      const switched = fallbackStepLabel(streamFallbackReason, null);
+      if (switched) appendRouteSwitchEntry(switched);
+    }
+    firstTokenWaitStartedAtMs = Date.now();
+    paintFirstTokenWait();
+    firstTokenWaitTicker = startTurnStartTicker({
+      phase: 'waiting',
+      modelName: waitingModelName,
+      startedAtMs: firstTokenWaitStartedAtMs,
+      onSummary: paintFirstTokenWait,
+    });
+  }
 
   const nativeToolCategory = (name: string): AgentEventToolCategory => {
     if (name === 'web_search' || name === 'gemini_grounding') return 'web-search';
@@ -1623,6 +1694,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let contentBuffer = '';
   let unacknowledgedPublicText = '';
 
+  openFirstTokenWait();
+
   let firstStreamActivitySeen = false;
   const reasoningFallbackTimer = getModelReasoning(model).capable
     ? setTimeout(() => {
@@ -1906,7 +1979,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           const parsed = JSON.parse(data);
 
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
-          if (agentEnvelope) sawRealAgentEvent = true;
+          if (agentEnvelope) {
+            closeFirstTokenWait();
+            sawRealAgentEvent = true;
+          }
           const duplicateAgentEnvelope = Boolean(
             agentEnvelope &&
             currentAgentActivity?.sessionId === agentEnvelope.sessionId &&
@@ -2412,6 +2488,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
+    closeFirstTokenWait();
     markFirstStreamActivitySeen();
     coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
@@ -2700,6 +2777,21 @@ export function useChatStream(): UseChatStreamReturn {
         reportTurnCommitted();
       }
 
+      const connectingTicker = startTurnStartTicker({
+        modelName: getModelMetadataById(model)?.name,
+        startedAtMs: assistantStartedAtMs,
+        onSummary: (summary) => {
+          const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
+          const next = withTurnStartSummary(current?.agentActivity, summary);
+          if (!next || next === current?.agentActivity) return;
+          updateMessage(
+            assistantMessageId,
+            { metadata: { ...current, agentActivity: next } },
+            conversationId,
+          );
+        },
+      });
+
       let retriedEmptyTurn = false;
       try {
         for (;;) {
@@ -2804,6 +2896,7 @@ export function useChatStream(): UseChatStreamReturn {
             }),
             signal: abortController.signal,
           });
+          connectingTicker.stop();
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -2906,6 +2999,7 @@ export function useChatStream(): UseChatStreamReturn {
           ...(assistantParentId ? { variantRestore: { previousLeafId: restoreLeafId } } : {}),
         });
       } finally {
+        connectingTicker.stop();
         if (activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId) {
           activeRunsRef.current.delete(conversationId);
         }

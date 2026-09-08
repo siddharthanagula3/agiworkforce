@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addFallbackReasonHeader,
   describeFallbackReason,
+  fallbackStepLabel,
   FALLBACK_REASON_HEADER,
   toFallbackReasonHeaderValue,
 } from './chat-fallback-reason';
@@ -52,5 +53,28 @@ describe('telling the user their request was changed', () => {
   it('says nothing when there is nothing to say', () => {
     expect(describeFallbackReason(null)).toBeNull();
     expect(describeFallbackReason('')).toBeNull();
+  });
+});
+
+describe('fallbackStepLabel', () => {
+  it('names the model the router moved to', () => {
+    expect(fallbackStepLabel('managed_failover', 'Claude Sonnet 5')).toBe(
+      'Switched to Claude Sonnet 5',
+    );
+  });
+
+  it('says a route changed when the model did not', () => {
+    expect(fallbackStepLabel('openrouter_route_failover', 'GPT-5.6 Luna')).toBe(
+      'Switched to a backup route for GPT-5.6 Luna',
+    );
+  });
+
+  it('stays truthful when the serving model is not known yet', () => {
+    expect(fallbackStepLabel('managed_failover', null)).toBe('Switched to a backup model');
+  });
+
+  it('has nothing to say when no fallback happened', () => {
+    expect(fallbackStepLabel(null, 'Anything')).toBeNull();
+    expect(fallbackStepLabel('   ', 'Anything')).toBeNull();
   });
 });
