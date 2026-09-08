@@ -97,25 +97,24 @@ describe('useStreamingArtifactSync', () => {
     expect(useStreamingArtifactStore.getState().streaming).toBeNull();
   });
 
-  // MessageBubble stops deriving a block the instant streaming ends, so the
-  // stopped turn arrives here as `isStreaming: false, block: null`, exactly the
-  // shape a finished turn arrives in. A test that kept handing the same block
-  // across the transition passed against a hook that was doing nothing in the
-  // browser.
+  // A stopped turn leaves its fence OPEN, so the caller still derives a block
+  // for it; a finished turn closes the fence and has none. That difference is
+  // the whole signal, and an earlier version of this test destroyed it by
+  // nulling the block on the transition.
   it('keeps what arrived when the stream is stopped mid-artifact', () => {
+    const openFence = blockFor('```html\n<div>partial');
     const { rerender } = renderHook(
-      ({ isStreaming, block }: { isStreaming: boolean; block: TrailingUnclosedBlock | null }) =>
+      ({ isStreaming }: { isStreaming: boolean }) =>
         useStreamingArtifactSync({
           messageId: MESSAGE_ID,
           conversationId: CONVERSATION_ID,
           isStreaming,
-          block,
-          completedArtifactIds: [],
+          block: openFence,
         }),
-      { initialProps: { isStreaming: true, block: blockFor('```html\n<div>partial') } },
+      { initialProps: { isStreaming: true } },
     );
 
-    rerender({ isStreaming: false, block: null });
+    rerender({ isStreaming: false });
 
     const expectedId = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
     const kept = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID);
@@ -134,7 +133,6 @@ describe('useStreamingArtifactSync', () => {
           conversationId: CONVERSATION_ID,
           isStreaming,
           block,
-          completedArtifactIds: [],
         }),
       { initialProps: { isStreaming: true, block: blockFor('```html\n<div>hi</div>') } },
     );
@@ -146,7 +144,6 @@ describe('useStreamingArtifactSync', () => {
   });
 
   it('keeps nothing when the last chunk both closes the fence and ends the turn', () => {
-    const expectedId = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
     const { rerender } = renderHook(
       ({ isStreaming, block }: { isStreaming: boolean; block: TrailingUnclosedBlock | null }) =>
         useStreamingArtifactSync({
@@ -154,7 +151,6 @@ describe('useStreamingArtifactSync', () => {
           conversationId: CONVERSATION_ID,
           isStreaming,
           block,
-          completedArtifactIds: isStreaming ? [] : [expectedId],
         }),
       { initialProps: { isStreaming: true, block: blockFor('```html\n<div>hi') } },
     );
@@ -162,6 +158,30 @@ describe('useStreamingArtifactSync', () => {
     rerender({ isStreaming: false, block: null });
 
     expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)).toHaveLength(0);
+  });
+
+  // A first turn streams under a client-only conversation id and settles under
+  // the real one. Keying the kept fragment on the id derived while streaming
+  // filed it under a conversation that no longer exists, which a browser run
+  // showed.
+  it('keeps the fragment under the conversation the turn settled in, not the placeholder', () => {
+    const openFence = blockFor('```html\n<div>partial');
+    const { rerender } = renderHook(
+      ({ conversationId, isStreaming }: { conversationId: string; isStreaming: boolean }) =>
+        useStreamingArtifactSync({
+          messageId: MESSAGE_ID,
+          conversationId,
+          isStreaming,
+          block: openFence,
+        }),
+      { initialProps: { conversationId: 'client-only-conversation', isStreaming: true } },
+    );
+
+    rerender({ conversationId: CONVERSATION_ID, isStreaming: false });
+
+    const kept = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.id).toBe(computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0));
   });
 
   it('clears its own entry on unmount', () => {
