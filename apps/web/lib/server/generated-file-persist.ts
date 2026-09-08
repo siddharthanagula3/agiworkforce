@@ -44,8 +44,20 @@ export function generatedFileKind(fileName: string, mime: string): string {
   return 'other';
 }
 
+/**
+ * `presentation`, not `surface`. Everywhere else in this repository a surface is
+ * a client, web, desktop, mobile, cli, vscode or chrome, and `sourceSurface`
+ * five lines below carries exactly that meaning. This value answers a different
+ * question, whether the file belongs in the artifact panel or the file list, and
+ * naming both the same word put two vocabularies in one object literal.
+ *
+ * The wire field and the stored metadata key stay `surface`: desktop, mobile and
+ * every already-catalogued row read that name, so renaming it would be a
+ * cross-surface break for a naming fix. The two are mapped at the boundary
+ * below, which is the only place the old word appears.
+ */
 export interface GeneratedFileClassification {
-  surface: GeneratedFileSurface;
+  presentation: GeneratedFileSurface;
   previewable: boolean;
 }
 
@@ -97,23 +109,23 @@ export function classifyGeneratedFile(fileName: string, mime: string): Generated
   const ext = fileName.toLowerCase().split('.').pop() ?? '';
   const mimeLower = mime.toLowerCase();
   if (ext === 'svg' || mimeLower.startsWith('image/svg')) {
-    return { surface: 'artifact', previewable: true };
+    return { presentation: 'artifact', previewable: true };
   }
-  if (ARTIFACT_EXTENSIONS.has(ext)) return { surface: 'artifact', previewable: true };
-  if (PREVIEWABLE_FILE_EXTENSIONS.has(ext)) return { surface: 'file', previewable: true };
-  if (mimeLower.startsWith('image/')) return { surface: 'file', previewable: true };
+  if (ARTIFACT_EXTENSIONS.has(ext)) return { presentation: 'artifact', previewable: true };
+  if (PREVIEWABLE_FILE_EXTENSIONS.has(ext)) return { presentation: 'file', previewable: true };
+  if (mimeLower.startsWith('image/')) return { presentation: 'file', previewable: true };
   if (mimeLower === 'text/csv' || mimeLower === 'text/tab-separated-values') {
-    return { surface: 'file', previewable: true };
+    return { presentation: 'file', previewable: true };
   }
-  if (mimeLower === 'application/pdf') return { surface: 'file', previewable: true };
+  if (mimeLower === 'application/pdf') return { presentation: 'file', previewable: true };
   if (
     mimeLower.startsWith('text/') ||
     mimeLower === 'application/json' ||
     mimeLower === 'application/xml'
   ) {
-    return { surface: 'artifact', previewable: true };
+    return { presentation: 'artifact', previewable: true };
   }
-  return { surface: 'file', previewable: false };
+  return { presentation: 'file', previewable: false };
 }
 
 function mediaKindFor(mime: string): MediaKind {
@@ -179,7 +191,7 @@ export async function persistGeneratedFileBytes(
           filename,
           origin,
           checksumSha256: checksum,
-          surface: classification.surface,
+          surface: classification.presentation,
           previewable: classification.previewable,
           ...(params.extraMetadata ?? {}),
         },
@@ -206,7 +218,7 @@ export async function persistGeneratedFileBytes(
         byte_count: stored.byteSize,
         kind: generatedFileKind(filename, mimeType),
         checksum_sha256: checksum,
-        surface: classification.surface,
+        surface: classification.presentation,
         previewable: classification.previewable,
       },
     };
