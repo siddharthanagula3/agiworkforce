@@ -934,10 +934,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           <div className={styles['body']}>
             <div className={styles['column']}>
               {selectedSession ? (
-                <div className={styles['scroll']}>
+                <div className={styles['scroll']} data-testid="code-scroll">
                   <div className={styles['center']}>
-                    {notices}
-
                     {detailLoading && (
                       <div className={styles['notice']} role="status">
                         <Spinner size="sm" aria-label={CODE_COPY.openingSession} />
@@ -984,13 +982,16 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                           ? CODE_COPY.greeting
                           : null}
                     </h1>
-                    {notices}
                   </div>
                 </div>
               )}
 
+              <div className={styles['noticeArea']} data-testid="code-notices">
+                <div className={styles['center']}>{notices}</div>
+              </div>
+
               {archived ? (
-                <div className={styles['composerArea']}>
+                <div className={styles['composerArea']} data-testid="code-composer-area">
                   <div className={styles['center']}>
                     <div className={styles['closedBanner']} role="status">
                       <span className={styles['closedBannerText']}>{CODE_COPY.archivedBanner}</span>
@@ -1005,7 +1006,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                   </div>
                 </div>
               ) : closed ? (
-                <div className={styles['composerArea']}>
+                <div className={styles['composerArea']} data-testid="code-composer-area">
                   <div className={styles['center']}>
                     <div className={styles['closedBanner']} role="status">
                       <span className={styles['closedBannerText']}>{CODE_COPY.closedBanner}</span>
