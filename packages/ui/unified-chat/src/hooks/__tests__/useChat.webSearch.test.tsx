@@ -189,7 +189,7 @@ describe('useChat, automatic Web search request clamp', () => {
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-search',
       searchPrompt,
-      expect.objectContaining({ provider: genericOnlyModel.provider, webSearch: false }),
+      expect.objectContaining({ model: genericOnlyModel.id, webSearch: false }),
     );
   });
 
