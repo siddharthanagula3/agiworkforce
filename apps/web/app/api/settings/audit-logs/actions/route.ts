@@ -52,6 +52,7 @@ async function handleGetActions(request: NextRequest) {
       'password_changed',
       'two_factor_enabled',
       'two_factor_disabled',
+      'two_factor_backup_codes_regenerated',
       'session_expired',
     ];
 
