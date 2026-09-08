@@ -156,9 +156,9 @@ describe('/admin segment layout admits operators and org admins', () => {
     expect((await renderLayout()).redirectedTo).toBe('/');
   });
 
-  it('sends a signed-out visitor to login', async () => {
+  it('sends a lapsed session to the recovery page', async () => {
     mockAuth.mockResolvedValue({ userId: null });
 
-    expect((await renderLayout()).redirectedTo).toBe('/login?redirectTo=/admin');
+    expect((await renderLayout()).redirectedTo).toBe('/session-expired?redirectTo=%2Fadmin');
   });
 });

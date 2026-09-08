@@ -95,7 +95,12 @@ describe('Single Conversation API', () => {
     vi.clearAllMocks();
 
     mockGetUserScopedDb.mockResolvedValue({
-      db: { query: mockQuery, execute: mockExecute },
+      db: {
+        query: mockQuery,
+        execute: mockExecute,
+        transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+          run({ query: mockQuery, execute: mockExecute }),
+      },
       userId: 'user-123',
       organizationId: null,
     });
