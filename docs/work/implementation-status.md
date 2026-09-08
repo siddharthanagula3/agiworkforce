@@ -2,11 +2,340 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-09
+Last updated: 2026-09-07
 
 This is the implementation-facing parity matrix for AGI. It turns the high-level source of truth into feature, option, component, contract, and surface requirements that technical agents can execute without inventing their own product.
 
 Use this with `docs/product/definition.md`. If they conflict, update both in the same change.
+
+## Web workflow audit, 2026-09-06
+
+Scope: the web product, including its server routes and shared owners consumed
+by web. This is a source and isolated-test audit of 26 workflow groups, not a
+production certification or a new claim of competitor parity. The reviewed
+working tree included other ongoing edits, including the model catalogue;
+the base revision recorded during the audit was `7b870e977`. Earlier dated
+tables below remain historical evidence where their web status differs from
+this section. No other surface has been re-audited here.
+
+The completion standard is
+[experience-contract.md, section 16.1](../product/experience-contract.md#161-web-workflow-acceptance-criteria).
+That document owns acceptance criteria; this section owns audit evidence and
+the remaining execution queue. The previous conversational estimate of
+250–500 hours is not a scoped implementation commitment: this pass found
+substantial existing code in several areas previously labeled unverified.
+
+### Evidence vocabulary
+
+- **Implemented; live verification open:** a mounted/consumed code path was
+  traced, with relevant tests where listed. It has not passed full live
+  acceptance in this audit.
+- **Partial:** a concrete limitation exists relative to the acceptance target.
+- **Defect:** an observed incorrect behavior with reproduction or a traced
+  failure path. Defects are recorded in the known-flaw ledger, not counted
+  again as new features to build.
+- **Intentional boundary:** the product explicitly does not execute the action
+  in a browser. An honest handoff is valid behavior.
+- **Unverified:** the audit lacks evidence. This does not mean missing.
+
+### Workflow inventory and remaining work
+
+All source paths in this table are relative to `apps/web/`. The W identifiers
+map directly to section 16.1 of the experience contract. B1–B6 refer to the
+test batches recorded below. A passing mocked test is never a live pass.
+
+| ID  | Workflow and owner paths                                                                                                                                | Audit status / evidence                                                                                                                                                                                          | Remaining work before acceptance                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W01 | Identity/onboarding: `app/welcome/page.tsx`, `features/onboarding/components/OnboardingWizard.tsx`, `features/onboarding/lib/onboarding-preferences.ts` | Defect: late seed response overwrites edited name; reproduced. Completion/save tests and logout cleanup pass in B1.                                                                                              | Fix dirty-field/seed ownership and cover initial read failure. Then verify login return targets, fresh-account completion/skip, expired sessions, and account switching in a real browser.                                  |
+| W02 | Chat: `features/chat/pages/WebChatPage.tsx`, `lib/hooks/useChatStream.ts`                                                                               | Defects: older archived restore can announce success without restoring the sidebar entry; bulk-delete/publication cleanup can remain incomplete after a successful retry. B6 passes existing lifecycle fixtures. | Fix restore upsert and transactional/retryable publication revocation. Prove create/send/stop/edit/branch/retry/archive/delete with delayed uploads and reconnects against durable storage.                                 |
+| W03 | Model catalogue: `features/chat/lib/use-model-catalogue.ts`, `app/api/models/catalogue/route.ts`                                                        | Defect carried forward: status-driven effect repeatedly fetches after failure; earlier same-conversation probe reproduced it and current source still has the transition.                                        | Bound fetch/retry lifecycle; then verify UI admission matches plan/deployment/route policy and actual fallback across the advertised route matrix.                                                                          |
+| W04 | Attachments: `features/chat/services/chat-attachment-upload.ts`, `app/api/files/[id]/route.ts`                                                          | Implemented; generated-file pipeline B1 uses an in-memory object store.                                                                                                                                          | Verify each advertised file format with real storage, extraction failure, size/count rejection, unauthorized download, retry, and conversation switching.                                                                   |
+| W05 | Project knowledge: `lib/services/project-context-service.ts`                                                                                            | Partial plus carried-forward defect: file-level substring ranking and leading excerpts; ASCII-only query terms lose non-Latin relevance. Earlier probe reproduced omitted Russian evidence.                      | Add language-aware passage retrieval and a fixed answer-position/language evaluation set; validate shared project permissions and extraction states. Truncation disclosure already exists and is not a new missing feature. |
+| W06 | Memory: `lib/services/managed-memory-context-service.ts`                                                                                                | Partial relevance selection (pinned/recency rather than current-question ranking), plus reproduced memory-save and client-status defects in the follow-up. Prior review passed project-scope tests.              | Fix failed/out-of-order privacy saves and stale status first. Evaluate older relevant recall, exclusions, provenance, import, delete and temporary chats.                                                                   |
+| W07 | Search: `features/chat/services/global-search-service.ts`, `app/api/search/route.ts`                                                                    | Implemented search/history routes; existing pagination defect also reproduced in Archived chats after restoring a loaded row. Deleted chats has the same source pattern.                                         | Reconcile pagination after row removal. Verify filters, ranking, message anchoring, permission changes and empty/error states on real seeded data.                                                                          |
+| W08 | Research: `app/api/llm/v1/chat/completions/lib/research-loop.ts`, `features/chat/components/research/ResearchReportView.tsx`                            | Implemented planning/gathering/synthesis/recovery path; prior research tests passed. Fine-grained source steering and real citation quality remain unverified.                                                   | Fixed source/citation evaluation; verify source controls, interrupted resume, report export, and provider usage reconciliation. Do not infer quality from loop iteration counts.                                            |
+| W09 | Artifacts: `features/chat/components/artifacts/ArtifactPreview.tsx`, `features/chat/services/artifact-cloud-sync.ts`                                    | Implemented preview/edit/version/restore/publish/sync; partial editing ergonomics (textarea source editor). Prior sync tests passed.                                                                             | Validate revision/restore and sync conflict behavior across fresh browser contexts; improve focused change inspection and editing to meet W09.                                                                              |
+| W10 | Sharing: `app/api/share/route.ts`, `app/api/share/[token]/route.ts`, `features/chat/components/share/ShareConversationDialog.tsx`                       | Sharing paths exist; B1 passed link fixtures. September 7 probe reproduced a publication remaining readable after failed bulk-delete cleanup and a success-reporting retry.                                      | Fix deletion/revocation atomicity and reject public access to deleted-source content. Verify separate-browser revoke/expiry, associated files, workspace policy and snapshot/fork behavior.                                 |
+| W11 | Library: `app/chat/library/page.tsx`, `app/api/library/route.ts`, `app/api/files/[id]/route.ts`                                                         | Implemented download/listing paths; B1/B5 file fixtures pass. Known Library offset drift remains in the current removeFromPage implementation (source rechecked September 7).                                    | Fix pagination after mutations and verify real file bytes, storage failures, download authorization, expired references and restore/delete behavior.                                                                        |
+| W12 | Media: `app/api/media/video/generate/route.ts`, `lib/services/video-job-reconciliation-service.ts`                                                      | Implemented durable job/admission/reconciliation paths; image/video generate/status/cancel tests pass in B2.                                                                                                     | Real-provider generation and download, refresh during submission uncertainty, delayed callback, storage outage, and accounting reconciliation. No live media purchase occurred in this audit.                               |
+| W13 | Voice: `features/chat/hooks/use-voice-session.ts`, `app/api/llm/v1/audio/transcriptions/route.ts`                                                       | Implemented, with completed-text-to-speech limitation; capture/voice/transcription suites pass in B2.                                                                                                            | Measure first audio and interruption latency on actual devices/browsers; validate permission loss and cleanup. Realtime audio is a separate enhancement, not a correction to a fake voice feature.                          |
+| W14 | Connectors: `lib/connectors/mcp-context-service.ts`, `lib/connectors/oauth-store.ts`, `lib/user-connector-tools.ts`                                     | Implemented; B1 exercises authorization, stored grants, tool discovery/use, refresh, revoke, reconnect, and deconfiguration with mocked services.                                                                | Repeat lifecycle with disposable real connectors and source permissions. Tests mocking auth/egress do not establish real boundary enforcement.                                                                              |
+| W15 | Skills/plugins: `features/skills/services/skills-catalog.ts`, `features/plugins/server/directory/install.ts`, `app/api/plugins/installations/route.ts`  | Implemented with runtime/source gates; catalog, CRUD, install, and API suites pass in B3.                                                                                                                        | Verify installed content is used on the next turn; disable/uninstall/update and unavailable runtime/credentials must remain honest in a real browser.                                                                       |
+| W16 | Tasks/approvals: `features/tasks/components/TasksPage.tsx`, `lib/workflows/cloud-agent-workflow-stream.ts`                                              | Implemented task history and rerun handoff; task page and code approval suites pass in B1. Approval tests cover replay/concurrent decision rejection.                                                            | Close-tab continuation against a real durable runner; verify cancel/deny prevents new actions and a fresh browser reconstructs the same task.                                                                               |
+| W17 | Schedules/notifications: `features/schedules/components/SchedulesPage.tsx`, `lib/services/schedule-service.ts`, `app/api/cron/run-schedules/route.ts`   | Implemented scheduling paths; B1/B4 pass. Follow-up reproduced skipped browser push revocation when the server removal request rejects.                                                                          | Fix logout revocation failure. Verify real contention/DST, cron lag, and opt-in delivery/account switching. Mobile opt-in does not authorize browser notifications.                                                         |
+| W18 | Code/notebooks: `app/code/page.tsx`, `features/code/CloudCodePage.tsx`, `app/api/code/sessions/[sessionId]/notebook/execute/route.ts`                   | Mounted at `/code`; `/chat/code` redirects. Code page/approval/notebook suites pass in B1/B3. Deployment, storage and plan gates exist.                                                                          | Real sandbox task/cell/diff, resume/expiry, limits, denied approvals, and sandbox egress. External repository writes need a disposable repository.                                                                          |
+| W19 | Settings/privacy: `app/settings/_lib/preferences-client.ts`, `app/api/settings/preferences/route.ts`                                                    | Defects reproduced: Memory saves hide failure and concurrent capability writes can restore an earlier value. Read/write scope tests pass in B2/B4/B5.                                                            | Make acknowledged state, errors/retry and save ordering consistent; propagate successful changes to mounted consumers. Exercise account/workspace cache reset.                                                              |
+| W20 | Billing/usage: `app/api/checkout/route.ts`, `app/api/stripe-webhook/lib/`, `lib/services/managed-usage-request-service.ts`                              | Implemented; checkout and unpaid-entitlement suites pass in B1.                                                                                                                                                  | Payment test-mode round trip, duplicate/out-of-order webhook delivery, invoice/usage reconciliation, concurrent reservation settlement, cancellation and supported refund flows. No financial mutation was made.            |
+| W21 | Export/deletion: `app/api/user/export/route.ts`, `app/api/user/delete-account/route.ts`                                                                 | Two export defects: incomplete sections report success and private object keys lack usable download references. Scope/deletion suites pass in B1/B2/B5.                                                          | Fail or explicitly mark partial export when any section fails; demonstrate usable private-file references. Verify seeded multi-workspace export and full purge/cancel behavior without touching real user data.             |
+| W22 | Workspace admin: `app/api/settings/team/`, `app/api/settings/organization/`                                                                             | Implemented; shared-resource isolation, invite lifecycle, team isolation and preference scope suites pass in B1/B4. Existing enterprise browser specs were inspected, not run.                                   | Real owner/admin/member requests and policy propagation; role changes, seat races, member removal, sharing gates and audit records.                                                                                         |
+| W23 | Accessibility/responsive UI: `shared/components/accessibility/`, `e2e/qa-*.spec.ts`                                                                     | Source assertions pass in B2; no fresh rendered audit.                                                                                                                                                           | Keyboard, screen reader, zoom, narrow layouts, actual contrast, reduced motion, overlays and long transcripts on release-supported browsers.                                                                                |
+| W24 | Performance/release: `playwright.config.ts`, `lib/workflows/durable-stream-liveness.ts`                                                                 | Defensive mechanisms and existing test infrastructure; live SLOs, concurrency, rollback and deployment readiness unverified.                                                                                     | Record measured budgets and task outcomes against a known revision; execute real limiter/load and migration/rollback checks separately from scaled UI tests.                                                                |
+| W25 | Device entry: `app/pair/pair-body.tsx`, `app/api/settings/devices/route.ts`                                                                             | Intentional boundary: browser tells the user pairing must start in Desktop and finish in the phone app. Device/code validation suites pass in B4.                                                                | Validate truthful handoff and owned device revoke UI; physical pairing is an external-surface dependency, not an absent browser pairing implementation.                                                                     |
+| W26 | Support/feedback: `features/support/components/SupportWidgetMount.tsx`, `app/api/support/ask/route.ts`, `app/api/feedback/route.ts`                     | Widget is deployment-gated; ask/action suites pass in B4. Feedback route has validation and storage handling; delivery not exercised.                                                                            | Confirm availability copy, input recovery, source-backed answers/abstention, scoped action confirmation, and test-recipient delivery where enabled.                                                                         |
+
+### Remaining work in execution order
+
+1. **Correctness fixes:** prioritize misleading Memory privacy state, logout
+   push revocation and incomplete publication revocation, then archived restore,
+   mutation-safe pagination, capability save ordering, stale memory status, usable
+   export references, and the tracked catalogue retry loop, non-Latin project
+   query handling, onboarding seed overwrite and partial-export success.
+   Each fix needs a regression assertion for correct behavior, not a test that
+   merely reproduces the defect.
+2. **Data and authorization release gates:** W04/W10/W11/W21/W22 with seeded
+   accounts, real isolated database/object storage, and browser/API assertions.
+   Resolve usable export references and incomplete-export disclosure before
+   presenting export as complete.
+3. **Durable task and billing release gates:** W02/W12/W16/W17/W18/W20 with
+   controlled provider failures, concurrent requests, test-mode billing and a
+   fresh browser. Confirm acknowledged state and charges independently of UI.
+4. **Competitive depth:** W05 passage retrieval, W06 relevant recall, W08
+   source controls and citation evaluation, W09 revision ergonomics. These are
+   scoped enhancements; existing CRUD, loops and sync should be reused.
+5. **Usability/performance:** W01/W03/W07/W13/W19/W23/W24, then the enabled
+   integration/support flows W14/W15/W25/W26. Voice architecture changes depend
+   on measured latency and the intended product promise.
+
+### Validation run in this audit
+
+**655 existing tests passed across 44 suites**, in four batches. Two temporary
+probes separately reproduced onboarding overwrite and incomplete export;
+they were removed afterward. The export probe also reran its copied scoped
+fixture tests, which are not counted again in the 655. Earlier in this
+conversation, 73 tests and two other probes covered research, memory scope,
+artifact sync, concurrent attachments, catalogue failure and Cyrillic
+retrieval; those are separate earlier evidence, not part of this run total.
+
+All paths below are relative to `apps/web/`. Each batch was invoked with
+`pnpm --filter @agiworkforce/web test` followed by the listed paths. Individual
+paths containing brackets should be shell-quoted when rerunning.
+
+| Batch | Result                       | Exact test paths                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B1    | 19 suites / 255 tests passed | `features/onboarding/components/OnboardingWizard.test.tsx`; `shared/stores/authentication-store.logout-cleanup.test.ts`; `app/api/checkout/route.test.ts`; `app/api/stripe-webhook/lib/__tests__/unpaid-checkout-entitlement.test.ts`; `app/api/share/route.test.ts`; `app/api/share/[token]/route.test.ts`; `app/api/user/export/__tests__/export-covers-personal-data.test.ts`; `app/api/user/delete-account/__tests__/route.test.ts`; `app/api/user/delete-account/cancel/__tests__/route.test.ts`; `lib/services/schedule-service.test.ts`; `features/schedules/components/SchedulesPage.test.tsx`; `app/api/cron/run-schedules/route.test.ts`; `features/tasks/components/TasksPage.test.tsx`; `features/code/CloudCodePage.test.tsx`; `lib/services/__tests__/cloud-code-agent-approval-service.test.ts`; `lib/connectors/__tests__/oauth-connector-lifecycle.contract.test.ts`; `app/api/library/__tests__/route.test.ts`; `app/api/files/[id]/__tests__/generated-file-pipeline.integration.test.ts`; `app/api/settings/organization/shared/__tests__/route.cross-org-isolation.test.ts` |
+| B2    | 12 suites / 271 tests passed | `__tests__/api/media-image-generate.test.ts`; `__tests__/api/media-video-generate.test.ts`; `__tests__/api/media-video-status.test.ts`; `__tests__/api/media-video-cancel.test.ts`; `lib/services/video-job-reconciliation-service.test.ts`; `app/api/llm/v1/audio/transcriptions/route.test.ts`; `features/chat/hooks/use-voice-session.test.tsx`; `features/chat/services/__tests__/global-search-service.test.ts`; `features/chat/components/share/ShareConversationDialog.test.tsx`; `app/api/user/export/__tests__/route.scoped-db.test.ts`; `shared/components/accessibility/accessibility-surface.test.ts`; `app/settings/__tests__/settings-routes-reachable.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| B3    | 5 suites / 47 tests passed   | `features/skills/services/skills-catalog.test.ts`; `app/api/skills/__tests__/skill-crud.test.ts`; `features/plugins/server/directory/__tests__/install.test.ts`; `app/api/plugins/installations/__tests__/route.test.ts`; `app/api/code/sessions/[sessionId]/notebook/execute/route.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| B4    | 8 suites / 82 tests passed   | `lib/services/__tests__/schedule-notification-service.test.ts`; `lib/validations/__tests__/device-pairing-codes.test.ts`; `app/api/settings/devices/__tests__/route.test.ts`; `app/api/support/actions/__tests__/routes.test.ts`; `app/api/support/ask/route.test.ts`; `app/api/settings/team/invitations/__tests__/route.lifecycle.test.ts`; `app/api/settings/team/__tests__/route.cross-org-isolation.test.ts`; `app/api/settings/preferences/__tests__/rls-scoped.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+### Follow-up failure audit, 2026-09-06
+
+Five additional findings are recorded in
+[the known-flaw ledger](../agent-context/known-flaws.md#2026-09-06-web-workflow-audit-nine-open-correctness-findings):
+misleading Memory state after rejected saves, browser push revocation skipped
+on transport failure, out-of-order capability saves, unusable private-media
+export references, and stale client memory status. As of September 6 this brought the audit's
+tracked findings to nine; it is not a count of every open repository defect.
+
+B5: **9 existing suites / 81 tests passed**, invoked with the same web test
+command and these paths: `features/settings/sections/__tests__/MemorySection.test.tsx`;
+`features/settings/sections/__tests__/CapabilitiesSection.test.tsx`;
+`features/notifications/lib/__tests__/web-push-client.test.ts`;
+`lib/services/__tests__/web-push-service.test.ts`;
+`app/api/web-push/__tests__/route.test.ts`;
+`app/api/user/export/__tests__/route.scoped-db.test.ts`;
+`lib/server/media-storage.test.ts`;
+`shared/stores/authentication-store.logout-cleanup.test.ts`;
+`app/api/files/[id]/__tests__/generated-file-pipeline.integration.test.ts`.
+Some repeat earlier coverage; this total is separate from the initial 655.
+
+Seven new reproduction/control cases also passed across five temporary probe
+files: rejected Memory save with remount, reverse-order successful saves with
+remount, push transport rejection, an HTTP-error unsubscribe control, private
+key export output, failed-read cache recovery after explicit reset, and the
+mounted composer's stale Memory off indicator after a preference-save event.
+The two probe invocations reported 24 and 7 assertions because they reused
+existing fixture tests; those totals are not additional unique regression
+coverage. Temporary files were removed after recording the reproducible steps.
+
+These probes execute real UI/helpers/handlers with controlled dependencies.
+The save-order double applies namespace snapshots when each pending operation
+completes, matching the traced preference PUT behavior; it does not prove live
+PostgreSQL timing. The composer probe uses an already-persisted per-chat memory
+opt-out and the real save-event name, not a browser interaction with Settings.
+Browser push delivery after logout and downloading exported production media
+were source-traced only. The memory-status result does not establish a server
+policy bypass. Production code was not changed.
+
+### Deletion and restore continuation, 2026-09-07
+
+Two new findings were reproduced: bulk-delete publication cleanup cannot
+recover through the same bulk action after its first attempt partially commits,
+and an archived chat absent from the loaded sidebar slice is not added there
+when restore succeeds. The audit now tracks **11 new findings across its
+initial and follow-up passes**. The previously known pagination defect was
+also reproduced on Archived chats and source-traced in Deleted chats; its
+existing ledger entry was updated instead of adding another count.
+
+B6: **9 existing suites / 68 tests passed** with the web test command and:
+`features/settings/sections/ConversationDataSections.test.tsx`;
+`features/settings/services/conversation-data-service.test.ts`;
+`app/api/chat/conversations/bulk/route.test.ts`;
+`app/api/chat/conversations/[id]/restore/route.test.ts`;
+`app/api/chat/conversations/route.archived-filter.test.ts`;
+`lib/services/published-artifact-service.test.ts`;
+`app/api/settings/sessions/route.test.ts`;
+`app/api/settings/sessions/[sessionId]/route.test.ts`;
+`features/settings/sections/AccountSection.sessions.test.tsx`.
+
+Three additional probe cases passed in two temporary files: partial bulk delete
+plus retry and public-token access, restore with an empty sidebar store, and
+restore-before-pagination against a mutable archived-row fixture. The invocation
+reported 10 assertions because seven existing component tests were copied as
+fixture coverage. These temporary files were removed after recording the steps.
+
+The publication probe used the real route and publication service with a
+stateful database double; direct unpublish made the same token unreadable as
+a control. Source inspection established separate scoped statements and no
+soft-delete publication trigger. The existing bulk-delete test only checks the
+500 response, which cannot establish rollback. This is not a live PostgreSQL
+or anonymous-browser result. The archive probe used the canonical page-size
+constant and asserted that the skipped row remained in its server fixture;
+passing over an actually empty result set could not produce its finding.
+
+No additional account-session defect was established in this continuation.
+Provider-side session invalidation and real browser recovery remain acceptance
+work. Production code was not changed.
+
+Instrument qualifications:
+
+- `test/setup.ts` points database variables to an unroutable local port and
+  sets `AGI_KV_PROVIDER=none`; unit tests cannot establish live database policy
+  or deployed limiter behavior. It also mocks CSRF by default, so a passing
+  route suite must not be reported as CSRF proof unless it restores that owner.
+- The connector lifecycle fixture mocks OAuth/MCP/auth/egress. The generated
+  file pipeline fixture uses in-memory assets/object storage. These prove
+  application orchestration under their inputs, not third-party availability.
+- Export inventory and accessibility-surface tests inspect source text. Export
+  scope tests execute the handler with a mocked database; actual PostgreSQL RLS
+  and retrieval of exported file bytes remain unverified.
+- B1 schedule execution emitted notification warnings because its database
+  stub did not supply notification preference rows. That warning was not
+  classified as a production defect. The dedicated notification suite passed
+  in B4. An initially supplied notification test filter omitted `__tests__`
+  and matched no file in B2; the 12-suite count above excludes it.
+- Playwright loads `.env.local`; its server overrides Redis credentials and
+  scales rate limits but does not replace the database/identity/provider
+  configuration. Some authenticated specs mint a ticket for a designated QA
+  account. Reusing an existing server can also bypass server setup. No browser
+  sweep was run without first establishing a separate test environment.
+- No full build, whole-web typecheck, production mutation, payment, provider
+  generation, message to another person, load test or physical-device run was
+  performed. Live acceptance for all 26 groups remains open until evidence is
+  attached to the specific criteria; this audit itself is complete at the
+  source/isolated-test level.
+
+### Wave 3 continuation, 2026-09-07 evening
+
+Scope: the founder's completion mandate for the web product, run as a lead plus
+four executors on the shared checkout, starting from the register above and
+W01 to W26. Revision at the start of the wave: `bfa4db827`. This section is
+the execution queue and evidence for that wave; the audit tables above stay
+as the evidence they were.
+
+Status vocabulary in the matrix below: **verified complete** (a live run or a
+production check behind it), **implemented; live verification open** (a
+traced code path with tests, no live acceptance yet), **partial** (a concrete
+limitation remains), **confirmed defect** (a register row still open),
+**missing required capability**, **intentional platform boundary**, and
+**unknown** (no evidence either way). A mocked test never promotes a row past
+"implemented".
+
+#### Schema
+
+Migration `0175_plugin_marketplace_uploads.sql` (a `kind` on plugin sources, a
+nullable repository url constrained by kind, and `plugin_marketplace_entry_files`
+under owner row level security) was rehearsed on a branch cloned from
+production, where the apply ran clean and the row level security probe passed
+33 tables, then applied to production and recorded against `129c33946`.
+Production is at 175 applied, 0 pending, 0 drift; `/api/health`, `/`, `/login`
+and `/pricing` answered 200 afterwards. The dependency guard carries an
+allowlist row for the one module that references the new column.
+
+#### Matrix, rows that changed in this wave
+
+| Workflow                     | Expected outcome                                                                                                                                           | Current evidence                                                                                                                                                                                                                                          | Status                              | Root cause and owner                                                                                    | Acceptance criteria | Verification                                                                              | Remaining dependency                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| W01 sign-in and onboarding   | A lapsed session lands on a recovery page that explains itself and returns the user where they were; a delayed profile read never overwrites a typed name. | Seven protected layouts and two gated pages redirect through one helper to `/session-expired`; the wizard keeps edited fields when the seed resolves late.                                                                                                | Implemented; live verification open | Layouts redirected to bare sign-in (`7fba1e305`); seed callback assigned unconditionally (`b9d9fe8e6`). | W01                 | Component and guard tests; no browser run with a real expired cookie.                     | Live expiry against Clerk in a real browser.                                                              |
+| W02 chat lifecycle           | Two near-simultaneous sends start one billed run; a failed send keeps the draft; stopping a stream keeps what arrived.                                     | Per-conversation advisory lock in a new admission owner, 409 to the loser with the reservation refunded (`956f648fc`); composer restores text and attachments on failure (`5679154d6`); interrupted artifact persisted as such (`3e3b9a773`).             | Implemented; live verification open | Two statements under read committed both saw no active run.                                             | W02                 | Route test drives two concurrent posts through a transaction-aware fake; component tests. | Browser run firing two sends within 100 ms against the running server, with the billing ledger read back. |
+| W06 memory                   | "Never remember" terms apply to every write.                                                                                                               | One write gate in `memory-write-service.ts`; manual create, edit, import commit and cross-device sync all pass through it; a structural test pins every route under `app/api/memory` to the gate (`af1bf499a`).                                           | Implemented; live verification open | Only auto-captured facts were filtered.                                                                 | W06, W19            | Route tests with the gate's read stubbed.                                                 | A turn in an open tab after adding a term.                                                                |
+| W07 search and history       | Sidebar recents page past fifty.                                                                                                                           | Not landed in this wave; executor item 5 pending behind the screenshot gate.                                                                                                                                                                              | Confirmed defect                    | WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01.                                                         | W07                 | none                                                                                      | turn-integrity-executor item 5.                                                                           |
+| W10 public sharing           | Shared transcripts never carry local paths.                                                                                                                | Scrubber walks tool calls recursively (`cb3e9c6b1`).                                                                                                                                                                                                      | Implemented; live verification open | The only scrubbed field was one no caller populated.                                                    | W10                 | Route tests on the stored payload.                                                        | Signed-out browser read of a share with tool calls.                                                       |
+| W12 image and video          | Provider failures reach the user as app copy, never upstream text.                                                                                         | Category to copy map with one generic fallback (`34c5deb86`).                                                                                                                                                                                             | Implemented; live verification open | Fallback branch echoed the raw message.                                                                 | W12                 | Route test with a credential-shaped upstream body.                                        | Real provider failure.                                                                                    |
+| W15 skills and plugins       | A user can bring a plugin as a zip and see its skills in the composer.                                                                                     | Migration 0175 applied; upload route validates with the existing manifest parsers and ceilings, stores files durably, installs through the existing service (`990f57f41`, `5dc0c6158`). Authored plugins, upload skill and the Add menus are in progress. | Partial                             | Sources required a github url and skill bodies lived in a public ninety day cache.                      | W15                 | Route and service tests; browser evidence pending the Add menu gate.                      | plugins-executor items C to E.                                                                            |
+| W16 work tasks and approvals | A tool blocked mid-run is refused on the next dispatch; a push notification opens the run it names.                                                        | Permission re-read on every durable dispatch with a persisted refusal event (`8e858426c`); tasks page reads the run parameter the worker writes (`0d45f9f49`).                                                                                            | Implemented; live verification open | Permission read once per run; page ignored the parameter.                                               | W16, W17            | Workflow and page tests.                                                                  | Close-tab continuation and a real push click.                                                             |
+| W19 settings and privacy     | Consent withdrawal stops the next analytics event in the open tab; concurrent capability saves keep the last intent.                                       | Withdrawal reaches the analytics gate (`f823bb6b1`). The preferences precondition and capability save ordering are in progress.                                                                                                                           | Partial                             | Withdrawal wrote a record the gate never read.                                                          | W19                 | Component test on the gate.                                                               | privacy-executor item 4.                                                                                  |
+| W20 billing and usage        | A fleet-wide reset ledgers what it cleared.                                                                                                                | Update joins a locked snapshot and returns the pre-update balance (`6d29e38d2`).                                                                                                                                                                          | Implemented; live verification open | `returning` read the zero it had just written.                                                          | W20                 | Service test simulating returning semantics.                                              | An operator run against a seeded database.                                                                |
+| W21 export and deletion      | An export says when it is incomplete and how to retry.                                                                                                     | Completeness ledger on every section read; json reports success only when complete; download carries a status header (`6978ca9ca`).                                                                                                                       | Implemented; live verification open | Failed reads returned empty arrays under a success response.                                            | W21                 | Four route tests.                                                                         | Seeded-account export with a forced section failure.                                                      |
+| W22 workspace administration | Leaving or being deprovisioned closes the same access; deleting a directory sync connection revokes what it granted.                                       | Self-leave runs the admin deprovision and reports what it could not revoke (`d37a3d30b`); directory sync deletion revokes memberships and credentials with an audit row (`0db44e9f3`).                                                                    | Implemented; live verification open | Two offboarding paths ended in two states.                                                              | W22                 | Route tests plus the coverage guard listing every removal path.                           | Two-workspace browser run with real roles.                                                                |
+| W25 device entry points      | Pairing initiation is protected like every other cookie-authenticated mutation.                                                                            | Csrf gate on the route and the coverage guard matches the identity helper (`f1c86148d`).                                                                                                                                                                  | Verified complete at the unit level | Route used a helper the guard did not match.                                                            | W25                 | Coverage guard plus route suites.                                                         | none                                                                                                      |
+| Public catalogue             | Deprecated and not-live models are distinguishable.                                                                                                        | Lifecycle block on every entry (`66e41ea14`).                                                                                                                                                                                                             | Implemented; live verification open | No field carried status.                                                                                | W03                 | Route test against the catalogue source.                                                  | none                                                                                                      |
+| Desktop download             | The standard installer reads the same repository every other release route reads.                                                                          | Download route and trusted asset allowlist resolve through the release repository owner (`32e2fcad7`).                                                                                                                                                    | Implemented; live verification open | Two private defaults disagreed.                                                                         | W24                 | Route test with the override cleared.                                                     | A production download.                                                                                    |
+| Sync                         | A dirty conversation keeps only the fields its push will send.                                                                                             | Per-field merge on the dirty set (`6e18f829b`).                                                                                                                                                                                                           | Implemented; live verification open | Pull discarded every remote field.                                                                      | W02                 | Package tests.                                                                            | Two-device edit.                                                                                          |
+| Transcript                   | Thinking blocks label their own region; a clarify card shows it is busy.                                                                                   | Ids from the react id hook (`ce8437510`); in-flight flag from the card block (`711763c10`).                                                                                                                                                               | Implemented; live verification open | Content-derived ids; fire-and-forget submit.                                                            | W23                 | Component tests.                                                                          | none                                                                                                      |
+
+#### Register delta
+
+Rows closed in this wave, each in or beside its fixing commit:
+WEB-OPERATOR-METRICS-FLEET-WIDE-USAGE-RESET-01, WEB-ROUTE-DEVICE-PAIRING-POST-BYPASSES-01,
+WEB-ROUTE-SHARE-PAYLOAD-PATH-REDACTION-01, WEB-ROUTE-IMAGE-GENERATION-ECHOES-RAW-01,
+WEB-ONBOARDING-SEED-OVERWRITE-01, WEB-EXPORT-PARTIAL-SUCCESS-01,
+WEB-ROUTE-APP-API-DOWNLOAD-DEFAULTS-01, WEB-PAGE-SESSION-EXPIRED-RECOVERY-FULLY-01,
+WEB-ROUTE-REMEMBER-EXCLUSION-TERMS-ENFORCED-01, WEB-ROUTE-SELF-LEAVE-DEPROVISIONS-DEPARTING-01,
+WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01, WEB-SW-WEB-PUSH-DEEP-LINK-01,
+WEB-ROUTE-PUBLIC-MODEL-CATALOG-ENDPOINT-01, WEB-THINKING-BLOCK-THINKINGBLOCK-DERIVES-01,
+WEB-CLARIFY-CARD-SEND-SKIP-BUTTONS-GIVE-01, WEB-CONSENT-CENTRE-ANALYTICS-WITHDRAWAL-01,
+WEB-CLOUD-AGENT-WORKFLOW-TOOL-BLOCKED-RUN-01, WEB-ROUTE-DELETING-DIRECTORY-SYNC-CONNECTION-01,
+WEB-CHAT-COMPOSER-NEW-WIPES-USER-MESSAGE-01, WEB-USE-STREAMING-ARTIFACT-INTERRUPTING-01,
+WEB-CONVERSATIONS-PULL-SIDE-RECONCILIATION-01.
+
+Intentional boundary recorded rather than built: the web product is
+subscription-backed Managed Cloud and does not expose BYOK, so
+WEB-WEB-SETTINGS-SECTIONS-BYOK-PAGE-PROVIDER-01 is not a missing feature; the
+honest fix is to remove the unreachable page and endpoint from the web bundle,
+which stays queued.
+
+#### Verification actually performed
+
+Every fix carries a regression test that was run in its own suite, and the
+touched suites were rerun: operator metrics, csrf coverage and its two sibling
+security suites, share, image generation (66), onboarding wizard, export (4
+suites), desktop release routes, protected layouts guard, models route, tasks
+page in both packages, thinking block, interactive card block (25). The web
+typecheck was clean on the lead's files at each commit; the only errors on the
+tree were executors' in-flight files. The pre-push guard chain ran green from a
+clean worktree at `0d45f9f49`. CI on `8ce285a50` was cancelled by the next push;
+CI on `0d45f9f49` is the run of record for this batch.
+
+Not performed: no browser run against a real expired session, no two-device
+sync run, no seeded two-workspace administration run, no payment test-mode
+round trip, no provider failure injected live, no load test. Those remain open
+under the criteria they belong to.
+
+#### Live verification still open, in priority order
+
+1. W02 concurrent send against the running server with the billing ledger read back.
+2. W15 upload, authored and skill-upload paths in the browser behind the screenshot gate.
+3. W19 capability save ordering and the preferences precondition (in progress).
+4. W22 two-workspace role run through direct api requests and the ui.
+5. W21 seeded export with a forced section failure and a media byte comparison.
+6. W01 real expiry in a browser.
+
+#### External dependencies
+
+- Production deploy of this batch is gated on founder approval of the
+  production-web job, as every deploy is.
+- GitHub App installation revocation (authz item 3) needs the app's
+  credentials in the environment to be exercised live; the code path can only
+  be unit tested here.
+
+#### Next implementation priority
+
+turn-integrity item 5 (sidebar pagination), privacy item 4 (preferences
+precondition and capability save ordering), authz items 3 to 7 (GitHub
+revocation, shared project capabilities, the dead mcp route, ownership
+transfer ui, takedown and erasure queues), plugins items C to E, then the
+support live chat, whose server side (create, status, messages, claim,
+presence) exists with no visitor or agent thread in the ui.
 
 ## How To Use
 
