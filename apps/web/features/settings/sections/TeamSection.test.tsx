@@ -51,6 +51,7 @@ const state = vi.hoisted(() => ({
   leaveOrganization: vi.fn(),
   updateRole: vi.fn(),
   removeMember: vi.fn(),
+  transferOwnership: vi.fn(),
   inviteError: null as Error | null,
   invitations: [] as Array<{
     id: string;
@@ -144,6 +145,12 @@ vi.mock('../hooks/use-settings-queries', () => ({
   }),
   useRemoveTeamMember: () => ({
     mutate: state.removeMember,
+    isPending: false,
+    error: null,
+  }),
+  useTransferOrganizationOwnership: () => ({
+    mutate: state.transferOwnership,
+    mutateAsync: state.transferOwnership,
     isPending: false,
     error: null,
   }),
@@ -509,5 +516,107 @@ describe('TeamSection', () => {
     fireEvent.click(leaveButton);
     fireEvent.click(screen.getByRole('button', { name: 'Transfer and leave' }));
     expect(state.leaveOrganization).toHaveBeenCalledWith({ successorUserId: 'successor' });
+  });
+
+  function renderAsOwnerWithMember() {
+    state.organization = {
+      id: 'org-1',
+      name: 'Acme',
+      slug: 'acme',
+      plan: 'team',
+      memberCount: 2,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+    state.members = [
+      {
+        id: 'm-1',
+        userId: 'owner',
+        organizationId: 'org-1',
+        email: 'owner@example.com',
+        name: 'Owner',
+        avatarUrl: null,
+        role: 'owner',
+        status: 'active',
+        provisionedAt: null,
+        joinedAt: null,
+        lastActiveAt: null,
+        permissions: [],
+        isCurrentUser: true,
+      },
+      {
+        id: 'm-2',
+        userId: 'successor',
+        organizationId: 'org-1',
+        email: 'successor@example.com',
+        name: 'Successor',
+        avatarUrl: null,
+        role: 'member',
+        status: 'active',
+        provisionedAt: null,
+        joinedAt: null,
+        lastActiveAt: null,
+        permissions: [],
+        isCurrentUser: false,
+      },
+    ];
+    render(<TeamSection />);
+  }
+
+  it('transfers ownership without leaving, and keeps the outgoing role the owner picked', () => {
+    renderAsOwnerWithMember();
+
+    const submit = screen.getByTestId('transfer-ownership-submit');
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('transfer-ownership-member'), {
+      target: { value: 'successor' },
+    });
+    fireEvent.change(screen.getByTestId('transfer-ownership-outgoing-role'), {
+      target: { value: 'viewer' },
+    });
+    expect(submit).toBeEnabled();
+
+    fireEvent.click(submit);
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }));
+
+    expect(state.transferOwnership).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      toUserId: 'successor',
+      outgoingOwnerRole: 'viewer',
+    });
+    expect(state.leaveOrganization).not.toHaveBeenCalled();
+  });
+
+  it('names who gains what and what the owner loses before transferring', () => {
+    renderAsOwnerWithMember();
+
+    fireEvent.change(screen.getByTestId('transfer-ownership-member'), {
+      target: { value: 'successor' },
+    });
+    fireEvent.click(screen.getByTestId('transfer-ownership-submit'));
+
+    const description = screen.getByText(/becomes the owner of Acme/i);
+    expect(description.textContent).toContain('Successor');
+    expect(description.textContent).toContain('billing');
+    expect(description.textContent).toContain('You become Admin');
+    expect(state.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('never offers the transfer to a member who is not the owner', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Acme',
+      slug: 'acme',
+      plan: 'team',
+      memberCount: 2,
+      maxMembers: null,
+      currentUserRole: 'admin',
+    };
+    state.members = [];
+
+    render(<TeamSection />);
+
+    expect(screen.queryByTestId('transfer-ownership-submit')).toBeNull();
   });
 });

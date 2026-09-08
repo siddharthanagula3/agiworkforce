@@ -1369,7 +1369,9 @@ export function useLeaveOrganization(): UseMutationResult<
     onSuccess: async () => {
       await queryClient.cancelQueries();
       queryClient.clear();
-      toast.success('You left the workspace. You can now join or create another one.');
+      toast.success(
+        'You left the workspace. Your sessions, device tokens and API keys were revoked, so sign in again to continue in your personal account.',
+      );
       window.location.reload();
     },
     onError: (error: Error) => toast.error(error.message || 'Failed to leave workspace'),
@@ -1445,6 +1447,44 @@ export function useInviteTeamMember(): UseMutationResult<
  *
  * @returns UseMutationResult for removing a team member
  */
+export type OrganizationOwnerRoleAfterTransfer = 'admin' | 'member' | 'viewer';
+
+export function useTransferOrganizationOwnership(): UseMutationResult<
+  void,
+  Error,
+  {
+    organizationId: string;
+    toUserId: string;
+    outgoingOwnerRole: OrganizationOwnerRoleAfterTransfer;
+  }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ organizationId, toUserId, outgoingOwnerRole }) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/settings/organization/transfer-ownership', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ organizationId, toUserId, outgoingOwnerRole }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+    },
+    onSuccess: (_, { organizationId }) => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'team', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success('Ownership transferred.');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to transfer ownership'),
+  });
+}
+
 export function useRemoveTeamMember(): UseMutationResult<
   void,
   Error,
