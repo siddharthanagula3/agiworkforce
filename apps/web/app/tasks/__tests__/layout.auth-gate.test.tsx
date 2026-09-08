@@ -20,7 +20,7 @@ describe('tasks layout auth gate', () => {
 
     const rendered = await TasksLayout({ children: 'tasks' });
 
-    expect(mocks.redirect).toHaveBeenCalledWith('/login?redirectTo=/tasks');
+    expect(mocks.redirect).toHaveBeenCalledWith('/session-expired?redirectTo=%2Ftasks');
     expect(rendered).toBeUndefined();
   });
 
