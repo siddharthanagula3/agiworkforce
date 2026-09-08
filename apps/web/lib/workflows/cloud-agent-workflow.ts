@@ -450,9 +450,6 @@ export async function executeCloudAgentWorkflowInvocation(
   try {
     for await (const chunk of generator) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
-        // Journalled before it is put on the wire: the journal is what a
-        // reattaching client replays, and it is the only one of the two that
-        // still works once the reader is gone.
         if (projected.envelope) {
           await journal.append(projected.envelope);
           if (projected.envelope.event.type === 'error') reportedFailure = true;
@@ -533,10 +530,6 @@ export async function failCloudAgentWorkflow(
     emitter.emitWithEnvelope({ type: 'stop', reason: 'error' }),
   ];
 
-  // Journal, then settle, then the wire. The settle is what transitions the run,
-  // persists the assistant row and releases the reservation, and it used to sit
-  // behind three writes to a stream whose reader may already be gone, which is
-  // how a failed run stayed `running` until someone cancelled it by hand.
   for (const emitted of events) {
     await appendCloudAgentEvent(db, {
       userId: input.userId,
