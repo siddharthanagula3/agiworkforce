@@ -564,16 +564,44 @@ async function handlePush(request: NextRequest) {
       // chat turn does, so the web gallery can discover artifacts from
       // conversations synced in from another surface. Fire-and-forget: a
       // discovery aid, never allowed to fail or slow the sync response.
+      // Indexed from the stored row, never from the payload that asked for the
+      // write. The client's copy is a request; what the row holds after the
+      // push is the fact, and the two differ whenever the write was rejected,
+      // transformed, or raced by another device. Reading back also settles the
+      // role and the conversation without trusting the same request twice.
       const pushedById = new Map(messages.map((item) => [item.id, item]));
-      for (const row of applied.messages) {
-        const pushed = pushedById.get(row.id);
-        if (pushed?.role === 'assistant' && !pushed.isDeleted) {
+      const candidateIds = applied.messages
+        .filter((row) => {
+          const pushed = pushedById.get(row.id);
+          return pushed?.role === 'assistant' && !pushed.isDeleted;
+        })
+        .map((row) => row.id);
+
+      if (candidateIds.length > 0) {
+        const stored = await db.query<{
+          id: string;
+          conversation_id: string;
+          content: string;
+        }>(
+          `select message.id::text as id,
+                  message.conversation_id::text as conversation_id,
+                  message.content
+             from web_messages as message
+             join web_conversations as conversation
+               on conversation.id = message.conversation_id
+            where message.id = any($1::uuid[])
+              and conversation.user_id = $2
+              and message.role = 'assistant'
+              and message.deleted_at is null`,
+          [candidateIds, userId],
+        );
+        for (const row of stored) {
           scheduleArtifactIndexing({
             db,
             userId,
-            conversationId: pushed.conversationId,
-            messageId: pushed.id,
-            content: pushed.content,
+            conversationId: row.conversation_id,
+            messageId: row.id,
+            content: row.content,
           });
         }
       }
