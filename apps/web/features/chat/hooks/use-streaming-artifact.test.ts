@@ -97,6 +97,47 @@ describe('useStreamingArtifactSync', () => {
     expect(useStreamingArtifactStore.getState().streaming).toBeNull();
   });
 
+  it('keeps what arrived when the stream is stopped mid-artifact', () => {
+    const block = blockFor('```html\n<div>partial');
+    const { rerender } = renderHook(
+      ({ isStreaming }: { isStreaming: boolean }) =>
+        useStreamingArtifactSync({
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          isStreaming,
+          block,
+        }),
+      { initialProps: { isStreaming: true } },
+    );
+
+    rerender({ isStreaming: false });
+
+    const expectedId = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
+    const kept = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.id).toBe(expectedId);
+    expect(kept[0]?.content).toBe('<div>partial');
+    expect(kept[0]?.interrupted).toBe(true);
+    expect(useStreamingArtifactStore.getState().streaming).toBeNull();
+  });
+
+  it('leaves the completed artifact to the message parser when the fence closes', () => {
+    const { rerender } = renderHook(
+      ({ block }: { block: TrailingUnclosedBlock | null }) =>
+        useStreamingArtifactSync({
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          isStreaming: true,
+          block,
+        }),
+      { initialProps: { block: blockFor('```html\n<div>hi</div>') } },
+    );
+
+    rerender({ block: null });
+
+    expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)).toHaveLength(0);
+  });
+
   it('clears its own entry on unmount', () => {
     const { unmount } = renderHook(() =>
       useStreamingArtifactSync({
