@@ -18,6 +18,7 @@ import {
 } from './managed-usage-request-service';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
 import {
   createObservedProviderUsage,
@@ -256,6 +257,8 @@ const CANCELLABLE_TURN_STATES = ['running', 'awaiting_approval'];
 export interface CloudCodeTurnCancellation {
   turnId: string;
   requestedAt: string;
+  /** True when the stop was also recorded against a durable run carrying it. */
+  durable: boolean;
 }
 
 /**
@@ -293,7 +296,11 @@ export async function requestCloudCodeTurnCancellation(
   turnId?: string | null,
 ): Promise<CloudCodeTurnCancellation> {
   validateCloudCodeSessionId(sessionId);
-  const rows = await db.query<{ id: string; cancel_requested_at: string | Date }>(
+  const rows = await db.query<{
+    id: string;
+    idempotency_key: string;
+    cancel_requested_at: string | Date;
+  }>(
     `update cloud_code_agent_turns
         set cancel_requested_at = coalesce(cancel_requested_at, now()), updated_at = now()
       where session_id = $1
@@ -301,15 +308,25 @@ export async function requestCloudCodeTurnCancellation(
         and organization_id is not distinct from $3
         and state = any($4::text[])
         and ($5::uuid is null or id = $5::uuid)
-      returning id, cancel_requested_at`,
+      returning id, idempotency_key, cancel_requested_at`,
     [sessionId, owner.userId, owner.organizationId, CANCELLABLE_TURN_STATES, turnId ?? null],
   );
   const row = rows[0];
   if (!row) {
     throw new CloudCodeConflictError('No agent turn is running in this Code session');
   }
+  // A durable turn runs in an invocation that never saw this request and reads
+  // the run row instead, so the stop is written to both or it only works on one
+  // transport.
+  const durable = await mirrorCloudCodeStopOntoDurableRun(db, owner, row.idempotency_key).catch(
+    (error: unknown) => {
+      logger.warn({ error, turnId: row.id }, 'Could not mirror a Code stop onto its durable run');
+      return false;
+    },
+  );
   return {
     turnId: row.id,
+    durable,
     requestedAt:
       row.cancel_requested_at instanceof Date
         ? row.cancel_requested_at.toISOString()
