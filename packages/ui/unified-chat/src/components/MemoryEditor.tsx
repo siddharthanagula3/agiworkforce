@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
@@ -23,6 +23,7 @@ export interface MemoryEditorDataAdapter {
   hydrateFromServer: () => Promise<void>;
   add: (text: string, sourceConversationId?: string) => Promise<unknown> | unknown;
   update: (id: string, text: string) => Promise<unknown> | unknown;
+  setPinned?: (id: string, pinned: boolean) => Promise<unknown> | unknown;
   remove: (id: string) => Promise<unknown> | unknown;
   clear: () => Promise<unknown> | unknown;
 }
@@ -38,6 +39,7 @@ export function MemoryEditor({
   const localFacts = useMemoryStore((s) => s.facts);
   const localAdd = useMemoryStore((s) => s.add);
   const localUpdate = useMemoryStore((s) => s.update);
+  const localSetPinned = useMemoryStore((s) => s.setPinned);
   const localRemove = useMemoryStore((s) => s.remove);
   const localClear = useMemoryStore((s) => s.clear);
   const localSyncStatus = useMemoryStore((s) => s.syncStatus);
@@ -45,6 +47,7 @@ export function MemoryEditor({
   const facts = adapter?.facts ?? localFacts;
   const add = adapter?.add ?? localAdd;
   const update = adapter?.update ?? localUpdate;
+  const setPinned = adapter?.setPinned ?? localSetPinned;
   const remove = adapter?.remove ?? localRemove;
   const clear = adapter?.clear ?? localClear;
   const syncStatus = adapter?.syncStatus ?? localSyncStatus;
@@ -64,7 +67,10 @@ export function MemoryEditor({
 
   const query = search.trim().toLowerCase();
   const visibleFacts = useMemo(
-    () => (query ? facts.filter((fact) => fact.text.toLowerCase().includes(query)) : facts),
+    () =>
+      (query ? facts.filter((fact) => fact.text.toLowerCase().includes(query)) : facts)
+        .slice()
+        .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)),
     [facts, query],
   );
 
@@ -306,23 +312,44 @@ export function MemoryEditor({
                             </>
                           )}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            confirm({
-                              title: 'Delete this memory?',
-                              description:
-                                'The assistant stops using this fact in future conversations. It cannot be restored, it would have to be saved again.',
-                              confirmLabel: 'Delete memory',
-                              onConfirm: () => runMutation(() => remove(fact.id)),
-                            })
-                          }
-                          disabled={fact.pending}
-                          className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
-                          aria-label={`Delete memory fact`}
-                        >
-                          <Trash2 size={13} strokeWidth={1.75} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => runMutation(() => setPinned(fact.id, !fact.pinned))}
+                            disabled={fact.pending}
+                            aria-pressed={fact.pinned === true}
+                            aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
+                            className={cn(
+                              'rounded p-1 hover:bg-[var(--chat-surface-hover)]',
+                              fact.pinned
+                                ? 'text-[var(--chat-accent-primary-text)]'
+                                : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
+                            )}
+                          >
+                            {fact.pinned ? (
+                              <PinOff size={13} strokeWidth={1.75} />
+                            ) : (
+                              <Pin size={13} strokeWidth={1.75} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirm({
+                                title: 'Delete this memory?',
+                                description:
+                                  'The assistant stops using this fact in future conversations. It cannot be restored, it would have to be saved again.',
+                                confirmLabel: 'Delete memory',
+                                onConfirm: () => runMutation(() => remove(fact.id)),
+                              })
+                            }
+                            disabled={fact.pending}
+                            className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
+                            aria-label={`Delete memory fact`}
+                          >
+                            <Trash2 size={13} strokeWidth={1.75} />
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}

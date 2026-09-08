@@ -43,3 +43,38 @@ describe('memoryStore', () => {
     expect(useMemoryStore.getState().facts).toHaveLength(0);
   });
 });
+
+describe('memoryStore pinning', () => {
+  beforeEach(() => {
+    useMemoryStore.setState({ facts: [] });
+  });
+
+  it('pins and unpins a local fact', () => {
+    const created = useMemoryStore.getState().add('Prefers metric units');
+    expect(created).not.toBeNull();
+    const id = created!.id;
+
+    useMemoryStore.getState().setPinned(id, true);
+    expect(useMemoryStore.getState().facts.find((f) => f.id === id)?.pinned).toBe(true);
+
+    useMemoryStore.getState().setPinned(id, false);
+    expect(useMemoryStore.getState().facts.find((f) => f.id === id)?.pinned).toBe(false);
+  });
+
+  it('refuses to pin a fact the server has not acknowledged yet', () => {
+    useMemoryStore.setState({
+      facts: [
+        {
+          id: 'pending-1',
+          text: 'Still saving',
+          pending: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    useMemoryStore.getState().setPinned('pending-1', true);
+    expect(useMemoryStore.getState().facts[0]?.pinned).toBeUndefined();
+  });
+});
