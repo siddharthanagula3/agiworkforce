@@ -36,6 +36,10 @@ import type {
   SendReplayMetadata,
   WebSearchResults,
 } from '@/features/chat/types/message-metadata';
+import {
+  accountUsageBlockEqual,
+  type AccountUsageBlock,
+} from '@/features/chat/stores/account-usage-block';
 import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
 import {
   resolveLeafForSibling,
@@ -584,6 +588,14 @@ interface ChatState {
   /** Derived: does the ACTIVE conversation have a turn in flight (see above). */
   isLoading: boolean;
   error: string | null;
+  /**
+   * A refusal that blocks the whole account rather than the turn that hit it:
+   * the plan's capacity for this period is spent, or its credits are. It
+   * outlives the turn and the conversation because every next send is refused
+   * the same way, so the composer states it and stays blocked until the account
+   * state changes, instead of leaving one card behind in one transcript.
+   */
+  accountUsageBlock: AccountUsageBlock | null;
 
   // Model selection
   selectedModel: string;
@@ -789,6 +801,7 @@ interface ChatState {
    * instead of leaking into the conversation currently on screen.
    */
   setError: (error: string | null, conversationId?: string) => void;
+  setAccountUsageBlock: (block: AccountUsageBlock | null) => void;
 
   // Actions - Model
   setSelectedModel: (modelId: string, tier: ModelTier) => void;
@@ -872,6 +885,7 @@ const initialState = {
   loadingConversationIds: [] as string[],
   isLoading: false,
   error: null,
+  accountUsageBlock: null as AccountUsageBlock | null,
   selectedModel: 'auto',
   selectedModelTier: 'balanced' as ModelTier,
   draftsByConversation: {} as Record<string, string>,
@@ -1565,6 +1579,16 @@ export const useChatStore = create<ChatState>()(
               conversationId && conversationId !== state.activeConversationId ? state : { error },
             undefined,
             'chat/setError',
+          ),
+
+        setAccountUsageBlock: (accountUsageBlock) =>
+          set(
+            (state) =>
+              accountUsageBlockEqual(state.accountUsageBlock, accountUsageBlock)
+                ? state
+                : { accountUsageBlock },
+            undefined,
+            'chat/setAccountUsageBlock',
           ),
 
         // Model
