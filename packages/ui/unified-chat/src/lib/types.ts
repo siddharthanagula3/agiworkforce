@@ -155,6 +155,12 @@ export interface Project {
   lastUsedAt?: string | null;
   importedFrom?: ProjectImportSource | null;
   metadata?: Record<string, unknown> | null;
+  /**
+   * True when the caller reaches this project through an organisation share
+   * rather than owning it. Every write route refuses these, so a surface that
+   * renders them as editable is offering controls the server answers 404 to.
+   */
+  isOrgShared?: boolean;
 }
 
 export type ArtifactType = SharedArtifactType;
