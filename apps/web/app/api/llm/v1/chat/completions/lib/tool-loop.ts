@@ -237,6 +237,7 @@ import {
   PROVIDER_STREAM_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
+  PROVIDER_FIRST_TOKEN_DEADLINE_MS,
 } from '@/lib/deadline-policy';
 
 const DEFAULT_CHAT_MAX_STEPS = 10;
@@ -1100,6 +1101,25 @@ export class ProviderStreamDeadlineError extends Error {
 }
 
 /**
+ * Distinct from the whole-stream budget above, and worded so `classifyError`
+ * reads it as `api_timeout`: a route that never speaks is an availability
+ * failure the failover plan may rotate away from, while a stream that outran
+ * the turn's remaining time is not.
+ */
+export class ProviderFirstTokenDeadlineError extends Error {
+  readonly deadlineMs: number;
+
+  constructor(deadlineMs: number) {
+    super(
+      `The model sent no first token within its ` +
+        `${Math.round(deadlineMs / 1000)}s first-token timeout.`,
+    );
+    this.name = 'ProviderFirstTokenDeadlineError';
+    this.deadlineMs = deadlineMs;
+  }
+}
+
+/**
  * Bound one provider stream to `deadlineMs` of wall clock, and abort the
  * upstream request when it expires.
  *
@@ -1119,15 +1139,22 @@ export class ProviderStreamDeadlineError extends Error {
  * finishes in time rather than left pending for the rest of the budget.
  */
 export function withProviderStreamDeadline<T>(
-  run: (signal: AbortSignal) => Promise<T>,
+  run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
   deadlineMs: number,
   parentSignal?: AbortSignal,
+  firstTokenMs?: number,
 ): Promise<T> {
   const controller = new AbortController();
   const forwardParentAbort = (): void => controller.abort(parentSignal?.reason);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let firstTokenTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearFirstTokenTimer = (): void => {
+    if (firstTokenTimer !== undefined) clearTimeout(firstTokenTimer);
+    firstTokenTimer = undefined;
+  };
   const cleanup = (): void => {
     if (timer !== undefined) clearTimeout(timer);
+    clearFirstTokenTimer();
     parentSignal?.removeEventListener('abort', forwardParentAbort);
   };
   if (parentSignal?.aborted) forwardParentAbort();
@@ -1140,7 +1167,15 @@ export function withProviderStreamDeadline<T>(
       cleanup();
       reject(expired);
     }, deadlineMs);
-    run(controller.signal).then(
+    if (firstTokenMs !== undefined && firstTokenMs < deadlineMs) {
+      firstTokenTimer = setTimeout(() => {
+        const expired = new ProviderFirstTokenDeadlineError(firstTokenMs);
+        controller.abort(expired);
+        cleanup();
+        reject(expired);
+      }, firstTokenMs);
+    }
+    run(controller.signal, clearFirstTokenTimer).then(
       (value) => {
         cleanup();
         resolve(value);
@@ -2277,8 +2312,13 @@ export async function* runToolLoop(
           text: '',
           usage: stepUsage,
         };
+        const streamDeadlineMs = nestedDeadlineMs(
+          PROVIDER_STREAM_DEADLINE_MS,
+          maxDurationMs,
+          now() - startedAt,
+        );
         const collected = await withProviderStreamDeadline(
-          async (signal) => {
+          async (signal, markFirstToken) => {
             const providerStream = await buildToolLoopStream(
               attemptProcessed.provider,
               attemptProcessed,
@@ -2288,13 +2328,17 @@ export async function* runToolLoop(
               signal,
             );
             return collectProviderStream(providerStream, (entry) => {
-              if (firstProviderLineAtMs === undefined) firstProviderLineAtMs = now();
+              if (firstProviderLineAtMs === undefined) {
+                firstProviderLineAtMs = now();
+                markFirstToken();
+              }
               liveLinesReachedClient = true;
               onLine?.(entry);
             });
           },
-          nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
+          streamDeadlineMs,
           options.signal,
+          nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamDeadlineMs, 0),
         );
         return {
           ...collected,
