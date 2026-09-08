@@ -39,6 +39,7 @@ describe('publishing from an older artifact version', () => {
       async (): Promise<PublishResult> => ({
         kind: 'cloud',
         shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
+        publishedAt: '2026-09-07T00:00:00.000Z',
       }),
     );
     const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
@@ -63,6 +64,7 @@ describe('publishing from an older artifact version', () => {
       async (): Promise<PublishResult> => ({
         kind: 'cloud',
         shareUrl: 'https://agiworkforce.com/shared-artifact/dddddddddddddddddddddddd',
+        publishedAt: '2026-09-07T00:00:00.000Z',
       }),
     );
     const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
