@@ -62,6 +62,7 @@ interface WebSideEntry {
   computeSession?: ArtifactData['computeSession'];
   generatedFile?: ArtifactData['generatedFile'];
   artifactManifest?: ArtifactData['artifactManifest'];
+  interrupted?: boolean;
 }
 
 export interface Artifact extends ArtifactData {
@@ -72,6 +73,13 @@ export interface Artifact extends ArtifactData {
   messageId: string;
   conversationId?: string;
   createdAt: Date;
+  /**
+   * The stream that was producing this artifact stopped before the fence
+   * closed, so the content is everything that arrived and not the whole
+   * document. Web-only, carried in the side map because the shared artifact
+   * wire has no field for it.
+   */
+  interrupted?: boolean;
 }
 
 type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: Date };
@@ -121,6 +129,7 @@ function toArtifact(shared: SharedArtifact): Artifact {
     computeSession: side.computeSession,
     generatedFile: side.generatedFile,
     artifactManifest: side.artifactManifest,
+    interrupted: side.interrupted,
   };
 }
 
@@ -161,7 +170,8 @@ function artifactsContentEqual(a: ArtifactInput, b: ArtifactInput): boolean {
     a.messageId === b.messageId &&
     a.computeSession === b.computeSession &&
     a.generatedFile === b.generatedFile &&
-    a.artifactManifest === b.artifactManifest
+    a.artifactManifest === b.artifactManifest &&
+    a.interrupted === b.interrupted
   );
 }
 
@@ -385,6 +395,7 @@ const actions = {
       computeSession: normalized.computeSession,
       generatedFile: normalized.generatedFile,
       artifactManifest: normalized.artifactManifest,
+      interrupted: normalized.interrupted,
     });
     _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
     if (!_sharedArtifactStore.getState().selectedArtifactId) {
@@ -403,6 +414,7 @@ const actions = {
         computeSession: normalized.computeSession,
         generatedFile: normalized.generatedFile,
         artifactManifest: normalized.artifactManifest,
+        interrupted: normalized.interrupted,
       });
       engine.upsertArtifact(toSharedArtifact(normalized));
       if (!engine.selectedArtifactId) {
@@ -425,6 +437,7 @@ const actions = {
       computeSession: side.computeSession,
       generatedFile: side.generatedFile,
       artifactManifest: side.artifactManifest,
+      interrupted: side.interrupted,
     };
     const contentChanged = !artifactsContentEqual(normalized, existingAsInput);
 
@@ -433,6 +446,7 @@ const actions = {
         computeSession: normalized.computeSession,
         generatedFile: normalized.generatedFile,
         artifactManifest: normalized.artifactManifest,
+        interrupted: normalized.interrupted,
       });
       _sharedArtifactStore
         .getState()
@@ -502,6 +516,7 @@ const actions = {
       computeSession: normalized.computeSession,
       generatedFile: normalized.generatedFile,
       artifactManifest: normalized.artifactManifest,
+      interrupted: normalized.interrupted,
     });
     _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
     if (!_sharedArtifactStore.getState().selectedArtifactId) {
