@@ -155,7 +155,7 @@ CREATE TABLE accounts (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email       TEXT NOT NULL UNIQUE,
   name        TEXT,
-  tier        TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','hobby','pro','max','enterprise')),
+  tier        TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','basic','pro','max','enterprise')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
