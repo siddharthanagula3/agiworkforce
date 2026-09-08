@@ -322,4 +322,40 @@ describe('the context a session has spent', () => {
     expect(turns[0]).toMatchObject({ inputTokens: 1234, outputTokens: 567 });
     expect(queries[0]?.sql).toContain('input_tokens, output_tokens');
   });
+
+  it('tells a turn the reader stopped from one whose connection dropped', async () => {
+    function turnRow(cancelRequestedAt: string | null) {
+      return {
+        id: '22222222-2222-4222-8222-222222222222',
+        goal: 'fix it',
+        state: 'cancelled',
+        stop_reason: 'cancelled',
+        steps_used: 1,
+        input_tokens: 0,
+        output_tokens: 0,
+        cancel_requested_at: cancelRequestedAt,
+        final_message: '',
+        error_message: null,
+        created_at: '2026-09-07T12:00:00.000Z',
+      };
+    }
+
+    const stopped = await listCloudCodeAgentTurns(
+      db((sql) =>
+        /from cloud_code_agent_turns/.test(sql) ? [turnRow('2026-09-07T12:05:00.000Z')] : [],
+      ) as never,
+      OWNER,
+      SESSION_ID,
+    );
+    const dropped = await listCloudCodeAgentTurns(
+      db((sql) => (/from cloud_code_agent_turns/.test(sql) ? [turnRow(null)] : [])) as never,
+      OWNER,
+      SESSION_ID,
+    );
+
+    expect(stopped[0]?.stopReason).toBe('cancelled');
+    expect(dropped[0]?.stopReason).toBe('cancelled');
+    expect(stopped[0]?.cancelRequestedAt).toBe('2026-09-07T12:05:00.000Z');
+    expect(dropped[0]?.cancelRequestedAt).toBeNull();
+  });
 });

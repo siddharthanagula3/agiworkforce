@@ -330,6 +330,11 @@
       "file": "apps/web/lib/services/cloud-code-agent-service.ts",
       "migration": 176,
       "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-turn-reaper.ts",
+      "migration": 176,
+      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
     }
   ]
 }
