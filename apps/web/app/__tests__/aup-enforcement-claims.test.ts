@@ -29,15 +29,31 @@ function toolCallGateSource(): string {
   return TOOL_LOOP.slice(start, end);
 }
 
-describe('Q-1 · "Every connector and MCP tool requires approval by default"', () => {
+/**
+ * The published sentence used to exempt built-ins: "Every connector and MCP
+ * tool requires approval by default. Built-in web search, page fetch, and
+ * sandbox tools do not." It contradicted the Tool Approvals setting, whose own
+ * copy names web search and page fetch as things that still ask, and it was the
+ * behaviour the code implemented, so a user who chose "Ask before every action"
+ * watched a web search run unprompted. The rule is now one rule for every tool
+ * and the page says so.
+ */
+describe('Q-1 · "Your Tool Approvals setting decides, and it governs our own tools"', () => {
   it('is the sentence actually published on /acceptable-use', () => {
-    expect(AUP).toContain('Every connector and MCP tool requires approval by default.');
+    expect(AUP).toContain(
+      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors.',
+    );
+  });
+
+  it('no longer claims the built-ins are exempt', () => {
+    expect(AUP).not.toContain('Built-in web search, page fetch, and sandbox tools do not');
   });
 
   it('holds because any MCP tool in the turn forces manual approval mode', () => {
     const withMcp = classifyToolLoopInputs(
       [{ qualifiedName: 'gmail__send_email' } as never],
       undefined,
+      DEFAULT_TOOL_APPROVAL_POLICY,
     );
     expect(withMcp.approvalMode).toBe('manual');
   });
@@ -47,15 +63,28 @@ describe('Q-1 · "Every connector and MCP tool requires approval by default"', (
     for (const name of ['gmail__list_messages', 'notion__search', 'slack__post_message']) {
       expect(policyAutoApprovesTool(DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(false);
     }
+    for (const name of ['web_search', 'url_fetch']) {
+      expect(policyAutoApprovesTool(DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(false);
+    }
   });
 
-  it('exempts exactly the built-ins the same sentence names, and nothing else', () => {
-    expect(AUP).toContain('Built-in web search, page fetch, and sandbox tools do not');
+  it('governs our own tools on the default, which is what the page now claims', () => {
     const builtInsOnly = classifyToolLoopInputs(
       [],
-      [{ function: { name: 'web_search' } }, { function: { name: 'fetch_url' } }],
+      [{ function: { name: 'web_search' } }, { function: { name: 'url_fetch' } }],
+      DEFAULT_TOOL_APPROVAL_POLICY,
     );
-    expect(builtInsOnly.approvalMode).toBe('auto');
+    expect(builtInsOnly.approvalMode).toBe('manual');
+  });
+
+  it('still asks for web search and page fetch when read-only work is auto-approved', () => {
+    expect(AUP).toContain('web search and page fetch included');
+    const result = classifyToolLoopInputs(
+      [],
+      [{ function: { name: 'web_search' } }, { function: { name: 'url_fetch' } }],
+      'auto_approve_read_only',
+    );
+    expect(result.approvalMode).toBe('manual');
   });
 });
 
