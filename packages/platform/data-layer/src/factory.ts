@@ -57,6 +57,7 @@ import {
   type RealtimeProvider,
   DataLayerConfigError,
 } from './types';
+import { assertDatabaseEnvironmentIsolation } from './environment-isolation';
 import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
 import { PostgresDatabaseAdapter, type PostgresDatabaseAdapterConfig } from './adapters/postgres';
@@ -142,6 +143,7 @@ function databaseConnectionConfig(
         'a postgres:// connection string.',
     );
   }
+  assertDatabaseEnvironmentIsolation({ connectionString });
   const cfg: NeonDatabaseAdapterConfig & PostgresDatabaseAdapterConfig = { connectionString };
   if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
   if (opts.connectionTimeoutMs !== undefined) cfg.connectionTimeoutMs = opts.connectionTimeoutMs;
