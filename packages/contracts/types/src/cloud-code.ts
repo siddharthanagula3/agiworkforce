@@ -132,11 +132,26 @@ export interface CloudCodeSessionListResponse {
   runtimes: CloudCodeRuntime[];
 }
 
+/**
+ * A repository chosen from a connected GitHub installation, as an alternative
+ * to a raw URL. The installation is what makes a private repository reachable,
+ * so it travels with the name rather than being guessed from the owner.
+ */
+export interface CloudCodeRepositoryReference {
+  installationId: number;
+  /** `owner/repository`, exactly as the installation reported it. */
+  fullName: string;
+  /** Null or absent means the repository's own default branch. */
+  branch?: string | null;
+}
+
 export interface CreateCloudCodeSessionInput {
   requestId: string;
   title: string;
   repositoryUrl?: string | null;
   repositoryBranch?: string | null;
+  /** Wins over repositoryUrl when both name the same repository. */
+  repository?: CloudCodeRepositoryReference | null;
   networkAccess: CloudCodeNetworkAccess;
   fullNetworkAcknowledged?: boolean;
   /** Must match a catalogue entry; omitted means the default image. */
