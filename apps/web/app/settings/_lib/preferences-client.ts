@@ -15,6 +15,30 @@ const PREFERENCES_SNAPSHOT_TTL_MS = 60_000;
 
 let snapshotInFlight: Promise<Record<string, unknown>> | null = null;
 let snapshotLoadedAt = 0;
+let storedVersion: string | null = null;
+
+export class PreferenceVersionConflictError extends Error {
+  readonly namespace: string;
+  readonly settings: unknown;
+  readonly version: string | null;
+
+  constructor(params: {
+    message: string;
+    namespace: string;
+    settings: unknown;
+    version: string | null;
+  }) {
+    super(params.message);
+    this.name = 'PreferenceVersionConflictError';
+    this.namespace = params.namespace;
+    this.settings = params.settings;
+    this.version = params.version;
+  }
+}
+
+function readVersion(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
 
 async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
   const response = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
@@ -27,10 +51,16 @@ async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
     };
     throw new Error(data.error?.message ?? data.message ?? 'Failed to load settings');
   }
-  const data = (await response.json()) as { settings?: unknown };
+  const data = (await response.json()) as { settings?: unknown; version?: unknown };
+  storedVersion = readVersion(data.version);
   return data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
     ? (data.settings as Record<string, unknown>)
     : {};
+}
+
+export async function readPreferencesVersion(): Promise<string | null> {
+  await loadPreferencesSnapshot();
+  return storedVersion;
 }
 
 function loadPreferencesSnapshot(): Promise<Record<string, unknown>> {
@@ -96,23 +126,57 @@ export async function refreshProfileConsumers(): Promise<void> {
   ]);
 }
 
+export interface PreferenceSaveOptions {
+  /** Merge into the stored namespace instead of replacing it. */
+  merge?: boolean;
+  /** Refuse the write, with a conflict, if the stored revision moved on. */
+  expectedVersion?: string | null;
+}
+
+export interface PreferenceSaveResult {
+  version: string | null;
+}
+
 export async function savePreferenceNamespace<T extends object>(
   namespace: string,
   value: T,
-): Promise<void> {
+  options?: PreferenceSaveOptions,
+): Promise<PreferenceSaveResult> {
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
   const response = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
     method: 'PUT',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ namespace, value }),
+    body: JSON.stringify({
+      namespace,
+      ...(options?.merge ? { patch: value } : { value }),
+      ...(options?.expectedVersion === undefined
+        ? {}
+        : { expectedVersion: options.expectedVersion }),
+    }),
   });
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(data.error?.message ?? 'Failed to save settings');
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+      settings?: unknown;
+      version?: unknown;
+    };
+    const message = data.error?.message ?? 'Failed to save settings';
+    if (response.status === 412) {
+      invalidatePreferencesSnapshot();
+      throw new PreferenceVersionConflictError({
+        message,
+        namespace,
+        settings: data.settings,
+        version: readVersion(data.version),
+      });
+    }
+    throw new Error(message);
   }
 
+  const data = (await response.json().catch(() => ({}))) as { version?: unknown };
   invalidatePreferencesSnapshot();
+  const version = readVersion(data.version);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
@@ -121,4 +185,6 @@ export async function savePreferenceNamespace<T extends object>(
       }),
     );
   }
+
+  return { version };
 }

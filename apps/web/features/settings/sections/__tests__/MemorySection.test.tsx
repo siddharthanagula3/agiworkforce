@@ -13,6 +13,8 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   savePreferenceNamespace: (...args: unknown[]) =>
     savePreferenceNamespace(...(args as [string, unknown])),
   fetchStoredPreferenceNamespace: async () => ({}),
+  readPreferencesVersion: async () => null,
+  PreferenceVersionConflictError: class PreferenceVersionConflictError extends Error {},
 }));
 
 vi.mock('@/lib/runtime/memory-capability', () => ({
@@ -53,7 +55,8 @@ describe('MemorySection top-level settings entry', () => {
     await waitFor(() =>
       expect(savePreferenceNamespace).toHaveBeenCalledWith(
         'capabilities',
-        expect.objectContaining({ memory: true }),
+        { memory: true },
+        { merge: true, expectedVersion: null },
       ),
     );
   });
