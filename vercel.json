@@ -39,6 +39,10 @@
       "schedule": "10,25,40,55 * * * *"
     },
     {
+      "path": "/api/cron/recover-reservations",
+      "schedule": "0,15,30,45 * * * *"
+    },
+    {
       "path": "/api/cron/purge-deleted-media",
       "schedule": "0 4 * * *"
     },
