@@ -248,10 +248,6 @@ Cross.toml
 # Transient gate battery logs
 reports/audit/gate-baseline/
 
-# Workspace-generated audit artifacts (authoritative findings in AUDIT_FINDINGS.md)
-AUDIT_PARTS/
-AUDIT_BATCHES/
-AUDIT_MANIFEST.txt
 
 # --- Generated QA artifacts / local scratch (not for main) ---
 .agiworkforce/
@@ -286,17 +282,6 @@ __pycache__/
 # scripts/check-repo-organization.mjs, which skips gitignored entries.
 /CLAUDE-SECURITY-*/
 
-# Point-in-time architecture audit produced by a multi-agent code sweep. Same
-# artifact class as the CLAUDE-SECURITY reports above: a snapshot of the tree at
-# one revision, not living documentation, and stale the moment the code moves.
-#
-# It necessarily quotes hundreds of real catalog model IDs to describe routing,
-# which is precisely what scripts/check-no-hardcoded-model-ids.mjs exists to
-# forbid in tracked files. Ignoring it keeps that guard meaningful rather than
-# widening its owner-path allowlist to admit a document that owns nothing.
-# Current-state facts that must survive belong in the docs the guards already
-# cover (README, docs/architecture/**), not in a frozen report.
-/AGIWORKFORCE_CURRENT_STATE.md
 
 # Transient capability-QA evidence (raw provider streams, probes)
 .qa-evidence/
