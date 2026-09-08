@@ -249,6 +249,7 @@ jobs:
           pnpm db:migrate -- apply --target ci
           pnpm db:migrate -- verify
           pnpm db:rls-probe -- --target ci
+          pnpm db:lease-probe -- --target ci
 
   js-verify:
     name: JS lint, typecheck, test, build
