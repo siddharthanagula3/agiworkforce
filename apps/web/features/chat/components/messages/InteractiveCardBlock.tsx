@@ -126,14 +126,18 @@ const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardP
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
   const submissionError = useCardSubmissionError(card.cardId);
+  const [submitting, setSubmitting] = useState(false);
   useCardResponseDeadline(card);
   useCardTurnResume(card, channel);
   const canRespond = channel !== null && interactiveCardAcceptsResponse(card);
 
   if (renderer && card.recognized) {
     const onRespond = (cardId: string, payload: InteractiveCardResponsePayload) => {
-      if (!channel) return;
-      void respondToInteractiveCard({ ...channel, cardId }, payload);
+      if (!channel || submitting) return;
+      setSubmitting(true);
+      void respondToInteractiveCard({ ...channel, cardId }, payload).finally(() =>
+        setSubmitting(false),
+      );
     };
 
     return (
@@ -150,6 +154,7 @@ const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardP
           ctx: {
             canRespond,
             ...(canRespond ? { onRespond } : {}),
+            submitting,
             ...(submissionError ? { submissionError } : {}),
             ...(assistantText ? { assistantText } : {}),
             onOpenUrl: openMapSearchProviderUrl,

@@ -143,6 +143,43 @@ describe('InteractiveCardBlock, response channel', () => {
     }
   });
 
+  it('disables both controls and shows the busy state until the response settles', async () => {
+    const card = decode(envelope);
+    seedTranscript(card);
+    let settle: (value: Response) => void = () => {};
+    vi.mocked(fetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const settledCard = settledResponse({
+      status: 'answered',
+      answeredAt: '2026-08-05T10:05:00.000Z',
+      answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['Relaxed'] }],
+    });
+
+    render(<InteractiveCardBlock cards={[card]} />);
+    await act(async () => {
+      screen.getByRole('button', { name: 'Relaxed' }).click();
+    });
+    await act(async () => {
+      screen.getByRole('button', { name: 'Send answers' }).click();
+    });
+
+    try {
+      const sending = screen.getByRole('button', { name: /Sending/ });
+      expect(sending).toBeDisabled();
+      expect(screen.getByRole('button', { name: "I'll just type it" })).toBeDisabled();
+      expect(sending.closest('[aria-busy="true"]')).not.toBeNull();
+    } finally {
+      await act(async () => {
+        settle(settledCard);
+      });
+    }
+
+    expect(screen.queryByRole('button', { name: /Sending/ })).toBeNull();
+  });
+
   it('sends a dismissal when the user would rather type', async () => {
     const card = decode(envelope);
     seedTranscript(card);

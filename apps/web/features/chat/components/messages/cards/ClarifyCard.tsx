@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { Spinner } from '@agiworkforce/ui';
 import { Check } from '@agiworkforce/icons';
 import type {
   ClarifyAnswer,
@@ -15,6 +16,7 @@ import { cn } from '@shared/lib/utils';
 export interface ClarifyCardContext {
   canRespond: boolean;
   onRespond?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
+  submitting?: boolean;
   submissionError?: string;
 }
 
@@ -42,6 +44,7 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
 
   const isPending = body.state.status === 'pending';
   const interactive = isPending && ctx.canRespond && typeof ctx.onRespond === 'function';
+  const submitting = ctx.submitting === true;
 
   const answersById = useMemo(() => {
     if (body.state.status !== 'answered') return new Map<string, ClarifyAnswer>();
@@ -195,19 +198,21 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
       </div>
 
       {interactive && (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2" aria-busy={submitting}>
           <button
             type="button"
-            disabled={!canSubmit}
+            disabled={!canSubmit || submitting}
             onClick={submit}
-            className="rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-accent-on-primary)] disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-accent-on-primary)] disabled:opacity-40"
           >
-            Send answers
+            {submitting ? <Spinner className="h-3 w-3" /> : null}
+            {submitting ? 'Sending' : 'Send answers'}
           </button>
           <button
             type="button"
+            disabled={submitting}
             onClick={dismiss}
-            className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
           >
             I'll just type it
           </button>
