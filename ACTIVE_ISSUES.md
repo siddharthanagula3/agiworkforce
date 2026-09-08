@@ -284,32 +284,38 @@ sharing model, and do not reuse the `organization_id` governance column from
 non-member cannot, and removing a member revokes access.
 **Validation:** RLS tests mirroring the 0086 project-sharing tests.
 
-### `AGI-14` Speech to text is hard-coupled to one provider
+### `AGI-14` There is no second speech-to-text vendor to fail over to
 
 **Severity:** P2
-**Status:** Open
+**Status:** Open, and blocked on a catalog decision rather than on code.
 **Area:** Provider neutrality, voice
-**Root cause:** The managed transcription route resolves a model, refuses
-anything whose provider is not OpenAI, and calls that vendor's endpoint directly
-instead of going through the provider abstraction the rest of the product uses.
-**Current behavior:** Transcription rejects the request when the resolved
-model's provider is not `openai`. Voice input has a single point of failure and
-a single vendor's pricing, on a product whose stated differentiator is model and
-provider neutrality.
-**Required behavior:** Transcription resolves through the same registry and
-routing path as every other capability, with at least one fallback provider.
-**Evidence:** `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:377`
-(`defaultModel.provider !== 'openai'`), `:387`, `:521`
-(`providerApiUrl('openai', 'audio/transcriptions')`), `:232`, `:247`.
-**User impact:** Voice input stops entirely if one vendor is unavailable, and
-its cost cannot be routed.
-**Dependencies:** Shares the voice surface with `AGI-6`, but is separate work.
-**Implementation direction:** Model transcription as a registry capability with
-a provider fallback chain, the way chat providers are already selected. Do not
-add a second hardcoded vendor.
-**Acceptance criteria:** Transcription succeeds through at least two providers
+**Corrected root cause:** Recorded as a coupling in the route, which is where it
+shows: `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:377` refuses a
+resolved model whose provider is not `openai`, `:521` calls
+`providerApiUrl('openai', 'audio/transcriptions')` directly, and the key is read
+as `OPENAI_API_KEY`. Checked on 2026-09-08, the catalog is the same shape: the
+authored catalog contains exactly two STT models, `gpt-4o-transcribe` and
+`gpt-4o-mini-transcribe`, both OpenAI, both under the `openai` family, and the
+`voice_transcription` slot resolves to one of them. The route is not hiding a
+choice; there is no second choice to make.
+**Why the route is not being generalised first:** an abstraction with one
+implementation and no second vendor to test it against is speculative
+generality. The provider-neutral shape is worth building at the moment a second
+vendor exists, and against it, so the seams land where that vendor actually
+differs rather than where OpenAI happens to.
+**What the decision is:** which second STT vendor, on what terms and at what
+price. That is spend and contract, so it is the founder's.
+**What follows the decision, in order:** add the model to
+`models.curation.json` under its own family; give the route a provider-keyed
+dispatch table for endpoint, auth header and form fields, replacing the four
+literals above; extend the routing slot to a fallback chain; then a route test
+per provider.
+**User impact:** voice input has one point of failure and one vendor's pricing,
+on a product whose stated differentiator is model and provider neutrality.
+**Dependencies:** the vendor decision, before any of it.
+**Acceptance criteria:** transcription succeeds through at least two providers
 and fails over. No provider literal remains at the call site.
-**Validation:** Route tests per provider, plus registry contract tests.
+**Validation:** route tests per provider, plus registry contract tests.
 
 ### `AGI-16` A citation's href is still the routing provider's redirect
 
@@ -577,8 +583,8 @@ Dependency-aware, not severity-ordered.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
    same provenance story as `AGI-4`.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
-7. `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent of each
-   other.
+7. `AGI-10`. Enterprise sharing, independent. `AGI-14` needs a vendor decision
+   before it needs an implementer.
 8. `AGI-11`, `AGI-20`. Background and polish. `AGI-17` needs a decision before
    it needs an implementer.
 
@@ -596,7 +602,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
 | `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
 | `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
-| `AGI-14` | per-provider route tests, registry contract     | none                               | transcription fails over between vendors |
+| `AGI-14` | per-provider route tests, registry contract     | none                               | a second STT vendor exists and fails over |
 | `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn       | a citation survives redirect expiry     |
 | `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
 | `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
@@ -616,7 +622,8 @@ AGI-24 ──> AGI-23          routing, one implementer, ordered
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
-AGI-10, AGI-14             enterprise and neutrality, independent
+AGI-10                     enterprise sharing, independent
+AGI-14                     blocked on a second STT vendor, not on code
 AGI-11, AGI-12             background
 AGI-17, AGI-20             polish, independent of everything
 ```
