@@ -40,8 +40,9 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 18 unresolved issues: 0 P0, 1 P1, 12 P2, 5 P3, plus 3 items needing
-  validation this session could not perform.
+- 19 unresolved issues: 0 P0, 1 P1, 13 P2, 5 P3, plus 3 items needing
+  validation this session could not perform. Two of them, `AGI-3` and `AGI-4`,
+  are partly fixed in this pass and say so.
 
 ### Closed in this pass
 
@@ -67,59 +68,38 @@ settlement is idempotent and concurrency-safe.
 
 ## 3. P1, high
 
-### `AGI-4` Project answers only ever see the head of a long file
+### `AGI-4` Project retrieval is fixed but not yet seen working in a browser
 
 **Severity:** P1
-**Status:** Open
+**Status:** Fixed and unit-verified. Live verification outstanding.
 **Area:** Project knowledge retrieval
-**Root cause:** Ranking and selection disagree. `scoreKnowledgeFile` scores the
-whole `extractedText`, so a term anywhere in a document raises its rank.
-Selection then takes `content.slice(0, limit)` with `limit` at most 16,000
-characters per file and 48,000 across all files. The passage that earned the
-rank is routinely excluded. There is no chunking and no passage selection.
-**Current behavior:** A question about material late in a long document
-retrieves the right file and answers from the wrong part of it. The prompt does
-carry an `excerptOf` notice, so the model usually says the file was truncated
-rather than inventing an answer. The failure is an honest abstention, not a
-fabrication.
-**Required behavior:** Retrieval selects query-relevant passages from anywhere
-in the document, within the same prompt budget, with a stable reference back to
-the file.
-**Evidence:** `apps/web/lib/services/project-context-service.ts:26-27`
-(budgets), `:104-120` (whole-body scoring), `:329-355` (`content.slice(0, limit)`
-and the `excerptOf` notice); `apps/web/lib/services/__tests__/project-context-bounded-excerpt.test.ts`
-asserts today's behavior, that a sentinel at the end of a 20,000 character
-document does not reach the prompt. Ownership is validated at both the
-conversation and project level, so the older claim that ACL filtering is absent
-is wrong.
-**Compounding factors found in the same trace:** long documents are truncated
-twice, once at extraction
-(`apps/web/lib/server/project-knowledge-extraction.ts:9`,
-`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a 250 page PDF cap) and again
-at prompt assembly. There is no docx, xlsx or pptx extraction, those return
-null. Project files reach the model as one JSON blob with no chunk id, offset or
-citation instruction, so an answer cannot point back at a passage.
-**User impact:** Project knowledge, an advertised core workflow, cannot answer
-questions about the back half of any long document.
-**Dependencies:** None.
-**Implementation direction:** Do not build a RAG stack. A tested Okapi BM25
-chunk retriever already exists at
-`apps/web/lib/support/agent/retrieval/{bm25,tokenize,retrieve}.ts`, with a
-per-document result cap, citation construction, a relevance floor and an
-abstention policy, and it is general over any `{id, text}` chunk list. Point it
-at windows cut from `project_knowledge_files.extracted_text` at request time.
-It is currently used only by the support agent and is not imported by
-`project-context-service.ts`. A managed embeddings endpoint also exists
-(`apps/web/app/api/llm/v1/embeddings/route.ts`, real Google calls, real
-billing) if semantic ranking is wanted later. There is no pgvector, no vector
-column and no tsvector anywhere, so a database-native path would be new work.
-Move the hardcoded budgets to the same owner as `MAX_PROJECT_KNOWLEDGE_FILES`.
-**Acceptance criteria:** Questions aimed at the beginning, middle and end of a
-long file are all answered, with paraphrased queries, competing sources, and
-correct abstention when content is absent or inaccessible. Replace the bounded
-excerpt test with a passage-retrieval test.
-**Validation:** Unit tests over chunking and selection, plus a project QA set
-measuring supported answers and correct abstentions.
+**What was fixed:** Ranking and selection are now one pass. `scoreKnowledgeFile`
+scored the whole `extractedText` while selection took `content.slice(0, limit)`,
+so the passage that earned a file its rank was routinely not in what was sent.
+`project-knowledge-passages.ts` cuts a document into overlapping windows, ranks
+them with the BM25 retriever the support agent already uses, and spends the same
+prompt budget on the passages that answer the question, in document order, each
+carrying the character range it came from. A document that fits is still sent
+whole; with no query, or with a query the document matches nowhere, it still
+falls back to the head, which is the only defensible choice there.
+**Verified:** `project-knowledge-passages.test.ts` drives the real
+`loadProjectContext` and `formatProjectSystemPrompt` with the answer placed at
+the beginning, the middle and the end of a document several times the per-file
+budget. All three reach the prompt; before the change only the first did.
+**What is outstanding:** a browser pass. Three unrelated things blocked it on
+2026-09-08: the project composer inherits AGI Work mode from `AGI-18`, an agent
+run reaches for code execution which now correctly stops for approval, and Auto
+selected the route in `AGI-23`. None of them are retrieval, and none should be
+worked around inside a retrieval test. Re-run once `AGI-23` and `AGI-18` are
+closed.
+**Remaining known limits, unchanged by this:** long documents are still
+truncated at extraction (`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a
+250 page PDF cap), and there is still no docx, xlsx or pptx extraction. Those
+are extraction gaps, not retrieval gaps.
+**Dependencies:** `AGI-23` and `AGI-18` for the live check only.
+**Acceptance criteria:** a question aimed at the back half of a long project
+file is answered from it, in a browser.
+**Validation:** the passage tests above, plus one live project question.
 
 ## 4. P2, important
 
@@ -464,39 +444,71 @@ selected for an eligible user.
 `known-flaws.md`, which describes the same "gate exists, nothing calls it"
 shape without naming this scenario.
 
-### `AGI-23` A route the account's own data policy will always refuse stays selectable
+### `AGI-23` A route the account's own data policy refuses is still offered
 
 **Severity:** P2
-**Status:** Open
+**Status:** Half fixed. The refusal now rotates; the catalog still offers the route.
 **Area:** Routing, catalog
-**Root cause:** The catalog offers a model whose only endpoint at the routing
-provider is excluded by our own account privacy setting. Selection does not
-consult that, so the turn is dispatched and refused every time.
-**Current behavior (observed live 2026-09-08):** an organization-scoped turn
-routed to `openrouter` for `gpt-5.6-sol` returned HTTP 404, `0 endpoints out of
-1 requested are available matching your guardrail restrictions and data policy
-... ZDR violation (account settings)`. The user saw "The provider rejected this
-request. Try again, or choose another model." The route cannot ever succeed
-while that setting stands, so every retry spends a round trip to fail again.
-**Required behavior:** A route that the account's data policy excludes is not
-selectable, or the exclusion is discovered once and the route taken out of
-service rather than re-tried per turn.
-**Evidence:** dev server log 2026-09-08 22:20:07 UTC, provider `openrouter`,
-`client_error_404`, and the same shape twice more within the minute.
-**Not an environment failure:** the setting is ours, on our own OpenRouter
-account, and the catalog entry is ours. A user cannot resolve it.
-**User impact:** A model in the picker that always fails, with an error that
-implicates the request rather than the configuration.
-**Dependencies:** None. `AGI-8` is the same class of defect one layer up.
-**Implementation direction:** Classify a data-policy refusal as a route-health
-signal so the existing runtime-state machinery withdraws it, and reconcile the
-catalog against the account's endpoint policy rather than assuming every listed
-endpoint is reachable.
-**Acceptance criteria:** A route excluded by the account's data policy is not
-offered, and a first refusal takes it out of service for the window.
-**Validation:** A classification test over the observed 404 body, plus a
-route-health test.
+**What was fixed:** An OpenRouter 404 saying `0 endpoints out of 1 requested are
+available matching your guardrail restrictions and data policy ... ZDR violation
+(account settings)` classified as a plain `client_error`, so it was neither
+retried nor rotated and the user was told the request had been rejected. It now
+classifies as `capacity_off_switch`, the same class as
+`min_discount_unavailable`, which is failover-eligible: the route has no supply
+on terms we accept, the provider is not down, and the request moves on.
+**What remains:** the model is still in the picker, and Auto still selects it
+first. Every turn that picks it spends a round trip discovering the same
+permanent refusal before rotating. The catalog should reconcile against the
+account's endpoint policy rather than assuming every listed endpoint is
+reachable, or a first refusal should take the route out of service for a window
+the way route health does for other classes.
+**Evidence:** dev server log 2026-09-08 22:20:07 and 22:54:35 UTC, provider
+`openrouter`, model `gpt-5.6-sol`, three occurrences within the minute.
+**Not an environment failure:** the setting is ours, on our own account, and so
+is the catalog entry. No user can resolve it.
+**User impact:** a model in the picker that never answers on the first attempt.
+**Dependencies:** None. `AGI-24` prevents the rotation from completing on any
+turn carrying tools, so both are needed before this reads as fixed to a user.
+**Acceptance criteria:** the route is not offered, or one refusal withdraws it
+for the window.
+**Validation:** the classification test in `provider-runtime`, plus a route
+health assertion.
 
+### `AGI-24` A turn carrying any function tool cannot fail over to another provider
+
+**Severity:** P2
+**Status:** Open, observed but not diagnosed.
+**Area:** Provider routing, failover
+**Root cause:** `mustStayOnProvider = requestCarriesTools(processed)`, and
+`requestCarriesTools` is true when the request carries any tool that is NOT a
+provider-native search, which is every ordinary function tool. Every candidate
+on a different provider is then skipped with "provider-native tools cannot
+transfer providers", a message that describes the opposite of the predicate.
+**Current behavior (observed live 2026-09-08):** a turn whose route was refused
+outright rotated through its whole fallback list and skipped every candidate,
+including `claude-opus-5` and `gemini-3.5-flash-lite`, because a function tool
+was attached. The turn failed with no answer despite Auto having working routes
+available.
+**Why it might be deliberate:** a mid-turn provider switch could invalidate
+tool-call ids already in the transcript. That would justify the restriction from
+the second provider step onward, not on the first, and function tool schemas are
+translated per provider by design.
+**Required behavior:** determine which of the two the restriction is for, and
+say so in the code. Either narrow it to provider-native tools, which is what its
+own message claims, or narrow it to steps after the first, or document why a
+first-step rotation is unsafe.
+**Evidence:** `apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts`
+`requestCarriesTools` and the `mustStayOnProvider` skip; dev log 2026-09-08
+22:56:54 UTC, four consecutive skips on one turn.
+**User impact:** Auto stops being Auto for any turn with a tool attached, which
+is most agentic turns.
+**Dependencies:** None. Compounds `AGI-23`.
+**Implementation direction:** Do not change the predicate before establishing
+which invariant it protects; there is no comment and the message contradicts the
+code, so one of the two is wrong and guessing which would be a regression.
+**Acceptance criteria:** a first-step route failure on a tool-carrying Auto turn
+reaches a working route, or the restriction carries a stated reason.
+**Validation:** failover unit tests over a tool-carrying request.
 
 ## 5. P3, lower priority
 
@@ -704,11 +716,12 @@ Dependency-aware, not severity-ordered.
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Out of order on purpose: it protects every later native
    change, and every day it is not done is another merge without validation.
-4. `AGI-8`, then `AGI-22`, then `AGI-23`. One implementer, in that order: all
-   three are routing preferences that exist and are not consulted, `AGI-8`
-   establishes the threading `AGI-22` reuses, and `AGI-23` is the same defect
-   seen from the catalog side. Do not run these concurrently with `AGI-4`, both
-   touch the chat request processor.
+4. `AGI-24`, then `AGI-23`, then `AGI-8`, then `AGI-22`. One implementer, in
+   that order. `AGI-24` first because until failover can complete, nothing
+   downstream of it is observable; `AGI-23` next because it is what exposed
+   `AGI-24`; then the two preferences that exist and are not consulted, `AGI-8`
+   establishing the threading `AGI-22` reuses. Do not run these concurrently
+   with `AGI-4`, both touch the chat request processor.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
    same provenance story as `AGI-4`.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
@@ -744,6 +757,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-21` | settings query hook test                        | none                               | an abort logs nothing at error level   |
 | `AGI-22` | auto-route conformance on the web path          | none                               | no Chinese-HQ route without consent    |
 | `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
+| `AGI-24` | failover tests over a tool-carrying request     | none                               | a tool turn reaches a working route    |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -753,7 +767,7 @@ Every web change closes with `apps/web` typecheck run on its own.
 AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
-AGI-8 ──> AGI-22 ──> AGI-23  routing preferences, one implementer, ordered
+AGI-24 ──> AGI-23 ──> AGI-8 ──> AGI-22   routing, one implementer, ordered
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
 AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent
