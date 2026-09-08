@@ -674,17 +674,6 @@ export function GeneralSection() {
         </p>
         <CustomCommandsSettings />
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        Keeping chats in step across devices?{' '}
-        <a
-          href="/settings/sync"
-          className="inline-block min-h-6 py-0.5 text-[var(--chat-accent-primary-text)] hover:underline"
-        >
-          Sync settings
-        </a>
-        .
-      </p>
     </div>
   );
 }
