@@ -8,6 +8,8 @@ import { calculateObservedProviderUsageCostDollars } from './managed-usage-accou
 import { LLMCostCalculator } from './llm-cost-calculator';
 import {
   CloudAgentExecutionConflictError,
+  DEAD_HOLDER_SILENCE_MS,
+  OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS,
   attachCloudAgentWorkflow,
   claimCloudAgentExecutionOperation,
   completeCloudAgentExecutionOperation,
@@ -428,6 +430,49 @@ describe('cloud agent execution service', () => {
     });
 
     expect(claim).toEqual({ disposition: 'outcome_unknown' });
+  });
+
+  it('calls a holder dead after three missed renewals, not sooner', () => {
+    expect(DEAD_HOLDER_SILENCE_MS).toBe(OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS * 3 * 1_000);
+  });
+
+  /**
+   * The unsafe branch used to sit above the replay ceiling, so the ceiling
+   * governed tool steps only and a provider step could never reach it. Ordering
+   * it after the ceiling makes the one constant mean the same thing for both.
+   */
+  it('fails an unsafe operation that has spent its replay attempts, rather than reporting it unknown', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          attempt: 5,
+          lease_expires_at: '2026-07-17T20:05:00.000Z',
+          updated_at: '2026-07-17T20:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          attempt: 5,
+          status: 'failed',
+          error: { code: 'operation_replay_limit_exceeded', message: 'spent' },
+        },
+      ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      inputHash: INPUT_HASH,
+      retrySafety: 'unsafe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toMatchObject({ disposition: 'failed' });
+    const [sql] = vi.mocked(db.query).mock.calls[1] as [string];
+    expect(sql).toMatch(/status = 'failed'/);
   });
 
   it('renews an active lease without touching its attempt count', async () => {

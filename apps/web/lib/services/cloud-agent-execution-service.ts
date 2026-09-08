@@ -29,7 +29,7 @@ export const OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS = Math.floor(
   MIN_OPERATION_LEASE_SECONDS / OPERATION_LEASE_RENEWAL_SAFETY_DIVISOR,
 );
 
-const LEASE_HEARTBEAT_GRACE_INTERVALS = 4;
+const LEASE_HEARTBEAT_GRACE_INTERVALS = 3;
 
 export const DEAD_HOLDER_SILENCE_MS =
   OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS *
@@ -277,25 +277,6 @@ export async function claimCloudAgentExecutionOperation(
       return { disposition: 'in_progress' };
     }
 
-    if (operation.retrySafety === 'unsafe') {
-      const unknownRows = await tx.query<CloudAgentExecutionOperationRow>(
-        `update public.cloud_agent_execution_operations
-            set status = 'outcome_unknown',
-                lease_token = null,
-                lease_expires_at = null,
-                error = jsonb_build_object(
-                  'code', 'expired_unsafe_operation',
-                  'message', 'The process stopped before the external outcome was recorded.'
-                ),
-                updated_at = now()
-          where id = $1 and user_id = $2 and status = 'running'
-          returning *`,
-        [operation.id, input.userId],
-      );
-      requireOperation(unknownRows);
-      return { disposition: 'outcome_unknown' };
-    }
-
     if (operation.attempt >= MAX_OPERATION_REPLAY_ATTEMPTS) {
       const lastAttemptAgeSeconds = Math.max(
         0,
@@ -324,6 +305,25 @@ export async function claimCloudAgentExecutionOperation(
         ],
       );
       return claimFromOperation(requireOperation(exhaustedRows));
+    }
+
+    if (operation.retrySafety === 'unsafe') {
+      const unknownRows = await tx.query<CloudAgentExecutionOperationRow>(
+        `update public.cloud_agent_execution_operations
+            set status = 'outcome_unknown',
+                lease_token = null,
+                lease_expires_at = null,
+                error = jsonb_build_object(
+                  'code', 'expired_unsafe_operation',
+                  'message', 'The process stopped before the external outcome was recorded.'
+                ),
+                updated_at = now()
+          where id = $1 and user_id = $2 and status = 'running'
+          returning *`,
+        [operation.id, input.userId],
+      );
+      requireOperation(unknownRows);
+      return { disposition: 'outcome_unknown' };
     }
 
     const leaseToken = randomUUID();
