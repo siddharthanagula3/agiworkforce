@@ -297,6 +297,9 @@ export const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
 
 export const PLUGIN_ENABLED_LABEL = 'Enabled';
 export const PLUGIN_ENABLED_HINT = 'Turn this off to keep the plugin installed without using it.';
+export const PLUGIN_UNAVAILABLE_LABEL = 'Not available on this surface';
+export const PLUGIN_UNAVAILABLE_HINT =
+  'This plugin is still installed on your account, but the server no longer runs it here, so it does nothing in a turn.';
 export const PLUGIN_CONNECTOR_CONNECTED_LABEL = 'Connected';
 export const PLUGIN_CONNECTOR_MISSING_LABEL = 'Not connected';
 export const PLUGIN_SETTINGS_LOADING_LABEL = 'Loading plugin settings';

@@ -26,6 +26,8 @@ import {
   PLUGIN_TABS_LABEL,
   PLUGIN_ENABLED_HINT,
   PLUGIN_ENABLED_LABEL,
+  PLUGIN_UNAVAILABLE_HINT,
+  PLUGIN_UNAVAILABLE_LABEL,
   PLUGIN_SETTINGS_LOADING_LABEL,
   PLUGIN_SKILL_TOGGLE_PREFIX,
   PLUGIN_AGENTS_LABEL,
@@ -485,7 +487,21 @@ export function PluginDetailView({
         />
       ) : null}
 
-      {installed && onSetEnabled ? (
+      {/* A plugin the server no longer runs must not offer a switch reading
+          Enabled: the account still has it installed, but turning it on changes
+          nothing. The grid already branches on the same flag. */}
+      {installed && detail.installable === false ? (
+        <div className={SETTINGS_ROW_CLASS}>
+          <div className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-foreground">
+              {PLUGIN_UNAVAILABLE_LABEL}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {detail.availabilityNote ?? PLUGIN_UNAVAILABLE_HINT}
+            </span>
+          </div>
+        </div>
+      ) : installed && onSetEnabled ? (
         <EnabledRow
           id={detail.id}
           enabled={detail.enabled !== false}
