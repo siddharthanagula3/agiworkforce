@@ -10,6 +10,7 @@ const errors = [];
 const warnings = [];
 
 const allowedRootFiles = new Set([
+  'ACTIVE_ISSUES.md',
   '.git',
   '.agi-guardian.yml',
   '.claudeignore',
@@ -54,25 +55,24 @@ const allowedRootFiles = new Set([
   'vercel-ignore-build.sh',
 ]);
 
-const knownRootDebt = new Set([
-  '.DS_Store',
-  '.mcp.json',
-  'AUDIT_BATCHES',
-  'AUDIT_FINDINGS.md',
-  'AUDIT_MANIFEST.txt',
-  'OVERNIGHT_REPORT.md',
-  'AUDIT_PARTS',
-  'AUDIT_STATE.md',
-  'AUDIT_TAXONOMY.md',
-  'REMEDIATION_PRIORITY.md',
-  'SKILL.md',
-  'PHASE2_MAP.md',
-  'PUBLIC_PAGES_AUDIT.md',
-  'REFERENCE_ANALYSIS.md',
-  'SKILL_SESSION.md',
-  'founder_work.md',
-  'libnull.rlib',
-]);
+/**
+ * Root entries that warn rather than fail: cruft that already exists and is not
+ * worth breaking a build over.
+ *
+ * A ratchet, so it only ever shrinks. On 2026-09-08 fifteen of the seventeen
+ * entries were gone from disk, every one an audit artifact from a session that
+ * ended weeks earlier: AUDIT_FINDINGS.md, AUDIT_STATE.md, AUDIT_TAXONOMY.md,
+ * OVERNIGHT_REPORT.md, REMEDIATION_PRIORITY.md, PHASE2_MAP.md,
+ * PUBLIC_PAGES_AUDIT.md, REFERENCE_ANALYSIS.md, SKILL_SESSION.md, SKILL.md,
+ * founder_work.md, libnull.rlib, AUDIT_MANIFEST.txt and the AUDIT_BATCHES and
+ * AUDIT_PARTS directories. They were removed from this list with them: an
+ * allowlist entry that no longer names anything is a standing invitation to
+ * recreate the file it forgave.
+ *
+ * Do not add to this set. A new root entry belongs in `allowedRootFiles` with a
+ * reason, or nowhere.
+ */
+const knownRootDebt = new Set(['.DS_Store', '.mcp.json']);
 
 const allowedRootDirs = new Set([
   '.agent',

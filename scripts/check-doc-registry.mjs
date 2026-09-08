@@ -24,6 +24,7 @@ const DOC_TIERS = new Set([
 ]);
 
 const ROOT_DOCS = new Set([
+  'ACTIVE_ISSUES.md',
   'AGENTS.md',
   'ARCHITECTURE.md',
   'CHANGELOG.md',

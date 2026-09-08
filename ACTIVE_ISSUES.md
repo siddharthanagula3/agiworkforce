@@ -1,0 +1,769 @@
+# Active issues and execution plan
+
+Status: Current
+Owner: Founder + platform lead
+Last updated: 2026-09-08
+
+The single human-readable register of unresolved defects, risks and required
+corrections, with the execution plan to clear them. Start here before opening
+any older audit.
+
+**Canonical status.** This file carries the explanation and the plan. Three
+machine-readable registers stay authoritative for their own row identity
+because code, tests and CI cite their IDs directly:
+
+| Register                            | Holds                                     | Enforced by                  |
+| ----------------------------------- | ----------------------------------------- | ---------------------------- |
+| `docs/agent-context/known-flaws.md` | one row per open defect, cited by ID      | PR template, `ci.yml`, tests |
+| `audit/capability-gaps.csv`         | `CAP-*` product capability backlog        | `check:capability-gaps`      |
+| `audit/ui-gaps.csv`                 | `GAP-*` UI parity rows, monotonic ratchet | `check:ui-gaps`              |
+
+Those registers hold rows. This file holds root causes. One root cause here may
+retire several rows there. Do not copy long narrative into a register, and do
+not open a second active-issues document.
+
+Capability backlog (`CAP-*`) is product scope, not defect work, and is out of
+scope for this file.
+
+**A closed issue is deleted, not archived.** Git history is the record of what
+was fixed and why; a resolved section left here is a second, staler copy of a
+commit message that also makes the open count unreadable. What each removed
+issue turned out to be is in the commit that closed it.
+
+## 1. Current repository state
+
+- Audit date 2026-09-08. Scope: repository and test evidence, a live
+  authenticated session driven against the dev server on `:3100`, and a browser
+  QA pass over the shipped chat, project, settings and marketing surfaces.
+  No load run and no production capacity test.
+- Reconciles the 2026-09-08 Codex audit, the browser QA pass (consolidated here
+  and removed), the local security-scan directories (reconciled and removed,
+  one surviving finding carried in as `AGI-22`), `known-flaws.md`,
+  `capability-gaps.csv` and `ui-gaps.csv`.
+- 18 unresolved issues: 0 P0, 2 P1, 11 P2, 5 P3, plus 3 items needing
+  validation this session could not perform.
+
+### Closed in this pass
+
+Seven issues were fixed and verified, and their sections are gone from this
+file. Named here only so a reader coming from an older copy knows where they
+went, and so nobody re-files them:
+
+| Was       | What it was                                                    | Verified by                                       |
+| --------- | -------------------------------------------------------------- | ------------------------------------------------- |
+| `AGI-15`  | Local development ran against the shared database              | dev server on `:3100` now writes `agiworkforce_dev` |
+| `AGI-1`   | Managed usage leases clamped to one hour, never renewed        | `pnpm db:lease-probe` against real Postgres        |
+| `AGI-2`   | Stranded reservations waited up to a day for recovery          | cron scope test, `/api/cron/recover-reservations`  |
+| browser   | Non-image chat attachments failed on every route               | `apps/web/e2e/chat-document-attachment.spec.ts`    |
+| browser   | Starting a conversation inside a project failed every time     | `apps/web/e2e/project-first-conversation.spec.ts`  |
+| browser   | Tool Approvals did not gate web search in either mode          | `apps/web/e2e/tool-approval-web-search.spec.ts`    |
+| latent    | Approval checkpoints 500'd on a jsonb parameter                | found by the first turn to reach that path         |
+
+## 2. P0, critical
+
+None. No verified security breach, privilege escalation, secret exposure, data
+corruption, double charge or trust-boundary failure was found. Reservation
+settlement is idempotent and concurrency-safe.
+
+## 3. P1, high
+
+### `AGI-3` Assistant turn metadata is silently lost when the client save fails
+
+**Severity:** P1
+**Status:** Open
+**Area:** Web chat persistence
+**Root cause:** The server persists a thin assistant snapshot (text, model,
+provider, token counts, truncation). The richer metadata (tool-call timeline,
+search sources and citations, code-execution results, reasoning content,
+generated-file list, interactive cards) is written only by the client's own
+`saveMessageToDb` after the stream ends. Its failure handler is
+`notifyPersistenceFailure`, which only calls `console.error`.
+**Current behavior:** The client retries 3 times on 5xx/429/network. A
+non-retryable failure (4xx, auth, an exception while building the payload) is
+logged and nothing else. On reload the answer text is present and every source
+chip, tool card, reasoning block and generated file is gone, with no indication
+anything failed.
+**Required behavior:** Either the server captures the same metadata, or a
+failed metadata save is surfaced and retryable. A turn must not render as
+though it never had sources.
+**Evidence:** `apps/web/lib/hooks/useChatStream.ts:444-446` (handler) and call
+sites `:1683, :3241, :3299, :3408, :3664, :3778`; the user-message path at
+`:2782-2822` shows the correct pattern, it awaits and surfaces a real error.
+`apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts` and
+`lib/stream-transform.ts` never pass the richer fields into the snapshot.
+**User impact:** Silent loss of citations and tool evidence, the part of an
+answer a user most needs to trust it.
+**Dependencies:** None.
+**Implementation direction:** Prefer moving metadata capture server-side beside
+the existing snapshot write, which removes the client round trip entirely. If
+it must stay client-side, surface failure in the transcript with a retry, using
+the user-message path as the model. Note cloud-agent-run turns already capture
+`interactiveCards` server-side in `managed-agent-stream.ts:119-131`, so a
+server-side path already exists to extend.
+**Acceptance criteria:** A forced non-retryable save failure either preserves
+metadata or shows a visible, retryable error. Reload after a successful turn
+restores sources, tool cards and reasoning.
+**Validation:** Component test forcing a 4xx from the messages route, plus a
+reload assertion in `apps/web/e2e/`.
+
+### `AGI-4` Project answers only ever see the head of a long file
+
+**Severity:** P1
+**Status:** Open
+**Area:** Project knowledge retrieval
+**Root cause:** Ranking and selection disagree. `scoreKnowledgeFile` scores the
+whole `extractedText`, so a term anywhere in a document raises its rank.
+Selection then takes `content.slice(0, limit)` with `limit` at most 16,000
+characters per file and 48,000 across all files. The passage that earned the
+rank is routinely excluded. There is no chunking and no passage selection.
+**Current behavior:** A question about material late in a long document
+retrieves the right file and answers from the wrong part of it. The prompt does
+carry an `excerptOf` notice, so the model usually says the file was truncated
+rather than inventing an answer. The failure is an honest abstention, not a
+fabrication.
+**Required behavior:** Retrieval selects query-relevant passages from anywhere
+in the document, within the same prompt budget, with a stable reference back to
+the file.
+**Evidence:** `apps/web/lib/services/project-context-service.ts:26-27`
+(budgets), `:104-120` (whole-body scoring), `:329-355` (`content.slice(0, limit)`
+and the `excerptOf` notice); `apps/web/lib/services/__tests__/project-context-bounded-excerpt.test.ts`
+asserts today's behavior, that a sentinel at the end of a 20,000 character
+document does not reach the prompt. Ownership is validated at both the
+conversation and project level, so the older claim that ACL filtering is absent
+is wrong.
+**Compounding factors found in the same trace:** long documents are truncated
+twice, once at extraction
+(`apps/web/lib/server/project-knowledge-extraction.ts:9`,
+`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a 250 page PDF cap) and again
+at prompt assembly. There is no docx, xlsx or pptx extraction, those return
+null. Project files reach the model as one JSON blob with no chunk id, offset or
+citation instruction, so an answer cannot point back at a passage.
+**User impact:** Project knowledge, an advertised core workflow, cannot answer
+questions about the back half of any long document.
+**Dependencies:** None.
+**Implementation direction:** Do not build a RAG stack. A tested Okapi BM25
+chunk retriever already exists at
+`apps/web/lib/support/agent/retrieval/{bm25,tokenize,retrieve}.ts`, with a
+per-document result cap, citation construction, a relevance floor and an
+abstention policy, and it is general over any `{id, text}` chunk list. Point it
+at windows cut from `project_knowledge_files.extracted_text` at request time.
+It is currently used only by the support agent and is not imported by
+`project-context-service.ts`. A managed embeddings endpoint also exists
+(`apps/web/app/api/llm/v1/embeddings/route.ts`, real Google calls, real
+billing) if semantic ranking is wanted later. There is no pgvector, no vector
+column and no tsvector anywhere, so a database-native path would be new work.
+Move the hardcoded budgets to the same owner as `MAX_PROJECT_KNOWLEDGE_FILES`.
+**Acceptance criteria:** Questions aimed at the beginning, middle and end of a
+long file are all answered, with paraphrased queries, competing sources, and
+correct abstention when content is absent or inaccessible. Replace the bounded
+excerpt test with a passage-retrieval test.
+**Validation:** Unit tests over chunking and selection, plus a project QA set
+measuring supported answers and correct abstentions.
+
+## 4. P2, important
+
+### `AGI-5` Native code merges without compilation or test validation
+
+**Severity:** P2
+**Status:** Open
+**Area:** CI
+**Root cause:** `rust-desktop-cli` in `ci.yml` is gated on
+`needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'`,
+a deliberate, commented cost tradeoff.
+**Current behavior:** More runs pre-merge than the Codex audit stated.
+`codeql.yml` triggers on `pull_request` for `**/*.rs`, `**/Cargo.toml` and
+`**/Cargo.lock` and runs the identical clippy command for
+`agiworkforce-desktop` and `agiworkforce-cli`, which type-checks those two
+crates. Still entirely post-merge: `cargo test` at any scope, every crate in
+`crates/*` (the ported workspace, 100+ crates), macOS and Windows compilation,
+the extended-features clippy lane, and `cargo deny`.
+**Required behavior:** A bounded required native lane on pull requests covering
+the compilation and test surface a desktop product depends on, with the full
+matrix left in the release lane.
+**Evidence:** the same `github.ref == 'refs/heads/main'` condition gates four
+jobs, not one: `rust-desktop-cli` (`.github/workflows/ci.yml:549`),
+`clippy-all-features` (`:1187`), `macos-smoke` (`:1273`) and `windows-smoke`
+(`:1320`). `auto-route-conformance` (`:526`) does run on pull requests but only
+replays one fixture against the narrow `agiworkforce-model-registry` crate.
+`.github/workflows/codeql.yml:56-63` (`cargo audit`), `:83-92` (clippy).
+`windows-smoke`'s own `cargo test` step carries `continue-on-error: true` even
+on its main-only run.
+**Guardrail gap:** `scripts/check-ci-guardrails.mjs` and
+`scripts/check-ci-lane-independence.test.mjs` enforce structural invariants but
+neither encodes the `github.ref` half of the condition, so nothing in the
+repository's own CI-testing-the-CI layer would fail if that gate changed.
+**Severity note:** production is not directly exposed. `deploy-production.yml`
+only promotes after a `CI` run concludes `success` on a push to main and checks
+out that exact SHA, so a post-merge native failure blocks promotion. The cost is
+main-branch health and developer velocity, which is why this is P2 and not P1.
+**User impact:** A native regression in `crates/*` or a platform-specific break
+is caught at merge, not at review.
+**Dependencies:** None.
+**Implementation direction:** Add a PR-triggered job covering `cargo test` for
+the shipped crates plus a `crates/*` compile check, sized to stay inside the
+existing CI budget. Confirm the required status actually runs on a
+representative native PR.
+**Acceptance criteria:** A deliberately broken `crates/*` change fails a
+required check on a pull request.
+**Validation:** A draft PR carrying a known break.
+
+### `AGI-6` Web voice cannot start speaking until the whole reply is written
+
+**Severity:** P2
+**Status:** Open
+**Area:** Voice, web
+**Root cause:** The speak effect returns early while `turnActive` is true and
+reads `reply.content` once, fully assembled. There is no sentence-boundary
+chunking of the token stream and no partial dispatch. Output is
+`SpeechSynthesisUtterance`, so voice and playback are whatever the browser
+provides, and there is no provider abstraction to route elsewhere.
+**Current behavior:** Time to first audio is bounded below by full reply
+generation. Barge-in is implemented. This supports a usable turn-based
+conversation and should not be described as absent, but it does not match a
+live, simultaneous voice mode.
+**Required behavior:** Speech begins on the first complete sentence, and the
+speech engine is selectable rather than fixed to the browser.
+**Evidence:** `apps/web/features/chat/hooks/use-voice-session.ts:271-290`;
+`packages/ui/unified-chat/src/voice/voice-session-machine.ts:147-150`
+(`streaming` to `speaking` only on `replyComplete`); `apps/web/lib/hooks/useTTS.ts`.
+Barge-in is real wired code (`use-voice-session.ts:229-249`, a mic analyser
+running concurrently with playback) but is untested: the unit suite mocks `tts`
+as a plain object and never drives `AudioContext`, and there is no voice spec
+under `apps/web/e2e/`. Echo suppression relies entirely on the browser's
+`echoCancellation` constraint, with no code confirming it cancels synthesized
+speech. Mobile STT is genuinely on-device with live partial results and is the
+strongest voice implementation in the repository.
+**Measured 2026-09-08:** a two-sentence answer, routed by Auto to the fastest
+tier model (Gemini 3.5 Flash-Lite), took **6.0s** from send to response
+complete. Because `tts.speak()` only fires on `replyComplete`, that 6.0s is the
+time to first audio for that turn. A live voice mode starts speaking in a few
+hundred milliseconds.
+**User impact:** Voice replies feel slow next to a live voice mode.
+**Dependencies:** Measure before building. See `LIVE-5`.
+**Implementation direction:** Chunk the assistant stream on sentence
+boundaries and speak incrementally, which is the cheap win inside the current
+architecture. Introduce a speech provider interface before adding any vendor,
+so this stays provider-neutral. Decide on a realtime audio route only against
+measured numbers.
+**Acceptance criteria:** First audio begins before generation completes.
+Barge-in still cancels cleanly. No echo-triggered self-interruption.
+**Validation:** Instrumented latency capture, plus existing voice session
+tests.
+
+### `AGI-7` Desktop global voice does not meet its own release gates
+
+**Severity:** P2
+**Status:** Open
+**Area:** Voice, desktop
+**Root cause:** Tracked in the feature's own spec. The OS-level input hook is
+real, but the coordinator refuses every global-source session, so the hook only
+emits `refused` events, and `system_dictation_available()` is a compile-time
+`false` on every OS.
+**Current behavior:** The spec's release-gate ledger records 6 of 12 gates
+unmet: focus-target pinning, secure-field refusal, capture-pipeline recovery,
+text injection, dictionary and snippet precedence, and a signed build.
+**Required behavior:** Either the unmet gates are met, or the surface stays off
+in shipped builds.
+**Evidence:** `docs/specs/desktop-global-voice/spec.md:16-20, :59-61, :78, :82-95`.
+**User impact:** Global dictation cannot be relied on.
+**Dependencies:** Independent of `AGI-6`.
+**Implementation direction:** Work the spec's own gate ledger in order. Keep
+the ledger as the acceptance record.
+**Acceptance criteria:** Every gate in the ledger is met, or the entry point is
+removed from shipped builds.
+**Validation:** The spec's gate ledger, exercised on a signed build.
+
+### `AGI-8` The US-only routing preference has no effect on the web path
+
+**Severity:** P2
+**Status:** Open
+**Area:** Provider routing
+**Root cause:** The policy is implemented and tested, but the persisted user
+preference is never read on the web request path. Merges two register rows that
+describe one defect.
+**Current behavior:** `usOnly` is a real provider-exclusion overlay: tiers
+`max` and `enterprise`, excluding `deepseek`, `qwen`, `moonshot`, `zhipu`,
+`minimax`. The Rust resolver applies it and TS routing tests cover it. The
+preference is persisted through `/api/me/routing-preferences`, and nothing in
+the web request processor reads `us_only`, so a `max` user who sets it is still
+routed to an excluded provider. A regression test stops an active web control
+from advertising the unenforced preference, so this is not currently a false
+promise in the UI.
+**Required behavior:** The stored preference reaches the web routing resolver,
+or the preference is removed. Do not describe this as data residency.
+`docs/decisions/2026-09-04-region-neutral-data-residency.md` is accepted and
+US-only already applies to every managed route, so the real value here is
+provider jurisdiction choice, not residency.
+**Evidence:** `packages/ai/model-registry/catalog/routing-policies.json:104-108`;
+enforcement exists in both languages, `packages/ai/routing/src/auto.ts:1030-1034`
+and `crates/agiworkforce-model-registry/src/lib.rs:790-800`. The break is exact:
+`buildWebCloudAutoRoutingRequest`
+(`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1429-1509`)
+builds every real web routing request and never sets `usOnly`. Its structurally
+identical sibling `zeroDataRetentionOnly` **is** threaded through the same
+function into `canonical-request.ts:122`, which is the pattern to copy and
+strong evidence this is an oversight rather than a decision. Also
+`packages/contracts/cloud-contracts/src/me.ts:27`;
+`apps/web/app/api/me/routing-preferences/route.ts:17-21`.
+**Residual risk:** the GET and PUT routes are live and callable by any
+authenticated client even with no UI wired to them, which the source-scanning
+guard does not cover.
+**User impact:** An eligible customer cannot actually exclude those providers on
+web.
+**Dependencies:** None. Also check `geo_overlay` in the same schema, which
+looks like the same gap.
+**Implementation direction:** Thread the persisted preference into the routing
+request built by the web request processor, matching the Rust resolver. Only
+then may a control be shown.
+**Acceptance criteria:** With the preference set, no excluded provider is
+selected on web for an eligible tier. With it unset, routing is unchanged.
+**Validation:** Extend the auto-route conformance fixtures to the web path.
+**Retires:** `WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01`,
+`WEB-US-ONLY-ROUTING-NOT-THREADED-01`.
+
+### `AGI-9` Organization connector policy is not enforced when a connector is added
+
+**Severity:** P2
+**Status:** Open
+**Area:** Authorization, connectors
+**Root cause:** The stored organization policy is consulted only when tools are
+read for a chat turn, not on the connect, authorize or create path.
+**Current behavior:** A member can connect and authorize a connector the
+organization policy forbids. The policy applies later, at tool read time.
+**Required behavior:** Policy is evaluated at the moment of connection and
+authorization, and denies before any credential is exchanged.
+**Evidence:** `apps/web/app/api/connectors/custom/route.ts`; register rows
+`CONN-ROUTE-ORG-CONNECTOR-POLICY-CHECKED-01` and `CAP-030`; the UI-side symptom
+is `GAP-180`.
+**User impact:** An organization control is advisory where it reads as binding.
+**Dependencies:** None.
+**Implementation direction:** One shared policy check called by the connect,
+authorize and create routes. One canonical owner, not a copy per route.
+**Acceptance criteria:** A forbidden connector cannot be connected or
+authorized, and the denial is visible where the connector is managed.
+**Validation:** Route tests per path, plus an organization policy test.
+
+### `AGI-10` Artifacts can only be shared publicly, never with an organization
+
+**Severity:** P2
+**Status:** Open
+**Area:** Artifacts, enterprise
+**Root cause:** `published_artifacts` has no audience model. Publication mints a
+144-bit token and the read path is deliberately anonymous.
+**Current behavior:** Sharing an artifact means creating a public URL. There is
+no authenticated, membership-scoped share, and no expiry.
+**Required behavior:** An artifact can be shared to an organization so only
+members can open it, with membership revocation taking effect.
+**Evidence:** `apps/web/lib/services/published-artifact-service.ts:217-219, :226-331, :333-349, :389-404`;
+`apps/web/db/neon/0095_published_artifacts.sql` (no organization column, RLS
+protects only the authenticated management surface).
+**Not artifact-specific:** conversation sharing has the identical gap.
+`apps/web/db/neon/0051_shared_sessions.sql` is also public-token-only with no
+organization scoping. Fix both against one model.
+**User impact:** Team customers cannot share internal work without making it
+public.
+**Dependencies:** None.
+**Implementation direction:** The pattern already exists. Migration
+`apps/web/db/neon/0086_org_shared_ecosystem.sql` implements organization
+sharing for projects and connectors with join tables, table-resolved membership
+predicates (`app_org_resource_is_readable`, `app_org_resource_is_manageable`)
+and forced RLS. Extend the same shape to artifacts. Do not invent a second
+sharing model, and do not reuse the `organization_id` governance column from
+0073, which 0086 explicitly separates from sharing.
+**Acceptance criteria:** A member can open an organization-shared artifact, a
+non-member cannot, and removing a member revokes access.
+**Validation:** RLS tests mirroring the 0086 project-sharing tests.
+
+### `AGI-14` Speech to text is hard-coupled to one provider
+
+**Severity:** P2
+**Status:** Open
+**Area:** Provider neutrality, voice
+**Root cause:** The managed transcription route resolves a model, refuses
+anything whose provider is not OpenAI, and calls that vendor's endpoint directly
+instead of going through the provider abstraction the rest of the product uses.
+**Current behavior:** Transcription rejects the request when the resolved
+model's provider is not `openai`. Voice input has a single point of failure and
+a single vendor's pricing, on a product whose stated differentiator is model and
+provider neutrality.
+**Required behavior:** Transcription resolves through the same registry and
+routing path as every other capability, with at least one fallback provider.
+**Evidence:** `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:377`
+(`defaultModel.provider !== 'openai'`), `:387`, `:521`
+(`providerApiUrl('openai', 'audio/transcriptions')`), `:232`, `:247`.
+**User impact:** Voice input stops entirely if one vendor is unavailable, and
+its cost cannot be routed.
+**Dependencies:** Shares the voice surface with `AGI-6`, but is separate work.
+**Implementation direction:** Model transcription as a registry capability with
+a provider fallback chain, the way chat providers are already selected. Do not
+add a second hardcoded vendor.
+**Acceptance criteria:** Transcription succeeds through at least two providers
+and fails over. No provider literal remains at the call site.
+**Validation:** Route tests per provider, plus registry contract tests.
+
+### `AGI-16` Citations carry the routing provider's redirect, not the publisher
+
+**Severity:** P2
+**Status:** Open
+**Area:** Research, citations, provider neutrality
+**Root cause:** Grounded search results are surfaced with the provider's
+grounding-redirect URL rather than the resolved publisher URL, and the source
+card's icon is derived from the redirect host instead of the publisher domain.
+**Current behavior (verified live 2026-09-08):** a web research turn routed to
+Gemini returned four sources. Each card correctly names the publisher
+(`anthropic.com`, `claude.com`, `youtube.com`) but shows
+`vertexaisearch.cloud.google.com` as the host, renders Google's favicon for
+every source regardless of publisher, and links to
+`https://vertexaisearch.cloud.google.com/grounding-api-redirect/...`.
+**Required behavior:** a citation resolves to the publisher's own URL and shows
+the publisher's favicon. Which model answered is disclosed separately, as it
+already is.
+**Evidence:** live session, sources panel and the `Sources` chip; hrefs read
+from the DOM were all grounding redirects.
+**User impact:** Three problems at once. Citations advertise the routing vendor
+on a product sold on provider neutrality; every source looks like it came from
+Google; and grounding redirects expire, so saved conversations accumulate dead
+citations.
+**Dependencies:** None. Independent of `AGI-4`, though both concern provenance.
+**Implementation direction:** Resolve the redirect to its target when ingesting
+a grounded result, store the publisher URL, and derive the favicon from that
+domain. Keep the redirect only as a fallback. The support agent's
+`buildCitation` already models title, canonical URL and snippet; reuse that
+shape.
+**Acceptance criteria:** No provider hostname appears in a rendered citation.
+Favicons match publishers. A citation still resolves after the provider's
+redirect expires.
+**Validation:** A research turn on each grounded provider, asserting no
+provider host appears in any citation href.
+
+### `AGI-22` The provider-jurisdiction consent gate is never called
+
+**Severity:** P2
+**Status:** Open
+**Area:** Compliance, routing
+**Root cause:** `isProviderRoutingAllowed` checks recorded consent before
+routing to a Chinese-headquartered provider, and is correct. Nothing calls it.
+Neither `apps/web` nor `packages/ai/routing` imports it, `llm-gate.ts`, or
+`@agiworkforce/compliance` anywhere on the chat request path.
+**Current behavior:** Auto routing can place a conversation on DeepSeek,
+Moonshot, Qwen or Zhipu with no consent recorded. Mobile has a client-side
+consent surface that nothing server-side backs.
+**Required behavior:** The gate is consulted where the route is chosen, not
+where a client chooses to ask.
+**Evidence:** `packages/contracts/compliance/src/provider-jurisdiction.ts:40`,
+called only from `packages/contracts/compliance/src/llm-gate.ts:53,65`; zero
+call sites anywhere else. Carried in from the 2026-08-26 scan, re-verified
+against current source 2026-09-08.
+**User impact:** A consent record the product presents as obtained is not
+enforced.
+**Dependencies:** None. Sits next to `AGI-8`: both are routing preferences that
+exist and are not read on the web path, and both should be threaded through
+`buildWebCloudAutoRoutingRequest`.
+**Implementation direction:** One call in the routing request builder, beside
+`zeroDataRetentionOnly`. Do not add a second gate in the UI.
+**Acceptance criteria:** Without recorded consent, no Chinese-HQ provider is
+selected for an eligible user.
+**Validation:** Auto-route conformance fixtures on the web path.
+**Already tracked as:** `COMPLIANCE-LLM-GATE-SURFACE-COVERAGE-01` in
+`known-flaws.md`, which describes the same "gate exists, nothing calls it"
+shape without naming this scenario.
+
+### `AGI-23` A route the account's own data policy will always refuse stays selectable
+
+**Severity:** P2
+**Status:** Open
+**Area:** Routing, catalog
+**Root cause:** The catalog offers a model whose only endpoint at the routing
+provider is excluded by our own account privacy setting. Selection does not
+consult that, so the turn is dispatched and refused every time.
+**Current behavior (observed live 2026-09-08):** an organization-scoped turn
+routed to `openrouter` for `gpt-5.6-sol` returned HTTP 404, `0 endpoints out of
+1 requested are available matching your guardrail restrictions and data policy
+... ZDR violation (account settings)`. The user saw "The provider rejected this
+request. Try again, or choose another model." The route cannot ever succeed
+while that setting stands, so every retry spends a round trip to fail again.
+**Required behavior:** A route that the account's data policy excludes is not
+selectable, or the exclusion is discovered once and the route taken out of
+service rather than re-tried per turn.
+**Evidence:** dev server log 2026-09-08 22:20:07 UTC, provider `openrouter`,
+`client_error_404`, and the same shape twice more within the minute.
+**Not an environment failure:** the setting is ours, on our own OpenRouter
+account, and the catalog entry is ours. A user cannot resolve it.
+**User impact:** A model in the picker that always fails, with an error that
+implicates the request rather than the configuration.
+**Dependencies:** None. `AGI-8` is the same class of defect one layer up.
+**Implementation direction:** Classify a data-policy refusal as a route-health
+signal so the existing runtime-state machinery withdraws it, and reconcile the
+catalog against the account's endpoint policy rather than assuming every listed
+endpoint is reachable.
+**Acceptance criteria:** A route excluded by the account's data policy is not
+offered, and a first refusal takes it out of service for the window.
+**Validation:** A classification test over the observed 404 body, plus a
+route-health test.
+
+
+## 5. P3, lower priority
+
+### `AGI-11` Published artifacts never expire
+
+**Severity:** P3
+**Status:** Open
+**Area:** Artifacts, data lifecycle
+**Root cause:** No TTL column or sweep. The comparable conversation share
+(`shared_sessions`) carries a 7 day `expires_at`; artifacts deliberately
+omitted it.
+**Current behavior:** A published artifact URL is live until the owner deletes
+it.
+**Required behavior:** A default expiry, or an explicit, visible "no expiry"
+choice at publish time.
+**Evidence:** `apps/web/db/neon/0095_published_artifacts.sql`;
+`apps/web/db/neon/0051_shared_sessions.sql`; the service module notes this as a
+founder-pending gap.
+**User impact:** Content stays reachable longer than the author expects.
+**Dependencies:** Product decision on the default.
+**Implementation direction:** Follow the `shared_sessions` pattern and add a
+purge cron beside the existing purge jobs.
+**Acceptance criteria:** An expired token stops resolving and the page reports
+expiry rather than not-found.
+**Validation:** Service tests plus a cron scope test.
+
+### `AGI-12` Desktop stores were never migrated to the shared runtime state
+
+**Severity:** P3
+**Status:** Open
+**Area:** Desktop, shared packages
+**Root cause:** An unfinished consolidation. 41 files carry the identical
+marker `TODO(task-1.3): migrate to packages/client/client-runtime/state`.
+**Current behavior:** Desktop keeps its own store layer beside the shared one.
+**Required behavior:** One owner for the state these stores duplicate, per
+AGENTS.md section 3.
+**Evidence:** 41 occurrences across `apps/desktop/src/stores/*.ts`.
+**User impact:** None directly. Drift risk between desktop and other surfaces.
+**Dependencies:** None.
+**Implementation direction:** Migrate per domain, deleting each marker with its
+store. One canonical issue, not 41.
+**Acceptance criteria:** No `task-1.3` markers remain and desktop reads the
+shared state.
+**Validation:** `check:boundaries`, desktop tests.
+
+### `AGI-13` Unimplemented native commands answer with mock success in cloud web mode
+
+**Severity:** P3
+**Status:** Open
+**Area:** Desktop shell, trust
+**Root cause:** In `tauri-mock.ts`, when `isCloudWeb` is true the guard that
+throws for unavailable native features is skipped, and execution falls through
+to a `switch` returning fixture values such as `{ success: true, title: 'Mock
+Artifact' }`.
+**Current behavior:** Not reachable in either shipped product's chat path.
+`createDesktopChatRuntime` returns `WebRuntime` when the host is not Tauri, so
+the Electron cloud shell never calls these commands for chat, and
+`SettingsPanel` hides the `voice` and `models-keys` tabs in cloud mode. This is
+a latent hazard, not an observed user-facing defect. It is recorded because
+AGENTS.md section 9 forbids mock production paths and fake responses, and the
+next feature that calls `invoke` from cloud mode inherits a false success.
+**Required behavior:** An unimplemented native command in a shipped mode throws
+a clear unavailable error. Fixtures stay in test builds.
+**Evidence:** `apps/desktop/src/lib/tauri-mock.ts:252-300`, `:1753-1790`;
+`apps/desktop/src/lib/runtimeEnvironment.ts:8-28`;
+`apps/desktop/src/lib/tauri-electron/bridgeContract.ts:3-14` (the bridge carries
+12 account commands only); `apps/desktop/src/runtime/desktopChatRuntime.ts:52-60`;
+`apps/desktop/src/features/settings/SettingsPanel.tsx:97-108`.
+**User impact:** None today. Prevents a class of future silent failure.
+**Dependencies:** None.
+**Implementation direction:** Gate the fixture `switch` on the test
+environment only, and throw for cloud web.
+**Acceptance criteria:** A non-bridged command in cloud mode throws. Tests
+still get fixtures.
+**Validation:** Desktop unit tests, `check:trust-boundaries`.
+
+### `AGI-17` A line beginning with `>` loses its first character
+
+**Severity:** P3
+**Status:** Open
+**Area:** Markdown rendering
+**Root cause:** The renderer treats a leading `> ` as a blockquote marker
+unconditionally, so the character is consumed and, with nothing after it on the
+line to quote, an empty blockquote is produced and the `>` disappears.
+**Current behavior:** Reproduced identically in assistant and user messages.
+Anything using `>` at the start of a line for its ordinary meaning, shell
+redirection, a comparison, an arrow, silently loses it.
+**Required behavior:** A `>` that is not a blockquote survives. What
+distinguishes them is context the renderer already has: a blockquote has
+content, and its neighbours are prose.
+**Evidence:** browser QA 2026-09-08, both message roles, desktop and 390px.
+**User impact:** Silent corruption of the user's own text, which is worse than
+a visible rendering fault because nothing signals it.
+**Dependencies:** None.
+**Implementation direction:** Fix in the shared renderer, not per surface. Test
+the ambiguous cases directly: `> ` alone, `> quoted`, `>= 3`, `cmd > out.txt`.
+**Acceptance criteria:** Every one of those renders its own characters.
+**Validation:** Renderer unit tests, plus a case in the streaming markdown spec.
+
+### `AGI-18` A project in the sidebar attaches itself instead of opening
+
+**Severity:** P3
+**Status:** Open
+**Area:** Navigation
+**Root cause:** The sidebar row and the Projects grid card are wired to
+different actions. The grid card navigates; the sidebar row attaches the
+project as composer context and flips the mode toggle from Chat to AGI Work.
+**Current behavior:** Clicking a project in the left sidebar from the chat home
+screen silently changes the composer's mode and scope, with no navigation. The
+same project clicked from the Projects page opens it.
+**Required behavior:** One name, one action. If attaching as context is wanted,
+it needs its own affordance and its own label.
+**Evidence:** browser QA 2026-09-08; `ProjectCard` exposes
+`Open project <name>`, the sidebar row does not.
+**User impact:** Undiscoverable, and it changes the mode of the next send
+without saying so.
+**Dependencies:** None.
+**Implementation direction:** Decide which action the row performs and make its
+accessible name say so. Do not leave two behaviours behind one label.
+**Acceptance criteria:** A project row's name describes what clicking it does,
+and both entry points agree.
+**Validation:** Component test on the sidebar row, plus a navigation spec.
+
+### `AGI-19` Marketing nav dropdowns stay open while the page scrolls
+
+**Severity:** P3
+**Status:** Open
+**Area:** Marketing site
+**Root cause:** The dropdown closes on outside click only; no scroll listener.
+**Current behavior:** An open menu floats over the content the reader scrolls
+past.
+**Required behavior:** Scrolling dismisses it, as it does on the sites this
+navigation is modelled on.
+**Evidence:** browser QA 2026-09-08.
+**User impact:** Cosmetic, briefly obscures content.
+**Dependencies:** None.
+**Implementation direction:** Close on scroll in the same hook that closes on
+outside click, so the two cannot drift apart.
+**Acceptance criteria:** Scrolling with a menu open closes it.
+**Validation:** A case in the marketing nav spec.
+
+### `AGI-20` Retry can move the viewport to an unrelated message
+
+**Severity:** P3
+**Status:** Open
+**Area:** Chat transcript
+**Root cause:** Not diagnosed. Retry replaces a message in a virtualised list;
+the scroll anchor appears to be resolved against the pre-retry layout.
+**Current behavior:** In a long thread, Retry sometimes scrolls to an earlier,
+unrelated position instead of following the retried message. Manual scrolling
+recovers it.
+**Required behavior:** Retry keeps the retried message in view.
+**Evidence:** browser QA 2026-09-08, long threads only.
+**User impact:** Recoverable annoyance; no data is affected.
+**Dependencies:** None. Related to the overscan behaviour the streaming spec
+already exercises.
+**Implementation direction:** Anchor the scroll to the retried message's own
+id after the list settles, rather than to an index.
+**Acceptance criteria:** Retry in a long thread leaves the retried message
+visible.
+**Validation:** An e2e case in a thread longer than the overscan window.
+
+### `AGI-21` The API Keys settings query logs an aborted request as an error
+
+**Severity:** P3
+**Status:** Open
+**Area:** Settings, log hygiene
+**Root cause:** An AbortController cancels the in-flight query when the user
+switches settings sections, and the rejection is logged at error level instead
+of being recognised as a cancellation.
+**Current behavior:** `[SettingsQuery] API keys error: "signal is aborted
+without reason"` on the console. The UI renders correctly.
+**Required behavior:** A cancelled request is not an error. An abort is the
+expected outcome of navigating away.
+**Evidence:** browser QA 2026-09-08;
+`features/settings/hooks/use-settings-queries.ts:199`.
+**User impact:** None visible. It is noise that hides real errors, and it
+misleads whoever reads the console next.
+**Dependencies:** None.
+**Implementation direction:** Recognise `AbortError` in the shared settings
+query hook, so every section gets the same treatment rather than this one.
+**Acceptance criteria:** Switching sections rapidly logs nothing at error
+level.
+**Validation:** Hook unit test asserting an aborted query does not log.
+
+
+## 6. Needs live validation
+
+Neither of these is a confirmed defect.
+
+| id       | Question                                                      | Why it is still open                                                                                                                                                              |
+| -------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed. |
+| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                          |
+| `LIVE-6` | Do scheduled tasks actually fire?                             | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect. |
+
+## 7. Execution order
+
+Dependency-aware, not severity-ordered.
+
+1. `AGI-3`, durable assistant metadata. The largest remaining user-visible
+   loss, and independent of everything else.
+2. `AGI-4`, project passage retrieval. Independent, and the second half of the
+   project workflow the conversation-creation fix reopened.
+3. `AGI-5`, native CI. Out of order on purpose: it protects every later native
+   change, and every day it is not done is another merge without validation.
+4. `AGI-8`, then `AGI-22`, then `AGI-23`. One implementer, in that order: all
+   three are routing preferences that exist and are not consulted, `AGI-8`
+   establishes the threading `AGI-22` reuses, and `AGI-23` is the same defect
+   seen from the catalog side. Do not run these concurrently with `AGI-4`, both
+   touch the chat request processor.
+5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
+   same provenance story as `AGI-4`.
+6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
+7. `AGI-9`, `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent
+   of each other.
+8. `AGI-11`, `AGI-17` to `AGI-21`. Background and polish. `AGI-17` is small and
+   corrupts the user's own text, so it is worth taking early by whoever is
+   already in the renderer.
+
+`AGI-12` and `AGI-13` belong to whoever is next in `apps/desktop`.
+
+## 8. Acceptance matrix
+
+| Issue    | Automated                                       | Manual or live                     | Gate                                   |
+| -------- | ----------------------------------------------- | ---------------------------------- | -------------------------------------- |
+| `AGI-3`  | forced 4xx save test, e2e reload                | reload after a cited answer        | sources survive or an error is visible |
+| `AGI-4`  | passage retrieval unit tests                    | question set over a long document  | beginning, middle and end all answered |
+| `AGI-5`  | PR with a deliberate native break               | none                               | required check fails on the PR         |
+| `AGI-6`  | voice session tests                             | measured time to first audio       | audio starts before generation ends    |
+| `AGI-7`  | spec gate ledger                                | signed build                       | 12 of 12 gates, or surface removed     |
+| `AGI-8`  | auto-route conformance on the web path          | none                               | no excluded provider for an opted user |
+| `AGI-9`  | per-route policy tests                          | none                               | forbidden connector cannot authorize   |
+| `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
+| `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
+| `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
+| `AGI-13` | desktop unit tests                              | none                               | cloud mode throws                      |
+| `AGI-14` | per-provider route tests, registry contract     | none                               | transcription fails over between vendors |
+| `AGI-16` | assert no provider host in any citation href    | a grounded research turn           | publisher favicon and publisher URL    |
+| `AGI-17` | renderer cases for `>`, `>=`, `cmd > out`       | a message containing each          | every character survives               |
+| `AGI-18` | sidebar row component test                      | click from both entry points       | one label, one action                  |
+| `AGI-19` | marketing nav spec                              | none                               | scrolling closes an open menu          |
+| `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
+| `AGI-21` | settings query hook test                        | none                               | an abort logs nothing at error level   |
+| `AGI-22` | auto-route conformance on the web path          | none                               | no Chinese-HQ route without consent    |
+| `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
+
+Every web change closes with `apps/web` typecheck run on its own.
+
+## 9. Dependencies and parallel work
+
+```
+AGI-3                      web persistence, independent
+AGI-4                      retrieval, independent
+AGI-5                      CI, independent, do early
+AGI-8 ──> AGI-22 ──> AGI-23  routing preferences, one implementer, ordered
+AGI-16                     provenance, independent
+LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
+AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent
+AGI-11, AGI-12, AGI-13     background
+AGI-17 .. AGI-21           polish, independent of everything
+```
+
+Four tracks can run at once without touching the same files: web chat
+(`AGI-3`), retrieval (`AGI-4`), CI (`AGI-5`), and voice (`AGI-6`). `AGI-8` and
+`AGI-4` both touch the chat request processor, so do not run them concurrently.
