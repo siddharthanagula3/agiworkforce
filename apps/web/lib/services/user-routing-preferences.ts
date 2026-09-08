@@ -9,9 +9,14 @@ import { logger } from '@/lib/logger';
  *
  * `us_only` is a real provider-exclusion overlay: the policy is in
  * `routing-policies.json`, both resolvers enforce it, and TS and Rust tests
- * cover it. `/api/me/routing-preferences` persists the user's choice. Nothing
- * ever read it back on the chat path, so a `max` or `enterprise` user who
- * excluded those providers was still routed to them.
+ * cover it. The routing-preferences endpoint under `me` persists the user's
+ * choice. Nothing ever read it back on the chat path, so a `max` or
+ * `enterprise` user who excluded those providers was still routed to them.
+ *
+ * The path is deliberately not written out above. `routes-without-callers`
+ * scans raw file text for a route's literal URL, so naming it here would count
+ * as a caller and retire a ledger entry that is still true: the route has no
+ * caller, because nothing yet offers the control.
  *
  * The gap was one missing read, not a missing feature, and the shape to copy
  * was already beside it: `zeroDataRetentionOnly` is resolved from stored policy
