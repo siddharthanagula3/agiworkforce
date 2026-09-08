@@ -1466,3 +1466,139 @@ describe('removing a marketplace reports what happened', () => {
     expect(calls.filter((call) => call === 'GET /api/plugins/marketplaces')).not.toHaveLength(0);
   });
 });
+
+describe('an uploaded or authored plugin reaches the installed table without a reload', () => {
+  const UPLOAD_SOURCE = {
+    id: 'source-9',
+    name: 'release-notes-pack',
+    kind: 'upload' as const,
+    repositoryUrl: null,
+    ref: null,
+    status: 'active' as const,
+    lastError: null,
+    contentHash: 'a'.repeat(64),
+    entryCount: 1,
+    lastSyncedAt: null,
+    createdAt: '2026-09-07T00:00:00.000Z',
+    updatedAt: '2026-09-07T00:00:00.000Z',
+  };
+  const UPLOAD_ENTRY = {
+    id: 'entry-9',
+    sourceId: UPLOAD_SOURCE.id,
+    pluginKey: 'release-notes-pack',
+    name: 'release-notes-pack',
+    description: 'Turns a changelog into release notes',
+    version: '1.2.0',
+    declaredSkills: ['draft-release-notes'],
+    requiredConnectors: [],
+    agents: [],
+    examplePrompts: [],
+    permissions: [],
+    contentHash: 'b'.repeat(64),
+    createdAt: '2026-09-07T00:00:00.000Z',
+    updatedAt: '2026-09-07T00:00:00.000Z',
+  };
+  const INSTALLATION = {
+    id: 'installation-9',
+    entryId: UPLOAD_ENTRY.id,
+    sourceId: UPLOAD_SOURCE.id,
+    pluginKey: 'release-notes-pack',
+    installedVersion: '1.2.0',
+    enabled: true,
+    enabledSkills: ['draft-release-notes'],
+    customExamplePrompts: null,
+    installedAt: '2026-09-07T00:00:00.000Z',
+    updatedAt: '2026-09-07T00:00:00.000Z',
+  };
+
+  function stubAfterUpload(): string[] {
+    let uploaded = false;
+    return stubPluginRoutes({
+      'POST /api/plugins/uploads': () => {
+        uploaded = true;
+        return json(
+          {
+            sourceName: UPLOAD_SOURCE.name,
+            kind: 'upload',
+            plugins: [
+              {
+                entryId: UPLOAD_ENTRY.id,
+                pluginKey: UPLOAD_ENTRY.pluginKey,
+                name: UPLOAD_ENTRY.name,
+                skills: ['draft-release-notes'],
+                installation: INSTALLATION,
+              },
+            ],
+          },
+          201,
+        );
+      },
+      'GET /api/plugins/marketplaces': () => json({ sources: uploaded ? [UPLOAD_SOURCE] : [] }),
+      'GET /api/plugins/marketplaces/entries': () =>
+        json({ entries: uploaded ? [UPLOAD_ENTRY] : [] }),
+      'GET /api/plugins/marketplace-installations': () =>
+        json({ installations: uploaded ? [INSTALLATION] : [] }),
+    });
+  }
+
+  it('refetches the install state, so the manage table gains the row', async () => {
+    const calls = stubAfterUpload();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    expect(result.current.plugins?.manage?.rows.some((row) => row.id === 'entry-9')).toBe(false);
+
+    await act(async () => {
+      await result.current.uploadPluginArchive?.(
+        new File([new Uint8Array([1, 2, 3])], 'release-notes-pack.zip'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.plugins?.manage?.rows.some((row) => row.name === 'release-notes-pack'),
+      ).toBe(true);
+    });
+    expect(calls).toContain('GET /api/plugins/marketplace-installations');
+  });
+
+  it('reports what was installed to the dialog', async () => {
+    stubAfterUpload();
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.uploadPluginArchive?.(
+        new File([new Uint8Array([1, 2, 3])], 'release-notes-pack.zip'),
+      );
+    });
+
+    expect(outcome).toEqual({
+      title: 'Plugin installed',
+      lines: ['release-notes-pack', '1 skill is now available in chat.'],
+    });
+  });
+
+  it('raises the server rejection to the dialog', async () => {
+    stubPluginRoutes({
+      'POST /api/plugins/uploads': () =>
+        json(
+          {
+            error: {
+              code: 'PLUGIN_UPLOAD_REJECTED',
+              message: 'That file is not a readable zip archive.',
+            },
+          },
+          422,
+        ),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await expect(
+      result.current.uploadPluginArchive?.(new File([new Uint8Array([1])], 'broken.zip')),
+    ).rejects.toThrow('That file is not a readable zip archive.');
+  });
+});

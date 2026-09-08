@@ -303,3 +303,46 @@ export const PLUGIN_SETTINGS_LOADING_LABEL = 'Loading plugin settings';
 export const PLUGIN_SKILL_TOGGLE_PREFIX = 'Use';
 export const MARKETPLACE_REFRESH_LABEL = 'Refresh';
 export const MARKETPLACE_REFRESHING_LABEL = 'Refreshing marketplace';
+
+export const UPLOAD_PLUGIN_ACTION_ID = 'upload-plugin';
+export const UPLOAD_SKILL_ACTION_ID = 'upload-skill';
+export const CREATE_PLUGIN_ACTION_ID = 'create-plugin';
+export const UPLOAD_PLUGIN_LABEL = 'Upload plugin';
+export const UPLOAD_PLUGIN_INTRO =
+  'Choose a zip of your plugin. It needs a skills folder, and may carry a plugin manifest folder.';
+export const UPLOAD_PLUGIN_ACCEPT = '.zip,application/zip';
+export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
+
+export const UPLOAD_SKILL_LABEL = 'Upload skill';
+export const UPLOAD_SKILL_INTRO =
+  'Choose a SKILL.md, or a zip holding one. It needs a name and a description in its frontmatter.';
+export const UPLOAD_SKILL_ACCEPT = '.md,.zip,text/markdown,application/zip';
+export const UPLOAD_SKILL_FAILED_COPY = 'The skill could not be uploaded.';
+
+export const UPLOAD_CHOOSE_FILE_LABEL = 'Choose file';
+export const UPLOAD_NO_FILE_LABEL = 'No file chosen yet.';
+export const UPLOAD_SUBMIT_LABEL = 'Upload';
+export const UPLOAD_CANCEL_LABEL = 'Cancel';
+export const UPLOAD_DONE_LABEL = 'Done';
+export const UPLOAD_BUSY_LABEL = 'Uploading';
+
+export const CREATE_PLUGIN_LABEL = 'Create a plugin';
+export const CREATE_PLUGIN_INTRO =
+  'A plugin is a name, a description and the skills it brings. You can add more skills later.';
+export const CREATE_PLUGIN_NAME_LABEL = 'Name';
+export const CREATE_PLUGIN_NAME_PLACEHOLDER = 'Release notes';
+export const CREATE_PLUGIN_DESCRIPTION_LABEL = 'Description';
+export const CREATE_PLUGIN_DESCRIPTION_PLACEHOLDER = 'Turns a changelog into release notes.';
+export const CREATE_PLUGIN_SKILL_HEADING = 'Skills';
+export const CREATE_PLUGIN_SKILL_NAME_LABEL = 'Skill name';
+export const CREATE_PLUGIN_SKILL_NAME_PLACEHOLDER = 'draft-release-notes';
+export const CREATE_PLUGIN_SKILL_NAME_HINT =
+  'Lowercase letters, numbers and hyphens. This is what you type after a slash in chat.';
+export const CREATE_PLUGIN_SKILL_DESCRIPTION_LABEL = 'Skill description';
+export const CREATE_PLUGIN_SKILL_DESCRIPTION_PLACEHOLDER = 'Draft release notes from a changelog.';
+export const CREATE_PLUGIN_SKILL_BODY_LABEL = 'Instructions';
+export const CREATE_PLUGIN_SKILL_BODY_PLACEHOLDER = 'Read the changelog and write the notes.';
+export const CREATE_PLUGIN_ADD_SKILL_LABEL = 'Add another skill';
+export const CREATE_PLUGIN_REMOVE_SKILL_LABEL = 'Remove this skill';
+export const CREATE_PLUGIN_SUBMIT_LABEL = 'Create plugin';
+export const CREATE_PLUGIN_FAILED_COPY = 'The plugin could not be created.';

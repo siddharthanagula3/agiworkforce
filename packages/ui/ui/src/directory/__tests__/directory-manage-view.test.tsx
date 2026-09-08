@@ -151,3 +151,86 @@ describe('the plugins manage view', () => {
     expect(screen.getByRole('heading', { name: 'Connectors' })).toBeTruthy();
   });
 });
+
+describe('the Add menu offers what the account can actually do', () => {
+  function openAddMenu() {
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    return screen.getByRole('menu');
+  }
+
+  it('orders the plugins menu the way the leader does', () => {
+    renderPlugins(
+      { rows: ROWS, actions: [{ id: 'compose', label: 'Create with AGI', onSelect: vi.fn() }] },
+      {
+        addMarketplace: vi.fn(),
+        uploadPluginArchive: vi.fn(),
+        createPlugin: vi.fn(),
+      },
+    );
+    const items = within(openAddMenu())
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(items).toEqual([
+      'Add marketplace',
+      'Upload plugin',
+      'Create a plugin',
+      'Create with AGI',
+    ]);
+  });
+
+  it('leaves out an item the adapter cannot perform', () => {
+    renderPlugins(
+      { rows: ROWS, actions: [{ id: 'compose', label: 'Create with AGI', onSelect: vi.fn() }] },
+      { addMarketplace: vi.fn() },
+    );
+    const items = within(openAddMenu())
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(items).toEqual(['Add marketplace', 'Create with AGI']);
+  });
+
+  it('opens the upload dialog from the menu and closes it on cancel', async () => {
+    renderPlugins({ rows: ROWS }, { uploadPluginArchive: vi.fn() });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Upload plugin' }));
+    expect(await screen.findByLabelText('Choose file')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByLabelText('Choose file')).toBeNull());
+  });
+
+  it('opens the create dialog from the menu', async () => {
+    renderPlugins({ rows: ROWS }, { createPlugin: vi.fn() });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Create a plugin' }));
+    expect(await screen.findByLabelText('Skill name')).toBeTruthy();
+  });
+
+  it('reloads the plugins section when an upload dialog closes', async () => {
+    const loadSection = vi.fn();
+    renderPlugins({ rows: ROWS }, { uploadPluginArchive: vi.fn(), loadSection });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Upload plugin' }));
+    await screen.findByLabelText('Choose file');
+    loadSection.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(loadSection).toHaveBeenCalledWith('plugins'));
+  });
+
+  it('puts Upload skill first on the skills menu and never on the plugins one', () => {
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: {
+        installable: true,
+        entries: [],
+        manage: {
+          rows: [{ id: 'summarise', name: 'summarise' }],
+          actions: [{ id: 'create', label: 'Create a skill', onSelect: vi.fn() }],
+        },
+      },
+      uploadSkillFile: vi.fn(),
+      uploadPluginArchive: vi.fn(),
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    const items = within(openAddMenu())
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(items).toEqual(['Upload skill', 'Create a skill']);
+  });
+});

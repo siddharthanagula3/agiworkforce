@@ -9,6 +9,8 @@ import { useConfirmAction } from '../primitives/ConfirmAction';
 import { isDirectoryActionNotice } from './action-notice';
 import { AddMarketplaceDialog } from './AddMarketplaceDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
+import { CreatePluginDialog } from './CreatePluginDialog';
+import { UploadFileDialog } from './UploadFileDialog';
 import {
   ADD_MARKETPLACE_ACTION_ID,
   ADD_MARKETPLACE_LABEL,
@@ -34,6 +36,18 @@ import {
   INSTALL_LABEL,
   MARKETPLACE_REFRESHING_LABEL,
   MARKETPLACE_REFRESH_LABEL,
+  CREATE_PLUGIN_ACTION_ID,
+  CREATE_PLUGIN_LABEL,
+  UPLOAD_PLUGIN_ACCEPT,
+  UPLOAD_PLUGIN_ACTION_ID,
+  UPLOAD_PLUGIN_FAILED_COPY,
+  UPLOAD_PLUGIN_INTRO,
+  UPLOAD_PLUGIN_LABEL,
+  UPLOAD_SKILL_ACCEPT,
+  UPLOAD_SKILL_ACTION_ID,
+  UPLOAD_SKILL_FAILED_COPY,
+  UPLOAD_SKILL_INTRO,
+  UPLOAD_SKILL_LABEL,
 } from './constants';
 import { DirectoryBackLink } from './DirectoryDetailHeader';
 import { DirectoryGrid } from './DirectoryGrid';
@@ -49,6 +63,7 @@ import type {
   DirectoryEntry,
   DirectoryFilterSelection,
   DirectoryGroup,
+  DirectoryManageAction,
   DirectoryQuery,
   DirectorySectionKey,
   DirectorySortKey,
@@ -124,6 +139,9 @@ function DirectorySectionPanel({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [uploadPluginOpen, setUploadPluginOpen] = useState(false);
+  const [createPluginOpen, setCreatePluginOpen] = useState(false);
+  const [uploadSkillOpen, setUploadSkillOpen] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
   const openChangeRef = useRef(onOpenEntryChange);
@@ -336,19 +354,39 @@ function DirectorySectionPanel({
   function renderIndex() {
     const manage = data.manage;
     if (!manage || browsing) return renderCatalog();
-    const marketplaceAction = showAddMarketplace
-      ? [
-          {
-            id: ADD_MARKETPLACE_ACTION_ID,
-            label: ADD_MARKETPLACE_LABEL,
-            onSelect: () => setMarketplaceOpen(true),
-          },
-        ]
-      : [];
+    const leadingActions: DirectoryManageAction[] = [];
+    if (showAddMarketplace) {
+      leadingActions.push({
+        id: ADD_MARKETPLACE_ACTION_ID,
+        label: ADD_MARKETPLACE_LABEL,
+        onSelect: () => setMarketplaceOpen(true),
+      });
+    }
+    if (section === 'plugins' && adapter.uploadPluginArchive) {
+      leadingActions.push({
+        id: UPLOAD_PLUGIN_ACTION_ID,
+        label: UPLOAD_PLUGIN_LABEL,
+        onSelect: () => setUploadPluginOpen(true),
+      });
+    }
+    if (section === 'plugins' && adapter.createPlugin) {
+      leadingActions.push({
+        id: CREATE_PLUGIN_ACTION_ID,
+        label: CREATE_PLUGIN_LABEL,
+        onSelect: () => setCreatePluginOpen(true),
+      });
+    }
+    if (section === 'skills' && adapter.uploadSkillFile) {
+      leadingActions.push({
+        id: UPLOAD_SKILL_ACTION_ID,
+        label: UPLOAD_SKILL_LABEL,
+        onSelect: () => setUploadSkillOpen(true),
+      });
+    }
     return (
       <DirectoryManageView
         section={section}
-        view={{ ...manage, actions: [...marketplaceAction, ...(manage.actions ?? [])] }}
+        view={{ ...manage, actions: [...leadingActions, ...(manage.actions ?? [])] }}
         onBrowse={() => setBrowsing(true)}
         onOpen={setEntryId}
         headerActions={headerActions}
@@ -680,6 +718,44 @@ function DirectorySectionPanel({
     <>
       {confirmDialog}
       {renderBody()}
+      {adapter.uploadPluginArchive ? (
+        <UploadFileDialog
+          open={uploadPluginOpen}
+          title={UPLOAD_PLUGIN_LABEL}
+          description={UPLOAD_PLUGIN_INTRO}
+          accept={UPLOAD_PLUGIN_ACCEPT}
+          failureCopy={UPLOAD_PLUGIN_FAILED_COPY}
+          onClose={() => {
+            setUploadPluginOpen(false);
+            void adapter.loadSection?.('plugins');
+          }}
+          onSubmit={adapter.uploadPluginArchive}
+        />
+      ) : null}
+      {adapter.createPlugin ? (
+        <CreatePluginDialog
+          open={createPluginOpen}
+          onClose={() => {
+            setCreatePluginOpen(false);
+            void adapter.loadSection?.('plugins');
+          }}
+          onSubmit={adapter.createPlugin}
+        />
+      ) : null}
+      {adapter.uploadSkillFile ? (
+        <UploadFileDialog
+          open={uploadSkillOpen}
+          title={UPLOAD_SKILL_LABEL}
+          description={UPLOAD_SKILL_INTRO}
+          accept={UPLOAD_SKILL_ACCEPT}
+          failureCopy={UPLOAD_SKILL_FAILED_COPY}
+          onClose={() => {
+            setUploadSkillOpen(false);
+            void adapter.loadSection?.('skills');
+          }}
+          onSubmit={adapter.uploadSkillFile}
+        />
+      ) : null}
       {adapter.addMarketplace ? (
         <AddMarketplaceDialog
           open={marketplaceOpen}
