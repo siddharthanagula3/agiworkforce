@@ -6,12 +6,13 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 
-let capturedPublish: (() => Promise<PublishResult>) | undefined;
+type PublishSelection = { content: string; versionIndex: number };
+let capturedPublish: ((selection: PublishSelection) => Promise<PublishResult>) | undefined;
 
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: (props: {
     artifact: { title?: string };
-    publishArtifact?: () => Promise<PublishResult>;
+    publishArtifact?: (selection: PublishSelection) => Promise<PublishResult>;
   }) => {
     capturedPublish = props.publishArtifact;
     return (
@@ -99,7 +100,7 @@ describe('ArtifactsPanel · publish wiring', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ArtifactsPanel />);
-    const result = await capturedPublish!();
+    const result = await capturedPublish!({ content: CONTENT, versionIndex: 0 });
 
     expect(result.kind).toBe('cloud');
     expect(result.shareUrl).toBe(
@@ -121,6 +122,29 @@ describe('ArtifactsPanel · publish wiring', () => {
     });
   });
 
+  it('publishes the version the viewer selected, not the latest content', async () => {
+    const OLDER = '<h1>Sales dashboard, first draft</h1>';
+    const fetchMock = vi.fn(async () =>
+      Response.json(
+        {
+          token: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+          shareUrl: 'https://agiworkforce.com/shared-artifact/bbbbbbbbbbbbbbbbbbbbbbbb',
+          publishedAt: '2026-08-05T00:00:00.000Z',
+        },
+        { status: 201 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ArtifactsPanel />);
+    await capturedPublish!({ content: OLDER, versionIndex: 0 });
+
+    const [, init] = fetchMock.mock.calls[0]! as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.content).toBe(OLDER);
+    expect(body.content).not.toBe(CONTENT);
+  });
+
   it('surfaces the server error instead of reporting a fake success', async () => {
     vi.stubGlobal(
       'fetch',
@@ -130,6 +154,8 @@ describe('ArtifactsPanel · publish wiring', () => {
     );
 
     render(<ArtifactsPanel />);
-    await expect(capturedPublish!()).rejects.toThrow('Publishing is rate limited');
+    await expect(capturedPublish!({ content: CONTENT, versionIndex: 0 })).rejects.toThrow(
+      'Publishing is rate limited',
+    );
   });
 });
