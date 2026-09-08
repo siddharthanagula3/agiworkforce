@@ -38,7 +38,6 @@ const MANAGED_ROUTES = [
   'app/api/llm/v1/audio/transcriptions/route.ts',
   'app/api/media/image/generate/route.ts',
   'app/api/media/video/generate/route.ts',
-  'app/api/settings/test-provider/route.ts',
 ] as const;
 
 function source(relative: string): string {
