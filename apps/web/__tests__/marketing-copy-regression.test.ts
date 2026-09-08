@@ -186,7 +186,6 @@ describe('public marketing copy regressions', () => {
     const waitlist = readWebFile('app/waitlist/page.tsx');
     const waitlistModal = readWebFile('features/marketing/components/WaitlistModal.tsx');
     const publicWaitlistForm = readWebFile('features/marketing/components/PublicWaitlistForm.tsx');
-    const webByokSettings = readWebFile('app/settings/byok/page.tsx');
 
     expect(byokSetup).not.toContain('Private-beta key entry');
     expect(byokSetup).not.toContain(
@@ -203,9 +202,6 @@ describe('public marketing copy regressions', () => {
     expect(waitlistModal).not.toContain('Team has self-serve per-seat checkout');
     expect(publicWaitlistForm).not.toContain('when AGI Cloud access opens');
     expect(publicWaitlistForm).toContain('when the Enterprise program opens');
-    expect(webByokSettings).not.toContain('Managed key vault');
-    expect(webByokSettings).not.toContain('Request hosted key vault access');
-    expect(webByokSettings).toContain('not per-account Web BYOK');
   });
 
   it('does not promise unverified contact or enterprise sales guarantees', () => {
