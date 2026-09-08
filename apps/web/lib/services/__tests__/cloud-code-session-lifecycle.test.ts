@@ -23,6 +23,7 @@ import {
   CloudCodeValidationError,
   asCloudCodeSessionStatusFilter,
   deleteCloudCodeSession,
+  listCloudCodeAgentTurns,
   listCloudCodeSessions,
   renameCloudCodeSession,
   runCloudCodeCommand,
@@ -292,5 +293,33 @@ describe('the Recents status filter', () => {
     expect(asCloudCodeSessionStatusFilter(undefined)).toBe('all');
     expect(asCloudCodeSessionStatusFilter('archived')).toBe('archived');
     expect(() => asCloudCodeSessionStatusFilter('deleted')).toThrow(CloudCodeValidationError);
+  });
+});
+
+describe('the context a session has spent', () => {
+  it('carries the per-turn token counts onto the transcript record', async () => {
+    const adapter = db((sql) =>
+      /from cloud_code_agent_turns/.test(sql)
+        ? [
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              goal: 'fix it',
+              state: 'completed',
+              stop_reason: 'done',
+              steps_used: 2,
+              input_tokens: '1234',
+              output_tokens: 567,
+              final_message: 'done',
+              error_message: null,
+              created_at: '2026-09-07T12:00:00.000Z',
+            },
+          ]
+        : [],
+    );
+
+    const turns = await listCloudCodeAgentTurns(adapter as never, OWNER, SESSION_ID);
+
+    expect(turns[0]).toMatchObject({ inputTokens: 1234, outputTokens: 567 });
+    expect(queries[0]?.sql).toContain('input_tokens, output_tokens');
   });
 });
