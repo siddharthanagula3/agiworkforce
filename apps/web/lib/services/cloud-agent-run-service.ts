@@ -756,6 +756,87 @@ export async function transitionCloudAgentRun(
   return run;
 }
 
+export const ARCHIVABLE_TASK_STATES: ReadonlySet<AgentTaskState> = new Set<AgentTaskState>([
+  'ready_for_review',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export class CloudAgentRunNotArchivableError extends Error {
+  constructor(readonly state: string) {
+    super(`A ${state} task cannot be archived`);
+    this.name = 'CloudAgentRunNotArchivableError';
+  }
+}
+
+export class CloudAgentRunRestoreStateUnknownError extends Error {
+  constructor() {
+    super('This task has no recorded state to restore');
+    this.name = 'CloudAgentRunRestoreStateUnknownError';
+  }
+}
+
+async function readRunState(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRunRow> {
+  const rows = await db.query<CloudAgentRunRow>(
+    `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
+    [input.runId, input.userId],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudAgentRunNotFoundError();
+  return row;
+}
+
+/**
+ * Archiving is a shelf, not a delete: only a run that has stopped can go on it,
+ * and the run keeps every event it produced.
+ */
+export async function archiveCloudAgentRun(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun> {
+  const row = await readRunState(db, input);
+  if (row.state === 'archived') return mapRun(row);
+  if (!ARCHIVABLE_TASK_STATES.has(row.state as AgentTaskState)) {
+    throw new CloudAgentRunNotArchivableError(row.state);
+  }
+  return transitionCloudAgentRun(db, { ...input, state: 'archived' });
+}
+
+/**
+ * The journal is the only record of what a run was before it was shelved, so
+ * restoring reads the last state it announced rather than guessing a terminal
+ * one. A run whose journal cannot say is left archived and says so.
+ */
+export async function unarchiveCloudAgentRun(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun> {
+  const row = await readRunState(db, input);
+  if (row.state !== 'archived') return mapRun(row);
+
+  const restored = await db.query<{ state: string | null }>(
+    `select envelope -> 'event' ->> 'state' as state
+       from public.cloud_agent_events
+      where run_id = $1
+        and user_id = $2
+        and event_type = 'task-state-changed'
+        and envelope -> 'event' ->> 'state' is not null
+        and envelope -> 'event' ->> 'state' <> 'archived'
+      order by sequence desc
+      limit 1`,
+    [input.runId, input.userId],
+  );
+  const previous = restored[0]?.state;
+  if (!previous || !ARCHIVABLE_TASK_STATES.has(previous as AgentTaskState)) {
+    throw new CloudAgentRunRestoreStateUnknownError();
+  }
+  return transitionCloudAgentRun(db, { ...input, state: previous as AgentTaskState });
+}
+
 export async function recordCloudAgentRunSettledUsage(
   db: DatabaseAdapter,
   input: {
