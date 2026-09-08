@@ -360,12 +360,7 @@ export { BudgetTracker } from './components/BudgetTracker';
 export { BudgetAlertsPanel } from './components/BudgetAlertsPanel';
 export { TokenCounter } from './components/TokenCounter';
 export type { TokenCounterProps } from './components/TokenCounter';
-export {
-  UsageLimitBanner,
-  UsageLimitBannerContainer,
-  getUsageUrgency,
-  type UrgencyLevel,
-} from './components/UsageLimitBanner';
+export { getUsageUrgency, type UrgencyLevel } from './components/usage-urgency';
 export { CurrentActionBadge, CurrentActionStack } from './components/CurrentActionBadge';
 export {
   useBudgetStore,

@@ -21,7 +21,7 @@ import {
   readManagedUsageBuckets,
   useManagedUsageSummary,
 } from '@/lib/hooks/useManagedUsageSummary';
-import { formatUsageResetIn, paywallLimitHeadline, selectUsageWarning } from '@agiworkforce/types';
+import { paywallLimitHeadline, selectUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from '@agiworkforce/unified-chat';
 import {
   isTemporaryConversationById,
@@ -1113,15 +1113,13 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const accountUsageBlock = useChatStore((state) => state.accountUsageBlock);
   const composerUsageBlock = useMemo(() => {
     if (!accountUsageBlock) return undefined;
-    const resetLabel =
-      accountUsageBlock.showResetTime && accountUsageBlock.resetAt
-        ? (formatUsageResetIn(accountUsageBlock.resetAt) ?? '')
-        : '';
+    const resetAt =
+      accountUsageBlock.showResetTime && accountUsageBlock.resetAt ? accountUsageBlock.resetAt : '';
     const requiredTier = normalizeRequiredTier(accountUsageBlock.requiredTier || 'basic');
     const recoveryAction = accountUsageBlock.recoveryAction ?? 'upgrade';
     return {
       reason: accountUsageBlock.reason || paywallLimitHeadline(accountUsageBlock.feature),
-      ...(resetLabel ? { resetLabel } : {}),
+      ...(resetAt ? { resetAt } : {}),
       ...(accountUsageBlock.showUpgradeCta === false
         ? {}
         : {
