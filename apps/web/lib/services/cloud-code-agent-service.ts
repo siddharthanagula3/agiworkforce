@@ -30,6 +30,7 @@ import {
   type CloudCodeAgentEvent,
   type CloudCodeAgentResult,
   type CloudCodeTurnUsage,
+  type RunCloudCodeAgentTurnInput,
 } from './cloud-code-agent-loop';
 import {
   CloudCodeConflictError,
@@ -452,10 +453,24 @@ function terminalErrorMessage(result: CloudCodeAgentResult, stoppedByUser: boole
   }
 }
 
+/**
+ * The four things about a session that decide how a turn runs: where it works,
+ * what it may reach, what image it runs in, and what it was cloned from.
+ *
+ * Narrower than `CloudCodeSession` on purpose. A durable turn rebuilds its
+ * sandbox in a later invocation from what it was started with, not from a fresh
+ * read, so a session edited mid-turn cannot widen the egress of a turn already
+ * running under a narrower tier.
+ */
+export type CloudCodeTurnEnvironment = Pick<
+  CloudCodeSession,
+  'networkAccess' | 'runtimeId' | 'workspacePath' | 'repositoryUrl'
+>;
+
 export interface PersistedAgentTurnExecution {
   db: DatabaseAdapter;
   owner: CloudCodeOwner;
-  session: CloudCodeSession;
+  session: CloudCodeTurnEnvironment;
   sessionId: string;
   turnId: string;
   goal: string;
@@ -467,6 +482,18 @@ export interface PersistedAgentTurnExecution {
   priorMessages?: ProviderMessage[];
   preApproved?: { toolUseId: string; command: string; approved: boolean };
   initialStepIndex?: number;
+  /**
+   * How each provider and tool call is performed. Absent inline, where they are
+   * performed directly; supplied by the durable transport, which records each
+   * one so a retried invocation resumes instead of replaying the turn.
+   */
+  providerExecutor?: RunCloudCodeAgentTurnInput['providerExecutor'];
+  toolExecutor?: RunCloudCodeAgentTurnInput['toolExecutor'];
+  /**
+   * Whether a stop has been asked for, when the caller knows somewhere else to
+   * look than this turn's own row. The durable transport reads the run row too.
+   */
+  isCancellationRequested?: () => Promise<boolean>;
 }
 
 export async function executePersistedAgentTurn(
@@ -561,7 +588,10 @@ async function runClaimedAgentTurn(
   let result: CloudCodeAgentResult;
   let stepIndex = initialStepIndex;
   const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS, {
-    isRequested: () => isCloudCodeTurnCancellationRequested(db, owner, turnId),
+    isRequested: () =>
+      input.isCancellationRequested
+        ? input.isCancellationRequested()
+        : isCloudCodeTurnCancellationRequested(db, owner, turnId),
   });
   const resumingOwnLoop = Boolean(input.preApproved ?? input.priorMessages);
   const harness = resumingOwnLoop ? null : selectHarnessRunner(session.runtimeId);
@@ -637,6 +667,8 @@ async function runClaimedAgentTurn(
           });
         },
         isCancelled: deadline.cancelled,
+        ...(input.providerExecutor ? { providerExecutor: input.providerExecutor } : {}),
+        ...(input.toolExecutor ? { toolExecutor: input.toolExecutor } : {}),
         onEvent: recordStep,
       });
     }
@@ -791,10 +823,23 @@ async function runClaimedAgentTurn(
   };
 }
 
-export async function startCloudCodeAgentTurn(
+export interface PreparedCloudCodeAgentTurn {
+  session: CloudCodeSession;
+  turnId: string;
+  provider: string;
+}
+
+/**
+ * Everything that must happen before a turn runs, whichever transport runs it:
+ * the session is readable and accepts work, and the turn row exists so anything
+ * the turn does has somewhere to be recorded. Separated from execution so the
+ * transport choice can be made between the two without this file having to know
+ * a transport exists.
+ */
+export async function prepareCloudCodeAgentTurn(
   input: StartCloudCodeAgentTurnInput,
-): Promise<CloudCodeAgentTurnOutcome> {
-  const { db, owner, sessionId, goal, model, planTier, idempotencyKey } = input;
+): Promise<PreparedCloudCodeAgentTurn> {
+  const { db, owner, sessionId, goal, model, idempotencyKey } = input;
 
   const session = await getCloudCodeSession(db, owner, sessionId);
   if (session.state === 'closed') {
@@ -826,17 +871,5 @@ export async function startCloudCodeAgentTurn(
   const turnId = turnRows[0]?.id;
   if (!turnId) throw new CloudCodeUnavailableError('Could not open an agent turn');
 
-  return executePersistedAgentTurn({
-    db,
-    owner,
-    session,
-    sessionId,
-    turnId,
-    goal,
-    model,
-    provider,
-    planTier,
-    idempotencyKey,
-    signal: input.signal,
-  });
+  return { session, turnId, provider };
 }
