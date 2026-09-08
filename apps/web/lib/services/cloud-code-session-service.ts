@@ -226,6 +226,8 @@ interface ValidatedCreateInput {
   repositoryBranch: string | null;
   extraHosts: string[];
   harnessCredential: { envVar: string; value: string } | null;
+  /** Set when the repository came from a connected installation rather than a URL. */
+  installationId: number | null;
 }
 
 function iso(value: string | Date): string {
@@ -396,6 +398,41 @@ function validateRepositoryUrl(value: unknown): string | null {
   return `https://github.com/${pathParts[0]}/${pathParts[1]}.git`;
 }
 
+const GITHUB_FULL_NAME_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+interface ValidatedRepositoryReference {
+  installationId: number;
+  repositoryUrl: string;
+  branch: string | null;
+}
+
+function validateRepositoryReference(value: unknown): ValidatedRepositoryReference | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new CloudCodeValidationError('repository must be an object');
+  }
+  const record = value as Record<string, unknown>;
+  const installationId = record['installationId'];
+  if (
+    typeof installationId !== 'number' ||
+    !Number.isSafeInteger(installationId) ||
+    installationId <= 0
+  ) {
+    throw new CloudCodeValidationError('repository.installationId must be a positive integer');
+  }
+  const fullName = typeof record['fullName'] === 'string' ? record['fullName'].trim() : '';
+  if (!GITHUB_FULL_NAME_RE.test(fullName) || fullName.endsWith('.git')) {
+    throw new CloudCodeValidationError('repository.fullName must be in owner/repository form');
+  }
+  return {
+    installationId,
+    repositoryUrl: `https://github.com/${fullName}.git`,
+    branch: validateRepositoryBranch(
+      typeof record['branch'] === 'string' ? record['branch'] : null,
+    ),
+  };
+}
+
 /**
  * Accept only refs that cannot be mistaken for a git option.
  *
@@ -465,8 +502,17 @@ export function validateCreateCloudCodeSession(
       'Full internet access requires explicit acknowledgement of unrestricted egress',
     );
   }
-  const repositoryUrl = validateRepositoryUrl(input.repositoryUrl);
-  const repositoryBranch = validateRepositoryBranch(input.repositoryBranch);
+  const reference = validateRepositoryReference(input.repository);
+  const requestedUrl = validateRepositoryUrl(input.repositoryUrl);
+  if (reference && requestedUrl && requestedUrl !== reference.repositoryUrl) {
+    throw new CloudCodeValidationError(
+      'repository and repositoryUrl name different repositories; send one of them',
+    );
+  }
+  const repositoryUrl = reference?.repositoryUrl ?? requestedUrl;
+  const repositoryBranch = reference
+    ? (reference.branch ?? validateRepositoryBranch(input.repositoryBranch))
+    : validateRepositoryBranch(input.repositoryBranch);
   if (repositoryBranch && !repositoryUrl) {
     throw new CloudCodeValidationError('A branch needs a repository to clone it from');
   }
@@ -497,6 +543,7 @@ export function validateCreateCloudCodeSession(
     repositoryBranch,
     extraHosts,
     harnessCredential: resolveExplicitHarnessCredential(runtimeId, input.harnessCredential),
+    installationId: reference?.installationId ?? null,
   };
 }
 
@@ -750,22 +797,55 @@ function parseGithubRepositoryUrl(url: string): { owner: string; repo: string } 
   return match ? { owner: match[1]!, repo: match[2]! } : null;
 }
 
+/**
+ * `preferredInstallationId` is a caller-supplied number, so it is honoured only
+ * when it is one of this user's own verified installations. Passing it straight
+ * to {@link getInstallationAccessToken}, which checks ownership verification but
+ * not ownership, would mint a token for another account's installation.
+ */
 async function resolveGithubCloneCredential(
   userId: string,
   repositoryUrl: string,
+  preferredInstallationId?: number | null,
 ): Promise<GitHubCloneCredential | null> {
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return null;
   const parsed = parseGithubRepositoryUrl(repositoryUrl);
   if (!parsed) return null;
   const installations = await getUserGithubInstallations(userId);
   if (installations.length === 0) return null;
+  const preferred = preferredInstallationId
+    ? installations.find((installation) => installation.installationId === preferredInstallationId)
+    : undefined;
+  if (preferredInstallationId && !preferred) return null;
   const match =
+    preferred ??
     installations.find(
       (installation) => installation.login.toLowerCase() === parsed.owner.toLowerCase(),
-    ) ?? (installations.length === 1 ? installations[0] : undefined);
+    ) ??
+    (installations.length === 1 ? installations[0] : undefined);
   if (!match) return null;
   const password = await getInstallationAccessToken(match.installationId);
   return { username: GITHUB_INSTALLATION_TOKEN_USERNAME, password };
+}
+
+/**
+ * A repository reference names an installation the caller chose, so it is
+ * refused before a sandbox is provisioned unless it is one of the caller's own.
+ */
+async function assertInstallationBelongsToUser(
+  userId: string,
+  installationId: number | null,
+): Promise<void> {
+  if (!installationId) return;
+  if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) {
+    throw new CloudCodeValidationError(
+      'This deployment cannot use a connected GitHub account, so choose a repository by URL',
+    );
+  }
+  const installations = await getUserGithubInstallations(userId);
+  if (!installations.some((installation) => installation.installationId === installationId)) {
+    throw new CloudCodeValidationError('That GitHub installation is not connected to this account');
+  }
 }
 
 export async function createCloudCodeSession(
@@ -784,6 +864,7 @@ export async function createCloudCodeSession(
     throw error;
   }
   await assertRuntimeIsAvailable(validated.runtimeId);
+  await assertInstallationBelongsToUser(owner.userId, validated.installationId);
 
   let claimed: { row: SessionRow; reused: boolean };
   try {
@@ -909,7 +990,16 @@ export async function createCloudCodeSession(
       if (!executor.git) {
         throw new CloudCodeUnavailableError('Managed Code environment cannot clone repositories');
       }
-      const credential = await resolveGithubCloneCredential(owner.userId, validated.repositoryUrl);
+      const credential = await resolveGithubCloneCredential(
+        owner.userId,
+        validated.repositoryUrl,
+        validated.installationId,
+      );
+      if (validated.installationId && !credential) {
+        throw new CloudCodeUnavailableError(
+          'The connected GitHub account could not authorise this clone',
+        );
+      }
       const clone = await executor.git.clone({
         url: validated.repositoryUrl,
         path: REPOSITORY_WORKSPACE_PATH,

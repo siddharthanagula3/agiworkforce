@@ -66,6 +66,7 @@ describe('cloud-code-session-service validation', () => {
       repositoryBranch: null,
       extraHosts: [],
       harnessCredential: null,
+      installationId: null,
     });
   });
 
@@ -185,6 +186,81 @@ describe('cloud-code-session-service validation', () => {
         fullNetworkAcknowledged: true,
       }).networkAccess,
     ).toBe('full');
+  });
+
+  it('turns a chosen installation repository into a clone url and keeps the installation', () => {
+    expect(
+      validateCreateCloudCodeSession({
+        requestId: 'request_123456',
+        title: 'Repository workspace',
+        repository: { installationId: 42, fullName: 'acme/widgets', branch: 'release/2.1' },
+        networkAccess: 'trusted',
+      }),
+    ).toMatchObject({
+      repositoryUrl: 'https://github.com/acme/widgets.git',
+      repositoryBranch: 'release/2.1',
+      workspacePath: '/home/user/project',
+      installationId: 42,
+    });
+  });
+
+  it('falls back to the repository default branch when the reference names none', () => {
+    expect(
+      validateCreateCloudCodeSession({
+        requestId: 'request_123456',
+        title: 'Repository workspace',
+        repository: { installationId: 42, fullName: 'acme/widgets' },
+        networkAccess: 'trusted',
+      }).repositoryBranch,
+    ).toBeNull();
+  });
+
+  it('refuses a repository reference that is not a usable owner and installation', () => {
+    for (const repository of [
+      { installationId: 0, fullName: 'acme/widgets' },
+      { installationId: -1, fullName: 'acme/widgets' },
+      { installationId: 1.5, fullName: 'acme/widgets' },
+      { installationId: '42', fullName: 'acme/widgets' },
+      { installationId: 42, fullName: 'acme' },
+      { installationId: 42, fullName: 'acme/widgets/extra' },
+      { installationId: 42, fullName: '../../etc/passwd' },
+      { installationId: 42, fullName: 'acme/widgets.git' },
+      { installationId: 42, fullName: 'acme/wid gets' },
+    ]) {
+      expect(
+        () =>
+          validateCreateCloudCodeSession({
+            requestId: 'request_123456',
+            title: 'Repository workspace',
+            repository: repository as never,
+            networkAccess: 'trusted',
+          }),
+        `repository ${JSON.stringify(repository)} must be refused`,
+      ).toThrow(CloudCodeValidationError);
+    }
+  });
+
+  it('refuses a reference and a url that name different repositories', () => {
+    expect(() =>
+      validateCreateCloudCodeSession({
+        requestId: 'request_123456',
+        title: 'Repository workspace',
+        repository: { installationId: 42, fullName: 'acme/widgets' },
+        repositoryUrl: 'https://github.com/acme/other',
+        networkAccess: 'trusted',
+      }),
+    ).toThrow(/different repositories/i);
+  });
+
+  it('keeps the raw url path working with no installation attached', () => {
+    expect(
+      validateCreateCloudCodeSession({
+        requestId: 'request_123456',
+        title: 'Repository workspace',
+        repositoryUrl: 'https://github.com/acme/widgets',
+        networkAccess: 'trusted',
+      }).installationId,
+    ).toBeNull();
   });
 
   it('rejects malformed session identifiers as not found', () => {

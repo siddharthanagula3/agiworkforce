@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual, randomBytes, createSign } from 'crypto';
 import { z } from 'zod';
 import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { findInGitHubRestPages } from './github-rest-pagination';
+import { collectGitHubRestPages, findInGitHubRestPages } from './github-rest-pagination';
 
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
 
@@ -422,6 +422,90 @@ export async function getInstallationAccessToken(installationId: number): Promis
   );
 
   return token;
+}
+
+const gitHubInstallationRepositorySchema = z.object({
+  full_name: z.string().min(1).max(512),
+  name: z.string().min(1).max(255),
+  private: z.boolean(),
+  default_branch: z.string().min(1).max(255).nullish(),
+  owner: z.object({ login: z.string().min(1).max(255) }),
+});
+
+const gitHubInstallationRepositoriesResponseSchema = z.object({
+  total_count: z.number().int().nonnegative(),
+  repositories: z.array(gitHubInstallationRepositorySchema),
+});
+
+export interface GitHubInstallationRepository {
+  installationId: number;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string | null;
+  isPrivate: boolean;
+}
+
+export interface ListInstallationRepositoriesResult {
+  repositories: GitHubInstallationRepository[];
+  truncated: boolean;
+}
+
+/**
+ * The repositories one installation grants this app, as the picker lists them.
+ *
+ * The caller must have already proved the installation belongs to the signed-in
+ * account: {@link getInstallationAccessToken} checks only that the row is
+ * ownership-verified, so an unchecked id from a request body would mint a token
+ * for someone else's installation.
+ */
+export async function listInstallationRepositories(
+  installationId: number,
+  limits: { maxItems: number; maxPages: number; perPage: number },
+): Promise<ListInstallationRepositoriesResult> {
+  const token = await getInstallationAccessToken(installationId);
+  const collected = await collectGitHubRestPages({
+    perPage: limits.perPage,
+    maxPages: limits.maxPages,
+    maxItems: limits.maxItems,
+    loadPage: async (page) => {
+      const response = await fetch(
+        buildGitHubApiUrl(`/installation/repositories?per_page=${limits.perPage}&page=${page}`),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          },
+          signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to list GitHub repositories: ${response.status}`);
+      }
+      const parsed = gitHubInstallationRepositoriesResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error('GitHub repository listing response was invalid');
+      }
+      return {
+        items: parsed.data.repositories,
+        totalCount: parsed.data.total_count,
+        linkHeader: response.headers.get('link'),
+      };
+    },
+  });
+
+  return {
+    truncated: collected.truncated,
+    repositories: collected.items.map((repository) => ({
+      installationId,
+      owner: repository.owner.login,
+      name: repository.name,
+      fullName: repository.full_name,
+      defaultBranch: repository.default_branch ?? null,
+      isPrivate: repository.private,
+    })),
+  };
 }
 
 export async function getPrDiff(
