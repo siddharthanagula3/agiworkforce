@@ -13,6 +13,8 @@ import {
 } from '../services/content-report-queue-client';
 import { toUserMessage } from '@/lib/user-error-message';
 
+const CONTENT_TAKEDOWN_HREF = '/operator#content';
+
 const OPEN_STATUSES: readonly ContentReportStatus[] = ['received', 'in_review'];
 const RESOLVED_STATUSES: readonly ContentReportStatus[] = ['actioned', 'dismissed'];
 
@@ -97,8 +99,14 @@ export default function ContentReportQueuePanel() {
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Reports flagged from web and mobile. Reviewed within {counts?.slaHours ?? 24} hours;
-            resolving one writes an audited decision. To unpublish shared content, use the takedown
-            control with the share link.
+            resolving one writes an audited decision. To unpublish shared content, open the{' '}
+            <a
+              href={CONTENT_TAKEDOWN_HREF}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              takedown control
+            </a>{' '}
+            and paste the share link.
           </p>
         </div>
         <div className="flex items-center gap-2">

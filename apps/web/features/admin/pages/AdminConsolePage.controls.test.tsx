@@ -37,6 +37,24 @@ describe('AdminConsolePage, admin control inventory', () => {
     expect(hrefsIn(controlsSection(container))).toContain('/settings/team');
   });
 
+  it('links the takedown control the report queue sends the reviewer to', () => {
+    const { container } = render(<AdminConsolePage />);
+    expect(hrefsIn(controlsSection(container))).toContain('/operator#content');
+  });
+
+  it('links the privacy request and erasure queues, which had no inbound link anywhere', () => {
+    const { container } = render(<AdminConsolePage />);
+    expect(hrefsIn(controlsSection(container))).toContain('/operator#privacy');
+  });
+
+  it('names the takedown and privacy services behind their rows', () => {
+    const { container } = render(<AdminConsolePage />);
+    const text = controlsSection(container).textContent ?? '';
+    expect(text).toContain('/api/admin/takedown');
+    expect(text).toContain('/api/admin/privacy/requests');
+    expect(text).toContain('/api/admin/privacy/erasures');
+  });
+
   it('gives every listed control a destination, an inventory entry with no link is a dead control', () => {
     const { container } = render(<AdminConsolePage />);
     const section = controlsSection(container);

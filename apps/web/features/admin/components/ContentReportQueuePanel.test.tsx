@@ -95,4 +95,12 @@ describe('ContentReportQueuePanel', () => {
     await screen.findByText(/reviewer note is required/i);
     expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
+
+  it('links the takedown control it tells the reviewer to use', async () => {
+    render(<ContentReportQueuePanel />);
+    await screen.findByText(/explained how to hurt someone/);
+
+    const link = screen.getByRole('link', { name: /takedown control/i });
+    expect(link.getAttribute('href')).toBe('/operator#content');
+  });
 });
