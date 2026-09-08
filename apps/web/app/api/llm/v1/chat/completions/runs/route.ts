@@ -19,6 +19,7 @@ import {
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
+  findActiveCloudAgentRunForConversation,
   listCloudAgentRuns,
   type CloudAgentRunCursor,
 } from '@/lib/services/cloud-agent-run-service';
@@ -33,6 +34,7 @@ const DEFAULT_ACTIVE_STATES = [
   'awaiting_input',
   'ready_for_review',
 ] as const;
+const ConversationIdSchema = z.string().uuid();
 const CursorSchema = z.object({
   updatedAt: z.string().datetime(),
   id: z.string().uuid(),
@@ -81,6 +83,23 @@ async function handleGet(request: NextRequest) {
   }
 
   const { db, userId } = await getUserScopedDb(request);
+
+  const rawConversationId = url.searchParams.get('conversationId');
+  if (rawConversationId !== null) {
+    const parsedConversationId = ConversationIdSchema.safeParse(rawConversationId);
+    if (!parsedConversationId.success) {
+      throw createError.validation('Invalid Cloud task list parameters');
+    }
+    const active = await findActiveCloudAgentRunForConversation(db, {
+      userId,
+      conversationId: parsedConversationId.data,
+    });
+    return NextResponse.json(
+      { runs: active ? [active] : [], nextCursor: null },
+      { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    );
+  }
+
   // Tasks is the AGI Work surface: it lists the runs that mode produced and
   // nothing else. An ordinary `chat` turn also writes a cloud_agent_runs row,
   // so without this filter every conversation showed up here as a "task".
