@@ -70,16 +70,27 @@ export function CodeSessionMenu({
   onDeleteSession,
   onCloseSession,
 }: CodeSessionMenuProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const copyLink = async () => {
     if (typeof window === 'undefined') return;
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
   };
 
+  const copyLabel =
+    copyState === 'copied'
+      ? CODE_COPY.copiedLink
+      : copyState === 'failed'
+        ? CODE_COPY.copyLinkFailed
+        : CODE_COPY.copyLink;
+
   return (
-    <DropdownMenu onOpenChange={(open) => open && setCopied(false)}>
+    <DropdownMenu onOpenChange={(open) => open && setCopyState('idle')}>
       <DropdownMenuTrigger asChild>
         <button type="button" className={styles['headerButton']} aria-label={CODE_COPY.sessionMenu}>
           <MoreHorizontal size={GLYPH_SIZE} aria-hidden="true" />
@@ -144,9 +155,7 @@ export function CodeSessionMenu({
           }}
         >
           <Link2 size={MENU_GLYPH_SIZE} aria-hidden="true" />
-          <span className={styles['menuRowLabel']}>
-            {copied ? CODE_COPY.copiedLink : CODE_COPY.copyLink}
-          </span>
+          <span className={styles['menuRowLabel']}>{copyLabel}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onSelect={onEditEnvironment}>
