@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
+import type { ArtifactWireDelta, ChatSyncPushResponse } from '@agiworkforce/cloud-contracts';
 import { ARTIFACT_PANEL_OVERLAY_QUERY, useArtifactsStore } from './artifacts-store';
 
 function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
@@ -389,6 +389,99 @@ describe('local artifact push batching', () => {
     expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([
       expect.objectContaining({ content: '<main>Local again</main>' }),
     ]);
+  });
+
+  // WEB-ARTIFACTS-STORE-CLOUD-SYNC-CONFLICTS-01: the server version took the
+  // live slot and the edit it beat was masked by the cloud merge, never pushed
+  // again because its timestamp no longer superseded the server's, and never
+  // mentioned to anyone.
+  function conflictWithServerCopy(serverContent: string): ChatSyncPushResponse {
+    return {
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: {
+        conversations: [],
+        messages: [],
+        artifacts: [
+          {
+            id: ARTIFACT_ID,
+            current: {
+              id: ARTIFACT_ID,
+              conversation_id: CONVERSATION_ID,
+              message_id: MESSAGE_ID,
+              title: 'Local artifact',
+              artifact_type: 'html',
+              language: 'html',
+              content: serverContent,
+              current_version: 2,
+              pinned: false,
+              tags: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date(Date.now() + 60_000).toISOString(),
+              deleted_at: null,
+              server_version: '9',
+            },
+          },
+        ],
+      },
+      cursor: '9',
+    };
+  }
+
+  it('keeps the refused edit as a version and says the push was refused', () => {
+    seedLocalArtifact('<main>Mine</main>');
+    useArtifactsStore.getState().collectArtifactPushBatch();
+
+    useArtifactsStore
+      .getState()
+      .applyArtifactPushResult(conflictWithServerCopy('<main>Theirs</main>'));
+
+    const conflict = useArtifactsStore.getState().artifactConflicts[ARTIFACT_ID];
+    expect(conflict?.localContent).toBe('<main>Mine</main>');
+    expect(conflict?.serverContent).toBe('<main>Theirs</main>');
+    expect(
+      useArtifactsStore
+        .getState()
+        .getArtifactVersions(ARTIFACT_ID)
+        .some((version) => version.content === '<main>Mine</main>'),
+    ).toBe(true);
+  });
+
+  it('retries the refused push against the new base once the user keeps their edit', () => {
+    seedLocalArtifact('<main>Mine</main>');
+    useArtifactsStore.getState().collectArtifactPushBatch();
+    useArtifactsStore
+      .getState()
+      .applyArtifactPushResult(conflictWithServerCopy('<main>Theirs</main>'));
+
+    expect(useArtifactsStore.getState().resolveArtifactConflict(ARTIFACT_ID, 'mine')).toBe(true);
+
+    expect(useArtifactsStore.getState().artifactConflicts[ARTIFACT_ID]).toBeUndefined();
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([
+      expect.objectContaining({ content: '<main>Mine</main>' }),
+    ]);
+  });
+
+  it('settles on the server copy and pushes nothing when the user keeps theirs', () => {
+    seedLocalArtifact('<main>Mine</main>');
+    useArtifactsStore.getState().collectArtifactPushBatch();
+    useArtifactsStore
+      .getState()
+      .applyArtifactPushResult(conflictWithServerCopy('<main>Theirs</main>'));
+
+    expect(useArtifactsStore.getState().resolveArtifactConflict(ARTIFACT_ID, 'theirs')).toBe(true);
+
+    expect(useArtifactsStore.getState().artifactConflicts[ARTIFACT_ID]).toBeUndefined();
+    expect(useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)?.content).toBe(
+      '<main>Theirs</main>',
+    );
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+
+  it('answers nothing for an artifact with no conflict to resolve', () => {
+    seedLocalArtifact();
+
+    expect(useArtifactsStore.getState().resolveArtifactConflict(ARTIFACT_ID, 'mine')).toBe(false);
   });
 
   it('never sends an artifact the sync contract would reject', () => {

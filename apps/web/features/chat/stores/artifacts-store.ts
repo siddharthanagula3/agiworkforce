@@ -220,6 +220,50 @@ function recordCloudCopy(artifact: CloudArtifact): void {
   _cloudArtifacts = [..._cloudArtifacts.filter((a) => a.id !== artifact.id), artifact];
 }
 
+/**
+ * A push the server refused because someone else had already changed the
+ * artifact. The losing content is kept here, and as a version on the artifact,
+ * because the merge below hands the live slot to the server copy: without this
+ * the edit is masked, never pushed again (its timestamp no longer supersedes
+ * the server's), and gone with no trace.
+ */
+export interface ArtifactConflict {
+  id: string;
+  localContent: string;
+  serverContent: string;
+  detectedAt: string;
+}
+
+let _conflictsById: Record<string, ArtifactConflict> = {};
+
+function recordConflict(conflict: ArtifactConflict): void {
+  _conflictsById = { ..._conflictsById, [conflict.id]: conflict };
+}
+
+function clearConflict(id: string): void {
+  if (!(id in _conflictsById)) return;
+  const { [id]: _dropped, ...rest } = _conflictsById;
+  _conflictsById = rest;
+}
+
+/**
+ * Keep the refused edit reachable through the version control the panel
+ * already has, rather than inventing a second place to find it. Appended
+ * without touching the live artifact, which the server copy now owns.
+ */
+function appendLosingVersion(id: string, losing: SharedArtifact): void {
+  _sharedArtifactStore.setState((state) => {
+    const versions = state.versionsById[id] ?? [];
+    if (versions.some((version) => version.content === losing.content)) return state;
+    return {
+      versionsById: {
+        ...state.versionsById,
+        [id]: [...versions, { ...losing, version: versions.length + 1 }],
+      },
+    };
+  });
+}
+
 interface PersistedShape {
   artifacts: SharedArtifact[];
   versionsById: Record<string, SharedArtifact[]>;
@@ -356,6 +400,8 @@ type ArtifactsStoreReturn = {
   cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
   cloudSyncError: string | null;
   persistenceDegraded: boolean;
+  /** Pushes the server refused, keyed by artifact id, awaiting the user's answer. */
+  artifactConflicts: Record<string, ArtifactConflict>;
 
   addArtifact: (artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }) => string;
   addArtifactForMessage: (
@@ -375,6 +421,7 @@ type ArtifactsStoreReturn = {
   getMessageArtifacts: (messageId: string) => Artifact[];
   getConversationArtifacts: (conversationId: string) => Artifact[];
   getArtifactVersions: (id: string) => SharedArtifact[];
+  resolveArtifactConflict: (id: string, keep: 'mine' | 'theirs') => boolean;
   restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
   applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
   collectArtifactPushBatch: () => ArtifactSyncPushItem[];
@@ -499,6 +546,7 @@ const actions = {
     _cloudSyncError = null;
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
+    _conflictsById = {};
   },
 
   addArtifactForMessage(messageId: string, artifact: ArtifactData, conversationId?: string): void {
@@ -538,6 +586,44 @@ const actions = {
 
   getArtifactVersions(id: string): SharedArtifact[] {
     return _sharedArtifactStore.getState().getArtifactVersions(id);
+  },
+
+  /**
+   * The user's answer to a refused push. Keeping theirs simply accepts the
+   * server copy that is already live. Keeping mine re-applies the refused
+   * content with a fresh revision so it supersedes the server copy again, and
+   * releases the rejection guard, so the next batch pushes it against the base
+   * version the server has just told us about instead of the stale one it
+   * refused.
+   */
+  resolveArtifactConflict(id: string, keep: 'mine' | 'theirs'): boolean {
+    const conflict = _conflictsById[id];
+    if (!conflict) return false;
+    clearConflict(id);
+
+    if (keep === 'theirs') {
+      const current = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
+      if (current && current.content !== conflict.serverContent) {
+        _sharedArtifactStore
+          .getState()
+          .upsertArtifact({ ...current, content: conflict.serverContent });
+      }
+      notifyArtifactSubscribers();
+      return true;
+    }
+
+    delete _rejectedPushContentById[id];
+    const current = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
+    if (current) {
+      _sharedArtifactStore.getState().upsertArtifact({
+        ...current,
+        content: conflict.localContent,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    _cloudArtifacts = _cloudArtifacts.filter((artifact) => artifact.id !== id);
+    notifyArtifactSubscribers();
+    return true;
   },
 
   restoreArtifactVersion(id: string, versionIndex: number): boolean {
@@ -643,11 +729,29 @@ const actions = {
     }
 
     for (const conflict of result.conflicts.artifacts) {
+      const pushed = _inFlightPushById.get(conflict.id);
       if (conflict.current) {
-        recordCloudCopy(wireToCloudArtifact(conflict.current));
+        const server = wireToCloudArtifact(conflict.current);
+        recordCloudCopy(server);
+        // The server takes the live slot, as before. What is new is that the
+        // edit it beat survives: kept as a version the panel can restore, and
+        // recorded as a conflict so the panel can say the push was refused
+        // instead of the change simply vanishing.
+        // Whatever the local copy was, the panel is now showing the server's
+        // content, so a marker describing the local one no longer applies to
+        // what is on screen.
+        setSideEntry(conflict.id, { interrupted: false });
+        if (pushed && pushed.content !== server.content) {
+          appendLosingVersion(conflict.id, pushed);
+          recordConflict({
+            id: conflict.id,
+            localContent: pushed.content,
+            serverContent: server.content,
+            detectedAt: new Date().toISOString(),
+          });
+        }
         continue;
       }
-      const pushed = _inFlightPushById.get(conflict.id);
       if (pushed) _rejectedPushContentById[conflict.id] = pushed.content;
     }
 
@@ -682,6 +786,7 @@ const actions = {
     _cloudSyncError = null;
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
+    _conflictsById = {};
   },
 };
 
@@ -700,6 +805,7 @@ function buildStoreSlice(): ArtifactsStoreReturn {
     cloudSyncStatus: _cloudSyncStatus,
     cloudSyncError: _cloudSyncError,
     persistenceDegraded: _persistDegraded,
+    artifactConflicts: _conflictsById,
     ...actions,
   };
 }
