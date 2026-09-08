@@ -140,6 +140,7 @@
     "check:neon-migrations": "node --test scripts/check-neon-migrations.test.mjs && node scripts/check-neon-migrations.mjs && node --test scripts/neon-migrate.test.mjs",
     "db:migrate": "node scripts/neon-migrate.mjs",
     "db:rls-probe": "node apps/web/scripts/rls-probe.mjs",
+    "db:lease-probe": "node apps/web/scripts/managed-usage-lease-probe.mjs",
     "test:db-migrate": "node --test scripts/neon-migrate.test.mjs",
     "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs && node --test scripts/production-deploy-scope.test.mjs scripts/verify-deployment.test.mjs scripts/check-semgrep-findings.test.mjs scripts/check-ci-lane-independence.test.mjs scripts/ci-failure-attribution.test.mjs",
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
