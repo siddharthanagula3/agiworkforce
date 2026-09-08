@@ -21,6 +21,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('@/lib/services/cloud-code-agent-runner', () => ({
   createCloudCodeToolRunner: vi.fn(() => ({})),
 }));
+vi.mock('workflow/api', () => ({ start: vi.fn() }));
 // importOriginal, not a bare factory: the service also imports the loop's
 // constants, and a factory that only supplies the function makes those undefined.
 vi.mock('@/lib/services/cloud-code-agent-loop', async (importOriginal) => ({
@@ -51,6 +52,7 @@ import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { getCloudCodeSession } from '@/lib/services/cloud-code-session-service';
 import { runCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-loop';
+import { runCloudCodeTurn } from '@/lib/services/cloud-code-turn-transport';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -68,7 +70,6 @@ import type {
 import {
   CLOUD_CODE_AGENT_TURN_BUDGET_MS,
   executePersistedAgentTurn,
-  startCloudCodeAgentTurn,
 } from '@/lib/services/cloud-code-agent-service';
 
 const FLAT_RESERVATION_CENTS = 25;
@@ -111,7 +112,7 @@ async function runTurn(options: {
     };
   });
 
-  await startCloudCodeAgentTurn({
+  await runCloudCodeTurn({
     db: dbStub() as never,
     owner: { userId: 'user-1', organizationId: null },
     sessionId: 'session-1',
@@ -182,7 +183,7 @@ describe('Cloud Code turn lifecycle', () => {
       };
     });
 
-    const outcome = await startCloudCodeAgentTurn({
+    const outcome = await runCloudCodeTurn({
       db: dbStub() as never,
       owner: { userId: 'user-1', organizationId: null },
       sessionId: 'session-1',
@@ -319,7 +320,7 @@ function terminalTurnUpdate(db: TrackedDb): unknown[] | undefined {
 }
 
 function startTurn(db: TrackedDb, signal?: AbortSignal) {
-  return startCloudCodeAgentTurn({
+  return runCloudCodeTurn({
     db: db as never,
     owner: { userId: 'user-1', organizationId: null },
     sessionId: 'session-1',
