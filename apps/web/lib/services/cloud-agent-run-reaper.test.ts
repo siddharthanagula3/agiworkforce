@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { listCanonicalModels } from '@agiworkforce/types';
 const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('./cloud-agent-run-service', () => ({ appendCloudAgentEvents: appendEvents }));
 vi.mock('@/lib/logger', () => ({
@@ -24,13 +25,21 @@ function database(): DatabaseAdapter {
   } as unknown as DatabaseAdapter;
 }
 
+const ZERO_COST_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.inputCost === 0 && candidate.outputCost === 0 && candidate.apiModelId,
+  );
+  if (!model) throw new Error('The catalog must expose a zero-cost model with an api id');
+  return model;
+})();
+
 const REAPED = {
   id: '0190a000-0000-7000-8000-000000000001',
   user_id: 'user-1',
   state: 'failed',
   conversation_id: '0190a000-0000-7000-8000-000000000009',
   request_id: 'agi.chat.web.send.turn-1',
-  model: 'openrouter-free',
+  model: ZERO_COST_MODEL.id,
   last_event_sequence: 4,
 };
 const REAPED_AFTER_STOP = {

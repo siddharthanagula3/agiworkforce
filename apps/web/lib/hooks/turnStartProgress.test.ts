@@ -7,7 +7,7 @@ import {
 } from './turnStartProgress';
 
 const STARTED_AT_MS = 1_000_000;
-const MODEL_NAME = 'OpenRouter Free Auto';
+const MODEL_NAME = 'Fixture Router Model';
 
 function placeholderActivity(summary: string): AgentActivityState {
   return {

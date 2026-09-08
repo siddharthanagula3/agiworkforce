@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 const budget = vi.hoisted(() => ({ attemptMs: 40, turnMs: 90 }));
 const HANG_MS = 5_000;
@@ -201,7 +202,15 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
-const FREE_ROUTE = 'openrouter-free';
+const ZERO_COST_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.inputCost === 0 && candidate.outputCost === 0 && candidate.apiModelId,
+  );
+  if (!model) throw new Error('The catalog must expose a zero-cost model with an api id');
+  return model;
+})();
+
+const FREE_ROUTE = ZERO_COST_MODEL.id;
 
 function makeRequest(): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
@@ -267,9 +276,9 @@ beforeEach(() => {
 });
 
 /**
- * The founder's 2026-09-07 production turn: OpenRouter Free Auto accepted the
- * request and never sent a first token, so the chat function held the whole
- * 300 s platform budget and answered 504 with no body the client could read.
+ * The founder's 2026-09-07 production turn: the free router accepted the request
+ * and never sent a first token, so the chat function held the whole 300 s
+ * platform budget and answered 504 with no body the client could read.
  */
 describe('a free-route turn whose upstream never speaks', () => {
   it('answers within the first-token budget instead of holding the function open', async () => {
