@@ -166,6 +166,14 @@ export interface WebChatMessageMetadata {
 
   isSearching?: boolean;
   searchResults?: WebSearchResults;
+  /**
+   * The client's post-stream metadata save failed and was not retried.
+   *
+   * Client-only: it describes a write that did not happen, so it can never
+   * itself be written. It exists so the transcript can say what the reader
+   * would otherwise discover by reloading and finding the sources gone.
+   */
+  metadataNotSaved?: true;
 
   isExecutingCode?: boolean;
   codeExecutionResult?: unknown;

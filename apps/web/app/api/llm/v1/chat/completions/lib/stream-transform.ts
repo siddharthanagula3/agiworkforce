@@ -21,6 +21,7 @@ import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
 import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
+import { AssistantTurnSourceCollector } from './assistant-turn-sources';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -150,23 +151,26 @@ async function settleStreamBilling(input: {
     Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd > 0;
 
   let actualCostCents: number;
+  let billedCostCents: number;
   let costSource: 'provider_reported' | 'estimated';
 
   if (billedOutcome === 'failed') {
     actualCostCents = 0;
+    billedCostCents = 0;
     costSource = 'estimated';
   } else if (totalTokens > 0) {
+    const tokenUsage = {
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+    };
     const estimateCostCents = LLMCostCalculator.calculateCost(
       provider,
       model,
-      {
-        promptTokens: usage.inputTokens,
-        completionTokens: usage.outputTokens,
-        totalTokens,
-        cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
-        cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
-        cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-      },
+      tokenUsage,
       undefined,
       buildServingRouteId(provider, model),
     );
@@ -182,9 +186,11 @@ async function settleStreamBilling(input: {
     actualCostCents = reportedAdmitted
       ? reportedCostCentsFromUsd(reportedCostUsd as number)
       : estimateCostCents;
+    billedCostCents = LLMCostCalculator.calculateListCost(model, tokenUsage) ?? actualCostCents;
     costSource = reportedAdmitted ? 'provider_reported' : 'estimated';
   } else {
     actualCostCents = processed.estimatedCostCents;
+    billedCostCents = actualCostCents;
     costSource = 'estimated';
   }
 
@@ -192,7 +198,8 @@ async function settleStreamBilling(input: {
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: billedOutcome,
-      actualCostCents,
+      actualCostCents: billedCostCents,
+      providerCostCents: actualCostCents,
       usage: {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -800,6 +807,7 @@ export async function buildAdapterStreamResponse(
   let upstreamProvider: string | undefined;
 
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
+  const sourceCollector = new AssistantTurnSourceCollector();
 
   const assistantTurnPersistable = canPersistAssistantTurn(processed);
   let assistantTurnPersisted = false;
@@ -816,6 +824,7 @@ export async function buildAdapterStreamResponse(
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         truncated,
+        ...(sourceCollector.snapshot() ? { sources: sourceCollector.snapshot() } : {}),
       },
     });
   };
@@ -834,6 +843,7 @@ export async function buildAdapterStreamResponse(
             /* scanning is best-effort; never break the stream */
           }
           const wireEvents = assembler.sseChunks(chunk);
+          for (const event of wireEvents) sourceCollector.ingestWireEvent(event);
           if (wireEvents.length === 0) continue;
 
           const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
