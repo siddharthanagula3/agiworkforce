@@ -135,7 +135,12 @@ export interface TasksTransport {
   rerunWork?(goal: AgiWorkRerunGoal): void;
 }
 
-export function TasksPage({ transport }: { transport: TasksTransport }) {
+export interface TasksPageProps {
+  transport: TasksTransport;
+  initialRunId?: string | null;
+}
+
+export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const [filter, setFilter] = useState<TaskFilter>('active');
   const [runs, setRuns] = useState<CloudAgentRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -145,7 +150,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
   const [guidanceByRunId, setGuidanceByRunId] = useState<Record<string, string>>({});
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId);
   const [journal, setJournal] = useState<TaskJournalSnapshot | null>(null);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState<string | null>(null);
@@ -220,6 +225,10 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     },
     [getClient],
   );
+
+  useEffect(() => {
+    if (initialRunId) setSelectedRunId(initialRunId);
+  }, [initialRunId]);
 
   useEffect(() => {
     if (!selectedRunId) {
