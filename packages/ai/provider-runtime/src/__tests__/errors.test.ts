@@ -4,6 +4,7 @@ import { UnsupportedFileInputError } from '@agiworkforce/types';
 
 import {
   CannotRetryError,
+  DATA_POLICY_NO_ENDPOINT_CODE,
   FallbackTriggeredError,
   EmptyProviderResponseError,
   SPENDING_CAP_PROVIDER_HINT,
@@ -43,6 +44,43 @@ describe('classifyError', () => {
     const c = classifyError(new TypeError('File inputs require an OpenAI Responses-capable model'));
 
     expect(c.category).not.toBe('unsupported_input');
+  });
+
+  it('classifies a data-policy endpoint exclusion as a route off-switch, not a bad request', () => {
+    // Observed live 2026-09-08: Auto picked a model whose only OpenRouter
+    // endpoint our own account privacy setting forbids, so the route failed
+    // every single time it was chosen. As a plain client_error it was neither
+    // retried nor rotated, and the user was told the request was rejected.
+    const err = {
+      status: 404,
+      message:
+        'OpenRouter not found (404): 404 0 endpoints out of 1 requested are available matching ' +
+        'your guardrail restrictions and data policy. We removed them for the following reasons ' +
+        '(an endpoint may have matched multiple reasons):\nZDR violation (account settings): ' +
+        '1 endpoint excluded; configurable at https://openrouter.ai/settings/privacy',
+    };
+    const c = classifyError(err);
+
+    expect(c.category).toBe('capacity_off_switch');
+    expect(c.code).toBe(DATA_POLICY_NO_ENDPOINT_CODE);
+    // Retrying the same route fails identically for as long as the setting
+    // stands; a different route is the only thing that can change the outcome.
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
+  it('matches the vendor phrase even without the endpoint count', () => {
+    expect(classifyError({ status: 404, message: 'ZDR violation (account settings)' }).code).toBe(
+      DATA_POLICY_NO_ENDPOINT_CODE,
+    );
+  });
+
+  it.each([
+    ['a plain 404', { status: 404, message: 'model not found' }],
+    ['policy prose with no endpoint claim', { status: 400, message: 'see our data policy' }],
+    ['an endpoint count with no policy claim', { status: 404, message: 'no endpoints available' }],
+  ])('does not read %s as a data-policy exclusion', (_label, err) => {
+    expect(classifyError(err).code).not.toBe(DATA_POLICY_NO_ENDPOINT_CODE);
   });
 
   it('classifies a connection timeout as api_timeout/retryable', () => {
