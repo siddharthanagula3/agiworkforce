@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { bearerCredential, sealCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -65,13 +66,28 @@ interface CreateBody {
 }
 
 async function handlePost(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET, `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  // A custom connector is an arbitrary member-supplied MCP endpoint, and
+  // `allowCustomConnectors` is the switch an administrator sets to say no to
+  // exactly that. It was consulted only when tools were read, so the endpoint
+  // was created, probed and stored first and hidden afterwards. Refused before
+  // the body is parsed, so nothing is reached and nothing is written.
+  const policyDecision = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    organizationId,
+    connectorId: null,
+    isCustom: true,
+    request,
+  });
+  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 
   let body: CreateBody;
   try {

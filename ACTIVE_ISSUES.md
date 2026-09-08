@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 14 unresolved issues: 0 P0, 1 P1, 11 P2, 2 P3, plus 3 items needing
+- 13 unresolved issues: 0 P0, 1 P1, 10 P2, 2 P3, plus 3 items needing
   validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
   `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
 
@@ -64,6 +64,7 @@ went, and so nobody re-files them:
 | `AGI-21`  | A cancelled settings query logged at error level               | `use-settings-queries.abort.test.tsx`             |
 | `AGI-8`   | The US-only preference never reached the web resolver          | `request-processor.us-only.test.ts`               |
 | `AGI-18`  | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                |
+| `AGI-9`   | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`               |
 
 ## 2. P0, critical
 
@@ -251,28 +252,6 @@ the ledger as the acceptance record.
 **Acceptance criteria:** Every gate in the ledger is met, or the entry point is
 removed from shipped builds.
 **Validation:** The spec's gate ledger, exercised on a signed build.
-
-### `AGI-9` Organization connector policy is not enforced when a connector is added
-
-**Severity:** P2
-**Status:** Open
-**Area:** Authorization, connectors
-**Root cause:** The stored organization policy is consulted only when tools are
-read for a chat turn, not on the connect, authorize or create path.
-**Current behavior:** A member can connect and authorize a connector the
-organization policy forbids. The policy applies later, at tool read time.
-**Required behavior:** Policy is evaluated at the moment of connection and
-authorization, and denies before any credential is exchanged.
-**Evidence:** `apps/web/app/api/connectors/custom/route.ts`; register rows
-`CONN-ROUTE-ORG-CONNECTOR-POLICY-CHECKED-01` and `CAP-030`; the UI-side symptom
-is `GAP-180`.
-**User impact:** An organization control is advisory where it reads as binding.
-**Dependencies:** None.
-**Implementation direction:** One shared policy check called by the connect,
-authorize and create routes. One canonical owner, not a copy per route.
-**Acceptance criteria:** A forbidden connector cannot be connected or
-authorized, and the denial is visible where the connector is managed.
-**Validation:** Route tests per path, plus an organization policy test.
 
 ### `AGI-10` Artifacts can only be shared publicly, never with an organization
 
@@ -598,8 +577,8 @@ Dependency-aware, not severity-ordered.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
    same provenance story as `AGI-4`.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
-7. `AGI-9`, `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent
-   of each other.
+7. `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent of each
+   other.
 8. `AGI-11`, `AGI-20`. Background and polish. `AGI-17` needs a decision before
    it needs an implementer.
 
@@ -614,7 +593,6 @@ Dependency-aware, not severity-ordered.
 | `AGI-5`  | the four native lanes are pinned together       | a PR with a deliberate native break | required check fails on the PR         |
 | `AGI-6`  | voice session tests                             | measured time to first audio       | audio starts before generation ends    |
 | `AGI-7`  | spec gate ledger                                | signed build                       | 12 of 12 gates, or surface removed     |
-| `AGI-9`  | per-route policy tests                          | none                               | forbidden connector cannot authorize   |
 | `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
 | `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
 | `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
@@ -638,7 +616,7 @@ AGI-24 ──> AGI-23          routing, one implementer, ordered
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
-AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent
+AGI-10, AGI-14             enterprise and neutrality, independent
 AGI-11, AGI-12             background
 AGI-17, AGI-20             polish, independent of everything
 ```

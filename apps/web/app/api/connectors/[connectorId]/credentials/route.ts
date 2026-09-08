@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -106,12 +107,26 @@ async function handlePost(
   const limited = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (limited) return limited;
 
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
   const target = await requireTarget(context);
 
   if (!isConnectorTokenStorageAvailable()) {
     throw createError.serviceUnavailable(CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
   }
+
+  // Before the key is read out of the body, let alone stored. See
+  // lib/services/connector-policy-gate.ts: the policy used to apply only when
+  // tools were read for a chat turn, so a forbidden connector could be
+  // connected and its credential kept.
+  const policyDecision = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    organizationId,
+    connectorId: target.serverId,
+    isCustom: true,
+    request,
+  });
+  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 
   const parsedBody = BodySchema.safeParse(await request.json().catch(() => null));
   if (!parsedBody.success) throw createError.validation('apiKey is required');
