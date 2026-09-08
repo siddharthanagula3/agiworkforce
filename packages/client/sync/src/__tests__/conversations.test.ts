@@ -89,6 +89,43 @@ describe('applyConversationDeltas', () => {
     });
   });
 
+  it('takes the server fields a push never carries, even on a dirty conversation', () => {
+    const port = createInMemoryConversationPort([
+      {
+        id: 'c1',
+        title: 'New (dirty)',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 4,
+        pinned: false,
+        serverVersion: '1',
+        activeLeafMessageId: 'm-stale',
+      },
+    ]);
+
+    applyConversationDeltas(
+      port,
+      [
+        delta({
+          title: 'Old (stale)',
+          created_at: T,
+          updated_at: T2,
+          server_version: '9',
+          active_leaf_message_id: 'm-current',
+        }),
+      ],
+      ['c1'],
+    );
+
+    expect(port.get('c1')).toMatchObject({
+      title: 'New (dirty)',
+      updatedAt: T2,
+      serverVersion: '9',
+      activeLeafMessageId: 'm-current',
+      messageCount: 4,
+    });
+  });
+
   it('a remote delete wins even over a dirty rename', () => {
     const port = createInMemoryConversationPort([
       {

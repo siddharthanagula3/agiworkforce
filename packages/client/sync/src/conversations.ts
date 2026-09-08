@@ -20,6 +20,21 @@ export interface ConversationStorePort {
   remove(id: string): void;
 }
 
+type LocallyOwnedConversationFields = Pick<
+  SyncConversationRecord,
+  'title' | 'model' | 'projectId' | 'pinned'
+>;
+
+function locallyOwnedFields(record: SyncConversationRecord): LocallyOwnedConversationFields {
+  const pushed = toConversationPushItem(record);
+  return {
+    title: pushed.title,
+    model: pushed.model ?? undefined,
+    projectId: pushed.projectId ?? undefined,
+    pinned: pushed.pinned,
+  };
+}
+
 export function applyConversationDeltas(
   port: ConversationStorePort,
   deltas: ReadonlyArray<ConversationWireDelta>,
@@ -47,14 +62,14 @@ export function applyConversationDeltas(
       ...branchPointer,
       serverVersion: d.server_version,
     };
-    if (dirtyConversationIds.includes(d.id)) {
-      if (existing) {
-        // Dirty preservation covers local edits awaiting a push. The branch
-        // pointer is never one: no push item carries it, so the server is its
-        // only writer and re-asserting it keeps a local copy from outliving the
-        // branch it names.
-        Object.assign(record, existing, branchPointer, { serverVersion: d.server_version });
-      }
+    if (existing && dirtyConversationIds.includes(d.id)) {
+      // Dirty preservation covers local edits awaiting a push, and a push
+      // carries exactly the fields `toConversationPushItem` names. Copying the
+      // whole local record over the delta instead froze the fields no push can
+      // send -- the timestamps, the message count, the branch pointer and the
+      // CAS base -- so one unsent rename discarded every concurrent remote edit
+      // to that conversation, including the `updatedAt` the sidebar orders by.
+      Object.assign(record, locallyOwnedFields(existing));
     }
     if (existing) {
       port.patch(d.id, record);
