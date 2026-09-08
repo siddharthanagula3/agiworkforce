@@ -51,6 +51,8 @@ export interface DirectorySourceChip {
   label: string;
   heading?: string;
   removable?: boolean;
+  /** A source the server can re-fetch. False for one the account supplied. */
+  refreshable?: boolean;
 }
 
 export interface DirectoryEntry {
