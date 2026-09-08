@@ -311,7 +311,7 @@ export function CodeTranscript({
   const cloning = session.state === 'provisioning' && Boolean(session.repositoryUrl);
 
   return (
-    <div className={styles['transcript']}>
+    <div className={styles['transcript']} data-testid="code-transcript">
       <InitializedSession session={session} />
 
       {items.map((item) => {
@@ -398,12 +398,6 @@ export function CodeTranscript({
       )}
 
       {busy && busySince && <RunningRow startedAt={busySince} phase={CODE_COPY.agentWorking} />}
-
-      {!busy && items.length > 0 && (
-        <div className={styles['idleMark']} aria-hidden="true">
-          <AgiMark size={MARK_SIZE} />
-        </div>
-      )}
     </div>
   );
 }
