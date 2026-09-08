@@ -15,6 +15,7 @@ export interface MemoryFact {
   createdAt: string;
   updatedAt: string;
   serverId?: string;
+  pinned?: boolean;
   /**
    * Shown immediately from an optimistic add, before the server has assigned a
    * real id. Editing or deleting one is refused because there is nothing
@@ -31,6 +32,7 @@ interface MemoryState {
   syncStatus: MemorySyncStatus;
   add: (text: string, sourceConversationId?: string) => MemoryFact | null;
   update: (id: string, text: string) => void;
+  setPinned: (id: string, pinned: boolean) => void;
   remove: (id: string) => void;
   clear: () => void;
   hydrateFromServer: () => Promise<void>;
@@ -74,6 +76,7 @@ interface ServerMemoryRow {
   source: string;
   projectId?: string | null;
   projectName?: string | null;
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,13 +137,16 @@ async function createServerMemory(text: string): Promise<ServerMemoryRow | null>
   }
 }
 
-async function updateServerMemory(serverId: string, text: string): Promise<boolean> {
+async function updateServerMemory(
+  serverId: string,
+  patch: { content?: string; pinned?: boolean },
+): Promise<boolean> {
   try {
     const headers = await withCsrfHeaders({ 'Content-Type': 'application/json' });
     const res = await fetch(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify(patch),
     });
     return res.ok;
   } catch {
@@ -211,7 +217,18 @@ export const useMemoryStore = create<MemoryState>()(
           ),
         }));
         if (canSyncToServer() && target?.serverId) {
-          void updateServerMemory(target.serverId, trimmed);
+          void updateServerMemory(target.serverId, { content: trimmed });
+        }
+      },
+
+      setPinned: (id, pinned) => {
+        const target = get().facts.find((f) => f.id === id);
+        if (!target || target.pending) return;
+        set((state) => ({
+          facts: state.facts.map((f) => (f.id === id ? { ...f, pinned } : f)),
+        }));
+        if (canSyncToServer() && target.serverId) {
+          void updateServerMemory(target.serverId, { pinned });
         }
       },
 
@@ -264,6 +281,7 @@ export const useMemoryStore = create<MemoryState>()(
                 projectName: row.projectName ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
+                pinned: row.pinned === true,
               });
               byServerId.delete(row.id);
               continue;
@@ -280,6 +298,7 @@ export const useMemoryStore = create<MemoryState>()(
                   projectId: row.projectId ?? null,
                   projectName: row.projectName ?? null,
                   updatedAt: row.updatedAt,
+                  pinned: row.pinned === true,
                 });
                 continue;
               }
@@ -291,6 +310,7 @@ export const useMemoryStore = create<MemoryState>()(
               projectName: row.projectName ?? null,
               createdAt: row.createdAt,
               updatedAt: row.updatedAt,
+              pinned: row.pinned === true,
               serverId: row.id,
             });
           }
