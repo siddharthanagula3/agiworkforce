@@ -208,3 +208,67 @@ describe('tool permissions for a directory-sourced connector', () => {
     await waitFor(() => expect(result.current.toolPermissionsConnector).toBeNull());
   });
 });
+
+describe('github disconnect partial state', () => {
+  const INSTALLATIONS = [
+    {
+      id: 'row-1',
+      installation_id: 111,
+      account_login: 'acme',
+      account_type: 'Organization',
+      created_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'row-2',
+      installation_id: 222,
+      account_login: 'personal',
+      account_type: 'User',
+      created_at: '2026-02-02T00:00:00.000Z',
+    },
+  ];
+
+  function stubGithubFetch(failOn: number, errorBody: { error?: string }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/api/github/installations')) {
+          if (init?.method === 'DELETE') {
+            const body = JSON.parse(String(init.body)) as { installationId: number };
+            if (body.installationId === failOn) {
+              return { ok: false, status: 502, json: async () => errorBody };
+            }
+            return { ok: true, status: 200, json: async () => ({ success: true }) };
+          }
+          return { ok: true, status: 200, json: async () => ({ installations: INSTALLATIONS }) };
+        }
+        if (url.includes('/api/connectors/custom')) {
+          return { ok: true, status: 200, json: async () => ({ connectors: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => CONNECTED_BODY };
+      }),
+    );
+  }
+
+  function directoryOption<T>(key: string): T {
+    return directoryOptions.current?.[key] as T;
+  }
+
+  it('surfaces the reason GitHub gave instead of a generic retry line', async () => {
+    stubGithubFetch(222, { error: 'The GitHub App is still installed on your account.' });
+    renderAdapter();
+
+    await waitFor(() =>
+      expect(
+        directoryOption<Array<{ connectorId: string }>>('connectedConnectors').some(
+          (c) => c.connectorId === 'github',
+        ),
+      ).toBe(true),
+    );
+
+    const disconnect = directoryOption<(id: string) => Promise<void>>('onDisconnectConnector');
+    await expect(disconnect('github')).rejects.toThrow(
+      'The GitHub App is still installed on your account.',
+    );
+  });
+});

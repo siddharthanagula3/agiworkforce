@@ -36,7 +36,8 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
   },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
 }));
 
