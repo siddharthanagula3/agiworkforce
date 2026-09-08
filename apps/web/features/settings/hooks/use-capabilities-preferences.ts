@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  PreferenceVersionConflictError,
   fetchPreferenceNamespace,
+  readPreferencesVersion,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
@@ -13,6 +15,8 @@ export interface CapabilitiesSettings {
   searchPastChats: boolean;
   cloudCodeExecution: boolean;
 }
+
+type CapabilitiesPatch = Partial<CapabilitiesSettings>;
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
 
@@ -35,6 +39,18 @@ export interface UseCapabilitiesPreferencesResult {
   setBoolean: (key: keyof CapabilitiesSettings, value: boolean) => void;
 }
 
+function knownCapabilities(value: unknown): CapabilitiesPatch {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  const patch: CapabilitiesPatch = {};
+  for (const key of Object.keys(DEFAULT_CAPABILITIES_SETTINGS) as Array<
+    keyof CapabilitiesSettings
+  >) {
+    if (typeof source[key] === 'boolean') patch[key] = source[key];
+  }
+  return patch;
+}
+
 export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [settings, setSettings] = useState<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
   const [saving, setSaving] = useState(false);
@@ -42,9 +58,11 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [rejected, setRejected] = useState<CapabilitiesSettings | null>(null);
+  const [rejected, setRejected] = useState<CapabilitiesPatch | null>(null);
   const acknowledged = useRef<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
+  const storedVersion = useRef<string | null>(null);
   const latestChoice = useRef(0);
+  const pending = useRef<CapabilitiesPatch>({});
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
@@ -53,11 +71,12 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
       CAPABILITIES_NAMESPACE,
       DEFAULT_CAPABILITIES_SETTINGS,
     )
-      .then((value) => {
+      .then(async (value) => {
         if (cancelled) return;
         acknowledged.current = value;
         setSettings(value);
         setLoadError(null);
+        storedVersion.current = await readPreferencesVersion().catch(() => null);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -69,28 +88,49 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     };
   }, [reloadKey]);
 
-  const persist = useCallback((next: CapabilitiesSettings) => {
+  const persist = useCallback((patch: CapabilitiesPatch) => {
     const choice = (latestChoice.current += 1);
-    setSettings(next);
+    pending.current = { ...pending.current, ...patch };
+    setSettings((current) => ({ ...current, ...patch }));
     setSaving(true);
     setSaveError(null);
     setRejected(null);
-    // One write at a time, newest choice wins. Two toggles in quick succession
-    // used to race in the transport, and the namespace is written whole, so the
-    // request that happened to land last decided what the account held.
+    // One write at a time, and each write carries every choice made while the
+    // one before it was in flight. Sending the changed keys rather than the
+    // whole namespace is what stops a second tab's unrelated toggle from being
+    // overwritten, and the revision precondition is what catches it when it is.
     writeQueue.current = writeQueue.current.then(async () => {
-      if (choice !== latestChoice.current) return;
+      const batch = pending.current;
+      pending.current = {};
+      if (Object.keys(batch).length === 0) {
+        if (choice === latestChoice.current) setSaving(false);
+        return;
+      }
       try {
-        await savePreferenceNamespace(CAPABILITIES_NAMESPACE, next);
-        acknowledged.current = next;
+        let result;
+        try {
+          result = await savePreferenceNamespace(CAPABILITIES_NAMESPACE, batch, {
+            merge: true,
+            expectedVersion: storedVersion.current,
+          });
+        } catch (error) {
+          if (!(error instanceof PreferenceVersionConflictError)) throw error;
+          acknowledged.current = { ...acknowledged.current, ...knownCapabilities(error.settings) };
+          result = await savePreferenceNamespace(CAPABILITIES_NAMESPACE, batch, {
+            merge: true,
+            expectedVersion: error.version,
+          });
+        }
+        storedVersion.current = result?.version ?? null;
+        acknowledged.current = { ...acknowledged.current, ...batch };
+        setSettings(acknowledged.current);
         resetMemoryCapabilityCache();
         setSavedAt(Date.now());
       } catch (error) {
-        if (choice !== latestChoice.current) return;
         // The optimistic value has to go back to what the server acknowledged,
         // or the control keeps claiming a preference the account does not hold.
         setSettings(acknowledged.current);
-        setRejected(next);
+        setRejected(batch);
         setSaveError(toUserMessage(error, 'Failed to save settings'));
       } finally {
         if (choice === latestChoice.current) setSaving(false);
@@ -100,9 +140,9 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
 
   const setBoolean = useCallback(
     (key: keyof CapabilitiesSettings, value: boolean) => {
-      persist({ ...settings, [key]: value });
+      persist({ [key]: value });
     },
-    [settings, persist],
+    [persist],
   );
 
   const retry = useCallback(() => setReloadKey((value) => value + 1), []);
