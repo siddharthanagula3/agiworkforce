@@ -7,7 +7,9 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 
-let capturedPublish: (() => Promise<PublishResult>) | undefined;
+let capturedPublish:
+  | ((selection: { content: string; versionIndex: number }) => Promise<PublishResult>)
+  | undefined;
 
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: (props: { publishArtifact?: () => Promise<PublishResult> }) => {
@@ -106,7 +108,7 @@ async function publishAndCaptureFetch() {
   const fetchMock = vi.fn(async () => Response.json({}, { status: 201 }));
   vi.stubGlobal('fetch', fetchMock);
   render(<ArtifactsPanel />);
-  const result = await capturedPublish!();
+  const result = await capturedPublish!({ content: 'here is your artifact', versionIndex: 0 });
   return { fetchMock, result };
 }
 
@@ -220,7 +222,7 @@ describe('ArtifactsPanel · publish honors the conversation trust boundary', () 
     seedConversation([message(MESSAGE_ID, overrides)]);
 
     render(<ArtifactsPanel />);
-    const result = await capturedPublish!();
+    const result = await capturedPublish!({ content: 'here is your artifact', versionIndex: 0 });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.kind).toBe('cloud');
