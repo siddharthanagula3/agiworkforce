@@ -161,7 +161,12 @@ describe('cloud agent execution service', () => {
   });
 
   it('reports an active lease as in progress instead of racing another attempt', async () => {
-    vi.mocked(db.query).mockResolvedValueOnce([RUNNING_ROW]);
+    // `updated_at` is the last heartbeat: a claimant that is genuinely running
+    // has renewed within the last interval, which is what distinguishes it from
+    // a killed process whose lease has simply not expired yet.
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...RUNNING_ROW, updated_at: '2026-07-17T20:09:30.000Z' },
+    ]);
 
     const claim = await claimCloudAgentExecutionOperation(db, {
       userId: 'user-1',
@@ -330,7 +335,11 @@ describe('cloud agent execution service', () => {
 
   it('keeps a heartbeat-renewed lease waiting instead of reclaiming it as stale', async () => {
     vi.mocked(db.query).mockResolvedValueOnce([
-      { ...RUNNING_ROW, lease_expires_at: '2026-07-17T20:20:00.000Z' },
+      {
+        ...RUNNING_ROW,
+        lease_expires_at: '2026-07-17T20:20:00.000Z',
+        updated_at: '2026-07-17T20:09:45.000Z',
+      },
     ]);
 
     const claim = await claimCloudAgentExecutionOperation(db, {
@@ -345,6 +354,80 @@ describe('cloud agent execution service', () => {
 
     expect(claim).toEqual({ disposition: 'in_progress' });
     expect(db.query).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The founder's 2026-09-07 turn: the workflow invocation holding this
+   * operation was killed by the platform at its 800 s limit, so the heartbeat
+   * stopped, but the lease it last wrote was still valid for minutes. Every
+   * replay arriving inside that window was answered in_progress, which counts
+   * no attempt, so the replay ceiling was never approached and nine runs sat in
+   * running for days.
+   */
+  it('reclaims a lease whose holder stopped heartbeating, rather than sheltering a dead process', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          lease_expires_at: '2026-07-17T20:20:00.000Z',
+          updated_at: '2026-07-17T20:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          attempt: 2,
+          lease_expires_at: '2026-07-17T20:25:00.000Z',
+          updated_at: '2026-07-17T20:10:00.000Z',
+        },
+      ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'tool:call-1',
+      operationKind: 'tool',
+      inputHash: INPUT_HASH,
+      retrySafety: 'safe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toMatchObject({ disposition: 'acquired', attempt: 2 });
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/attempt = attempt \+ 1/i),
+      expect.anything(),
+    );
+  });
+
+  it('ends an unsafe operation whose holder died, instead of replaying it forever', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          lease_expires_at: '2026-07-17T20:20:00.000Z',
+          updated_at: '2026-07-17T20:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([{ ...RUNNING_ROW, status: 'outcome_unknown' }]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      inputHash: INPUT_HASH,
+      retrySafety: 'unsafe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toEqual({ disposition: 'outcome_unknown' });
   });
 
   it('renews an active lease without touching its attempt count', async () => {
