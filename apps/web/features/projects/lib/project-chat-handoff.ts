@@ -32,6 +32,8 @@ const ProjectChatHandoffSchema = z.object({
           deliverable: z.string().max(20_000).optional(),
         })
         .optional(),
+      disabledConnectorIds: z.array(z.string().min(1).max(200)).max(200).optional(),
+      memoryEnabled: z.boolean().optional(),
       mcpContext: z
         .object({
           prompt: z
@@ -52,11 +54,43 @@ const ProjectChatHandoffSchema = z.object({
             .optional(),
         })
         .optional(),
-    })
-    .strict(),
+    }),
 });
 
 type StoredProjectChatHandoff = z.infer<typeof ProjectChatHandoffSchema>;
+type StoredHandoffMeta = StoredProjectChatHandoff['meta'];
+
+type ExactKeys<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * Every composer field has somewhere to go in the handoff.
+ *
+ * This schema is a hand-written copy of `ComposerSendMeta`, and it was
+ * `.strict()`. Two fields were later added to the composer,
+ * `disabledConnectorIds` and `memoryEnabled`, and `memoryEnabled` is always
+ * present because it is a boolean read from the store rather than an optional
+ * flag. Strict parsing therefore threw `unrecognized_keys` on every single
+ * send, and the caller turned that into "Could not open the project chat. Your
+ * draft is still here." Starting a conversation from inside a project, which is
+ * what a project is for, failed 100% of the time on every project and every
+ * plan.
+ *
+ * The unit tests stayed green throughout, because their `meta` fixture was
+ * also hand-written and also missing the two fields. So the guard is a type,
+ * not another test case: adding a field to `ComposerSendMeta` without adding it
+ * here fails the build.
+ *
+ * `.strict()` is gone as well. Unknown keys are now stripped, which is Zod's
+ * default. The value being validated here is an object this module built one
+ * line earlier out of our own composer state, so rejecting it outright cannot
+ * protect anyone; every field is still individually validated, which is where
+ * the real protection was. On read the payload is untrusted, and a failed
+ * `safeParse` already clears storage and returns null.
+ */
+export const HANDOFF_CARRIES_EVERY_COMPOSER_FIELD: ExactKeys<
+  keyof StoredHandoffMeta,
+  keyof ComposerSendMeta
+> = true;
 
 export interface ProjectChatHandoff extends StoredProjectChatHandoff {
   attachments?: File[];
