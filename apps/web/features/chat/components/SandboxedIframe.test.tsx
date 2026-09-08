@@ -45,7 +45,7 @@ describe('SandboxedIframe', () => {
     vi.stubEnv('NEXT_PUBLIC_SANDBOX_ORIGIN', 'https://sandbox.agiworkforce.com');
     const onRenderError = vi.fn();
 
-    render(
+    const { container } = render(
       <SandboxedIframe
         title="Artifact preview"
         payload={{ type: 'render', kind: 'html', html: '<h1>Verified</h1>' }}
@@ -53,10 +53,15 @@ describe('SandboxedIframe', () => {
         onRenderError={onRenderError}
       />,
     );
+    // The source is what makes a message genuine, alongside the origin: the
+    // listener now requires both, so these events carry the frame that a real
+    // sandbox message would come from.
+    const source = container.querySelector('iframe')?.contentWindow ?? null;
 
     const forged = new MessageEvent('message', {
       data: { type: 'render-error', error: 'forged' },
       origin: 'https://evil.example',
+      source,
     });
     window.dispatchEvent(forged);
     expect(onRenderError).not.toHaveBeenCalled();
@@ -65,6 +70,7 @@ describe('SandboxedIframe', () => {
       new MessageEvent('message', {
         data: { type: 'render-error', error: 'genuine' },
         origin: 'https://sandbox.agiworkforce.com',
+        source,
       }),
     );
     expect(onRenderError).toHaveBeenCalledWith('genuine');

@@ -146,20 +146,37 @@
         // origins are unreachable from a browser, so listing them costs the
         // deployed web sandbox nothing.
         // --------------------------------------------------------------
-        const ALLOWED_PARENT_ORIGINS = new Set([
+        const PRODUCTION_PARENT_ORIGINS = [
           'https://agiworkforce.com',
           'https://chat.agiworkforce.com',
           'https://www.agiworkforce.com',
           'https://agiworkforce-chat.vercel.app',
-          'http://localhost:3000',
-          'http://127.0.0.1:3000',
           // Desktop (packaged): apps/desktop/src-tauri/tauri.conf.json
           'tauri://localhost',
           'http://tauri.localhost',
+        ];
+
+        // Only a sandbox that is itself served from a developer machine admits
+        // a developer parent. These bytes ship unchanged to production, so an
+        // unconditional list meant the deployed renderer accepted a parent
+        // running on any user's own localhost.
+        const DEVELOPER_PARENT_ORIGINS = [
+          'http://localhost:3000',
+          'http://127.0.0.1:3000',
           // Desktop (dev): apps/desktop/src-tauri/tauri.conf.json build.devUrl
           'http://127.0.0.1:5173',
           'http://localhost:5173',
-        ]);
+        ];
+
+        function isLocalHostname(hostname) {
+          return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+        }
+
+        const ALLOWED_PARENT_ORIGINS = new Set(
+          isLocalHostname(window.location.hostname)
+            ? PRODUCTION_PARENT_ORIGINS.concat(DEVELOPER_PARENT_ORIGINS)
+            : PRODUCTION_PARENT_ORIGINS,
+        );
 
         // Exact origins only, never a hostname shape. This gate used to also
         // accept anything matching agiworkforce-<hash>-<team>.vercel.app, but a
