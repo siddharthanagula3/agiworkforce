@@ -98,6 +98,7 @@ function fakeDb(): DatabaseAdapter & {
 const SOURCE_ROW = {
   id: 'source-1',
   name: 'Acme internal tools',
+  kind: 'repository',
   repository_url: 'https://github.com/acme/tools',
   ref: 'main',
   status: 'active',
@@ -299,6 +300,22 @@ describe('refreshMarketplaceSource', () => {
 
     const result = await refreshMarketplaceSource(db, 'user-1', 'source-1');
     expect(result).toBeNull();
+  });
+
+  it('never fetches for a source that has no repository to fetch from', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const db = fakeDb();
+    db.query.mockResolvedValueOnce([
+      { ...SOURCE_ROW, kind: 'upload', repository_url: null, content_hash: null },
+    ]);
+
+    const result = await refreshMarketplaceSource(db, 'user-1', 'source-1');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ kind: 'upload', repositoryUrl: null, status: 'active' });
   });
 
   it('skips re-pinning entries when the manifest content hash is unchanged', async () => {

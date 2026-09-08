@@ -23,6 +23,7 @@ import {
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
   type PluginMarketplaceManifestPlugin,
+  type PluginMarketplaceSourceKind,
   type PluginMarketplaceSourceSummary,
 } from '@agiworkforce/cloud-contracts';
 
@@ -74,7 +75,8 @@ export interface RegisterMarketplaceSourceInput {
 interface PluginMarketplaceSourceRow {
   id: string;
   name: string;
-  repository_url: string;
+  kind: PluginMarketplaceSourceKind;
+  repository_url: string | null;
   ref: string | null;
   status: 'active' | 'error';
   last_error: string | null;
@@ -118,6 +120,7 @@ function mapSourceRow(row: PluginMarketplaceSourceRow): PluginMarketplaceSourceS
   return {
     id: row.id,
     name: row.name,
+    kind: row.kind,
     repositoryUrl: row.repository_url,
     ref: row.ref,
     status: row.status,
@@ -473,6 +476,7 @@ export async function refreshMarketplaceSource(
   );
   const row = rows[0];
   if (!row) return null;
+  if (!row.repository_url) return mapSourceRow(row);
 
   try {
     const { manifest, contentHash } = await fetchMarketplaceManifest(row.repository_url, row.ref);
