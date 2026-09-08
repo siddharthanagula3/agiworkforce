@@ -15,12 +15,21 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+import { listCanonicalModels } from '@agiworkforce/types';
 import { recordFailedTurn } from './failed-turn-record';
 import type { ProcessedRequest } from './request-processor';
 
 const CONVERSATION_ID = 'e0e2b0d6-6d1f-4a3b-9a5e-2a1f0c8b4d11';
 const ASSISTANT_MESSAGE_ID = 'a1b2c3d4-6d1f-4a3b-9a5e-2a1f0c8b4d22';
 const USER_ID = 'user-1';
+
+const ZERO_COST_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.inputCost === 0 && candidate.outputCost === 0 && candidate.apiModelId,
+  );
+  if (!model) throw new Error('The catalog must expose a zero-cost model with an api id');
+  return model;
+})();
 
 function processedRequest(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -29,8 +38,8 @@ function processedRequest(overrides: Partial<ProcessedRequest> = {}): ProcessedR
     conversationIsTemporary: false,
     provider: 'openrouter',
     requestId: 'request-1',
-    chatRequest: { model: 'openrouter-free' },
-    llmRequest: { model: 'openrouter/free' },
+    chatRequest: { model: ZERO_COST_MODEL.id },
+    llmRequest: { model: ZERO_COST_MODEL.apiModelId },
     ...overrides,
   } as unknown as ProcessedRequest;
 }
@@ -55,7 +64,7 @@ describe('recording a turn that produced nothing', () => {
         snapshot: {
           content: '',
           truncated: true,
-          model: 'openrouter-free',
+          model: ZERO_COST_MODEL.id,
           provider: 'openrouter',
           inputTokens: 0,
           outputTokens: 0,
