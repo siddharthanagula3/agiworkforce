@@ -121,6 +121,10 @@ export interface ArtifactData {
   artifactManifest?: ArtifactManifest;
 }
 
+export interface ArtifactPublishSelection {
+  content: string;
+  versionIndex: number;
+}
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
   onShare?: () => void;
@@ -131,7 +135,7 @@ interface ArtifactPreviewProps {
   /** Called when user clicks the Close button in panel variant toolbar. */
   onClose?: () => void;
   versionHistory?: SharedArtifact[];
-  publishArtifact?: () => Promise<PublishResult>;
+  publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
 }
 
 /**
@@ -602,7 +606,10 @@ if (__AgiApp) {
     if (!publishArtifact || isPublishing) return;
     setIsPublishing(true);
     try {
-      const result = await publishArtifact();
+      const result = await publishArtifact({
+        content: activeContent,
+        versionIndex: shownVersionIndex,
+      });
       if (result.kind === 'cloud') {
         setPublishedUrl(result.shareUrl);
         if (await writeToClipboard(result.shareUrl)) {
@@ -629,7 +636,7 @@ if (__AgiApp) {
     } finally {
       setIsPublishing(false);
     }
-  }, [publishArtifact, isPublishing, activeContent]);
+  }, [publishArtifact, isPublishing, activeContent, shownVersionIndex]);
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
     const content = activeContent;
