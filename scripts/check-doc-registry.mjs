@@ -169,8 +169,11 @@ function checkStatusDocuments(files) {
   }
 }
 
+const APP_ROUTER_ACTION_FILE = /\/app\/.*\/(archive)\/(route|page|layout)(\.[^/]+)?\.tsx?$/i;
+
 function checkArchiveDirectories(files) {
   for (const file of files) {
+    if (APP_ROUTER_ACTION_FILE.test(file)) continue;
     if (/(^|\/)(archive|_archive|legacy|deprecated)\//i.test(file)) {
       errors.push(
         `${file} sits in an archive directory. Git is the archive, delete the tree instead of keeping a second copy of retired source.`,
