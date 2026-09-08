@@ -230,6 +230,22 @@ interface CtaButtonsProps {
  * Recovery and dismiss CTAs. The page owns the exact checkout/Settings
  * destination so the card remains a pure transcript renderer.
  */
+/**
+ * The label on a paywall's primary way out. Exported because the account-wide
+ * banner above the composer offers the same recoveries as this card and must
+ * name them identically; two copies of this ladder would drift.
+ */
+export function paywallRecoveryLabel(
+  recoveryAction: PaywallRecoveryAction,
+  requiredTier: RequiredTier,
+): string {
+  if (recoveryAction === 'manage_billing') return 'Manage billing';
+  if (recoveryAction === 'view_usage') return 'View usage';
+  if (recoveryAction === 'top_up') return 'Buy credits';
+  const tier = `${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`;
+  return recoveryAction === 'subscribe' ? `Subscribe to ${tier}` : `Upgrade to ${tier}`;
+}
+
 const CtaButtons = memo(function CtaButtons({
   requiredTier,
   showUpgradeCta,
@@ -241,15 +257,7 @@ const CtaButtons = memo(function CtaButtons({
     <div className="flex flex-wrap gap-2">
       {showUpgradeCta ? (
         <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
-          {recoveryAction === 'manage_billing'
-            ? 'Manage billing'
-            : recoveryAction === 'view_usage'
-              ? 'View usage'
-              : recoveryAction === 'top_up'
-                ? 'Buy credits'
-                : recoveryAction === 'subscribe'
-                  ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`
-                  : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`}
+          {paywallRecoveryLabel(recoveryAction, requiredTier)}
         </Button>
       ) : null}
 

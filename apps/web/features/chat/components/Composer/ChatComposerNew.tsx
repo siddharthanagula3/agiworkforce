@@ -352,6 +352,18 @@ interface ChatComposerProps {
     enabled: boolean;
     limitReached: boolean;
   };
+  /**
+   * Account-wide capacity the plan has spent. Unlike a refusal about one
+   * request, it applies to every next send, so it is stated here and the
+   * composer stays blocked until the account state changes. `onRecover` runs
+   * the same recovery the inline card's CTA runs.
+   */
+  usageBlock?: {
+    reason: string;
+    resetLabel?: string;
+    actionLabel?: string;
+    onRecover?: () => void;
+  };
   onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
   /**
    * "Project or folder" picker (Claude-composer parity). Provided only by hosts
@@ -556,6 +568,7 @@ const ChatComposerNewComponent = ({
   onUpgradeRequest,
   onModelChange,
   freeTrial,
+  usageBlock,
   onGenerateImage,
   onGenerateVideo,
   projectPicker,
@@ -2193,6 +2206,10 @@ const ChatComposerNewComponent = ({
       onUpgradeRequest?.();
       return;
     }
+    if (usageBlock) {
+      usageBlock.onRecover?.();
+      return;
+    }
 
     /**
      * AUDIT-FIX CMP-9: apply a typed command at SEND time.
@@ -2445,6 +2462,7 @@ const ChatComposerNewComponent = ({
     clearComposerState,
     writeComposerMessage,
     activeToolLabels,
+    usageBlock,
   ]);
 
   useEffect(() => {
@@ -2774,7 +2792,7 @@ const ChatComposerNewComponent = ({
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
-  const composerDisabled = disabled || trialExhausted;
+  const composerDisabled = disabled || trialExhausted || Boolean(usageBlock);
   const selectedMediaModelUnavailable =
     (imageMode && mediaAdmissionFor(imageModelId)?.state !== 'enabled') ||
     (videoMode && mediaAdmissionFor(videoModelId)?.state !== 'enabled');
@@ -2921,6 +2939,30 @@ const ChatComposerNewComponent = ({
           >
             Upgrade
           </button>
+        </div>
+      )}
+
+      {!trialExhausted && usageBlock && (
+        <div
+          role="alert"
+          data-testid="composer-usage-block"
+          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          <span className="min-w-0">
+            {usageBlock.reason}
+            {usageBlock.resetLabel ? (
+              <span className="opacity-80"> {usageBlock.resetLabel}</span>
+            ) : null}
+          </span>
+          {usageBlock.onRecover && usageBlock.actionLabel && (
+            <button
+              type="button"
+              onClick={usageBlock.onRecover}
+              className="shrink-0 rounded-sm font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-amber-200 dark:hover:text-amber-50"
+            >
+              {usageBlock.actionLabel}
+            </button>
+          )}
         </div>
       )}
 
@@ -4336,6 +4378,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onGenerateVideo === next.onGenerateVideo &&
     prev.freeTrial?.enabled === next.freeTrial?.enabled &&
     prev.freeTrial?.limitReached === next.freeTrial?.limitReached &&
+    prev.usageBlock === next.usageBlock &&
     prev.projectPicker?.projects === next.projectPicker?.projects &&
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&

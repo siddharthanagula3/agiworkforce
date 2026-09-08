@@ -103,6 +103,7 @@ import {
   resolveQuotaPaywallSlot,
   type ServerQuotaRecovery,
 } from '@/features/chat/lib/quotaPaywallSlot';
+import { isAccountWideUsageBlock } from '@/features/chat/stores/account-usage-block';
 import { readRetryAt } from '@/features/chat/lib/freeCapacityRecovery';
 import { ROUTE_LANE_HEADER, readRouteLane } from '@/features/chat/lib/routeLane';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -3036,6 +3037,11 @@ export function useChatStream(): UseChatStreamReturn {
             });
           }
 
+          // The account just sent a turn, so whatever capacity was exhausted
+          // has returned. This is the acceptance the banner waits for; nothing
+          // else can prove the block has lifted.
+          useChatStore.getState().setAccountUsageBlock(null);
+
           await consumeAssistantStream({
             response,
             assistantMessageId,
@@ -3578,6 +3584,13 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   if (paywall) {
     if (errorCode === 'free_trial_token_budget_reached') {
       useFreeTrialStore.getState().markLimitReached();
+    }
+    // A refusal the account cannot send its way out of outlives this turn and
+    // this conversation, so it is raised to the composer instead of being left
+    // behind as one card in one transcript. Anything a different request could
+    // satisfy stays inline.
+    if (isAccountWideUsageBlock(paywall)) {
+      useChatStore.getState().setAccountUsageBlock(paywall);
     }
     updateMessage(
       assistantMessageId,

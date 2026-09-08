@@ -21,7 +21,7 @@ import {
   readManagedUsageBuckets,
   useManagedUsageSummary,
 } from '@/lib/hooks/useManagedUsageSummary';
-import { selectUsageWarning } from '@agiworkforce/types';
+import { formatUsageResetIn, paywallLimitHeadline, selectUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from '@agiworkforce/unified-chat';
 import {
   isTemporaryConversationById,
@@ -236,6 +236,7 @@ import {
   type ImageAspectRatio,
 } from '../lib/imageGenerationOptions';
 import { resolveMediaPaywallSlot, runMediaPaywallRecovery } from '../lib/mediaPaywallRecovery';
+import { normalizeRequiredTier, paywallRecoveryLabel } from '../components/InlinePaywallCard';
 import { useDocumentTitleSync } from '../components/DocumentTitleSync';
 import {
   imageTranscriptMutationKeys,
@@ -1101,6 +1102,38 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     },
     [handleOpenUpgradeDialog, openSettings],
   );
+
+  /*
+   * Account-wide capacity the plan has spent. It is store state rather than a
+   * message's metadata because it survives the turn that hit it, the
+   * conversation it happened in, and the remount that opening another chat
+   * performs; every next send is refused the same way until the account state
+   * changes. The stream hook clears it the moment a send is accepted.
+   */
+  const accountUsageBlock = useChatStore((state) => state.accountUsageBlock);
+  const composerUsageBlock = useMemo(() => {
+    if (!accountUsageBlock) return undefined;
+    const resetLabel =
+      accountUsageBlock.showResetTime && accountUsageBlock.resetAt
+        ? (formatUsageResetIn(accountUsageBlock.resetAt) ?? '')
+        : '';
+    const requiredTier = normalizeRequiredTier(accountUsageBlock.requiredTier || 'basic');
+    const recoveryAction = accountUsageBlock.recoveryAction ?? 'upgrade';
+    return {
+      reason: accountUsageBlock.reason || paywallLimitHeadline(accountUsageBlock.feature),
+      ...(resetLabel ? { resetLabel } : {}),
+      ...(accountUsageBlock.showUpgradeCta === false
+        ? {}
+        : {
+            actionLabel: paywallRecoveryLabel(recoveryAction, requiredTier),
+            onRecover: () =>
+              runMediaPaywallRecovery(
+                { recoveryAction, requiredTier },
+                { openSettings, openUpgrade: handleOpenUpgradeDialog },
+              ),
+          }),
+    };
+  }, [accountUsageBlock, handleOpenUpgradeDialog, openSettings]);
 
   const { usage: managedUsageSummary, refresh: refreshManagedUsageSummary } =
     useManagedUsageSummary();
@@ -5069,6 +5102,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         enabled: isWebsiteFreeTrial,
                         limitReached: freeUsageLimitReached,
                       }}
+                      {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
                     />
                   )}
                 </div>
@@ -5169,6 +5203,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         enabled: isWebsiteFreeTrial,
                         limitReached: freeUsageLimitReached,
                       }}
+                      {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
                       suppressAutoFocus={Boolean(highlightMessageId)}
                     />
                   )}
