@@ -74,7 +74,7 @@ describe('/chat route', () => {
     expect(routeMocks.webChatRoot).toHaveBeenCalledWith({ initialWorkMode: 'agiwork' });
   });
 
-  it('preserves the requested chat session path when redirecting signed-out users', async () => {
+  it('preserves the requested chat session path when sending a lapsed session to recovery', async () => {
     routeMocks.auth.mockResolvedValue({ userId: null });
     routeMocks.headers.mockResolvedValue(
       new Headers({ 'x-agi-pathname': '/chat/session-123?panel=artifacts' }),
@@ -84,7 +84,7 @@ describe('/chat route', () => {
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.redirect).toHaveBeenCalledWith(
-      '/login?redirectTo=%2Fchat%2Fsession-123%3Fpanel%3Dartifacts',
+      '/session-expired?redirectTo=%2Fchat%2Fsession-123%3Fpanel%3Dartifacts',
     );
   });
 
@@ -95,7 +95,7 @@ describe('/chat route', () => {
 
     await ChatLayout({ children: <div>Chat</div> });
 
-    expect(routeMocks.redirect).toHaveBeenCalledWith('/login?redirectTo=%2Fchat');
+    expect(routeMocks.redirect).toHaveBeenCalledWith('/session-expired?redirectTo=%2Fchat');
   });
 
   it('enforces current terms against the exact requested chat path', async () => {
