@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce/unified-chat';
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
-import { createWebCloudTasksClient } from '../services/cloud-tasks-client';
+import { createWebCloudTasksClient, setWebCloudTaskArchived } from '../services/cloud-tasks-client';
 
 const RUN_QUERY_PARAM = 'run';
 
@@ -41,6 +41,7 @@ export function TasksPage() {
         store.setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
         router.push('/chat');
       },
+      setRunArchived: (runId, archived) => setWebCloudTaskArchived(runId, archived),
       rerunWork: (goal) => {
         const store = useChatStore.getState();
         store.setDraftContent(goal.goal, PENDING_CONVERSATION_KEY);

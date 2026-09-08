@@ -92,6 +92,19 @@ export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
   muted: 'border-border bg-muted text-muted-foreground',
 };
 
+/**
+ * Archiving is a shelf for work that has stopped. A run still capable of
+ * producing events would come back from the shelf changed, so it stays off.
+ */
+export function isArchivableState(state: AgentTaskState): boolean {
+  return (
+    state === 'ready_for_review' ||
+    state === 'completed' ||
+    state === 'failed' ||
+    state === 'cancelled'
+  );
+}
+
 export function isCancellableState(state: AgentTaskState): boolean {
   return (
     state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'
