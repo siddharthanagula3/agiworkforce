@@ -51,6 +51,15 @@ export async function resolveUserPersonalPlanTier(
  * establish membership on the scoped connection before asking: both call sites
  * pass an organization id taken from the caller's own membership, and
  * `requireTeamAdminAccess` asserts membership first.
+ *
+ * A present anchor is not proof of a subscription. An organizations row can
+ * hold a Stripe id that no subscriptions row carries any more, because the
+ * owner resubscribed under a new id while the organization kept the old one.
+ * Treating that as authoritative resolved the workspace to free and locked its
+ * owner out of administration while their subscription was live, so the owner
+ * branch also opens when the anchor joins to nothing. Status is still
+ * re-evaluated on every read, so a dead subscription stays dead either way, and
+ * the claim guards still stop one subscription entitling two organizations.
  */
 export async function resolveOrganizationEntitlementPlan(
   organizationId: string,
@@ -68,7 +77,14 @@ export async function resolveOrganizationEntitlementPlan(
            o.stripe_subscription_id is not null
            and s.stripe_subscription_id = o.stripe_subscription_id
          ) or (
-           o.stripe_subscription_id is null
+           (
+             o.stripe_subscription_id is null
+             or not exists (
+               select 1
+                 from public.subscriptions anchored
+                where anchored.stripe_subscription_id = o.stripe_subscription_id
+             )
+           )
            and s.user_id = o.owner_user_id
            and (
              s.stripe_subscription_id is null

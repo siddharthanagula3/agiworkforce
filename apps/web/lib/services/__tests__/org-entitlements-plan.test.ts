@@ -52,6 +52,54 @@ describe('resolveOrganizationEntitlementPlan', () => {
     expect(query.mock.calls[0]?.[1]).toEqual([ORG_A]);
   });
 
+  /**
+   * The organizations row can hold a Stripe subscription id that no
+   * subscriptions row carries any more: the owner resubscribed and the new
+   * subscription arrived under a different id while the organization kept the
+   * old anchor. The resolver treated a present anchor as authoritative and,
+   * finding nothing joined to it, called the workspace free. The QA workspace
+   * was in exactly that state, holding an enterprise anchor and 600 licensed
+   * seats while its owner held an active enterprise subscription under another
+   * id, and the Team pane told the owner to upgrade.
+   */
+  it('falls back to the owner when the organization anchor matches no subscription', async () => {
+    const { query } = dbWith([{ user_id: 'owner-1', plan_tier: 'enterprise', status: 'active' }]);
+    getSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+
+    await expect(resolveOrganizationEntitlementPlan(ORG_A)).resolves.toBe('enterprise');
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(
+      sql,
+      'a present anchor that joins to nothing must not shut the owner branch out',
+    ).toMatch(/not exists[\s\S]*anchored\.stripe_subscription_id = o\.stripe_subscription_id/i);
+  });
+
+  it('still refuses when the anchor is stale and the owner subscription is dead', async () => {
+    dbWith([{ user_id: 'owner-1', plan_tier: 'enterprise', status: 'canceled' }]);
+    getSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'canceled' });
+
+    await expect(resolveOrganizationEntitlementPlan(ORG_A)).resolves.toBe('free');
+  });
+
+  it('still refuses when nothing joins at all', async () => {
+    dbWith([]);
+
+    await expect(resolveOrganizationEntitlementPlan(ORG_A)).resolves.toBe('free');
+  });
+
+  it('never reads the cached tier on the organizations row', async () => {
+    const { query } = dbWith([{ user_id: 'owner-1', plan_tier: 'enterprise', status: 'active' }]);
+    getSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+
+    await resolveOrganizationEntitlementPlan(ORG_A);
+
+    // billing_plan_tier is written by the Stripe webhook and never re-evaluated,
+    // so it cannot turn a dead subscription into a live entitlement. It happens
+    // to be right on the QA workspace; that is luck, not a source of truth.
+    expect(String(query.mock.calls[0]?.[0])).not.toMatch(/o\.billing_plan_tier/i);
+  });
+
   it.each([
     ['team', 'active', 'team'],
     ['team', 'trialing', 'team'],
