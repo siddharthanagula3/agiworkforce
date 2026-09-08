@@ -167,6 +167,33 @@ export type SupportHandoffView =
   | { kind: 'timed_out'; referenceId: string | null; headline: string; detail: string }
   | { kind: 'failed'; message: string };
 
+export interface SupportHandoffMessageView {
+  seq: number;
+  author: 'user' | 'agent' | 'system';
+  body: string;
+  at: string;
+}
+
+export interface SupportHandoffThreadPage {
+  status: string;
+  messages: SupportHandoffMessageView[];
+  nextAfter: number;
+  pollIntervalMs: number;
+}
+
+export type SupportHandoffSendResult =
+  | { ok: true; message: SupportHandoffMessageView }
+  | { ok: false; message: string };
+
+export interface SupportHandoffQueueEntryView {
+  sessionId: string;
+  referenceId: string;
+  summary: string;
+  createdAt: string;
+  waitExpiresAt: string | null;
+  signedIn: boolean;
+}
+
 export interface SupportUserTurn {
   id: string;
   role: 'user';

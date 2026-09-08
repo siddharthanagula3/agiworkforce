@@ -521,6 +521,43 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Live handoff thread ────────────────────────────── */
+
+.handoffThread {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.agentTurn {
+  align-self: flex-start;
+  max-width: 88%;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 4px;
+  border: 1px solid var(--support-rule);
+  background: var(--support-card);
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.systemTurn {
+  align-self: center;
+  max-width: 92%;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--support-ink-quiet);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 /* ── Composer ─────────────────────────────────────────────────────── */
 
 .composer {
