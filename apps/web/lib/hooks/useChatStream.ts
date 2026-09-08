@@ -82,6 +82,11 @@ import {
   MOVED_REASON_HEADER,
 } from '@/lib/chat-fallback-reason';
 import {
+  IN_FLIGHT_TURN_RECHECK_MS,
+  askWhetherTurnIsRunning,
+  shouldAskWhetherTurnIsRunning,
+} from './inFlightTurnRecovery';
+import {
   startTurnStartTicker,
   turnStartSummary,
   withTurnStartSummary,
@@ -2548,6 +2553,46 @@ export function useChatStream(): UseChatStreamReturn {
       // intentionally empty: preserve controller across unmount
     };
   }, []);
+
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+
+    const ask = async (): Promise<void> => {
+      if (stopped) return;
+      const store = useChatStore.getState();
+      const conversationId = store.activeConversationId;
+      if (
+        !shouldAskWhetherTurnIsRunning({
+          conversationId,
+          messages: readConversationMessages(conversationId ?? ''),
+          isLoading: store.isLoading,
+          isTemporaryConversation:
+            store.conversations.find((entry) => entry.id === conversationId)?.isTemporary ?? false,
+        })
+      ) {
+        return;
+      }
+      let running: boolean;
+      try {
+        running = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
+      } catch {
+        return;
+      }
+      if (stopped) return;
+      useChatStore.getState().setLoading(running, conversationId as string);
+      if (running) timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+    };
+
+    void ask();
+    return () => {
+      stopped = true;
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeConversationId]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
 

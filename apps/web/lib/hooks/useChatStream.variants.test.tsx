@@ -90,14 +90,26 @@ interface CapturedRequest {
   body: Record<string, unknown>;
 }
 
+// `/api/llm/v1/chat/completions/runs` sits under the same prefix, so a substring
+// test matches the run lookup as well as the turn itself.
+function isCompletionsTurn(url: string): boolean {
+  return new URL(url, 'http://localhost').pathname === '/api/llm/v1/chat/completions';
+}
+
 function captureRequests(): CapturedRequest[] {
   const captured: CapturedRequest[] = [];
   vi.mocked(fetch).mockImplementation(async (input, init) => {
     const url = String(input);
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     captured.push({ url, body });
-    if (url.includes('/api/llm/v1/chat/completions')) {
+    if (isCompletionsTurn(url)) {
       return mockSseStream('Around 2.1 million.');
+    }
+    if (url.includes('/api/llm/v1/chat/completions/runs')) {
+      return new Response(JSON.stringify({ runs: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     }
     return new Response(JSON.stringify({ message: { id: body['id'] ?? NEW_ASSISTANT } }), {
       status: 200,
@@ -108,9 +120,7 @@ function captureRequests(): CapturedRequest[] {
 }
 
 function promptContents(captured: CapturedRequest[]): string[] {
-  const completion = captured.find((call) =>
-    call.url.includes('/api/llm/v1/chat/completions'),
-  )?.body;
+  const completion = captured.find((call) => isCompletionsTurn(call.url))?.body;
   const messages = (completion?.['messages'] ?? []) as Array<{ content: unknown }>;
   return messages.map((entry) => (typeof entry.content === 'string' ? entry.content : ''));
 }
