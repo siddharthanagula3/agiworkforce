@@ -19,9 +19,15 @@ import {
   withConnectorReturnPath,
 } from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 import { CONNECTOR_REAUTHORIZATION_COPY, useDirectoryAdapter } from '@/features/directory';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
+
+const GITHUB_PR_REVIEW_LABEL = 'Review pull requests';
+const GITHUB_PR_REVIEW_HINT =
+  'When a pull request opens on an account below, AGI reviews it and posts the review as a comment.';
+const GITHUB_PR_REVIEW_FAILED = 'Could not save the pull request review setting.';
 
 const TOOL_PERMISSIONS_LABEL = 'Tool permissions';
 const TOOL_PERMISSIONS_HINT = 'Choose when the assistant may use each of this connector’s tools.';
@@ -87,6 +93,8 @@ const GitHubInstallationsResponseSchema = z.object({
     z.object({
       installation_id: z.number().int().positive(),
       created_at: z.string().optional(),
+      account_login: z.string().optional(),
+      pr_review_enabled: z.boolean().optional(),
     }),
   ),
 });
@@ -299,7 +307,12 @@ export function useConnectorsSettingsAdapter({
   // open that one page and scroll to the right row.
   const [expiredConnectorIds, setExpiredConnectorIds] = useState<string[]>([]);
   const [githubInstallations, setGithubInstallations] = useState<
-    { installation_id: number; created_at?: string }[]
+    {
+      installation_id: number;
+      created_at?: string;
+      account_login?: string;
+      pr_review_enabled?: boolean;
+    }[]
   >([]);
   // Connector ids the server reports as actually connectable on web (GET
   // /api/connectors `available`): github when the GitHub App is configured, plus
@@ -581,6 +594,33 @@ export function useConnectorsSettingsAdapter({
     [authedHeaders],
   );
 
+  const setGithubPrReview = useCallback(
+    async (installationId: number, enabled: boolean) => {
+      const csrfToken = await getCsrfToken();
+      const previous = githubInstallations;
+      setGithubInstallations((rows) =>
+        rows.map((row) =>
+          row.installation_id === installationId ? { ...row, pr_review_enabled: enabled } : row,
+        ),
+      );
+      const res = await fetch('/api/github/installations', {
+        method: 'PATCH',
+        headers: await authedHeaders({
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        }),
+        credentials: 'include',
+        body: JSON.stringify({ installationId, prReviewEnabled: enabled }),
+      });
+      if (!res.ok) {
+        setGithubInstallations(previous);
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? 'Could not save the pull request review setting.');
+      }
+    },
+    [authedHeaders, githubInstallations],
+  );
+
   const disconnectConnector = useCallback(
     async (id: string) => {
       const csrfToken = await getCsrfToken();
@@ -727,6 +767,45 @@ export function useConnectorsSettingsAdapter({
         {detail.connected ? (
           <>
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
+            {connectorId === 'github' && githubInstallations.length > 0 ? (
+              <div
+                className="rounded-lg border border-border px-3 py-2"
+                data-testid="github-pr-review-settings"
+              >
+                <p className="text-xs font-medium text-foreground">{GITHUB_PR_REVIEW_LABEL}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{GITHUB_PR_REVIEW_HINT}</p>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {githubInstallations.map((installation) => (
+                    <li
+                      key={installation.installation_id}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span className="truncate text-xs text-foreground">
+                        {installation.account_login ?? String(installation.installation_id)}
+                      </span>
+                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          data-testid={`github-pr-review-${installation.installation_id}`}
+                          checked={Boolean(installation.pr_review_enabled)}
+                          onChange={(event) => {
+                            const next = event.target.checked;
+                            void setGithubPrReview(installation.installation_id, next).catch(
+                              (error: unknown) => {
+                                setGithubInstallationsNotice(
+                                  toUserMessage(error, GITHUB_PR_REVIEW_FAILED),
+                                );
+                              },
+                            );
+                          }}
+                        />
+                        {installation.pr_review_enabled ? 'On' : 'Off'}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() =>
