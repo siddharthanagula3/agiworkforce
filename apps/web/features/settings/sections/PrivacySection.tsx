@@ -120,6 +120,9 @@ function ExpandableSection({ title, children }: { title: string; children: React
   );
 }
 
+const BROWSER_SYNC_STATEMENT =
+  'Artifacts you create here are synced to your account; conversations are stored in your account directly, not synced from this browser.';
+
 export function PrivacySection() {
   const newChatsTemporary = useSettingsStore((state) => state.newChatsTemporary) ?? false;
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
@@ -840,6 +843,22 @@ export function PrivacySection() {
             )}
           </div>
         </div>
+
+        {/* What this browser sends to the account, in one line. It replaces a
+            whole Sync page that described other surfaces' behaviour and showed
+            a status it had no way to observe. */}
+        <p
+          data-testid="browser-sync-statement"
+          style={{
+            margin: 0,
+            padding: '14px 0',
+            fontSize: 12,
+            color: 'var(--text-3)',
+            lineHeight: 1.55,
+          }}
+        >
+          {BROWSER_SYNC_STATEMENT}
+        </p>
 
         {/* Memory preferences row */}
         <div
