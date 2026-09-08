@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,9 +7,19 @@ import {
   type CloudCodeSession,
 } from '@agiworkforce/types';
 import { useUIStore } from '@shared/stores/layout-store';
-import { TOOL_APPROVAL_POLICY_OPTIONS } from '@shared/types/toolApprovalPolicy';
+import { getModelMetadata } from '@shared/config/llm';
+import { contextWindowLabel } from './code-surface';
+import {
+  TOOL_APPROVAL_POLICY_OPTIONS,
+  type ToolApprovalPreferences,
+} from '@shared/types/toolApprovalPolicy';
+import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { CloudCodePage } from './CloudCodePage';
-import { CloudCodeApiError, type CloudCodeApi } from './services/cloud-code-api';
+import {
+  CloudCodeApiError,
+  type CloudCodeAgentTurn,
+  type CloudCodeApi,
+} from './services/cloud-code-api';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -54,6 +64,11 @@ vi.mock('@features/chat/components/Composer/ComposerFooter', () => ({
   ComposerFooter: () => <div data-testid="model-trigger" />,
 }));
 
+vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  fetchPreferenceNamespace: vi.fn(async (_namespace: string, fallback: unknown) => fallback),
+  savePreferenceNamespace: vi.fn(async () => undefined),
+}));
+
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -77,10 +92,41 @@ const session: CloudCodeSession = {
   extraHosts: [],
   state: 'ready',
   workspacePath: '/home/user',
+  workingBranch: null,
+  baseBranch: null,
+  pullRequestUrl: null,
+  pullRequestNumber: null,
+  archivedAt: null,
+  contextInputTokens: 0,
+  contextOutputTokens: 0,
   lastError: null,
   createdAt: '2026-07-30T12:00:00.000Z',
   updatedAt: '2026-07-30T12:00:00.000Z',
   closedAt: null,
+};
+
+const repositoryPage = {
+  repositories: [
+    {
+      installationId: 42,
+      owner: 'owner',
+      name: 'public-one',
+      fullName: 'owner/public-one',
+      defaultBranch: 'main',
+      isPrivate: false,
+    },
+    {
+      installationId: 42,
+      owner: 'owner',
+      name: 'private-two',
+      fullName: 'owner/private-two',
+      defaultBranch: 'trunk',
+      isPrivate: true,
+    },
+  ],
+  installationCount: 1,
+  truncated: false,
+  unreachable: [],
 };
 
 const availability = {
@@ -94,6 +140,26 @@ const availability = {
 function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
   return {
     list: vi.fn(async () => ({ availability, sessions: [], runtimes: [] })),
+    listRepositories: vi.fn(async () => ({
+      repositories: [],
+      installationCount: 0,
+      truncated: false,
+      unreachable: [],
+    })),
+    changes: vi.fn(async () => ({
+      session,
+      base: null,
+      workingBranch: null,
+      files: [],
+      diff: '',
+      diffTruncated: false,
+    })),
+    createPullRequest: vi.fn(async () => ({
+      session,
+      url: 'https://github.com/owner/repository/pull/7',
+      number: 7,
+      alreadyOpen: false,
+    })),
     get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     create: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     run: vi.fn(async () => ({
@@ -109,7 +175,17 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
         completedAt: '2026-07-30T12:01:00.200Z',
       },
     })),
+    cancelAgentTurn: vi.fn(async () => ({
+      turnId: '22222222-2222-4222-8222-222222222222',
+      requestedAt: '2026-07-30T12:02:00.000Z',
+    })),
     close: vi.fn(async (): Promise<CloudCodeSession> => ({ ...session, state: 'closed' })),
+    rename: vi.fn(async (_sessionId: string, title: string) => ({ ...session, title })),
+    setArchived: vi.fn(async (_sessionId: string, archived: boolean) => ({
+      ...session,
+      archivedAt: archived ? '2026-07-30T12:10:00.000Z' : null,
+    })),
+    deleteSession: vi.fn(async () => undefined),
     commit: vi.fn(async () => ({
       session,
       push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
@@ -226,14 +302,18 @@ describe('CloudCodePage', () => {
       state: 'closed',
     };
     const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [closed], runtimes: [] })),
+      list: vi.fn(async (status?: string) => ({
+        availability,
+        sessions: status === 'open' ? [] : [closed],
+        runtimes: [],
+      })),
     });
     render(<CloudCodePage api={api} />);
 
     const rail = await screen.findByRole('navigation', { name: 'Recents' });
-    expect(within(rail).getByText('No open sessions.')).toBeInTheDocument();
+    expect(await within(rail).findByText('No open sessions.')).toBeInTheDocument();
 
-    await user.click(within(rail).getByRole('button', { name: 'Show closed sessions' }));
+    await user.click(await within(rail).findByRole('button', { name: 'Show closed sessions' }));
 
     expect(within(rail).getByRole('button', { name: 'Old run' })).toBeInTheDocument();
   });
@@ -451,6 +531,9 @@ describe('CloudCodePage', () => {
             goal: 'print the node version',
             stopReason: 'done' as const,
             stepsUsed: 1,
+            inputTokens: 1200,
+            outputTokens: 340,
+            cancelRequestedAt: null,
             finalMessage: 'Node 22 is installed.',
             errorMessage: null,
             createdAt: '2026-07-30T12:05:00.000Z',
@@ -546,14 +629,18 @@ describe('CloudCodePage', () => {
     const user = userEvent.setup();
     const closed: CloudCodeSession = { ...session, state: 'closed' };
     const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [closed], runtimes: [] })),
+      list: vi.fn(async (status?: string) => ({
+        availability,
+        sessions: status === 'open' ? [] : [closed],
+        runtimes: [],
+      })),
       get: vi.fn(async () => ({ session: closed, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
     const rail = await screen.findByRole('navigation', { name: 'Recents' });
-    await user.click(within(rail).getByRole('button', { name: 'Show closed sessions' }));
-    await user.click(within(rail).getByRole('button', { name: closed.title }));
+    await user.click(await within(rail).findByRole('button', { name: 'Show closed sessions' }));
+    await user.click(await within(rail).findByRole('button', { name: closed.title }));
 
     expect(
       await screen.findByText('This session is closed. Start a new one to keep working.'),
@@ -619,6 +706,14 @@ describe('CloudCodePage', () => {
       commit: vi.fn(async () => ({
         session: repoSession,
         push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
+      })),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
       })),
     });
     render(<CloudCodePage api={api} />);
@@ -694,6 +789,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
     await user.type(
       await screen.findByLabelText('Repository URL'),
       'https://github.com/owner/repository',
@@ -901,7 +997,7 @@ describe('CloudCodePage', () => {
     const list = vi
       .fn()
       .mockRejectedValueOnce(new Error('HTTP 429'))
-      .mockResolvedValueOnce({ availability, sessions: [], runtimes: [] });
+      .mockResolvedValue({ availability, sessions: [], runtimes: [] });
     render(<CloudCodePage api={createApi({ list })} />);
 
     expect(
@@ -910,7 +1006,9 @@ describe('CloudCodePage', () => {
 
     await user.click(screen.getByRole('button', { name: /Retry/i }));
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(list.mock.calls.filter((call) => call[0] === 'open')).toHaveLength(2),
+    );
     expect(
       screen.queryByText('You are going a little fast. Wait a moment and try again.'),
     ).not.toBeInTheDocument();
@@ -1118,28 +1216,34 @@ describe('CloudCodePage', () => {
     expect(await screen.findByText('all green')).toBeInTheDocument();
   });
 
-  it('reads the changed files from git status rather than inventing a diff', async () => {
+  it('lists the changed files and their diff from the changes route', async () => {
     const user = userEvent.setup();
     const repoSession: CloudCodeSession = {
       ...session,
       repositoryUrl: 'https://github.com/owner/repository',
       repositoryBranch: 'main',
+      workingBranch: 'agi/run-the-test-suite',
     };
-    const run: CloudCodeApi['run'] = vi.fn(async () => ({
+    const changes: CloudCodeApi['changes'] = vi.fn(async () => ({
       session: repoSession,
-      terminalEntry: {
-        id: 'status-1',
-        sessionId: repoSession.id,
-        command: 'git status --porcelain',
-        stdout: ' M apps/web/page.tsx\n?? notes.md\n',
-        stderr: '',
-        exitCode: 0,
-        startedAt: '2026-07-30T12:05:00.000Z',
-        completedAt: '2026-07-30T12:05:00.400Z',
-      },
+      base: 'main',
+      workingBranch: 'agi/run-the-test-suite',
+      files: [
+        { path: 'apps/web/page.tsx', state: 'modified' as const },
+        { path: 'notes.md', state: 'untracked' as const },
+      ],
+      diff: [
+        'diff --git a/apps/web/page.tsx b/apps/web/page.tsx',
+        '--- a/apps/web/page.tsx',
+        '+++ b/apps/web/page.tsx',
+        '@@ -1 +1 @@',
+        '-const old = true;',
+        '+const fresh = true;',
+      ].join('\n'),
+      diffTruncated: false,
     }));
     const api = createApi({
-      run,
+      changes,
       list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
       get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
     });
@@ -1147,11 +1251,360 @@ describe('CloudCodePage', () => {
 
     await openSession(user, repoSession.title);
     await user.click(await screen.findByRole('button', { name: 'Changes' }));
-    await user.click(await screen.findByRole('button', { name: 'Check for changes' }));
 
-    await waitFor(() => expect(run).toHaveBeenCalledWith(repoSession.id, 'git status --porcelain'));
-    expect(await screen.findByText('apps/web/page.tsx')).toBeInTheDocument();
-    expect(screen.getByText('notes.md')).toBeInTheDocument();
+    await waitFor(() => expect(changes).toHaveBeenCalledWith(repoSession.id, expect.anything()));
+    expect(await screen.findByText('main')).toBeInTheDocument();
+    expect(screen.getByText('agi/run-the-test-suite')).toBeInTheDocument();
+    expect(screen.getByText('apps/web/page.tsx')).toBeInTheDocument();
+    expect(screen.getByText('Untracked')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /apps\/web\/page\.tsx/ }));
+    expect(await screen.findByText('+const fresh = true;')).toBeInTheDocument();
+  });
+
+  it('says there is nothing to show when the working tree is clean', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+      workingBranch: 'agi/run-the-test-suite',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: 'main',
+        workingBranch: 'agi/run-the-test-suite',
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(await screen.findByRole('button', { name: 'Changes' }));
+
+    expect(await screen.findByText('No changes to show')).toBeInTheDocument();
+  });
+
+  it('opens a pull request and then links to the one it opened', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+      workingBranch: 'agi/run-the-test-suite',
+    };
+    const opened: CloudCodeSession = {
+      ...repoSession,
+      pullRequestUrl: 'https://github.com/owner/repository/pull/7',
+      pullRequestNumber: 7,
+    };
+    const createPullRequest: CloudCodeApi['createPullRequest'] = vi.fn(async () => ({
+      session: opened,
+      url: opened.pullRequestUrl ?? '',
+      number: 7,
+      alreadyOpen: false,
+    }));
+    const api = createApi({
+      createPullRequest,
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: 'main',
+        workingBranch: 'agi/run-the-test-suite',
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(await screen.findByRole('button', { name: 'Changes' }));
+    await user.click(await screen.findByRole('button', { name: 'Create pull request' }));
+
+    await waitFor(() => expect(createPullRequest).toHaveBeenCalledWith(repoSession.id));
+    expect(await screen.findByRole('link', { name: 'Pull request #7' })).toHaveAttribute(
+      'href',
+      'https://github.com/owner/repository/pull/7',
+    );
+  });
+
+  it('refuses a pull request without a working branch and says why', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: 'main',
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(await screen.findByRole('button', { name: 'Changes' }));
+
+    expect(await screen.findByRole('button', { name: 'Create pull request' })).toBeDisabled();
+    expect(
+      screen.getByText('A pull request needs a repository and a working branch.'),
+    ).toBeInTheDocument();
+  });
+
+  it('offers a stop while a turn runs and records the cancelled turn', async () => {
+    const user = userEvent.setup();
+    let finishTurn: (turn: CloudCodeAgentTurn) => void = () => undefined;
+    const startAgentTurn: CloudCodeApi['startAgentTurn'] = vi.fn(
+      () =>
+        new Promise<CloudCodeAgentTurn>((resolve) => {
+          finishTurn = resolve;
+        }),
+    );
+    const cancelAgentTurn: CloudCodeApi['cancelAgentTurn'] = vi.fn(async () => ({
+      turnId: 'turn-1',
+      requestedAt: '2026-07-30T12:02:00.000Z',
+    }));
+    const api = createApi({
+      startAgentTurn,
+      cancelAgentTurn,
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests{Enter}',
+    );
+
+    const stop = await screen.findByRole('button', { name: 'Stop the task' });
+    expect(screen.queryByRole('button', { name: 'Start the task' })).not.toBeInTheDocument();
+
+    await user.click(stop);
+    await waitFor(() => expect(cancelAgentTurn).toHaveBeenCalledWith(session.id));
+
+    await act(async () => {
+      finishTurn({
+        turnId: 'turn-1',
+        stopReason: 'cancelled',
+        stepsUsed: 1,
+        finalMessage: '',
+        steps: [],
+      });
+    });
+
+    expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run this task again' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Start the task' })).toBeInTheDocument();
+  });
+
+  it('renames a session inline from the more menu', async () => {
+    const user = userEvent.setup();
+    const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
+      ...session,
+      title,
+    }));
+    const api = createApi({
+      rename,
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'Rewrite the changes panel{Enter}');
+
+    await waitFor(() =>
+      expect(rename).toHaveBeenCalledWith(session.id, 'Rewrite the changes panel'),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Rewrite the changes panel' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the rename field open long enough to type in it', async () => {
+    const user = userEvent.setup();
+    const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
+      ...session,
+      title,
+    }));
+    const api = createApi({
+      rename,
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'Committed by clicking away');
+    await user.click(screen.getByRole('button', { name: 'Session actions' }));
+
+    await waitFor(() =>
+      expect(rename).toHaveBeenCalledWith(session.id, 'Committed by clicking away'),
+    );
+  });
+
+  it('archives a session and offers unarchive where the composer was', async () => {
+    const user = userEvent.setup();
+    const archived: CloudCodeSession = { ...session, archivedAt: '2026-07-30T12:10:00.000Z' };
+    const setArchived: CloudCodeApi['setArchived'] = vi.fn(async (_sessionId, next) =>
+      next ? archived : session,
+    );
+    const api = createApi({
+      setArchived,
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+
+    await waitFor(() => expect(setArchived).toHaveBeenCalledWith(session.id, true));
+    expect(
+      await screen.findByText(
+        'This session is archived. Unarchive it to keep working in this session.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Unarchive' }));
+
+    await waitFor(() => expect(setArchived).toHaveBeenCalledWith(session.id, false));
+    expect(
+      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).toBeInTheDocument();
+  });
+
+  it('withholds delete until the session is closed or archived', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+
+    const remove = await screen.findByRole('menuitem', { name: 'Delete' });
+    expect(remove).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByText('Close or archive the session before deleting it.'),
+    ).toBeInTheDocument();
+  });
+
+  it('deletes an archived session through the confirmation', async () => {
+    const user = userEvent.setup();
+    const archived: CloudCodeSession = { ...session, archivedAt: '2026-07-30T12:10:00.000Z' };
+    const deleteSession: CloudCodeApi['deleteSession'] = vi.fn(async () => undefined);
+    const api = createApi({
+      deleteSession,
+      list: vi.fn(async () => ({ availability, sessions: [archived], runtimes: [] })),
+      get: vi.fn(async () => ({ session: archived, terminalEntries: [], turns: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, archived.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+    expect(await screen.findByText('Delete this session?')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The transcript, every command it ran and its approvals go with it. Nothing here can be recovered.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete session' }));
+
+    await waitFor(() => expect(deleteSession).toHaveBeenCalledWith(archived.id));
+    expect(await screen.findByRole('heading', { name: /What's up next/ })).toBeInTheDocument();
+  });
+
+  it('offers archived as a status filter and asks the route for it', async () => {
+    const user = userEvent.setup();
+    const list = vi.fn(async () => ({ availability, sessions: [], runtimes: [] }));
+    render(<CloudCodePage api={createApi({ list })} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Filter sessions' }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Archived' }));
+
+    await waitFor(() => expect(list).toHaveBeenCalledWith('archived', expect.anything()));
+  });
+
+  it('reads the session context against the model window in the usage popover', async () => {
+    const user = userEvent.setup();
+    const used: CloudCodeSession = {
+      ...session,
+      contextInputTokens: 48000,
+      contextOutputTokens: 13234,
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [used], runtimes: [] })),
+      get: vi.fn(async () => ({ session: used, terminalEntries: [], turns: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, used.title);
+    await user.click(await screen.findByRole('button', { name: 'Usage' }));
+
+    expect(await screen.findByText('Context window')).toBeInTheDocument();
+    const window = getModelMetadata(getRoutingSlotModel('coding_balanced'))?.contextWindow;
+    expect(window).toBeGreaterThan(0);
+    expect(screen.getByText(contextWindowLabel(61234, window ?? 0))).toBeInTheDocument();
+  });
+
+  it('shows no context line on the home screen where no session is selected', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Usage' }));
+
+    expect(await screen.findByText('Plan usage limits')).toBeInTheDocument();
+    expect(screen.queryByText('Context window')).not.toBeInTheDocument();
+  });
+
+  it('waits for the stored approval mode rather than painting the default first', async () => {
+    let resolvePolicy: (value: ToolApprovalPreferences) => void = () => undefined;
+    vi.mocked(fetchPreferenceNamespace).mockReturnValueOnce(
+      new Promise<ToolApprovalPreferences>((resolve) => {
+        resolvePolicy = resolve;
+      }) as ReturnType<typeof fetchPreferenceNamespace>,
+    );
+    render(<CloudCodePage api={createApi()} />);
+
+    const trigger = await screen.findByRole('button', { name: 'Approval mode' });
+    expect(trigger).toHaveAttribute('aria-busy', 'true');
+    expect(trigger).not.toHaveTextContent('Ask');
+    expect(trigger).not.toHaveTextContent('Auto');
+
+    await act(async () => {
+      resolvePolicy({ defaultPolicy: 'auto_approve_read_only' });
+    });
+
+    await waitFor(() => expect(trigger).toHaveTextContent('Auto'));
+    expect(trigger).toHaveAttribute('aria-busy', 'false');
   });
 
   it('says there is nothing to push for a session with no repository', async () => {
@@ -1167,7 +1620,7 @@ describe('CloudCodePage', () => {
     expect(
       await screen.findByText('This session has no repository, so there is nothing to push.'),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Check for changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create pull request' })).not.toBeInTheDocument();
   });
 
   it('names the approval modes the capabilities settings define, with shortcuts', async () => {
@@ -1181,11 +1634,12 @@ describe('CloudCodePage', () => {
     expect(screen.getByText('Run read-only actions without asking')).toBeInTheDocument();
   });
 
-  it('shows the repository and its branch as two chips plus an add control', async () => {
+  it('shows the repository and its branch as two chips plus a change control', async () => {
     const user = userEvent.setup();
     render(<CloudCodePage api={createApi()} />);
 
     await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
     await user.type(
       await screen.findByLabelText('Repository URL'),
       'https://github.com/owner/repository',
@@ -1194,8 +1648,116 @@ describe('CloudCodePage', () => {
     await user.click(screen.getByRole('button', { name: 'Use this repository' }));
 
     expect(await screen.findByRole('button', { name: 'owner/repository' })).toBeInTheDocument();
-    expect(screen.getByText('release')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add a repository' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('release');
+    expect(screen.getByRole('button', { name: 'Change repository' })).toBeInTheDocument();
+  });
+
+  it('offers the two first-run steps when no github app is installed', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    expect(await screen.findByText('Two steps to work in your repository')).toBeInTheDocument();
+    expect(screen.getByText('Connect your GitHub account')).toBeInTheDocument();
+    expect(screen.getByText('Install the GitHub app')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Connect GitHub' })).toHaveAttribute(
+      'href',
+      '/api/github/install/start',
+    );
+    expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument();
+  });
+
+  it('lists the installation repositories and sends the chosen one as a reference', async () => {
+    const user = userEvent.setup();
+    const api = createApi({ listRepositories: vi.fn(async () => repositoryPage) });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
+
+    expect(await screen.findByRole('button', { name: 'owner/public-one' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('main');
+    expect(screen.getByRole('button', { name: /Trusted hosts/ })).toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests{Enter}',
+    );
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repository: { installationId: 42, fullName: 'owner/public-one', branch: 'main' },
+          repositoryUrl: null,
+          networkAccess: 'trusted',
+        }),
+      ),
+    );
+  });
+
+  it('marks a private repository in the list', async () => {
+    const user = userEvent.setup();
+    render(
+      <CloudCodePage api={createApi({ listRepositories: vi.fn(async () => repositoryPage) })} />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    const row = await screen.findByRole('button', { name: /owner\/private-two/ });
+    expect(within(row).getByLabelText('Private')).toBeInTheDocument();
+  });
+
+  it('passes the search text to the repositories route', async () => {
+    const user = userEvent.setup();
+    const listRepositories = vi.fn(async () => repositoryPage);
+    render(<CloudCodePage api={createApi({ listRepositories })} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.type(await screen.findByLabelText('Search repositories'), 'private');
+
+    await waitFor(() =>
+      expect(listRepositories).toHaveBeenCalledWith('private', expect.anything()),
+    );
+  });
+
+  it('offers a retry when the repository list cannot be read', async () => {
+    const user = userEvent.setup();
+    const listRepositories = vi
+      .fn<CloudCodeApi['listRepositories']>()
+      .mockRejectedValueOnce(new CloudCodeApiError('Request failed (500).', 500))
+      .mockResolvedValue(repositoryPage);
+    render(<CloudCodePage api={createApi({ listRepositories })} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    expect(await screen.findByText('Repositories could not be loaded.')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Repository URL')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('button', { name: /owner\/public-one/ })).toBeInTheDocument();
+  });
+
+  it('edits the branch of a chosen repository from its chip', async () => {
+    const user = userEvent.setup();
+    const api = createApi({ listRepositories: vi.fn(async () => repositoryPage) });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
+    await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
+
+    const field = await screen.findByLabelText('Branch');
+    await user.clear(field);
+    await user.type(field, 'release');
+    await user.click(screen.getByRole('button', { name: 'Use this branch' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent(
+        'release',
+      ),
+    );
   });
 
   it('asks the shell for no rail and leaves the reader collapse choice alone', async () => {

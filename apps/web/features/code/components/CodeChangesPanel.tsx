@@ -6,9 +6,11 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   GitBranch,
   Minimize2,
   MoreHorizontal,
+  RefreshCw,
   X,
 } from '@agiworkforce/icons';
 import {
@@ -20,12 +22,69 @@ import {
   Spinner,
 } from '@agiworkforce/ui';
 import type { CloudCodeSession, CloudCodeTerminalEntry } from '@agiworkforce/types';
-import { CODE_COPY, CODE_LIMITS, repositoryLabel } from '../code-surface';
+import { CODE_COPY, CODE_LIMITS, changeStateLabel, repositoryLabel } from '../code-surface';
+import { diffByPath, diffLineKind } from '../code-diff';
+import type { CloudCodeChanges } from '../services/cloud-code-api';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
 const EXIT_CODE_OK = 0;
-const PORCELAIN_STATUS_WIDTH = 3;
+
+function DiffBody({ body }: { body: string }) {
+  return (
+    <pre className={styles['diff']}>
+      {body.split('\n').map((line, index) => (
+        <span
+          key={`${index}:${line}`}
+          className={`${styles['diffLine']} ${styles[`diffLine-${diffLineKind(line)}`]}`}
+        >
+          {line}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+function ChangedFile({ path, state, body }: { path: string; state: string; body?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const regionId = useId();
+
+  if (!body) {
+    return (
+      <div className={styles['fileRow']}>
+        <span className={styles['fileStatus']}>{state}</span>
+        <span className={styles['fileName']}>{path}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles['fileBlock']}>
+      <button
+        type="button"
+        className={styles['fileRow']}
+        aria-expanded={expanded}
+        aria-controls={regionId}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        <span className={styles['activityChevron']}>
+          {expanded ? (
+            <ChevronDown size={GLYPH_SIZE} aria-hidden="true" />
+          ) : (
+            <ChevronRight size={GLYPH_SIZE} aria-hidden="true" />
+          )}
+        </span>
+        <span className={styles['fileStatus']}>{state}</span>
+        <span className={styles['fileName']}>{path}</span>
+      </button>
+      {expanded && (
+        <div id={regionId}>
+          <DiffBody body={body} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface CodeChangesPanelProps {
   session: CloudCodeSession;
@@ -35,11 +94,14 @@ export interface CodeChangesPanelProps {
   commitNotice: string | null;
   running: boolean;
   wide: boolean;
-  changedFiles: string[] | null;
+  changes: CloudCodeChanges | null;
+  changesLoading: boolean;
+  pullRequestBusy: boolean;
   onToggleWide: () => void;
   onCommit: (message: string) => void;
   onRunCommand: (command: string) => void;
-  onCheckChanges: () => void;
+  onRefreshChanges: () => void;
+  onCreatePullRequest: () => void;
   onClose: () => void;
 }
 
@@ -51,11 +113,14 @@ export function CodeChangesPanel({
   commitNotice,
   running,
   wide,
-  changedFiles,
+  changes,
+  changesLoading,
+  pullRequestBusy,
   onToggleWide,
   onCommit,
   onRunCommand,
-  onCheckChanges,
+  onRefreshChanges,
+  onCreatePullRequest,
   onClose,
 }: CodeChangesPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
@@ -68,11 +133,17 @@ export function CodeChangesPanel({
 
   const ready = session.state === 'ready';
   const hasRepository = Boolean(session.repositoryUrl);
-  const committable =
-    hasRepository &&
-    session.state !== 'closed' &&
-    session.state !== 'provisioning' &&
-    session.state !== 'failed';
+  const workingBranch = changes?.workingBranch ?? session.workingBranch;
+  const base = session.baseBranch ?? changes?.base ?? session.repositoryBranch;
+  const closedOrArchived = session.state === 'closed' || session.archivedAt !== null;
+  const committable = hasRepository && !closedOrArchived && session.state !== 'provisioning';
+  const diffs = diffByPath(changes?.diff ?? '');
+
+  const pullRequestBlocked = closedOrArchived
+    ? CODE_COPY.pullRequestNeedsOpenSession
+    : !hasRepository || !workingBranch
+      ? CODE_COPY.pullRequestNeedsBranch
+      : null;
 
   useEffect(() => {
     if (!terminalOpen) return;
@@ -105,13 +176,11 @@ export function CodeChangesPanel({
       <div className={styles['changesHeader']}>
         <span className={styles['changesBranch']}>
           <GitBranch size={GLYPH_SIZE} aria-hidden="true" />
-          {hasRepository ? (
+          {hasRepository && workingBranch ? (
             <>
-              <span>{repositoryLabel(session.repositoryUrl ?? '')}</span>
+              <span>{base ?? repositoryLabel(session.repositoryUrl ?? '')}</span>
               <ArrowRight size={GLYPH_SIZE} aria-hidden="true" />
-              <span className={styles['changesBranchName']}>
-                {session.repositoryBranch ?? CODE_COPY.changesBranchFrom}
-              </span>
+              <span className={styles['changesBranchName']}>{workingBranch}</span>
             </>
           ) : (
             <span>{CODE_COPY.changesHeading}</span>
@@ -119,6 +188,16 @@ export function CodeChangesPanel({
         </span>
 
         <div className={styles['changesActions']}>
+          <button
+            type="button"
+            className={styles['headerButton']}
+            aria-label={CODE_COPY.changesRefresh}
+            disabled={changesLoading || !hasRepository}
+            onClick={onRefreshChanges}
+          >
+            <RefreshCw size={GLYPH_SIZE} aria-hidden="true" />
+          </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -171,37 +250,31 @@ export function CodeChangesPanel({
           <p className={styles['changesEmpty']}>{CODE_COPY.changesNoRepository}</p>
         )}
 
-        {hasRepository && changedFiles === null && (
-          <div className={styles['changesCheck']}>
-            <button
-              type="button"
-              className={styles['secondaryButton']}
-              disabled={!canRun || !ready || running}
-              onClick={onCheckChanges}
-            >
-              {running ? <Spinner size="sm" aria-hidden="true" /> : null}
-              {running ? CODE_COPY.changesChecking : CODE_COPY.changesCheck}
-            </button>
+        {hasRepository && changesLoading && !changes && (
+          <div className={styles['changesEmpty']}>
+            <Spinner size="sm" aria-label={CODE_COPY.changesLoading} />
           </div>
         )}
 
-        {hasRepository && changedFiles?.length === 0 && (
+        {hasRepository && changes && changes.files.length === 0 && (
           <p className={styles['changesEmpty']}>{CODE_COPY.changesNone}</p>
         )}
 
-        {hasRepository && changedFiles && changedFiles.length > 0 && (
-          <ul className={styles['fileList']}>
-            {changedFiles.map((line) => (
-              <li key={line} className={styles['fileRow']}>
-                <span className={styles['fileStatus']}>
-                  {line.slice(0, PORCELAIN_STATUS_WIDTH).trim()}
-                </span>
-                <span className={styles['fileName']}>
-                  {line.slice(PORCELAIN_STATUS_WIDTH).trim()}
-                </span>
-              </li>
+        {hasRepository && changes && changes.files.length > 0 && (
+          <div className={styles['fileList']}>
+            {changes.files.map((file) => (
+              <ChangedFile
+                key={file.path}
+                path={file.path}
+                state={changeStateLabel(file.state)}
+                body={diffs.get(file.path)}
+              />
             ))}
-          </ul>
+          </div>
+        )}
+
+        {hasRepository && changes?.diffTruncated && (
+          <p className={styles['formHelp']}>{CODE_COPY.changesDiffTruncated}</p>
         )}
 
         {committable && (
@@ -227,6 +300,37 @@ export function CodeChangesPanel({
             </div>
             {commitNotice && <span className={styles['formHelp']}>{commitNotice}</span>}
           </form>
+        )}
+
+        {hasRepository && (
+          <div className={styles['pullRequestBlock']}>
+            {session.pullRequestUrl ? (
+              <a
+                className={`${styles['chip']} ${styles['chipSet']}`}
+                href={session.pullRequestUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
+                <span>{`${CODE_COPY.pullRequestChipPrefix} #${session.pullRequestNumber ?? ''}`}</span>
+              </a>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={styles['secondaryButton']}
+                  disabled={pullRequestBlocked !== null || pullRequestBusy}
+                  onClick={onCreatePullRequest}
+                >
+                  {pullRequestBusy && <Spinner size="sm" aria-hidden="true" />}
+                  {pullRequestBusy ? CODE_COPY.creatingPullRequest : CODE_COPY.createPullRequest}
+                </button>
+                {pullRequestBlocked && (
+                  <span className={styles['formHelp']}>{pullRequestBlocked}</span>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         <div className={styles['terminalBlock']}>

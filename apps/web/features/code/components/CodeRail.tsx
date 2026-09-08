@@ -153,8 +153,8 @@ function FilterMenu({
 
 export interface CodeRailProps {
   sessions: CloudCodeSession[];
-  /** Before the filters, so an empty account reads differently from an empty filter. */
-  totalSessions: number;
+  /** True when the account has sessions the current status filter is hiding. */
+  hiddenSessionsExist: boolean;
   selectedId: string | null;
   loading: boolean;
   filters: CodeSessionFilters;
@@ -166,7 +166,7 @@ export interface CodeRailProps {
 
 export function CodeRail({
   sessions,
-  totalSessions,
+  hiddenSessionsExist,
   selectedId,
   loading,
   filters,
@@ -177,7 +177,7 @@ export function CodeRail({
 }: CodeRailProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRegionId = useId();
-  const filterHidesSessions = totalSessions > 0 && filters.status === 'open';
+  const filterHidesSessions = filters.status === 'open' && hiddenSessionsExist;
 
   return (
     <>

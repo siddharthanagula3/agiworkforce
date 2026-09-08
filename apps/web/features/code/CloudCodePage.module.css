@@ -271,6 +271,8 @@ svg + .menuRowLabel {
 
 .headerTitle {
   overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 80px;
   margin: 0;
   font-size: 14px;
   font-weight: 550;
@@ -280,8 +282,10 @@ svg + .menuRowLabel {
 
 .headerChip {
   display: inline-flex;
+  overflow: hidden;
   align-items: center;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 5px;
   min-height: 22px;
   padding: 0 8px;
@@ -290,6 +294,38 @@ svg + .menuRowLabel {
   color: var(--chat-text-secondary);
   font-size: 12px;
   text-decoration: none;
+}
+
+.headerTitleInput {
+  min-width: 120px;
+  padding: 2px 6px;
+  border: 1px solid var(--chat-accent-secondary);
+  border-radius: var(--chat-radius-sm);
+  outline: none;
+  background: var(--chat-bg);
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.menuRowDestructive {
+  color: var(--chat-destructive-text);
+}
+
+.menuHint {
+  color: var(--chat-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.headerChipText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .headerActions {
@@ -523,6 +559,10 @@ svg + .menuRowLabel {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.retryButton {
+  align-self: flex-start;
 }
 
 .stepList {
@@ -871,6 +911,11 @@ svg + .menuRowLabel {
   color: var(--chat-text-primary);
 }
 
+.controlButtonMode {
+  min-width: 62px;
+  justify-content: space-between;
+}
+
 .controlIconButton {
   display: grid;
   width: 32px;
@@ -1041,6 +1086,129 @@ svg + .menuRowLabel {
   gap: 8px;
 }
 
+.popoverToggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chat-accent-primary-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popoverToggle:hover {
+  text-decoration: underline;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checklistRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklistRow {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+
+.checklistGlyph {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-top: 2px;
+  color: var(--chat-text-muted);
+}
+
+.repositoryList {
+  display: flex;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 232px;
+  margin: 0 -6px;
+}
+
+.repositoryRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repositoryRow:hover {
+  background: var(--chat-surface-hover);
+}
+
+.repositoryName {
+  overflow: hidden;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repositoryPrivate {
+  flex: 0 0 auto;
+  color: var(--chat-text-muted);
+}
+
+.repositoryEmpty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 6px;
+  color: var(--chat-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.repositorySearch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-bg);
+  color: var(--chat-text-muted);
+}
+
+.repositorySearch:focus-within {
+  border-color: var(--chat-accent-secondary);
+}
+
+.repositorySearchInput {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
 .primaryButton,
 .secondaryButton {
   display: inline-flex;
@@ -1156,13 +1324,62 @@ svg + .menuRowLabel {
 
 .fileRow {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 10px;
   min-height: 28px;
   padding: 0 8px;
+  border: 0;
   border-radius: var(--chat-radius-sm);
+  background: transparent;
   font-family: var(--chat-font-mono);
   font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fileBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.diff {
+  display: flex;
+  overflow-x: auto;
+  flex-direction: column;
+  margin: 2px 0 6px;
+  padding: 6px 0;
+  border: 1px solid var(--chat-code-border);
+  border-radius: var(--chat-radius-sm);
+  background: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  font-family: var(--chat-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.diffLine {
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.diffLine-added {
+  background: color-mix(in srgb, var(--chat-success) 16%, transparent);
+}
+
+.diffLine-removed {
+  background: color-mix(in srgb, var(--chat-destructive) 16%, transparent);
+}
+
+.diffLine-meta {
+  color: var(--chat-text-muted);
+}
+
+.pullRequestBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
 }
 
 .fileRow:hover {
