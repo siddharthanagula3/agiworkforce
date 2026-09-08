@@ -40,3 +40,24 @@ describe('ThinkingBlock', () => {
     },
   );
 });
+
+describe('ThinkingBlock header ids', () => {
+  it('gives two blocks with the same opening words distinct ids so labels never collide', async () => {
+    const content = 'Considering the request carefully before answering.';
+    const { container } = render(
+      <>
+        <ThinkingBlock content={content} isStreaming={false} durationSeconds={3} />
+        <ThinkingBlock content={content} isStreaming={false} durationSeconds={5} />
+      </>,
+    );
+
+    const headers = Array.from(container.querySelectorAll('button[id^="thinking-header-"]'));
+    expect(headers).toHaveLength(2);
+    const ids = headers.map((header) => header.getAttribute('id'));
+    expect(new Set(ids).size).toBe(2);
+    for (const header of headers) {
+      const region = container.querySelector(`[aria-labelledby="${header.getAttribute('id')}"]`);
+      expect(region).not.toBeNull();
+    }
+  });
+});

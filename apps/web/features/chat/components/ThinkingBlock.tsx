@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useId, useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -46,6 +46,8 @@ export function ThinkingBlock({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const [reducedMotion, setReducedMotion] = useState(false);
+  const headerId = `thinking-header-${useId()}`;
+
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -111,8 +113,6 @@ export function ThinkingBlock({
   if (!isStreaming && (!content || content.trim().length === 0)) {
     return null;
   }
-
-  const headerId = `thinking-header-${content.slice(0, 8).replace(/\s/g, '')}`;
 
   return (
     <div>
