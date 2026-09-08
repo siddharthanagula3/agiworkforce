@@ -603,6 +603,26 @@ describe('TeamSection', () => {
     expect(state.transferOwnership).not.toHaveBeenCalled();
   });
 
+  it('lets the ownership fields stack instead of holding the pane open at 390', () => {
+    // The pane's own container is a grid column that cannot shrink below its
+    // widest child's min-content. A bare minmax(220px, 1fr) put a 454px floor
+    // under this card, which held the whole Team pane at 496px inside 348px and
+    // pushed every heading off a phone. min(220px, 100%) lets the track fall to
+    // the container width, so the two fields stack.
+    renderAsOwnerWithMember();
+
+    const field = screen.getByTestId('transfer-ownership-member');
+    const grid = field.closest('div[style*="grid-template-columns"]');
+    expect(grid, 'the two ownership fields should share one grid').not.toBeNull();
+
+    const columns = (grid as HTMLElement).style.gridTemplateColumns;
+    expect(columns).toContain('min(220px, 100%)');
+    expect(
+      columns,
+      'a bare pixel floor cannot shrink, which is what broke the phone width',
+    ).not.toMatch(/minmax\(\s*220px/);
+  });
+
   it('never offers the transfer to a member who is not the owner', () => {
     state.organization = {
       id: 'org-1',
