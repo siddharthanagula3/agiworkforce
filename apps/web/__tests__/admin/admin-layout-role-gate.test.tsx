@@ -55,11 +55,11 @@ describe('AdminLayout, role gate', () => {
     mockRequireCurrentTerms.mockResolvedValue(undefined);
   });
 
-  it('redirects to /login when the user is not authenticated', async () => {
+  it('sends an unauthenticated request to the session recovery page', async () => {
     mockAuth.mockResolvedValue({ userId: null });
 
     await expect(callLayout()).rejects.toThrow();
-    expect(mockRedirect).toHaveBeenCalledWith('/login?redirectTo=/admin');
+    expect(mockRedirect).toHaveBeenCalledWith('/session-expired?redirectTo=%2Fadmin');
     expect(mockGetUser).not.toHaveBeenCalled();
   });
 

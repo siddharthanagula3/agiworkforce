@@ -49,7 +49,7 @@ describe('/upgrade/[plan] guards', () => {
     authMocks.auth.mockResolvedValue({ userId: null } as never);
 
     await expect(open('max_15x')).rejects.toThrow(
-      'REDIRECT:/login?redirectTo=%2Fupgrade%2Fmax_15x',
+      'REDIRECT:/session-expired?redirectTo=%2Fupgrade%2Fmax_15x',
     );
   });
 

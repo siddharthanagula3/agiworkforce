@@ -92,12 +92,12 @@ describe('admin layout account-status gate', () => {
     expect(rendered).toBe(CHILDREN);
   });
 
-  it('still sends a signed-out visitor to login before any status read', async () => {
+  it('still sends a lapsed session to the recovery page before any status read', async () => {
     mockAuth.mockResolvedValue({ userId: null });
 
     const { redirectedTo } = await renderLayout();
 
-    expect(redirectedTo).toBe('/login?redirectTo=/admin');
+    expect(redirectedTo).toBe('/session-expired?redirectTo=%2Fadmin');
     expect(mockAssertAccountActive).not.toHaveBeenCalled();
   });
 
