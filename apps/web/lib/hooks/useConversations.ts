@@ -263,7 +263,14 @@ export function useConversations(): UseConversationsReturn {
 
     try {
       const headers = await getAuthHeaders();
-      const offset = nextOffsetRef.current;
+      // W07: the next page starts after the rows still held, not after the
+      // count the server echoed when the last page arrived. Deleting or
+      // archiving a loaded conversation shifts every later row down by one, so
+      // resuming at the stale echo stepped over exactly as many rows as had
+      // been removed and they could never be reached again. Clamped rather than
+      // replaced so a locally created conversation cannot push the offset past
+      // what the server has served; the id dedupe below absorbs any overlap.
+      const offset = Math.min(nextOffsetRef.current, conversations.length);
       const response = await fetch(
         `/api/chat/conversations?limit=${CONVERSATIONS_PAGE_SIZE}&offset=${offset}`,
         { headers },

@@ -385,6 +385,65 @@ describe('useConversations.loadConversation pagination races', () => {
   });
 });
 
+describe('WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01', () => {
+  const PAGE = [
+    WIRE_CONVERSATION,
+    { ...WIRE_CONVERSATION, id: 'c0ffee00-0000-4000-8000-000000000011' },
+    { ...WIRE_CONVERSATION, id: 'c0ffee00-0000-4000-8000-000000000012' },
+  ];
+
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
+    authMocks.getToken.mockResolvedValue('session-token');
+  });
+
+  function stubPagedList(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(
+          JSON.stringify({ conversations: PAGE, hasMore: true, nextOffset: PAGE.length }),
+          { status: 200 },
+        );
+      }),
+    );
+  }
+
+  it('resumes after the rows still held, so deleting one skips none of the rest', async () => {
+    stubPagedList();
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(result.current.hasMoreConversations).toBe(true));
+
+    act(() => {
+      useChatStore.getState().deleteConversation(PAGE[1]!.id);
+    });
+    await act(async () => {
+      await result.current.loadMoreConversations();
+    });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining(`offset=${PAGE.length - 1}`),
+      expect.any(Object),
+    );
+  });
+
+  it('resumes at the served count when nothing was removed', async () => {
+    stubPagedList();
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(result.current.hasMoreConversations).toBe(true));
+
+    await act(async () => {
+      await result.current.loadMoreConversations();
+    });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining(`offset=${PAGE.length}`),
+      expect.any(Object),
+    );
+  });
+});
+
 describe('useProjectConversations', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
