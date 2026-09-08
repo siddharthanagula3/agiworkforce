@@ -12,6 +12,7 @@ import {
   Info,
   Loader2,
   PauseCircle,
+  Square,
 } from 'lucide-react';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import type { CloudWorkMode } from '@agiworkforce/types';
@@ -40,6 +41,7 @@ import { ConnectorConnectCard } from './ConnectorConnectCard';
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
 const GENERIC_START_LABEL = 'Working';
+const STOPPED_RUN_LABEL = 'Stopped';
 const GENERIC_START_WINDOW_MS = 1_000;
 const LABEL_HOLD_MS = 400;
 const SECONDS_PER_MINUTE = 60;
@@ -109,20 +111,33 @@ function webSearchCompletedLabel(sourceCount: number): string {
     : WEB_SEARCH_COMPLETED_SUMMARY;
 }
 
-function finalSummary(activity: AgentActivityState): string | undefined {
+function entrySummary(entry: AgentActivityEntry): string | undefined {
+  if (!('summary' in entry) || !entry.summary) return undefined;
+  if (entry.kind === 'tool' && entry.category === 'web-search') {
+    if (entry.status === 'cancelled') return WEB_SEARCH_CANCELLED_SUMMARY;
+    if (entry.status !== 'failed') {
+      if (!entry.summary.startsWith(WEB_SEARCH_IN_PROGRESS_PREFIX)) return entry.summary;
+      return webSearchCompletedLabel(entry.sources?.length ?? 0);
+    }
+  }
+  return entry.summary;
+}
+
+function lastSummary(
+  activity: AgentActivityState,
+  accepts: (entry: AgentActivityEntry) => boolean,
+): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
-    if (!entry || !('summary' in entry) || !entry.summary) continue;
-    if (entry.kind === 'tool' && entry.category === 'web-search') {
-      if (entry.status === 'cancelled') return WEB_SEARCH_CANCELLED_SUMMARY;
-      if (entry.status !== 'failed') {
-        if (!entry.summary.startsWith(WEB_SEARCH_IN_PROGRESS_PREFIX)) return entry.summary;
-        return webSearchCompletedLabel(entry.sources?.length ?? 0);
-      }
-    }
-    return entry.summary;
+    if (!entry || !accepts(entry)) continue;
+    const summary = entrySummary(entry);
+    if (summary) return summary;
   }
   return undefined;
+}
+
+function finalSummary(activity: AgentActivityState): string | undefined {
+  return lastSummary(activity, () => true);
 }
 
 function thinkingLabel(startedAtMs: number, nowMs: number): string {
@@ -232,6 +247,17 @@ function distinctCompletedToolSummary(activity: AgentActivityState): string | un
   return undefined;
 }
 
+/**
+ * A run the user stopped is described by the work it actually did, never by the
+ * placeholder that stood in while it was starting. `finishAgentActivityLocally`
+ * marks that placeholder cancelled rather than removing it, so the last entry
+ * with a summary is "Preparing", and reading it back said a stopped turn was
+ * still getting ready.
+ */
+function cancelledSummary(activity: AgentActivityState): string | undefined {
+  return lastSummary(activity, (entry) => !isLocalPlaceholderActivityEntry(entry));
+}
+
 function collapsedCompletionSummary(activity: AgentActivityState): string {
   if (isSearchOnlyRun(activity.entries)) {
     return (
@@ -255,7 +281,7 @@ export function buildAgentActivitySummary(
   if (activity.status === 'paused') return active ?? 'Paused';
   if (activity.status === 'failed') return finalSummary(activity) ?? 'Failed';
   if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
-  if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
+  if (activity.status === 'cancelled') return cancelledSummary(activity) ?? STOPPED_RUN_LABEL;
   if (activity.status === 'completed') {
     return isAgiWork
       ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
@@ -278,7 +304,7 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState, summary: s
   if (activity.status === 'paused') return 'Agent activity paused';
   if (activity.status === 'failed') return 'Agent activity failed';
   if (activity.status === 'partial') return 'Agent activity finished with errors';
-  if (activity.status === 'cancelled') return 'Agent activity cancelled';
+  if (activity.status === 'cancelled') return 'Agent activity stopped';
   if (activity.status === 'completed') return 'Agent activity completed';
   return `Agent working: ${summary}`;
 }
@@ -575,8 +601,11 @@ function RunStatusIcon({
     );
   }
   if (status === 'paused') return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
-  if (status === 'failed' || status === 'cancelled') {
+  if (status === 'failed') {
     return <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
+  }
+  if (status === 'cancelled') {
+    return <Square className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
   if (status === 'completed') {
     return <CheckCircle2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
@@ -730,7 +759,12 @@ export function AgentActivityTimeline({
   );
   const expandable = visibleEntries.length > 0 || hiddenEntryCount > 0;
 
-  if (activity.status === 'completed' && !hasReportableWork(activity.entries)) return null;
+  if (
+    (activity.status === 'completed' || activity.status === 'cancelled') &&
+    !hasReportableWork(activity.entries)
+  ) {
+    return null;
+  }
 
   return (
     <section className={cn('w-full max-w-3xl', className)} aria-label="Agent activity">

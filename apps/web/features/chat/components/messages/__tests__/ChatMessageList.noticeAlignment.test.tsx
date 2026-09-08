@@ -67,4 +67,18 @@ describe('transcript notices share the message column', () => {
 
     expectMessageColumn(wrapperOf(/declined to finish this response/i));
   });
+
+  it('raises the failed-run links to a 44px target on a coarse pointer', () => {
+    renderTranscript(
+      turn(
+        { streamError: { message: 'the upstream closed the connection' } },
+        'Half an answer before the stream dropped.',
+      ),
+    );
+
+    const retry = screen.getByRole('button', { name: 'Regenerate this response' });
+    expect(retry.classList.contains('pointer-coarse:min-h-11')).toBe(true);
+    expect(retry.classList.contains('pointer-coarse:min-w-11')).toBe(true);
+    expect(retry.classList.contains('min-h-6')).toBe(true);
+  });
 });
