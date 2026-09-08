@@ -77,7 +77,10 @@ export function RecentActivityPanel() {
         </div>
       ) : error ? (
         <div>
-          <p role="alert" style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--danger)' }}>
+          <p
+            role="alert"
+            style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--chat-destructive-text)' }}
+          >
             Recent activity could not be loaded.
           </p>
           <button
