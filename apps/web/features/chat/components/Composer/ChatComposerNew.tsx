@@ -121,7 +121,11 @@ import {
   isImageAspectRatioSupported,
   type ImageAspectRatio,
 } from '../../lib/imageGenerationOptions';
-import { getVideoAspectOptionsForModel, getVideoQualityOptionsForModel } from '@agiworkforce/types';
+import {
+  formatUsageResetIn,
+  getVideoAspectOptionsForModel,
+  getVideoQualityOptionsForModel,
+} from '@agiworkforce/types';
 import {
   consumePendingMcpContextSelection,
   MCP_CONTEXT_SELECTED_EVENT,
@@ -360,7 +364,8 @@ interface ChatComposerProps {
    */
   usageBlock?: {
     reason: string;
-    resetLabel?: string;
+    /** ISO instant the capacity returns, when the refusal carried one. */
+    resetAt?: string;
     actionLabel?: string;
     onRecover?: () => void;
   };
@@ -464,6 +469,7 @@ const COMPOSER_RESTING_HEIGHT_EMPTY_PX = 40;
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
+const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
 const RESTORED_BLOCKED_SEND_NOTICE =
   'Your previous message was still starting, so this one is back here. Send it again.';
@@ -2792,6 +2798,18 @@ const ChatComposerNewComponent = ({
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
+  const usageBlockResetAt = usageBlock?.resetAt;
+  const [usageBlockNowMs, setUsageBlockNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!usageBlockResetAt) return;
+    setUsageBlockNowMs(Date.now());
+    const timer = setInterval(() => setUsageBlockNowMs(Date.now()), USAGE_RESET_TICK_MS);
+    return () => clearInterval(timer);
+  }, [usageBlockResetAt]);
+  const usageBlockResetLabel = usageBlockResetAt
+    ? formatUsageResetIn(usageBlockResetAt, usageBlockNowMs)
+    : null;
+
   const composerDisabled = disabled || trialExhausted || Boolean(usageBlock);
   const selectedMediaModelUnavailable =
     (imageMode && mediaAdmissionFor(imageModelId)?.state !== 'enabled') ||
@@ -2950,8 +2968,8 @@ const ChatComposerNewComponent = ({
         >
           <span className="min-w-0">
             {usageBlock.reason}
-            {usageBlock.resetLabel ? (
-              <span className="opacity-80"> {usageBlock.resetLabel}</span>
+            {usageBlockResetLabel ? (
+              <span className="opacity-80"> {usageBlockResetLabel}.</span>
             ) : null}
           </span>
           {usageBlock.onRecover && usageBlock.actionLabel && (
