@@ -41,8 +41,8 @@ issue turned out to be is in the commit that closed it.
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
 - 14 unresolved issues: 0 P0, 1 P1, 11 P2, 2 P3, plus 3 items needing
-  validation this session could not perform. Three of them, `AGI-3`, `AGI-4`
-  and `AGI-23`, are partly fixed in this pass and say which part.
+  validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
+  `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
 
 ### Closed in this pass
 
@@ -332,40 +332,40 @@ add a second hardcoded vendor.
 and fails over. No provider literal remains at the call site.
 **Validation:** Route tests per provider, plus registry contract tests.
 
-### `AGI-16` Citations carry the routing provider's redirect, not the publisher
+### `AGI-16` A citation's href is still the routing provider's redirect
 
 **Severity:** P2
-**Status:** Open
+**Status:** Half fixed. The citation no longer looks like Google's; the link
+still is.
 **Area:** Research, citations, provider neutrality
-**Root cause:** Grounded search results are surfaced with the provider's
-grounding-redirect URL rather than the resolved publisher URL, and the source
-card's icon is derived from the redirect host instead of the publisher domain.
-**Current behavior (verified live 2026-09-08):** a web research turn routed to
-Gemini returned four sources. Each card correctly names the publisher
-(`anthropic.com`, `claude.com`, `youtube.com`) but shows
-`vertexaisearch.cloud.google.com` as the host, renders Google's favicon for
-every source regardless of publisher, and links to
-`https://vertexaisearch.cloud.google.com/grounding-api-redirect/...`.
-**Required behavior:** a citation resolves to the publisher's own URL and shows
-the publisher's favicon. Which model answered is disclosed separately, as it
-already is.
-**Evidence:** live session, sources panel and the `Sources` chip; hrefs read
-from the DOM were all grounding redirects.
-**User impact:** Three problems at once. Citations advertise the routing vendor
-on a product sold on provider neutrality; every source looks like it came from
-Google; and grounding redirects expire, so saved conversations accumulate dead
-citations.
-**Dependencies:** None. Independent of `AGI-4`, though both concern provenance.
-**Implementation direction:** Resolve the redirect to its target when ingesting
-a grounded result, store the publisher URL, and derive the favicon from that
-domain. Keep the redirect only as a fallback. The support agent's
-`buildCitation` already models title, canonical URL and snippet; reuse that
-shape.
-**Acceptance criteria:** No provider hostname appears in a rendered citation.
-Favicons match publishers. A citation still resolves after the provider's
-redirect expires.
-**Validation:** A research turn on each grounded provider, asserting no
-provider host appears in any citation href.
+**What was fixed:** A grounded result does not arrive with the publisher's URL.
+Google hands back
+`https://vertexaisearch.cloud.google.com/grounding-api-redirect/...`, with the
+publisher's domain in the chunk's title instead, and every consumer derived the
+displayed host and the favicon from the URL. So a research answer named
+`anthropic.com`, `claude.com` and `youtube.com` on its cards while showing
+Google as the host of each and drawing Google's favicon for all of them.
+`citationPublisherDomain` now answers that question once, for the citation chip,
+the research panel and the sources control: the URL's host wherever it is a
+publisher, the title where the URL belongs to a router, and only when the title
+is shaped like a domain, because printing prose in a host slot is a different
+wrong answer.
+**What remains:** the `href` is still the redirect, so a saved conversation
+still accumulates dead citations as those redirects expire. Fixing that means
+resolving each redirect to its target when the grounded result is ingested,
+which is a network call and does not belong in a streaming translation path.
+The place for it is server-side ingestion, beside `assistant-turn-sources.ts`,
+where the egress policy and `pinnedPublicFetch` already are.
+**Evidence:** live session 2026-09-08, sources panel and the `Sources` chip;
+`packages/ai/providers/google/src/stream.ts` `citationFromGroundingChunk`, which
+carries `web.uri` (the redirect) and `web.title` (the publisher).
+**User impact:** reduced. A citation no longer advertises the routing vendor,
+and favicons match publishers. Links still rot.
+**Dependencies:** None.
+**Acceptance criteria:** a citation still resolves after the provider's redirect
+has expired.
+**Validation:** resolve-on-ingest unit tests, plus a grounded research turn
+asserting no provider host appears in any citation href.
 
 ### `AGI-22` There is no server-side record of provider-jurisdiction consent
 
@@ -619,7 +619,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
 | `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
 | `AGI-14` | per-provider route tests, registry contract     | none                               | transcription fails over between vendors |
-| `AGI-16` | assert no provider host in any citation href    | a grounded research turn           | publisher favicon and publisher URL    |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn       | a citation survives redirect expiry     |
 | `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
 | `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
 | `AGI-22` | conformance fixtures, consent record migration  | none                               | no Chinese-HQ route without consent    |
