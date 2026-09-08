@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('./cloud-agent-run-service', () => ({ appendCloudAgentEvents: appendEvents }));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 import {
   CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS,
   reapOrphanedCloudAgentRuns,
@@ -18,12 +24,26 @@ function database(): DatabaseAdapter {
   } as unknown as DatabaseAdapter;
 }
 
-const REAPED = { id: 'run-1', state: 'failed' };
-const REAPED_AFTER_STOP = { id: 'run-2', state: 'cancelled' };
+const REAPED = {
+  id: '0190a000-0000-7000-8000-000000000001',
+  user_id: 'user-1',
+  state: 'failed',
+  conversation_id: '0190a000-0000-7000-8000-000000000009',
+  request_id: 'agi.chat.web.send.turn-1',
+  model: 'openrouter-free',
+  last_event_sequence: 4,
+};
+const REAPED_AFTER_STOP = {
+  ...REAPED,
+  id: '0190a000-0000-7000-8000-000000000002',
+  state: 'cancelled',
+};
 
 let db: DatabaseAdapter;
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  appendEvents.mockResolvedValue(undefined);
   db = database();
 });
 
@@ -70,6 +90,34 @@ describe('reaping a run whose invocation is gone', () => {
     expect(sql).toMatch(/cancellation_requested_at is null/);
   });
 
+  it('tells the reader why the run ended, rather than only changing its state', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([REAPED]);
+
+    await reapOrphanedCloudAgentRuns(db);
+
+    expect(appendEvents).toHaveBeenCalledTimes(1);
+    const call = (appendEvents.mock.calls as unknown as unknown[][])[0]?.[1] as {
+      userId: string;
+      runId: string;
+      envelopes: Array<{ sequence: number; event: { type: string; message?: string } }>;
+    };
+    expect(call.userId).toBe('user-1');
+    expect(call.runId).toBe(REAPED.id);
+    expect(call.envelopes[0]?.event.type).toBe('error');
+    expect(call.envelopes[0]?.event.message).toMatch(/did not finish/i);
+    expect(call.envelopes.at(-1)?.event.type).toBe('task-state-changed');
+    expect(call.envelopes[0]?.sequence).toBe(REAPED.last_event_sequence + 1);
+  });
+
+  it('still ends the run when its reason cannot be journalled', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([REAPED]);
+    appendEvents.mockRejectedValueOnce(new Error('journal is unreachable'));
+
+    const report = await reapOrphanedCloudAgentRuns(db);
+
+    expect(report.reaped).toBe(1);
+  });
+
   it('reports nothing swept when every run is either fresh or finished', async () => {
     vi.mocked(db.query).mockResolvedValueOnce([]);
 
@@ -82,8 +130,8 @@ describe('reaping a run whose invocation is gone', () => {
 
   it('keeps sweeping while a batch comes back full', async () => {
     const full = Array.from({ length: 200 }, (_unused, index) => ({
-      id: `run-${index}`,
-      state: 'failed',
+      ...REAPED,
+      id: `0190a000-0000-7000-8000-${String(index).padStart(12, '0')}`,
     }));
     vi.mocked(db.query).mockResolvedValueOnce(full).mockResolvedValueOnce([REAPED]);
 
@@ -95,8 +143,8 @@ describe('reaping a run whose invocation is gone', () => {
 
   it('stops on its own budget and says work is left rather than running past it', async () => {
     const full = Array.from({ length: 200 }, (_unused, index) => ({
-      id: `run-${index}`,
-      state: 'failed',
+      ...REAPED,
+      id: `0190a000-0000-7000-8000-${String(index).padStart(12, '0')}`,
     }));
     vi.mocked(db.query).mockResolvedValue(full);
     let nowMs = 0;
