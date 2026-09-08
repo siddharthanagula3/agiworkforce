@@ -22,23 +22,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.startsWith('/api/usage/analytics')) {
-      return {
-        ok: true,
-        json: async () => ({
-          stats: {
-            sessions_count: 159,
-            today_cost: 0,
-            today_tokens: 0,
-            week_cost: 0,
-            month_cost: 500,
-            total_tokens: 0,
-          },
-        }),
-      } as Response;
-    }
+  global.fetch = vi.fn(async () => {
     return {
       ok: true,
       json: async () => ({
