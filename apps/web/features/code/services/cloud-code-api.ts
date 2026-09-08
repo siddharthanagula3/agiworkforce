@@ -116,6 +116,8 @@ const agentTurnRecordSchema = z.object({
   goal: z.string(),
   stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS).nullable(),
   stepsUsed: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative().default(0),
+  outputTokens: z.number().int().nonnegative().default(0),
   finalMessage: z.string(),
   errorMessage: z.string().nullable(),
   createdAt: z.string(),

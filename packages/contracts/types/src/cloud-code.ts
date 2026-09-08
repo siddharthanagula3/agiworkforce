@@ -121,6 +121,9 @@ export interface CloudCodeAgentTurnRecord {
   goal: string;
   stopReason: CloudCodeAgentStopReason | null;
   stepsUsed: number;
+  /** Tokens this turn reported, summed from what each step's provider call returned. */
+  inputTokens: number;
+  outputTokens: number;
   finalMessage: string;
   errorMessage: string | null;
   createdAt: string;

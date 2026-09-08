@@ -391,6 +391,42 @@ describe('Cloud Code turn state does not launder a turn that stopped short', () 
   });
 });
 
+describe('Cloud Code records the context a session has spent', () => {
+  /** The one write that carries the turn totals. */
+  function turnUsageParams(db: TrackedDb): unknown[] | undefined {
+    const call = db.query.mock.calls.find(([text]) => String(text).includes('input_tokens = $8'));
+    return call?.[1] as unknown[] | undefined;
+  }
+
+  it('writes the tokens the provider reported onto the turn', async () => {
+    const db = trackedDb();
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'done',
+      stepsUsed: 2,
+      usage: usage({ inputTokens: 1_234, outputTokens: 567 }),
+      finalMessage: 'done',
+      messages: [],
+    });
+    const record = await startTurn(db);
+
+    expect(turnUsageParams(db)?.[7]).toBe(1_234);
+    expect(turnUsageParams(db)?.[8]).toBe(567);
+    expect(record.inputTokens).toBe(1_234);
+    expect(record.outputTokens).toBe(567);
+  });
+
+  it('re-sums the session from its turns rather than adding to a running total', async () => {
+    const db = trackedDb();
+    await runTurnOn(db, 'done');
+    const call = db.query.mock.calls.find(([text]) =>
+      String(text).includes('set context_input_tokens'),
+    );
+    expect(String(call?.[0])).toContain('coalesce(sum(input_tokens), 0)');
+    expect(String(call?.[0])).toContain('cloud_code_sessions.user_id = $2');
+    expect(call?.[1]).toEqual(['session-1', 'user-1', null]);
+  });
+});
+
 describe('Cloud Code turn stops when the reader asks it to', () => {
   /** A db whose cancellation read answers that a stop has been recorded. */
   function stoppedDb(): TrackedDb {
