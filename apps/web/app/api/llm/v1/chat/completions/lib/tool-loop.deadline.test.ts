@@ -21,7 +21,13 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   };
 });
 
-import { runToolLoop, withProviderStreamDeadline } from './tool-loop';
+import {
+  ProviderFirstTokenDeadlineError,
+  runToolLoop,
+  withProviderStreamDeadline,
+} from './tool-loop';
+import { classifyError } from '@agiworkforce/provider-runtime';
+import { isFailoverEligibleError } from './managed-failover';
 import { CHAT_TOOL_LOOP_BUDGET_MS, TOOL_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 import type { ProcessedRequest } from './request-processor';
 
@@ -305,6 +311,65 @@ describe('withProviderStreamDeadline, the signal handed to the adapter', () => {
       ),
     ).rejects.toThrow('cancelled before dispatch');
     expect(abortedAtDispatch).toBe(true);
+  });
+
+  /**
+   * The founder's 2026-09-07 turn hung on a free route that accepted the request
+   * and sent nothing. The whole-stream budget is minutes, which is the right
+   * bound for a long answer and the wrong one for a route that will never speak.
+   */
+  it('gives up when no first token arrives, long before the stream budget', async () => {
+    let adapterSignal: AbortSignal | undefined;
+    const pending = withProviderStreamDeadline(
+      (signal) => {
+        adapterSignal = signal;
+        return new Promise<never>(() => {});
+      },
+      60_000,
+      undefined,
+      20,
+    );
+
+    await expect(pending).rejects.toBeInstanceOf(ProviderFirstTokenDeadlineError);
+    expect(adapterSignal?.aborted).toBe(true);
+  });
+
+  it('classifies the give-up as an upstream timeout, so the route may rotate', async () => {
+    const error = await withProviderStreamDeadline(
+      () => new Promise<never>(() => {}),
+      60_000,
+      undefined,
+      20,
+    ).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+
+    expect(classifyError(error).category).toBe('api_timeout');
+    expect(isFailoverEligibleError(error)).toBe(true);
+  });
+
+  it('stops watching for a first token once one arrives', async () => {
+    const started = Date.now();
+    await expect(
+      withProviderStreamDeadline(
+        async (_signal, markFirstToken) => {
+          markFirstToken();
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return 'streamed on';
+        },
+        60_000,
+        undefined,
+        20,
+      ),
+    ).resolves.toBe('streamed on');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(50);
+  });
+
+  it('leaves the whole-stream budget in charge when no first-token bound is given', async () => {
+    await expect(
+      withProviderStreamDeadline(() => new Promise<never>(() => {}), 20),
+    ).rejects.toThrow(/ran past this turn's remaining time budget/);
   });
 
   it('clears the deadline timer when the stream finishes inside its budget', async () => {
