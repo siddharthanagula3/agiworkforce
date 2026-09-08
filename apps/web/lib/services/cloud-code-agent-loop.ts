@@ -102,6 +102,13 @@ export interface RunCloudCodeAgentTurnInput {
   workspacePath?: string;
   priorMessages?: ProviderMessage[];
   preApproved?: { toolUseId: string; command: string; approved: boolean };
+  /**
+   * Read between steps and before every tool call. A stop arrives as a row in
+   * another request, not as an abort on this one's signal, so the loop asks
+   * rather than waits: what it must not do after a stop is issue the next side
+   * effect.
+   */
+  isCancelled?: () => boolean;
   onStepCommitted?: (stepIndex: number) => Promise<void> | void;
   onEvent?: (event: CloudCodeAgentEvent) => Promise<void> | void;
   maxSteps?: number;
@@ -283,7 +290,7 @@ export async function runCloudCodeAgentTurn(
   const usage = createObservedProviderUsage();
 
   while (stepsUsed < maxSteps) {
-    if (input.signal.aborted) {
+    if (input.signal.aborted || input.isCancelled?.()) {
       return { stopReason: 'cancelled', stepsUsed, finalMessage, messages, usage };
     }
     if (now() - startedAt > maxDurationMs) {
@@ -363,6 +370,10 @@ export async function runCloudCodeAgentTurn(
 
     const results: ContentBlock[] = [];
     for (const call of drained.toolCalls) {
+      if (input.isCancelled?.()) {
+        if (results.length > 0) messages.push({ role: 'user', content: results });
+        return { stopReason: 'cancelled', stepsUsed, finalMessage, messages, usage };
+      }
       stepsUsed += 1;
       await input.onEvent?.({
         type: 'tool-start',

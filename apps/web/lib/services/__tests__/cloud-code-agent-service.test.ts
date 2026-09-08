@@ -391,6 +391,63 @@ describe('Cloud Code turn state does not launder a turn that stopped short', () 
   });
 });
 
+describe('Cloud Code turn stops when the reader asks it to', () => {
+  /** A db whose cancellation read answers that a stop has been recorded. */
+  function stoppedDb(): TrackedDb {
+    return {
+      query: vi.fn(async (text: string) => {
+        const sql = String(text);
+        if (sql.startsWith('insert into cloud_code_agent_turns')) return TURN_ROW;
+        if (sql.includes('select cancel_requested_at')) {
+          return [{ cancel_requested_at: '2026-09-07T20:00:00.000Z' }];
+        }
+        return [];
+      }),
+    };
+  }
+
+  it('hands the loop something to read, so a stop can land between tool calls', async () => {
+    await runTurnOn(trackedDb(), 'done');
+    const input = vi.mocked(runCloudCodeAgentTurn).mock.calls.at(-1)?.[0];
+    expect(typeof input?.isCancelled).toBe('function');
+  });
+
+  it('records the turn as cancelled when the poll finds a stop mid-run', async () => {
+    vi.useFakeTimers();
+    const db = stoppedDb();
+    let releaseLoop: () => void = () => undefined;
+    const loopGate = new Promise<void>((resolve) => {
+      releaseLoop = resolve;
+    });
+    vi.mocked(runCloudCodeAgentTurn).mockImplementation(async () => {
+      await loopGate;
+      return { stopReason: 'done', stepsUsed: 2, usage: NO_USAGE, finalMessage: '', messages: [] };
+    });
+
+    try {
+      const running = startTurn(db);
+      await vi.advanceTimersByTimeAsync(3_000);
+      releaseLoop();
+      const record = await running;
+
+      expect(record.stopReason).toBe('cancelled');
+      const params = terminalTurnUpdate(db);
+      expect(params?.[1]).toBe('cancelled');
+      expect(params?.[3]).toBe('cancelled');
+      expect(params?.[5]).toMatch(/you stopped this turn/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('settles a stopped turn as delivered rather than forfeiting the work it did', async () => {
+    const db = trackedDb();
+    await runTurnOn(db, 'cancelled');
+    const settlement = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
+    expect(settlement?.outcome).toBe('completed');
+  });
+});
+
 describe('Cloud Code loop budget fits inside the platform ceiling', () => {
   it('hands the loop a budget under the maxDuration both routes declare', () => {
     const agentRoute = routeMaxDurationSeconds('[sessionId]/agent/route.ts');

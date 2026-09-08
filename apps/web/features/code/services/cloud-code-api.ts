@@ -161,6 +161,11 @@ const pullRequestSchema = z.object({
   alreadyOpen: z.boolean(),
 });
 
+const turnCancellationSchema = z.object({
+  turnId: z.string(),
+  requestedAt: z.string(),
+});
+
 const pendingApprovalSchema = z.object({
   stepIndex: z.number().int().nonnegative(),
   toolUseId: z.string(),
@@ -200,6 +205,7 @@ export type CloudCodeCommitResult = z.infer<typeof commitResultSchema>;
 export type CloudCodeRepository = z.infer<typeof repositorySchema>;
 export type CloudCodeChanges = z.infer<typeof changesSchema>;
 export type CloudCodePullRequest = z.infer<typeof pullRequestSchema>;
+export type CloudCodeTurnCancellation = z.infer<typeof turnCancellationSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof repositoryListSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
@@ -249,6 +255,11 @@ export interface CloudCodeApi {
     input: StartCloudCodeAgentTurnRequest,
     signal?: AbortSignal,
   ): Promise<CloudCodeAgentTurn>;
+  cancelAgentTurn(
+    sessionId: string,
+    turnId?: string,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeTurnCancellation>;
   listApprovals(sessionId: string, signal?: AbortSignal): Promise<CloudCodeAgentApproval[]>;
   decideApproval(
     sessionId: string,
@@ -407,6 +418,18 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
           signal,
         },
         agentTurnSchema,
+      );
+    },
+    async cancelAgentTurn(sessionId, turnId, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/agent/cancel`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(turnId ? { turnId } : {}),
+          signal,
+        },
+        turnCancellationSchema,
       );
     },
     async listApprovals(sessionId, signal) {
