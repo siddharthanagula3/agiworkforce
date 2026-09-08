@@ -514,6 +514,9 @@ interface Message {
   };
 }
 
+const INTERRUPTED_ARTIFACT_NOTICE = 'This artifact stopped before it finished.';
+const INTERRUPTED_ARTIFACT_ACTION = 'Regenerate';
+
 export interface RegenerateModelOption {
   id: string;
   name: string;
@@ -1006,11 +1009,17 @@ const MessageBubbleComponent = function MessageBubble({
     return block;
   }, [isUser, message.isStreaming, message.content, messageCodeBlocks]);
 
+  const completedArtifactIds = useMemo(
+    () => extractedArtifacts.map((artifact) => artifact.id),
+    [extractedArtifacts],
+  );
+
   useStreamingArtifactSync({
     messageId: message.id,
     conversationId: artifactConversationId,
     isStreaming: Boolean(message.isStreaming),
     block: streamingBlock,
+    completedArtifactIds,
   });
 
   // ── Tool/provider-generated files (`x_generated_files` → metadata) ────────
@@ -1253,6 +1262,13 @@ const MessageBubbleComponent = function MessageBubble({
     () => artifacts.filter((artifact) => artifact.type !== 'image'),
     [artifacts],
   );
+  const hasInterruptedArtifact = useMemo(
+    () => inlineArtifacts.some((artifact) => artifact.interrupted === true),
+    [inlineArtifacts],
+  );
+  const handleRegenerateInterruptedArtifact = useCallback(() => {
+    onRegenerate?.(message.id);
+  }, [onRegenerate, message.id]);
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
@@ -2030,6 +2046,32 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && inlineArtifacts.length > 0 && (
             <InlineArtifactCards artifacts={inlineArtifacts} />
+          )}
+
+          {/* A stopped turn leaves a partial artifact on the card above. The
+              card looks the same as a finished one, so the transcript has to
+              say which it is and offer the way to a whole document. */}
+          {!isUser && hasInterruptedArtifact && (
+            <div
+              className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"
+              style={{
+                borderColor: 'var(--chat-warning-border)',
+                background: 'var(--chat-warning-bg)',
+                color: 'var(--chat-warning-fg)',
+              }}
+              data-testid="interrupted-artifact-notice"
+            >
+              <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={handleRegenerateInterruptedArtifact}
+                  className="ml-auto inline-flex min-h-6 shrink-0 items-center px-1 text-xs font-medium underline underline-offset-2"
+                >
+                  {INTERRUPTED_ARTIFACT_ACTION}
+                </button>
+              )}
+            </div>
           )}
 
           {/* Image generation card (states A/B/C/D) */}

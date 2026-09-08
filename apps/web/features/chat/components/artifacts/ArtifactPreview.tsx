@@ -119,7 +119,16 @@ export interface ArtifactData {
   computeSession?: ComputeSession;
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
+  /**
+   * The stream producing this artifact stopped before its fence closed, so the
+   * content is everything that arrived and not the finished document. Set by
+   * the streaming sync hook when it persists the partial.
+   */
+  interrupted?: boolean;
 }
+
+const INTERRUPTED_ARTIFACT_NOTICE =
+  'This artifact stopped before it finished. What arrived is kept below; regenerate for the whole document.';
 
 export interface ArtifactPublishSelection {
   content: string;
@@ -1404,6 +1413,25 @@ if (__AgiApp) {
             )}
           </div>
         </div>
+
+        {/* The turn was stopped before this artifact finished, so the panel is
+            showing a fragment. Saying so is the point: the content looks like a
+            whole document and a reader who copies or publishes it would carry
+            the truncation with them. */}
+        {artifact.interrupted && (
+          <div
+            className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
+            style={{
+              borderColor: 'var(--chat-warning-border)',
+              background: 'var(--chat-warning-bg)',
+              color: 'var(--chat-warning-fg)',
+            }}
+            data-testid="artifact-interrupted-notice"
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
+          </div>
+        )}
 
         {/* CAP-015: the live public link for this artifact. Shown only after a
             publish actually returned a URL, never as an aspirational bar. */}

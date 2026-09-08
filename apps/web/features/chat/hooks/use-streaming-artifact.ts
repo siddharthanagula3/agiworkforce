@@ -19,6 +19,13 @@ interface UseStreamingArtifactSyncParams {
   conversationId?: string;
   isStreaming: boolean;
   block: TrailingUnclosedBlock | null;
+  /**
+   * Ids of the artifacts the message parser has already closed out. The caller
+   * stops deriving a block the moment streaming ends, so a turn that finished
+   * and a turn that was stopped both arrive here as `block: null`; this is what
+   * separates them.
+   */
+  completedArtifactIds?: readonly string[];
 }
 
 interface StreamedArtifactSnapshot {
@@ -26,6 +33,7 @@ interface StreamedArtifactSnapshot {
   type: ArtifactData['type'];
   language: string;
   title: string | null;
+  content: string;
 }
 
 export function useStreamingArtifactSync({
@@ -33,6 +41,7 @@ export function useStreamingArtifactSync({
   conversationId,
   isStreaming,
   block,
+  completedArtifactIds,
 }: UseStreamingArtifactSyncParams): void {
   const openedForRef = useRef<string | null>(null);
   const autoOpenDismissedRef = useRef(false);
@@ -49,19 +58,21 @@ export function useStreamingArtifactSync({
 
     if (!isStreaming || !block) {
       const streamed = streamedRef.current;
-      streamedRef.current = null;
-      // A trailing block still open with the stream finished is a turn that was
-      // stopped mid-artifact. Persist what arrived under the id the completed
-      // artifact would have taken, so the panel keeps showing it instead of
-      // going blank and the reader can copy or regenerate from it. A fence that
-      // closed leaves `block` null and the message parser owns that artifact.
-      if (streamed && block) {
+      // The fence closed while the turn is still running, so the parser owns
+      // this artifact from here. Nothing to keep.
+      if (isStreaming) streamedRef.current = null;
+      // The turn ended with a fence this hook watched open and never saw close.
+      // Persist what arrived under the id the finished artifact would have
+      // taken, so the panel keeps showing it instead of going blank and the
+      // reader can copy or regenerate from it.
+      if (!isStreaming && streamed && !completedArtifactIds?.includes(streamed.artifactId)) {
+        streamedRef.current = null;
         useArtifactsStore.getState().upsertArtifact({
           id: streamed.artifactId,
           type: streamed.type,
           title: streamed.title ?? INTERRUPTED_ARTIFACT_TITLE,
           language: streamed.language,
-          content: block.content,
+          content: streamed.content,
           messageId,
           conversationId,
           interrupted: true,
@@ -75,7 +86,13 @@ export function useStreamingArtifactSync({
     const type = detectArtifactType(block.language, block.content) as ArtifactData['type'];
     const title = extractArtifactTitle(block.content) ?? null;
 
-    streamedRef.current = { artifactId, type, language: block.language, title };
+    streamedRef.current = {
+      artifactId,
+      type,
+      language: block.language,
+      title,
+      content: block.content,
+    };
 
     store.setStreamingArtifact({
       artifactId,
@@ -96,7 +113,7 @@ export function useStreamingArtifactSync({
       artifacts.selectArtifact(artifactId);
       if (!autoOpenDismissedRef.current) artifacts.autoOpenPanel();
     }
-  }, [messageId, conversationId, isStreaming, block]);
+  }, [messageId, conversationId, isStreaming, block, completedArtifactIds]);
 
   useEffect(() => {
     return () => {
