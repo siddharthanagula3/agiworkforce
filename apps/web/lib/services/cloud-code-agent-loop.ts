@@ -35,6 +35,19 @@ export const CLOUD_CODE_AGENT_MAX_STEPS = 24;
 export const CLOUD_CODE_AGENT_MAX_DURATION_MS = CLOUD_CODE_TURN_BUDGET_MS;
 export const CLOUD_CODE_AGENT_MAX_TOOL_OUTPUT = 30_000;
 
+const PROVIDER_OPERATION_PREFIX = 'provider:';
+const TOOL_OPERATION_PREFIX = 'tool:';
+
+/**
+ * Reads may be replayed after an outcome nobody observed; anything that runs in
+ * the workspace may not, because a replay runs it again.
+ */
+export function cloudCodeToolRetrySafety(toolName: string): CloudCodeRetrySafety {
+  return toolName === CLOUD_CODE_READ_FILE_TOOL || toolName === CLOUD_CODE_LIST_FILES_TOOL
+    ? 'safe'
+    : 'unsafe';
+}
+
 export type CloudCodeAgentStopReason =
   | 'done'
   | 'max_steps'
@@ -92,6 +105,37 @@ export interface CloudCodeAgentResult {
   errorMessage?: string;
 }
 
+/**
+ * How a provider call or a tool call is actually performed.
+ *
+ * Inline they are performed directly, which is the default and the behaviour
+ * this loop has always had. Durably each one is a separately recorded step, so
+ * an invocation that dies mid-turn resumes from the last one that finished
+ * instead of replaying the whole turn. The loop does not know or care which:
+ * it hands over a key, a retry-safety classification, and a thunk.
+ */
+export interface CloudCodeProviderStepRequest {
+  operationKey: string;
+  step: number;
+  execute: () => Promise<DrainedTurn>;
+}
+
+export type CloudCodeRetrySafety = 'safe' | 'unsafe';
+
+export interface CloudCodeToolStepRequest {
+  operationKey: string;
+  step: number;
+  toolName: string;
+  args: Record<string, unknown>;
+  /**
+   * `safe` may be replayed after an unknown outcome; `unsafe` may not. A read
+   * is safe. Anything that runs a command in the workspace is not: replaying it
+   * would run it a second time.
+   */
+  retrySafety: CloudCodeRetrySafety;
+  execute: () => Promise<CloudCodeToolOutcome>;
+}
+
 export interface RunCloudCodeAgentTurnInput {
   adapter: ProviderAdapter;
   model: string;
@@ -110,6 +154,8 @@ export interface RunCloudCodeAgentTurnInput {
    */
   isCancelled?: () => boolean;
   onStepCommitted?: (stepIndex: number) => Promise<void> | void;
+  providerExecutor?: (request: CloudCodeProviderStepRequest) => Promise<DrainedTurn>;
+  toolExecutor?: (request: CloudCodeToolStepRequest) => Promise<CloudCodeToolOutcome>;
   onEvent?: (event: CloudCodeAgentEvent) => Promise<void> | void;
   maxSteps?: number;
   maxDurationMs?: number;
@@ -153,7 +199,7 @@ export function truncateToolOutput(
   return `[${omitted} earlier characters omitted]\n${output.slice(output.length - limit)}`;
 }
 
-interface DrainedTurn {
+export interface DrainedTurn {
   text: string;
   toolCalls: ToolUseBlock[];
   usage?: CloudCodeProviderCallUsage;
@@ -309,7 +355,14 @@ export async function runCloudCodeAgentTurn(
 
     let drained: DrainedTurn;
     try {
-      drained = await drainAssistantTurn(input.adapter.stream(request, input.signal));
+      const runProviderStep = () => drainAssistantTurn(input.adapter.stream(request, input.signal));
+      drained = input.providerExecutor
+        ? await input.providerExecutor({
+            operationKey: `${PROVIDER_OPERATION_PREFIX}${stepsUsed}`,
+            step: stepsUsed,
+            execute: runProviderStep,
+          })
+        : await runProviderStep();
     } catch (error) {
       if (input.signal.aborted) {
         return { stopReason: 'cancelled', stepsUsed, finalMessage, messages, usage };
@@ -384,6 +437,23 @@ export async function runCloudCodeAgentTurn(
 
       let outcome: CloudCodeToolOutcome;
 
+      // Only the branches that actually reach the workspace go through the
+      // executor. A refusal and an unknown tool produce their answer here and
+      // touch nothing, so recording them as durable steps would be ceremony.
+      const runToolStep = (
+        execute: () => Promise<CloudCodeToolOutcome>,
+      ): Promise<CloudCodeToolOutcome> =>
+        input.toolExecutor
+          ? input.toolExecutor({
+              operationKey: `${TOOL_OPERATION_PREFIX}${stepsUsed}:${call.id}`,
+              step: stepsUsed,
+              toolName: call.name,
+              args: call.input,
+              retrySafety: cloudCodeToolRetrySafety(call.name),
+              execute,
+            })
+          : execute();
+
       const shellCommand =
         call.name === CLOUD_CODE_RUN_COMMAND_TOOL
           ? { command: typeof call.input['command'] === 'string' ? call.input['command'] : '' }
@@ -415,18 +485,20 @@ export async function runCloudCodeAgentTurn(
             },
           };
         } else {
-          outcome = await input.runner.runCommand(command, commandDeadlineMs());
+          outcome = await runToolStep(() => input.runner.runCommand(command, commandDeadlineMs()));
         }
       } else if (call.name === CLOUD_CODE_READ_FILE_TOOL) {
         const path = typeof call.input['path'] === 'string' ? call.input['path'] : '';
         outcome = path
-          ? await input.runner.readFile(path)
+          ? await runToolStep(() => input.runner.readFile(path))
           : { output: 'read_file requires a "path".', isError: true };
       } else if (call.name === CLOUD_CODE_LIST_FILES_TOOL) {
         const path = typeof call.input['path'] === 'string' ? call.input['path'] : undefined;
-        outcome = await input.runner.listFiles(path);
+        outcome = await runToolStep(() => input.runner.listFiles(path));
       } else if (isExecutionTool(call.name)) {
-        outcome = await input.runner.runSharedExecutionTool(call.name, call.input);
+        outcome = await runToolStep(() =>
+          input.runner.runSharedExecutionTool(call.name, call.input),
+        );
       } else {
         outcome = {
           output: `Tool "${call.name}" is not available in Code sessions.`,
