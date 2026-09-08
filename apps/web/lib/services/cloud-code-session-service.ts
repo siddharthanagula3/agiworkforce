@@ -64,6 +64,7 @@ const MAX_NOTEBOOK_CELL_CODE_LENGTH = 50_000;
 const MAX_NOTEBOOK_UPLOAD_BYTES = 10 * 1024 * 1024;
 const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
 const GIT_DEFAULT_REMOTE = 'origin';
+const DETACHED_HEAD_BRANCH = 'HEAD';
 const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
 const DEFAULT_WORKSPACE_PATH = '/home/user';
 const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
@@ -199,6 +200,7 @@ interface SessionRow extends Record<string, unknown> {
   state: string;
   workspace_path: string;
   working_branch?: string | null;
+  base_branch?: string | null;
   pull_request_url?: string | null;
   pull_request_number?: number | string | null;
   archived_at?: string | Date | null;
@@ -313,6 +315,7 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     state: asSessionState(row.state),
     workspacePath: row.workspace_path,
     workingBranch: row.working_branch ?? null,
+    baseBranch: row.base_branch ?? null,
     pullRequestUrl: row.pull_request_url ?? null,
     pullRequestNumber: countValue(row.pull_request_number) || null,
     archivedAt: row.archived_at ? iso(row.archived_at) : null,
@@ -908,19 +911,38 @@ async function resolveGithubCloneCredential(
   return { username: GITHUB_INSTALLATION_TOKEN_USERNAME, password };
 }
 
-async function recordWorkingBranch(
+/**
+ * What the clone left checked out, as a branch name.
+ *
+ * Asked of git rather than assumed, because the answer for a clone with no
+ * requested ref is whatever the repository calls its default, and nothing else
+ * in this process knows that. A detached HEAD answers `HEAD`, which names no
+ * branch, so it is reported as unknown rather than recorded as one.
+ */
+async function resolveClonedBranch(
+  executor: { git?: { currentBranch(input: { path: string }): Promise<CommandExecutionResult> } },
+  workspacePath: string,
+): Promise<string | null> {
+  if (!executor.git) return null;
+  const result = await executor.git.currentBranch({ path: workspacePath });
+  if (!result.ok) return null;
+  const branch = result.stdout.trim();
+  return branch && branch !== DETACHED_HEAD_BRANCH && GIT_REF_RE.test(branch) ? branch : null;
+}
+
+async function recordSessionBranches(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
-  workingBranch: string,
+  branches: { workingBranch: string; baseBranch: string | null },
 ): Promise<void> {
-  const scoped = ownerSql(owner, 3);
+  const scoped = ownerSql(owner, 4);
   const rows = await db.query<{ id: string }>(
     `update cloud_code_sessions
-        set working_branch = $2, updated_at = now()
+        set working_branch = $2, base_branch = $3, updated_at = now()
       where id = $1 and ${scoped.clause}
       returning id`,
-    [sessionId, workingBranch, ...scoped.params],
+    [sessionId, branches.workingBranch, branches.baseBranch, ...scoped.params],
   );
   if (!rows[0]) throw new CloudCodeNotFoundError();
 }
@@ -1110,6 +1132,10 @@ export async function createCloudCodeSession(
           clone.error || clone.stderr || 'Repository setup failed',
         );
       }
+      // Read the base before branching: afterwards HEAD is the working branch.
+      const baseBranch =
+        (await resolveClonedBranch(executor, REPOSITORY_WORKSPACE_PATH)) ??
+        validated.repositoryBranch;
       const workingBranch = cloudCodeWorkingBranchName(validated.title, sessionId);
       const branched = await executor.git.createBranch({
         path: REPOSITORY_WORKSPACE_PATH,
@@ -1120,7 +1146,7 @@ export async function createCloudCodeSession(
           branched.error || branched.stderr || 'Working branch could not be created',
         );
       }
-      await recordWorkingBranch(db, owner, sessionId, workingBranch);
+      await recordSessionBranches(db, owner, sessionId, { workingBranch, baseBranch });
     }
     await executor.pause?.();
     const ready = await transitionSessionState(
@@ -1821,10 +1847,26 @@ export function parseGitPorcelainStatus(output: string): CloudCodeChangedFile[] 
   return files;
 }
 
-function sessionBaseRef(session: CloudCodeSession): string {
-  return session.repositoryBranch
-    ? `${GIT_DEFAULT_REMOTE}/${session.repositoryBranch}`
-    : `${GIT_DEFAULT_REMOTE}/HEAD`;
+/**
+ * The branch a session's work is measured against, as a reader would say it.
+ *
+ * Recorded at provisioning, so it is the branch the clone actually checked out
+ * rather than a guess. Falls back to the ref the request asked for, for sessions
+ * created before that was recorded, and is null when neither is known.
+ */
+export function cloudCodeSessionBaseBranch(session: CloudCodeSession): string | null {
+  return session.baseBranch ?? session.repositoryBranch ?? null;
+}
+
+/**
+ * The remote-tracking ref that branch name means to git. Null when there is no
+ * base to compare against, which the caller reports rather than papering over
+ * with `origin/HEAD`: that names a git internal, not a branch, and the panel
+ * would print it verbatim.
+ */
+function sessionBaseRef(session: CloudCodeSession): string | null {
+  const branch = cloudCodeSessionBaseBranch(session);
+  return branch ? `${GIT_DEFAULT_REMOTE}/${branch}` : null;
 }
 
 function assertSessionAcceptsWork(session: CloudCodeSession, verb: string): void {
@@ -1896,10 +1938,15 @@ export async function readCloudCodeSessionChanges(
         status.error || status.stderr || 'Workspace status could not be read',
       );
     }
-    const requestedBase = sessionBaseRef(claim.session);
-    let base: string | null = requestedBase;
-    let diff = await executor.git.diff({ path: workspacePath, baseRef: requestedBase });
-    if (!diff.ok) {
+    const baseRef = sessionBaseRef(claim.session);
+    let base = cloudCodeSessionBaseBranch(claim.session);
+    let diff = baseRef
+      ? await executor.git.diff({ path: workspacePath, baseRef })
+      : await executor.git.diff({ path: workspacePath });
+    if (!diff.ok && baseRef) {
+      // The base branch is known but its remote ref is not there to compare
+      // against. Fall back to the last commit and stop naming a base, rather
+      // than draw a branch flow for a comparison that did not happen.
       base = null;
       diff = await executor.git.diff({ path: workspacePath });
     }

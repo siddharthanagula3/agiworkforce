@@ -340,6 +340,11 @@
       "file": "apps/web/lib/services/cloud-code-durable-run.ts",
       "migration": 176,
       "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 177,
+      "reason": "the Code session base branch column is founder-gated; the deploy runbook applies migration 0177 before this code reaches production."
     }
   ]
 }

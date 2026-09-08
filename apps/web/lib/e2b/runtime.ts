@@ -450,6 +450,7 @@ function truncateUtf8(value: string, maxBytes: number): string {
 const SANDBOX_GIT_BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
 const UNSAFE_GIT_BRANCH_MESSAGE = 'Refused a branch name that is not a plain git ref';
 const GIT_STATUS_COMMAND = 'git status --porcelain=v1 --untracked-files=all';
+const GIT_CURRENT_BRANCH_COMMAND = 'git rev-parse --abbrev-ref HEAD';
 const GIT_DIFF_COMMAND = 'git --no-pager diff --no-color';
 
 function commandResult(
@@ -916,6 +917,17 @@ export async function getE2BExecutor(
       async add({ path, all }): Promise<CommandExecutionResult> {
         try {
           const result = await sandbox.git.add(path, { ...(all ? { all } : {}) });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
+      async currentBranch({ path }): Promise<CommandExecutionResult> {
+        try {
+          const result = await sandbox.commands.run(GIT_CURRENT_BRANCH_COMMAND, {
+            cwd: path,
+            timeoutMs: E2B_COMMAND_TIMEOUT_MS,
+          });
           return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
         } catch (err) {
           return commandCatchResult(err);
