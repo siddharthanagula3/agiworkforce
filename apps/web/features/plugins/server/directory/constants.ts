@@ -167,6 +167,12 @@ export const UPLOAD_TOO_MANY_MEMBERS_MESSAGE = `The zip archive holds more than 
 export const UPLOAD_EXPANDS_TOO_FAR_MESSAGE = `The zip archive expands to more than ${PLUGIN_UPLOAD_MAX_TOTAL_BYTES} bytes.`;
 export const UPLOAD_NO_SKILLS_MESSAGE =
   'This plugin declares no SKILL.md the web app can run, so there is nothing to install. A plugin needs at least one skills/<name>/SKILL.md.';
+export const SKILL_UPLOAD_UNREADABLE_MESSAGE = 'Attach a SKILL.md file, or a zip holding one.';
+export const SKILL_UPLOAD_NOT_UTF8_MESSAGE = 'That file is not valid UTF-8 text.';
+export const UPLOAD_NO_SKILL_FILE_MESSAGE =
+  'The zip holds no SKILL.md. A skill is a SKILL.md with a name and a description in its frontmatter.';
+export const UPLOAD_MANY_SKILL_FILES_MESSAGE =
+  'The zip holds more than one SKILL.md. Upload one skill here, or upload the whole thing as a plugin.';
 export const UPLOAD_NO_PLUGIN_MESSAGE =
   'No plugin was found in the zip. It needs a .claude-plugin/plugin.json, a .claude-plugin/marketplace.json, or a skills directory.';
 
