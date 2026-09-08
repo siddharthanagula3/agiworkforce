@@ -38,6 +38,7 @@ import {
   claimCloudCodeSessionForRun,
   getCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
+  validateCloudCodeSessionId,
 } from './cloud-code-session-service';
 
 const ESTIMATED_TURN_COST_CENTS = 25;
@@ -80,11 +81,23 @@ export const CLOUD_CODE_AGENT_TURN_BUDGET_MS = Math.min(
   CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
 );
 
+/**
+ * How often a running turn asks whether it has been stopped.
+ *
+ * The stop arrives as a row written by a different request, so there is nothing
+ * to wait on: the only way a turn in flight learns about it is by asking. Two
+ * and a half seconds bounds how long a reader waits after pressing stop, and
+ * bounds the cost at one indexed single-row read per interval per running turn.
+ */
+const CANCELLATION_POLL_INTERVAL_MS = 2_500;
+
 interface TurnDeadline {
-  /** The signal handed to the loop: aborts on client disconnect OR on budget. */
+  /** The signal handed to the loop: aborts on client disconnect, budget OR stop. */
   signal: AbortSignal;
   /** True once the budget, rather than the client, caused the abort. */
   expired: () => boolean;
+  /** True once the reader asked for this turn to stop. */
+  cancelled: () => boolean;
   dispose: () => void;
 }
 
@@ -95,9 +108,14 @@ interface TurnDeadline {
  * aborted too, and remember which of the two fired so a budget abort is not
  * mislabelled as a client cancellation.
  */
-function withTurnDeadline(requestSignal: AbortSignal, budgetMs: number): TurnDeadline {
+function withTurnDeadline(
+  requestSignal: AbortSignal,
+  budgetMs: number,
+  cancellation?: { isRequested: () => Promise<boolean> },
+): TurnDeadline {
   const controller = new AbortController();
   let expired = false;
+  let cancelled = false;
 
   const onRequestAbort = () => controller.abort(requestSignal.reason);
   if (requestSignal.aborted) onRequestAbort();
@@ -111,11 +129,33 @@ function withTurnDeadline(requestSignal: AbortSignal, budgetMs: number): TurnDea
   // Node-only method the DOM `setTimeout` typing does not carry.
   (timer as unknown as { unref?: () => void }).unref?.();
 
+  // The loop reads `cancelled` synchronously between steps and before each tool
+  // call, which is what stops new side effects. This poll is what also cuts
+  // short work already in flight: a provider stream, or a coding agent CLI that
+  // the loop cannot interrupt from between its own iterations.
+  const poll = cancellation
+    ? setInterval(() => {
+        void cancellation
+          .isRequested()
+          .then((requested) => {
+            if (!requested || cancelled) return;
+            cancelled = true;
+            controller.abort(new Error('Managed Code agent turn was stopped'));
+          })
+          .catch((error: unknown) => {
+            logger.warn({ error }, 'Could not read the Managed Code turn cancellation request');
+          });
+      }, CANCELLATION_POLL_INTERVAL_MS)
+    : null;
+  (poll as unknown as { unref?: () => void } | null)?.unref?.();
+
   return {
     signal: controller.signal,
     expired: () => expired,
+    cancelled: () => cancelled,
     dispose: () => {
       clearTimeout(timer);
+      if (poll) clearInterval(poll);
       requestSignal.removeEventListener('abort', onRequestAbort);
     },
   };
@@ -211,6 +251,72 @@ function isFlagshipModel(model: string): boolean {
   return FLAGSHIP_MODEL_IDS.has(normalizeModelId(model) ?? model);
 }
 
+const CANCELLABLE_TURN_STATES = ['running', 'awaiting_approval'];
+
+export interface CloudCodeTurnCancellation {
+  turnId: string;
+  requestedAt: string;
+}
+
+/**
+ * Whether a stop has been asked for. Read by the running turn itself, so it is
+ * scoped by the turn id and the owner and touches one indexed row.
+ */
+export async function isCloudCodeTurnCancellationRequested(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  turnId: string,
+): Promise<boolean> {
+  const rows = await db.query<{ cancel_requested_at: string | Date | null }>(
+    `select cancel_requested_at
+       from cloud_code_agent_turns
+      where id = $1 and user_id = $2 and organization_id is not distinct from $3
+      limit 1`,
+    [turnId, owner.userId, owner.organizationId],
+  );
+  return Boolean(rows[0]?.cancel_requested_at);
+}
+
+/**
+ * Records the stop. It does not release the run lease: the invocation running
+ * the turn still holds the sandbox, and taking the session from underneath it
+ * would let a second run drive the same sandbox. That invocation releases the
+ * lease when it notices, and a killed one lets the lease expire on its own.
+ *
+ * `coalesce` keeps the first request's timestamp, so pressing stop twice does
+ * not move the moment the turn was asked to end.
+ */
+export async function requestCloudCodeTurnCancellation(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  turnId?: string | null,
+): Promise<CloudCodeTurnCancellation> {
+  validateCloudCodeSessionId(sessionId);
+  const rows = await db.query<{ id: string; cancel_requested_at: string | Date }>(
+    `update cloud_code_agent_turns
+        set cancel_requested_at = coalesce(cancel_requested_at, now()), updated_at = now()
+      where session_id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and state = any($4::text[])
+        and ($5::uuid is null or id = $5::uuid)
+      returning id, cancel_requested_at`,
+    [sessionId, owner.userId, owner.organizationId, CANCELLABLE_TURN_STATES, turnId ?? null],
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new CloudCodeConflictError('No agent turn is running in this Code session');
+  }
+  return {
+    turnId: row.id,
+    requestedAt:
+      row.cancel_requested_at instanceof Date
+        ? row.cancel_requested_at.toISOString()
+        : new Date(row.cancel_requested_at).toISOString(),
+  };
+}
+
 export interface StartCloudCodeAgentTurnInput {
   db: DatabaseAdapter;
   owner: CloudCodeOwner;
@@ -284,6 +390,8 @@ function terminalErrorMessage(result: CloudCodeAgentResult): string | null {
       return `Agent turn reached its ${CLOUD_CODE_AGENT_MAX_STEPS}-step limit before finishing.`;
     case 'denied':
       return 'Agent turn stopped: a required command was denied.';
+    case 'cancelled':
+      return 'You stopped this turn. Nothing further was run.';
     default:
       return null;
   }
@@ -397,7 +505,9 @@ async function runClaimedAgentTurn(
 
   let result: CloudCodeAgentResult;
   let stepIndex = initialStepIndex;
-  const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS);
+  const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS, {
+    isRequested: () => isCloudCodeTurnCancellationRequested(db, owner, turnId),
+  });
   const resumingOwnLoop = Boolean(input.preApproved ?? input.priorMessages);
   const harness = resumingOwnLoop ? null : selectHarnessRunner(session.runtimeId);
 
@@ -471,17 +581,45 @@ async function runClaimedAgentTurn(
             isFlagship,
           });
         },
+        isCancelled: deadline.cancelled,
         onEvent: recordStep,
       });
     }
 
-    if (deadline.expired() && result.stopReason === 'cancelled') {
+    if (deadline.cancelled()) {
+      // The reader pressed stop. That outranks both the budget and a client
+      // disconnect: whatever the loop reported, this turn ended because it was
+      // asked to.
+      result = { ...result, stopReason: 'cancelled' };
+    } else if (deadline.expired() && result.stopReason === 'cancelled') {
       // The loop saw our budget abort, not a client disconnect. Persisting that
       // as `cancelled` would blame the user for the clock.
       result = { ...result, stopReason: 'timeout' };
     }
   } catch (error) {
-    if (!deadline.expired() || input.signal.aborted) {
+    const abandoned = {
+      stepsUsed: Math.max(0, stepIndex - initialStepIndex),
+      usage: createObservedProviderUsage(),
+      finalMessage: '',
+      messages: [],
+    };
+    if (deadline.cancelled()) {
+      // Our own abort, raised because the reader stopped the turn. The work
+      // already done still settles; only the rest of it is abandoned.
+      logger.info({ turnId, sessionId }, 'Managed Code agent turn stopped on request');
+      result = { stopReason: 'cancelled', ...abandoned };
+    } else if (deadline.expired() && !input.signal.aborted) {
+      // A provider stream or sandbox command that hung past the budget: our own
+      // abort surfaced as a throw. That is a timeout, not a 500, and it falls
+      // through to the same terminal write and settlement as any other stop
+      // reason. Usage is empty because nothing measurable came back, which
+      // settles at the reservation estimate rather than forfeiting the spend.
+      logger.warn(
+        { turnId, sessionId, budgetMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS },
+        'Managed Code agent turn aborted on its own time budget',
+      );
+      result = { stopReason: 'timeout', ...abandoned };
+    } else {
       await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });
       await markTurnFailed(
         db,
@@ -492,22 +630,6 @@ async function runClaimedAgentTurn(
       );
       throw error;
     }
-    // A provider stream or sandbox command that hung past the budget: our own
-    // abort surfaced as a throw. That is a timeout, not a 500, and it falls
-    // through to the same terminal write and settlement as any other stop
-    // reason. Usage is empty because nothing measurable came back, which settles
-    // at the reservation estimate rather than forfeiting the spend.
-    logger.warn(
-      { turnId, sessionId, budgetMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS },
-      'Managed Code agent turn aborted on its own time budget',
-    );
-    result = {
-      stopReason: 'timeout',
-      stepsUsed: Math.max(0, stepIndex - initialStepIndex),
-      usage: createObservedProviderUsage(),
-      finalMessage: '',
-      messages: [],
-    };
   } finally {
     deadline.dispose();
     await releaseSandbox(executor, { turnId, sessionId });
