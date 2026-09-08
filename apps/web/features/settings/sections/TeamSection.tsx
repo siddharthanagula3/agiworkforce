@@ -980,7 +980,7 @@ export function TeamSection() {
               style={{
                 display: 'grid',
                 gap: 14,
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
                 marginTop: 14,
                 maxWidth: 560,
               }}
