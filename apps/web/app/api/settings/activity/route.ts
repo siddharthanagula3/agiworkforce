@@ -12,6 +12,7 @@ import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { presentActivity, type PresentedActivity } from './activity-presentation';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -21,19 +22,6 @@ const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
-
-const EVENT_TYPE_MAP: Record<string, string> = {
-  login: 'login',
-  logout: 'logout',
-  settings_change: 'settings_change',
-  api_call: 'api_call',
-  chat_session: 'chat_session',
-  payment: 'payment',
-};
-
-function mapEventType(eventType: string): string {
-  return EVENT_TYPE_MAP[eventType] ?? 'other';
-}
 
 async function handleGetActivity(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
@@ -71,17 +59,19 @@ async function handleGetActivity(request: NextRequest) {
       [userId, limit, offset],
     );
 
-    const activities = rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id ?? userId,
-      type: mapEventType(row.event_type),
-      description:
-        (row.details?.['description'] as string | undefined) ?? row.endpoint ?? row.event_type,
-      ipAddress: row.ip_address ?? null,
-      userAgent: row.user_agent ?? null,
-      metadata: (row.details as Record<string, unknown>) ?? {},
-      createdAt: row.created_at,
-    }));
+    // Rows the map does not recognise are dropped rather than handed to the
+    // client as a path and an address. See activity-presentation.ts.
+    const activities = rows
+      .map((row) =>
+        presentActivity({
+          id: row.id,
+          event_type: row.event_type,
+          endpoint: row.endpoint ?? null,
+          user_agent: row.user_agent ?? null,
+          created_at: row.created_at,
+        }),
+      )
+      .filter((activity): activity is PresentedActivity => activity !== null);
 
     return NextResponse.json({ activities, limit, offset });
   } catch (error) {
