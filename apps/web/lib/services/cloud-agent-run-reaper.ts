@@ -7,19 +7,6 @@ import { logger } from '@/lib/logger';
 import { appendCloudAgentEvents } from './cloud-agent-run-service';
 import { MAX_OPERATION_LEASE_SECONDS } from './cloud-agent-execution-service';
 
-/**
- * How long a run may sit non-terminal before it certainly has no invocation.
- *
- * Every journal append writes `updated_at`, so a run that is producing anything
- * keeps its row fresh and is never a candidate. A silent one is bounded by the
- * platform's workflow invocation ceiling, and a replay that finds the operation
- * still leased waits at most one lease on top of that. Past the sum, "still
- * working" has stopped being a possible explanation.
- *
- * Erring long is deliberate, as in `cloud-code-turn-reaper`: writing a terminal
- * row underneath a live workflow would be overwritten by it, while waiting
- * longer only delays a row nobody is watching.
- */
 export const CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS =
   CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS / 1_000 + MAX_OPERATION_LEASE_SECONDS;
 
@@ -35,11 +22,8 @@ const STOPPED_RUN_MESSAGE =
 const ORPHANED_RUN_CODE = 'run_abandoned';
 
 export interface CloudAgentRunReapReport {
-  /** Runs moved off queued or running by this sweep. */
   reaped: number;
-  /** Of those, the ones the reader had already asked to stop. */
   stoppedByUser: number;
-  /** True when the batch or time ceiling stopped the sweep with work left. */
   remaining: boolean;
 }
 
@@ -53,14 +37,6 @@ interface ReapedRunRow extends Record<string, unknown> {
   last_event_sequence: number | string;
 }
 
-/**
- * The state change alone is a run that stopped for no stated reason. These two
- * events are what a reattaching client and the task surface read, written
- * through the same journal owner the workflow's own failure path uses.
- *
- * Best-effort on purpose: the run is already off `running` by the time this
- * runs, and a journal that cannot be written must not put it back.
- */
 async function explainReapedRun(db: DatabaseAdapter, row: ReapedRunRow): Promise<void> {
   const stopped = row.state === CANCELLED_STATE;
   const turnId = row.request_id;
@@ -95,17 +71,6 @@ async function explainReapedRun(db: DatabaseAdapter, row: ReapedRunRow): Promise
   }
 }
 
-/**
- * Ends runs whose workflow invocation died before it could settle them.
- *
- * Only `queued` and `running` are swept. `awaiting_input`, `ready_for_review`
- * and `paused` are parked on a person and stay parked however long that takes.
- *
- * Deliberately does not settle managed-usage reservations, for the reason
- * `reapStuckCloudCodeTurns` states: `recover_stale_managed_usage_requests` owns
- * that ledger and refunds an expired reservation exactly once, and a second
- * writer could double-refund or race its `for update skip locked`.
- */
 export async function reapOrphanedCloudAgentRuns(
   db: DatabaseAdapter,
   options: { now?: () => number } = {},

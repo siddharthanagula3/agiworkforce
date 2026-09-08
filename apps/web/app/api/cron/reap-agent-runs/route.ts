@@ -9,18 +9,6 @@ import { reapOrphanedCloudAgentRuns } from '@/lib/services/cloud-agent-run-reape
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-/**
- * Ends cloud agent runs whose workflow invocation died before settling them.
- *
- * A settle is the only thing that transitions a run, and on 2026-09-07 nine
- * runs reached a state where no invocation could ever run it: the platform
- * killed each one mid-step, and the replay that followed died the same way.
- * They stayed at `running` for days and were cleared by hand.
- *
- * This is the backstop, not the fix. A run should settle itself; this exists
- * because a process that is killed runs no code, so some orphan will always be
- * possible.
- */
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');

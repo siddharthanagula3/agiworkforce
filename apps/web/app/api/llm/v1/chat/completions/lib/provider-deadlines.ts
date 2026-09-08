@@ -8,11 +8,6 @@ import {
 } from '@/lib/deadline-policy';
 import { startProviderStream } from './adapter-factory';
 
-/**
- * Worded so `classifyError` reads it as `api_timeout`, which is already
- * failover-eligible: a route that accepts the request and never speaks is an
- * availability failure another route may not share.
- */
 export class ProviderFirstTokenDeadlineError extends Error {
   readonly deadlineMs: number;
   readonly model: string | undefined;
@@ -29,10 +24,6 @@ export class ProviderFirstTokenDeadlineError extends Error {
   }
 }
 
-/**
- * Deliberately NOT an `api_timeout`: the turn ran out of its own budget, which
- * a different route cannot fix, so this one must not rotate.
- */
 export class ProviderStreamDeadlineError extends Error {
   readonly deadlineMs: number;
 
@@ -59,26 +50,11 @@ export function hasFirstTokenBudgetLeft(turnElapsedMs: number): boolean {
 }
 
 export interface ProviderDeadlineBounds {
-  /** Time the route has to produce anything at all. */
   firstTokenMs?: number | undefined;
-  /** Time the whole stream has, once it has started producing. */
   streamMs?: number | undefined;
-  /** Named in the first-token message when the caller knows which route it is. */
   model?: string | undefined;
 }
 
-/**
- * The one race both provider dispatch paths use.
- *
- * The inline path treats its own resolution as the milestone, because
- * `startProviderStream` resolves only after peeking the first chunk. The tool
- * loop calls `markFirstToken` when it collects its first line, because its
- * promise resolves at the END of the stream. Same bound, two different moments
- * to stop watching for it.
- *
- * Every expiry aborts the derived signal before it rejects, so the upstream
- * request is closed rather than left running against a caller that has given up.
- */
 export function withProviderDeadlines<T>(
   run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
   bounds: ProviderDeadlineBounds,
