@@ -7,7 +7,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { mapProjectRow } from '@/lib/projects';
+import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   getProjectLimit,
@@ -17,6 +17,19 @@ import {
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const PG_UNDEFINED_COLUMN = '42703';
+
+const CARRIED_COLUMNS = [
+  'icon_emoji',
+  'accent_color',
+  'default_privacy_mode',
+  'default_provider_mode',
+  'allowed_surfaces',
+  'default_model_id',
+  'imported_from',
+  'uses_global_memory',
+] as const;
 
 function isSchemaNotReady(error: unknown): boolean {
   const code = (error as { code?: string } | null)?.code;
@@ -62,29 +75,71 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     throw createError.validation(getProjectLimitErrorMessage(planTier));
   }
 
-  let created: Record<string, unknown> | undefined;
-  try {
-    [created] = await db.query<Record<string, unknown>>(
-      `with inserted as materialized (
-         insert into user_projects
-           (user_id, organization_id, name, description, instructions, color)
-         values ($1, $2, $3, $4, $5, $6)
+  const baseColumns = [
+    'user_id',
+    'organization_id',
+    'name',
+    'description',
+    'instructions',
+    'color',
+  ];
+  const baseValues: unknown[] = [
+    userId,
+    organizationId,
+    copyName(String(source['name'] ?? 'Project')),
+    source['description'] ?? '',
+    source['instructions'] ?? '',
+    source['color'] ?? DEFAULT_PROJECT_COLOR,
+  ];
+
+  // Everything below arrived after the base columns and is settable by the
+  // user, so a copy that drops it silently rewrites the project's behaviour.
+  // uses_global_memory is the one that matters most: defaulting it back to true
+  // would widen what the copy's chats can read.
+  const carriedColumns: string[] = [];
+  const carriedValues: unknown[] = [];
+  for (const column of CARRIED_COLUMNS) {
+    if (source[column] === undefined) continue;
+    carriedColumns.push(column);
+    carriedValues.push(source[column]);
+  }
+  const hasCarried = carriedColumns.length > 0;
+
+  function buildInsertSql(includeCarried: boolean): { sql: string; params: unknown[] } {
+    const columns = includeCarried ? [...baseColumns, ...carriedColumns] : [...baseColumns];
+    const values = includeCarried ? [...baseValues, ...carriedValues] : [...baseValues];
+    const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+    return {
+      sql: `with inserted as materialized (
+         insert into user_projects (${columns.join(', ')})
+         values (${placeholders})
          returning *
        ), quota_guard as materialized (
-         select public.assert_user_resource_limit('projects', $1, $7)
+         select public.assert_user_resource_limit('projects', $1, $${values.length + 1})
            from (select count(*) from inserted) as dependency
        )
        select inserted.* from inserted cross join quota_guard`,
-      [
-        userId,
-        organizationId,
-        copyName(String(source['name'] ?? 'Project')),
-        source['description'] ?? '',
-        source['instructions'] ?? '',
-        source['color'] ?? '#3b82f6',
-        projectLimit,
-      ],
-    );
+      params: [...values, projectLimit],
+    };
+  }
+
+  const insertCopy = async (includeCarried: boolean) => {
+    const { sql, params } = buildInsertSql(includeCarried);
+    const [row] = await db.query<Record<string, unknown>>(sql, params);
+    return row;
+  };
+
+  let created: Record<string, unknown> | undefined;
+  try {
+    try {
+      created = await insertCopy(hasCarried);
+    } catch (error) {
+      if (hasCarried && (error as { code?: string } | null)?.code === PG_UNDEFINED_COLUMN) {
+        created = await insertCopy(false);
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
     if (isUserResourceLimitError(error)) {
       throw createError.validation(getProjectLimitErrorMessage(planTier));

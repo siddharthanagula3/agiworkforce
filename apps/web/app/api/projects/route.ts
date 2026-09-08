@@ -4,7 +4,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { mapProjectRow } from '@/lib/projects';
+import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -109,7 +109,7 @@ async function handleCreateProject(request: NextRequest) {
     body.name.trim(),
     body.description?.trim() ?? '',
     body.instructions?.trim() ?? '',
-    body.color?.trim() || '#3b82f6',
+    body.color?.trim() || DEFAULT_PROJECT_COLOR,
   ];
 
   const round10Columns: string[] = [];

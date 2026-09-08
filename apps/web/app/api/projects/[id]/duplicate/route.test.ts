@@ -47,6 +47,14 @@ const SOURCE = {
   description: 'desc',
   instructions: 'Always cite sources.',
   color: '#3b82f6',
+  icon_emoji: 'chart',
+  accent_color: 'violet',
+  default_privacy_mode: 'managed',
+  default_provider_mode: 'ManagedNative',
+  allowed_surfaces: ['web', 'desktop'],
+  default_model_id: 'some-configured-model',
+  imported_from: 'claude',
+  uses_global_memory: false,
 };
 
 describe('POST /api/projects/[id]/duplicate', () => {
@@ -73,6 +81,67 @@ describe('POST /api/projects/[id]/duplicate', () => {
     expect(String(insertCall?.[0])).toContain('insert into user_projects');
     expect(insertCall?.[1]).toContain('Always cite sources.');
     expect(insertCall?.[1]).toContain('Q3 Analysis (copy)');
+  });
+
+  it('carries every persisted setting the source had, not just the four it used to', async () => {
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
+      .mockResolvedValueOnce([]);
+
+    await call();
+
+    const [insertSql, insertParams] = mocks.query.mock.calls[1] as [string, unknown[]];
+    for (const column of [
+      'icon_emoji',
+      'accent_color',
+      'default_provider_mode',
+      'allowed_surfaces',
+      'default_model_id',
+      'imported_from',
+      'uses_global_memory',
+      'default_privacy_mode',
+    ]) {
+      expect(insertSql, `the duplicate drops ${column}`).toContain(column);
+    }
+    expect(insertParams).toContain('chart');
+    expect(insertParams).toContain('violet');
+    expect(insertParams).toContain('ManagedNative');
+    expect(insertParams).toContain('some-configured-model');
+    expect(insertParams).toContain('claude');
+    expect(insertParams).toContainEqual(['web', 'desktop']);
+    expect(insertParams).toContain(false);
+  });
+
+  it('never re-enables global memory on a project that had it off', async () => {
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockResolvedValueOnce([{ id: 'proj-2' }])
+      .mockResolvedValueOnce([]);
+
+    await call();
+
+    const [insertSql, insertParams] = mocks.query.mock.calls[1] as [string, unknown[]];
+    const columns = /insert into user_projects\s*\(([^)]+)\)/i.exec(insertSql)?.[1] ?? '';
+    const index = columns.split(',').findIndex((name) => name.trim() === 'uses_global_memory');
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(insertParams[index]).toBe(false);
+  });
+
+  it('falls back to the base columns on a database that predates them', async () => {
+    const undefinedColumn = Object.assign(new Error('column does not exist'), { code: '42703' });
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockRejectedValueOnce(undefinedColumn)
+      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
+      .mockResolvedValueOnce([]);
+
+    const res = await call();
+
+    expect(res.status).toBe(200);
+    const [retrySql] = mocks.query.mock.calls[2] as [string, unknown[]];
+    expect(retrySql).toContain('insert into user_projects');
+    expect(retrySql).not.toContain('icon_emoji');
   });
 
   it('authorizes the source and binds the copy to the active workspace', async () => {
