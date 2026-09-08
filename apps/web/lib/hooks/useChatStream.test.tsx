@@ -2293,3 +2293,156 @@ describe('useChatStream', () => {
     expect(body['effort']).toBe('minimal');
   });
 });
+
+describe('the transcript says what the turn is actually waiting for', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    useThinkingStore.getState().setEnabled(false);
+    useFreeTrialStore.getState().clearLimitReached();
+    useChatStore.setState({
+      activeConversationId: TEMP_CONVERSATION.id,
+      conversations: [TEMP_CONVERSATION],
+    });
+    authMocks.getToken.mockResolvedValue('session-token');
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function openStreamThatSendsNothing(headers: Headers = new Headers()): () => void {
+    let close: (() => void) | undefined;
+    const stream = new ReadableStream({
+      start(controller) {
+        close = () => controller.close();
+      },
+    });
+    vi.mocked(fetch).mockResolvedValue(new Response(stream, { status: 200, headers }));
+    return () => close?.();
+  }
+
+  function activitySummaries(status?: 'running'): string[] {
+    const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+    return (assistant?.metadata?.agentActivity?.entries ?? [])
+      .filter(
+        (entry): entry is Extract<typeof entry, { summary: string; status: string }> =>
+          'summary' in entry &&
+          'status' in entry &&
+          (status === undefined || entry.status === status),
+      )
+      .map((entry) => entry.summary);
+  }
+
+  function runningSummaries(): string[] {
+    return activitySummaries('running');
+  }
+
+  it('stops saying it is connecting once the route has accepted the request', async () => {
+    const close = openStreamThatSendsNothing();
+    const { result } = renderHook(() => useChatStream());
+
+    act(() => {
+      void result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    await vi.waitFor(() => {
+      expect(runningSummaries()).toContain('Waiting for the first token');
+    });
+    expect(runningSummaries().some((summary) => summary.includes('Connecting'))).toBe(false);
+
+    close();
+  });
+
+  it('says the router moved on when the response reports a route switch', async () => {
+    const close = openStreamThatSendsNothing(
+      new Headers({ 'X-AGI-Fallback-Reason': 'managed_failover' }),
+    );
+    const { result } = renderHook(() => useChatStream());
+
+    act(() => {
+      void result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    await vi.waitFor(() => {
+      expect(activitySummaries()).toContain('Switched to a backup model');
+    });
+
+    close();
+  });
+
+  function respondWith(body: string, headers: Headers = new Headers()): void {
+    const encoder = new TextEncoder();
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(body));
+            controller.close();
+          },
+        }),
+        { status: 200, headers },
+      ),
+    );
+  }
+
+  const ROTATED = new Headers({ 'X-AGI-Fallback-Reason': 'managed_failover' });
+  const ANSWERED = 'data: {"choices":[{"delta":{"content":"answered"}}]}\n\ndata: [DONE]\n\n';
+
+  /**
+   * The rotation step is worth a row of its own, but a rotated turn is still an
+   * ordinary turn and must settle like one. The first version appended the step
+   * through the activity reducer, which drops the local starting entry the
+   * moment a real entry appears, so a rotated turn lost the "Response ready"
+   * every other turn ends on.
+   */
+  it('keeps the starting step a rotated turn still needs to settle on', async () => {
+    const close = openStreamThatSendsNothing(ROTATED);
+    const { result } = renderHook(() => useChatStream());
+
+    act(() => {
+      void result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    await vi.waitFor(() => {
+      expect(activitySummaries()).toContain('Switched to a backup model');
+    });
+    expect(runningSummaries()).toContain('Waiting for the first token');
+
+    close();
+  });
+
+  it('adds the switch row and nothing else to a rotated turn that answered', async () => {
+    respondWith(ANSWERED);
+    const first = renderHook(() => useChatStream());
+    await act(async () => {
+      await first.result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+    const unrotated = activitySummaries();
+
+    useChatStore.getState().reset();
+    useChatStore.setState({
+      activeConversationId: TEMP_CONVERSATION.id,
+      conversations: [TEMP_CONVERSATION],
+    });
+    respondWith(ANSWERED, ROTATED);
+    const second = renderHook(() => useChatStream());
+    await act(async () => {
+      await second.result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(activitySummaries()).toEqual([...unrotated, 'Switched to a backup model']);
+  });
+
+  it('closes the waiting step as soon as the first token arrives', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'hello' } }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(runningSummaries()).toEqual([]);
+  });
+});
