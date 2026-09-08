@@ -165,10 +165,12 @@ requireIncludes(
   'pnpm --filter @agiworkforce/mobile exec detox build --configuration ios.sim.release',
 );
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/mobile test:e2e:ios:ci');
-requireIncludes(
-  '.github/workflows/ci.yml',
-  'pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1',
-);
+// The spec list itself is checked by apps/web/__tests__/web-e2e-ci-coverage.test.ts
+// against the specs that do not sign in, so pinning the literal command here
+// would only freeze the list the moment a public spec is added.
+requireIncludes('.github/workflows/ci.yml', 'Run signed-out Web Playwright flows');
+requireIncludes('.github/workflows/ci.yml', 'public-auth-clean.spec.ts');
+requireIncludes('.github/workflows/ci.yml', 'checkout.spec.ts');
 requireIncludes('apps/mobile/detox.config.js', 'ONLY_ACTIVE_ARCH=YES');
 requireIncludes('apps/mobile/detox.config.js', 'DETOX_IOS_DEVICE');
 requireIncludes('apps/mobile/package.json', '"test:e2e:ios:ci"');

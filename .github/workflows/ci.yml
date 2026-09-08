@@ -1112,11 +1112,28 @@ jobs:
       - name: Run blocking WCAG 2.1 A/AA audit
         run: pnpm --filter @agiworkforce/web a11y:audit
 
+      # Every spec that does not sign in. The authenticated specs cannot run
+      # here: they mint a Clerk sign-in ticket with a real CLERK_SECRET_KEY,
+      # and this job carries the `test-clerk-secret-key` fixture against the
+      # deliberately non-routable clerk-ci.invalid publishable key. No Clerk
+      # secret exists among the repository secrets either. Adding one is a
+      # credential decision, not a workflow edit.
+      # `web-e2e-ci-coverage.test.ts` fails if this list drifts from the set of
+      # specs that do not import the QA harness.
       - name: Run signed-out Web Playwright flows
         working-directory: apps/web
         env:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
-        run: pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1
+        run: |
+          pnpm exec playwright test \
+            checkout.spec.ts \
+            enterprise-surface.spec.ts \
+            marketing-mobile-nav.spec.ts \
+            marketing-mount-scroll.spec.ts \
+            marketing-stage-contrast.spec.ts \
+            public-auth-clean.spec.ts \
+            qa-14-public-route-contrast.spec.ts \
+            --project=chromium --workers=1
 
       - name: Print Web app log on failure
         if: failure()
