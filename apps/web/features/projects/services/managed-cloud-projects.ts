@@ -41,6 +41,7 @@ function toWebProject(project: ManagedCloudProject): Project {
     metadata: project.metadata,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+    isOrgShared: project.isOrgShared,
   };
 }
 

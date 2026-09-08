@@ -31,6 +31,7 @@ export const ManagedCloudProjectSchema = z.object({
   iconEmoji: z.string().nullable().optional(),
   accentColor: ProjectAccentColorSchema.nullable().optional(),
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
+  isOrgShared: z.boolean().optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });

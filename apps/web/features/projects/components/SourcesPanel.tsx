@@ -51,9 +51,16 @@ function fileIcon(mimeType: string): string {
 
 interface Props {
   projectId: string;
+  /**
+   * A project reached through an organisation share. Migration 0090 grants the
+   * member SELECT on these files and restricts every write to the owner, so the
+   * list and the preview stay and the upload and delete controls go: the routes
+   * behind them answer 404 for this caller.
+   */
+  readOnly?: boolean;
 }
 
-export function SourcesPanel({ projectId }: Props) {
+export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const [files, setFiles] = useState<ProjectKnowledgeFile[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
@@ -304,34 +311,37 @@ export function SourcesPanel({ projectId }: Props) {
               lineHeight: 1.6,
             }}
           >
-            Upload sources, link drives, or connect apps to give AGI deeper context about your
-            project.
+            {readOnly
+              ? 'The owner of this project has not added any sources yet. Only they can add or remove them.'
+              : 'Upload sources, link drives, or connect apps to give AGI deeper context about your project.'}
           </p>
 
-          <button
-            type="button"
-            onClick={() => setAddSourcesOpen(true)}
-            data-testid="sources-add-btn"
-            style={{
-              padding: '10px 22px',
-              borderRadius: 9999,
-              border: 'none',
-              background: 'var(--agi-amber)',
-              color: 'var(--agi-bg)',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.opacity = '0.88';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-            }}
-          >
-            Add sources
-          </button>
+          {readOnly ? null : (
+            <button
+              type="button"
+              onClick={() => setAddSourcesOpen(true)}
+              data-testid="sources-add-btn"
+              style={{
+                padding: '10px 22px',
+                borderRadius: 9999,
+                border: 'none',
+                background: 'var(--agi-amber)',
+                color: 'var(--agi-bg)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = '0.88';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+              }}
+            >
+              Add sources
+            </button>
+          )}
         </div>
       )}
 
@@ -353,23 +363,25 @@ export function SourcesPanel({ projectId }: Props) {
               <span style={{ fontSize: 12, color: 'var(--agi-ink-2)' }}>
                 {files.length} {files.length === 1 ? 'source' : 'sources'}
               </span>
-              <button
-                type="button"
-                onClick={() => setAddSourcesOpen(true)}
-                data-testid="sources-add-btn-inline"
-                style={{
-                  padding: '4px 12px',
-                  borderRadius: 9999,
-                  border: '1px solid var(--agi-amber)',
-                  background: 'transparent',
-                  color: 'var(--agi-amber)',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
-                + Add sources
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => setAddSourcesOpen(true)}
+                  data-testid="sources-add-btn-inline"
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 9999,
+                    border: '1px solid var(--agi-amber)',
+                    background: 'transparent',
+                    color: 'var(--agi-amber)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Add sources
+                </button>
+              )}
             </div>
 
             {/* Right: sort + filter selects */}
@@ -481,41 +493,43 @@ export function SourcesPanel({ projectId }: Props) {
                   <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                     {(file.byteCount / 1024).toFixed(1)} KB
                   </span>
-                  <button
-                    type="button"
-                    data-testid="sources-delete"
-                    aria-label={`Remove ${file.fileName}`}
-                    title="Remove source"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      confirm({
-                        title: `Remove ${file.fileName}?`,
-                        description:
-                          'The file is deleted from this project’s knowledge and the assistant stops using it. This cannot be undone: the file would have to be uploaded again.',
-                        confirmLabel: 'Remove file',
-                        onConfirm: () => handleDelete(file),
-                      });
-                    }}
-                    style={{
-                      flexShrink: 0,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--agi-ink-2)',
-                      padding: 4,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Trash2 size={14} aria-hidden />
-                  </button>
+                  {readOnly ? null : (
+                    <button
+                      type="button"
+                      data-testid="sources-delete"
+                      aria-label={`Remove ${file.fileName}`}
+                      title="Remove source"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirm({
+                          title: `Remove ${file.fileName}?`,
+                          description:
+                            'The file is deleted from this project’s knowledge and the assistant stops using it. This cannot be undone: the file would have to be uploaded again.',
+                          confirmLabel: 'Remove file',
+                          onConfirm: () => handleDelete(file),
+                        });
+                      }}
+                      style={{
+                        flexShrink: 0,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--agi-ink-2)',
+                        padding: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
           {/* Drop overlay when files already exist */}
-          <DropOverlay onDrop={handleUpload} />
+          {readOnly ? null : <DropOverlay onDrop={handleUpload} />}
         </>
       )}
 
@@ -535,7 +549,7 @@ export function SourcesPanel({ projectId }: Props) {
 
       {/* Add sources modal */}
       <AddSourcesModal
-        open={addSourcesOpen}
+        open={addSourcesOpen && !readOnly}
         onClose={() => setAddSourcesOpen(false)}
         onUploadFile={handleUpload}
         onUploadText={handleUploadText}
