@@ -1597,12 +1597,10 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
  */
 export interface UserActivity {
   id: string;
-  userId: string;
-  type: 'login' | 'logout' | 'settings_change' | 'api_call' | 'chat_session' | 'payment' | 'other';
-  description: string;
-  ipAddress: string | null;
-  userAgent: string | null;
-  metadata: Record<string, unknown>;
+  /** What happened, in a sentence the server's route-to-event map produced. */
+  sentence: string;
+  /** What it was done from, in the sessions list's shape. Never an address. */
+  device: string | null;
   createdAt: string;
 }
 

@@ -26,6 +26,9 @@ vi.mock('../components/Settings/ApiKeys', () => ({
 
 vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
   ...(await importOriginal()),
+  // The pane now carries a Recent activity panel under the sessions list; these
+  // files have no QueryClient, and these tests are about other rows.
+  useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
     mutate: vi.fn(),

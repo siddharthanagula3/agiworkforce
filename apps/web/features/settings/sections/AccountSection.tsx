@@ -20,6 +20,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
+import { RecentActivityPanel } from '@features/settings/components/RecentActivityPanel';
 import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
 import { CopyableIdField } from '../components/CopyableIdField';
 import {
@@ -712,6 +713,8 @@ export function AccountSection() {
               not recognize, or use &ldquo;Log out of all devices&rdquo; above.
             </p>
           </div>
+
+          <RecentActivityPanel />
         </>
       )}
 
