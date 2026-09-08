@@ -16,6 +16,7 @@ import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-re
 import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
+import { citationPublisherDomain } from '@agiworkforce/unified-chat';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -82,18 +83,17 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
       ? source.title
       : (humanizedPathTitle(source.url) ?? pathTrimmedUrl(source.url));
 
-  // Fall back to Google's favicon service when no favicon was provided
+  // Fall back to Google's favicon service when no favicon was provided, drawn
+  // for the PUBLISHER's domain. A grounded result's URL host is the routing
+  // vendor, so deriving from it drew the same icon for every source in an
+  // answer and claimed Google had published all of them.
+  const publisherDomain = citationPublisherDomain(source);
   const faviconSrc =
     source.favicon && !imgError
       ? source.favicon
-      : (() => {
-          try {
-            const domain = new URL(source.url).hostname;
-            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-          } catch {
-            return undefined;
-          }
-        })();
+      : publisherDomain
+        ? `https://www.google.com/s2/favicons?domain=${publisherDomain}&sz=32`
+        : undefined;
 
   return (
     <a
@@ -493,16 +493,12 @@ export function ResearchToggleButton({ count = 0 }: { count?: number }) {
 // ============================================================================
 
 function sourceDisplay(source: ResearchSource): { host: string; favicon?: string } {
-  try {
-    const parsed = new URL(source.url);
-    return {
-      host: parsed.hostname.replace(/^www\./, ''),
-      favicon:
-        source.favicon ?? `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`,
-    };
-  } catch {
-    return { host: source.url, favicon: source.favicon };
-  }
+  const domain = citationPublisherDomain(source);
+  if (!domain) return { host: source.url, favicon: source.favicon };
+  return {
+    host: domain,
+    favicon: source.favicon ?? `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
+  };
 }
 
 function SourceFavicon({ source }: { source: ResearchSource }) {
