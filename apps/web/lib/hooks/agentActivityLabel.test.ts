@@ -72,13 +72,13 @@ describe('deriveAgentActivityLabel', () => {
     ],
     [
       'waiting for a first token before a second has passed',
-      { kind: 'waiting', modelName: 'OpenRouter Free Auto', elapsedMs: 400 },
-      'Waiting for the first token from OpenRouter Free Auto',
+      { kind: 'waiting', modelName: 'Fixture Router Model', elapsedMs: 400 },
+      'Waiting for the first token from Fixture Router Model',
     ],
     [
       'waiting for a first token with the elapsed time',
-      { kind: 'waiting', modelName: 'OpenRouter Free Auto', elapsedMs: 12_400 },
-      'Waiting for the first token from OpenRouter Free Auto \u00b7 12s',
+      { kind: 'waiting', modelName: 'Fixture Router Model', elapsedMs: 12_400 },
+      'Waiting for the first token from Fixture Router Model \u00b7 12s',
     ],
     [
       'waiting without a known model',
@@ -87,13 +87,13 @@ describe('deriveAgentActivityLabel', () => {
     ],
     [
       'connecting reports how long it has been trying',
-      { kind: 'idle', modelName: 'OpenRouter Free Auto', elapsedMs: 62_000 },
-      'Connecting to OpenRouter Free Auto \u00b7 62s',
+      { kind: 'idle', modelName: 'Fixture Router Model', elapsedMs: 62_000 },
+      'Connecting to Fixture Router Model \u00b7 62s',
     ],
     [
       'connecting stays unadorned before the first second',
-      { kind: 'idle', modelName: 'OpenRouter Free Auto', elapsedMs: 200 },
-      'Connecting to OpenRouter Free Auto',
+      { kind: 'idle', modelName: 'Fixture Router Model', elapsedMs: 200 },
+      'Connecting to Fixture Router Model',
     ],
   ];
 

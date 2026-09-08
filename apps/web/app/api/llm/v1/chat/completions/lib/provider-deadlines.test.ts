@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { classifyError } from '@agiworkforce/provider-runtime';
-import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+import {
+  listCanonicalModels,
+  type ChatRequest,
+  type ProviderAdapter,
+  type StreamChunk,
+} from '@agiworkforce/types';
 import {
   PROVIDER_FIRST_TOKEN_DEADLINE_MS,
   TURN_FIRST_TOKEN_BUDGET_MS,
@@ -18,7 +23,15 @@ vi.mock('server-only', () => ({}));
 
 const TEST_DEADLINE_MS = 25;
 const LONGER_THAN_DEADLINE_MS = 2_000;
-const MODEL = 'openrouter/free';
+const ZERO_COST_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.inputCost === 0 && candidate.outputCost === 0 && candidate.apiModelId,
+  );
+  if (!model) throw new Error('The catalog must expose a zero-cost model with an api id');
+  return model;
+})();
+
+const MODEL = ZERO_COST_MODEL.apiModelId;
 
 function makeAdapter(stream: ProviderAdapter['stream']): ProviderAdapter {
   return {

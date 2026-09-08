@@ -58,14 +58,14 @@ describe('telling the user their request was changed', () => {
 
 describe('fallbackStepLabel', () => {
   it('names the model the router moved to', () => {
-    expect(fallbackStepLabel('managed_failover', 'Claude Sonnet 5')).toBe(
-      'Switched to Claude Sonnet 5',
+    expect(fallbackStepLabel('managed_failover', 'Fixture Backup Model')).toBe(
+      'Switched to Fixture Backup Model',
     );
   });
 
   it('says a route changed when the model did not', () => {
-    expect(fallbackStepLabel('openrouter_route_failover', 'GPT-5.6 Luna')).toBe(
-      'Switched to a backup route for GPT-5.6 Luna',
+    expect(fallbackStepLabel('openrouter_route_failover', 'Fixture Direct Model')).toBe(
+      'Switched to a backup route for Fixture Direct Model',
     );
   });
 
