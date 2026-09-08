@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { routeIsServed } from './route-availability';
 
 const STAGES = [
   { route: '/', anchor: '.agi-fl-hero' },
@@ -25,7 +26,10 @@ test.describe('marketing landing contrast', () => {
           await page.emulateMedia({ colorScheme: theme });
           const response = await page.goto(stage.route, { waitUntil: 'networkidle' });
           // llm-guardrail-allow: the dev preview route answers 404 on a production build, so this is not a skipped check
-          test.skip(response?.status() === 404, `${stage.route} is not served by this build`);
+          test.skip(
+            !(await routeIsServed(page, response)),
+            `${stage.route} is not served by this build`,
+          );
           await page.evaluate((t) => {
             document.documentElement.classList.toggle('dark', t === 'dark');
           }, theme);
