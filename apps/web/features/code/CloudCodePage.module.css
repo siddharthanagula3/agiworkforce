@@ -636,12 +636,6 @@ svg + .menuRowLabel {
   font-size: 14px;
 }
 
-.idleMark {
-  display: flex;
-  align-items: center;
-  padding-top: 2px;
-}
-
 .actionRow {
   display: flex;
   align-items: center;
