@@ -159,12 +159,31 @@ describe('storeOwnedPluginSource', () => {
       statements,
       'delete from public.plugin_marketplace_entry_files',
     );
-    expect(staleFiles.params).toEqual([ENTRY_ID, ['skills/summarise/SKILL.md']]);
+    expect(staleFiles.params).toEqual([ENTRY_ID, ['skills/summarise/SKILL.md'], USER_ID]);
+    expect(staleFiles.sql).toContain('sources.user_id = $3');
     const staleEntries = statementMatching(
       statements,
       'delete from public.plugin_marketplace_entries',
     );
-    expect(staleEntries.params).toEqual([SOURCE_ID, ['my-plugin']]);
+    expect(staleEntries.params).toEqual([SOURCE_ID, ['my-plugin'], USER_ID]);
+    expect(staleEntries.sql).toContain('sources.user_id = $3');
+  });
+
+  it('binds every write to the owner so the owner connection cannot reach a foreign source', async () => {
+    const { db, statements } = transactionalDb();
+    await storeOwnedPluginSource(db, USER_ID, {
+      kind: 'upload',
+      sourceName: 'My plugin',
+      plugins: [plugin()],
+    });
+    const writes = statements.filter((statement) =>
+      /^\s*(insert|update|delete)/i.test(statement.sql),
+    );
+    expect(writes.length).toBeGreaterThan(0);
+    for (const statement of writes) {
+      expect(statement.sql, statement.sql).toMatch(/user_id/);
+      expect(statement.params, statement.sql).toContain(USER_ID);
+    }
   });
 
   it('enables exactly the skills the plugin shipped', async () => {
