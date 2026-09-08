@@ -7,11 +7,11 @@ import {
   MIN_CHILD_DEADLINE_MS,
 } from '@/lib/deadline-policy';
 import {
-  FirstTokenTimeoutError,
+  ProviderFirstTokenDeadlineError,
   firstTokenDeadlineMs,
   hasFirstTokenBudgetLeft,
   startProviderStreamWithinFirstTokenDeadline,
-} from './first-token-deadline';
+} from './provider-deadlines';
 import { isFailoverEligibleError } from './managed-failover';
 
 vi.mock('server-only', () => ({}));
@@ -73,7 +73,7 @@ describe('the first-token deadline bounds a route that never answers', () => {
         mapError,
         TEST_DEADLINE_MS,
       ),
-    ).rejects.toBeInstanceOf(FirstTokenTimeoutError);
+    ).rejects.toBeInstanceOf(ProviderFirstTokenDeadlineError);
 
     expect(Date.now() - start).toBeLessThan(LONGER_THAN_DEADLINE_MS);
   });
@@ -90,7 +90,7 @@ describe('the first-token deadline bounds a route that never answers', () => {
     ).catch(() => undefined);
 
     expect(aborted).toHaveBeenCalledTimes(1);
-    expect(aborted.mock.calls[0]?.[0]).toBeInstanceOf(FirstTokenTimeoutError);
+    expect(aborted.mock.calls[0]?.[0]).toBeInstanceOf(ProviderFirstTokenDeadlineError);
   });
 
   it('names the route and the deadline so the failure is not silent', async () => {
@@ -102,10 +102,10 @@ describe('the first-token deadline bounds a route that never answers', () => {
       TEST_DEADLINE_MS,
     ).then(
       () => null,
-      (error: unknown) => error as FirstTokenTimeoutError,
+      (error: unknown) => error as ProviderFirstTokenDeadlineError,
     );
 
-    expect(caught).toBeInstanceOf(FirstTokenTimeoutError);
+    expect(caught).toBeInstanceOf(ProviderFirstTokenDeadlineError);
     expect(caught!.message).toContain(MODEL);
     expect(caught!.message).toContain(String(TEST_DEADLINE_MS));
     expect(caught!.deadlineMs).toBe(TEST_DEADLINE_MS);
@@ -162,7 +162,7 @@ describe('the deadline never interferes with a route that does answer', () => {
       (caught: unknown) => caught,
     );
 
-    expect(error).not.toBeInstanceOf(FirstTokenTimeoutError);
+    expect(error).not.toBeInstanceOf(ProviderFirstTokenDeadlineError);
     expect(classifyError(error).category).toBe('aborted');
   });
 });

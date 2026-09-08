@@ -239,6 +239,10 @@ import {
   nestedDeadlineMs,
   PROVIDER_FIRST_TOKEN_DEADLINE_MS,
 } from '@/lib/deadline-policy';
+import {
+  ProviderStreamDeadlineError as SharedProviderStreamDeadlineError,
+  withProviderDeadlines,
+} from './provider-deadlines';
 
 const DEFAULT_CHAT_MAX_STEPS = 10;
 const DEFAULT_AGI_WORK_MAX_STEPS = 100;
@@ -1087,56 +1091,14 @@ export function withToolTimeout(
   });
 }
 
-export class ProviderStreamDeadlineError extends Error {
-  readonly deadlineMs: number;
-
-  constructor(deadlineMs: number) {
-    super(
-      `The model stream ran past this turn's remaining time budget ` +
-        `(${Math.round(deadlineMs / 1000)}s) and was stopped.`,
-    );
-    this.name = 'ProviderStreamDeadlineError';
-    this.deadlineMs = deadlineMs;
-  }
-}
+export { ProviderFirstTokenDeadlineError, ProviderStreamDeadlineError } from './provider-deadlines';
 
 /**
- * Distinct from the whole-stream budget above, and worded so `classifyError`
- * reads it as `api_timeout`: a route that never speaks is an availability
- * failure the failover plan may rotate away from, while a stream that outran
- * the turn's remaining time is not.
- */
-export class ProviderFirstTokenDeadlineError extends Error {
-  readonly deadlineMs: number;
-
-  constructor(deadlineMs: number) {
-    super(
-      `The model sent no first token within its ` +
-        `${Math.round(deadlineMs / 1000)}s first-token timeout.`,
-    );
-    this.name = 'ProviderFirstTokenDeadlineError';
-    this.deadlineMs = deadlineMs;
-  }
-}
-
-/**
- * Bound one provider stream to `deadlineMs` of wall clock, and abort the
- * upstream request when it expires.
- *
- * Two things happen on expiry and BOTH are load-bearing. The returned promise
- * rejects, so the loop stops waiting and reaches its teardown; and the signal
- * handed to the adapter is aborted, so the upstream HTTP request is torn down
- * instead of streaming (and billing) into a reader nobody is draining.
- *
- * `parentSignal` (the client's, when there is one) is forwarded onto the same
- * derived controller, so a client disconnect still aborts the adapter exactly
- * as it did when `options.signal` was passed straight through.
- *
- * Exported for `tool-loop.deadline.test.ts`, which drives the three paths a
- * full-loop test cannot observe from the SSE bytes: the derived signal is
- * aborted on expiry, a client cancel is forwarded onto it (including one that
- * arrived before dispatch), and the deadline timer is cleared when the stream
- * finishes in time rather than left pending for the rest of the budget.
+ * The tool loop's two bounds, both from the one shared race in
+ * `provider-deadlines.ts`: the whole-stream budget the turn has left, and the
+ * first-token bound the inline dispatch path uses. Kept as a named wrapper
+ * because the loop's own tests drive it directly and because the loop calls it
+ * with the milestone callback the inline path does not need.
  */
 export function withProviderStreamDeadline<T>(
   run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
@@ -1144,48 +1106,11 @@ export function withProviderStreamDeadline<T>(
   parentSignal?: AbortSignal,
   firstTokenMs?: number,
 ): Promise<T> {
-  const controller = new AbortController();
-  const forwardParentAbort = (): void => controller.abort(parentSignal?.reason);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let firstTokenTimer: ReturnType<typeof setTimeout> | undefined;
-  const clearFirstTokenTimer = (): void => {
-    if (firstTokenTimer !== undefined) clearTimeout(firstTokenTimer);
-    firstTokenTimer = undefined;
-  };
-  const cleanup = (): void => {
-    if (timer !== undefined) clearTimeout(timer);
-    clearFirstTokenTimer();
-    parentSignal?.removeEventListener('abort', forwardParentAbort);
-  };
-  if (parentSignal?.aborted) forwardParentAbort();
-  else parentSignal?.addEventListener('abort', forwardParentAbort, { once: true });
-
-  return new Promise<T>((resolve, reject) => {
-    timer = setTimeout(() => {
-      const expired = new ProviderStreamDeadlineError(deadlineMs);
-      controller.abort(expired);
-      cleanup();
-      reject(expired);
-    }, deadlineMs);
-    if (firstTokenMs !== undefined && firstTokenMs < deadlineMs) {
-      firstTokenTimer = setTimeout(() => {
-        const expired = new ProviderFirstTokenDeadlineError(firstTokenMs);
-        controller.abort(expired);
-        cleanup();
-        reject(expired);
-      }, firstTokenMs);
-    }
-    run(controller.signal, clearFirstTokenTimer).then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (err: unknown) => {
-        cleanup();
-        reject(err);
-      },
-    );
-  });
+  return withProviderDeadlines(
+    run,
+    { streamMs: deadlineMs, ...(firstTokenMs !== undefined ? { firstTokenMs } : {}) },
+    parentSignal,
+  );
 }
 
 export interface ServerToolStartSignal {
@@ -2394,7 +2319,7 @@ export async function* runToolLoop(
         return result;
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
-        if (err instanceof ProviderStreamDeadlineError) throw err;
+        if (err instanceof SharedProviderStreamDeadlineError) throw err;
         if (liveLinesReachedClient) throw err;
         const classified = classifyError(err);
         recordProviderStepFailure({
@@ -3682,7 +3607,7 @@ export async function* runToolLoop(
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
         const classified: ClassifiedError =
-          err instanceof ProviderStreamDeadlineError
+          err instanceof SharedProviderStreamDeadlineError
             ? {
                 category: 'api_timeout',
                 code: 'api_timeout',
@@ -3704,7 +3629,7 @@ export async function* runToolLoop(
             step,
             error: msg,
           },
-          err instanceof ProviderStreamDeadlineError
+          err instanceof SharedProviderStreamDeadlineError
             ? '[tool-loop] provider stream exceeded the remaining invocation budget'
             : '[tool-loop] provider call failed',
         );
