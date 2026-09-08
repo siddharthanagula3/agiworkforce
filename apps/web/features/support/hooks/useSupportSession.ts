@@ -185,8 +185,12 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     setHandoffPending(false);
   }, []);
 
-  const sessionId = handoff && handoff.kind === 'waiting' ? handoff.sessionId : null;
-  const pollIntervalMs = handoff && handoff.kind === 'waiting' ? handoff.pollIntervalMs : 0;
+  // A live session keeps polling once it connects, not only while it waits: the
+  // agent closing the conversation, or the session timing out, is a transition
+  // the visitor has to see, and stopping at `connected` froze the card there.
+  const live = handoff && (handoff.kind === 'waiting' || handoff.kind === 'connected');
+  const sessionId = live ? handoff.sessionId : null;
+  const pollIntervalMs = live ? handoff.pollIntervalMs : 0;
   const waitExpiresAt = handoff && handoff.kind === 'waiting' ? handoff.waitExpiresAt : null;
 
   useEffect(() => {
@@ -194,9 +198,11 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     const timer = window.setInterval(() => {
       void fetchHandoffStatus(sessionId).then((next) => {
         if (!mounted.current || !next) return;
-        setHandoff((current) =>
-          current && current.kind === 'waiting' && current.sessionId === sessionId ? next : current,
-        );
+        setHandoff((current) => {
+          if (!current) return current;
+          if (current.kind !== 'waiting' && current.kind !== 'connected') return current;
+          return current.sessionId === sessionId ? next : current;
+        });
       });
     }, pollIntervalMs);
     return () => {

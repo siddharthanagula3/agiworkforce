@@ -8,6 +8,10 @@ import {
   type SupportAvailableAction,
   type SupportHandoffView,
   type SupportPresenceView,
+  type SupportHandoffMessageView,
+  type SupportHandoffQueueEntryView,
+  type SupportHandoffSendResult,
+  type SupportHandoffThreadPage,
   type SupportProposeResult,
   type SupportReplyView,
   type SupportSurface,
@@ -659,6 +663,175 @@ export async function fetchHandoffStatus(sessionId: string): Promise<SupportHand
   }
 
   return null;
+}
+
+export const SUPPORT_MAX_MESSAGE_LENGTH = 4000;
+
+function toMessageView(value: unknown): SupportHandoffMessageView | null {
+  if (!isRecord(value)) return null;
+  const author = value['author'];
+  const body = str(value['body']);
+  const at = str(value['at']);
+  if (author !== 'user' && author !== 'agent' && author !== 'system') return null;
+  if (!body || !at) return null;
+  return { seq: num(value['seq'], 0), author, body, at };
+}
+
+function toThreadPage(body: unknown, after: number): SupportHandoffThreadPage | null {
+  if (!isRecord(body)) return null;
+  const raw = Array.isArray(body['messages']) ? body['messages'] : [];
+  const messages = raw
+    .map(toMessageView)
+    .filter((entry): entry is SupportHandoffMessageView => entry !== null);
+  return {
+    status: str(body['status']) ?? 'unknown',
+    messages,
+    nextAfter: num(body['nextAfter'], after),
+    pollIntervalMs: Math.max(1000, num(body['pollIntervalMs'], 3000)),
+  };
+}
+
+async function readThread(url: string, after: number): Promise<SupportHandoffThreadPage | null> {
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  return toThreadPage(await readJson(response), after);
+}
+
+async function postMessage(url: string, body: string): Promise<SupportHandoffSendResult> {
+  let response: Response;
+  try {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    response = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ body }) });
+  } catch {
+    return { ok: false, message: 'That did not send. Check your connection and try again.' };
+  }
+
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const message =
+      isRecord(payload) && isRecord(payload['error'])
+        ? str((payload['error'] as Record<string, unknown>)['message'])
+        : null;
+    return {
+      ok: false,
+      message: message ?? 'That did not send. Nothing was added to the conversation.',
+    };
+  }
+
+  const message = isRecord(payload) ? toMessageView(payload['message']) : null;
+  if (!message) {
+    return { ok: false, message: 'The server accepted that but returned nothing to show.' };
+  }
+  return { ok: true, message };
+}
+
+function threadPath(sessionId: string, after: number): string {
+  return `/api/support/handoff/${encodeURIComponent(sessionId)}/messages?after=${String(after)}`;
+}
+
+function agentThreadPath(sessionId: string, after: number): string {
+  return `/api/support/handoff/agent/${encodeURIComponent(sessionId)}/messages?after=${String(after)}`;
+}
+
+export function fetchHandoffMessages(
+  sessionId: string,
+  after: number,
+): Promise<SupportHandoffThreadPage | null> {
+  return readThread(threadPath(sessionId, after), after);
+}
+
+export function sendHandoffMessage(
+  sessionId: string,
+  body: string,
+): Promise<SupportHandoffSendResult> {
+  return postMessage(`/api/support/handoff/${encodeURIComponent(sessionId)}/messages`, body);
+}
+
+export function fetchAgentHandoffMessages(
+  sessionId: string,
+  after: number,
+): Promise<SupportHandoffThreadPage | null> {
+  return readThread(agentThreadPath(sessionId, after), after);
+}
+
+export function sendAgentHandoffMessage(
+  sessionId: string,
+  body: string,
+): Promise<SupportHandoffSendResult> {
+  return postMessage(`/api/support/handoff/agent/${encodeURIComponent(sessionId)}/messages`, body);
+}
+
+function toQueueEntry(value: unknown): SupportHandoffQueueEntryView | null {
+  if (!isRecord(value)) return null;
+  const sessionId = str(value['sessionId']);
+  const referenceId = str(value['referenceId']);
+  if (!sessionId || !referenceId) return null;
+  return {
+    sessionId,
+    referenceId,
+    summary: str(value['summary']) ?? '',
+    createdAt: str(value['createdAt']) ?? '',
+    waitExpiresAt: str(value['waitExpiresAt']),
+    signedIn: value['signedIn'] === true,
+  };
+}
+
+export async function fetchAgentQueue(): Promise<SupportHandoffQueueEntryView[] | null> {
+  let response: Response;
+  try {
+    response = await fetch('/api/support/handoff/agent/queue', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body['queue'])) return null;
+  return body['queue']
+    .map(toQueueEntry)
+    .filter((entry): entry is SupportHandoffQueueEntryView => entry !== null);
+}
+
+export type SupportHandoffClaimResult =
+  | { ok: true; sessionId: string; summary: string; contactEmail: string; pollIntervalMs: number }
+  | { ok: false; message: string };
+
+export async function claimHandoffSession(sessionId: string): Promise<SupportHandoffClaimResult> {
+  let response: Response;
+  try {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    response = await fetch(`/api/support/handoff/agent/${encodeURIComponent(sessionId)}/claim`, {
+      method: 'POST',
+      headers,
+    });
+  } catch {
+    return { ok: false, message: 'Could not reach the support service.' };
+  }
+
+  const payload = await readJson(response);
+  if (!response.ok || !isRecord(payload)) {
+    const message =
+      isRecord(payload) && isRecord(payload['error'])
+        ? str((payload['error'] as Record<string, unknown>)['message'])
+        : null;
+    return { ok: false, message: message ?? 'Could not take that request.' };
+  }
+
+  return {
+    ok: true,
+    sessionId: str(payload['sessionId']) ?? sessionId,
+    summary: str(payload['summary']) ?? '',
+    contactEmail: str(payload['contactEmail']) ?? '',
+    pollIntervalMs: Math.max(1000, num(payload['pollIntervalMs'], 3000)),
+  };
 }
 
 /** Re-exported so tests and components share one citation normalizer. */

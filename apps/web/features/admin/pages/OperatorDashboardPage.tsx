@@ -14,6 +14,7 @@ import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
+import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
 const TABS = [
@@ -25,6 +26,7 @@ const TABS = [
   'routes',
   'content',
   'privacy',
+  'support',
 ] as const;
 
 type Tab = (typeof TABS)[number];
@@ -410,6 +412,8 @@ export function OperatorDashboardPage() {
       {tab === 'content' ? <ContentTakedownPanel /> : null}
 
       {tab === 'privacy' ? <PrivacyRequestsPanel /> : null}
+
+      {tab === 'support' ? <SupportHandoffQueuePanel /> : null}
 
       {tab === 'users' ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
