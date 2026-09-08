@@ -108,6 +108,13 @@ export default function ProjectDetailPage() {
 
   const [tab, setTab] = useState<Tab>('chats');
 
+  /**
+   * Reached through an organisation share rather than owned. Every project
+   * write route enforces ownership and answers 404, so the controls that drive
+   * them are not rendered rather than left to fail.
+   */
+  const isSharedProject = Boolean(project?.isOrgShared);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
@@ -480,82 +487,88 @@ export default function ProjectDetailPage() {
                       zIndex: 'var(--z-popover)',
                     }}
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="project-detail-menu-settings"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setSettingsOpen(true);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        width: '100%',
-                        padding: '10px 14px',
-                        background: 'transparent',
-                        border: 0,
-                        textAlign: 'left',
-                        fontSize: 13,
-                        color: 'hsl(var(--foreground))',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
-                    >
-                      <Settings2
-                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                        aria-hidden="true"
-                      />
-                      Project settings
-                    </button>
+                    {isSharedProject ? null : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="project-detail-menu-settings"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setSettingsOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: 'transparent',
+                          border: 0,
+                          textAlign: 'left',
+                          fontSize: 13,
+                          color: 'hsl(var(--foreground))',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'var(--agi-bg-3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                        }}
+                      >
+                        <Settings2
+                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                          aria-hidden="true"
+                        />
+                        Project settings
+                      </button>
+                    )}
 
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="project-detail-menu-pin"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        if (projectId) toggleStar(projectId);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        width: '100%',
-                        padding: '10px 14px',
-                        background: 'transparent',
-                        border: 0,
-                        textAlign: 'left',
-                        fontSize: 13,
-                        color: 'hsl(var(--foreground))',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
-                    >
-                      {project.starred ? (
-                        <PinOff
-                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <Pin
-                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                          aria-hidden="true"
-                        />
-                      )}
-                      {project.starred ? 'Unpin project' : 'Pin project'}
-                    </button>
+                    {isSharedProject ? null : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="project-detail-menu-pin"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          if (projectId) toggleStar(projectId);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: 'transparent',
+                          border: 0,
+                          textAlign: 'left',
+                          fontSize: 13,
+                          color: 'hsl(var(--foreground))',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'var(--agi-bg-3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                        }}
+                      >
+                        {project.starred ? (
+                          <PinOff
+                            style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Pin
+                            style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                            aria-hidden="true"
+                          />
+                        )}
+                        {project.starred ? 'Unpin project' : 'Pin project'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -576,15 +589,11 @@ export default function ProjectDetailPage() {
             }}
           >
             <div ref={appearanceRef} style={{ position: 'relative', marginBottom: 12 }}>
-              <button
-                ref={appearanceTriggerRef}
-                type="button"
-                onClick={() => setAppearancePickerOpen((open) => !open)}
-                aria-label="Change project icon and colour"
-                aria-expanded={appearancePickerOpen}
-                aria-haspopup="true"
-                data-testid="project-appearance-trigger"
-                style={{
+              {(() => {
+                const TriggerIcon = resolveProjectIcon(
+                  hasKnownProjectIcon(project.iconEmoji) ? project.iconEmoji : null,
+                );
+                const badge = {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -593,29 +602,40 @@ export default function ProjectDetailPage() {
                   borderRadius: 16,
                   border: 'none',
                   background: `${resolveProjectAccentHex(project.accentColor)}22`,
-                  cursor: 'pointer',
-                }}
-              >
-                {(() => {
-                  const TriggerIcon = resolveProjectIcon(
-                    hasKnownProjectIcon(project.iconEmoji) ? project.iconEmoji : null,
-                  );
-                  return (
-                    <span
-                      style={{
-                        display: 'flex',
-                        width: 28,
-                        height: 28,
-                        color: resolveProjectAccentHex(project.accentColor),
-                      }}
-                    >
-                      <TriggerIcon className="h-[28px] w-[28px]" aria-hidden="true" />
-                    </span>
-                  );
-                })()}
-              </button>
+                } as const;
+                const glyph = (
+                  <span
+                    style={{
+                      display: 'flex',
+                      width: 28,
+                      height: 28,
+                      color: resolveProjectAccentHex(project.accentColor),
+                    }}
+                  >
+                    <TriggerIcon className="h-[28px] w-[28px]" aria-hidden="true" />
+                  </span>
+                );
+                return isSharedProject ? (
+                  <div data-testid="project-appearance-static" style={badge}>
+                    {glyph}
+                  </div>
+                ) : (
+                  <button
+                    ref={appearanceTriggerRef}
+                    type="button"
+                    onClick={() => setAppearancePickerOpen((open) => !open)}
+                    aria-label="Change project icon and colour"
+                    aria-expanded={appearancePickerOpen}
+                    aria-haspopup="true"
+                    data-testid="project-appearance-trigger"
+                    style={{ ...badge, cursor: 'pointer' }}
+                  >
+                    {glyph}
+                  </button>
+                );
+              })()}
 
-              {appearancePickerOpen && (
+              {appearancePickerOpen && !isSharedProject && (
                 <div
                   role="dialog"
                   aria-label="Project icon and colour"
@@ -814,6 +834,22 @@ export default function ProjectDetailPage() {
             >
               {project.name}
             </h1>
+            {isSharedProject ? (
+              <span
+                data-testid="project-shared-badge"
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: 8,
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  border: '1px solid var(--agi-rule)',
+                  color: 'var(--agi-ink-2)',
+                }}
+              >
+                Shared with you
+              </span>
+            ) : null}
 
             {/* Optional project description / instructions summary */}
             {headerPresentation && (
@@ -1048,7 +1084,7 @@ export default function ProjectDetailPage() {
                 </>
               )
             ) : tab === 'sources' ? (
-              <SourcesPanel projectId={project.id} />
+              <SourcesPanel projectId={project.id} readOnly={isSharedProject} />
             ) : (
               <SchedulesPage
                 scope={{ projectId: project.id, projectName: project.name }}
