@@ -145,47 +145,45 @@ existing reload assertion in `apps/web/e2e/citation-persistence.spec.ts`.
 ### `AGI-5` Native code merges without compilation or test validation
 
 **Severity:** P2
-**Status:** Open
+**Status:** Open, and blocked on a spend decision rather than on code.
 **Area:** CI
-**Root cause:** `rust-desktop-cli` in `ci.yml` is gated on
-`needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'`,
-a deliberate, commented cost tradeoff.
-**Current behavior:** More runs pre-merge than the Codex audit stated.
-`codeql.yml` triggers on `pull_request` for `**/*.rs`, `**/Cargo.toml` and
-`**/Cargo.lock` and runs the identical clippy command for
-`agiworkforce-desktop` and `agiworkforce-cli`, which type-checks those two
-crates. Still entirely post-merge: `cargo test` at any scope, every crate in
-`crates/*` (the ported workspace, 100+ crates), macOS and Windows compilation,
-the extended-features clippy lane, and `cargo deny`.
-**Required behavior:** A bounded required native lane on pull requests covering
-the compilation and test surface a desktop product depends on, with the full
-matrix left in the release lane.
-**Evidence:** the same `github.ref == 'refs/heads/main'` condition gates four
-jobs, not one: `rust-desktop-cli` (`.github/workflows/ci.yml:549`),
-`clippy-all-features` (`:1187`), `macos-smoke` (`:1273`) and `windows-smoke`
-(`:1320`). `auto-route-conformance` (`:526`) does run on pull requests but only
-replays one fixture against the narrow `agiworkforce-model-registry` crate.
-`.github/workflows/codeql.yml:56-63` (`cargo audit`), `:83-92` (clippy).
-`windows-smoke`'s own `cargo test` step carries `continue-on-error: true` even
-on its main-only run.
-**Guardrail gap:** `scripts/check-ci-guardrails.mjs` and
-`scripts/check-ci-lane-independence.test.mjs` enforce structural invariants but
-neither encodes the `github.ref` half of the condition, so nothing in the
-repository's own CI-testing-the-CI layer would fail if that gate changed.
+**Root cause:** Four lanes carry `github.ref == 'refs/heads/main'`:
+`rust-desktop-cli` (`.github/workflows/ci.yml:550`), `clippy-all-features`
+(`:1188`), `macos-smoke` (`:1274`) and `windows-smoke` (`:1321`). So `cargo
+test` at any scope, every crate under `crates/*`, and macOS and Windows
+compilation all happen after a merge rather than at review.
+**Current behavior:** More runs pre-merge than first recorded. `codeql.yml`
+triggers on `pull_request` for `**/*.rs`, `**/Cargo.toml` and `**/Cargo.lock`
+and runs the same clippy command for the two shipped crates, which type-checks
+them. `auto-route-conformance` runs on pull requests but replays one fixture
+against a single crate. `windows-smoke`'s own `cargo test` carries
+`continue-on-error: true` even on its main-only run.
+**What was fixed in this pass:** the guardrail layer pinned the
+`native_changed` half of that condition and not the `github.ref` half, so the
+trade-off could be widened or narrowed with nothing failing either way, and a
+reader of `check-ci-guardrails.mjs` would have concluded native code was gated
+on pull requests. The four lanes are now asserted to move together, with the
+cost stated where the assertion lives.
+**Why the rest is not being changed here:** the gating is a deliberate,
+commented decision, and reversing it buys one full native build per pull request
+that touches Rust. A native build is the slowest thing in this CI by an order of
+magnitude, the change cannot be verified from a working copy (only a real pull
+request exercises it), and recurring CI spend is the founder's call. Nothing
+about it is a code defect.
 **Severity note:** production is not directly exposed. `deploy-production.yml`
-only promotes after a `CI` run concludes `success` on a push to main and checks
+only promotes after a `CI` run concludes success on a push to main and checks
 out that exact SHA, so a post-merge native failure blocks promotion. The cost is
-main-branch health and developer velocity, which is why this is P2 and not P1.
+main-branch health and developer velocity.
 **User impact:** A native regression in `crates/*` or a platform-specific break
 is caught at merge, not at review.
-**Dependencies:** None.
-**Implementation direction:** Add a PR-triggered job covering `cargo test` for
-the shipped crates plus a `crates/*` compile check, sized to stay inside the
-existing CI budget. Confirm the required status actually runs on a
-representative native PR.
+**Dependencies:** A founder decision on the CI budget.
+**Implementation direction, once decided:** a bounded PR lane, not the full
+matrix: `cargo test` for the two shipped crates plus a `crates/*` compile check,
+leaving the sidecar build, `cargo deny`, the GUI suites and the platform smokes
+in the main-only lane. Update `NATIVE_MAIN_ONLY_JOBS` in the same commit.
 **Acceptance criteria:** A deliberately broken `crates/*` change fails a
 required check on a pull request.
-**Validation:** A draft PR carrying a known break.
+**Validation:** A draft pull request carrying a known break.
 
 ### `AGI-6` Web voice cannot start speaking until the whole reply is written
 
@@ -613,8 +611,8 @@ Dependency-aware, not severity-ordered.
    reopened.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
-3. `AGI-5`, native CI. Out of order on purpose: it protects every later native
-   change, and every day it is not done is another merge without validation.
+3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
+   trade-off is now pinned so it cannot drift while that is pending.
 4. `AGI-24`, then `AGI-23`. One implementer, in that order: until failover can
    complete, nothing downstream of it is observable, and `AGI-23` is what
    exposed `AGI-24`. Do not run these concurrently with `AGI-4`, both touch the
@@ -636,7 +634,7 @@ Dependency-aware, not severity-ordered.
 | -------- | ----------------------------------------------- | ---------------------------------- | -------------------------------------- |
 | `AGI-3`  | per-class snapshot tests, e2e reload            | reload after a tool-using answer   | nothing the transcript rendered is lost |
 | `AGI-4`  | passage retrieval unit tests                    | question set over a long document  | beginning, middle and end all answered |
-| `AGI-5`  | PR with a deliberate native break               | none                               | required check fails on the PR         |
+| `AGI-5`  | the four native lanes are pinned together       | a PR with a deliberate native break | required check fails on the PR         |
 | `AGI-6`  | voice session tests                             | measured time to first audio       | audio starts before generation ends    |
 | `AGI-7`  | spec gate ledger                                | signed build                       | 12 of 12 gates, or surface removed     |
 | `AGI-9`  | per-route policy tests                          | none                               | forbidden connector cannot authorize   |
