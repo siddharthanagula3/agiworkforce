@@ -39,6 +39,10 @@ import type {
 } from '@/lib/services/managed-usage-accounting-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
+  connectorToolNames,
+  createCloudAgentToolPermissionGate,
+} from './cloud-agent-tool-permission-gate';
+import {
   cloudAgentWorkflowBillingKey,
   parseCloudAgentWorkflowInput,
   rehydrateCloudAgentWorkflowRequest,
@@ -327,6 +331,10 @@ export async function executeCloudAgentWorkflowInvocation(
   const connectorExecutor = input.mcpTools.some((tool) => tool.origin === 'connector')
     ? makeUserConnectorExecutor(input.userId, input.processed.organizationId ?? null)
     : undefined;
+  const toolPermissionGate = createCloudAgentToolPermissionGate(db, {
+    userId: input.userId,
+    connectorToolNames: connectorToolNames(input.mcpTools),
+  });
   let nextInput: CloudAgentWorkflowInput | null = null;
   let approvalCheckpointSaved = false;
   let inputCheckpointSaved = false;
@@ -369,8 +377,10 @@ export async function executeCloudAgentWorkflowInvocation(
         },
         usage: (result) => ({ ...result.usage }),
       }),
-    toolExecutor: ({ operationKey, retrySafety, toolCall, execute }) =>
-      executeCloudAgentOperation<ToolLoopToolResult>(db, {
+    toolExecutor: async ({ operationKey, retrySafety, toolCall, execute }) => {
+      const refused = await toolPermissionGate.refusalFor(toolCall.qualifiedName);
+      if (refused) return refused;
+      return executeCloudAgentOperation<ToolLoopToolResult>(db, {
         userId: input.userId,
         runId: input.runId,
         billingIdempotencyKey: billingLedgerKey,
@@ -380,7 +390,8 @@ export async function executeCloudAgentWorkflowInvocation(
         payload: toolCall,
         resultSchema: ToolResultSchema,
         execute,
-      }),
+      });
+    },
     onInvocationCheckpoint: async (checkpoint) => {
       nextInput = workflowContinuation(input, checkpoint);
     },
