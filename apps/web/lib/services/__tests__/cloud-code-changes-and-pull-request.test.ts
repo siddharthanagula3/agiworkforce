@@ -70,6 +70,7 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     state: 'ready',
     workspace_path: '/home/user/project',
     working_branch: 'agi/fix-the-flaky-test-11111111',
+    base_branch: 'main',
     pull_request_url: null,
     pull_request_number: null,
     archived_at: null,
@@ -103,14 +104,14 @@ function stubDb(row: Record<string, unknown>, calls: QueryCall[] = []) {
         return [{ final_message: 'Renamed the fixture and pinned the clock.', goal: 'fix it' }];
       }
       if (/^\s*update cloud_code_sessions/.test(sql)) {
+        // Every update answers with the fixture row, so a claim and a release
+        // return the same session the test set up rather than a default one.
         const pullRequestUrl = params[1];
         const pullRequestNumber = params[2];
         return [
-          sessionRow(
-            /pull_request_url/.test(sql)
-              ? { pull_request_url: pullRequestUrl, pull_request_number: pullRequestNumber }
-              : {},
-          ),
+          /pull_request_url/.test(sql)
+            ? { ...row, pull_request_url: pullRequestUrl, pull_request_number: pullRequestNumber }
+            : row,
         ];
       }
       return [row];
@@ -168,7 +169,7 @@ describe('readCloudCodeSessionChanges', () => {
 
     const changes = await readCloudCodeSessionChanges(db as never, OWNER, SESSION_ID, PLAN);
 
-    expect(changes.base).toBe('origin/main');
+    expect(changes.base).toBe('main');
     expect(changes.workingBranch).toBe('agi/fix-the-flaky-test-11111111');
     expect(changes.files).toEqual([
       { path: 'src/app.ts', state: 'modified' },
@@ -182,6 +183,55 @@ describe('readCloudCodeSessionChanges', () => {
     expect(db.calls.some((call) => /insert into cloud_code_terminal_entries/.test(call.sql))).toBe(
       false,
     );
+  });
+
+  it('names the base as a branch a reader would say, not as a git ref', async () => {
+    const git = gitExecutor();
+    mockGetE2BExecutor.mockResolvedValue({ git, pause: vi.fn(), dispose: vi.fn() });
+
+    const changes = await readCloudCodeSessionChanges(
+      stubDb(sessionRow()) as never,
+      OWNER,
+      SESSION_ID,
+      PLAN,
+    );
+
+    expect(changes.base).toBe('main');
+    expect(changes.base).not.toContain('origin/');
+    expect(changes.base).not.toBe('HEAD');
+  });
+
+  it('falls back to the branch the request asked for when none was recorded', async () => {
+    const git = gitExecutor();
+    mockGetE2BExecutor.mockResolvedValue({ git, pause: vi.fn(), dispose: vi.fn() });
+
+    const changes = await readCloudCodeSessionChanges(
+      stubDb(sessionRow({ base_branch: null, repository_branch: 'release/2.1' })) as never,
+      OWNER,
+      SESSION_ID,
+      PLAN,
+    );
+
+    expect(changes.base).toBe('release/2.1');
+    expect(git.diff).toHaveBeenCalledWith({
+      path: '/home/user/project',
+      baseRef: 'origin/release/2.1',
+    });
+  });
+
+  it('compares against the last commit and names no base when neither is known', async () => {
+    const git = gitExecutor();
+    mockGetE2BExecutor.mockResolvedValue({ git, pause: vi.fn(), dispose: vi.fn() });
+
+    const changes = await readCloudCodeSessionChanges(
+      stubDb(sessionRow({ base_branch: null, repository_branch: null })) as never,
+      OWNER,
+      SESSION_ID,
+      PLAN,
+    );
+
+    expect(changes.base).toBeNull();
+    expect(git.diff).toHaveBeenCalledWith({ path: '/home/user/project' });
   });
 
   it('falls back to the last commit and says so when the remote base is unknown', async () => {

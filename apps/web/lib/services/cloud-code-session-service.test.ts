@@ -13,6 +13,7 @@ import {
   CLOUD_CODE_WORKING_BRANCH_PREFIX,
   CloudCodeNotFoundError,
   CloudCodeValidationError,
+  cloudCodeSessionBaseBranch,
   cloudCodeWorkingBranchName,
   isCloudCodeSchemaUnavailable,
   validateCloudCodeSessionId,
@@ -313,5 +314,30 @@ describe('cloud code working branch names', () => {
       expect(branch.includes('..')).toBe(false);
       expect(branch.includes('//')).toBe(false);
     }
+  });
+});
+
+describe('the base branch a session measures its work against', () => {
+  function session(overrides: Record<string, unknown>) {
+    return { baseBranch: null, repositoryBranch: null, ...overrides } as never;
+  }
+
+  it('is the branch the clone checked out', () => {
+    expect(
+      cloudCodeSessionBaseBranch(session({ baseBranch: 'main', repositoryBranch: 'release/2.1' })),
+    ).toBe('main');
+  });
+
+  it('falls back to the ref the request asked for, for a session that predates recording it', () => {
+    expect(cloudCodeSessionBaseBranch(session({ repositoryBranch: 'release/2.1' }))).toBe(
+      'release/2.1',
+    );
+  });
+
+  it('is null when neither is known, rather than naming a git internal', () => {
+    const resolved = cloudCodeSessionBaseBranch(session({}));
+    expect(resolved).toBeNull();
+    expect(resolved).not.toBe('HEAD');
+    expect(resolved).not.toBe('origin/HEAD');
   });
 });

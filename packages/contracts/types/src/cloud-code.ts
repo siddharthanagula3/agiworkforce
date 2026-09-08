@@ -61,6 +61,12 @@ export interface CloudCodeSession {
   workspacePath: string;
   /** The branch this session works on and pushes. Null with no repository. */
   workingBranch: string | null;
+  /**
+   * The branch the clone checked out, which the work is measured against.
+   * Resolved at provisioning rather than guessed, and null when there is no
+   * repository or the session predates it being recorded.
+   */
+  baseBranch: string | null;
   /** The pull request opened from the working branch, once one exists. */
   pullRequestUrl: string | null;
   pullRequestNumber: number | null;
@@ -153,11 +159,11 @@ export interface CloudCodeChangedFile {
 }
 
 /**
- * What the Changes panel draws. `base` is the ref the diff was taken against,
- * null when the sandbox could only compare against its own last commit, which
- * the panel says rather than implying a comparison it did not make. Untracked
- * files appear in `files` and not in `diff`, because reading the changes must
- * not stage anything.
+ * What the Changes panel draws. `base` is the branch name the diff was taken
+ * against, as a reader would say it, and null when the sandbox could only
+ * compare against its own last commit, which the panel says rather than
+ * implying a comparison it did not make. Untracked files appear in `files` and
+ * not in `diff`, because reading the changes must not stage anything.
  */
 export interface CloudCodeSessionChanges {
   session: CloudCodeSession;

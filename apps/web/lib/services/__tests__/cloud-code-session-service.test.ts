@@ -64,6 +64,7 @@ import {
   claimCloudCodeSessionForRun,
   commitAndPushCloudCodeSession,
   createCloudCodeSession,
+  getCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
   runCloudCodeCommand,
   validateCreateCloudCodeSession,
@@ -86,6 +87,7 @@ type StoredRow = {
   state: unknown;
   workspace_path: unknown;
   working_branch: string | null;
+  base_branch: string | null;
   pull_request_url: string | null;
   pull_request_number: number | null;
   archived_at: string | null;
@@ -602,6 +604,7 @@ function createFakeDb(): FakeDb {
         workspace_path: params[6],
         extra_hosts: params[9],
         working_branch: null,
+        base_branch: null,
         pull_request_url: null,
         pull_request_number: null,
         archived_at: null,
@@ -1111,6 +1114,13 @@ function gitExecutor() {
         stderr: '',
         exitCode: 0,
       })),
+      currentBranch: vi.fn(async (_input: { path: string }) => ({
+        ok: true,
+        output: 'main',
+        stdout: 'main\n',
+        stderr: '',
+        exitCode: 0,
+      })),
       createBranch: vi.fn(async (_input: { path: string; branch: string }) => ({
         ok: true,
         output: '',
@@ -1227,6 +1237,37 @@ describe('commitAndPushCloudCodeSession', () => {
     );
     expect(result.session.state).toBe('ready');
     expect(result.push.stdout).toBe('pushed');
+  });
+
+  it('records the branch the clone checked out as the base the work is measured against', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+    const sessionId = await readySession(db, executor);
+
+    const session = await getCloudCodeSession(db, OWNER, sessionId);
+    expect(session.baseBranch).toBe('main');
+    // Asked before the working branch is created, or HEAD would already be it.
+    const askedAt = executor.git.currentBranch.mock.invocationCallOrder[0] ?? 0;
+    const branchedAt = executor.git.createBranch.mock.invocationCallOrder[0] ?? 0;
+    expect(askedAt).toBeLessThan(branchedAt);
+  });
+
+  it('falls back to the requested ref when git cannot name the checked-out branch', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    executor.git.currentBranch = vi.fn(async () => ({
+      ok: true,
+      output: 'HEAD',
+      stdout: 'HEAD\n',
+      stderr: '',
+      exitCode: 0,
+    })) as never;
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+    const sessionId = await readySession(db, executor);
+
+    const session = await getCloudCodeSession(db, OWNER, sessionId);
+    expect(session.baseBranch).toBeNull();
   });
 
   it('works on a branch of its own and pushes that branch, never the base', async () => {
