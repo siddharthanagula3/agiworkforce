@@ -3783,7 +3783,7 @@
     "item": "usage-dashboard",
     "surface": "admin-and-billing",
     "status": "built",
-    "evidence": "apps/web/features/settings/sections/UsageSection.tsx:108-217 renders live usage bars (percent used, reset countdown) sourced from apps/web/lib/hooks/useManagedUsageSummary via GET /api/usage; apps/web/app/api/billing/analytics/route.ts:17-38 and apps/web/app/api/usage/history/route.ts:17-38 both back real percentage-usage summaries through lib/services/managed-usage-summary-service.ts. Also surfaced in the billing dashboard's Usage.tsx (apps/web/features/billing/components/Billing/Usage.tsx:69-90) reachable from BillingDashboard.tsx."
+    "evidence": "apps/web/features/settings/sections/UsageSection.tsx:110 renders live usage bars (percent used, reset countdown) from apps/web/lib/hooks/useManagedUsageSummary.ts:32, which fetches GET /api/usage; apps/web/app/api/usage/route.ts:27 answers it through lib/services/managed-usage-summary-service.ts. The billing surface reads the same route at apps/web/features/billing/hooks/use-billing-queries.ts:111 and :214."
   },
   {
     "item": "cost-breakdown",
