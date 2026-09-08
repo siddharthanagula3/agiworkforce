@@ -9,6 +9,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { DirectorySyncConnectionRow, DirectorySyncEventRow } from '@/lib/server/neon-types';
 import { readJsonBody } from '@/lib/read-json-body';
+import { getIdentityProvider } from '@/lib/server/identity';
+import { revokeDirectorySyncGrants } from '@/lib/services/directory-sync-revocation';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from './directory-sync-access';
 
 export const runtime = 'nodejs';
@@ -252,6 +254,26 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
+    let revocation;
+    try {
+      revocation = await revokeDirectorySyncGrants(db, getIdentityProvider(), {
+        organizationId: access.organizationId,
+        connectionId,
+      });
+    } catch (revocationError) {
+      logger.error(
+        { error: revocationError, connectionId, organizationId: access.organizationId },
+        'Failed to revoke directory sync grants',
+      );
+      return NextResponse.json(
+        {
+          error:
+            'The access this connection granted could not be revoked, so the connection was kept. Retry, or remove the affected members from Team settings first.',
+        },
+        { status: 500 },
+      );
+    }
+
     try {
       await db.execute(
         'delete from directory_sync_connections where id = $1 and organization_id = $2',
@@ -277,6 +299,10 @@ export async function DELETE(request: NextRequest) {
         provider: existing.provider,
         directoryId: existing.directory_id,
         organizationId: access.organizationId,
+        membershipsRevoked: revocation.membershipsRevoked,
+        membersDeprovisioned: revocation.membersDeprovisioned,
+        ownersRetained: revocation.ownersRetained,
+        revocationWarnings: revocation.errors,
       },
     });
 
@@ -285,23 +311,38 @@ export async function DELETE(request: NextRequest) {
       eventType: 'directory_sync_connection_deleted',
       organizationId: access.organizationId,
       request,
+      outcome: revocation.errors.length > 0 ? 'failure' : 'success',
       severity: 'critical',
       detail: {
         resourceType: 'directory_sync_connection',
         resourceId: connectionId,
         resourceName: existing.directory_id,
         source: existing.provider,
+        count: revocation.membershipsRevoked,
+        ...(revocation.errors.length > 0 ? { reason: revocation.errors.join('; ') } : {}),
       },
     });
 
     logger.info(
-      { userId: access.userId, organizationId: access.organizationId, connectionId },
+      {
+        userId: access.userId,
+        organizationId: access.organizationId,
+        connectionId,
+        membershipsRevoked: revocation.membershipsRevoked,
+        membersDeprovisioned: revocation.membersDeprovisioned,
+      },
       'Directory sync connection deleted',
     );
 
     return NextResponse.json({
       success: true,
       message: `Directory sync connection ${connectionId} deleted`,
+      revoked: {
+        memberships: revocation.membershipsRevoked,
+        credentials: revocation.membersDeprovisioned,
+      },
+      ownersRetained: revocation.ownersRetained,
+      warnings: revocation.errors,
     });
   } catch (error) {
     logger.error({ error }, 'Error in directory sync DELETE');

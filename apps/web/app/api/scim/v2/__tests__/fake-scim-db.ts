@@ -140,6 +140,59 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       });
     }
 
+    // Connection-scoped revocation. Both statements name `public.` and are
+    // matched ahead of the single-row membership branches, which share a prefix.
+    if (q.startsWith('delete from public.organization_members')) {
+      const [organizationId, connectionId] = p as [string, string];
+      const linkedHere = (userId: string) =>
+        state.scim_provisioned_users.some(
+          (row) =>
+            row['connection_id'] === connectionId &&
+            row['organization_id'] === organizationId &&
+            row['linked_user_id'] === userId,
+        );
+      const linkedToAnotherLiveConnection = (userId: string) =>
+        state.scim_provisioned_users.some((row) => {
+          if (row['organization_id'] !== organizationId) return false;
+          if (row['linked_user_id'] !== userId) return false;
+          if (row['connection_id'] === connectionId) return false;
+          if (row['active'] === false) return false;
+          const connection = state.directory_sync_connections.find(
+            (entry) => entry['id'] === row['connection_id'],
+          );
+          return Boolean(connection) && connection!['is_active'] !== false;
+        });
+
+      const removed = state.organization_members.filter(
+        (row) =>
+          row['organization_id'] === organizationId &&
+          row['provisioning_source'] === 'scim' &&
+          row['role'] !== 'owner' &&
+          linkedHere(String(row['user_id'])) &&
+          !linkedToAnotherLiveConnection(String(row['user_id'])),
+      );
+      state.organization_members = state.organization_members.filter(
+        (row) => !removed.includes(row),
+      );
+      return removed.map((row) => ({ user_id: row['user_id'] }));
+    }
+
+    if (q.startsWith('select count(*)::text as count from public.organization_members')) {
+      const [organizationId, connectionId] = p as [string, string];
+      const count = state.organization_members.filter(
+        (row) =>
+          row['organization_id'] === organizationId &&
+          row['role'] === 'owner' &&
+          state.scim_provisioned_users.some(
+            (user) =>
+              user['connection_id'] === connectionId &&
+              user['organization_id'] === organizationId &&
+              user['linked_user_id'] === row['user_id'],
+          ),
+      ).length;
+      return [{ count: String(count) }];
+    }
+
     if (q.startsWith('delete from organization_members') && q.includes('user_id = any(')) {
       const ids = (p[1] as string[]) ?? [];
       const before = state.organization_members.length;
