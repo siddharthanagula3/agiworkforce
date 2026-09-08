@@ -19,6 +19,7 @@ import {
   readPluginArchive,
   unsafeArchivePath,
 } from '../archive';
+import { parseSkillFile } from '../skill-files';
 
 const SYMLINK_MODE = 0o120777;
 const UPLOAD_NAME = 'my-plugin';
@@ -237,10 +238,23 @@ describe('readPluginArchive acceptance', () => {
       {
         name: 'summarise',
         description: 'Summarise things',
-        body: 'Do it.',
         path: 'skills/summarise/SKILL.md',
+        content: skillFile('summarise', 'Summarise things', 'Do it.'),
       },
     ]);
+  });
+
+  it('keeps the whole SKILL.md, so the stored copy still carries its frontmatter', async () => {
+    const source = skillFile('summarise', 'Summarise things', 'Do it.');
+    const archive = await zipOf({ 'skills/summarise/SKILL.md': source });
+    const result = await readPluginArchive(archive, UPLOAD_NAME);
+    const stored = result.plugins[0]!.skills[0]!;
+    expect(stored.content).toBe(source);
+    expect(parseSkillFile(stored.path, stored.content)).toMatchObject({
+      name: 'summarise',
+      description: 'Summarise things',
+      body: 'Do it.',
+    });
   });
 
   it('strips the wrapper directory a folder zip adds', async () => {

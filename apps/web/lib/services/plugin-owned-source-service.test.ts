@@ -19,6 +19,7 @@ const USER_ID = 'user-1';
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const ENTRY_ID = '22222222-2222-4222-8222-222222222222';
 const INSTALLATION_ID = '33333333-3333-4333-8333-333333333333';
+const SUMMARISE_FILE = '---\nname: summarise\ndescription: Summarise things\n---\n\nDo it.\n';
 
 interface RecordedStatement {
   sql: string;
@@ -34,9 +35,8 @@ function plugin(overrides: Partial<OwnedPluginInput> = {}): OwnedPluginInput {
     skills: [
       {
         name: 'summarise',
-        description: 'Summarise things',
-        body: 'Do it.',
         path: 'skills/summarise/SKILL.md',
+        content: SUMMARISE_FILE,
       },
     ],
     ...overrides,
@@ -99,9 +99,8 @@ describe('ownedPluginContentHash', () => {
           skills: [
             {
               name: 'summarise',
-              description: 'Summarise things',
-              body: 'Do it differently.',
               path: 'skills/summarise/SKILL.md',
+              content: `${SUMMARISE_FILE}Do it differently.\n`,
             },
           ],
         }),
@@ -111,8 +110,8 @@ describe('ownedPluginContentHash', () => {
 
   it('does not depend on the order the skills arrive in', () => {
     const skills = [
-      { name: 'a', description: 'a', body: 'A', path: 'skills/a/SKILL.md' },
-      { name: 'b', description: 'b', body: 'B', path: 'skills/b/SKILL.md' },
+      { name: 'a', path: 'skills/a/SKILL.md', content: 'A' },
+      { name: 'b', path: 'skills/b/SKILL.md', content: 'B' },
     ];
     expect(ownedPluginContentHash(plugin({ skills }))).toBe(
       ownedPluginContentHash(plugin({ skills: [...skills].reverse() })),
@@ -144,9 +143,9 @@ describe('storeOwnedPluginSource', () => {
     const file = statementMatching(statements, 'insert into public.plugin_marketplace_entry_files');
     expect(file.params[0]).toBe(ENTRY_ID);
     expect(file.params[1]).toBe('skills/summarise/SKILL.md');
-    expect(file.params[2]).toBe('Do it.');
+    expect(file.params[2]).toBe(SUMMARISE_FILE);
     expect(file.params[3]).toMatch(/^[0-9a-f]{64}$/);
-    expect(file.params[4]).toBe(Buffer.byteLength('Do it.', 'utf8'));
+    expect(file.params[4]).toBe(Buffer.byteLength(SUMMARISE_FILE, 'utf8'));
   });
 
   it('removes the files and entries a re-upload no longer carries', async () => {
