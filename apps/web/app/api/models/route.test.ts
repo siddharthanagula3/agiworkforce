@@ -92,3 +92,28 @@ describe('GET /api/models token-context semantics', () => {
     ).toBe(true);
   });
 });
+
+describe('GET /api/models lifecycle', () => {
+  it('tells a deprecated or not-yet-live model apart from a live one', async () => {
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/models'));
+    const body = (await response.json()) as {
+      models: Array<{
+        id: string;
+        lifecycle: { status: string; deprecated: boolean; availability: string };
+      }>;
+    };
+    const catalog = new Map(listCanonicalModels().map((model) => [model.id, model]));
+
+    expect(body.models.length).toBeGreaterThan(0);
+    for (const entry of body.models) {
+      const source = catalog.get(entry.id);
+      expect(source, entry.id).toBeDefined();
+      const deprecated = source?.deprecated === true || source?.status === 'deprecated';
+      expect(entry.lifecycle.deprecated, entry.id).toBe(deprecated);
+      expect(entry.lifecycle.availability, entry.id).toBe(source?.availability ?? 'live');
+      expect(['active', 'beta', 'deprecated']).toContain(entry.lifecycle.status);
+    }
+    expect(body.models.some((entry) => entry.lifecycle.deprecated)).toBe(true);
+    expect(body.models.some((entry) => entry.lifecycle.availability !== 'live')).toBe(true);
+  });
+});
