@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   PanelLeft,
   PanelsTopLeft,
@@ -27,6 +28,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import {
   cloudCodeApi,
+  CloudCodeApiError,
   type CloudCodeAgentTurn,
   type CloudCodeApi,
   type CloudCodeChanges,
@@ -34,7 +36,11 @@ import {
 import {
   CODE_COPY,
   CODE_LIMITS,
+  CODE_MISSING_SESSION_PARAM,
+  CODE_ROUTES,
   CODE_SIZES,
+  codeHomeAfterMissingSession,
+  codeSessionPath,
   DEFAULT_CODE_FILTERS,
   DEFAULT_RUNTIME_ID,
   type CodeStatusFilter,
@@ -63,6 +69,7 @@ const DEFAULT_SESSION_TITLE_WORDS = 6;
 const GREETING_MARK_SIZE = 28;
 const GREETING_NAME_SLOT = '{name}';
 const DOCUMENT_TITLE_SEPARATOR = ' · ';
+const MISSING_SESSION_STATUSES = new Set([403, 404]);
 const RENAME_COMMIT_KEY = 'Enter';
 const RENAME_CANCEL_KEY = 'Escape';
 
@@ -106,19 +113,22 @@ function resolveAgentModel(selectedModelId: string | null): string {
 
 export interface CloudCodePageProps {
   api?: CloudCodeApi;
+  /** The session in the URL. Absent on the surface root, which is the home. */
+  sessionId?: string;
 }
 
-export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
+export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePageProps) {
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
   const [runtimes, setRuntimes] = useState<CloudCodeRuntime[]>([]);
   const [sessions, setSessions] = useState<CloudCodeSession[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
   const [approvals, setApprovals] = useState<CodeApprovalPrompt[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
   const [busy, setBusy] = useState(false);
@@ -146,8 +156,11 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
+  const routeSessionRef = useRef<string | null>(sessionId ?? null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  const router = useRouter();
+  const routerRef = useRef(router);
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -160,6 +173,30 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!new URLSearchParams(window.location.search).has(CODE_MISSING_SESSION_PARAM)) return;
+    setRouteNotice(CODE_COPY.sessionNotFound);
+    routerRef.current.replace(CODE_ROUTES.root);
+  }, []);
+
+  useEffect(() => {
+    const next = sessionId ?? null;
+    if (routeSessionRef.current === next) return;
+    routeSessionRef.current = next;
+    if (next !== null) setRouteNotice(null);
+    setSelectedId(next);
+    setTurns([]);
+    setEntries([]);
+    setChangesOpen(false);
+    setChanges(null);
+    setCommitNotice(null);
+  }, [sessionId]);
 
   const replaceSession = useCallback((next: CloudCodeSession) => {
     setSessions((current) => {
@@ -258,6 +295,15 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       })
       .catch((detailError) => {
         if (detailError instanceof DOMException && detailError.name === 'AbortError') return;
+        if (
+          detailError instanceof CloudCodeApiError &&
+          MISSING_SESSION_STATUSES.has(detailError.status)
+        ) {
+          setSelectedId(null);
+          setRouteNotice(CODE_COPY.sessionNotFound);
+          routerRef.current.replace(codeHomeAfterMissingSession());
+          return;
+        }
         setError(friendlyError(detailError));
       })
       .finally(() => setDetailLoading(false));
@@ -438,6 +484,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         setEntries(body.terminalEntries);
         setTurns([]);
         setDraft(EMPTY_CODE_DRAFT);
+        router.push(codeSessionPath(body.session.id));
         return body.session;
       } catch (createError) {
         setError(friendlyError(createError));
@@ -447,7 +494,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         setBusySince(null);
       }
     },
-    [api, busy, canCreate, draft, replaceSession],
+    [api, busy, canCreate, draft, replaceSession, router],
   );
 
   const handleSubmit = useCallback(
@@ -583,7 +630,8 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     setError(null);
     setCommitNotice(null);
     setRailDrawerOpen(false);
-  }, []);
+    router.push(CODE_ROUTES.root);
+  }, [router]);
 
   const handleRename = useCallback(async () => {
     const session = selectedSession;
@@ -663,15 +711,19 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     }
   }, [api, pullRequestBusy, replaceSession, selectedSession]);
 
-  const openSession = useCallback((sessionId: string) => {
-    setSelectedId(sessionId);
-    setTurns([]);
-    setChangesOpen(false);
-    setChanges(null);
-    setError(null);
-    setCommitNotice(null);
-    setRailDrawerOpen(false);
-  }, []);
+  const openSession = useCallback(
+    (openedId: string) => {
+      setSelectedId(openedId);
+      setTurns([]);
+      setChangesOpen(false);
+      setChanges(null);
+      setError(null);
+      setCommitNotice(null);
+      setRailDrawerOpen(false);
+      router.push(codeSessionPath(openedId));
+    },
+    [router],
+  );
 
   const railProps = {
     sessions: railSessions,
@@ -707,6 +759,22 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{unavailableNotice}</span>
+        </div>
+      )}
+      {routeNotice && (
+        <div className={styles['notice']} role="status">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>{routeNotice}</span>
+          <span className={styles['noticeActions']}>
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={() => setRouteNotice(null)}
+            >
+              <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+              {CODE_COPY.dismiss}
+            </button>
+          </span>
         </div>
       )}
       {error && (
