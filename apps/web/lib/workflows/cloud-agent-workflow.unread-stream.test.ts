@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
 const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/deadline-policy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/deadline-policy')>()),
+  DURABLE_STREAM_WRITE_DEADLINE_MS: 25,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: mocks.warn },
 }));
