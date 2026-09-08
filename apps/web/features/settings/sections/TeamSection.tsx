@@ -12,6 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   useCreateOrganization,
@@ -25,7 +26,9 @@ import {
   useTeamInvitations,
   useTeamMembers,
   useUpdateOrganizationSettings,
+  useTransferOrganizationOwnership,
   useUpdateTeamMemberRole,
+  type OrganizationOwnerRoleAfterTransfer,
   type TeamInvitation,
   type TeamMember,
 } from '../hooks/use-settings-queries';
@@ -168,6 +171,8 @@ export function TeamSection() {
   const leaveOrganization = useLeaveOrganization();
   const updateRole = useUpdateTeamMemberRole();
   const removeMember = useRemoveTeamMember();
+  const transferOwnership = useTransferOrganizationOwnership();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
@@ -180,6 +185,9 @@ export function TeamSection() {
   } | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [successorUserId, setSuccessorUserId] = useState('');
+  const [newOwnerUserId, setNewOwnerUserId] = useState('');
+  const [outgoingOwnerRole, setOutgoingOwnerRole] =
+    useState<OrganizationOwnerRoleAfterTransfer>('admin');
 
   useEffect(() => {
     if (organization) {
@@ -957,6 +965,93 @@ export function TeamSection() {
         <InlineError error={updateRole.error ?? removeMember.error} />
       </SectionCard>
 
+      {isOwner ? (
+        <SectionCard
+          title="Workspace ownership"
+          description="Hand the owner role to another member while keeping your own seat."
+        >
+          <div style={{ padding: 20 }}>
+            <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+              A workspace has exactly one owner. Transferring gives that member billing, deletion
+              and every administrative control, and moves you to the role you pick below. Only the
+              new owner can give it back.
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gap: 14,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                marginTop: 14,
+                maxWidth: 560,
+              }}
+            >
+              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+                New owner
+                <select
+                  aria-label="Member to receive ownership"
+                  data-testid="transfer-ownership-member"
+                  value={newOwnerUserId}
+                  onChange={(event) => setNewOwnerUserId(event.target.value)}
+                  style={controlStyle}
+                >
+                  <option value="">Choose a member</option>
+                  {(membersQuery.data ?? [])
+                    .filter((member) => !member.isCurrentUser)
+                    .map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.name} ({member.email})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+                Your role afterwards
+                <select
+                  aria-label="Your role after the transfer"
+                  data-testid="transfer-ownership-outgoing-role"
+                  value={outgoingOwnerRole}
+                  onChange={(event) =>
+                    setOutgoingOwnerRole(event.target.value as OrganizationOwnerRoleAfterTransfer)
+                  }
+                  style={controlStyle}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="member">Member</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </label>
+            </div>
+            <button
+              type="button"
+              data-testid="transfer-ownership-submit"
+              disabled={!newOwnerUserId || transferOwnership.isPending}
+              onClick={() => {
+                const target = (membersQuery.data ?? []).find(
+                  (member) => member.userId === newOwnerUserId,
+                );
+                if (!target || !organization) return;
+                confirm({
+                  title: 'Transfer ownership?',
+                  description: `${target.name} becomes the owner of ${organization.name}, with billing, workspace deletion and every administrative control. You become ${titleCase(outgoingOwnerRole)} and lose those controls immediately. Only ${target.name} can transfer ownership back.`,
+                  confirmLabel: 'Transfer ownership',
+                  destructive: true,
+                  onConfirm: () =>
+                    transferOwnership.mutateAsync({
+                      organizationId: organization.id,
+                      toUserId: target.userId,
+                      outgoingOwnerRole,
+                    }),
+                });
+              }}
+              style={{ ...secondaryButtonStyle, marginTop: 14 }}
+            >
+              {transferOwnership.isPending ? 'Transferring…' : 'Transfer ownership'}
+            </button>
+            <InlineError error={transferOwnership.error} />
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard
         title="Workspace membership"
         description="Leaving releases your seat and removes this workspace from your account."
@@ -1065,8 +1160,8 @@ export function TeamSection() {
                   ? `${pendingAction.invitation.email} will no longer be able to join with this link. Its reserved seat becomes available immediately.`
                   : pendingAction?.kind === 'leave-workspace'
                     ? isOwner
-                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available.'
-                      : 'You will immediately lose access to this workspace and your seat becomes available. This cannot be undone by you.'
+                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available. Every session, device token and API key of yours is revoked, and any connector you shared with this workspace stops working for its members.'
+                      : 'You will immediately lose access to this workspace and your seat becomes available. Every session, device token and API key of yours is revoked, so you sign in again, and any connector you shared with this workspace stops working for its members. This cannot be undone by you.'
                     : pendingAction?.kind === 'role'
                       ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
                       : ''}
@@ -1088,6 +1183,7 @@ export function TeamSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {confirmDialog}
     </div>
   );
 }
