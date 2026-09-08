@@ -58,6 +58,13 @@ interface ConnectStartBody {
 const CONNECTORS_CACHE_TTL_MS = 5000;
 let connectorsInFlight: Promise<ConnectorsResponse> | null = null;
 let connectorsCache: { data: ConnectorsResponse; fetchedAt: number } | null = null;
+/**
+ * Bumped by every invalidation. A request that was already in flight carries the
+ * generation it started in, so its response can no longer write a cache that has
+ * since been cleared: an account switch during a fetch would otherwise be
+ * followed, within the TTL, by the previous account's connectors.
+ */
+let connectorsGeneration = 0;
 
 /**
  * Force the next useConnectors() fetch (in any mounted component) to hit the
@@ -69,6 +76,7 @@ let connectorsCache: { data: ConnectorsResponse; fetchedAt: number } | null = nu
 export function invalidateConnectorsCache() {
   connectorsCache = null;
   connectorsInFlight = null;
+  connectorsGeneration += 1;
 }
 
 function fetchConnectorsShared(): Promise<ConnectorsResponse> {
@@ -78,17 +86,23 @@ function fetchConnectorsShared(): Promise<ConnectorsResponse> {
   if (connectorsInFlight) {
     return connectorsInFlight;
   }
+  const generation = connectorsGeneration;
   const request = fetch('/api/connectors')
     .then(async (res) => {
       if (!res.ok) {
         throw new Error(`Failed to fetch connectors: ${res.status}`);
       }
       const json = (await res.json()) as ConnectorsResponse;
-      connectorsCache = { data: json, fetchedAt: Date.now() };
+      if (generation === connectorsGeneration) {
+        connectorsCache = { data: json, fetchedAt: Date.now() };
+      }
       return json;
     })
     .finally(() => {
-      connectorsInFlight = null;
+      // Only retire this request's own registration. Clearing it blindly
+      // de-registered a newer fetch that had already replaced it, so the next
+      // caller opened a third request instead of joining the one in flight.
+      if (connectorsInFlight === request) connectorsInFlight = null;
     });
   connectorsInFlight = request;
   return request;

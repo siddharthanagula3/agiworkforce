@@ -325,6 +325,68 @@ describe('useConnectors, OAuth grants', () => {
   });
 });
 
+describe('WEB-CONNECTORS-SSR-HANG-2026-07-11 · the shared connector cache', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invalidateConnectorsCache();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // The cache is module scope and keyed by nothing, so a response that lands
+  // after the cache was cleared used to repopulate it with the account that had
+  // just been left, and the next account read those connectors for the whole TTL.
+  it('refuses to fill a cache that was cleared while the request was in flight', async () => {
+    let releaseFirst!: (value: unknown) => void;
+    const firstBody = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => firstBody })
+      .mockResolvedValue(
+        jsonResponse(200, { connectors: [{ connectorId: 'second-account-connector' }] }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = renderHook(() => useConnectors());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    // The account changes; the earlier request has not answered yet.
+    act(() => {
+      invalidateConnectorsCache();
+    });
+    await act(async () => {
+      releaseFirst({ connectors: [{ connectorId: 'first-account-connector' }] });
+      await Promise.resolve();
+    });
+    first.unmount();
+
+    const second = renderHook(() => useConnectors());
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+
+    expect(second.result.current.connectedIds.has('first-account-connector')).toBe(false);
+    expect(second.result.current.connectedIds.has('second-account-connector')).toBe(true);
+  });
+
+  it('serves one request to concurrent consumers and still answers a later one', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { connectors: [{ connectorId: 'shared' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const a = renderHook(() => useConnectors());
+    const b = renderHook(() => useConnectors());
+    await waitFor(() => expect(a.result.current.loading).toBe(false));
+    await waitFor(() => expect(b.result.current.loading).toBe(false));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(b.result.current.connectedIds.has('shared')).toBe(true);
+  });
+});
+
 describe('connector OAuth start-path helpers', () => {
   afterEach(() => {
     if (originalLocation) Object.defineProperty(window, 'location', originalLocation);
