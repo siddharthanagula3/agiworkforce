@@ -32,7 +32,9 @@ export default defineConfig({
   forbidOnly: !!process.env['CI'],
   retries: process.env['RUN_LIVE_MEDIA_E2E'] === '1' ? 0 : process.env['CI'] ? 2 : 0,
   workers: 1,
-  reporter: [['html', { outputFolder: 'playwright-report' }]],
+  reporter: process.env['CI']
+    ? [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]]
+    : [['html', { outputFolder: 'playwright-report' }]],
   use: {
     baseURL: process.env['PLAYWRIGHT_BASE_URL'] ?? 'http://localhost:3000',
     trace: 'on-first-retry',
