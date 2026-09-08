@@ -77,6 +77,24 @@ const listSchema = z.object({
   runtimes: z.array(runtimeSchema).default([]),
 });
 
+const repositorySchema = z.object({
+  installationId: z.number().int().positive(),
+  owner: z.string().min(1),
+  name: z.string().min(1),
+  fullName: z.string().min(1),
+  defaultBranch: z.string().nullable(),
+  isPrivate: z.boolean(),
+});
+
+const repositoryListSchema = z.object({
+  repositories: z.array(repositorySchema),
+  installationCount: z.number().int().nonnegative(),
+  truncated: z.boolean().default(false),
+  unreachable: z
+    .array(z.object({ installationId: z.number().int(), accountLogin: z.string() }))
+    .default([]),
+});
+
 const agentStepSchema = z.object({
   index: z.number().int().nonnegative(),
   toolName: z.string(),
@@ -151,6 +169,8 @@ export type CloudCodeAgentTurn = z.infer<typeof agentTurnSchema>;
 export type CloudCodeAgentApproval = z.infer<typeof agentApprovalsSchema>['approvals'][number];
 export type CloudCodeApprovalDecision = 'approve' | 'reject';
 export type CloudCodeCommitResult = z.infer<typeof commitResultSchema>;
+export type CloudCodeRepository = z.infer<typeof repositorySchema>;
+export type CloudCodeRepositoryList = z.infer<typeof repositoryListSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
   goal: string;
@@ -172,6 +192,7 @@ interface CloudCodeApiDependencies {
 
 export interface CloudCodeApi {
   list(signal?: AbortSignal): Promise<CloudCodeSessionListResponse>;
+  listRepositories(search?: string, signal?: AbortSignal): Promise<CloudCodeRepositoryList>;
   get(
     sessionId: string,
     signal?: AbortSignal,
@@ -274,6 +295,10 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
   return {
     list(signal) {
       return request('/api/code/sessions', { signal }, listSchema);
+    },
+    listRepositories(search, signal) {
+      const query = search ? `?search=${encodeURIComponent(search)}` : '';
+      return request(`/api/github/repositories${query}`, { signal }, repositoryListSchema);
     },
     get(sessionId, signal) {
       return request(
