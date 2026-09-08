@@ -317,6 +317,37 @@ export async function requestCloudCodeTurnCancellation(
   };
 }
 
+/**
+ * Re-sums the session from its turns rather than adding this turn's tokens to
+ * a running total. A turn can be written more than once, by a retry or by an
+ * approval resuming it, and an addition would count those twice. The aggregate
+ * is over one session's turns on an indexed column and cannot drift.
+ */
+async function recordSessionContextUsage(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<void> {
+  await db.query(
+    `update cloud_code_sessions
+        set context_input_tokens = totals.input_tokens,
+            context_output_tokens = totals.output_tokens,
+            updated_at = now()
+       from (
+         select coalesce(sum(input_tokens), 0) as input_tokens,
+                coalesce(sum(output_tokens), 0) as output_tokens
+           from cloud_code_agent_turns
+          where session_id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+       ) as totals
+      where cloud_code_sessions.id = $1
+        and cloud_code_sessions.user_id = $2
+        and cloud_code_sessions.organization_id is not distinct from $3`,
+    [sessionId, owner.userId, owner.organizationId],
+  );
+}
+
 export interface StartCloudCodeAgentTurnInput {
   db: DatabaseAdapter;
   owner: CloudCodeOwner;
@@ -332,6 +363,9 @@ export interface CloudCodeAgentTurnOutcome {
   turnId: string;
   stopReason: CloudCodeAgentResult['stopReason'];
   stepsUsed: number;
+  /** Tokens this turn reported, summed from what each step's provider call returned. */
+  inputTokens: number;
+  outputTokens: number;
   finalMessage: string;
   /** Every tool this turn ran, in order, so the transcript can show the work. */
   steps: CloudCodeAgentStep[];
@@ -648,7 +682,8 @@ async function runClaimedAgentTurn(
     await db.query(
       `update cloud_code_agent_turns
           set state = $2, steps_used = greatest(steps_used, $3), stop_reason = $4,
-              final_message = $5, error_message = $6, updated_at = now()
+              final_message = $5, error_message = $6,
+              input_tokens = $8, output_tokens = $9, updated_at = now()
         where id = $1 and user_id = $7`,
       [
         turnId,
@@ -658,8 +693,11 @@ async function runClaimedAgentTurn(
         result.finalMessage.slice(0, 100_000) || null,
         terminalErrorMessage(result),
         owner.userId,
+        result.usage.inputTokens,
+        result.usage.outputTokens,
       ],
     );
+    await recordSessionContextUsage(db, owner, sessionId);
   } catch (error) {
     terminalRowWritten = false;
     logger.error(
@@ -722,6 +760,8 @@ async function runClaimedAgentTurn(
     turnId,
     stopReason: result.stopReason,
     stepsUsed: cumulativeSteps,
+    inputTokens: result.usage.inputTokens,
+    outputTokens: result.usage.outputTokens,
     finalMessage: result.finalMessage,
     steps,
     ...(pendingApproval ? { pendingApproval } : {}),
