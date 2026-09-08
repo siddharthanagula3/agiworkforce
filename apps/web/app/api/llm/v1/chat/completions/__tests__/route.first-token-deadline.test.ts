@@ -57,6 +57,11 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => ({
 
 const upstream = vi.hoisted(() => ({ calls: 0, aborts: 0 }));
 
+const turnRecord = vi.hoisted(() => ({ recordFailedTurn: vi.fn(async () => undefined) }));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/failed-turn-record', () => ({
+  recordFailedTurn: turnRecord.recordFailedTurn,
+}));
+
 function inertAdapter(providerId: string) {
   return {
     [`create${providerId}Adapter`]: vi.fn(() => ({
@@ -302,5 +307,22 @@ describe('a free-route turn whose upstream never speaks', () => {
     expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'failed' }),
     );
+  });
+
+  /**
+   * Without this the server keeps no record of the turn at all, so a reload has
+   * only the user's trailing message and a stopwatch to go on.
+   */
+  it('records the outcome so a reload reads it instead of inferring it', async () => {
+    await POST(makeRequest());
+
+    expect(turnRecord.recordFailedTurn).toHaveBeenCalledTimes(1);
+    const [recorded, userId] = turnRecord.recordFailedTurn.mock.calls[0] as unknown as [
+      { provider: string; chatRequest: { model: string } },
+      string,
+    ];
+    expect(userId).toBe('user-1');
+    expect(recorded.provider).toBe('openrouter');
+    expect(recorded.chatRequest.model).toBe(FREE_ROUTE);
   });
 });
