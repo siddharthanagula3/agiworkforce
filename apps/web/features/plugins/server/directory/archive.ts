@@ -11,8 +11,10 @@ import {
   UPLOAD_EMPTY_MESSAGE,
   UPLOAD_EXPANDS_TOO_FAR_MESSAGE,
   UPLOAD_NOT_AN_ARCHIVE_MESSAGE,
+  UPLOAD_MANY_SKILL_FILES_MESSAGE,
   UPLOAD_NO_PLUGIN_MESSAGE,
   UPLOAD_NO_SKILLS_MESSAGE,
+  UPLOAD_NO_SKILL_FILE_MESSAGE,
   UPLOAD_TOO_MANY_MEMBERS_MESSAGE,
   uploadMemberTooLargeMessage,
   uploadNotUtf8Message,
@@ -305,6 +307,19 @@ async function marketplacePlugins(
 function lastSegmentPath(declaredSkill: string): string {
   const cleaned = declaredSkill.replace(RELATIVE_SOURCE_PREFIX, '').replace(/\/+$/, '');
   return `${CLAUDE_PLUGIN_SKILLS_DIRECTORY}${PATH_SEPARATOR}${lastSegment(cleaned)}${SKILL_FILE_SUFFIX}`;
+}
+
+export async function readSingleSkillFromArchive(
+  archive: Uint8Array,
+): Promise<{ path: string; content: string }> {
+  const members = await readMembers(archive);
+  const paths = [...members.keys()]
+    .filter((path) => path === CLAUDE_SKILL_FILE_NAME || path.endsWith(SKILL_FILE_SUFFIX))
+    .sort();
+  if (paths.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILL_FILE_MESSAGE]);
+  if (paths.length > 1) throw new PluginArchiveError([UPLOAD_MANY_SKILL_FILES_MESSAGE]);
+  const path = paths[0]!;
+  return { path, content: await readText(members.get(path)!) };
 }
 
 export async function readPluginArchive(
