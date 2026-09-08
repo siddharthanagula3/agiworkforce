@@ -1,4 +1,3 @@
-
 import {
   SYNCED_APP_SURFACES,
   type PrivacyMode,
@@ -89,6 +88,8 @@ function asMetadata(value: unknown): Record<string, unknown> | null {
   }
   return null;
 }
+
+export const DEFAULT_PROJECT_COLOR = '#3b82f6';
 
 export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowledgeFile {
   return {
