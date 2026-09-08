@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 16 unresolved issues: 0 P0, 1 P1, 12 P2, 3 P3, plus 3 items needing
+- 15 unresolved issues: 0 P0, 1 P1, 11 P2, 3 P3, plus 3 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-4`
   and `AGI-23`, are partly fixed in this pass and say which part.
 
@@ -62,6 +62,7 @@ went, and so nobody re-files them:
 | `AGI-13`  | Unimplemented native commands answered with mock success       | the guard was unreachable; rule extracted and tested |
 | `AGI-19`  | Marketing nav panels stayed open while the page scrolled       | `NavGroup.scroll.test.tsx`                        |
 | `AGI-21`  | A cancelled settings query logged at error level               | `use-settings-queries.abort.test.tsx`             |
+| `AGI-8`   | The US-only preference never reached the web resolver          | `request-processor.us-only.test.ts`               |
 
 ## 2. P0, critical
 
@@ -252,54 +253,6 @@ the ledger as the acceptance record.
 removed from shipped builds.
 **Validation:** The spec's gate ledger, exercised on a signed build.
 
-### `AGI-8` The US-only routing preference has no effect on the web path
-
-**Severity:** P2
-**Status:** Open
-**Area:** Provider routing
-**Root cause:** The policy is implemented and tested, but the persisted user
-preference is never read on the web request path. Merges two register rows that
-describe one defect.
-**Current behavior:** `usOnly` is a real provider-exclusion overlay: tiers
-`max` and `enterprise`, excluding `deepseek`, `qwen`, `moonshot`, `zhipu`,
-`minimax`. The Rust resolver applies it and TS routing tests cover it. The
-preference is persisted through `/api/me/routing-preferences`, and nothing in
-the web request processor reads `us_only`, so a `max` user who sets it is still
-routed to an excluded provider. A regression test stops an active web control
-from advertising the unenforced preference, so this is not currently a false
-promise in the UI.
-**Required behavior:** The stored preference reaches the web routing resolver,
-or the preference is removed. Do not describe this as data residency.
-`docs/decisions/2026-09-04-region-neutral-data-residency.md` is accepted and
-US-only already applies to every managed route, so the real value here is
-provider jurisdiction choice, not residency.
-**Evidence:** `packages/ai/model-registry/catalog/routing-policies.json:104-108`;
-enforcement exists in both languages, `packages/ai/routing/src/auto.ts:1030-1034`
-and `crates/agiworkforce-model-registry/src/lib.rs:790-800`. The break is exact:
-`buildWebCloudAutoRoutingRequest`
-(`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1429-1509`)
-builds every real web routing request and never sets `usOnly`. Its structurally
-identical sibling `zeroDataRetentionOnly` **is** threaded through the same
-function into `canonical-request.ts:122`, which is the pattern to copy and
-strong evidence this is an oversight rather than a decision. Also
-`packages/contracts/cloud-contracts/src/me.ts:27`;
-`apps/web/app/api/me/routing-preferences/route.ts:17-21`.
-**Residual risk:** the GET and PUT routes are live and callable by any
-authenticated client even with no UI wired to them, which the source-scanning
-guard does not cover.
-**User impact:** An eligible customer cannot actually exclude those providers on
-web.
-**Dependencies:** None. Also check `geo_overlay` in the same schema, which
-looks like the same gap.
-**Implementation direction:** Thread the persisted preference into the routing
-request built by the web request processor, matching the Rust resolver. Only
-then may a control be shown.
-**Acceptance criteria:** With the preference set, no excluded provider is
-selected on web for an eligible tier. With it unset, routing is unchanged.
-**Validation:** Extend the auto-route conformance fixtures to the web path.
-**Retires:** `WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01`,
-`WEB-US-ONLY-ROUTING-NOT-THREADED-01`.
-
 ### `AGI-9` Organization connector policy is not enforced when a connector is added
 
 **Severity:** P2
@@ -415,37 +368,46 @@ redirect expires.
 **Validation:** A research turn on each grounded provider, asserting no
 provider host appears in any citation href.
 
-### `AGI-22` The provider-jurisdiction consent gate is never called
+### `AGI-22` There is no server-side record of provider-jurisdiction consent
 
 **Severity:** P2
-**Status:** Open
+**Status:** Open, and larger than first recorded.
 **Area:** Compliance, routing
-**Root cause:** `isProviderRoutingAllowed` checks recorded consent before
-routing to a Chinese-headquartered provider, and is correct. Nothing calls it.
-Neither `apps/web` nor `packages/ai/routing` imports it, `llm-gate.ts`, or
-`@agiworkforce/compliance` anywhere on the chat request path.
+**Corrected root cause:** The 2026-08-26 scan and the first draft of this entry
+both said the gate exists and nothing calls it, and that the fix is one call in
+the routing request builder. Checked on 2026-09-08, that is wrong in a way that
+matters. `isProviderRoutingAllowed` takes a `ConsentLedger`, and the only
+implementation of one is `apps/mobile/services/complianceLedger.ts`, which reads
+device storage. There is no table, no column, no API and no web or desktop
+surface that records this consent. The server has nothing to consult, so the
+call cannot be added: what is missing is the record, not the read.
 **Current behavior:** Auto routing can place a conversation on DeepSeek,
-Moonshot, Qwen or Zhipu with no consent recorded. Mobile has a client-side
-consent surface that nothing server-side backs.
-**Required behavior:** The gate is consulted where the route is chosen, not
-where a client chooses to ask.
+Moonshot, Qwen or Zhipu with no consent recorded anywhere the server can see.
+Mobile's consent is real but local to one device and invisible to the backend
+that does the routing.
+**What now partially covers it:** the `usOnly` overlay is threaded as of this
+pass, and the providers it excludes are `deepseek`, `qwen`, `moonshot`, `zhipu`
+and `minimax`, which is the Chinese-HQ list plus one. A `max` or `enterprise`
+user who sets the preference is now genuinely excluded from all four. That is a
+user preference, not a compliance gate, and it does not apply below those tiers.
+**What the real fix needs, in order:** a durable per-user consent record with
+its disclosure version; an API to write it; a surface on web and desktop to
+collect it; then the read in `buildWebCloudAutoRoutingRequest` beside `usOnly`
+and `zeroDataRetentionOnly`. Whether existing users are grandfathered or
+blocked on their next turn is a disclosure decision, not an engineering one.
 **Evidence:** `packages/contracts/compliance/src/provider-jurisdiction.ts:40`,
-called only from `packages/contracts/compliance/src/llm-gate.ts:53,65`; zero
-call sites anywhere else. Carried in from the 2026-08-26 scan, re-verified
-against current source 2026-09-08.
-**User impact:** A consent record the product presents as obtained is not
-enforced.
-**Dependencies:** None. Sits next to `AGI-8`: both are routing preferences that
-exist and are not read on the web path, and both should be threaded through
-`buildWebCloudAutoRoutingRequest`.
-**Implementation direction:** One call in the routing request builder, beside
-`zeroDataRetentionOnly`. Do not add a second gate in the UI.
-**Acceptance criteria:** Without recorded consent, no Chinese-HQ provider is
-selected for an eligible user.
-**Validation:** Auto-route conformance fixtures on the web path.
+called only from `llm-gate.ts:53,65`; zero imports of `@agiworkforce/compliance`
+anywhere in `apps/web`; no `provider_consent` table or column in any migration.
+**User impact:** a consent the product presents on mobile is not enforced by the
+service that routes.
+**Dependencies:** Founder decision on the disclosure and on existing users,
+before any of it.
+**Acceptance criteria:** without a recorded consent, no Chinese-HQ provider is
+selected for any tier, on any surface.
+**Validation:** auto-route conformance fixtures on the web path, plus a
+migration test over the consent record.
 **Already tracked as:** `COMPLIANCE-LLM-GATE-SURFACE-COVERAGE-01` in
-`known-flaws.md`, which describes the same "gate exists, nothing calls it"
-shape without naming this scenario.
+`known-flaws.md`.
 
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
@@ -652,12 +614,11 @@ Dependency-aware, not severity-ordered.
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Out of order on purpose: it protects every later native
    change, and every day it is not done is another merge without validation.
-4. `AGI-24`, then `AGI-23`, then `AGI-8`, then `AGI-22`. One implementer, in
-   that order. `AGI-24` first because until failover can complete, nothing
-   downstream of it is observable; `AGI-23` next because it is what exposed
-   `AGI-24`; then the two preferences that exist and are not consulted, `AGI-8`
-   establishing the threading `AGI-22` reuses. Do not run these concurrently
-   with `AGI-4`, both touch the chat request processor.
+4. `AGI-24`, then `AGI-23`. One implementer, in that order: until failover can
+   complete, nothing downstream of it is observable, and `AGI-23` is what
+   exposed `AGI-24`. Do not run these concurrently with `AGI-4`, both touch the
+   chat request processor. `AGI-22` is not in this sequence: it is blocked on a
+   disclosure decision, not on the threading `AGI-8` established.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
    same provenance story as `AGI-4`.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
@@ -677,7 +638,6 @@ Dependency-aware, not severity-ordered.
 | `AGI-5`  | PR with a deliberate native break               | none                               | required check fails on the PR         |
 | `AGI-6`  | voice session tests                             | measured time to first audio       | audio starts before generation ends    |
 | `AGI-7`  | spec gate ledger                                | signed build                       | 12 of 12 gates, or surface removed     |
-| `AGI-8`  | auto-route conformance on the web path          | none                               | no excluded provider for an opted user |
 | `AGI-9`  | per-route policy tests                          | none                               | forbidden connector cannot authorize   |
 | `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
 | `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
@@ -687,7 +647,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
 | `AGI-18` | sidebar row component test                      | click from both entry points       | one label, one action                  |
 | `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
-| `AGI-22` | auto-route conformance on the web path          | none                               | no Chinese-HQ route without consent    |
+| `AGI-22` | conformance fixtures, consent record migration  | none                               | no Chinese-HQ route without consent    |
 | `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
 | `AGI-24` | failover tests over a tool-carrying request     | none                               | a tool turn reaches a working route    |
 
@@ -699,7 +659,8 @@ Every web change closes with `apps/web` typecheck run on its own.
 AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
-AGI-24 ──> AGI-23 ──> AGI-8 ──> AGI-22   routing, one implementer, ordered
+AGI-24 ──> AGI-23          routing, one implementer, ordered
+AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
 AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent

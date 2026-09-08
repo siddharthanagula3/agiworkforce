@@ -13,6 +13,10 @@ import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
+import {
+  resolveUserRoutingPreferences,
+  type UserRoutingPreferences,
+} from '@/lib/services/user-routing-preferences';
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
@@ -1467,6 +1471,17 @@ export function buildWebCloudAutoRoutingRequest(
    * workspace may not run instead of the caller filtering the plan afterwards.
    */
   organizationPolicy?: ModelAccessPolicy | null,
+  /**
+   * The user's own saved routing preferences.
+   *
+   * `usOnly` is enforced by both resolvers and covered by tests in both
+   * languages, and `/api/me/routing-preferences` has always persisted it. This
+   * function never set it, so the preference reached the database and stopped
+   * there. Threaded exactly like `zeroDataRetentionOnly` above, which is its
+   * structurally identical sibling and the strongest evidence the omission was
+   * an oversight rather than a decision.
+   */
+  userRoutingPreferences?: UserRoutingPreferences | null,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
@@ -1505,6 +1520,7 @@ export function buildWebCloudAutoRoutingRequest(
       ? { zeroDataRetentionProviders }
       : {}),
     ...(organizationPolicy ? { organizationPolicy } : {}),
+    ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
   };
 }
 
@@ -1529,6 +1545,7 @@ export function resolveWebCloudModelRoute(
   zeroDataRetentionOnly?: boolean,
   zeroDataRetentionProviders?: ReadonlySet<string>,
   organizationPolicy?: ModelAccessPolicy | null,
+  userRoutingPreferences?: UserRoutingPreferences | null,
 ) {
   return resolveAutoRoute(
     buildWebCloudAutoRoutingRequest(
@@ -1542,6 +1559,7 @@ export function resolveWebCloudModelRoute(
       zeroDataRetentionOnly,
       zeroDataRetentionProviders,
       organizationPolicy,
+      userRoutingPreferences,
     ),
   );
 }
@@ -2495,19 +2513,25 @@ export async function processRequest(
   // meant the router could pick a blocked model and every later hop had to be
   // filtered separately. One read serves the resolver, the primary gate and
   // every downgrade below.
-  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy, workspaceModelPolicy] =
-    await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
-      Promise.all([
-        resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
-        chatRequest.conversation_id
-          ? getServedRouteAffinity(chatRequest.conversation_id)
-          : Promise.resolve(null),
-        scopedDbPromise.then((scoped) =>
-          resolveZeroDataRetentionPolicy(scoped.db, userId, request),
-        ),
-        scopedDbPromise.then((scoped) => readWorkspaceModelPolicy(scoped, requestId)),
-      ]),
-    );
+  const [
+    baseRouteHealthState,
+    routeAffinity,
+    zeroDataRetentionPolicy,
+    workspaceModelPolicy,
+    userRoutingPreferences,
+  ] = await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
+    Promise.all([
+      resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
+      chatRequest.conversation_id
+        ? getServedRouteAffinity(chatRequest.conversation_id)
+        : Promise.resolve(null),
+      scopedDbPromise.then((scoped) => resolveZeroDataRetentionPolicy(scoped.db, userId, request)),
+      scopedDbPromise.then((scoped) => readWorkspaceModelPolicy(scoped, requestId)),
+      // Joins the block rather than adding a round trip of its own: it is
+      // needed at exactly the same moment as the three beside it.
+      scopedDbPromise.then((scoped) => resolveUserRoutingPreferences(scoped.db, userId)),
+    ]),
+  );
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
@@ -2528,6 +2552,7 @@ export async function processRequest(
     zeroDataRetentionOnly,
     zeroDataRetentionProviders,
     workspaceModelPolicy,
+    userRoutingPreferences,
   );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
@@ -2555,6 +2580,7 @@ export async function processRequest(
         zeroDataRetentionOnly,
         zeroDataRetentionProviders,
         workspaceModelPolicy,
+        userRoutingPreferences,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -3175,12 +3201,9 @@ export async function processRequest(
     maxTokens = Math.min(64000, thinkingConfig.budget_tokens + 1024);
   }
 
-  let estimatedCostCents = LLMCostCalculator.estimateCost(
-    provider,
-    chatRequest.model,
-    estimatedPromptTokens,
-    maxTokens,
-  );
+  let estimatedCostCents =
+    LLMCostCalculator.estimateListCost(chatRequest.model, estimatedPromptTokens, maxTokens) ??
+    LLMCostCalculator.estimateCost(provider, chatRequest.model, estimatedPromptTokens, maxTokens);
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
