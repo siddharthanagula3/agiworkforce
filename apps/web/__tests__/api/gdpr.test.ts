@@ -765,7 +765,9 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
+      expect(data.success).toBe(false);
+      expect(data.status).toBe('partial');
+      expect(data.data.export_metadata.completeness.status).toBe('partial');
     });
 
     it('should include GDPR metadata in export', async () => {

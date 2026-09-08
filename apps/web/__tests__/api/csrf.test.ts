@@ -46,7 +46,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockMemoryNeonQuery(...args),
     execute: (...args: unknown[]) => mockMemoryNeonExecute(...args),
-    transaction: vi.fn(),
+    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+      run({ query: mockMemoryNeonQuery, execute: mockMemoryNeonExecute }),
     withUser: vi.fn(),
     dispose: vi.fn(),
   })),
@@ -87,6 +88,11 @@ vi.mock('@/lib/server/rls-db', () => ({
       db: {
         query: (...args: unknown[]) => mockNeonQuery(...args),
         execute: (...args: unknown[]) => mockNeonExecute(...args),
+        transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+          run({
+            query: (...args: unknown[]) => mockNeonQuery(...args),
+            execute: (...args: unknown[]) => mockNeonExecute(...args),
+          }),
       },
       userId,
       organizationId: null,

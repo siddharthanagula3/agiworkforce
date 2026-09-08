@@ -27,7 +27,7 @@ describe('user_settings tenant isolation', () => {
   it('scopes every user_settings query by user_id', () => {
     const statements =
       route.match(
-        /(?:select|insert into|update|delete from)[\s\S]{0,240}?user_settings[\s\S]{0,240}?(?=;|`)/gi,
+        /\b(?:select|insert into|update|delete from)\b[\s\S]{0,240}?user_settings[\s\S]{0,240}?(?=;|`)/gi,
       ) ?? [];
     expect(statements.length).toBeGreaterThan(0);
     for (const s of statements) {
