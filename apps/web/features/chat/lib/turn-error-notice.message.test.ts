@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INCOMPLETE_TURN_DEFAULT_MESSAGE, incompleteTurnNoticeMessage } from '../ChatMessageList';
+import { INCOMPLETE_TURN_DEFAULT_MESSAGE, incompleteTurnNoticeMessage } from './turn-error-notice';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 
 function assistantMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {

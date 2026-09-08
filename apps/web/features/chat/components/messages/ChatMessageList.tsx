@@ -40,130 +40,20 @@ import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { TranscriptNotice } from './TranscriptNotice';
-import {
-  ArrowRight,
-  ChevronDown,
-  CircleAlert,
-  RefreshCw,
-  ShieldAlert,
-  Square,
-} from '@agiworkforce/icons';
+import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
 import {
   isMessageContinuable,
   hasStreamError,
-  hasVisibleContent,
   getStreamErrorMessage,
 } from '../../lib/continue-generation';
-
-/**
- * A safety refusal: the provider's safety layer stopped the response.
- * Reaches this surface as `metadata.finishReason` 'refusal' (the canonical
- * StreamChunkStop member, emitted on the legacy web wire as the literal
- * reason) or 'content_filter' (the OpenAI wire vocabulary on the
- * passthrough path). Distinct from streamError (transport/provider failure)
- * and from continuable truncation, it gets its own honest notice, never a
- * generic error and never a silent stop.
- */
-function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
-  const reason = (message?.metadata as { finishReason?: unknown } | undefined)?.finishReason;
-  return reason === 'refusal' || reason === 'content_filter';
-}
-
-/**
- * A user-initiated Stop, not a model or transport failure. Distinct from
- * isIncompleteTurn/hasStreamError so it never borrows their failure wording
- * or styling, see abandonTurn/handleStreamError in useChatStream.ts, which
- * stamp `finishReason: 'stopped'` on abort.
- */
-function isStoppedTurn(message: ChatMessage | undefined | null): boolean {
-  if (!message || message.role !== 'assistant' || message.isStreaming) return false;
-  const reason = (message.metadata as { finishReason?: unknown } | undefined)?.finishReason;
-  return reason === 'stopped';
-}
-
-/**
- * A turn that never produced a usable assistant reply: either the user's
- * message is trailing with no assistant row after it (a managed-cloud turn
- * dropped before any row was persisted), or the assistant row exists but is
- * marked truncated/error by the server marker or a web-composer error row.
- * Distinct from streamError (additive mid-stream failure with partial content)
- * and refusal, it gets an explicit "didn't complete" affordance with Retry.
- */
-function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
-  if (!message) return false;
-  if (message.role === 'user') return true;
-  if (message.role !== 'assistant') return false;
-  if (message.error) return true;
-  return (message.metadata as { truncated?: unknown } | undefined)?.truncated === true;
-}
-
-type IncompleteTurnCause =
-  | 'rateLimit'
-  | 'providerOutage'
-  | 'timeout'
-  | 'modelRestriction'
-  | 'emptyResponse';
-
-const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, IncompleteTurnCause>> = {
-  provider_rate_limited: 'rateLimit',
-  provider_quota_exhausted: 'rateLimit',
-  provider_overloaded: 'providerOutage',
-  provider_unreachable: 'providerOutage',
-  provider_error: 'providerOutage',
-  provider_billing_exhausted: 'providerOutage',
-  provider_credentials_rejected: 'providerOutage',
-  provider_paused_turn: 'providerOutage',
-  provider_timeout: 'timeout',
-  model_not_found: 'modelRestriction',
-  context_length_exceeded: 'modelRestriction',
-  attachment_too_large: 'modelRestriction',
-  tool_call_invalid: 'modelRestriction',
-};
-
-const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>> = {
-  rateLimit:
-    'This model is receiving too many requests right now. Wait a moment and retry, or choose Auto to use another available model.',
-  providerOutage:
-    'The model provider is temporarily unreachable. Retry, or choose Auto to use another available model.',
-  timeout:
-    'The model took too long to respond. Retry, or pick a faster model from the model picker.',
-  modelRestriction:
-    'The selected model could not complete this request. Retry, or choose a different model.',
-  emptyResponse: 'The model returned no response for this turn. Retry, or rephrase your message.',
-};
-
-export const INCOMPLETE_TURN_DEFAULT_MESSAGE =
-  "This turn didn't complete. No response was received.";
-
-export function incompleteTurnNoticeMessage(message: ChatMessage | undefined | null): string {
-  if (message?.role === 'user') return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
-
-  const errorCode = (message?.metadata as { errorCode?: unknown } | undefined)?.errorCode;
-  const cause =
-    typeof errorCode === 'string' ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[errorCode] : undefined;
-  if (cause) return INCOMPLETE_TURN_MESSAGE_BY_CAUSE[cause];
-
-  const truncated = (message?.metadata as { truncated?: unknown } | undefined)?.truncated === true;
-  if (truncated && !hasVisibleContent(message?.content)) {
-    return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
-  }
-
-  return INCOMPLETE_TURN_DEFAULT_MESSAGE;
-}
-
-export const INCOMPLETE_TURN_GRACE_MS = 45_000;
-
-export function isWithinIncompleteTurnGracePeriod(
-  message: ChatMessage | undefined | null,
-  nowMs: number,
-): boolean {
-  if (!message || message.role !== 'user' || !message.createdAt) return false;
-  const sentAtMs = new Date(message.createdAt).getTime();
-  if (Number.isNaN(sentAtMs)) return false;
-  return nowMs - sentAtMs < INCOMPLETE_TURN_GRACE_MS;
-}
+import {
+  INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE,
+  isRefusalFinish,
+  isStoppedTurn,
+  type IncompleteTurnCause,
+} from '../../lib/turn-error-notice';
 
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
@@ -287,11 +177,12 @@ export interface ChatMessageListProps {
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
   /**
-   * The reason the turn failed, owned by the send path rather than derived from
-   * the transcript. One failure gets one notice, and this is the surface that
-   * carries it: a page-level banner beside it said the same thing twice.
+   * The turn-error notice is resolved and rendered in the composer column, so
+   * the transcript is told that it is on screen rather than deciding it again.
+   * Follow-up suggestions read it: a turn that already carries Retry must not
+   * also be offered questions picked from the words of its own error sentence.
    */
-  turnError?: string | null;
+  turnErrorActive?: boolean;
 }
 
 export interface MessageBranchGroup {
@@ -1095,10 +986,9 @@ const ChatMessageListComponent = ({
   enableFollowUpSuggestions = FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT,
   onRegenerateWithModel,
   regenerateModelOptions,
-  turnError = null,
+  turnErrorActive = false,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
-  const reportedTurnError = turnError?.trim() ? turnError.trim() : null;
   const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
@@ -1154,25 +1044,6 @@ const ChatMessageListComponent = ({
     }
     return null;
   }, [messages]);
-
-  const [pastIncompleteTurnGrace, setPastIncompleteTurnGrace] = useState(
-    () => !isWithinIncompleteTurnGracePeriod(lastMessage, Date.now()),
-  );
-  useEffect(() => {
-    const createdAt = lastMessage?.createdAt;
-    const withinGrace = lastMessage
-      ? isWithinIncompleteTurnGracePeriod(lastMessage, Date.now())
-      : false;
-    if (!withinGrace || !createdAt) {
-      setPastIncompleteTurnGrace(true);
-      return;
-    }
-    setPastIncompleteTurnGrace(false);
-    const sentAtMs = new Date(createdAt).getTime();
-    const remainingMs = INCOMPLETE_TURN_GRACE_MS - (Date.now() - sentAtMs);
-    const timer = setTimeout(() => setPastIncompleteTurnGrace(true), Math.max(0, remainingMs));
-    return () => clearTimeout(timer);
-  }, [lastMessage]);
 
   const lastMessageFingerprint = useMemo(
     () => (lastMessage ? `${lastMessage.id}-${lastMessage.content.length}` : ''),
@@ -1235,31 +1106,6 @@ const ChatMessageListComponent = ({
     isRefusalFinish(lastMessage),
   );
 
-  /**
-   * A turn that dropped without a usable reply (see isIncompleteTurn): the
-   * managed-cloud path could persist only a truncated marker, or nothing after
-   * the user row, and a web-composer error row lands here too. Shown once
-   * streaming has stopped and only when none of the more specific notices
-   * (Continue, stream-error, refusal) already own the last message, so the user
-   * always gets an explicit "didn't complete" state plus Retry instead of a
-   * silently missing answer.
-   *
-   * `turnError` is the send path reporting a failure it already knows about, so
-   * it skips the grace period, which only covers a turn that may still be
-   * running long.
-   */
-  const showIncompleteTurnNotice = Boolean(
-    onRegenerate &&
-    !isLoading &&
-    !lastMessage?.isStreaming &&
-    !showContinue &&
-    !showStoppedNotice &&
-    !showStreamErrorNotice &&
-    !showRefusalNotice &&
-    (reportedTurnError !== null || isIncompleteTurn(lastMessage)) &&
-    (reportedTurnError !== null || lastMessage?.role !== 'user' || pastIncompleteTurnGrace),
-  );
-
   // A turn that failed, was refused, stopped short, or is offering Continue
   // already has its specific next action on screen. Offering "Can you go deeper
   // on one of these points?" underneath "Video generation service is
@@ -1270,7 +1116,7 @@ const ChatMessageListComponent = ({
     lastMessage?.error ||
     showStreamErrorNotice ||
     showRefusalNotice ||
-    showIncompleteTurnNotice ||
+    turnErrorActive ||
     showStoppedNotice ||
     showContinue ||
     readAgentActivityStatus(lastMessage) === 'failed',
@@ -1768,22 +1614,6 @@ const ChatMessageListComponent = ({
           </div>
         )}
 
-        {showIncompleteTurnNotice && lastMessage && (
-          <div className="px-4 pt-1 md:px-12 lg:px-20">
-            <TranscriptNotice
-              tone="danger"
-              icon={CircleAlert}
-              message={reportedTurnError ?? incompleteTurnNoticeMessage(lastMessage)}
-              action={{
-                label: 'Retry',
-                ariaLabel: 'Retry this turn',
-                icon: RefreshCw,
-                onClick: () => onRegenerate?.(lastMessage.id),
-              }}
-            />
-          </div>
-        )}
-
         <AnimatePresence>
           {showTypingIndicator && (
             <motion.div
@@ -1820,8 +1650,6 @@ const ChatMessageListComponent = ({
       onRegenerate,
       showRefusalNotice,
       conversationId,
-      showIncompleteTurnNotice,
-      reportedTurnError,
       prefersReducedMotion,
       showTypingIndicator,
       showFollowUps,
@@ -1952,6 +1780,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.variantAnchorMessageId === next.variantAnchorMessageId &&
     prev.isConversationStreaming === next.isConversationStreaming &&
     prev.enableFollowUpSuggestions === next.enableFollowUpSuggestions &&
+    prev.turnErrorActive === next.turnErrorActive &&
     prev.onRegenerateWithModel === next.onRegenerateWithModel &&
     prev.regenerateModelOptions === next.regenerateModelOptions &&
     prev.messages.every((prevMessage, index) => {
