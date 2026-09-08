@@ -178,6 +178,7 @@ function userSource(): PluginMarketplaceSourceSummary {
   return {
     id: 'source-9',
     name: 'Team marketplace',
+    kind: 'repository',
     repositoryUrl: 'https://github.com/example/team-plugins',
     ref: null,
     status: 'active',
