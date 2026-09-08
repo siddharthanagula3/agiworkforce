@@ -4,10 +4,14 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { hashSkillContent, type Skill } from '@agiworkforce/skills';
 
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
+import {
+  listOwnedEntryFiles,
+  type OwnedEntryFile,
+} from '@/lib/services/plugin-owned-source-service';
 import { shaFromInstalledVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import type { DirectoryFetch } from './official-marketplace';
-import { fetchPluginSkillFiles } from './skill-files';
+import { fetchPluginSkillFiles, parseSkillFile } from './skill-files';
 import {
   installedSkillsCacheParams,
   readInstalledSkills,
@@ -21,11 +25,12 @@ const SKILL_FILE_PATH_PREFIX = 'plugins';
 const FRONTMATTER_PLUGIN_KEY = 'plugin';
 
 interface InstalledEntryRow {
+  entry_id: string;
   plugin_key: string;
   installed_version: string;
   enabled_skills: unknown;
   declared_skills: unknown;
-  repository_url: string;
+  repository_url: string | null;
   ref: string | null;
   content_hash: string | null;
 }
@@ -55,8 +60,8 @@ async function listInstalledEntries(
 ): Promise<InstalledEntryRow[]> {
   try {
     return await db.query<InstalledEntryRow>(
-      `select entries.plugin_key, installation.installed_version, installation.enabled_skills,
-              entries.declared_skills, entries.content_hash,
+      `select entries.id as entry_id, entries.plugin_key, installation.installed_version,
+              installation.enabled_skills, entries.declared_skills, entries.content_hash,
               sources.repository_url, sources.ref
          from public.plugin_marketplace_installations installation
          join public.plugin_marketplace_entries entries on entries.id = installation.entry_id
@@ -77,15 +82,15 @@ function sameRepository(left: string | null | undefined, right: string): boolean
   return typeof left === 'string' && left.toLowerCase() === right.toLowerCase();
 }
 
-async function ownSourcePlan(row: InstalledEntryRow): Promise<SkillFetchPlan | null> {
+async function ownSourcePlan(
+  row: InstalledEntryRow,
+  repositoryUrl: string,
+): Promise<SkillFetchPlan | null> {
   const revision = row.content_hash;
   if (!revision) return null;
 
   const record = await findPluginDirectoryRecord(row.plugin_key);
-  if (
-    record?.sourceLocation &&
-    sameRepository(record.marketplace?.repositoryUrl, row.repository_url)
-  ) {
+  if (record?.sourceLocation && sameRepository(record.marketplace?.repositoryUrl, repositoryUrl)) {
     return {
       revision,
       location: record.sourceLocation,
@@ -97,7 +102,7 @@ async function ownSourcePlan(row: InstalledEntryRow): Promise<SkillFetchPlan | n
   if (declared.length === 0) return null;
   return {
     revision,
-    location: { repositoryUrl: row.repository_url, ref: row.ref, sha: null, path: null },
+    location: { repositoryUrl, ref: row.ref, sha: null, path: null },
     skillPaths: declared.map((name) => `${CLAUDE_PLUGIN_SKILLS_DIRECTORY}/${name}/SKILL.md`),
   };
 }
@@ -124,12 +129,13 @@ interface SkillFetchPlan {
 
 async function skillsForRow(
   row: InstalledEntryRow,
+  repositoryUrl: string,
   fetchImpl: DirectoryFetch | undefined,
 ): Promise<Skill[]> {
   const sha = shaFromInstalledVersion(row.installed_version);
-  const plan = sha ? await directorySourcePlan(row, sha) : await ownSourcePlan(row);
+  const plan = sha ? await directorySourcePlan(row, sha) : await ownSourcePlan(row, repositoryUrl);
   if (!plan) return [];
-  const params = installedSkillsCacheParams(row.repository_url, row.plugin_key, plan.revision);
+  const params = installedSkillsCacheParams(repositoryUrl, row.plugin_key, plan.revision);
   let cached = await readInstalledSkills(params);
   if (!cached) {
     const fetched = await fetchPluginSkillFiles(plan.location, plan.skillPaths, fetchImpl);
@@ -142,16 +148,37 @@ async function skillsForRow(
     .map((skill) => toSkill(row.plugin_key, skill));
 }
 
+function storedSkills(row: InstalledEntryRow, files: readonly OwnedEntryFile[]): Skill[] {
+  const enabled = new Set(toStringArray(row.enabled_skills));
+  const skills: Skill[] = [];
+  for (const file of files) {
+    const parsed = parseSkillFile(file.path, file.content);
+    if (!parsed || !enabled.has(parsed.name)) continue;
+    skills.push(toSkill(row.plugin_key, parsed));
+  }
+  return skills;
+}
+
 export async function listInstalledDirectorySkills(
   db: DatabaseAdapter,
   userId: string,
   fetchImpl?: DirectoryFetch,
 ): Promise<Skill[]> {
   const rows = await listInstalledEntries(db, userId);
+  const stored = await listOwnedEntryFiles(
+    db,
+    userId,
+    rows.filter((row) => row.repository_url === null).map((row) => row.entry_id),
+  );
   const seen = new Set<string>();
   const skills: Skill[] = [];
   for (const row of rows) {
-    for (const skill of await skillsForRow(row, fetchImpl)) {
+    const repositoryUrl = row.repository_url;
+    const rowSkills =
+      repositoryUrl === null
+        ? storedSkills(row, stored.get(row.entry_id) ?? [])
+        : await skillsForRow(row, repositoryUrl, fetchImpl);
+    for (const skill of rowSkills) {
       if (seen.has(skill.name)) continue;
       seen.add(skill.name);
       skills.push(skill);

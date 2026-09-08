@@ -144,3 +144,56 @@ export const INGEST_PUBLIC_BUDGET_FRACTION = 0.4;
 export const INGEST_INSPECTION_BUDGET_FRACTION = 0.9;
 export const MS_PER_SECOND = 1_000;
 export const INGEST_LEASE_MESSAGE = 'Plugin directory ingest already running';
+
+export const PLUGIN_UPLOAD_MAX_MEMBERS = 2_000;
+export const PLUGIN_UPLOAD_MAX_TOTAL_BYTES = 20_000_000;
+export const PLUGIN_UPLOAD_MAX_PATH_CHARS = 400;
+export const PLUGIN_UPLOAD_FILE_FIELD = 'file';
+export const PLUGIN_UPLOAD_NAME_FIELD = 'name';
+export const PLUGIN_UPLOAD_ARCHIVE_MEDIA_TYPES = [
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/octet-stream',
+] as const;
+
+export const UNIX_FILE_TYPE_MASK = 0xf000;
+export const UNIX_FILE_TYPE_SYMLINK = 0xa000;
+
+export const PLUGIN_KEY_MAX_CHARS = 128;
+
+export const UPLOAD_NOT_AN_ARCHIVE_MESSAGE = 'That file is not a readable zip archive.';
+export const UPLOAD_EMPTY_MESSAGE = 'The zip archive is empty.';
+export const UPLOAD_TOO_MANY_MEMBERS_MESSAGE = `The zip archive holds more than ${PLUGIN_UPLOAD_MAX_MEMBERS} files.`;
+export const UPLOAD_EXPANDS_TOO_FAR_MESSAGE = `The zip archive expands to more than ${PLUGIN_UPLOAD_MAX_TOTAL_BYTES} bytes.`;
+export const UPLOAD_NO_SKILLS_MESSAGE =
+  'This plugin declares no SKILL.md the web app can run, so there is nothing to install. A plugin needs at least one skills/<name>/SKILL.md.';
+export const UPLOAD_NO_PLUGIN_MESSAGE =
+  'No plugin was found in the zip. It needs a .claude-plugin/plugin.json, a .claude-plugin/marketplace.json, or a skills directory.';
+
+export function uploadUnsafePathMessage(path: string): string {
+  return `"${path}" is not a safe path inside the archive.`;
+}
+
+export function uploadSymlinkMessage(path: string): string {
+  return `"${path}" is a symbolic link, which an uploaded plugin may not contain.`;
+}
+
+export function uploadMemberTooLargeMessage(path: string, limit: number): string {
+  return `"${path}" is larger than ${limit} bytes.`;
+}
+
+export function uploadNotUtf8Message(path: string): string {
+  return `"${path}" is not valid UTF-8 text.`;
+}
+
+export function uploadTooManySkillsMessage(pluginName: string, limit: number): string {
+  return `"${pluginName}" declares more than ${limit} skills.`;
+}
+
+export function uploadTooManyPluginsMessage(limit: number): string {
+  return `The archive declares more than ${limit} plugins.`;
+}
+
+export function uploadUnusableNameMessage(name: string): string {
+  return `"${name}" cannot be used as a plugin identifier. Use letters, numbers, dots, dashes or underscores.`;
+}

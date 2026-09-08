@@ -305,3 +305,93 @@ describe('one account own-source install never resolves for another account', ()
     );
   });
 });
+
+describe('an uploaded or authored plugin is served from its stored files', () => {
+  const ENTRY_ID = '44444444-4444-4444-8444-444444444444';
+  const STORED_ROW = {
+    entry_id: ENTRY_ID,
+    plugin_key: 'my-plugin',
+    installed_version: '1.0.0',
+    enabled_skills: ['summarise'],
+    declared_skills: ['summarise'],
+    repository_url: null,
+    ref: null,
+    content_hash: null,
+  };
+  const STORED_BODY = '---\nname: summarise\ndescription: Summarise things\n---\n\nDo it.\n';
+
+  function storedDatabase(
+    entryRows: unknown[],
+    fileRows: unknown[],
+  ): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
+    const db = {
+      query: vi.fn(async (sql: string) =>
+        String(sql).includes('plugin_marketplace_entry_files') ? fileRows : entryRows,
+      ),
+      execute: vi.fn(),
+    };
+    return db as unknown as DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
+  }
+
+  it('reads the skill body from the entry files table and never fetches', async () => {
+    const db = storedDatabase(
+      [STORED_ROW],
+      [{ entry_id: ENTRY_ID, path: 'skills/summarise/SKILL.md', content: STORED_BODY }],
+    );
+    const skills = await listInstalledDirectorySkills(db, 'user-1');
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({
+      name: 'summarise',
+      description: 'Summarise things',
+      body: 'Do it.',
+      source: 'extra',
+      filePath: 'plugins/my-plugin/skills/summarise/SKILL.md',
+      frontmatter: { plugin: 'my-plugin' },
+    });
+    expect(mocks.readInstalledSkills).not.toHaveBeenCalled();
+    expect(mocks.writeInstalledSkills).not.toHaveBeenCalled();
+  });
+
+  it('serves only the skills the installation has enabled', async () => {
+    const db = storedDatabase(
+      [STORED_ROW],
+      [
+        { entry_id: ENTRY_ID, path: 'skills/summarise/SKILL.md', content: STORED_BODY },
+        {
+          entry_id: ENTRY_ID,
+          path: 'skills/disabled/SKILL.md',
+          content: '---\nname: disabled\ndescription: Off\n---\n\nNo.\n',
+        },
+      ],
+    );
+    const skills = await listInstalledDirectorySkills(db, 'user-1');
+    expect(skills.map((skill) => skill.name)).toEqual(['summarise']);
+  });
+
+  it('serves nothing when the entry has no stored file left', async () => {
+    const db = storedDatabase([STORED_ROW], []);
+    await expect(listInstalledDirectorySkills(db, 'user-1')).resolves.toEqual([]);
+  });
+
+  it('scopes the stored file read to the caller', async () => {
+    const db = storedDatabase(
+      [STORED_ROW],
+      [{ entry_id: ENTRY_ID, path: 'skills/summarise/SKILL.md', content: STORED_BODY }],
+    );
+    await listInstalledDirectorySkills(db, 'user-9');
+    const fileCall = db.query.mock.calls.find((call) =>
+      String(call[0]).includes('plugin_marketplace_entry_files'),
+    );
+    expect(fileCall![1]).toEqual([[ENTRY_ID], 'user-9']);
+  });
+
+  it('resolves an uploaded skill by name through the chat lookup', async () => {
+    const db = storedDatabase(
+      [STORED_ROW],
+      [{ entry_id: ENTRY_ID, path: 'skills/summarise/SKILL.md', content: STORED_BODY }],
+    );
+    await expect(findInstalledDirectorySkill(db, 'user-1', 'summarise')).resolves.toMatchObject({
+      name: 'summarise',
+    });
+  });
+});

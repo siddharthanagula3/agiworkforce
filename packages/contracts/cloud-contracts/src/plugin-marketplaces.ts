@@ -60,6 +60,23 @@ export function isPluginMarketplaceContentHash(value: unknown): value is string 
   return typeof value === 'string' && MARKETPLACE_CONTENT_HASH_PATTERN.test(value);
 }
 
+export type PluginMarketplaceSourceKind = 'repository' | 'upload' | 'authored';
+
+export const PLUGIN_MARKETPLACE_SOURCE_KINDS: readonly PluginMarketplaceSourceKind[] = [
+  'repository',
+  'upload',
+  'authored',
+] as const;
+
+export function isPluginMarketplaceSourceKind(
+  value: unknown,
+): value is PluginMarketplaceSourceKind {
+  return (
+    typeof value === 'string' &&
+    (PLUGIN_MARKETPLACE_SOURCE_KINDS as readonly string[]).includes(value)
+  );
+}
+
 export type PluginMarketplaceSourceStatus = 'active' | 'error';
 
 export const PLUGIN_MARKETPLACE_SOURCE_STATUSES: readonly PluginMarketplaceSourceStatus[] = [
@@ -79,7 +96,8 @@ export function isPluginMarketplaceSourceStatus(
 export interface PluginMarketplaceSourceSummary {
   id: string;
   name: string;
-  repositoryUrl: string;
+  kind: PluginMarketplaceSourceKind;
+  repositoryUrl: string | null;
   ref: string | null;
   status: PluginMarketplaceSourceStatus;
   lastError: string | null;
@@ -130,6 +148,20 @@ export interface PluginMarketplaceInstallation {
 
 export interface PluginMarketplaceInstallationsResponse {
   installations: PluginMarketplaceInstallation[];
+}
+
+export interface PluginSourceInstalledPlugin {
+  entryId: string;
+  pluginKey: string;
+  name: string;
+  skills: string[];
+  installation: PluginMarketplaceInstallation;
+}
+
+export interface PluginSourceInstallResponse {
+  sourceName: string;
+  kind: PluginMarketplaceSourceKind;
+  plugins: PluginSourceInstalledPlugin[];
 }
 
 export interface PluginConnectorRequirementState {
