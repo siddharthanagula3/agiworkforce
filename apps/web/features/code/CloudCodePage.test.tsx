@@ -1768,6 +1768,43 @@ describe('CloudCodePage', () => {
     expect(notices.nextElementSibling).toBe(screen.getByTestId('code-composer-area'));
   });
 
+  it.each([
+    ['error' as const, 'Failed'],
+    ['cancelled' as const, 'Cancelled'],
+  ])('leaves no indicator behind after a turn that ended %s', async (stopReason, label) => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({
+        session,
+        terminalEntries: [],
+        turns: [
+          {
+            turnId: '44444444-4444-4444-8444-444444444444',
+            goal: 'run the tests',
+            stopReason,
+            stepsUsed: 1,
+            inputTokens: 0,
+            outputTokens: 0,
+            cancelRequestedAt: null,
+            finalMessage: '',
+            errorMessage: stopReason === 'error' ? 'The sandbox went away.' : null,
+            createdAt: '2026-07-30T12:05:00.000Z',
+            steps: [],
+          },
+        ],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    const transcript = await screen.findByTestId('code-transcript');
+    expect(within(transcript).getByText(label)).toBeInTheDocument();
+    expect(transcript.querySelectorAll('[role="presentation"]')).toHaveLength(0);
+    expect(within(transcript).queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('says there is nothing to push for a session with no repository', async () => {
     const user = userEvent.setup();
     const api = createApi({
