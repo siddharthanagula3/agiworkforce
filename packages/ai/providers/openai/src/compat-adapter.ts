@@ -126,15 +126,18 @@ export function createOpenAICompatAdapter(
         id: req.model,
       });
 
-      const params = {
-        ...translateChatRequest(req, {
-          compat: detected.defaults,
-          provider: spec.id,
-        }),
-        ...(config.extraBody ?? {}),
-      };
-
       try {
+        // Inside the try on purpose: translation can reject a request this
+        // route cannot carry, and above the try that throw escaped the
+        // adapter's own error handling.
+        const params = {
+          ...translateChatRequest(req, {
+            compat: detected.defaults,
+            provider: spec.id,
+          }),
+          ...(config.extraBody ?? {}),
+        };
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

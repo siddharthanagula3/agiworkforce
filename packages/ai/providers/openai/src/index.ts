@@ -311,31 +311,34 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         }
       }
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'openai',
-      });
-
-      const policy = resolveOpenAIResponsesPayloadPolicy(
-        {
-          provider: 'openai',
-          api: 'openai-completions',
-          ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-          id: req.model,
-        },
-        {
-          enablePromptCacheStripping: true,
-          enableServerCompaction: false,
-        },
-      );
-      const payload = params as unknown as Record<string, unknown>;
-      applyOpenAIResponsesPayloadPolicy(payload, policy);
-
-      if (config.serviceTier && payload['service_tier'] === undefined) {
-        payload['service_tier'] = config.serviceTier;
-      }
-
       try {
+        // Inside the try on purpose. Translation can reject a request the
+        // route cannot carry, and above the try that throw escaped this
+        // adapter's error handling entirely.
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'openai',
+        });
+
+        const policy = resolveOpenAIResponsesPayloadPolicy(
+          {
+            provider: 'openai',
+            api: 'openai-completions',
+            ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+            id: req.model,
+          },
+          {
+            enablePromptCacheStripping: true,
+            enableServerCompaction: false,
+          },
+        );
+        const payload = params as unknown as Record<string, unknown>;
+        applyOpenAIResponsesPayloadPolicy(payload, policy);
+
+        if (config.serviceTier && payload['service_tier'] === undefined) {
+          payload['service_tier'] = config.serviceTier;
+        }
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

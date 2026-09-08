@@ -6,7 +6,12 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
-import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  decodeTextFileBlock,
+  getModelMetadataById,
+  isTextLikeFileMediaType,
+  UnsupportedFileInputError,
+} from '@agiworkforce/types';
 
 interface AnthropicTranslatedRequest {
   model: string;
@@ -120,19 +125,24 @@ function translateContentBlock(block: ContentBlock): AnthropicContentBlock {
           },
         };
       }
-      if (block.source.mediaType.startsWith('text/')) {
+      // The same predicate every other route uses. Matching on `text/` alone
+      // refused application/json and application/csv, which decode to
+      // characters exactly like text/plain does.
+      if (isTextLikeFileMediaType(block.source.mediaType)) {
         return {
           type: 'document',
           title: block.filename,
           source: {
             type: 'text',
             media_type: 'text/plain',
-            data: Buffer.from(block.source.data, 'base64').toString('utf8'),
+            data: decodeTextFileBlock(block),
           },
         };
       }
-      throw new TypeError(
-        `Anthropic document input does not support ${block.source.mediaType}; use PDF or text`,
+      throw new UnsupportedFileInputError(
+        block.filename,
+        block.source.mediaType,
+        'Anthropic document input accepts PDF and text',
       );
     case 'tool_use':
       return { type: 'tool_use', id: block.id, name: block.name, input: block.input };

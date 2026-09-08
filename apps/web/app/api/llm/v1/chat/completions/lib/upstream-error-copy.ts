@@ -35,6 +35,7 @@ export function upstreamFailureCopy(
 const REJECTION_CATEGORIES: ReadonlySet<ClassifiedError['category']> = new Set([
   'invalid_input',
   'client_error',
+  'unsupported_input',
 ]);
 const MAX_LOGGED_PROVIDER_MESSAGE_CHARS = 2_000;
 const PRODUCTION_ENV = 'production';
@@ -180,6 +181,17 @@ export function mapClassifiedUpstreamError(
         code: 'provider_rejected_request',
         message:
           'The provider rejected this request as malformed. Try again, and remove any unusual attachments or parameters.',
+      };
+
+    // Auto rotates this class, so reaching the user means every route in the
+    // plan said the same thing. The message names the attachment rather than
+    // blaming the request, because the request was fine.
+    case 'unsupported_input':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'unsupported_attachment',
+        message: classified.message,
       };
 
     case 'auth':
