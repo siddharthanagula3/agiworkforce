@@ -15,7 +15,10 @@ import {
   CloudCodeValidationError,
   isCloudCodeSchemaUnavailable,
 } from '@/lib/services/cloud-code-session-service';
-import { startCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-service';
+import {
+  CloudCodeTurnStillRunningError,
+  runCloudCodeTurn,
+} from '@/lib/services/cloud-code-turn-transport';
 import {
   ManagedUsageRequestError,
   parseManagedUsageIdempotencyKey,
@@ -52,6 +55,9 @@ const MAX_GOAL_LENGTH = 8000;
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
 function rethrowCloudCodeError(error: unknown): never {
+  // A durable turn outlives this request. Saying so is the honest answer, and a
+  // conflict is the status whose message reaches the reader intact.
+  if (error instanceof CloudCodeTurnStillRunningError) throw createError.conflict(error.message);
   if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
   if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
   if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
@@ -126,7 +132,7 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
   try {
-    const result = await startCloudCodeAgentTurn({
+    const result = await runCloudCodeTurn({
       db,
       owner: { userId, organizationId },
       sessionId,
