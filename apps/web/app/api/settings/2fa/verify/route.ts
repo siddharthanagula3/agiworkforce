@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { verifyTOTPCode } from '@/features/settings/services/user-preferences';
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -66,6 +67,14 @@ async function handleVerify2FA(request: NextRequest) {
   );
 
   logger.info({ userId }, '2FA enabled successfully');
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'two_factor_enabled',
+    request,
+    detail: { resourceType: 'two_factor', source: 'totp_code' },
+  });
+
   return NextResponse.json({ success: true });
 }
 

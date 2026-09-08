@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   verifyTOTPCode: vi.fn(),
+  recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -27,6 +28,11 @@ vi.mock('@/features/settings/services/user-preferences', () => ({
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
   openTotpSecret: vi.fn(() => 'SECRET'),
+}));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -62,6 +68,38 @@ describe('POST /api/settings/2fa/verify', () => {
     const response = await POST(request('000000'));
 
     expect(response.status).toBe(401);
+  });
+
+  it('writes an audit row naming the account that turned 2FA on', async () => {
+    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.verifyTOTPCode.mockResolvedValueOnce(true);
+
+    await POST(request('123456'));
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'two_factor_enabled',
+        detail: expect.objectContaining({ resourceType: 'two_factor' }),
+      }),
+    );
+  });
+
+  it('writes no audit row when the code is refused', async () => {
+    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.verifyTOTPCode.mockResolvedValueOnce(false);
+
+    await POST(request('000000')).catch(() => undefined);
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('writes no audit row when 2FA was already on', async () => {
+    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: true }]);
+
+    await POST(request('123456'));
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('exempts an organization owner from the mfa gate so verification stays reachable', async () => {
