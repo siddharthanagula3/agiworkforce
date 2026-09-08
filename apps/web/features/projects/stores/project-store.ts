@@ -31,18 +31,40 @@ interface ManagedCloudProjectSessionState {
   accountId: string | null;
   status: ManagedCloudProjectSessionStatus;
   error: string | null;
+  /** A full page came back, so the server may hold more than is loaded. */
+  hasMore: boolean;
+  isLoadingMore: boolean;
 }
 
 export const useManagedCloudProjectSessionStore = create<ManagedCloudProjectSessionState>(() => ({
   accountId: null,
   status: 'idle',
   error: null,
+  hasMore: false,
+  isLoadingMore: false,
 }));
+
+export type ListManagedCloudProjectsPage = (page: {
+  limit: number;
+  offset: number;
+}) => Promise<UnifiedProject[]>;
 
 interface HydrateManagedCloudProjectStoreInput {
   accountId: string;
-  listProjects: () => Promise<UnifiedProject[]>;
+  listProjects: ListManagedCloudProjectsPage;
+  pageSize: number;
   force?: boolean;
+}
+
+interface LoadMoreManagedCloudProjectsInput {
+  accountId: string;
+  listProjects: ListManagedCloudProjectsPage;
+  pageSize: number;
+}
+
+function mergeById(loaded: UnifiedProject[], incoming: UnifiedProject[]): UnifiedProject[] {
+  const seen = new Set(loaded.map((project) => project.id));
+  return [...loaded, ...incoming.filter((project) => !seen.has(project.id))];
 }
 
 let hydrationGeneration = 0;
@@ -55,6 +77,7 @@ function clearProjectViewModel(): void {
 export function hydrateManagedCloudProjectStore({
   accountId,
   listProjects,
+  pageSize,
   force = false,
 }: HydrateManagedCloudProjectStoreInput): Promise<void> {
   const normalizedAccountId = accountId.trim();
@@ -84,7 +107,7 @@ export function hydrateManagedCloudProjectStore({
 
   const promise = (async () => {
     try {
-      const projects = await listProjects();
+      const projects = await listProjects({ limit: pageSize, offset: 0 });
       const current = useManagedCloudProjectSessionStore.getState();
       if (generation !== hydrationGeneration || current.accountId !== normalizedAccountId) return;
 
@@ -93,6 +116,8 @@ export function hydrateManagedCloudProjectStore({
         accountId: normalizedAccountId,
         status: 'ready',
         error: null,
+        hasMore: projects.length >= pageSize,
+        isLoadingMore: false,
       });
     } catch (error) {
       const current = useManagedCloudProjectSessionStore.getState();
@@ -103,6 +128,8 @@ export function hydrateManagedCloudProjectStore({
         accountId: normalizedAccountId,
         status: 'error',
         error: toUserMessageWithStatus(error, 'Failed to load projects'),
+        hasMore: false,
+        isLoadingMore: false,
       });
     } finally {
       if (
@@ -127,7 +154,51 @@ export function resetManagedCloudProjectStore(): void {
     accountId: null,
     status: 'signed-out',
     error: null,
+    hasMore: false,
+    isLoadingMore: false,
   });
+}
+
+/**
+ * W07: the next page starts after the rows still held, not after a count echoed
+ * when the last page arrived. Archiving or deleting a loaded project shifts
+ * every later row down by one, so resuming at a stale offset would step over
+ * exactly as many rows as had been removed and they could never be reached.
+ * Merging by id absorbs the overlap a locally created project would otherwise
+ * cause.
+ */
+export async function loadMoreManagedCloudProjects({
+  accountId,
+  listProjects,
+  pageSize,
+}: LoadMoreManagedCloudProjectsInput): Promise<void> {
+  const session = useManagedCloudProjectSessionStore.getState();
+  if (session.accountId !== accountId || session.status !== 'ready') return;
+  if (!session.hasMore || session.isLoadingMore) return;
+
+  const generation = hydrationGeneration;
+  useManagedCloudProjectSessionStore.setState({ isLoadingMore: true });
+
+  const loaded = useChatProjectStore.getState().projects;
+  try {
+    const page = await listProjects({ limit: pageSize, offset: loaded.length });
+    const current = useManagedCloudProjectSessionStore.getState();
+    if (generation !== hydrationGeneration || current.accountId !== accountId) return;
+
+    const merged = mergeById(useChatProjectStore.getState().projects, page);
+    useChatProjectStore.setState({ projects: merged });
+    useManagedCloudProjectSessionStore.setState({
+      hasMore: page.length >= pageSize,
+      isLoadingMore: false,
+    });
+  } catch (error) {
+    const current = useManagedCloudProjectSessionStore.getState();
+    if (generation !== hydrationGeneration || current.accountId !== accountId) return;
+    useManagedCloudProjectSessionStore.setState({
+      isLoadingMore: false,
+      error: toUserMessageWithStatus(error, 'Failed to load more projects'),
+    });
+  }
 }
 
 export function getManagedCloudProjectsForAccount(

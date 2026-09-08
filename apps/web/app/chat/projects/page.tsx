@@ -17,6 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Spinner,
 } from '@agiworkforce/ui';
 
 type SortMode = 'updated' | 'created' | 'name' | 'starred';
@@ -54,7 +55,15 @@ export default function ProjectsPage() {
   const addProject = useProjectStore((s) => s.addProject);
   const removeProject = useProjectStore((s) => s.removeProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
-  const { projects, status: projectStatus, error: projectError, retry } = useManagedCloudProjects();
+  const {
+    projects,
+    status: projectStatus,
+    error: projectError,
+    hasMore: hasMoreProjects,
+    isLoadingMore: isLoadingMoreProjects,
+    loadMore: loadMoreProjects,
+    retry,
+  } = useManagedCloudProjects();
 
   const [editProject, setEditProject] = useState<Project | null>(null);
   const searchParams = useSearchParams();
@@ -466,6 +475,33 @@ export default function ProjectsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {hasMoreProjects && projects.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                <button
+                  type="button"
+                  data-testid="projects-load-more"
+                  onClick={loadMoreProjects}
+                  disabled={isLoadingMoreProjects}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    minHeight: 24,
+                    padding: '0 4px',
+                    border: 0,
+                    background: 'transparent',
+                    color: 'var(--color-primary)',
+                    fontSize: 12,
+                    cursor: isLoadingMoreProjects ? 'default' : 'pointer',
+                    opacity: isLoadingMoreProjects ? 0.7 : 1,
+                  }}
+                >
+                  {isLoadingMoreProjects ? <Spinner size="sm" /> : null}
+                  {isLoadingMoreProjects ? 'Loading projects' : 'Show more'}
+                </button>
               </div>
             )}
           </section>
