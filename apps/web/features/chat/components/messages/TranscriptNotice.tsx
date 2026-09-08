@@ -81,7 +81,7 @@ export function TranscriptNotice({
             <button
               type="button"
               onClick={action.onClick}
-              className="flex min-h-6 min-w-6 shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+              className="flex min-h-6 min-w-6 shrink-0 items-center justify-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted pointer-coarse:min-h-11 pointer-coarse:min-w-11"
               aria-label={action.ariaLabel}
             >
               {ActionIcon && <ActionIcon className="h-3 w-3" aria-hidden="true" />}
