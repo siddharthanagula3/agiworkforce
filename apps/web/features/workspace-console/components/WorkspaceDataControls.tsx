@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Gavel, ShieldAlert } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   useCreateLegalHold,
@@ -67,16 +68,10 @@ function HoldRow({
   hold,
   onRelease,
   releasing,
-  armed,
-  onArm,
-  onDisarm,
 }: {
   hold: LegalHold;
-  onRelease: (id: string) => void;
+  onRelease: (hold: LegalHold) => void;
   releasing: boolean;
-  armed: boolean;
-  onArm: (id: string) => void;
-  onDisarm: () => void;
 }) {
   const released = hold.releasedAt !== null;
 
@@ -102,17 +97,6 @@ function HoldRow({
             {hold.reason}
           </p>
         ) : null}
-        {armed ? (
-          <p
-            id={`release-warning-${hold.id}`}
-            role="alert"
-            className="mt-2 text-xs leading-relaxed"
-            style={{ color: 'var(--settings-destructive-text)' }}
-          >
-            Releasing this hold lets the retention sweep delete the records it was preserving. This
-            cannot be undone.
-          </p>
-        ) : null}
       </div>
       {released ? (
         <span className="shrink-0 text-xs" style={{ color: 'var(--text-3)' }}>
@@ -120,26 +104,14 @@ function HoldRow({
         </span>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
-          {armed ? (
-            <button
-              type="button"
-              onClick={onDisarm}
-              disabled={releasing}
-              className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              style={{ borderColor: 'var(--settings-border)', color: 'var(--text-2)' }}
-            >
-              Keep hold
-            </button>
-          ) : null}
           <button
             type="button"
             disabled={releasing}
-            onClick={() => (armed ? onRelease(hold.id) : onArm(hold.id))}
-            aria-describedby={armed ? `release-warning-${hold.id}` : undefined}
+            onClick={() => onRelease(hold)}
             className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-text)' }}
           >
-            {releasing ? 'Releasing…' : armed ? 'Confirm release' : 'Release hold'}
+            {releasing ? 'Releasing…' : 'Release hold'}
           </button>
         </div>
       )}
@@ -156,7 +128,35 @@ export function WorkspaceDataControls() {
   const [reason, setReason] = useState('');
   const [scope, setScope] = useState<LegalHoldScope>('organization');
   const [subjectUserId, setSubjectUserId] = useState('');
-  const [confirmingRelease, setConfirmingRelease] = useState<string | null>(null);
+  const [releasingId, setReleasingId] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  // The two-step arm this replaced put the consequence in a line beside the
+  // button and then accepted the second click on that same button, so a double
+  // click released a hold without the warning ever being read.
+  const askToRelease = (hold: LegalHold) => {
+    confirm({
+      title: `Release the hold "${hold.name}"?`,
+      description:
+        hold.scope === 'organization'
+          ? 'Every record this hold was preserving for the whole workspace becomes eligible for the retention sweep again, and the sweep deletes on its own schedule. Releasing cannot be undone, and a new hold does not bring back what has already been swept.'
+          : `Every record this hold was preserving for ${hold.subjectUserId ?? 'that member'} becomes eligible for the retention sweep again, and the sweep deletes on its own schedule. Releasing cannot be undone, and a new hold does not bring back what has already been swept.`,
+      confirmLabel: 'Release hold',
+      cancelLabel: 'Keep hold',
+      destructive: true,
+      onConfirm: () => {
+        setReleasingId(hold.id);
+        return new Promise<void>((resolve) => {
+          release.mutate(hold.id, {
+            onSettled: () => {
+              setReleasingId(null);
+              resolve();
+            },
+          });
+        });
+      },
+    });
+  };
 
   if (isPending) {
     return (
@@ -245,13 +245,8 @@ export function WorkspaceDataControls() {
               <HoldRow
                 key={hold.id}
                 hold={hold}
-                releasing={release.isPending && confirmingRelease === hold.id}
-                armed={confirmingRelease === hold.id}
-                onArm={(id) => setConfirmingRelease(id)}
-                onDisarm={() => setConfirmingRelease(null)}
-                onRelease={(id) => {
-                  release.mutate(id, { onSettled: () => setConfirmingRelease(null) });
-                }}
+                releasing={release.isPending && releasingId === hold.id}
+                onRelease={askToRelease}
               />
             ))}
           </ul>
@@ -418,6 +413,7 @@ export function WorkspaceDataControls() {
           </div>
         )}
       </section>
+      {confirmDialog}
     </div>
   );
 }
