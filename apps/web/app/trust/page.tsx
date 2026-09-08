@@ -319,7 +319,7 @@ export default function TrustPage() {
                       {
                         label: '2026-09-08',
                         value:
-                          'Re-measured after ten hosted routes nothing called were deleted. The database-backed total moved from 200 to 198, the routes excluded from both sides from 94 to 88, and the owner-connection count from 86 to 84. The row-level-isolation count stays at 114.',
+                          'Re-measured after ten hosted routes nothing called were deleted and one cron route that sweeps orphaned agent runs was added. The database-backed total moved from 200 to 199, the routes excluded from both sides from 94 to 88, and the owner-connection count from 86 to 85. The row-level-isolation count stays at 114.',
                       },
                       {
                         label: '2026-09-06',
