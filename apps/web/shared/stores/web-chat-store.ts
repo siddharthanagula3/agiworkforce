@@ -249,6 +249,16 @@ export interface MessageMetadata {
   isSearching?: boolean;
   /** Web search results from server-managed tools */
   searchResults?: WebSearchResults;
+  /**
+   * The client's post-stream metadata save failed and was not retried, so what
+   * is on screen is richer than what a reload will show.
+   *
+   * Client-only, and it cannot be otherwise: it describes a write that did not
+   * happen. The server now persists this turn's cited sources itself, so the
+   * loss this flag reports is the tool timeline, the reasoning blocks and the
+   * generated-file list.
+   */
+  metadataNotSaved?: true;
   citations?: Array<{ type?: string; cited_text?: string; title?: string; url?: string }>;
   /** True when this turn's request had web search on, stamped at send time. */
   webSearchRequested?: boolean;

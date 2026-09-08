@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 18 unresolved issues: 0 P0, 2 P1, 11 P2, 5 P3, plus 3 items needing
+- 18 unresolved issues: 0 P0, 1 P1, 12 P2, 5 P3, plus 3 items needing
   validation this session could not perform.
 
 ### Closed in this pass
@@ -66,45 +66,6 @@ corruption, double charge or trust-boundary failure was found. Reservation
 settlement is idempotent and concurrency-safe.
 
 ## 3. P1, high
-
-### `AGI-3` Assistant turn metadata is silently lost when the client save fails
-
-**Severity:** P1
-**Status:** Open
-**Area:** Web chat persistence
-**Root cause:** The server persists a thin assistant snapshot (text, model,
-provider, token counts, truncation). The richer metadata (tool-call timeline,
-search sources and citations, code-execution results, reasoning content,
-generated-file list, interactive cards) is written only by the client's own
-`saveMessageToDb` after the stream ends. Its failure handler is
-`notifyPersistenceFailure`, which only calls `console.error`.
-**Current behavior:** The client retries 3 times on 5xx/429/network. A
-non-retryable failure (4xx, auth, an exception while building the payload) is
-logged and nothing else. On reload the answer text is present and every source
-chip, tool card, reasoning block and generated file is gone, with no indication
-anything failed.
-**Required behavior:** Either the server captures the same metadata, or a
-failed metadata save is surfaced and retryable. A turn must not render as
-though it never had sources.
-**Evidence:** `apps/web/lib/hooks/useChatStream.ts:444-446` (handler) and call
-sites `:1683, :3241, :3299, :3408, :3664, :3778`; the user-message path at
-`:2782-2822` shows the correct pattern, it awaits and surfaces a real error.
-`apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts` and
-`lib/stream-transform.ts` never pass the richer fields into the snapshot.
-**User impact:** Silent loss of citations and tool evidence, the part of an
-answer a user most needs to trust it.
-**Dependencies:** None.
-**Implementation direction:** Prefer moving metadata capture server-side beside
-the existing snapshot write, which removes the client round trip entirely. If
-it must stay client-side, surface failure in the transcript with a retry, using
-the user-message path as the model. Note cloud-agent-run turns already capture
-`interactiveCards` server-side in `managed-agent-stream.ts:119-131`, so a
-server-side path already exists to extend.
-**Acceptance criteria:** A forced non-retryable save failure either preserves
-metadata or shows a visible, retryable error. Reload after a successful turn
-restores sources, tool cards and reasoning.
-**Validation:** Component test forcing a 4xx from the messages route, plus a
-reload assertion in `apps/web/e2e/`.
 
 ### `AGI-4` Project answers only ever see the head of a long file
 
@@ -161,6 +122,41 @@ excerpt test with a passage-retrieval test.
 measuring supported answers and correct abstentions.
 
 ## 4. P2, important
+
+### `AGI-3` Tool timeline and reasoning are still client-owned
+
+**Severity:** P2
+**Status:** Narrowed. The silent half is fixed; the rest is still client-only.
+**Area:** Web chat persistence
+**What was fixed:** The server now collects the pages a turn cited from the
+`x_search_results` frames it already emits and writes them into the same
+snapshot that carries the text, so citations survive a failed client save. A
+client metadata save that fails after its retries now stamps the turn and the
+transcript says what will not survive a reload, instead of a `console.error`
+nobody reads.
+**What remains:** the tool-call timeline, reasoning blocks, code-execution
+results and the generated-file list are still written only by the client's
+`saveMessageToDb`. A non-retryable failure still loses them; the difference is
+that the reader is now told.
+**Root cause of the remainder:** those four are derived by the client from the
+stream, with merging and per-tool status the server does not reproduce.
+Reproducing that derivation server-side is the work, and it must not become a
+second implementation of it.
+**Evidence:** `apps/web/lib/hooks/useChatStream.ts` `persistAssistant`, which
+builds the metadata object; `assistant-turn-sources.ts`, which shows the shape
+the rest would follow.
+**User impact:** Bounded. Sources, the part a reader needs to trust an answer,
+now survive. Losing the tool timeline degrades the record of how the answer was
+reached.
+**Dependencies:** None.
+**Implementation direction:** Extend `AssistantTurnSnapshot` the way `sources`
+extended it, one metadata class at a time, each collected from the canonical
+wire rather than from any provider's shape. Do not move the client's rendering
+derivation to the server; collect the evidence and let the client project it.
+**Acceptance criteria:** A forced non-retryable save failure loses nothing that
+the transcript rendered.
+**Validation:** Extend `assistant-turn-sources.test.ts` per class, plus the
+existing reload assertion in `apps/web/e2e/citation-persistence.spec.ts`.
 
 ### `AGI-5` Native code merges without compilation or test validation
 
@@ -701,10 +697,11 @@ Neither of these is a confirmed defect.
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-3`, durable assistant metadata. The largest remaining user-visible
-   loss, and independent of everything else.
-2. `AGI-4`, project passage retrieval. Independent, and the second half of the
-   project workflow the conversation-creation fix reopened.
+1. `AGI-4`, project passage retrieval. The largest remaining user-visible gap,
+   and the second half of the project workflow the conversation-creation fix
+   reopened.
+2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
+   what is left is bounded and visible.
 3. `AGI-5`, native CI. Out of order on purpose: it protects every later native
    change, and every day it is not done is another merge without validation.
 4. `AGI-8`, then `AGI-22`, then `AGI-23`. One implementer, in that order: all
@@ -727,7 +724,7 @@ Dependency-aware, not severity-ordered.
 
 | Issue    | Automated                                       | Manual or live                     | Gate                                   |
 | -------- | ----------------------------------------------- | ---------------------------------- | -------------------------------------- |
-| `AGI-3`  | forced 4xx save test, e2e reload                | reload after a cited answer        | sources survive or an error is visible |
+| `AGI-3`  | per-class snapshot tests, e2e reload            | reload after a tool-using answer   | nothing the transcript rendered is lost |
 | `AGI-4`  | passage retrieval unit tests                    | question set over a long document  | beginning, middle and end all answered |
 | `AGI-5`  | PR with a deliberate native break               | none                               | required check fails on the PR         |
 | `AGI-6`  | voice session tests                             | measured time to first audio       | audio starts before generation ends    |
@@ -753,8 +750,8 @@ Every web change closes with `apps/web` typecheck run on its own.
 ## 9. Dependencies and parallel work
 
 ```
-AGI-3                      web persistence, independent
 AGI-4                      retrieval, independent
+AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-8 ──> AGI-22 ──> AGI-23  routing preferences, one implementer, ordered
 AGI-16                     provenance, independent
@@ -764,6 +761,6 @@ AGI-11, AGI-12, AGI-13     background
 AGI-17 .. AGI-21           polish, independent of everything
 ```
 
-Four tracks can run at once without touching the same files: web chat
-(`AGI-3`), retrieval (`AGI-4`), CI (`AGI-5`), and voice (`AGI-6`). `AGI-8` and
+Four tracks can run at once without touching the same files: retrieval
+(`AGI-4`), web chat (`AGI-3`), CI (`AGI-5`), and voice (`AGI-6`). `AGI-8` and
 `AGI-4` both touch the chat request processor, so do not run them concurrently.

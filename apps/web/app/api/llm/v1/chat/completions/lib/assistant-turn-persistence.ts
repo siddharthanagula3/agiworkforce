@@ -12,6 +12,7 @@ import {
   resolveAnsweredParentId,
   setActiveLeaf,
 } from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
+import type { PersistedTurnSource } from './assistant-turn-sources';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
@@ -44,6 +45,12 @@ export interface AssistantTurnSnapshot {
   inputTokens: number;
   outputTokens: number;
   truncated: boolean;
+  /**
+   * The pages this turn cited. Written under the same `searchResults` key the
+   * client uses, so a reload after a failed client save renders the source
+   * chips instead of an answer that looks unsourced.
+   */
+  sources?: readonly PersistedTurnSource[];
   interactiveCards?: readonly InteractiveCard[];
   runReference?: {
     runId: string;
@@ -94,6 +101,7 @@ export async function persistAssistantTurn(params: {
     !snapshot.content.trim() &&
     !snapshot.truncated &&
     !snapshot.runReference &&
+    !snapshot.sources?.length &&
     interactiveCards.length === 0
   ) {
     return;
@@ -107,6 +115,10 @@ export async function persistAssistantTurn(params: {
       ? { truncated: true, truncationReason: TRUNCATED_ASSISTANT_TURN_REASON }
       : {}),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
+    // The on-conflict set-list merges with `||`, so a client save that lands
+    // later overwrites this key with its own richer copy. This is the floor,
+    // not a competing writer.
+    ...(snapshot.sources?.length ? { searchResults: snapshot.sources } : {}),
   };
   if (interactiveCards.length > 0) {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;
