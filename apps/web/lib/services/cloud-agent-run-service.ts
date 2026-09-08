@@ -1150,9 +1150,17 @@ export async function saveCloudAgentApprovalCheckpoint(
         input.turnId,
         nextEventSequence,
         completedSteps,
-        request,
-        messages,
-        pendingToolCalls,
+        // Serialized here, not left to the driver. node-postgres renders a JS
+        // ARRAY as a Postgres array literal, `{"a","b"}`, which is not JSON, so
+        // `$9::jsonb` failed with `invalid input syntax for type json: Expected
+        // ":", but found ","` and took the whole turn down with a 500. It went
+        // unnoticed because nothing reached this path: approval mode was 'auto'
+        // for every turn without an MCP tool, so no first-party tool ever
+        // checkpointed. `request` happens to work as an object, and is
+        // stringified too so all three read the same way.
+        JSON.stringify(request),
+        JSON.stringify(messages),
+        JSON.stringify(pendingToolCalls),
       ],
     );
 
@@ -1464,11 +1472,12 @@ export async function saveCloudAgentInputCheckpoint(
         input.turnId,
         nextEventSequence,
         completedSteps,
-        request,
-        messages,
-        pendingToolCalls,
-        inputRequests,
-        requestState,
+        // Same array-versus-jsonb hazard as the approval checkpoint above.
+        JSON.stringify(request),
+        JSON.stringify(messages),
+        JSON.stringify(pendingToolCalls),
+        JSON.stringify(inputRequests),
+        JSON.stringify(requestState),
       ],
     );
 

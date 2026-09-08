@@ -1100,10 +1100,12 @@ describe('cloud agent run service', () => {
       expect(checkpoint.id).toBe(CHECKPOINT_ROW.id);
       expect(checkpoint.inputRequests).toEqual(INPUT_REQUESTS);
       expect(checkpoint.requestState).toEqual(REQUEST_STATE);
+      // Serialized, not handed to the driver as objects: node-postgres renders
+      // a JS array as a Postgres array literal, which a jsonb column refuses.
       expect(db.query).toHaveBeenNthCalledWith(
         4,
         expect.stringMatching(/checkpoint_kind, input_requests, request_state[\s\S]*'input'/i),
-        expect.arrayContaining([INPUT_REQUESTS, REQUEST_STATE]),
+        expect.arrayContaining([JSON.stringify(INPUT_REQUESTS), JSON.stringify(REQUEST_STATE)]),
       );
       expect(db.query).toHaveBeenNthCalledWith(
         7,

@@ -7,18 +7,10 @@ import {
   parseToolApprovalPolicy,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
-import { resolveToolMetadata } from './tool-metadata';
-
-export function policyAutoApprovesTool(policy: ToolApprovalPolicy, qualifiedName: string): boolean {
-  if (policy !== 'auto_approve_read_only') return false;
-  const metadata = resolveToolMetadata(qualifiedName);
-  return (
-    metadata.declared &&
-    metadata.actionClass === 'read' &&
-    metadata.reversible &&
-    !metadata.createsEgressPath
-  );
-}
+// Owned by tool-metadata.ts, which is not server-only, so the tool-loop
+// routing can ask the same question without importing this module's database
+// read. Re-exported here because the callers that want both live together.
+export { policyAutoApprovesTool } from './tool-metadata';
 
 export async function loadToolApprovalPolicy(
   db: DatabaseAdapter,

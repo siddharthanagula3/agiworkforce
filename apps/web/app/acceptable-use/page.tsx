@@ -53,9 +53,9 @@ const SUMMARY: readonly LedgerRow[] = [
       'Code runs in an isolated cloud sandbox. Use it for your own compute. Not for mining, scanning, flooding, or building malware.',
   },
   {
-    label: 'Connectors ask first',
+    label: 'Tools ask first',
     value:
-      'Every connector and MCP tool requires approval by default. Built-in web search, page fetch, and sandbox tools do not. See the full authority map on agent permissions.',
+      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors. On the default, every tool action waits for you. Choose to auto-approve read-only work and reads inside AGI run on their own, while anything that writes, runs code, or can move data outside AGI still asks, web search and page fetch included. See the full authority map on agent permissions.',
   },
   {
     label: 'A block is absolute',

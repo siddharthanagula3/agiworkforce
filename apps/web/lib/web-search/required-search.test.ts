@@ -6,6 +6,7 @@ import {
   nativeSearchToolName,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
+  substituteGatedWebSearchTool,
 } from './required-search';
 import { WEB_SEARCH_TOOL, webSearchToolDef } from './web-search-tool';
 
@@ -178,5 +179,73 @@ describe('resolveRequiredSearchEnforcement', () => {
   it('publishes a nudge that names the tool and forbids answering from memory', () => {
     expect(REQUIRED_SEARCH_SYSTEM_NUDGE).toContain('web search tool');
     expect(REQUIRED_SEARCH_SYSTEM_NUDGE).toContain('memory');
+  });
+});
+
+describe('substituteGatedWebSearchTool', () => {
+  const GENERIC = webSearchToolDef();
+
+  it('leaves the tools alone when no approval is required', () => {
+    const tools = [GOOGLE_BUILTIN_TOOL];
+    expect(
+      substituteGatedWebSearchTool(tools, {
+        approvalRequired: false,
+        genericBackendConfigured: true,
+      }),
+    ).toBe(tools);
+  });
+
+  it.each([
+    ['google', GOOGLE_BUILTIN_TOOL],
+    ['anthropic', ANTHROPIC_SERVER_TOOL],
+    ['openai', OPENAI_HOSTED_TOOL],
+  ])('swaps the %s native search for our own gateable tool', (_provider, nativeTool) => {
+    const result = substituteGatedWebSearchTool([nativeTool], {
+      approvalRequired: true,
+      genericBackendConfigured: true,
+    });
+
+    expect(result?.some((tool) => nativeSearchToolName(tool) !== '')).toBe(false);
+    expect(result).toEqual([GENERIC]);
+  });
+
+  it('keeps every unrelated tool in place', () => {
+    const other = { type: 'function', function: { name: 'url_fetch' } };
+    const result = substituteGatedWebSearchTool([other, GOOGLE_BUILTIN_TOOL], {
+      approvalRequired: true,
+      genericBackendConfigured: true,
+    });
+
+    expect(result?.[0]).toBe(other);
+    expect(result).toHaveLength(2);
+  });
+
+  it('does not add a second generic tool when one is already offered', () => {
+    const result = substituteGatedWebSearchTool([GENERIC, GOOGLE_BUILTIN_TOOL], {
+      approvalRequired: true,
+      genericBackendConfigured: true,
+    });
+
+    expect(result).toEqual([GENERIC]);
+  });
+
+  it('withdraws search entirely rather than run it un-approved with no fallback', () => {
+    // Fail-closed. Leaving the native tool attached would keep running searches
+    // the account said had to be approved, which is the defect this replaces.
+    const result = substituteGatedWebSearchTool([GOOGLE_BUILTIN_TOOL], {
+      approvalRequired: true,
+      genericBackendConfigured: false,
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it('passes undefined through untouched', () => {
+    expect(
+      substituteGatedWebSearchTool(undefined, {
+        approvalRequired: true,
+        genericBackendConfigured: true,
+      }),
+    ).toBeUndefined();
   });
 });
