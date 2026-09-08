@@ -587,6 +587,7 @@ export function useConnectorsSettingsAdapter({
       if (id === 'github') {
         // GitHub "connected" state is its App installations; disconnect
         // removes each installation via the real installations endpoint.
+        const remaining = [...githubInstallations];
         for (const installation of githubInstallations) {
           const res = await fetch('/api/github/installations', {
             method: 'DELETE',
@@ -598,8 +599,17 @@ export function useConnectorsSettingsAdapter({
             body: JSON.stringify({ installationId: installation.installation_id }),
           });
           if (!res.ok) {
-            throw new Error('Could not disconnect GitHub. Try again.');
+            setGithubInstallations(remaining);
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(
+              body.error ??
+                'The GitHub App is still installed on that account, so nothing was disconnected.',
+            );
           }
+          remaining.splice(
+            remaining.findIndex((row) => row.installation_id === installation.installation_id),
+            1,
+          );
         }
         setGithubInstallations([]);
         return;

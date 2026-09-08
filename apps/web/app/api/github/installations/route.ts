@@ -9,7 +9,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
+import {
+  deleteGitHubAppInstallation,
+  isGitHubInstallationLinkingAvailable,
+} from '@/lib/github-app';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const GITHUB_SCOPE = { resolveOrganization: false } as const;
 
@@ -125,6 +129,59 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
+  let owned: Pick<GitHubInstallationRow, 'id' | 'account_login'> | undefined;
+  try {
+    [owned] = await db.query<Pick<GitHubInstallationRow, 'id' | 'account_login'>>(
+      `select id, account_login
+         from github_installations
+        where installation_id = $1
+          and user_id = $2
+        limit 1`,
+      [installationId, userId],
+    );
+  } catch (err) {
+    logger.error({ err, userId, installationId }, 'Failed to load GitHub installation');
+    return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 });
+  }
+
+  if (!owned) {
+    return NextResponse.json({ error: 'Installation not found' }, { status: 404 });
+  }
+
+  const revocation = await deleteGitHubAppInstallation(installationId);
+
+  if (revocation.status === 'failed' || revocation.status === 'unavailable') {
+    logger.error(
+      { userId, installationId, reason: revocation.reason },
+      'GitHub App installation was not revoked',
+    );
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_removed',
+      request,
+      outcome: 'failure',
+      severity: 'critical',
+      detail: {
+        resourceType: 'github_installation',
+        resourceId: String(installationId),
+        resourceName: owned.account_login,
+        source: 'github',
+        reason: revocation.reason,
+      },
+    });
+    return NextResponse.json(
+      {
+        error:
+          revocation.status === 'unavailable'
+            ? 'This deployment cannot revoke GitHub App installations, so the app is still installed on your account. Remove it from GitHub, under Settings then Applications.'
+            : 'The GitHub App is still installed on your account, so nothing was disconnected. Try again, or remove it from GitHub under Settings then Applications.',
+        reason: revocation.reason,
+        retryable: revocation.status === 'failed',
+      },
+      { status: revocation.status === 'unavailable' ? 503 : 502 },
+    );
+  }
+
   try {
     await db.execute(
       'delete from github_installations where installation_id = $1 and user_id = $2',
@@ -135,5 +192,20 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_removed',
+    request,
+    outcome: 'success',
+    severity: 'warning',
+    detail: {
+      resourceType: 'github_installation',
+      resourceId: String(installationId),
+      resourceName: owned.account_login,
+      source: 'github',
+      status: revocation.status,
+    },
+  });
+
+  return NextResponse.json({ success: true, revoked: revocation.status });
 }

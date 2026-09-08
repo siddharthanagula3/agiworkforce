@@ -263,6 +263,61 @@ export async function getGitHubAppJwt(): Promise<string> {
   return `${signingInput}.${signature}`;
 }
 
+export type GitHubInstallationDeletion =
+  | { status: 'deleted' }
+  | { status: 'already-absent' }
+  | { status: 'unavailable'; reason: string }
+  | { status: 'failed'; reason: string };
+
+/**
+ * Uninstalls the GitHub App itself, which is the only act that stops GitHub
+ * sending us webhooks and stops us minting installation tokens. Deleting our
+ * own row leaves the app installed on the account, so the grant survives a
+ * disconnect the user believes they completed.
+ *
+ * A 404 means GitHub has already forgotten the installation, which is the
+ * caller's desired end state, so it is reported as absent rather than failed.
+ * Every other outcome is a failure the caller must surface: an installation
+ * this product can no longer see but GitHub still honours is worse than a
+ * disconnect that visibly did not finish.
+ */
+export async function deleteGitHubAppInstallation(
+  installationId: number,
+): Promise<GitHubInstallationDeletion> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0) {
+    return { status: 'failed', reason: 'Invalid GitHub installation id' };
+  }
+  if (!isGitHubAppConfigured()) {
+    return { status: 'unavailable', reason: 'GitHub App credentials are not configured' };
+  }
+
+  let response: Response;
+  try {
+    const jwt = await getGitHubAppJwt();
+    response = await fetch(
+      buildGitHubApiUrl(`/app/installations/${encodeURIComponent(String(installationId))}`),
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': GITHUB_API_VERSION,
+        },
+        signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+      },
+    );
+  } catch (error) {
+    return {
+      status: 'failed',
+      reason: `GitHub was unreachable: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  if (response.status === 404) return { status: 'already-absent' };
+  if (response.ok) return { status: 'deleted' };
+  return { status: 'failed', reason: `GitHub returned ${response.status}` };
+}
+
 let _devFallbackRing: KeyRing | null = null;
 
 const HEX_64_RE = /^[0-9a-fA-F]{64}$/;
