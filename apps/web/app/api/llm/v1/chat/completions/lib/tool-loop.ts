@@ -1093,13 +1093,6 @@ export function withToolTimeout(
 
 export { ProviderFirstTokenDeadlineError, ProviderStreamDeadlineError } from './provider-deadlines';
 
-/**
- * The tool loop's two bounds, both from the one shared race in
- * `provider-deadlines.ts`: the whole-stream budget the turn has left, and the
- * first-token bound the inline dispatch path uses. Kept as a named wrapper
- * because the loop's own tests drive it directly and because the loop calls it
- * with the milestone callback the inline path does not need.
- */
 export function withProviderStreamDeadline<T>(
   run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
   deadlineMs: number,
