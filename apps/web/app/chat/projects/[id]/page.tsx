@@ -840,7 +840,7 @@ export default function ProjectDetailPage() {
                 style={{
                   alignSelf: 'flex-start',
                   marginTop: 8,
-                  fontSize: 11,
+                  fontSize: 12,
                   padding: '2px 8px',
                   borderRadius: 9999,
                   border: '1px solid var(--agi-rule)',
