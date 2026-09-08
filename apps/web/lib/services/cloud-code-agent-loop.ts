@@ -15,6 +15,8 @@ import {
   CLOUD_CODE_TURN_BUDGET_MS,
   nestedDeadlineMs,
 } from '@/lib/deadline-policy';
+import { upstreamFailureCopy } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
+import { logger } from '@/lib/logger';
 import {
   CLOUD_CODE_LIST_FILES_TOOL,
   CLOUD_CODE_READ_FILE_TOOL,
@@ -35,6 +37,8 @@ export const CLOUD_CODE_AGENT_MAX_STEPS = 24;
 export const CLOUD_CODE_AGENT_MAX_DURATION_MS = CLOUD_CODE_TURN_BUDGET_MS;
 export const CLOUD_CODE_AGENT_MAX_TOOL_OUTPUT = 30_000;
 
+const MAX_LOGGED_PROVIDER_FAILURE_CHARS = 2_000;
+const NEUTRAL_PROVIDER_LABEL = 'the model provider';
 const PROVIDER_OPERATION_PREFIX = 'provider:';
 const TOOL_OPERATION_PREFIX = 'tool:';
 
@@ -297,6 +301,62 @@ function toolResultBlock(toolUseId: string, outcome: CloudCodeToolOutcome): Cont
   };
 }
 
+/**
+ * Turns a provider failure into the one sentence a reader sees.
+ *
+ * An adapter reports a failure two ways, as an `error` chunk and as a throw,
+ * and neither carries copy: at least one provider formats its message as the
+ * HTTP status followed by the verbatim JSON body, request id included. That
+ * string used to be returned as `errorMessage`, persisted onto the turn row and
+ * rendered in the transcript, which put a provider's payload in front of the
+ * reader and told them their own credit balance was too low when the account
+ * that is out of funds is ours.
+ *
+ * `upstreamFailureCopy` is the same boundary the chat route crosses, so both
+ * surfaces say the same thing about the same failure. The body and the request
+ * id stay in the log, at error level with the turn's step, which is where an
+ * operator needs them.
+ */
+function providerFailureMessage(
+  error: unknown,
+  input: RunCloudCodeAgentTurnInput,
+  stepIndex: number,
+): string {
+  const failure = upstreamFailureCopy(error, input.adapter.id);
+  const message = withoutVendorName(failure.message, input.adapter.id);
+  logger.error(
+    {
+      provider: input.adapter.id,
+      model: input.model,
+      stepIndex,
+      code: failure.code,
+      upstream: rawProviderFailure(error).slice(0, MAX_LOGGED_PROVIDER_FAILURE_CHARS),
+    },
+    '[code] provider failed an agent turn step',
+  );
+  return message;
+}
+
+/**
+ * The shared copy names the provider in two of its branches, which is right for
+ * the chat surface and wrong for this one: Code says no vendor names. The real
+ * provider id still goes to the mapper, because it is what records the
+ * degradation signal and picks the code; only the sentence loses the name.
+ */
+function withoutVendorName(message: string, provider: string): string {
+  if (!provider) return message;
+  const named = new RegExp(`\\b${provider.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+  if (!named.test(message)) return message;
+  const neutral = message.replace(named, NEUTRAL_PROVIDER_LABEL);
+  return neutral.charAt(0).toUpperCase() + neutral.slice(1);
+}
+
+function rawProviderFailure(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export async function runCloudCodeAgentTurn(
   input: RunCloudCodeAgentTurnInput,
 ): Promise<CloudCodeAgentResult> {
@@ -373,7 +433,7 @@ export async function runCloudCodeAgentTurn(
         finalMessage,
         messages,
         usage,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: providerFailureMessage(error, input, stepsUsed),
       };
     }
 
@@ -391,7 +451,7 @@ export async function runCloudCodeAgentTurn(
         finalMessage,
         messages,
         usage,
-        errorMessage: drained.error,
+        errorMessage: providerFailureMessage(drained.error, input, stepsUsed),
       };
     }
 

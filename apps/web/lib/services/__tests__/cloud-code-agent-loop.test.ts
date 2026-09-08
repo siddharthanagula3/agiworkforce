@@ -266,7 +266,8 @@ describe('runCloudCodeAgentTurn', () => {
     } as unknown as ProviderAdapter;
     const result = await runCloudCodeAgentTurn({ ...baseInput, adapter, runner: runnerStub() });
     expect(result.stopReason).toBe('error');
-    expect(result.errorMessage).toContain('provider exploded');
+    expect(result.errorMessage).toBeTruthy();
+    expect(result.errorMessage).not.toContain('provider exploded');
   });
 
   it('commits a billable step before every provider call', async () => {
@@ -518,7 +519,8 @@ describe('runCloudCodeAgentTurn provider failures', () => {
     });
 
     expect(result.stopReason).toBe('error');
-    expect(result.errorMessage).toBe(message);
+    expect(result.errorMessage).toBeTruthy();
+    expect(result.errorMessage).not.toBe(message);
   });
 
   it('fails a turn that produced neither words nor work', async () => {
@@ -544,5 +546,117 @@ describe('runCloudCodeAgentTurn provider failures', () => {
 
     expect(result.stopReason).toBe('done');
     expect(result.finalMessage).toBe('Listed the workspace.');
+  });
+});
+
+/**
+ * The body the lead's walk put in the transcript, verbatim: an upstream 400
+ * whose message says the account balance is too low, carrying a provider
+ * request id. Nothing in it may reach a persisted turn row or the client.
+ */
+const UPSTREAM_BODY =
+  '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."},"request_id":"req_011CW2AHkuNAeXcYbNfhzp1s"}';
+
+function adapterThrowing(error: unknown): ProviderAdapter {
+  return {
+    ...adapterFor([]),
+    stream: () => {
+      throw error;
+    },
+  } as unknown as ProviderAdapter;
+}
+
+function turn(adapter: ProviderAdapter) {
+  return runCloudCodeAgentTurn({ ...baseInput, adapter, runner: runnerStub() });
+}
+
+function expectNothingLeaked(message: string | undefined): void {
+  expect(message).toBeTruthy();
+  const leaked = message ?? '';
+  expect(leaked).not.toContain('request_id');
+  expect(leaked).not.toContain('req_011CW2AHkuNAeXcYbNfhzp1s');
+  expect(leaked).not.toContain('invalid_request_error');
+  expect(leaked).not.toContain('credit balance');
+  expect(leaked).not.toContain('Plans & Billing');
+  expect(leaked).not.toMatch(/^\d{3}\s/);
+  expect(leaked).not.toContain('{"');
+}
+
+describe('a provider failure never reaches the transcript verbatim', () => {
+  it('classifies an error chunk instead of keeping the upstream body', async () => {
+    const result = await turn(
+      adapterFor([[{ type: 'error', message: UPSTREAM_BODY } as StreamChunk]]),
+    );
+
+    expect(result.stopReason).toBe('error');
+    expectNothingLeaked(result.errorMessage);
+  });
+
+  it('says the failure is ours when the provider account is out of funds', async () => {
+    const result = await turn(
+      adapterFor([[{ type: 'error', message: UPSTREAM_BODY } as StreamChunk]]),
+    );
+
+    // The reader's own balance is not the problem and must not be implied.
+    expect(result.errorMessage).toMatch(/our side|unavailable/i);
+    expect(result.errorMessage).not.toMatch(/your (credit|balance|account)/i);
+  });
+
+  it('classifies a thrown SDK error rather than repeating its message', async () => {
+    const thrown = Object.assign(new Error(UPSTREAM_BODY), { status: 400 });
+    const result = await turn(adapterThrowing(thrown));
+
+    expect(result.stopReason).toBe('error');
+    expectNothingLeaked(result.errorMessage);
+  });
+
+  it('classifies a thrown 402 as a funding problem on our side', async () => {
+    const thrown = Object.assign(new Error('Payment Required'), { status: 402 });
+    const result = await turn(adapterThrowing(thrown));
+
+    expect(result.stopReason).toBe('error');
+    expect(result.errorMessage).toMatch(/our side|unavailable/i);
+    expect(result.errorMessage).not.toMatch(/your (credit|balance|account)/i);
+  });
+
+  it('gives a rate limit its own words rather than the upstream body', async () => {
+    const thrown = Object.assign(new Error('429 {"error":{"message":"rate limit"}}'), {
+      status: 429,
+    });
+    const result = await turn(adapterThrowing(thrown));
+
+    expect(result.errorMessage).toMatch(/capacity|try again/i);
+    expectNothingLeaked(result.errorMessage);
+  });
+
+  it('names no vendor, on a surface whose copy never does', async () => {
+    const thrown = Object.assign(new Error('rate limited'), { status: 429 });
+    for (const provider of ['anthropic', 'openai', 'google']) {
+      const result = await runCloudCodeAgentTurn({
+        ...baseInput,
+        adapter: {
+          ...adapterFor([]),
+          id: provider,
+          stream: () => {
+            throw thrown;
+          },
+        } as unknown as ProviderAdapter,
+        runner: runnerStub(),
+      });
+
+      const message = result.errorMessage ?? '';
+      expect(message, `provider ${provider} must not be named`).not.toMatch(
+        new RegExp(provider, 'i'),
+      );
+      expect(message).toMatch(/^[A-Z]/);
+    }
+  });
+
+  it('still ends the turn with words when the failure is nothing it recognises', async () => {
+    const result = await turn(adapterThrowing(new Error('socket hang up')));
+
+    expect(result.stopReason).toBe('error');
+    expect(result.errorMessage).toBeTruthy();
+    expect(result.errorMessage).not.toBe('socket hang up');
   });
 });
