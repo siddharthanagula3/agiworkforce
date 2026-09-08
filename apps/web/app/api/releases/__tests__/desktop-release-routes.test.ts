@@ -25,7 +25,6 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.stubGlobal('fetch', fetchMock);
 
 import { GET as getTauriUpdate } from '../[target]/[version]/route';
-import { GET as checkRelease } from '../check/route';
 import { GET as getLatestRelease } from '../latest/[platform]/route';
 import { GET as getLatestCloudRelease } from '../desktop-cloud/latest/route';
 import { GET as downloadDesktop } from '../../download/route';
@@ -184,20 +183,6 @@ describe('desktop release routes', () => {
       expect.stringMatching(/\/releases\/latest$/),
       expect.any(Object),
     );
-  });
-
-  it('uses the normalized desktop semantic version in the release check fallback', async () => {
-    const response = await checkRelease(
-      makeRequest('https://agi.example/api/releases/check?version=1.9.0&platform=linux-x86_64'),
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      update_available: true,
-      current_version: '1.9.0',
-      latest_version: '1.10.0',
-      download_url: 'https://agiworkforce.com/api/releases/latest/linux-x86_64?channel=stable',
-    });
   });
 
   it('returns a Tauri manifest backed by the raw signed AppImage from the latest route', async () => {
@@ -388,29 +373,6 @@ describe('desktop release routes', () => {
     expect(neonExecuteMock).not.toHaveBeenCalled();
   });
 
-  it('omits the check-route download_url when the release row points at an untrusted asset host', async () => {
-    useDatabaseReleaseRow({
-      version: '1.10.0',
-      download_url: UNTRUSTED_ASSET_URL,
-      notes: 'Notes for v-desktop-1.10.0',
-      pub_date: '2026-07-15T00:00:00Z',
-      file_size_bytes: 1024,
-      is_critical: false,
-    });
-
-    const response = await checkRelease(
-      makeRequest('https://agi.example/api/releases/check?version=1.9.0&platform=linux-x86_64'),
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      update_available: true,
-      latest_version: '1.10.0',
-      download_url: null,
-      release_notes: 'Notes for v-desktop-1.10.0',
-    });
-  });
-
   it('finds the stable desktop release when other product releases fill an earlier page', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = String(input);
@@ -499,15 +461,14 @@ describe('desktop release routes', () => {
       return Response.json([stable.release, nightly.release, beta.release]);
     });
 
-    const betaCheck = await checkRelease(
-      makeRequest(
-        'https://agi.example/api/releases/check?version=1.9.0-beta.1&platform=linux-x86_64&channel=beta',
-      ),
+    const betaManifest = await getLatestRelease(
+      makeRequest('https://agi.example/api/releases/latest/linux-x86_64?channel=beta'),
+      { params: Promise.resolve({ platform: 'linux-x86_64' }) },
     );
-    expect(betaCheck.status).toBe(200);
-    expect(await betaCheck.json()).toMatchObject({
-      latest_version: '2.0.0-beta.3',
-      download_url: 'https://agiworkforce.com/api/releases/latest/linux-x86_64?channel=beta',
+    expect(betaManifest.status).toBe(200);
+    expect(await betaManifest.json()).toMatchObject({
+      version: '2.0.0-beta.3',
+      platforms: { 'linux-x86_64': { url: beta.url } },
     });
 
     const nightlyManifest = await getLatestRelease(
