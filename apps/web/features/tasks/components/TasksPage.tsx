@@ -1,14 +1,18 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce/unified-chat';
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 import { createWebCloudTasksClient } from '../services/cloud-tasks-client';
 
+const RUN_QUERY_PARAM = 'run';
+
 export function TasksPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkedRunId = searchParams.get(RUN_QUERY_PARAM);
 
   // Held apart from the transport so the memo below may rebuild freely: the
   // shared page keys its fetching on `transport.client`, so a stable client
@@ -50,5 +54,5 @@ export function TasksPage() {
     [client, router, titleByConversationId],
   );
 
-  return <SharedTasksPage transport={transport} />;
+  return <SharedTasksPage transport={transport} initialRunId={linkedRunId} />;
 }
