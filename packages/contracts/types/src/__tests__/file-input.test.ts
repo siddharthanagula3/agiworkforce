@@ -51,8 +51,8 @@ describe('isTextLikeFileMediaType', () => {
 
 describe('decodeTextFileBlock', () => {
   it('round-trips utf-8 beyond ascii', () => {
-    expect(decodeTextFileBlock(block('note.txt', 'text/plain', 'naïve — 名前'))).toBe(
-      'naïve — 名前',
+    expect(decodeTextFileBlock(block('note.txt', 'text/plain', 'naïve, 名前'))).toBe(
+      'naïve, 名前',
     );
   });
 });
