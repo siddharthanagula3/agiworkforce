@@ -10,12 +10,17 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 import {
+  CLOUD_CODE_WORKING_BRANCH_PREFIX,
   CloudCodeNotFoundError,
   CloudCodeValidationError,
+  cloudCodeWorkingBranchName,
   isCloudCodeSchemaUnavailable,
   validateCloudCodeSessionId,
   validateCreateCloudCodeSession,
 } from './cloud-code-session-service';
+
+const GIT_REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
+const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('cloud-code-session-service schema detection', () => {
   it('treats an absent table and an absent column alike', () => {
@@ -274,5 +279,39 @@ describe('cloud-code-session-service validation', () => {
     expect(isCloudCodeSchemaUnavailable({ code: '42P01' })).toBe(true);
     expect(isCloudCodeSchemaUnavailable({ cause: { code: '42P01' } })).toBe(true);
     expect(isCloudCodeSchemaUnavailable({ code: '23505' })).toBe(false);
+  });
+});
+
+describe('cloud code working branch names', () => {
+  it('slugs the task title under the configured prefix', () => {
+    expect(cloudCodeWorkingBranchName('Fix the flaky billing test', SESSION_ID)).toBe(
+      `${CLOUD_CODE_WORKING_BRANCH_PREFIX}fix-the-flaky-billing-test-11111111`,
+    );
+  });
+
+  it('keeps two sessions with one title on branches of their own', () => {
+    const first = cloudCodeWorkingBranchName('Same task', SESSION_ID);
+    const second = cloudCodeWorkingBranchName('Same task', '22222222-2222-4222-8222-222222222222');
+    expect(first).not.toBe(second);
+  });
+
+  it('never produces a ref git could read as an option', () => {
+    for (const title of [
+      '--upload-pack=touch /tmp/pwned',
+      '   ',
+      '////',
+      '...',
+      'Ship it!!!',
+      'Une tache accentuee',
+      'A'.repeat(120),
+      '\u4f60\u597d\u4e16\u754c',
+    ]) {
+      const branch = cloudCodeWorkingBranchName(title, SESSION_ID);
+      expect(branch, `title ${JSON.stringify(title)} produced ${branch}`).toMatch(GIT_REF_SHAPE);
+      expect(branch.startsWith(CLOUD_CODE_WORKING_BRANCH_PREFIX)).toBe(true);
+      expect(branch.endsWith('/')).toBe(false);
+      expect(branch.includes('..')).toBe(false);
+      expect(branch.includes('//')).toBe(false);
+    }
   });
 });

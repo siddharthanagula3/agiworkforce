@@ -33,6 +33,8 @@ export interface E2BGitExecutor {
     password?: string;
     timeoutMs?: number;
   }): Promise<CommandExecutionResult>;
+  /** Creates the branch and checks it out, so later commits land on it. */
+  createBranch(input: { path: string; branch: string }): Promise<CommandExecutionResult>;
   add(input: { path: string; all?: boolean }): Promise<CommandExecutionResult>;
   commit(input: {
     path: string;

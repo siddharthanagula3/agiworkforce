@@ -65,6 +65,15 @@ const AWAITING_APPROVAL_TURN_STATE = 'awaiting_approval';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
+ * Every repository session works on a branch of its own rather than on the ref
+ * it cloned, so a push can never land on the base branch. Change the prefix
+ * here and every session created after it follows.
+ */
+export const CLOUD_CODE_WORKING_BRANCH_PREFIX = 'agi/';
+const WORKING_BRANCH_SLUG_MAX_LENGTH = 40;
+const WORKING_BRANCH_SUFFIX_LENGTH = 8;
+
+/**
  * How long a run may hold a Code session before another run may take it over.
  *
  * A session is single-writer: a run flips it to `running` and flips it back in
@@ -177,6 +186,12 @@ interface SessionRow extends Record<string, unknown> {
   extra_hosts?: string[] | null;
   state: string;
   workspace_path: string;
+  working_branch?: string | null;
+  pull_request_url?: string | null;
+  pull_request_number?: number | string | null;
+  archived_at?: string | Date | null;
+  context_input_tokens?: number | string | null;
+  context_output_tokens?: number | string | null;
   last_error: string | null;
   run_lease_token: string | null;
   run_lease_expires_at: string | Date | null;
@@ -230,6 +245,27 @@ interface ValidatedCreateInput {
   installationId: number | null;
 }
 
+/**
+ * The session id suffix is what keeps two sessions with the same title on the
+ * same repository from claiming one branch, which would make the second push
+ * either a fast-forward onto the first session's work or a rejection.
+ */
+export function cloudCodeWorkingBranchName(title: string, sessionId: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, WORKING_BRANCH_SLUG_MAX_LENGTH)
+    .replace(/-+$/, '');
+  const suffix = sessionId.replace(/-/g, '').slice(0, WORKING_BRANCH_SUFFIX_LENGTH);
+  return `${CLOUD_CODE_WORKING_BRANCH_PREFIX}${slug ? `${slug}-` : ''}${suffix}`;
+}
+
+function countValue(value: number | string | null | undefined): number {
+  const parsed = typeof value === 'string' ? Number(value) : (value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function iso(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) throw new Error('Invalid Code session timestamp');
@@ -261,6 +297,12 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     extraHosts: row.extra_hosts ?? [],
     state: asSessionState(row.state),
     workspacePath: row.workspace_path,
+    workingBranch: row.working_branch ?? null,
+    pullRequestUrl: row.pull_request_url ?? null,
+    pullRequestNumber: countValue(row.pull_request_number) || null,
+    archivedAt: row.archived_at ? iso(row.archived_at) : null,
+    contextInputTokens: countValue(row.context_input_tokens),
+    contextOutputTokens: countValue(row.context_output_tokens),
     lastError: row.last_error,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -828,6 +870,23 @@ async function resolveGithubCloneCredential(
   return { username: GITHUB_INSTALLATION_TOKEN_USERNAME, password };
 }
 
+async function recordWorkingBranch(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  workingBranch: string,
+): Promise<void> {
+  const scoped = ownerSql(owner, 3);
+  const rows = await db.query<{ id: string }>(
+    `update cloud_code_sessions
+        set working_branch = $2, updated_at = now()
+      where id = $1 and ${scoped.clause}
+      returning id`,
+    [sessionId, workingBranch, ...scoped.params],
+  );
+  if (!rows[0]) throw new CloudCodeNotFoundError();
+}
+
 /**
  * A repository reference names an installation the caller chose, so it is
  * refused before a sandbox is provisioned unless it is one of the caller's own.
@@ -1013,6 +1072,17 @@ export async function createCloudCodeSession(
           clone.error || clone.stderr || 'Repository setup failed',
         );
       }
+      const workingBranch = cloudCodeWorkingBranchName(validated.title, sessionId);
+      const branched = await executor.git.createBranch({
+        path: REPOSITORY_WORKSPACE_PATH,
+        branch: workingBranch,
+      });
+      if (!branched.ok) {
+        throw new CloudCodeUnavailableError(
+          branched.error || branched.stderr || 'Working branch could not be created',
+        );
+      }
+      await recordWorkingBranch(db, owner, sessionId, workingBranch);
     }
     await executor.pause?.();
     const ready = await transitionSessionState(
@@ -1616,6 +1686,7 @@ export async function commitAndPushCloudCodeSession(
     }
     const push = await executor.git.push({
       path: claim.session.workspacePath,
+      ...(claim.session.workingBranch ? { branch: claim.session.workingBranch } : {}),
       username: credential.username,
       password: credential.password,
       timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,

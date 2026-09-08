@@ -59,6 +59,16 @@ export interface CloudCodeSession {
   extraHosts: string[];
   state: CloudCodeSessionState;
   workspacePath: string;
+  /** The branch this session works on and pushes. Null with no repository. */
+  workingBranch: string | null;
+  /** The pull request opened from the working branch, once one exists. */
+  pullRequestUrl: string | null;
+  pullRequestNumber: number | null;
+  /** Set while the session is archived: listed, reversible, refuses work. */
+  archivedAt: string | null;
+  /** Tokens every turn of this session has reported, for the context reading. */
+  contextInputTokens: number;
+  contextOutputTokens: number;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;

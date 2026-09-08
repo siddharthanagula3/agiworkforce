@@ -442,6 +442,14 @@ function truncateUtf8(value: string, maxBytes: number): string {
   return `${bytes.toString('utf8')}\n[output truncated]`;
 }
 
+/**
+ * A branch name reaches git as part of a shell string here, so the executor
+ * refuses anything but a plain ref rather than trusting every caller to have
+ * validated it. Matches GIT_REF_RE in cloud-code-session-service.ts.
+ */
+const SANDBOX_GIT_BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
+const UNSAFE_GIT_BRANCH_MESSAGE = 'Refused a branch name that is not a plain git ref';
+
 function commandResult(
   stdoutValue: unknown,
   stderrValue: unknown,
@@ -883,6 +891,20 @@ export async function getE2BExecutor(
               E2B_MAX_COMMAND_TIMEOUT_MS,
               Math.max(1_000, timeoutMs ?? E2B_COMMAND_TIMEOUT_MS),
             ),
+          });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
+      async createBranch({ path, branch }): Promise<CommandExecutionResult> {
+        if (!SANDBOX_GIT_BRANCH_RE.test(branch)) {
+          return commandResult('', UNSAFE_GIT_BRANCH_MESSAGE, 1, UNSAFE_GIT_BRANCH_MESSAGE);
+        }
+        try {
+          const result = await sandbox.commands.run(`git checkout -b ${branch}`, {
+            cwd: path,
+            timeoutMs: E2B_COMMAND_TIMEOUT_MS,
           });
           return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
         } catch (err) {
