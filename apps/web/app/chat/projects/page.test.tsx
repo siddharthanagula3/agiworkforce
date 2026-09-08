@@ -17,14 +17,24 @@ vi.mock('@shared/components/layout/WebAppShell', () => ({
   WebAppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+const listState = vi.hoisted(() => ({
+  projects: [] as Array<Record<string, unknown>>,
+  hasMore: false,
+  isLoadingMore: false,
+  loadMore: vi.fn(),
+}));
+
 vi.mock('@features/projects', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@features/projects')>();
   return {
     ...actual,
     useManagedCloudProjects: () => ({
-      projects: [],
+      projects: listState.projects,
       status: 'ready' as const,
       error: null,
+      hasMore: listState.hasMore,
+      isLoadingMore: listState.isLoadingMore,
+      loadMore: listState.loadMore,
       retry: vi.fn(),
     }),
   };
@@ -67,5 +77,57 @@ describe('Projects page create path', () => {
 
     await user.click(screen.getByTestId('projects-empty-new-btn'));
     expect(await screen.findByRole('button', { name: 'Create project' })).toBeInTheDocument();
+  });
+});
+
+describe('Projects page paging', () => {
+  const someProject = {
+    id: 'p-1',
+    name: 'Roadmap',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    listState.projects = [];
+    listState.hasMore = false;
+    listState.isLoadingMore = false;
+    listState.loadMore.mockReset();
+  });
+
+  it('offers no control when the server has nothing beyond the loaded page', () => {
+    listState.projects = [someProject];
+    render(<ProjectsPage />);
+
+    expect(screen.queryByTestId('projects-load-more')).toBeNull();
+  });
+
+  it('reaches the projects past the first page', async () => {
+    listState.projects = [someProject];
+    listState.hasMore = true;
+    const user = userEvent.setup();
+    render(<ProjectsPage />);
+
+    await user.click(screen.getByTestId('projects-load-more'));
+
+    expect(listState.loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('never offers the control over an empty list, where it would page nothing', () => {
+    listState.hasMore = true;
+    render(<ProjectsPage />);
+
+    expect(screen.queryByTestId('projects-load-more')).toBeNull();
+  });
+
+  it('refuses a second request while one is in flight and says it is working', () => {
+    listState.projects = [someProject];
+    listState.hasMore = true;
+    listState.isLoadingMore = true;
+    render(<ProjectsPage />);
+
+    const control = screen.getByTestId('projects-load-more');
+    expect(control).toBeDisabled();
+    expect(control).toHaveTextContent('Loading projects');
   });
 });
