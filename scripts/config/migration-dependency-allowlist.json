@@ -305,6 +305,26 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 175,
       "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 176,
+      "reason": "the Code session working branch, pull request, archive and context columns are founder-gated; the deploy runbook applies migration 0176 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-marketplace-service.ts",
+      "migration": 175,
+      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
+      "migration": 159,
+      "reason": "migration 0159 shipped before the 2026-09-06 baseline and 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
+      "migration": 175,
+      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
     }
   ]
 }
