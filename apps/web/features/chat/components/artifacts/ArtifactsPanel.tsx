@@ -19,7 +19,7 @@ import {
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
-import { ArtifactPreview } from './ArtifactPreview';
+import { ArtifactPreview, type ArtifactPublishSelection } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import { createWebCloudPublisher } from './publishArtifactClient';
@@ -103,7 +103,7 @@ function ArtifactViewer({
   artifact: Artifact;
   versionHistory: SharedArtifact[];
   onClose: () => void;
-  publishArtifact?: () => Promise<PublishResult>;
+  publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -243,12 +243,12 @@ export function ArtifactsPanel() {
     [activeConversationId],
   );
   const makePublishHandler = useCallback(
-    (artifact: Artifact) => () =>
+    (artifact: Artifact) => (selection: ArtifactPublishSelection) =>
       publishArtifactService({
         artifact: {
           id: artifact.id,
           title: artifact.title,
-          content: artifact.content,
+          content: selection.content,
           type: artifact.type,
           ...(artifact.language ? { language: artifact.language } : {}),
         },
