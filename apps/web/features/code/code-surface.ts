@@ -20,6 +20,16 @@ export const CODE_ROUTES = {
   githubInstall: '/api/github/install/start',
 } as const;
 
+export const CODE_MISSING_SESSION_PARAM = 'missing';
+
+export function codeHomeAfterMissingSession(): string {
+  return `${CODE_ROUTES.root}?${CODE_MISSING_SESSION_PARAM}=1`;
+}
+
+export function codeSessionPath(sessionId: string): string {
+  return `${CODE_ROUTES.root}/${encodeURIComponent(sessionId)}`;
+}
+
 export const CODE_LIMITS = {
   title: 120,
   repositoryUrl: 500,
@@ -134,6 +144,7 @@ export const CODE_COPY = {
   storageNotReady: 'Managed environments are not available yet. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
   loadFailed: 'Something went wrong. Please retry.',
+  sessionNotFound: 'That session is not available. It may have been deleted.',
 
   collapseRail: 'Collapse the session list',
   expandRail: 'Expand the session list',
@@ -211,6 +222,7 @@ export const CODE_COPY = {
   openDesktop: 'Desktop app',
   copyLink: 'Copy link',
   copiedLink: 'Link copied',
+  copyLinkFailed: 'Could not copy the link',
   editEnvironment: 'Edit environment',
   rename: 'Rename',
   renameLabel: 'Session title',

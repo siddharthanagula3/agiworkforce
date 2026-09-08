@@ -22,8 +22,10 @@ import {
 } from './services/cloud-code-api';
 
 const push = vi.fn();
+const replace = vi.fn();
+const router = { push, replace };
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => router,
   usePathname: () => '/code',
 }));
 
@@ -230,6 +232,7 @@ async function openEnvironmentSettings(user: ReturnType<typeof userEvent.setup>)
 describe('CloudCodePage', () => {
   beforeEach(() => {
     push.mockReset();
+    replace.mockReset();
     greetingName = 'Ada';
     greetingResolved = true;
   });
@@ -1605,6 +1608,120 @@ describe('CloudCodePage', () => {
 
     await waitFor(() => expect(trigger).toHaveTextContent('Auto'));
     expect(trigger).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('opens a session at its own route', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/code/${session.id}`));
+  });
+
+  it('selects the session named in the url on a cold load', async () => {
+    const get: CloudCodeApi['get'] = vi.fn(async () => ({
+      session,
+      terminalEntries: [],
+      turns: [],
+    }));
+    const api = createApi({
+      get,
+      list: vi.fn(async () => ({ availability, sessions: [], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} sessionId={session.id} />);
+
+    await waitFor(() => expect(get).toHaveBeenCalledWith(session.id, expect.anything()));
+    expect(await screen.findByRole('heading', { name: session.title })).toBeInTheDocument();
+  });
+
+  it('sends an unknown session back to the home and says why', async () => {
+    const api = createApi({
+      get: vi.fn(async () => {
+        throw new CloudCodeApiError('Not found', 404);
+      }),
+      list: vi.fn(async () => ({ availability, sessions: [], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} sessionId="55555555-5555-4555-8555-555555555555" />);
+
+    expect(
+      await screen.findByText('That session is not available. It may have been deleted.'),
+    ).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith('/code?missing=1');
+    expect(await screen.findByRole('heading', { name: /What's up next/ })).toBeInTheDocument();
+    const notice = screen
+      .getByText('That session is not available. It may have been deleted.')
+      .closest('[role="status"]');
+    expect(within(notice as HTMLElement).getByRole('button', { name: /Dismiss/ })).toBeVisible();
+  });
+
+  it('sends a session belonging to somebody else back to the home', async () => {
+    const api = createApi({
+      get: vi.fn(async () => {
+        throw new CloudCodeApiError('Forbidden', 403);
+      }),
+      list: vi.fn(async () => ({ availability, sessions: [], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} sessionId="66666666-6666-4666-8666-666666666666" />);
+
+    expect(
+      await screen.findByText('That session is not available. It may have been deleted.'),
+    ).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith('/code?missing=1');
+  });
+
+  it('navigates to the session it just created', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests{Enter}',
+    );
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/code/${session.id}`));
+  });
+
+  it('returns to the home route when a session is closed and left', async () => {
+    const user = userEvent.setup();
+    const closed: CloudCodeSession = { ...session, state: 'closed' };
+    const api = createApi({
+      list: vi.fn(async (status?: string) => ({
+        availability,
+        sessions: status === 'open' ? [] : [closed],
+        runtimes: [],
+      })),
+      get: vi.fn(async () => ({ session: closed, terminalEntries: [], turns: [] })),
+    });
+    render(<CloudCodePage api={api} sessionId={closed.id} />);
+
+    await user.click(await screen.findByRole('button', { name: 'New session' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/code'));
+  });
+
+  it('says so when the link cannot be copied rather than claiming it was', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => {
+      throw new Error('clipboard unavailable');
+    });
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
+      writeText,
+    } as unknown as Clipboard);
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy link' }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Could not copy the link' })).toBeVisible();
   });
 
   it('says there is nothing to push for a session with no repository', async () => {
