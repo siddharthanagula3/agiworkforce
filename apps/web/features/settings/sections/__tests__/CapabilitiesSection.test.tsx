@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-
-import { SettingsSectionNavigationProvider } from '../../components/SettingsSectionLink';
 
 const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unknown) => fallback);
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
@@ -43,25 +40,12 @@ describe('CapabilitiesSection', () => {
     expect(screen.queryByRole('switch', { name: 'Search past chats' })).toBeNull();
   });
 
-  it('links to /settings/memory when rendered as a plain route', () => {
+  it('carries no relocation notes, because the nav lists both sections itself', () => {
     render(<CapabilitiesSection />);
 
-    const link = screen.getByRole('link', { name: 'Memory' });
-    expect(link).toHaveAttribute('href', '/settings/memory');
-  });
-
-  it('navigates to the memory section when rendered inside the settings modal', async () => {
-    const onNavigate = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <SettingsSectionNavigationProvider onNavigate={onNavigate}>
-        <CapabilitiesSection />
-      </SettingsSectionNavigationProvider>,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Memory' }));
-
-    expect(onNavigate).toHaveBeenCalledWith('memory');
+    expect(screen.queryByText(/has moved to/i)).toBeNull();
+    expect(screen.queryByText(/have moved to/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Memory' })).toBeNull();
   });
 
   it('still renders the code execution toggle it kept', () => {
