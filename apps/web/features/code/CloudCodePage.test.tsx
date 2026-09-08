@@ -1724,6 +1724,50 @@ describe('CloudCodePage', () => {
     expect(await screen.findByRole('menuitem', { name: 'Could not copy the link' })).toBeVisible();
   });
 
+  it('puts the error notice in the composer column, directly above the composer', async () => {
+    const list = vi.fn().mockRejectedValue(new Error('HTTP 429'));
+    render(<CloudCodePage api={createApi({ list })} />);
+
+    const alert = await screen.findByRole('alert');
+    const notices = screen.getByTestId('code-notices');
+    const composerArea = screen.getByTestId('code-composer-area');
+
+    expect(notices).toContainElement(alert);
+    expect(notices.nextElementSibling).toBe(composerArea);
+    expect(notices.parentElement).toBe(composerArea.parentElement);
+    expect(screen.queryByTestId('code-scroll')).not.toBeInTheDocument();
+    expect(within(alert).getByRole('button', { name: /Retry/ })).toBeVisible();
+    expect(within(alert).getByRole('button', { name: /Dismiss/ })).toBeVisible();
+  });
+
+  it('keeps the notice out of the transcript scroll in a session', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+      workingBranch: 'agi/run-the-test-suite',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      changes: vi.fn(async () => {
+        throw new CloudCodeApiError('HTTP 429', 429);
+      }),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(await screen.findByRole('button', { name: 'Changes' }));
+
+    const alert = await screen.findByRole('alert');
+    const notices = screen.getByTestId('code-notices');
+    const scroll = screen.getByTestId('code-scroll');
+
+    expect(notices).toContainElement(alert);
+    expect(scroll).not.toContainElement(alert);
+    expect(notices.nextElementSibling).toBe(screen.getByTestId('code-composer-area'));
+  });
+
   it('says there is nothing to push for a session with no repository', async () => {
     const user = userEvent.setup();
     const api = createApi({

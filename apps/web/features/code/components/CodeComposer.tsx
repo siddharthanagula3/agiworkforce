@@ -1026,7 +1026,7 @@ export function CodeComposer({
   };
 
   return (
-    <div className={styles['composerArea']}>
+    <div className={styles['composerArea']} data-testid="code-composer-area">
       <div className={styles['center']}>
         {showChips && (
           <div className={styles['chipRow']}>
