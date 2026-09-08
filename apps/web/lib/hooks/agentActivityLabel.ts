@@ -1,12 +1,16 @@
 import { PLACES_SEARCH_TOOL_NAME, type AgentEventToolCategory } from '@agiworkforce/types';
 
 export type AgentActivityLabelSignal =
-  | { kind: 'idle'; modelName?: string }
+  | { kind: 'idle'; modelName?: string; elapsedMs?: number }
+  | { kind: 'waiting'; modelName?: string; elapsedMs: number }
   | { kind: 'thinking' }
   | { kind: 'planning' }
   | { kind: 'tool'; name: string; category: AgentEventToolCategory; argument?: string };
 
 const IDLE_UNKNOWN_MODEL_LABEL = 'Connecting to the model';
+const WAITING_LABEL = 'Waiting for the first token';
+const ELAPSED_SEPARATOR = ' \u00b7 ';
+const MS_PER_SECOND = 1_000;
 const THINKING_LABEL = 'Thinking';
 const PLANNING_LABEL = 'Planning';
 const RUNNING_CODE_LABEL = 'Running code';
@@ -59,10 +63,24 @@ function deriveToolLabel(
   return argument ? `Using ${name} for ${argument}` : `Using ${name}`;
 }
 
+function withElapsed(target: string, elapsedMs: number | undefined): string {
+  if (elapsedMs === undefined) return target;
+  const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / MS_PER_SECOND));
+  return elapsedSeconds > 0 ? `${target}${ELAPSED_SEPARATOR}${elapsedSeconds}s` : target;
+}
+
 export function deriveAgentActivityLabel(signal: AgentActivityLabelSignal): string {
   switch (signal.kind) {
     case 'idle':
-      return signal.modelName ? `Connecting to ${signal.modelName}` : IDLE_UNKNOWN_MODEL_LABEL;
+      return withElapsed(
+        signal.modelName ? `Connecting to ${signal.modelName}` : IDLE_UNKNOWN_MODEL_LABEL,
+        signal.elapsedMs,
+      );
+    case 'waiting':
+      return withElapsed(
+        signal.modelName ? `${WAITING_LABEL} from ${signal.modelName}` : WAITING_LABEL,
+        signal.elapsedMs,
+      );
     case 'thinking':
       return THINKING_LABEL;
     case 'planning':

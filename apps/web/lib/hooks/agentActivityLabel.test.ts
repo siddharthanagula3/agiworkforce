@@ -70,10 +70,61 @@ describe('deriveAgentActivityLabel', () => {
       { kind: 'tool', name: 'custom_tool', category: 'other', argument: 'the report' },
       'Using custom_tool for the report',
     ],
+    [
+      'waiting for a first token before a second has passed',
+      { kind: 'waiting', modelName: 'OpenRouter Free Auto', elapsedMs: 400 },
+      'Waiting for the first token from OpenRouter Free Auto',
+    ],
+    [
+      'waiting for a first token with the elapsed time',
+      { kind: 'waiting', modelName: 'OpenRouter Free Auto', elapsedMs: 12_400 },
+      'Waiting for the first token from OpenRouter Free Auto \u00b7 12s',
+    ],
+    [
+      'waiting without a known model',
+      { kind: 'waiting', elapsedMs: 9_000 },
+      'Waiting for the first token \u00b7 9s',
+    ],
+    [
+      'connecting reports how long it has been trying',
+      { kind: 'idle', modelName: 'OpenRouter Free Auto', elapsedMs: 62_000 },
+      'Connecting to OpenRouter Free Auto \u00b7 62s',
+    ],
+    [
+      'connecting stays unadorned before the first second',
+      { kind: 'idle', modelName: 'OpenRouter Free Auto', elapsedMs: 200 },
+      'Connecting to OpenRouter Free Auto',
+    ],
   ];
 
   it.each(cases)('%s', (_description, signal, expected) => {
     expect(deriveAgentActivityLabel(signal)).toBe(expected);
+  });
+});
+
+describe('the waiting label is honest about what it is waiting for', () => {
+  it('never claims to be connecting once the route has answered the request', () => {
+    const connecting = deriveAgentActivityLabel({ kind: 'idle', modelName: 'Any Model' });
+    const waiting = deriveAgentActivityLabel({
+      kind: 'waiting',
+      modelName: 'Any Model',
+      elapsedMs: 30_000,
+    });
+
+    expect(connecting).toContain('Connecting');
+    expect(waiting).not.toContain('Connecting');
+  });
+
+  it('advances the elapsed reading as the wait grows', () => {
+    const signal = (elapsedMs: number): AgentActivityLabelSignal => ({
+      kind: 'waiting',
+      modelName: 'Any Model',
+      elapsedMs,
+    });
+
+    expect(deriveAgentActivityLabel(signal(5_000))).not.toBe(
+      deriveAgentActivityLabel(signal(6_000)),
+    );
   });
 });
 
