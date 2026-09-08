@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test';
 const ROUTES = ['/', '/dev/landing-preview'];
 const PHONE = { width: 390, height: 844 };
 const MIN_TARGET_PX = 44;
-const SHEET_LINKS = ['Product', 'Pricing', 'Docs', 'Sign in', 'Try AGI Web'];
+const SHEET_GROUPS = ['Product', 'Features', 'Solutions', 'Developers', 'Company'];
+const SHEET_LINKS = ['Pricing', 'Contact sales', 'Sign in', 'Try AGI Web'];
 
 for (const route of ROUTES) {
   test.describe(`marketing mobile navigation on ${route}`, () => {
@@ -34,6 +35,9 @@ for (const route of ROUTES) {
       await expect(sheet).toBeVisible();
 
       const nav = sheet.getByRole('navigation', { name: 'Site' });
+      for (const group of SHEET_GROUPS) {
+        await expect(nav.getByText(group, { exact: true })).toBeVisible();
+      }
       for (const label of SHEET_LINKS) {
         await expect(nav.getByRole('link', { name: label })).toBeVisible();
       }
