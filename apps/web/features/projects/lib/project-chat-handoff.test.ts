@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
+
 import {
   acknowledgeProjectChatHandoff,
+  HANDOFF_CARRIES_EVERY_COMPOSER_FIELD,
   PROJECT_CHAT_HANDOFF_KEY,
   readProjectChatHandoff,
   saveProjectChatHandoff,
@@ -21,17 +24,54 @@ function memoryStorage(): Storage {
   };
 }
 
-const meta = {
-  workMode: 'agiwork' as const,
+/**
+ * Every field the composer can send, typed as the composer's own interface.
+ *
+ * The previous fixture was a bare object literal missing two fields, so it
+ * agreed with a schema that was missing the same two, and the suite passed
+ * while starting a chat inside a project failed for every user. Typing it as
+ * `Required<ComposerSendMeta>` makes an omission a compile error here, and
+ * `HANDOFF_CARRIES_EVERY_COMPOSER_FIELD` makes it one in the module.
+ */
+const meta: Required<ComposerSendMeta> = {
+  workMode: 'agiwork',
   projectId: 'project-1',
   webSearchEnabled: true,
   thinkingEnabled: true,
   codeExecutionEnabled: true,
+  officeCreationEnabled: true,
+  researchEnabled: true,
   styleInstruction: 'Use a concise project brief.',
+  skillName: 'Planning',
+  mcpContext: { resources: [{ connectorId: 'connector-1', uri: 'mcp://brief' }] },
   agiWorkGoal: { goal: 'Build the release plan', deliverable: 'A checked plan' },
+  disabledConnectorIds: ['connector-2'],
+  memoryEnabled: false,
 };
 
 describe('project chat handoff', () => {
+  it('carries every field the composer can send', () => {
+    expect(HANDOFF_CARRIES_EVERY_COMPOSER_FIELD).toBe(true);
+  });
+
+  it('survives a composer field the schema has never heard of', () => {
+    const storage = memoryStorage();
+
+    expect(() =>
+      saveProjectChatHandoff(storage, {
+        content: 'Start the project chat',
+        projectId: 'project-1',
+        meta: { ...meta, aFieldAddedTomorrow: true } as ComposerSendMeta,
+      }),
+    ).not.toThrow();
+
+    // Dropped rather than stored, and the send still happens. Rejecting the
+    // whole handoff over an unknown key is what broke every project chat.
+    const read = readProjectChatHandoff(storage, 'project-1');
+    expect(read?.meta).not.toHaveProperty('aFieldAddedTomorrow');
+    expect(read?.content).toBe('Start the project chat');
+  });
+
   it('keeps the complete project send claimed until the durable acknowledgement', () => {
     const storage = memoryStorage();
     const attachment = new File(['evidence'], 'brief.txt', { type: 'text/plain' });
