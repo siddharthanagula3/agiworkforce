@@ -40,9 +40,9 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 19 unresolved issues: 0 P0, 1 P1, 13 P2, 5 P3, plus 3 items needing
-  validation this session could not perform. Two of them, `AGI-3` and `AGI-4`,
-  are partly fixed in this pass and say so.
+- 16 unresolved issues: 0 P0, 1 P1, 12 P2, 3 P3, plus 3 items needing
+  validation this session could not perform. Three of them, `AGI-3`, `AGI-4`
+  and `AGI-23`, are partly fixed in this pass and say which part.
 
 ### Closed in this pass
 
@@ -59,6 +59,9 @@ went, and so nobody re-files them:
 | browser   | Starting a conversation inside a project failed every time     | `apps/web/e2e/project-first-conversation.spec.ts`  |
 | browser   | Tool Approvals did not gate web search in either mode          | `apps/web/e2e/tool-approval-web-search.spec.ts`    |
 | latent    | Approval checkpoints 500'd on a jsonb parameter                | found by the first turn to reach that path         |
+| `AGI-13`  | Unimplemented native commands answered with mock success       | the guard was unreachable; rule extracted and tested |
+| `AGI-19`  | Marketing nav panels stayed open while the page scrolled       | `NavGroup.scroll.test.tsx`                        |
+| `AGI-21`  | A cancelled settings query logged at error level               | `use-settings-queries.abort.test.tsx`             |
 
 ## 2. P0, critical
 
@@ -554,59 +557,34 @@ store. One canonical issue, not 41.
 shared state.
 **Validation:** `check:boundaries`, desktop tests.
 
-### `AGI-13` Unimplemented native commands answer with mock success in cloud web mode
+### `AGI-17` A leading `>` becomes a blockquote, which is the standard
 
 **Severity:** P3
-**Status:** Open
-**Area:** Desktop shell, trust
-**Root cause:** In `tauri-mock.ts`, when `isCloudWeb` is true the guard that
-throws for unavailable native features is skipped, and execution falls through
-to a `switch` returning fixture values such as `{ success: true, title: 'Mock
-Artifact' }`.
-**Current behavior:** Not reachable in either shipped product's chat path.
-`createDesktopChatRuntime` returns `WebRuntime` when the host is not Tauri, so
-the Electron cloud shell never calls these commands for chat, and
-`SettingsPanel` hides the `voice` and `models-keys` tabs in cloud mode. This is
-a latent hazard, not an observed user-facing defect. It is recorded because
-AGENTS.md section 9 forbids mock production paths and fake responses, and the
-next feature that calls `invoke` from cloud mode inherits a false success.
-**Required behavior:** An unimplemented native command in a shipped mode throws
-a clear unavailable error. Fixtures stay in test builds.
-**Evidence:** `apps/desktop/src/lib/tauri-mock.ts:252-300`, `:1753-1790`;
-`apps/desktop/src/lib/runtimeEnvironment.ts:8-28`;
-`apps/desktop/src/lib/tauri-electron/bridgeContract.ts:3-14` (the bridge carries
-12 account commands only); `apps/desktop/src/runtime/desktopChatRuntime.ts:52-60`;
-`apps/desktop/src/features/settings/SettingsPanel.tsx:97-108`.
-**User impact:** None today. Prevents a class of future silent failure.
-**Dependencies:** None.
-**Implementation direction:** Gate the fixture `switch` on the test
-environment only, and throw for cloud web.
-**Acceptance criteria:** A non-bridged command in cloud mode throws. Tests
-still get fixtures.
-**Validation:** Desktop unit tests, `check:trust-boundaries`.
-
-### `AGI-17` A line beginning with `>` loses its first character
-
-**Severity:** P3
-**Status:** Open
+**Status:** Not a defect as reported. A product decision remains.
 **Area:** Markdown rendering
-**Root cause:** The renderer treats a leading `> ` as a blockquote marker
-unconditionally, so the character is consumed and, with nothing after it on the
-line to quote, an empty blockquote is produced and the `>` disappears.
-**Current behavior:** Reproduced identically in assistant and user messages.
-Anything using `>` at the start of a line for its ordinary meaning, shell
-redirection, a comparison, an arrow, silently loses it.
-**Required behavior:** A `>` that is not a blockquote survives. What
-distinguishes them is context the renderer already has: a blockquote has
-content, and its neighbours are prose.
-**Evidence:** browser QA 2026-09-08, both message roles, desktop and 390px.
-**User impact:** Silent corruption of the user's own text, which is worse than
-a visible rendering fault because nothing signals it.
-**Dependencies:** None.
-**Implementation direction:** Fix in the shared renderer, not per surface. Test
-the ambiguous cases directly: `> ` alone, `> quoted`, `>= 3`, `cmd > out.txt`.
-**Acceptance criteria:** Every one of those renders its own characters.
-**Validation:** Renderer unit tests, plus a case in the streaming markdown spec.
+**What was actually found:** The behaviour reproduces, and it is CommonMark. A
+block quote marker is `>` optionally followed by one space, so `>= 3 items`
+renders as a blockquote containing `= 3 items`, and a lone `> ` renders as an
+empty blockquote with nothing visible in it. Confirmed by driving
+`MarkdownContent` directly: `"> "` produces `<blockquote>` with no content,
+`">= 3 items"` produces a blockquote of `= 3 items`, `"> quoted words"` produces
+a correct blockquote, and `"cmd > out.txt"` is untouched because a mid-line `>`
+is not a marker.
+**Why it is not being changed:** the renderer follows the standard every other
+markdown tool follows, and the leaders this product is measured against render
+CommonMark too. Special-casing `>=` or a bare `>` would deviate from the
+standard, and would have to be built so it never swallows a real blockquote.
+That is a deliberate product choice about conforming versus being forgiving, not
+a bug fix, and it is the founder's to make.
+**If it is taken:** the narrowest defensible rule is to treat `>` as a marker
+only when followed by a space or end of line, which keeps every real blockquote
+and returns `>=`, `>>`, `->` and similar to plain text. It would need cases for
+`> `, `> quoted`, `>= 3`, `cmd > out`, `>>> ` and a nested blockquote.
+**User impact:** low and cosmetic in an assistant answer. Real, if minor, when a
+user's own message uses `>` for comparison or redirection at the start of a
+line.
+**Evidence:** browser QA 2026-09-08; reproduced against the renderer directly
+2026-09-08.
 
 ### `AGI-18` A project in the sidebar attaches itself instead of opening
 
@@ -632,24 +610,6 @@ accessible name say so. Do not leave two behaviours behind one label.
 and both entry points agree.
 **Validation:** Component test on the sidebar row, plus a navigation spec.
 
-### `AGI-19` Marketing nav dropdowns stay open while the page scrolls
-
-**Severity:** P3
-**Status:** Open
-**Area:** Marketing site
-**Root cause:** The dropdown closes on outside click only; no scroll listener.
-**Current behavior:** An open menu floats over the content the reader scrolls
-past.
-**Required behavior:** Scrolling dismisses it, as it does on the sites this
-navigation is modelled on.
-**Evidence:** browser QA 2026-09-08.
-**User impact:** Cosmetic, briefly obscures content.
-**Dependencies:** None.
-**Implementation direction:** Close on scroll in the same hook that closes on
-outside click, so the two cannot drift apart.
-**Acceptance criteria:** Scrolling with a menu open closes it.
-**Validation:** A case in the marketing nav spec.
-
 ### `AGI-20` Retry can move the viewport to an unrelated message
 
 **Severity:** P3
@@ -670,30 +630,6 @@ id after the list settles, rather than to an index.
 **Acceptance criteria:** Retry in a long thread leaves the retried message
 visible.
 **Validation:** An e2e case in a thread longer than the overscan window.
-
-### `AGI-21` The API Keys settings query logs an aborted request as an error
-
-**Severity:** P3
-**Status:** Open
-**Area:** Settings, log hygiene
-**Root cause:** An AbortController cancels the in-flight query when the user
-switches settings sections, and the rejection is logged at error level instead
-of being recognised as a cancellation.
-**Current behavior:** `[SettingsQuery] API keys error: "signal is aborted
-without reason"` on the console. The UI renders correctly.
-**Required behavior:** A cancelled request is not an error. An abort is the
-expected outcome of navigating away.
-**Evidence:** browser QA 2026-09-08;
-`features/settings/hooks/use-settings-queries.ts:199`.
-**User impact:** None visible. It is noise that hides real errors, and it
-misleads whoever reads the console next.
-**Dependencies:** None.
-**Implementation direction:** Recognise `AbortError` in the shared settings
-query hook, so every section gets the same treatment rather than this one.
-**Acceptance criteria:** Switching sections rapidly logs nothing at error
-level.
-**Validation:** Hook unit test asserting an aborted query does not log.
-
 
 ## 6. Needs live validation
 
@@ -727,11 +663,10 @@ Dependency-aware, not severity-ordered.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
 7. `AGI-9`, `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent
    of each other.
-8. `AGI-11`, `AGI-17` to `AGI-21`. Background and polish. `AGI-17` is small and
-   corrupts the user's own text, so it is worth taking early by whoever is
-   already in the renderer.
+8. `AGI-11`, `AGI-18`, `AGI-20`. Background and polish. `AGI-17` needs a
+   decision before it needs an implementer.
 
-`AGI-12` and `AGI-13` belong to whoever is next in `apps/desktop`.
+`AGI-12` belongs to whoever is next in `apps/desktop`.
 
 ## 8. Acceptance matrix
 
@@ -747,14 +682,11 @@ Dependency-aware, not severity-ordered.
 | `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
 | `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
 | `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
-| `AGI-13` | desktop unit tests                              | none                               | cloud mode throws                      |
 | `AGI-14` | per-provider route tests, registry contract     | none                               | transcription fails over between vendors |
 | `AGI-16` | assert no provider host in any citation href    | a grounded research turn           | publisher favicon and publisher URL    |
-| `AGI-17` | renderer cases for `>`, `>=`, `cmd > out`       | a message containing each          | every character survives               |
+| `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
 | `AGI-18` | sidebar row component test                      | click from both entry points       | one label, one action                  |
-| `AGI-19` | marketing nav spec                              | none                               | scrolling closes an open menu          |
 | `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
-| `AGI-21` | settings query hook test                        | none                               | an abort logs nothing at error level   |
 | `AGI-22` | auto-route conformance on the web path          | none                               | no Chinese-HQ route without consent    |
 | `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
 | `AGI-24` | failover tests over a tool-carrying request     | none                               | a tool turn reaches a working route    |
@@ -771,8 +703,8 @@ AGI-24 ──> AGI-23 ──> AGI-8 ──> AGI-22   routing, one implementer, o
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
 AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent
-AGI-11, AGI-12, AGI-13     background
-AGI-17 .. AGI-21           polish, independent of everything
+AGI-11, AGI-12             background
+AGI-17, AGI-18, AGI-20     polish, independent of everything
 ```
 
 Four tracks can run at once without touching the same files: retrieval

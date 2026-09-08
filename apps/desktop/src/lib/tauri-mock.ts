@@ -249,6 +249,28 @@ async function handleCloudWebCommand<T>(
   }
 }
 
+/**
+ * May this runtime answer an unimplemented native command with a fixture?
+ *
+ * Only a test runtime and local desktop UI development may. Cloud web used to be
+ * exempt from the throw as well, which made the throw unreachable: `isCloudWeb`
+ * is `!supportsLocalAppMode && !isTestEnvironment`, and Tauri returns before
+ * this point, so every remaining caller satisfied one of the three exemptions
+ * and fell through into the fixture `switch`. An unimplemented native command in
+ * the shipped cloud shell answered `{ success: true, title: 'Mock Artifact' }`.
+ *
+ * Nothing reaches it today: `createDesktopChatRuntime` returns `WebRuntime` off
+ * Tauri, and `SettingsPanel` hides the tabs that would call these. It is closed
+ * because AGENTS.md section 9 forbids a mock production path, and the next
+ * feature to call `invoke` from cloud mode would have inherited a false success
+ * rather than an error it could handle.
+ *
+ * Pure and exported so the rule can be asserted without standing up a runtime.
+ */
+export function shouldServeFixtures(runtime: { test: boolean; desktopUiDev: boolean }): boolean {
+  return runtime.test || runtime.desktopUiDev;
+}
+
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
     assertRegisteredCommand(command);
@@ -290,7 +312,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     throw new Error('Agent execution requires the AGI Workforce desktop application');
   }
 
-  if (!isTestEnvironment && !isCloudWeb && !isDesktopUiDevLocal) {
+  if (!shouldServeFixtures({ test: isTestEnvironment, desktopUiDev: isDesktopUiDevLocal })) {
     const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
     console.error(`[Tauri] ${errorMessage}`, { command, args });
     throw new Error(errorMessage);

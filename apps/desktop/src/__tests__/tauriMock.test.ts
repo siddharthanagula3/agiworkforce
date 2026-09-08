@@ -6,6 +6,13 @@ async function getRealInvoke() {
   return mod.invoke;
 }
 
+// The suite auto-mocks this module, so the real export has to be reached the
+// same way `getRealInvoke` reaches `invoke`.
+async function getShouldServeFixtures() {
+  const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
+  return mod.shouldServeFixtures;
+}
+
 describe('LLM provider/model commands in tauri-mock', () => {
   it('llm_check_provider_status returns an object with available and configured fields', async () => {
     const invoke = await getRealInvoke();
@@ -215,5 +222,21 @@ describe('Native agent execution honesty', () => {
         desktopUiDev: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('which runtimes may answer with a fixture', () => {
+  it('lets a test runtime and local desktop UI development have them', async () => {
+    const shouldServeFixtures = await getShouldServeFixtures();
+    expect(shouldServeFixtures({ test: true, desktopUiDev: false })).toBe(true);
+    expect(shouldServeFixtures({ test: false, desktopUiDev: true })).toBe(true);
+  });
+
+  it('refuses the shipped cloud shell, which used to be exempt and so unreachable', async () => {
+    const shouldServeFixtures = await getShouldServeFixtures();
+    // isCloudWeb is `!supportsLocalAppMode && !isTestEnvironment`, and Tauri
+    // returns before the guard, so exempting cloud web exempted everything: a
+    // non-bridged command answered `{ success: true, title: 'Mock Artifact' }`.
+    expect(shouldServeFixtures({ test: false, desktopUiDev: false })).toBe(false);
   });
 });
