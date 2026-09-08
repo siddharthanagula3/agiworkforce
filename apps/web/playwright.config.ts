@@ -1,32 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
-import * as fs from 'fs';
 import * as path from 'path';
 
-const envPath = path.resolve(__dirname, '.env.local');
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split('\n').forEach((line) => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
-      const value = valueParts.join('=').replace(/^["']|["']$/g, '');
-      if (key && value) {
-        process.env[key] = value;
-      }
-    }
-  });
-}
+import { loadLocalEnvFile } from './e2e/lib/env-file';
+
+loadLocalEnvFile(path.resolve(__dirname, '.env.local'));
 
 const E2E_RATE_LIMIT_SCALE = '50';
 const NO_CREDENTIAL = '';
 
 /**
- * The loader above puts `.env.local` on `process.env`, real Upstash credentials
- * included, and Playwright starts the server with `{ ...process.env, ...env }`.
- * Left alone the batch shares one live rate-limit bucket with production: it
- * spends the account's real allowance, burns Upstash quota, and 429s its own
- * later specs. Blanking the credentials picks the in-process limiter, and the
- * scale keeps back-to-back sends off the ceiling.
+ * The loader above fills gaps in `process.env` from `.env.local`, real Upstash
+ * credentials included, and Playwright starts the server with
+ * `{ ...process.env, ...env }`. Left alone the batch shares one live
+ * rate-limit bucket with production: it spends the account's real allowance,
+ * burns Upstash quota, and 429s its own later specs. Blanking the credentials
+ * picks the in-process limiter, and the scale keeps back-to-back sends off the
+ * ceiling.
  */
 const ISOLATED_SERVER_ENV: Record<string, string> = {
   AGI_RATE_LIMIT_SCALE: E2E_RATE_LIMIT_SCALE,
