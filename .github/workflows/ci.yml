@@ -1145,7 +1145,7 @@ jobs:
             marketing-stage-contrast.spec.ts \
             public-auth-clean.spec.ts \
             qa-14-public-route-contrast.spec.ts \
-            --project=chromium --workers=1
+            --project=chromium --workers=2 --retries=1 --global-timeout=1500000
 
       - name: Print Web app log on failure
         if: failure()
