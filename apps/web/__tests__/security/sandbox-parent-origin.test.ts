@@ -16,7 +16,7 @@ const SANDBOX_VERCEL_JSON = JSON.parse(readFileSync(join(SANDBOX_DIR, 'vercel.js
 };
 
 function parentGateSource(): string {
-  const start = SANDBOX_HTML.indexOf('const ALLOWED_PARENT_ORIGINS');
+  const start = SANDBOX_HTML.indexOf('const PRODUCTION_PARENT_ORIGINS');
   const fnStart = SANDBOX_HTML.indexOf('function isAllowedParent(', start);
   if (start < 0 || fnStart < 0) throw new Error('sandbox parent gate is no longer declared');
   let depth = 0;
@@ -32,9 +32,17 @@ function parentGateSource(): string {
   return SANDBOX_HTML.slice(start, i + 1);
 }
 
-const isAllowedParent = new Function(`${parentGateSource()}\nreturn isAllowedParent;`)() as (
-  origin: string,
-) => boolean;
+type ParentGate = (origin: string) => boolean;
+
+function parentGateServedFrom(hostname: string): ParentGate {
+  // llm-guardrail-allow: evaluates the checked-in sandbox gate source, no input reaches it
+  return new Function('window', `${parentGateSource()}\nreturn isAllowedParent;`)({
+    location: { hostname },
+  }) as ParentGate;
+}
+
+const isAllowedParent = parentGateServedFrom('sandbox.agiworkforce.com');
+const isAllowedParentOnDeveloperMachine = parentGateServedFrom('localhost');
 
 function allowedOrigins(): string[] {
   return [...parentGateSource().matchAll(/'([a-z]+:\/\/[^']+)'/g)].map((m) => m[1]!);
@@ -57,6 +65,13 @@ describe('artifact sandbox parent-origin allowlist', () => {
   it('accepts the enumerated application origins', () => {
     for (const origin of ['https://agiworkforce.com', 'https://chat.agiworkforce.com']) {
       expect(isAllowedParent(origin)).toBe(true);
+    }
+  });
+
+  it('admits a developer parent only when the sandbox itself is served locally', () => {
+    for (const origin of ['http://localhost:3000', 'http://127.0.0.1:5173']) {
+      expect(isAllowedParent(origin)).toBe(false);
+      expect(isAllowedParentOnDeveloperMachine(origin)).toBe(true);
     }
   });
 

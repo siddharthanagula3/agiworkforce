@@ -59,7 +59,10 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     integration expects, described as streaming on the /workspace posture
   //     page; reclaim-sandboxes frees a paused sandbox's slot against the
   //     per-user cap inside the two hour window PAUSED_SANDBOX_MAX_AGE_MS
-  //     promises, which a daily sweep cannot keep.
+  //     promises, which a daily sweep cannot keep; reap-code-turns and
+  //     reap-agent-runs end a turn whose invocation died so it reads as ended
+  //     and its reservation is released within the lease window plus one
+  //     sweep, which is what "still running" means on the page.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -73,6 +76,8 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/run-schedules',
     '/api/cron/drain-audit-streams',
     '/api/cron/reclaim-sandboxes',
+    '/api/cron/reap-code-turns',
+    '/api/cron/reap-agent-runs',
   ]);
   const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
