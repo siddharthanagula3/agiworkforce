@@ -305,7 +305,10 @@ export default function ProjectsPage() {
                       {label}
                     </span>
                     {sortMode === mode && (
-                      <Check className="h-3.5 w-3.5 text-[var(--agi-amber)]" aria-hidden="true" />
+                      <Check
+                        className="h-3.5 w-3.5 text-[var(--color-primary)]"
+                        aria-hidden="true"
+                      />
                     )}
                   </DropdownMenuItem>
                 ))}
