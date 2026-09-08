@@ -6,11 +6,15 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
+  CircleDot,
   Code2,
   GitBranch,
+  Lock,
   Mic,
   Plug,
   Plus,
+  Search,
+  Square,
   X,
 } from '@agiworkforce/icons';
 import { Cloud, Lightbulb, Monitor } from 'lucide-react';
@@ -33,7 +37,11 @@ import {
   PopoverTrigger,
   Spinner,
 } from '@agiworkforce/ui';
-import type { CloudCodeNetworkAccess, CloudCodeRuntime } from '@agiworkforce/types';
+import type {
+  CloudCodeNetworkAccess,
+  CloudCodeRepositoryReference,
+  CloudCodeRuntime,
+} from '@agiworkforce/types';
 import Link from 'next/link';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
@@ -59,11 +67,14 @@ import {
   DEFAULT_NETWORK_ACCESS,
   DEFAULT_RUNTIME_ID,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
+  contextWindowLabel,
   formatResetIn,
   networkAccessLabel,
   repositoryLabel,
 } from '../code-surface';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
+import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
+import type { CloudCodeApi, CloudCodeRepository } from '../services/cloud-code-api';
 import styles from '../CloudCodePage.module.css';
 
 const CHIP_GLYPH_SIZE = 14;
@@ -86,6 +97,7 @@ export interface CodeDraft {
   runtimeId: string;
   repositoryUrl: string;
   repositoryBranch: string;
+  repository: CloudCodeRepositoryReference | null;
 }
 
 export const EMPTY_CODE_DRAFT: CodeDraft = {
@@ -95,7 +107,16 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
   runtimeId: DEFAULT_RUNTIME_ID,
   repositoryUrl: '',
   repositoryBranch: '',
+  repository: null,
 };
+
+export function draftRepositoryLabel(draft: CodeDraft): string {
+  return draft.repository ? draft.repository.fullName : repositoryLabel(draft.repositoryUrl);
+}
+
+export function draftHasRepository(draft: CodeDraft): boolean {
+  return draft.repository !== null || draft.repositoryUrl.trim().length > 0;
+}
 
 function EnvironmentSettings({
   draft,
@@ -337,34 +358,159 @@ function EnvironmentChip({
   );
 }
 
+function RepositoryFirstRun() {
+  const steps = [
+    { id: 'connect', title: CODE_COPY.firstRunConnectTitle, copy: CODE_COPY.firstRunConnectCopy },
+    { id: 'install', title: CODE_COPY.firstRunInstallTitle, copy: CODE_COPY.firstRunInstallCopy },
+  ];
+
+  return (
+    <div className={styles['checklist']}>
+      <span className={styles['popoverHeading']}>{CODE_COPY.firstRunRepositoryHeading}</span>
+      <ol className={styles['checklistRows']}>
+        {steps.map((step) => (
+          <li key={step.id} className={styles['checklistRow']}>
+            <span className={styles['checklistGlyph']}>
+              <CircleDot size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            </span>
+            <span>
+              <span className={styles['optionLabel']}>{step.title}</span>
+              <span className={styles['optionCopy']}>{step.copy}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <a className={styles['primaryButton']} href={CODE_ROUTES.githubInstall}>
+        {CODE_COPY.firstRunAction}
+      </a>
+    </div>
+  );
+}
+
+function RepositoryResults({
+  state,
+  search,
+  onSearchChange,
+  onChoose,
+}: {
+  state: CodeRepositoryState;
+  search: string;
+  onSearchChange: (value: string) => void;
+  onChoose: (repository: CloudCodeRepository) => void;
+}) {
+  const searchFieldId = useId();
+
+  return (
+    <>
+      <div className={styles['repositoryList']} aria-label={CODE_COPY.repositoryChip}>
+        {(state.status === 'loading' || state.status === 'idle') && (
+          <div className={styles['repositoryEmpty']}>
+            <Spinner size="sm" aria-label={CODE_COPY.repositoryLoading} />
+          </div>
+        )}
+
+        {state.status === 'ready' && state.repositories.length === 0 && (
+          <div className={styles['repositoryEmpty']}>
+            <span>
+              {search.trim() ? CODE_COPY.repositoryNoMatches : CODE_COPY.repositoryNoneReachable}
+            </span>
+          </div>
+        )}
+
+        {state.status === 'ready' &&
+          state.repositories.map((repository) => (
+            <button
+              key={`${repository.installationId}:${repository.fullName}`}
+              type="button"
+              className={styles['repositoryRow']}
+              onClick={() => onChoose(repository)}
+            >
+              <Code2 size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+              <span className={styles['repositoryName']}>{repository.fullName}</span>
+              {repository.isPrivate && (
+                <Lock
+                  size={CHIP_GLYPH_SIZE}
+                  className={styles['repositoryPrivate']}
+                  aria-label={CODE_COPY.repositoryPrivate}
+                />
+              )}
+            </button>
+          ))}
+      </div>
+
+      {state.status === 'ready' && state.truncated && (
+        <span className={styles['formHelp']}>{CODE_COPY.repositoryTruncated}</span>
+      )}
+
+      {state.status === 'ready' && state.unreachable.length > 0 && (
+        <span className={styles['formHelp']}>
+          {`${CODE_COPY.repositoryUnreachablePrefix} ${state.unreachable.join(', ')}`}
+        </span>
+      )}
+
+      <div className={styles['repositorySearch']}>
+        <Search size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+        <input
+          id={searchFieldId}
+          className={styles['repositorySearchInput']}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={CODE_COPY.repositorySearchPlaceholder}
+          aria-label={CODE_COPY.repositorySearchLabel}
+        />
+      </div>
+    </>
+  );
+}
+
 function RepositoryPicker({
   draft,
   onDraftChange,
   open,
   onOpenChange,
   trigger,
+  api,
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: React.ReactNode;
+  api: CloudCodeApi;
 }) {
   const [url, setUrl] = useState(draft.repositoryUrl);
   const [branch, setBranch] = useState(draft.repositoryBranch);
+  const [search, setSearch] = useState('');
+  const [urlMode, setUrlMode] = useState(false);
   const urlFieldId = useId();
   const branchFieldId = useId();
-  const selected = draft.repositoryUrl.trim().length > 0;
-  const promoting = url.trim().length > 0 && draft.networkAccess === 'none';
+  const selected = draftHasRepository(draft);
+  const { state, reload } = useCodeRepositories(open, search, api);
+  const promoting = draft.networkAccess === 'none';
+  const showUrlFields = urlMode || state.status === 'error';
+
+  const promote = () =>
+    draft.networkAccess === 'none' ? { networkAccess: REPOSITORY_MINIMUM_NETWORK_ACCESS } : {};
 
   const apply = () => {
     const nextUrl = url.trim();
     onDraftChange({
+      repository: null,
       repositoryUrl: nextUrl,
       repositoryBranch: nextUrl ? branch.trim() : '',
-      ...(nextUrl && draft.networkAccess === 'none'
-        ? { networkAccess: REPOSITORY_MINIMUM_NETWORK_ACCESS }
-        : {}),
+      ...(nextUrl ? promote() : {}),
+    });
+    onOpenChange(false);
+  };
+
+  const choose = (repository: CloudCodeRepository) => {
+    setUrl('');
+    setBranch(repository.defaultBranch ?? '');
+    onDraftChange({
+      repository: { installationId: repository.installationId, fullName: repository.fullName },
+      repositoryUrl: '',
+      repositoryBranch: repository.defaultBranch ?? '',
+      ...promote(),
     });
     onOpenChange(false);
   };
@@ -372,7 +518,7 @@ function RepositoryPicker({
   const clear = () => {
     setUrl('');
     setBranch('');
-    onDraftChange({ repositoryUrl: '', repositoryBranch: '' });
+    onDraftChange({ repository: null, repositoryUrl: '', repositoryBranch: '' });
     onOpenChange(false);
   };
 
@@ -388,48 +534,152 @@ function RepositoryPicker({
         aria-label={CODE_COPY.repositoryChip}
       >
         <div className={styles['popover']}>
-          <div className={styles['formField']}>
-            <label className={styles['formLabel']} htmlFor={urlFieldId}>
-              {CODE_COPY.repositoryUrlLabel}
-            </label>
-            <input
-              id={urlFieldId}
-              className={styles['textInput']}
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder={CODE_COPY.repositoryUrlPlaceholder}
-              maxLength={CODE_LIMITS.repositoryUrl}
+          {state.status === 'no-installation' && <RepositoryFirstRun />}
+
+          {state.status === 'error' && (
+            <div className={styles['repositoryEmpty']}>
+              <span>{CODE_COPY.repositoryLoadFailed}</span>
+              <button type="button" className={styles['secondaryButton']} onClick={reload}>
+                {CODE_COPY.retry}
+              </button>
+            </div>
+          )}
+
+          {state.status !== 'no-installation' && state.status !== 'error' && !urlMode && (
+            <RepositoryResults
+              state={state}
+              search={search}
+              onSearchChange={setSearch}
+              onChoose={choose}
             />
-          </div>
+          )}
+
+          {showUrlFields && (
+            <>
+              <div className={styles['formField']}>
+                <label className={styles['formLabel']} htmlFor={urlFieldId}>
+                  {CODE_COPY.repositoryUrlLabel}
+                </label>
+                <input
+                  id={urlFieldId}
+                  className={styles['textInput']}
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder={CODE_COPY.repositoryUrlPlaceholder}
+                  maxLength={CODE_LIMITS.repositoryUrl}
+                />
+              </div>
+              <div className={styles['formField']}>
+                <label className={styles['formLabel']} htmlFor={branchFieldId}>
+                  {CODE_COPY.repositoryBranchLabel}
+                </label>
+                <input
+                  id={branchFieldId}
+                  className={styles['textInput']}
+                  value={branch}
+                  onChange={(event) => setBranch(event.target.value)}
+                  placeholder={CODE_COPY.repositoryBranchPlaceholder}
+                  maxLength={CODE_LIMITS.repositoryBranch}
+                />
+              </div>
+              <div className={styles['popoverActions']}>
+                {selected && (
+                  <button type="button" className={styles['secondaryButton']} onClick={clear}>
+                    {CODE_COPY.repositoryClear}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={styles['primaryButton']}
+                  disabled={url.trim().length === 0}
+                  onClick={apply}
+                >
+                  {CODE_COPY.repositoryApply}
+                </button>
+              </div>
+            </>
+          )}
+
+          {promoting && (state.status === 'ready' || showUrlFields) && (
+            <span className={styles['formHelp']}>{CODE_COPY.environmentPromotedToTrusted}</span>
+          )}
+
+          {state.status !== 'error' && (
+            <button
+              type="button"
+              className={styles['popoverToggle']}
+              onClick={() => setUrlMode((current) => !current)}
+            >
+              {urlMode ? CODE_COPY.repositoryUrlHide : CODE_COPY.repositoryUrlToggle}
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function BranchChip({
+  draft,
+  onDraftChange,
+}: {
+  draft: CodeDraft;
+  onDraftChange: (patch: Partial<CodeDraft>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [branch, setBranch] = useState(draft.repositoryBranch);
+  const fieldId = useId();
+
+  useEffect(() => setBranch(draft.repositoryBranch), [draft.repositoryBranch]);
+
+  const apply = () => {
+    const next = branch.trim();
+    if (!next) return;
+    onDraftChange({ repositoryBranch: next });
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={styles['chip']} aria-label={CODE_COPY.branchEdit}>
+          <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+          <span>{draft.repositoryBranch}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        sideOffset={POPOVER_OFFSET}
+        style={{ width: POPOVER_WIDTH }}
+        className="p-0"
+      >
+        <div className={styles['popover']}>
           <div className={styles['formField']}>
-            <label className={styles['formLabel']} htmlFor={branchFieldId}>
+            <label className={styles['formLabel']} htmlFor={fieldId}>
               {CODE_COPY.repositoryBranchLabel}
             </label>
             <input
-              id={branchFieldId}
+              id={fieldId}
               className={styles['textInput']}
               value={branch}
               onChange={(event) => setBranch(event.target.value)}
-              placeholder={CODE_COPY.repositoryBranchPlaceholder}
+              onKeyDown={(event) => {
+                if (event.key !== ENTER_KEY) return;
+                event.preventDefault();
+                apply();
+              }}
               maxLength={CODE_LIMITS.repositoryBranch}
             />
           </div>
-          {promoting && (
-            <span className={styles['formHelp']}>{CODE_COPY.environmentPromotedToTrusted}</span>
-          )}
           <div className={styles['popoverActions']}>
-            {selected && (
-              <button type="button" className={styles['secondaryButton']} onClick={clear}>
-                {CODE_COPY.repositoryClear}
-              </button>
-            )}
             <button
               type="button"
               className={styles['primaryButton']}
-              disabled={url.trim().length === 0}
+              disabled={branch.trim().length === 0}
               onClick={apply}
             >
-              {CODE_COPY.repositoryApply}
+              {CODE_COPY.branchApply}
             </button>
           </div>
         </div>
@@ -441,12 +691,14 @@ function RepositoryPicker({
 function RepositoryChips({
   draft,
   onDraftChange,
+  api,
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
+  api: CloudCodeApi;
 }) {
   const [open, setOpen] = useState(false);
-  const selected = draft.repositoryUrl.trim().length > 0;
+  const selected = draftHasRepository(draft);
 
   if (!selected) {
     return (
@@ -455,6 +707,7 @@ function RepositoryChips({
         onDraftChange={onDraftChange}
         open={open}
         onOpenChange={setOpen}
+        api={api}
         trigger={
           <button type="button" className={styles['chip']}>
             <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
@@ -472,23 +725,19 @@ function RepositoryChips({
         onDraftChange={onDraftChange}
         open={open}
         onOpenChange={setOpen}
+        api={api}
         trigger={
           <button type="button" className={`${styles['chip']} ${styles['chipSet']}`}>
             <Code2 size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-            <span>{repositoryLabel(draft.repositoryUrl)}</span>
+            <span>{draftRepositoryLabel(draft)}</span>
           </button>
         }
       />
-      {draft.repositoryBranch && (
-        <span className={`${styles['chip']} ${styles['chipStatic']}`}>
-          <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-          <span>{draft.repositoryBranch}</span>
-        </span>
-      )}
+      {draft.repositoryBranch && <BranchChip draft={draft} onDraftChange={onDraftChange} />}
       <button
         type="button"
         className={`${styles['chip']} ${styles['chipCompact']}`}
-        aria-label={CODE_COPY.repositoryAdd}
+        aria-label={CODE_COPY.repositoryChange}
         onClick={() => setOpen(true)}
       >
         <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
@@ -498,9 +747,7 @@ function RepositoryChips({
 }
 
 function ApprovalModeControl() {
-  const [policy, setPolicy] = useState<ToolApprovalPolicy>(
-    DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
-  );
+  const [policy, setPolicy] = useState<ToolApprovalPolicy | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -512,7 +759,9 @@ function ApprovalModeControl() {
       .then((value) => {
         if (!cancelled) setPolicy(value.defaultPolicy);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setPolicy(DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy);
+      });
     return () => {
       cancelled = true;
     };
@@ -541,12 +790,13 @@ function ApprovalModeControl() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={styles['controlButton']}
+          className={`${styles['controlButton']} ${styles['controlButtonMode']}`}
           aria-label={CODE_COPY.approvalMode}
+          aria-busy={policy === null}
         >
-          <span>{toolApprovalPolicyOption(policy).shortLabel}</span>
-          {saving ? (
-            <Spinner size="sm" aria-hidden="true" />
+          {policy && <span>{toolApprovalPolicyOption(policy).shortLabel}</span>}
+          {saving || policy === null ? (
+            <Spinner size="sm" aria-label={policy === null ? CODE_COPY.approvalMode : undefined} />
           ) : (
             <ChevronDown size={CHIP_GLYPH_SIZE} aria-hidden="true" />
           )}
@@ -555,7 +805,7 @@ function ApprovalModeControl() {
       <DropdownMenuContent align="start" side="top" className="w-80">
         <DropdownMenuLabel>{CODE_COPY.modeMenu}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
-          value={policy}
+          value={policy ?? ''}
           onValueChange={(value) => void persist(value as ToolApprovalPolicy)}
         >
           {TOOL_APPROVAL_POLICY_OPTIONS.map((option, index) => (
@@ -597,7 +847,13 @@ function AttachMenu() {
   );
 }
 
-function UsageRing() {
+function UsageRing({
+  contextTokens,
+  contextWindow,
+}: {
+  contextTokens: number | null;
+  contextWindow: number | null;
+}) {
   const { usage, loading } = useManagedUsageSummary();
   const percent = Math.min(PERCENT_MAX, Math.max(0, usage?.usage_percentage ?? 0));
   const now = Date.now();
@@ -660,6 +916,22 @@ function UsageRing() {
       </PopoverTrigger>
       <PopoverContent align="end" side="top" sideOffset={POPOVER_OFFSET} className="w-72 p-0">
         <div className={styles['popover']}>
+          {contextTokens !== null && contextWindow !== null && (
+            <div className={styles['usageBarBlock']}>
+              <div className={styles['usageBarLabel']}>
+                <span>{CODE_COPY.contextWindow}</span>
+                <span>{contextWindowLabel(contextTokens, contextWindow)}</span>
+              </div>
+              <div className={styles['usageBarTrack']}>
+                <div
+                  className={styles['usageBarFill']}
+                  style={{
+                    width: `${Math.min(PERCENT_MAX, (contextTokens / contextWindow) * PERCENT_MAX)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
           <span className={styles['popoverHeading']}>{CODE_COPY.planUsage}</span>
           {loading && <Spinner size="sm" aria-label={CODE_COPY.usageMenu} />}
           {!loading && bars.length === 0 && (
@@ -706,6 +978,12 @@ export interface CodeComposerProps {
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmptyEnvironment: () => void;
   runtimes: CloudCodeRuntime[];
+  api: CloudCodeApi;
+  turnRunning: boolean;
+  stopping: boolean;
+  onStop: () => void;
+  contextTokens: number | null;
+  contextWindow: number | null;
 }
 
 export function CodeComposer({
@@ -721,6 +999,12 @@ export function CodeComposer({
   onDraftChange,
   onOpenEmptyEnvironment,
   runtimes,
+  api,
+  turnRunning,
+  stopping,
+  onStop,
+  contextTokens,
+  contextWindow,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -753,7 +1037,7 @@ export function CodeComposer({
               onDraftChange={onDraftChange}
               onOpenEmpty={onOpenEmptyEnvironment}
             />
-            <RepositoryChips draft={draft} onDraftChange={onDraftChange} />
+            <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
           </div>
         )}
 
@@ -788,19 +1072,35 @@ export function CodeComposer({
               rows={1}
               aria-label={CODE_COPY.composerPlaceholder}
             />
-            <button
-              type="button"
-              className={styles['sendButton']}
-              disabled={!sendable}
-              aria-label={CODE_COPY.send}
-              onClick={() => onSubmit(value.trim())}
-            >
-              {busy ? (
-                <Spinner size="sm" aria-hidden="true" />
-              ) : (
-                <ArrowUp size={SEND_GLYPH_SIZE} aria-hidden="true" />
-              )}
-            </button>
+            {turnRunning ? (
+              <button
+                type="button"
+                className={styles['sendButton']}
+                disabled={stopping}
+                aria-label={stopping ? CODE_COPY.stoppingTurn : CODE_COPY.stopTurn}
+                onClick={onStop}
+              >
+                {stopping ? (
+                  <Spinner size="sm" aria-hidden="true" />
+                ) : (
+                  <Square size={SEND_GLYPH_SIZE} aria-hidden="true" />
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles['sendButton']}
+                disabled={!sendable}
+                aria-label={CODE_COPY.send}
+                onClick={() => onSubmit(value.trim())}
+              >
+                {busy ? (
+                  <Spinner size="sm" aria-hidden="true" />
+                ) : (
+                  <ArrowUp size={SEND_GLYPH_SIZE} aria-hidden="true" />
+                )}
+              </button>
+            )}
           </div>
 
           <div className={styles['controlRow']}>
@@ -830,7 +1130,7 @@ export function CodeComposer({
                 </button>
                 <span className={styles['controlSpacer']} />
                 <ComposerFooter inline showStyleSelector={false} />
-                <UsageRing />
+                <UsageRing contextTokens={contextTokens} contextWindow={contextWindow} />
               </>
             )}
           </div>

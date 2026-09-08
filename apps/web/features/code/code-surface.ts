@@ -1,4 +1,10 @@
-import type { CloudCodeNetworkAccess, CloudCodeSession } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_SESSION_STATUS_FILTERS,
+  type CloudCodeChangeState,
+  type CloudCodeNetworkAccess,
+  type CloudCodeSession,
+  type CloudCodeSessionStatusFilter,
+} from '@agiworkforce/types';
 import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
 
 export const CODE_ROUTES = {
@@ -11,6 +17,7 @@ export const CODE_ROUTES = {
   desktop: '/download',
   connectors: '/connectors',
   usage: '/settings/usage',
+  githubInstall: '/api/github/install/start',
 } as const;
 
 export const CODE_LIMITS = {
@@ -29,7 +36,10 @@ export const CODE_SIZES = {
   narrowViewport: 900,
 } as const;
 
+const PERCENT_MAX = 100;
+
 export const CODE_TIMING = {
+  searchDebounceMs: 250,
   elapsedTickMs: 1000,
   msPerSecond: 1000,
   secondsPerMinute: 60,
@@ -62,6 +72,8 @@ export const CODE_COPY = {
   greetingWithName: "What's up next, {name}?",
   greeting: "What's up next?",
   send: 'Start the task',
+  stopTurn: 'Stop the task',
+  stoppingTurn: 'Stopping the task',
   startDictation: 'Start voice input',
   repositoryChip: 'Select repository',
   repositoryUrlLabel: 'Repository URL',
@@ -84,7 +96,8 @@ export const CODE_COPY = {
   extraHostsHelp: 'Comma separated, one leading wildcard allowed, up to 10 hosts.',
   fullNetworkAcknowledgement:
     'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI Workforce credentials.',
-  environmentPromotedToTrusted: 'Cloning a repository needs Trusted hosts, so the tier was raised.',
+  environmentPromotedToTrusted:
+    'Cloning a repository needs Trusted hosts, so choosing one raises the tier.',
   approvalMode: 'Approval mode',
   firstRunHint:
     'Commands run in an isolated environment. Nothing reaches your local files or credentials.',
@@ -132,6 +145,7 @@ export const CODE_COPY = {
   filterAll: 'All',
   statusOpen: 'Open',
   statusClosed: 'Closed',
+  statusArchived: 'Archived',
   sortActivity: 'Last activity',
   sortCreated: 'Created',
   sortTitle: 'Title',
@@ -142,6 +156,7 @@ export const CODE_COPY = {
   addConnectors: 'Add connectors',
   microphoneMenu: 'Microphone',
   usageMenu: 'Usage',
+  contextWindow: 'Context window',
   planUsage: 'Plan usage limits',
   usageDetail: 'See detailed breakdown',
   usageSession: 'Five hour limit',
@@ -156,8 +171,28 @@ export const CODE_COPY = {
   environmentRemote: 'Remote control',
   environmentRemoteHint: 'Desktop only',
 
-  repositoryAdd: 'Add a repository',
-  branchChip: 'Branch',
+  repositoryChange: 'Change repository',
+  branchEdit: 'Change the branch',
+  branchApply: 'Use this branch',
+
+  repositorySearchLabel: 'Search repositories',
+  repositorySearchPlaceholder: 'Search repositories',
+  repositoryLoading: 'Loading repositories',
+  repositoryNoMatches: 'No repositories match that search.',
+  repositoryNoneReachable:
+    'The installed app can reach no repositories yet. Give it access to one on GitHub.',
+  repositoryLoadFailed: 'Repositories could not be loaded.',
+  repositoryTruncated: 'More repositories exist. Search to narrow the list.',
+  repositoryUnreachablePrefix: 'These installations could not be read:',
+  repositoryPrivate: 'Private',
+  repositoryUrlToggle: 'Use a repository URL instead',
+  repositoryUrlHide: 'Hide the repository URL',
+  firstRunRepositoryHeading: 'Two steps to work in your repository',
+  firstRunConnectTitle: 'Connect your GitHub account',
+  firstRunConnectCopy: 'Sign in so this surface can see the repositories you can reach.',
+  firstRunInstallTitle: 'Install the GitHub app',
+  firstRunInstallCopy: 'Choose which repositories the environment may clone and push.',
+  firstRunAction: 'Connect GitHub',
 
   runningPlaceholder: 'The agent is working. Your next task can wait here.',
   initializedSession: 'Initialized session',
@@ -177,11 +212,29 @@ export const CODE_COPY = {
   copyLink: 'Copy link',
   copiedLink: 'Link copied',
   editEnvironment: 'Edit environment',
+  rename: 'Rename',
+  renameLabel: 'Session title',
+  renameApply: 'Rename the session',
+  renameCancel: 'Keep the current title',
+  archiveSession: 'Archive',
+  unarchiveSession: 'Unarchive',
+  archivedBanner: 'This session is archived. Unarchive it to keep working in this session.',
+  deleteSession: 'Delete',
+  deleteSessionTitle: 'Delete this session?',
+  deleteSessionDescription:
+    'The transcript, every command it ran and its approvals go with it. Nothing here can be recovered.',
+  deleteSessionConfirm: 'Delete session',
+  deleteNeedsClosed: 'Close or archive the session before deleting it.',
 
-  changesBranchFrom: 'Cloned from',
   changesNone: 'No changes to show',
-  changesCheck: 'Check for changes',
-  changesChecking: 'Checking',
+  changesRefresh: 'Refresh the changes',
+  changesLoading: 'Loading changes',
+  changesDiffTruncated: 'The diff is too large to show in full.',
+  createPullRequest: 'Create pull request',
+  creatingPullRequest: 'Opening the pull request',
+  pullRequestChipPrefix: 'Pull request',
+  pullRequestNeedsBranch: 'A pull request needs a repository and a working branch.',
+  pullRequestNeedsOpenSession: 'A closed or archived session cannot open a pull request.',
   changesSettings: 'Changes settings',
   changesExpand: 'Widen the panel',
   changesCollapse: 'Narrow the panel',
@@ -251,6 +304,23 @@ export function stopReasonIsFailure(reason: CloudCodeAgentStopReason): boolean {
   return reason === 'error' || reason === 'denied' || reason === 'timeout';
 }
 
+export function stopReasonIsRetryable(reason: CloudCodeAgentStopReason): boolean {
+  return stopReasonIsFailure(reason) || reason === 'cancelled';
+}
+
+const CHANGE_STATE_LABELS: Record<CloudCodeChangeState, string> = {
+  added: 'Added',
+  modified: 'Modified',
+  deleted: 'Deleted',
+  renamed: 'Renamed',
+  untracked: 'Untracked',
+  conflicted: 'Conflicted',
+};
+
+export function changeStateLabel(state: CloudCodeChangeState): string {
+  return CHANGE_STATE_LABELS[state];
+}
+
 export function repositoryLabel(repositoryUrl: string): string {
   const trimmed = repositoryUrl.replace(/\.git$/, '').replace(/\/$/, '');
   const parts = trimmed.split('/').filter(Boolean);
@@ -268,16 +338,17 @@ export function commandRanLabel(count: number): string {
   return count === 1 ? 'Ran a command' : `Ran ${count} commands`;
 }
 
-export const CODE_STATUS_FILTERS = ['all', 'open', 'closed'] as const;
-export type CodeStatusFilter = (typeof CODE_STATUS_FILTERS)[number];
+export const CODE_STATUS_FILTERS = CLOUD_CODE_SESSION_STATUS_FILTERS;
+export type CodeStatusFilter = CloudCodeSessionStatusFilter;
 
 export const CODE_SORT_OPTIONS = ['activity', 'created', 'title'] as const;
 export type CodeSortOption = (typeof CODE_SORT_OPTIONS)[number];
 
 export const CODE_STATUS_FILTER_LABELS: Record<CodeStatusFilter, string> = {
-  all: CODE_COPY.filterAll,
   open: CODE_COPY.statusOpen,
   closed: CODE_COPY.statusClosed,
+  archived: CODE_COPY.statusArchived,
+  all: CODE_COPY.filterAll,
 };
 
 export const CODE_SORT_LABELS: Record<CodeSortOption, string> = {
@@ -310,13 +381,9 @@ export function filterAndSortSessions(
   sessions: CloudCodeSession[],
   filters: CodeSessionFilters,
 ): CloudCodeSession[] {
-  const matched = sessions.filter((session) => {
-    if (filters.status === 'open' && session.state === 'closed') return false;
-    if (filters.status === 'closed' && session.state !== 'closed') return false;
-    if (filters.environment !== 'all' && session.networkAccess !== filters.environment)
-      return false;
-    return true;
-  });
+  const matched = sessions.filter(
+    (session) => filters.environment === 'all' || session.networkAccess === filters.environment,
+  );
   const sorted = [...matched];
   if (filters.sort === 'title') {
     sorted.sort((a, b) => a.title.localeCompare(b.title));
@@ -356,6 +423,27 @@ export function provisioningSteps(session: CloudCodeSession): CodeProvisioningSt
       ? { id: 'agent', label: CODE_COPY.stepAgent, state: provisioned }
       : { id: 'agent', label: CODE_COPY.stepAgentSkipped, state: 'skipped' },
   ];
+}
+
+const TOKENS_PER_THOUSAND = 1000;
+const TOKENS_PER_MILLION = 1000000;
+const TOKEN_DECIMALS = 1;
+const TRAILING_ZERO = /\.0$/;
+
+function trimTokenDecimal(value: number): string {
+  return value.toFixed(TOKEN_DECIMALS).replace(TRAILING_ZERO, '');
+}
+
+export function formatTokenCount(tokens: number): string {
+  const safe = Math.max(0, Math.round(tokens));
+  if (safe < TOKENS_PER_THOUSAND) return String(safe);
+  if (safe < TOKENS_PER_MILLION) return `${trimTokenDecimal(safe / TOKENS_PER_THOUSAND)}k`;
+  return `${trimTokenDecimal(safe / TOKENS_PER_MILLION)}M`;
+}
+
+export function contextWindowLabel(used: number, window: number): string {
+  const percent = Math.min(PERCENT_MAX, Math.round((used / window) * PERCENT_MAX));
+  return `${formatTokenCount(used)} / ${formatTokenCount(window)} (${percent}%)`;
 }
 
 export function formatElapsed(milliseconds: number): string {
