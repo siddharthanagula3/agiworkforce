@@ -2,7 +2,43 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import type { SupportHandoffView, SupportPresenceView } from '../lib/contract';
+import { useHandoffThread } from '../hooks/useHandoffThread';
+import { fetchHandoffMessages, sendHandoffMessage } from '../lib/support-client';
+import { SupportHandoffThread } from './SupportHandoffThread';
 import styles from './SupportWidget.module.css';
+
+const WAITING_COMPOSER_REASON = 'You can write once someone joins. Nobody has picked this up yet.';
+
+function VisitorThread({
+  sessionId,
+  pollIntervalMs,
+  connected,
+}: {
+  sessionId: string;
+  pollIntervalMs: number;
+  connected: boolean;
+}) {
+  const thread = useHandoffThread({
+    sessionId,
+    pollIntervalMs,
+    load: fetchHandoffMessages,
+    send: sendHandoffMessage,
+  });
+
+  return (
+    <SupportHandoffThread
+      messages={thread.messages}
+      loading={thread.loading}
+      loadError={thread.loadError}
+      sending={thread.sending}
+      sendError={thread.sendError}
+      canSend={connected}
+      disabledReason={WAITING_COMPOSER_REASON}
+      onSend={thread.send}
+      onDismissSendError={thread.clearSendError}
+    />
+  );
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -76,6 +112,11 @@ export function SupportHandoffPanel({
           <p className={styles['cardBody']}>{handoff.detail}</p>
           <WaitCountdown waitExpiresAt={handoff.waitExpiresAt} />
           <p className={styles['cardBody']}>Reference {handoff.referenceId}</p>
+          <VisitorThread
+            sessionId={handoff.sessionId}
+            pollIntervalMs={handoff.pollIntervalMs}
+            connected={false}
+          />
         </div>
       );
     }
@@ -90,6 +131,11 @@ export function SupportHandoffPanel({
               : handoff.detail}
           </p>
           <p className={styles['cardBody']}>Reference {handoff.referenceId}</p>
+          <VisitorThread
+            sessionId={handoff.sessionId}
+            pollIntervalMs={handoff.pollIntervalMs}
+            connected
+          />
         </div>
       );
     }
