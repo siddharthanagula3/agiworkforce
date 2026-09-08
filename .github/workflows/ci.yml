@@ -1008,7 +1008,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: scope
     if: needs.scope.outputs.web_changed == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 45
     # DATABASE_URL below points at a Postgres this job never started, so every
     # page answered 500 from the health check. The env-validation crash used to
     # kill the server first and hide it.
@@ -1029,6 +1029,11 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      # The data layer refuses a plaintext connection string unless the
+      # database is a loopback Postgres reached through the local websocket
+      # proxy, which is how development runs. Without it every page answered
+      # 500 from the health check and each spec ran to its timeout.
+      AGI_DATABASE_WS_PROXY: 127.0.0.1:5433
       # next start makes NODE_ENV production, which arms rate-limit.ts's
       # SEV-WEB-13 module-scope guard (Redis credentials or refuse to serve) and
       # empty-500s every rate-limited API route. This single-instance CI server
@@ -1084,6 +1089,12 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm --filter @agiworkforce/web build
 
+      - name: Start the database proxy
+        run: |
+          set -euo pipefail
+          node scripts/dev-db-ws-proxy.mjs > apps/web/db-proxy.log 2>&1 &
+          echo $! > apps/web/db-proxy.pid
+
       - name: Start Web app
         run: |
           set -euo pipefail
@@ -1107,6 +1118,7 @@ jobs:
           done
           echo "Web app failed to start"
           tail -200 apps/web/app.log || true
+          tail -50 apps/web/db-proxy.log || true
           exit 1
 
       - name: Run blocking WCAG 2.1 A/AA audit
