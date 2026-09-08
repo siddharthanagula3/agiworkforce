@@ -52,6 +52,7 @@ import {
   hasFirstTokenBudgetLeft,
   startProviderStreamWithinFirstTokenDeadline,
 } from './lib/first-token-deadline';
+import { recordFailedTurn } from './lib/failed-turn-record';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan } from './lib/managed-failover';
@@ -993,6 +994,7 @@ async function dispatchChatCompletions(
             continue;
           }
           await refundFailedReservation(userId, attemptProcessed, 'streaming_failure');
+          await recordFailedTurn(attemptProcessed, userId, request.signal);
           return buildUpstreamErrorResponse(
             error,
             attemptProcessed.provider,
@@ -1081,6 +1083,7 @@ async function dispatchChatCompletions(
           continue;
         }
         await refundFailedReservation(userId, attemptProcessed, 'request_failure');
+        await recordFailedTurn(attemptProcessed, userId, request.signal);
         return buildUpstreamErrorResponse(
           error,
           attemptProcessed.provider,
