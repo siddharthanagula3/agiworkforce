@@ -47,7 +47,11 @@ import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
-import { startProviderStream } from './lib/adapter-factory';
+import {
+  firstTokenDeadlineMs,
+  hasFirstTokenBudgetLeft,
+  startProviderStreamWithinFirstTokenDeadline,
+} from './lib/first-token-deadline';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan } from './lib/managed-failover';
@@ -960,15 +964,28 @@ async function dispatchChatCompletions(
           const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
           const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
           chunks = await timePhase(CHAT_TURN_PHASE.providerStream, () =>
-            startProviderStream(
+            startProviderStreamWithinFirstTokenDeadline(
               adapter,
               chatRequest,
               request.signal,
               attemptAdapterProvider.mapError,
+              firstTokenDeadlineMs(Date.now() - streamStartedAt),
             ),
           );
         } catch (error) {
-          const nextAttempt = failover.next(error);
+          const budgetLeft = hasFirstTokenBudgetLeft(Date.now() - streamStartedAt);
+          if (!budgetLeft) {
+            logger.warn(
+              {
+                requestId: attemptProcessed.requestId,
+                provider: attemptProcessed.provider,
+                model: attemptProcessed.chatRequest.model,
+                elapsedMs: Date.now() - streamStartedAt,
+              },
+              'First-token budget for this turn is spent; refusing to try another route',
+            );
+          }
+          const nextAttempt = budgetLeft ? failover.next(error) : null;
           const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
           if (nextAttempt && nextAdapterProvider) {
             attemptProcessed = nextAttempt.processed;
