@@ -8,6 +8,7 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
+import { inlineFileBlockAsText } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-protocol';
 import {
   normalizeOpenAIStrictToolParameters,
@@ -50,7 +51,21 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
       return [{ type: 'image_url', image_url: { url } }];
     }
     if (b.type === 'file') {
-      throw new TypeError('File inputs require an OpenAI Responses-capable model');
+      // The Chat Completions wire format has no file part at all, so a
+      // text-like document is inlined as text and opaque bytes raise
+      // `unsupported_input`, which Auto rotates to a route that has a real
+      // file channel. Throwing for every file, as this did, made every .txt
+      // and .csv attachment fail on OpenRouter and on every OpenAI-compatible
+      // vendor that shares this translator.
+      return [
+        {
+          type: 'text',
+          text: inlineFileBlockAsText(
+            b,
+            'this route speaks the Chat Completions format, which carries text and images only',
+          ),
+        },
+      ];
     }
     return [];
   });

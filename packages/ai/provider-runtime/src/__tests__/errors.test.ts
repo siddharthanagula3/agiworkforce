@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { UnsupportedFileInputError } from '@agiworkforce/types';
+
 import {
   CannotRetryError,
   FallbackTriggeredError,
@@ -19,6 +21,28 @@ describe('classifyError', () => {
     expect(c.category).toBe('aborted');
     expect(c.retryable).toBe(false);
     expect(c.fallbackable).toBe(false);
+  });
+
+  it('classifies an unsupported attachment as unsupported_input, not as a server error', () => {
+    const err = new UnsupportedFileInputError(
+      'brief.pdf',
+      'application/pdf',
+      'this route carries text and images only',
+    );
+    const c = classifyError(err);
+
+    expect(c.category).toBe('unsupported_input');
+    // Retrying the same route would fail identically; a different route is the
+    // only thing that can change the outcome.
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+    expect(c.message).toContain('brief.pdf');
+  });
+
+  it('does not mistake an unsupported attachment for a generic TypeError', () => {
+    const c = classifyError(new TypeError('File inputs require an OpenAI Responses-capable model'));
+
+    expect(c.category).not.toBe('unsupported_input');
   });
 
   it('classifies a connection timeout as api_timeout/retryable', () => {
