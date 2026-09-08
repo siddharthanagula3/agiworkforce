@@ -188,8 +188,16 @@ export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
         // A caller abort (unmount, navigation, a new query superseding this
         // one) is normal cancellation, not a failure, the same reasoning as
         // the signed-out suppression above. Only a genuine timeout is an error.
-        const aborted =
-          error instanceof Error && error.name === 'AbortError' && !timeoutSignal.aborted;
+        //
+        // Read from the SIGNAL, not from the error's name. The service catches
+        // its own rejection and returns `{ error: string }`, so the branch
+        // above rebuilds it as `new Error(error)` and the DOMException's
+        // `AbortError` name is gone by the time it lands here. The name check
+        // therefore never matched, and every settings section a user clicked
+        // away from logged `[SettingsQuery] API keys error: "signal is aborted
+        // without reason"` at error level. The signal cannot be reshaped by a
+        // layer in between.
+        const aborted = signal.aborted && !timeoutSignal.aborted;
         if (aborted) throw error;
         const message = timeoutSignal.aborted
           ? 'API keys took too long to load. Please try again.'

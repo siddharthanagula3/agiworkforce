@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import type { NavGroupDefinition } from './nav';
 
 const CLOSE_DELAY_MS = 140;
@@ -34,6 +34,26 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
       setOpen(false);
     }
   };
+
+  /**
+   * Scrolling dismisses an open panel.
+   *
+   * The panel opens on click as well as on hover, and the click-opened case had
+   * no way to close except another click or moving the pointer out. Scrolling
+   * with one open left it floating over the content being scrolled past, which
+   * is what the leaders' navigation does not do. Listening on `window` sees
+   * page scrolling only: a scroll inside the panel's own list does not bubble
+   * there, so a long menu can still be scrolled without closing itself.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const close = () => {
+      cancelClose();
+      setOpen(false);
+    };
+    window.addEventListener('scroll', close, { passive: true });
+    return () => window.removeEventListener('scroll', close);
+  }, [open]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && open) {
