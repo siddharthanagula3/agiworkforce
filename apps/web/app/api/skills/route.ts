@@ -9,6 +9,17 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { ManagedSkillsResponseSchema } from '@agiworkforce/cloud-contracts';
 import { SkillDraftBodySchema } from './skill-draft-schema';
+import { parseSkillDraftFromMarkdown } from '@agiworkforce/skills';
+import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
+import {
+  PluginArchiveError,
+  readSingleSkillFromArchive,
+} from '@/features/plugins/server/directory/archive';
+import {
+  PLUGIN_UPLOAD_FILE_FIELD,
+  SKILL_UPLOAD_NOT_UTF8_MESSAGE,
+  SKILL_UPLOAD_UNREADABLE_MESSAGE,
+} from '@/features/plugins/server/directory/constants';
 import {
   dedupeByFirstClaimedName,
   findManagedDirectorySkillByName,
@@ -32,6 +43,47 @@ export const runtime = 'nodejs';
 
 const CATALOG_PARAM = 'catalog';
 const CATALOG_ALL = 'all';
+const MULTIPART_CONTENT_TYPE = 'multipart/form-data';
+const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
+
+function isZipArchive(bytes: Uint8Array): boolean {
+  return ZIP_MAGIC.every((byte, index) => bytes[index] === byte);
+}
+
+async function readUploadedSkillDraft(request: NextRequest) {
+  let form: FormData;
+  try {
+    form = (await request.formData()) as unknown as FormData;
+  } catch (error) {
+    if (error instanceof PayloadCeilingExceededError) throw error;
+    throw createError.validation(SKILL_UPLOAD_UNREADABLE_MESSAGE);
+  }
+  const file = form.get(PLUGIN_UPLOAD_FILE_FIELD);
+  if (!file || typeof file === 'string') {
+    throw createError.validation(SKILL_UPLOAD_UNREADABLE_MESSAGE);
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  let source: string;
+  if (isZipArchive(bytes)) {
+    try {
+      source = (await readSingleSkillFromArchive(bytes)).content;
+    } catch (error) {
+      if (error instanceof PluginArchiveError) throw createError.validation(error.message);
+      throw error;
+    }
+  } else {
+    try {
+      source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      throw createError.validation(SKILL_UPLOAD_NOT_UTF8_MESSAGE);
+    }
+  }
+
+  const parsed = parseSkillDraftFromMarkdown(source);
+  if (!parsed.ok) throw createError.validation(parsed.errors.join(' '));
+  return parsed.draft;
+}
 
 async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
@@ -92,17 +144,25 @@ async function handleCreateSkill(request: NextRequest) {
   if (rateLimit) return rateLimit;
 
   const { db, userId } = await getUserScopedDb(request);
-  const parsed = SkillDraftBodySchema.safeParse(await readJsonBody(request));
-  if (!parsed.success) {
-    throw createError.validation('Invalid skill draft', parsed.error.issues);
+  const uploaded = (request.headers.get('content-type') ?? '').includes(MULTIPART_CONTENT_TYPE);
+
+  let draft;
+  if (uploaded) {
+    draft = await readUploadedSkillDraft(request);
+  } else {
+    const parsed = SkillDraftBodySchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
+      throw createError.validation('Invalid skill draft', parsed.error.issues);
+    }
+    draft = parsed.data;
   }
 
-  const existingManaged = await findManagedDirectorySkillByName(parsed.data.name);
+  const existingManaged = await findManagedDirectorySkillByName(draft.name);
   if (existingManaged) {
-    throw createError.conflict(`"${parsed.data.name}" is already a built-in skill name.`);
+    throw createError.conflict(`"${draft.name}" is already a built-in skill name.`);
   }
 
-  const created = await createUserSkill(db, userId, parsed.data);
+  const created = await createUserSkill(db, userId, draft);
   return NextResponse.json({ skill: toUserSkillSummary(created) }, { status: 201 });
 }
 
