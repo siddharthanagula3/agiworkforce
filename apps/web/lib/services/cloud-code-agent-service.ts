@@ -9,6 +9,7 @@ import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import { logger } from '@/lib/logger';
 import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
 import {
+  ManagedUsageRequestError,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   markManagedUsageProviderStarted,
@@ -34,8 +35,11 @@ import {
 } from './cloud-code-agent-loop';
 import {
   CloudCodeConflictError,
+  CloudCodeLimitError,
+  CloudCodeNotFoundError,
   type CloudCodeOwner,
   CloudCodeUnavailableError,
+  CloudCodeValidationError,
   agentStepLabel,
   claimCloudCodeSessionForRun,
   getCloudCodeSession,
@@ -48,6 +52,18 @@ const ESTIMATED_TURN_COST_CENTS = 25;
 const MINIMUM_BILLED_TURN_CENTS = 1;
 
 const UNKNOWN_TOOL_NAME = 'unknown';
+
+const GENERIC_TURN_FAILURE_MESSAGE =
+  'This turn could not be completed. Try running it again, or start a new session.';
+
+const READER_FACING_FAILURES = [
+  CloudCodeValidationError,
+  CloudCodeConflictError,
+  CloudCodeNotFoundError,
+  CloudCodeLimitError,
+  CloudCodeUnavailableError,
+  ManagedUsageRequestError,
+] as const;
 
 const MAX_STEP_OUTPUT_LENGTH = 100_000;
 
@@ -191,6 +207,17 @@ async function releaseSandbox(
  * something else, and a failure here must not mask the original error or skip
  * the settlement that follows it.
  */
+function persistedFailureMessage(error: unknown, turnId: string, sessionId: string): string {
+  if (READER_FACING_FAILURES.some((failure) => error instanceof failure)) {
+    return (error as Error).message;
+  }
+  logger.error(
+    { error, turnId, sessionId },
+    '[code] turn failed with an error whose words are not for the reader',
+  );
+  return GENERIC_TURN_FAILURE_MESSAGE;
+}
+
 async function markTurnFailed(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
@@ -541,7 +568,7 @@ async function runClaimedAgentTurn(
       db,
       owner,
       turnId,
-      error instanceof Error ? error.message : 'Usage reservation failed',
+      persistedFailureMessage(error, turnId, sessionId),
       'error',
     );
     throw error;
@@ -559,7 +586,7 @@ async function runClaimedAgentTurn(
       db,
       owner,
       turnId,
-      error instanceof Error ? error.message : 'Usage reservation could not be started',
+      persistedFailureMessage(error, turnId, sessionId),
       'error',
     );
     throw error;
@@ -712,7 +739,7 @@ async function runClaimedAgentTurn(
         db,
         owner,
         turnId,
-        error instanceof Error ? error.message : 'Agent turn failed',
+        persistedFailureMessage(error, turnId, sessionId),
         'error',
       );
       throw error;

@@ -28,7 +28,8 @@ vi.mock('@/lib/services/cloud-code-agent-loop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/cloud-code-agent-loop')>()),
   runCloudCodeAgentTurn: vi.fn(),
 }));
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   reserveManagedUsageProviderStep: vi.fn(),
@@ -63,6 +64,7 @@ import {
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import type {
   CloudCodeAgentStopReason,
   CloudCodeTurnUsage,
@@ -489,6 +491,42 @@ describe('Cloud Code turn stops when the reader asks it to', () => {
     await runTurnOn(db, 'cancelled');
     const settlement = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
     expect(settlement?.outcome).toBe('completed');
+  });
+});
+
+describe('an exception own words never become a persisted sentence', () => {
+  /** The write that moves a turn to `failed` and records why. */
+  function failedTurnMessage(db: TrackedDb): string | undefined {
+    const call = db.query.mock.calls.find(([text]) =>
+      String(text).includes("set state = 'failed'"),
+    );
+    return (call?.[1] as unknown[] | undefined)?.[1] as string | undefined;
+  }
+
+  it('persists generic copy for a thrown error carrying something that looks like a credential', async () => {
+    const db = trackedDb();
+    const leaked = 'connect ECONNREFUSED using key sk-ant-api03-Zx9QfakefakefakeKEY at db-1:5432';
+    vi.mocked(reserveManagedUsageRequest).mockRejectedValue(new Error(leaked));
+
+    await expect(startTurn(db)).rejects.toThrow(leaked);
+
+    const persisted = failedTurnMessage(db);
+    expect(persisted).toBeTruthy();
+    expect(persisted).not.toBe(leaked);
+    expect(persisted).not.toContain('sk-ant-api03');
+    expect(persisted).not.toContain('ECONNREFUSED');
+    expect(persisted).not.toContain('db-1:5432');
+  });
+
+  it('keeps the message of an error written for the reader', async () => {
+    const db = trackedDb();
+    const readable = 'Your workspace has reached its weekly limit for this model.';
+    vi.mocked(reserveManagedUsageRequest).mockRejectedValue(
+      new ManagedUsageRequestError(readable, 402, 'insufficient_quota'),
+    );
+
+    await expect(startTurn(db)).rejects.toThrow(readable);
+    expect(failedTurnMessage(db)).toBe(readable);
   });
 });
 
