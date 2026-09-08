@@ -2,6 +2,7 @@ import { createContext, useContext, useState } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Globe } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { citationPublisherDomain } from './citationPublisher';
 
 export interface MarkdownCitation {
   url: string;
@@ -23,25 +24,21 @@ export function useMarkdownCitations(): readonly MarkdownCitation[] {
   return useContext(CitationsContext);
 }
 
-function citationHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
+function citationHost(citation: MarkdownCitation): string {
+  return citationPublisherDomain(citation) ?? citation.url;
 }
 
 function citationFaviconSrc(citation: MarkdownCitation): string | undefined {
   if (citation.favicon) return citation.favicon;
-  try {
-    return `https://www.google.com/s2/favicons?domain=${new URL(citation.url).hostname}&sz=32`;
-  } catch {
-    return undefined;
-  }
+  // The publisher's domain, not the URL's host. A grounded result's URL host is
+  // the routing vendor, so drawing from it gave every source in an answer the
+  // same favicon.
+  const domain = citationPublisherDomain(citation);
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined;
 }
 
 function citationSiteName(citation: MarkdownCitation): string {
-  return citation.siteName || citationHost(citation.url);
+  return citation.siteName || citationHost(citation);
 }
 
 function CitationFavicon({
@@ -74,7 +71,7 @@ function CitationFavicon({
 }
 
 function TooltipSourceRow({ index, citation }: CitationItem) {
-  const host = citationHost(citation.url);
+  const host = citationHost(citation);
   const label = citation.title || citationSiteName(citation);
   return (
     <div className="flex items-start gap-1.5">
