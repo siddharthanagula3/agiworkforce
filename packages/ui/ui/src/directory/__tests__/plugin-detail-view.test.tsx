@@ -47,6 +47,38 @@ function renderDetail(
   return render(<PluginDetailView detail={{ ...detail, ...patch }} onBack={vi.fn()} {...props} />);
 }
 
+describe('WEB-WEB-SETTINGS-MODAL-INSTALLED-PLUGIN-01', () => {
+  it('offers the enable switch for an installed plugin the server still runs', () => {
+    renderDetail({ installed: true, installable: true }, { onSetEnabled: vi.fn() });
+
+    expect(screen.getByRole('switch', { name: 'Enabled' })).toBeTruthy();
+  });
+
+  // Installed, deprecated, and gated off server-side. The switch claimed the
+  // plugin was on for something no turn would ever run.
+  it('states the plugin is not run here instead of claiming it is enabled', () => {
+    const onSetEnabled = vi.fn();
+    renderDetail({ installed: true, installable: false }, { onSetEnabled });
+
+    expect(screen.queryByRole('switch', { name: 'Enabled' })).toBeNull();
+    expect(screen.getByText('Not available on this surface')).toBeTruthy();
+    expect(onSetEnabled).not.toHaveBeenCalled();
+  });
+
+  it('prefers the availability note the entry carries over the generic line', () => {
+    renderDetail(
+      {
+        installed: true,
+        installable: false,
+        availabilityNote: 'Retired by its publisher in August.',
+      },
+      { onSetEnabled: vi.fn() },
+    );
+
+    expect(screen.getByText('Retired by its publisher in August.')).toBeTruthy();
+  });
+});
+
 describe('PluginDetailView', () => {
   it('leads with the name, publisher, install count, verified glyph and Install', () => {
     const onInstall = vi.fn();
