@@ -106,6 +106,25 @@ describe('the agent loop observes a stop it was never signalled about', () => {
   });
 });
 
+function runRow() {
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    user_id: 'user-1',
+    request_id: 'turn-key-12345678',
+    conversation_id: null,
+    origin_surface: 'web',
+    work_mode: 'agiwork',
+    state: 'running',
+    provider: 'anthropic',
+    model: 'a-model',
+    last_event_sequence: -1,
+    cancellation_requested_at: '2026-09-07T20:00:00.000Z',
+    completed_at: null,
+    created_at: '2026-09-07T19:00:00.000Z',
+    updated_at: '2026-09-07T20:00:00.000Z',
+  };
+}
+
 describe('requestCloudCodeTurnCancellation', () => {
   let queries: { sql: string; params: unknown[] }[] = [];
 
@@ -113,6 +132,9 @@ describe('requestCloudCodeTurnCancellation', () => {
     return {
       query: vi.fn(async (sql: string, params: unknown[]) => {
         queries.push({ sql, params });
+        // The stop mirror looks for a durable run by the turn's key; these
+        // cases are all inline turns, which have none.
+        if (/from public\.cloud_agent_runs/.test(sql)) return [];
         return rows;
       }),
     };
@@ -124,12 +146,22 @@ describe('requestCloudCodeTurnCancellation', () => {
 
   it('records the stop against the running turn of the session', async () => {
     const result = await requestCloudCodeTurnCancellation(
-      db([{ id: TURN_ID, cancel_requested_at: '2026-09-07T20:00:00.000Z' }]) as never,
+      db([
+        {
+          id: TURN_ID,
+          idempotency_key: 'turn-key-12345678',
+          cancel_requested_at: '2026-09-07T20:00:00.000Z',
+        },
+      ]) as never,
       OWNER,
       SESSION_ID,
     );
 
-    expect(result).toEqual({ turnId: TURN_ID, requestedAt: '2026-09-07T20:00:00.000Z' });
+    expect(result).toEqual({
+      turnId: TURN_ID,
+      requestedAt: '2026-09-07T20:00:00.000Z',
+      durable: false,
+    });
     expect(queries[0]?.sql).toContain('cancel_requested_at = coalesce(cancel_requested_at, now())');
     expect(queries[0]?.sql).toContain('user_id = $2');
     expect(queries[0]?.params).toEqual([
@@ -148,6 +180,27 @@ describe('requestCloudCodeTurnCancellation', () => {
       SESSION_ID,
     );
     expect(queries[0]?.sql).not.toContain('cancel_requested_at = now()');
+  });
+
+  it('mirrors the stop onto the durable run that is carrying the turn', async () => {
+    const adapter = {
+      query: vi.fn(async (sql: string, params: unknown[]) => {
+        queries.push({ sql, params });
+        if (/public\.cloud_agent_runs/.test(sql)) return [runRow()];
+        return [
+          {
+            id: TURN_ID,
+            idempotency_key: 'turn-key-12345678',
+            cancel_requested_at: '2026-09-07T20:00:00.000Z',
+          },
+        ];
+      }),
+    };
+
+    const result = await requestCloudCodeTurnCancellation(adapter as never, OWNER, SESSION_ID);
+
+    expect(result.durable).toBe(true);
+    expect(queries.some((call) => /update public\.cloud_agent_runs/.test(call.sql))).toBe(true);
   });
 
   it('refuses when nothing is running', async () => {
