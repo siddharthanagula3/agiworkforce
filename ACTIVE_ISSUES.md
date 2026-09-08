@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 15 unresolved issues: 0 P0, 1 P1, 11 P2, 3 P3, plus 3 items needing
+- 14 unresolved issues: 0 P0, 1 P1, 11 P2, 2 P3, plus 3 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-4`
   and `AGI-23`, are partly fixed in this pass and say which part.
 
@@ -63,6 +63,7 @@ went, and so nobody re-files them:
 | `AGI-19`  | Marketing nav panels stayed open while the page scrolled       | `NavGroup.scroll.test.tsx`                        |
 | `AGI-21`  | A cancelled settings query logged at error level               | `use-settings-queries.abort.test.tsx`             |
 | `AGI-8`   | The US-only preference never reached the web resolver          | `request-processor.us-only.test.ts`               |
+| `AGI-18`  | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                |
 
 ## 2. P0, critical
 
@@ -100,7 +101,7 @@ closed.
 truncated at extraction (`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a
 250 page PDF cap), and there is still no docx, xlsx or pptx extraction. Those
 are extraction gaps, not retrieval gaps.
-**Dependencies:** `AGI-23` and `AGI-18` for the live check only.
+**Dependencies:** `AGI-23` for the live check only.
 **Acceptance criteria:** a question aimed at the back half of a long project
 file is answered from it, in a browser.
 **Validation:** the passage tests above, plus one live project question.
@@ -547,30 +548,6 @@ line.
 **Evidence:** browser QA 2026-09-08; reproduced against the renderer directly
 2026-09-08.
 
-### `AGI-18` A project in the sidebar attaches itself instead of opening
-
-**Severity:** P3
-**Status:** Open
-**Area:** Navigation
-**Root cause:** The sidebar row and the Projects grid card are wired to
-different actions. The grid card navigates; the sidebar row attaches the
-project as composer context and flips the mode toggle from Chat to AGI Work.
-**Current behavior:** Clicking a project in the left sidebar from the chat home
-screen silently changes the composer's mode and scope, with no navigation. The
-same project clicked from the Projects page opens it.
-**Required behavior:** One name, one action. If attaching as context is wanted,
-it needs its own affordance and its own label.
-**Evidence:** browser QA 2026-09-08; `ProjectCard` exposes
-`Open project <name>`, the sidebar row does not.
-**User impact:** Undiscoverable, and it changes the mode of the next send
-without saying so.
-**Dependencies:** None.
-**Implementation direction:** Decide which action the row performs and make its
-accessible name say so. Do not leave two behaviours behind one label.
-**Acceptance criteria:** A project row's name describes what clicking it does,
-and both entry points agree.
-**Validation:** Component test on the sidebar row, plus a navigation spec.
-
 ### `AGI-20` Retry can move the viewport to an unrelated message
 
 **Severity:** P3
@@ -623,8 +600,8 @@ Dependency-aware, not severity-ordered.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized: 6.0s measured to first audio.
 7. `AGI-9`, `AGI-10`, `AGI-14`. Enterprise and provider neutrality, independent
    of each other.
-8. `AGI-11`, `AGI-18`, `AGI-20`. Background and polish. `AGI-17` needs a
-   decision before it needs an implementer.
+8. `AGI-11`, `AGI-20`. Background and polish. `AGI-17` needs a decision before
+   it needs an implementer.
 
 `AGI-12` belongs to whoever is next in `apps/desktop`.
 
@@ -644,7 +621,6 @@ Dependency-aware, not severity-ordered.
 | `AGI-14` | per-provider route tests, registry contract     | none                               | transcription fails over between vendors |
 | `AGI-16` | assert no provider host in any citation href    | a grounded research turn           | publisher favicon and publisher URL    |
 | `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
-| `AGI-18` | sidebar row component test                      | click from both entry points       | one label, one action                  |
 | `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
 | `AGI-22` | conformance fixtures, consent record migration  | none                               | no Chinese-HQ route without consent    |
 | `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
@@ -664,7 +640,7 @@ AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
 AGI-9, AGI-10, AGI-14      enterprise and neutrality, independent
 AGI-11, AGI-12             background
-AGI-17, AGI-18, AGI-20     polish, independent of everything
+AGI-17, AGI-20             polish, independent of everything
 ```
 
 Four tracks can run at once without touching the same files: retrieval
