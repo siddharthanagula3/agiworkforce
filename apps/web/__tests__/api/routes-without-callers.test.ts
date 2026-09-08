@@ -95,7 +95,7 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
   {
     url: '/api/me/routing-preferences',
-    why: 'no caller; WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01 owns it and routing is out of scope under D-34',
+    why: 'no caller; the preference it persists IS now read on the chat path and enforced by the resolver (AGI-8), so what is missing is a control that writes it, not the reading of it',
   },
 ];
 

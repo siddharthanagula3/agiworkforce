@@ -21,6 +21,8 @@ import {
   type McpAuthorizationStart,
 } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   findDirectoryTargetByRemoteUrl,
   resolveDirectoryTarget,
@@ -48,6 +50,7 @@ export const OAUTH_START_STATUS_ERROR = 'error';
 export const OAUTH_START_STATUS_OPEN = 'open';
 export const OAUTH_START_STATUS_UNAVAILABLE = 'unavailable';
 export const OAUTH_START_STATUS_CREDENTIAL = 'credential';
+export const OAUTH_START_STATUS_POLICY_BLOCKED = 'policy_blocked';
 
 const CONNECTORS_PATH = '/connectors';
 const CONNECTORS_PATH_API = '/api/connectors';
@@ -182,6 +185,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if ((provider || discovered) && !isConnectorTokenStorageAvailable()) {
     return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
+  }
+
+  // After the cheap refusals and before any credential is exchanged. The
+  // workspace policy was consulted only when tools were READ for a chat turn,
+  // so a member could complete an OAuth flow for a connector their
+  // administrator forbids and have the tokens stored; the policy caught up
+  // afterwards by hiding the resulting tools. An administrator reads "these
+  // connectors only" as binding at the point their organization's data starts
+  // moving, which is here. It resolves the active workspace, so it runs only
+  // once this request is actually going to attempt a connection.
+  const policyDecision = await evaluateConnectorPolicyForUser({
+    db: getNeonDb(),
+    userId,
+    connectorId,
+    isCustom: Boolean(!provider && discovered),
+    request,
+  });
+  if (!policyDecision.allowed) {
+    return fail(OAUTH_START_STATUS_POLICY_BLOCKED, 403, policyDecision.reason);
   }
 
   if (!provider && discovered) {
