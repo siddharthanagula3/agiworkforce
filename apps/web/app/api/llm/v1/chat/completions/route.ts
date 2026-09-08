@@ -51,7 +51,7 @@ import {
   firstTokenDeadlineMs,
   hasFirstTokenBudgetLeft,
   startProviderStreamWithinFirstTokenDeadline,
-} from './lib/first-token-deadline';
+} from './lib/provider-deadlines';
 import { recordFailedTurn } from './lib/failed-turn-record';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
