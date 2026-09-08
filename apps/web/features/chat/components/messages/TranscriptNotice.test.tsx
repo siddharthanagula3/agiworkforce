@@ -85,13 +85,23 @@ describe('TranscriptNotice action', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('gives the action a 24px minimum target', () => {
+  it('gives the action a 24px minimum target on a fine pointer', () => {
     renderNotice({
       action: { label: 'Retry', ariaLabel: 'Retry this turn', icon: RefreshCw, onClick: vi.fn() },
     });
     expect(screen.getByRole('button', { name: 'Retry this turn' })).toHaveClass(
       'min-h-6',
       'min-w-6',
+    );
+  });
+
+  it('raises the action to a 44px target on a coarse pointer', () => {
+    renderNotice({
+      action: { label: 'Retry', ariaLabel: 'Retry this turn', icon: RefreshCw, onClick: vi.fn() },
+    });
+    expect(screen.getByRole('button', { name: 'Retry this turn' })).toHaveClass(
+      'pointer-coarse:min-h-11',
+      'pointer-coarse:min-w-11',
     );
   });
 

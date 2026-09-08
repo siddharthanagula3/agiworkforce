@@ -1552,7 +1552,7 @@ const ChatMessageListComponent = ({
     () => (
       <>
         {showContinue && lastMessage && (
-          <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
             <button
               type="button"
               onClick={() => onContinue?.(lastMessage.id)}
@@ -1566,7 +1566,7 @@ const ChatMessageListComponent = ({
         )}
 
         {showStoppedNotice && lastMessage && (
-          <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
             <TranscriptNotice
               tone="neutral"
               icon={Square}
@@ -1582,7 +1582,7 @@ const ChatMessageListComponent = ({
         )}
 
         {showRefusalNotice && lastMessage && (
-          <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
             <TranscriptNotice
               icon={ShieldAlert}
               message="The model declined to finish this response for safety reasons."
