@@ -14,7 +14,6 @@ const POLICY_IMPORT = "from '@/lib/mcp-egress-policy'";
 const POLICY = 'MCP_EGRESS_POLICY';
 
 const REQUIRED_CONNECT_SITES = [
-  'app/api/mcp/route.ts',
   'lib/connectors/mcp-custom-connections.ts',
   'lib/mcp-tool-executor.ts',
   'lib/user-connector-tools.ts',
