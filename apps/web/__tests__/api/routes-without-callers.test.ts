@@ -86,10 +86,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   // this group were deleted; each of these four is here because deleting it
   // would cost more than it saves.
   {
-    url: '/api/releases/check',
-    why: 'no caller, but one of its cases also covers the live nightly manifest route; removing it safely is its own change',
-  },
-  {
     url: '/api/settings/organization/deletion/cancel',
     why: 'no caller, but it cancels the deletion POST /api/settings/organization schedules; deleting the cancel and leaving the request is a regression',
   },
