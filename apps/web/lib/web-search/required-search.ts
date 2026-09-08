@@ -6,7 +6,7 @@ import {
   modelAcceptsForcedToolChoice,
 } from '@/lib/required-tool-call';
 
-import { WEB_SEARCH_TOOL } from './web-search-tool';
+import { WEB_SEARCH_TOOL, webSearchToolDef } from './web-search-tool';
 
 export type RequiredSearchSource = 'work_mode' | 'explicit_intent' | 'research_task';
 
@@ -92,6 +92,43 @@ export function classifyAttachedSearchTool(
 export function nativeSearchToolName(tool: unknown): string {
   const kind = classifySearchTool(tool);
   return kind && kind !== 'generic-function' ? kind : '';
+}
+
+/**
+ * Replace a provider-executed search tool with our own, when the account's
+ * policy says a search has to be approved first.
+ *
+ * A provider-native search never becomes a tool call we see. The provider runs
+ * it inside its own turn and we learn about it from a `serverToolStart` line on
+ * the wire, by which time the query has already left. `resolveToolCallGate` is
+ * therefore structurally unreachable for it: there is no call to gate, and no
+ * amount of wiring in the tool loop can create one. That is why "Ask before
+ * every action" did not stop a web search.
+ *
+ * The generic function tool is the same capability with a round trip. The model
+ * emits a call, the loop gates it, the user approves, and our own executor runs
+ * the search. So an approval requirement is honoured by choosing that shape
+ * instead of the native one, rather than by adding a second gate.
+ *
+ * Fail-closed when the generic backend is not configured: the native tool is
+ * withdrawn too and the model answers without search, saying so. Leaving native
+ * search attached would keep running un-approved searches under a setting that
+ * promises otherwise, which is the state this replaces.
+ */
+export function substituteGatedWebSearchTool(
+  tools: readonly unknown[] | undefined,
+  options: { approvalRequired: boolean; genericBackendConfigured: boolean },
+): unknown[] | undefined {
+  if (!options.approvalRequired || !tools) return tools as unknown[] | undefined;
+
+  const withoutNative = tools.filter((tool) => nativeSearchToolName(tool) === '');
+  if (withoutNative.length === tools.length) return tools as unknown[];
+
+  const alreadyGeneric = withoutNative.some(
+    (tool) => classifySearchTool(tool) === 'generic-function',
+  );
+  if (alreadyGeneric || !options.genericBackendConfigured) return withoutNative;
+  return [...withoutNative, webSearchToolDef()];
 }
 
 /**

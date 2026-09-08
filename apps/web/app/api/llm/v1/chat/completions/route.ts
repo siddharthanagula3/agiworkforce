@@ -89,7 +89,9 @@ import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
-import { loadToolApprovalPolicy } from './lib/tool-approval-policy';
+import { loadToolApprovalPolicy, policyAutoApprovesTool } from './lib/tool-approval-policy';
+import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
+import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
@@ -655,7 +657,23 @@ async function dispatchChatCompletions(
       : [[], { tools: [], dropped: [], limit: null }];
     const connectorTools = connectorCatalog.tools;
     const mcpTools = [...operatorTools, ...connectorTools];
-    const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
+
+    // A provider-native search runs inside the provider's own turn, so it never
+    // reaches the tool loop as a call and cannot be gated there. When the
+    // account's policy will not auto-approve a search, swap it for our own
+    // function tool, which does round-trip and is gated like any other. This
+    // has to happen here rather than in `processRequest`: the policy is only
+    // known after the read above, and the request was built before it.
+    processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+      approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+      genericBackendConfigured: webSearchBackendConfigured(),
+    });
+
+    const loopInputs = classifyToolLoopInputs(
+      mcpTools,
+      processed.llmRequest.tools,
+      toolApprovalPolicy,
+    );
 
     const isAgiWorkTurn = processed.chatRequest.work_mode === 'agiwork';
 

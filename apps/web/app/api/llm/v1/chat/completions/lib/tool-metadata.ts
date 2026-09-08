@@ -43,6 +43,7 @@
 
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import {
   isDestructiveTool,
   isParallelSafeTool as isParallelSafeContractTool,
@@ -267,4 +268,33 @@ export function toContractToolDefinition(
     retrySafety: metadata.actionClass === 'read' ? 'idempotent' : 'unknown',
     declared: metadata.declared,
   };
+}
+
+/**
+ * Does the account's standing policy let this tool run without asking?
+ *
+ * Lives beside the metadata rather than in `tool-approval-policy.ts`, which is
+ * `server-only` for its database read. The predicate is pure, and the tool-loop
+ * routing that decides whether a turn needs an approval mode at all has to be
+ * able to ask it without pulling a server-only module into its import graph.
+ *
+ * `ask_every_time` auto-approves nothing, which is what the setting says. Under
+ * `auto_approve_read_only` a tool has to be all four things: declared by us (an
+ * MCP or connector tool we know nothing about never qualifies), observing
+ * rather than changing state, undoable, and unable to move bytes outside the
+ * trust boundary. `web_search` and `url_fetch` fail the last one, which is why
+ * the setting's own copy says they still ask.
+ */
+export function policyAutoApprovesTool(
+  policy: ToolApprovalPolicy,
+  qualifiedName: string,
+): boolean {
+  if (policy !== 'auto_approve_read_only') return false;
+  const metadata = resolveToolMetadata(qualifiedName);
+  return (
+    metadata.declared &&
+    metadata.actionClass === 'read' &&
+    metadata.reversible &&
+    !metadata.createsEgressPath
+  );
 }
