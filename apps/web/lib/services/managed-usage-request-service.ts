@@ -550,11 +550,16 @@ export function markManagedUsageClientDelivered(
 export async function finalizeManagedUsageRequest(
   input: ManagedUsageRequestReservation & {
     outcome: 'completed' | 'failed';
+    /** What the user is billed: the model's official price for the usage. */
     actualCostCents: number;
+    /** What the served route cost the company; defaults to the billed amount. */
+    providerCostCents?: number;
     usage?: Record<string, unknown>;
   },
 ): Promise<ManagedUsageFinalization> {
   const actualCostCents = input.outcome === 'failed' ? 0 : Math.max(0, input.actualCostCents);
+  const providerCostCents =
+    input.outcome === 'failed' ? 0 : Math.max(0, input.providerCostCents ?? actualCostCents);
   const quotaTaggedUsage = input.quotaFeature
     ? { ...(input.usage ?? {}), quotaFeature: input.quotaFeature }
     : (input.usage ?? {});
@@ -620,13 +625,38 @@ export async function finalizeManagedUsageRequest(
         ? 'undelivered'
         : null;
 
-  if (settledTaskOutcome !== null && operationResult === 'finalized') {
+  // AGI-1. `already_finalized` against an `outcome_unknown` row is recovery
+  // having reclaimed a turn that was in fact still running: the user was
+  // refunded, the provider was not. Nothing branched on this status, so the
+  // absorbed cost was invisible. Recording it under the same source ref the
+  // delivered path uses keeps the COGS ledger honest, and `billedCents` is
+  // already zero for an undelivered outcome, so no user is charged twice.
+  if (operationResult === 'already_finalized' && requestStatus === 'outcome_unknown') {
+    logger.error(
+      {
+        event: 'managed_usage_finalize_after_recovery',
+        userId: input.userId,
+        idempotencyKey: input.idempotencyKey,
+        provider: servedRoute?.provider ?? input.provider ?? 'unknown',
+        model: servedRoute?.model ?? input.model ?? null,
+        actualCostCents,
+        providerCostCents,
+      },
+      'Managed usage turn completed after its lease was recovered; provider cost absorbed and nothing billed',
+    );
+  }
+
+  const recordsProviderCost =
+    operationResult === 'finalized' ||
+    (operationResult === 'already_finalized' && requestStatus === 'outcome_unknown');
+
+  if (settledTaskOutcome !== null && recordsProviderCost) {
     await recordSettledProviderCost({
       userId: input.userId,
       provider: servedRoute?.provider ?? input.provider ?? 'unknown',
       model: servedRoute?.model ?? input.model ?? null,
       routeId: servedRoute?.routeId ?? input.routeId ?? buildRouteId(input.provider, input.model),
-      actualCostCents: settledCostCents,
+      actualCostCents: input.providerCostCents === undefined ? settledCostCents : providerCostCents,
       sourceRef: `managed_usage:${input.userId}:${input.idempotencyKey}:${input.requestHash}`,
       taskOutcome: settledTaskOutcome,
       taskRef: input.requestHash,

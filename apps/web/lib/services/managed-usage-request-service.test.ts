@@ -481,6 +481,39 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     });
   });
 
+  it('records the absorbed provider cost when a turn finishes after recovery reclaimed it', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'outcome_unknown',
+        operation_result: 'already_finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 0,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_late',
+      requestHash: 'c'.repeat(64),
+      leaseToken: 'lease-late',
+      estimatedCostCents: 20,
+      provider: 'anthropic',
+      model: 'fixture-model',
+      outcome: 'completed',
+      actualCostCents: 31,
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'anthropic',
+        taskOutcome: 'undelivered',
+        sourceRef: `managed_usage:user_1:agi.chat.web.turn_late:${'c'.repeat(64)}`,
+      }),
+    );
+  });
+
   it('finalizes a failed-over turn with the serving route, not the reserved one', async () => {
     recordSettledProviderCost.mockClear();
     const db = fakeDb([
