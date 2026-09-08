@@ -5,9 +5,12 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import {
+  getModelAvailability,
   listCanonicalModels,
   modelsCatalogJson as modelsData,
+  type ModelAvailability,
   type ModelMetadata,
+  type ModelStatus,
   type ModelCapabilities as CatalogModelCapabilities,
 } from '@agiworkforce/types';
 import {
@@ -50,6 +53,12 @@ interface ModelPricing {
 
 export type ModelAvailabilityStatus = { state: 'available' } | ProviderAvailabilitySignal;
 
+export interface ModelLifecycle {
+  status: ModelStatus;
+  deprecated: boolean;
+  availability: ModelAvailability;
+}
+
 export interface ModelEntry {
   id: string;
   name: string;
@@ -64,6 +73,18 @@ export interface ModelEntry {
   bestFor: string[];
   released: string | null;
   availability: ModelAvailabilityStatus;
+  lifecycle: ModelLifecycle;
+}
+
+const DEFAULT_MODEL_STATUS: ModelStatus = 'active';
+
+function toLifecycle(raw: ModelMetadata): ModelLifecycle {
+  const status = raw.status ?? (raw.deprecated ? 'deprecated' : DEFAULT_MODEL_STATUS);
+  return {
+    status,
+    deprecated: raw.deprecated === true || status === 'deprecated',
+    availability: getModelAvailability(raw),
+  };
 }
 
 const AVAILABLE_STATUS: ModelAvailabilityStatus = { state: 'available' };
@@ -102,6 +123,7 @@ function toModelEntry(
     name: raw.name,
     provider: raw.provider,
     availability: availabilityByProvider[raw.provider] ?? AVAILABLE_STATUS,
+    lifecycle: toLifecycle(raw),
     category: toCategory(raw.modelType),
     contextWindow: raw.contextWindow ?? null,
     maxOutputTokens: raw.maxOutputTokens ?? null,
