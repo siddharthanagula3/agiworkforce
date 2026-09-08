@@ -608,8 +608,10 @@ describe('hydrateChatAttachments', () => {
         type: 'file',
         file: {
           filename: 'report.csv',
-          mime_type: 'text/plain',
-          file_data: `data:text/plain;base64,${Buffer.from('a,b,c\n1').toString('base64')}`,
+          // A text-like attachment keeps its own type. Collapsing every
+          // document to text/plain told the model a spreadsheet was prose.
+          mime_type: 'text/csv',
+          file_data: `data:text/csv;base64,${Buffer.from('a,b,c\n1').toString('base64')}`,
         },
       },
     ]);

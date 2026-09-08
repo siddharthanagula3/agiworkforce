@@ -97,6 +97,12 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'rate_limit',
   'quota_exhausted',
   'empty_response',
+  // The request is right and the route is the wrong one: an attached PDF
+  // reaching a vendor whose wire format has no file part. Rotating is the
+  // whole answer, and it is the mechanism that makes "check capability before
+  // dispatch" unnecessary, because a route that cannot read the attachment
+  // says so and Auto moves on to one that can.
+  'unsupported_input',
 ]);
 
 /**

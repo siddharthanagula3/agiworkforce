@@ -160,3 +160,13 @@ export type {
 export * from './sessions';
 
 export * from './capability-handshake';
+
+export {
+  decodeTextFileBlock,
+  inlineFileBlockAsText,
+  isTextLikeFileMediaType,
+  renderFileBlockAsText,
+  UnsupportedFileInputError,
+  UNSUPPORTED_FILE_INPUT_ERROR_NAME,
+  type FileInputBlock,
+} from './file-input';

@@ -1,3 +1,4 @@
+import { isTextLikeFileMediaType } from '@agiworkforce/types';
 import { z } from 'zod';
 
 export const MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH = '/api/uploads/presign';
@@ -82,9 +83,24 @@ export function isChatImageMimeType(mimeType: string): boolean {
   );
 }
 
+/**
+ * The type a document attachment is described by once it reaches a model.
+ *
+ * A PDF stays a PDF, because a route with a native file channel reads the
+ * bytes. Anything else the accept list admits decodes to characters, so it
+ * keeps its own type: a `.csv` announced as `text/csv` tells the model it is
+ * looking at rows, which collapsing everything to `text/plain` threw away.
+ *
+ * The fallback is still `text/plain`, and it is reachable: an extension on the
+ * accept list with no recognised media type (`.rs`, `.toml`) arrives labelled
+ * that way already. What must never reach it is opaque bytes, and nothing can:
+ * `isSupportedChatAttachment` admits images, PDF and text only, so an Office
+ * file is refused at upload rather than mislabelled as text here.
+ */
 export function normalizeChatDocumentMimeType(mimeType: string): string {
   const mime = mimeType.trim().toLowerCase();
   if (mime === 'application/pdf') return mime;
+  if (isTextLikeFileMediaType(mime)) return mime;
   return 'text/plain';
 }
 

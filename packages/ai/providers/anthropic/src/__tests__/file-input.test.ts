@@ -36,6 +36,19 @@ describe('Anthropic file input translation', () => {
     ]);
   });
 
+  it('decodes a structured text file the same way it decodes text/plain', () => {
+    const translated = translateChatRequest(requestWithFile('application/json', 'eyJhIjoxfQ=='));
+
+    expect(translated.messages[0]?.content).toEqual([
+      { type: 'text', text: 'Read this file' },
+      {
+        type: 'document',
+        title: 'notes.txt',
+        source: { type: 'text', media_type: 'text/plain', data: '{"a":1}' },
+      },
+    ]);
+  });
+
   it('decodes text files into plain-text document blocks', () => {
     const translated = translateChatRequest(requestWithFile('text/plain', 'aGVsbG8='));
 
@@ -57,6 +70,6 @@ describe('Anthropic file input translation', () => {
           'AA==',
         ),
       ),
-    ).toThrow('Anthropic document input does not support');
+    ).toThrow(/cannot read: Anthropic document input accepts PDF and text/);
   });
 });

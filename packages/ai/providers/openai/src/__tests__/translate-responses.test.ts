@@ -244,7 +244,7 @@ describe('translateChatRequestToResponses', () => {
 });
 
 describe('translateChatRequest', () => {
-  it('rejects generic file input on Chat Completions instead of silently dropping it', () => {
+  it('rejects a binary file on Chat Completions instead of silently dropping it', () => {
     expect(() =>
       translateChatRequest(
         {
@@ -264,7 +264,7 @@ describe('translateChatRequest', () => {
         },
         { compat, provider: 'openai' },
       ),
-    ).toThrow('File inputs require an OpenAI Responses-capable model');
+    ).toThrow(/brief\.pdf.*cannot read/);
   });
 
   it('maps high thinking budgets to OpenAI xhigh for Chat Completions when supported', () => {

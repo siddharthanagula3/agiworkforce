@@ -23,6 +23,8 @@
  * pass the error to a user-facing renderer.
  */
 
+import { UNSUPPORTED_FILE_INPUT_ERROR_NAME } from '@agiworkforce/types';
+
 import { parseRetryAfter } from './retry-after-internal';
 
 export type ErrorCategory =
@@ -36,6 +38,18 @@ export type ErrorCategory =
   | 'tool_validation'
   | 'invalid_model'
   | 'invalid_input'
+  /**
+   * The request is well formed, but THIS route has no channel that can carry
+   * part of it, an attached PDF reaching a Chat-Completions-only vendor being
+   * the case that named the category.
+   *
+   * Distinct from `invalid_input`, which says the request is wrong and would
+   * be wrong everywhere. This one says the request is right and the route is
+   * the wrong one, so it IS failover-eligible: Auto moves the turn to a route
+   * with a real file channel rather than telling the user their file is
+   * broken. Never retryable on the same route, which would just fail again.
+   */
+  | 'unsupported_input'
   | 'media_too_large'
   | 'auth'
   /**
@@ -451,6 +465,16 @@ export function classifyError(err: unknown): ClassifiedError {
       code: 'aborted',
       retryable: false,
       fallbackable: false,
+      message: err.message,
+    };
+  }
+
+  if (err instanceof Error && err.name === UNSUPPORTED_FILE_INPUT_ERROR_NAME) {
+    return {
+      category: 'unsupported_input',
+      code: 'unsupported_input',
+      retryable: false,
+      fallbackable: true,
       message: err.message,
     };
   }

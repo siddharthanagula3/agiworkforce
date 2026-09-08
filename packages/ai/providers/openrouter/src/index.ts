@@ -144,24 +144,29 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'open_router',
-      });
-
-      applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention, req);
-      applyOpenRouterProviderRouting(
-        params,
-        config.providerRouting,
-        req.metadata,
-        req.zeroDataRetentionOnly,
-      );
-
-      params.stream_options = { include_usage: true };
-
       const normalizer = createOpenRouterUsageNormalizer();
 
       try {
+        // Inside the try on purpose. Translation can reject a request the
+        // route cannot carry, and above the try that throw escaped this
+        // adapter's error handling entirely and surfaced as an unhandled
+        // TypeError, which the dispatch catch-all then rendered as "the model
+        // failed to produce a response".
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'open_router',
+        });
+
+        applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention, req);
+        applyOpenRouterProviderRouting(
+          params,
+          config.providerRouting,
+          req.metadata,
+          req.zeroDataRetentionOnly,
+        );
+
+        params.stream_options = { include_usage: true };
+
         const sdkStream = await createWithEndpointPoolRetry(() =>
           sdk.chat.completions.create(
             params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
@@ -207,4 +212,6 @@ export {
   applyOpenRouterProviderRouting,
   type OpenRouterProviderRoutingPreferences,
   type OpenRouterDataCollectionPolicy,
+  type OpenRouterProviderSort,
+  type OpenRouterMaxPrice,
 } from './provider-routing';
