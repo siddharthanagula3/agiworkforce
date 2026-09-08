@@ -21,8 +21,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The pane reads GET /api/usage through useManagedUsageSummary. This used to
+// stub /api/usage/analytics as well, a route the pane has never requested, and
+// that stub was the only thing making the route look reachable. The stub now
+// answers the one URL the pane asks for and refuses anything else, so a pane
+// that starts calling somewhere new fails here rather than passing quietly.
 beforeEach(() => {
-  global.fetch = vi.fn(async () => {
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (!url.startsWith('/api/usage')) {
+      throw new Error(`UsageSection requested an unexpected url: ${url}`);
+    }
     return {
       ok: true,
       json: async () => ({
