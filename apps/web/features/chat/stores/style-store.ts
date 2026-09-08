@@ -152,14 +152,18 @@ function syncToServer(): void {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     const { style, length, activeCustomStyleId, customStyles } = useStyleStore.getState();
-    void savePreferenceNamespace<StylePreferencesPayload>(RESPONSE_STYLE_PREFERENCES_NAMESPACE, {
-      style,
-      length,
-      activeCustomStyleId,
-      customStyles,
-    }).catch(() => {
-      // Keep the local value; the next mutation retries.
-    });
+    void Promise.resolve()
+      .then(() =>
+        savePreferenceNamespace<StylePreferencesPayload>(RESPONSE_STYLE_PREFERENCES_NAMESPACE, {
+          style,
+          length,
+          activeCustomStyleId,
+          customStyles,
+        }),
+      )
+      .catch(() => {
+        // Keep the local value; the next mutation retries.
+      });
   }, 600);
 }
 
