@@ -1,9 +1,16 @@
 import { app } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { type GarnishShortcuts, normalizeShortcuts, parseSettingsFile } from './garnishCore';
+import {
+  type GarnishPreferences,
+  type GarnishShortcuts,
+  normalizePreferences,
+  normalizeShortcuts,
+  parsePreferencesFile,
+  parseSettingsFile,
+} from './garnishCore';
 
-export type ShellSettings = GarnishShortcuts;
+export type ShellSettings = GarnishShortcuts & GarnishPreferences;
 
 let cached: ShellSettings | null = null;
 
@@ -17,10 +24,10 @@ export function getSettings(): ShellSettings {
   try {
     contents = readFileSync(settingsFilePath(), 'utf8');
   } catch {
-    cached = normalizeShortcuts(undefined);
+    cached = { ...normalizeShortcuts(undefined), ...normalizePreferences(undefined) };
     return cached;
   }
-  cached = parseSettingsFile(contents);
+  cached = { ...parseSettingsFile(contents), ...parsePreferencesFile(contents) };
   return cached;
 }
 
@@ -33,8 +40,13 @@ export function getShortcuts(): GarnishShortcuts {
   };
 }
 
+export function getPreferences(): GarnishPreferences {
+  return normalizePreferences(getSettings());
+}
+
 export function saveSettings(patch: Partial<ShellSettings>): ShellSettings {
-  const merged = normalizeShortcuts({ ...getSettings(), ...patch });
+  const next = { ...getSettings(), ...patch };
+  const merged: ShellSettings = { ...normalizeShortcuts(next), ...normalizePreferences(next) };
   cached = merged;
   try {
     writeFileSync(settingsFilePath(), `${JSON.stringify(merged, null, 2)}\n`, 'utf8');

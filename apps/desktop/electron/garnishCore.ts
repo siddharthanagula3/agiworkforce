@@ -181,3 +181,30 @@ export function centeredUpperPosition(
   const maxY = Math.round(workArea.y + Math.max(0, workArea.height - panelHeight));
   return { x, y: Math.min(preferredY, maxY) };
 }
+
+export interface GarnishPreferences {
+  launchAtLogin: boolean;
+}
+
+export const DEFAULT_PREFERENCES: GarnishPreferences = {
+  launchAtLogin: false,
+};
+
+export function normalizePreferences(raw: unknown): GarnishPreferences {
+  const source =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  return {
+    launchAtLogin:
+      typeof source['launchAtLogin'] === 'boolean'
+        ? source['launchAtLogin']
+        : DEFAULT_PREFERENCES.launchAtLogin,
+  };
+}
+
+export function parsePreferencesFile(contents: string): GarnishPreferences {
+  try {
+    return normalizePreferences(JSON.parse(contents));
+  } catch {
+    return DEFAULT_PREFERENCES;
+  }
+}
