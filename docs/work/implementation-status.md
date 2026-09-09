@@ -391,13 +391,12 @@ still had minutes of budget.
 
 #### Register delta
 
-The web section of `docs/agent-context/known-flaws.md` holds four rows, all
-recorded as founder-gated or foreign work in flight:
-WEB-ROUTE-ROUTING-PREFERENCE-PERSISTED-CALLER-01 and
-WEB-US-ONLY-ROUTING-NOT-THREADED-01 (routing preferences, D-34),
-WEB-NONSTREAM-COMPLETIONS-NO-PERSIST-01 (inside foreign completions files) and
-WEB-SEO-PROBE-404-01 (an extension surface). The rows closed in these waves
-were removed in or beside their fixing commits.
+The web section of `docs/agent-context/known-flaws.md` now holds one row,
+WEB-SEO-PROBE-404-01 (an extension surface). The three routing-preference and
+non-streaming rows this section used to list were closed: the us_only overlay
+is threaded into the resolver as of the 2026-09-08 stabilization pass
+(ACTIVE_ISSUES.md AGI-8). The rows closed in these waves were removed in or
+beside their fixing commits.
 
 #### Verification actually performed
 
