@@ -694,6 +694,14 @@ export async function createScimUser(
     return { row: created, outcome: await reconcileMembership(tx, ctx, created) };
   });
 
+  // A POST carrying active:false revokes an existing membership, exactly as the
+  // three other write paths do, so it revokes the credentials with it. Without
+  // this the seat was removed while the member's sessions, device tokens and API
+  // keys kept working.
+  const revocationWarnings = outcome.membershipRevoked
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, outcome.linkedUserId)
+    : [];
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'user.provisioned',
@@ -702,6 +710,9 @@ export async function createScimUser(
       scimUserId: row.id,
       linked: outcome.linkedUserId !== null,
       membershipGranted: outcome.membershipGranted,
+      membershipRevoked: outcome.membershipRevoked,
+      credentialsRevoked: outcome.membershipRevoked && revocationWarnings.length === 0,
+      revocationWarnings,
     },
   });
   await recordScimResourceAudit(
