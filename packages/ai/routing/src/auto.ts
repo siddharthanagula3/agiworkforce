@@ -180,6 +180,27 @@ export interface AutoRoutingRequest {
    * not a desktop or CLI runtime resolving against its own credentials.
    */
   excludedProviders?: ReadonlySet<string>;
+  /**
+   * Transports Auto may not dispatch through, whatever the ranking says.
+   *
+   * The second of the two identities `routeAdmissionRejections` already names:
+   * `excludedProviders` above is the vendor that OWNS the model, this is the
+   * transport that SERVES it. They are genuinely different facts and the
+   * catalog proves it, because the same model reaches a US gateway on one tier
+   * and the vendor's own endpoint on another.
+   *
+   * That difference is the whole reason both exist. "Our data must not leave
+   * the United States" is a question about this field; "we do not use Chinese
+   * vendors" is a question about the other one. A single field would answer one
+   * of those two callers wrongly.
+   *
+   * Unlike `excludedProviders`, this DOES apply to a model the user named, and
+   * the asymmetry is deliberate: the user chose a model, not a datacentre. The
+   * model stays available through a permitted transport, which is what the
+   * catalog already supports, since every one of these models is carried by
+   * several hosts at the same price.
+   */
+  excludedRouteHosts?: ReadonlySet<string>;
   capabilityDocument?: EffectiveCapabilityDocument | null;
   capabilityRequirements?: readonly CapabilityRequirement[];
   fallbackToAutoForCapabilityMismatch?: boolean;
@@ -877,6 +898,9 @@ function routeAdmissionRejections(
   vendor: string,
 ): string[] {
   const reasons: string[] = [];
+  if (request.excludedRouteHosts?.has(route.provider)) {
+    reasons.push(`route ${routeId} dispatches through an excluded transport`);
+  }
   if (request.organizationPolicy) {
     // Both provider identities: the VENDOR that owns the model and the
     // TRANSPORT this route dispatches through. The evaluator decides what each
