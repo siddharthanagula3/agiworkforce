@@ -23,11 +23,23 @@ export function OPTIONS(request: NextRequest) {
 
 const DEFAULT_SHARE_EXPIRY_DAYS = 7;
 
+// A share body carried no bound of its own beyond the 4 MiB payload ceiling, so
+// the secret scanner's input was whatever the caller sent.
+const MAX_SHARE_MESSAGES = 2_000;
+const MAX_SHARE_SERIALIZED_CHARS = 1_000_000;
+
 const CreateShareSchema = z.object({
   title: z.string().min(1).max(200).default('Shared Session'),
   model_id: z.string().optional(),
   provider: z.string().optional(),
-  messages: z.array(z.record(z.string(), z.unknown())).default([]),
+  messages: z
+    .array(z.record(z.string(), z.unknown()))
+    .max(MAX_SHARE_MESSAGES)
+    .refine(
+      (value) => JSON.stringify(value).length <= MAX_SHARE_SERIALIZED_CHARS,
+      'messages exceed the size limit',
+    )
+    .default([]),
   expires_in_days: z
     .union([z.literal(1), z.literal(7), z.literal(30)])
     .default(DEFAULT_SHARE_EXPIRY_DAYS),

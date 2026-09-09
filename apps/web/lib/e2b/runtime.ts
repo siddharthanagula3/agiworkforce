@@ -812,8 +812,12 @@ export async function getE2BExecutor(
               context: { id: context.id, language: context.language, cwd: context.cwd },
             })
           : await sandbox.runCode(code, { language: lang });
-        const stdout = (execution.logs?.stdout ?? []).join('');
-        const stderr = (execution.logs?.stderr ?? []).join('');
+        // Bounded here rather than at the caller: what a cell prints is chosen
+        // by the executed code, and runCommand already truncates its own
+        // streams the same way.
+        const perStreamLimit = Math.floor(MAX_EXECUTION_OUTPUT_BYTES / 2);
+        const stdout = truncateUtf8((execution.logs?.stdout ?? []).join(''), perStreamLimit);
+        const stderr = truncateUtf8((execution.logs?.stderr ?? []).join(''), perStreamLimit);
         if (execution.error) {
           const traceback = execution.error.traceback ? `\n${execution.error.traceback}` : '';
           return {
@@ -823,7 +827,12 @@ export async function getE2BExecutor(
             outputs: notebookOutputs(stdout, stderr, [], execution.error),
           };
         }
-        const output = [stdout, stderr, execution.text ?? ''].filter(Boolean).join('\n');
+        const output = truncateUtf8(
+          [stdout, stderr, truncateUtf8(execution.text ?? '', perStreamLimit)]
+            .filter(Boolean)
+            .join('\n'),
+          MAX_EXECUTION_OUTPUT_BYTES,
+        );
         const results = (execution.results ?? []) as NotebookResultLike[];
         const pngResults = results
           .map((r) => r?.png)
