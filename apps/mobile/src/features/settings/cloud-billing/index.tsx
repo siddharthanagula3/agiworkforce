@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -356,7 +355,7 @@ export default function CloudBillingScreen() {
           />
           <SettingsInfo
             title="Usage top-ups"
-            body={`${TOP_UP_UNITS_PER_USD} units for every $1 of configured product value. The minimum top-up is $${MIN_TOP_UP_AMOUNT_USD} (${MINIMUM_TOP_UP_UNITS.toLocaleString('en-US')} units), and the ordinary self-serve maximum is $${MAX_TOP_UP_AMOUNT_USD}. The native store shows the actual localized price and applicable tax before approval. Top-ups do not change your plan or renewal date, and unused purchased balance carries across renewals for up to 12 months.`}
+            body={`${TOP_UP_UNITS_PER_USD} credits for every $1 of configured product value. The minimum top-up is $${MIN_TOP_UP_AMOUNT_USD} (${MINIMUM_TOP_UP_UNITS.toLocaleString('en-US')} credits), and the ordinary self-serve maximum is $${MAX_TOP_UP_AMOUNT_USD}. The native store shows the actual localized price and applicable tax before approval. Top-ups do not change your plan or renewal date, and unused purchased balance carries across renewals for up to 12 months.`}
             icon={CreditCard}
           />
         </>
@@ -414,7 +413,7 @@ export default function CloudBillingScreen() {
             <>
               <SettingsInfo
                 title="Native usage top-ups"
-                body={`${TOP_UP_UNITS_PER_USD} units per $1 of configured product value, with a $${MIN_TOP_UP_AMOUNT_USD} minimum. The store shows the actual localized price before purchase. Top-ups are consumable, do not change your renewal date, and are granted only once after server verification.`}
+                body={`${TOP_UP_UNITS_PER_USD} credits per $1 of configured product value, with a $${MIN_TOP_UP_AMOUNT_USD} minimum. The store shows the actual localized price before purchase. Top-ups are consumable, do not change your renewal date, and are granted only once after server verification.`}
                 icon={ShoppingBag}
               />
               <SettingsGroup>
