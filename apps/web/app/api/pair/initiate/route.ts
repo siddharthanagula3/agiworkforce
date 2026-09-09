@@ -6,7 +6,10 @@ import { z } from 'zod';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
 const DEFAULT_TTL_SECONDS = 300;
@@ -36,8 +39,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

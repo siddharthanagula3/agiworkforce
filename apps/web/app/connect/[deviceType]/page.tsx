@@ -1,12 +1,12 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
-import { ConnectDeviceClient, friendlyDeviceName, isKnownDeviceType } from './connect-client';
+import { friendlyDeviceName, isKnownDeviceType } from './connect-client';
 
 const STATEMENT_MAX_WIDTH = '30rem';
 
@@ -22,12 +22,9 @@ const statementStyle: CSSProperties = {
 
 function ConnectBody() {
   const params = useParams();
-  const searchParams = useSearchParams();
 
   const raw = params?.['deviceType'];
   const deviceType = (Array.isArray(raw) ? raw[0] : raw) ?? 'device';
-  const deviceId = searchParams.get('device_id');
-  const deviceFingerprint = searchParams.get('device_fingerprint');
   const name = friendlyDeviceName(deviceType);
 
   if (!isKnownDeviceType(deviceType)) {
@@ -52,46 +49,23 @@ function ConnectBody() {
     );
   }
 
-  if (!deviceId) {
-    return (
-      <Section id="connect-incomplete" labelledBy="agi-connect-incomplete-title">
-        <div style={statementStyle}>
-          <div>
-            <Eyebrow>Device sign-in</Eyebrow>
-            <h1 className="agi-ds-h1" id="agi-connect-incomplete-title">
-              This link is incomplete.
-            </h1>
-          </div>
-          <Prose>
-            The device sign-in link is missing its device id. Start the sign-in again from {name}.
-          </Prose>
-          <a href="/" className="agi-ds-link">
-            Back to home
-          </a>
-        </div>
-      </Section>
-    );
-  }
-
   return (
     <Section id="connect-device" labelledBy="agi-connect-device-title">
       <div style={statementStyle}>
         <div>
           <Eyebrow>Device sign-in</Eyebrow>
           <h1 className="agi-ds-h1" id="agi-connect-device-title">
-            Connect {name} to AGI?
+            Finish signing in from {name}.
           </h1>
         </div>
         <Prose>
-          {name} is requesting to sign in to your AGI account. Approve it only if you just started
-          this sign-in from {name}; if you did not, choose Deny.
+          {name} shows a code when you start signing in. Open the link it gives you, or go to the
+          verification page and approve the code you can see on {name} itself. A page that offers to
+          approve a device you cannot see the code for is not one to trust.
         </Prose>
-
-        <ConnectDeviceClient
-          deviceId={deviceId}
-          deviceFingerprint={deviceFingerprint}
-          deviceType={deviceType}
-        />
+        <a href="/verify" className="agi-ds-link">
+          Enter the code from {name}
+        </a>
       </div>
     </Section>
   );
