@@ -267,6 +267,12 @@
       "purpose": "Signed enterprise license and policy verification."
     },
     {
+      "name": "@agiworkforce/local-runtime-contract",
+      "path": "packages/contracts/local-runtime",
+      "kind": "package",
+      "purpose": "Typed contract for the privileged Electron local runtime. Pure types and validation; performs no I/O."
+    },
+    {
       "name": "@agiworkforce/trust-boundaries",
       "path": "packages/contracts/trust-boundaries",
       "kind": "package",

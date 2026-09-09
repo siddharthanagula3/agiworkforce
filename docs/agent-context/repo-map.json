@@ -779,6 +779,21 @@
       ]
     },
     {
+      "path": "packages/contracts/local-runtime",
+      "kind": "package",
+      "canonicalOwner": "Privileged local runtime contract",
+      "consumers": ["apps/desktop", "apps/web", "packages/client/client-runtime"],
+      "deployability": "cross-surface-contract-library",
+      "trustBoundary": "the request and response shapes the Electron shell's privileged local runtime accepts, with the path-safety and capability predicates that decide what a workspace grant reaches; pure types and validation, performs no I/O",
+      "status": "active-canonical-owner",
+      "action": "keep",
+      "evidence": [
+        "packages/contracts/local-runtime/src/index.ts",
+        "packages/contracts/local-runtime/src/path-safety.ts",
+        "packages/contracts/local-runtime/package.json"
+      ]
+    },
+    {
       "path": "packages/contracts/compliance",
       "kind": "package",
       "canonicalOwner": "Compliance and privacy",
