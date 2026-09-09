@@ -44,6 +44,14 @@ import {
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
 import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
+import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
+import {
+  redactSecretsFromValue,
+  SecretRedactionIncompleteError,
+} from '@/lib/security/secrets-audit';
+
+const SECRET_IN_RESUME_MESSAGE =
+  'This resume was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
 
 function jsonError(message: string, status: number): NextResponse {
   return NextResponse.json(
@@ -156,6 +164,32 @@ async function handleToolInputResume(request: NextRequest) {
     resumeFields = parsed.data;
   } catch {
     return jsonError('Invalid JSON in input resume request.', 400);
+  }
+
+  // Guidance and the input responses both reach the model, and the responses
+  // are echoed to the remote server, so both go through the same gate the
+  // message array does rather than around it.
+  const guidanceGate = await applySecretHandlingToTexts(userId, [resumeFields.guidance ?? '']);
+  if (guidanceGate.action === 'blocked') {
+    return jsonError(SECRET_IN_RESUME_MESSAGE, 400);
+  }
+  if (guidanceGate.action === 'redacted') {
+    resumeFields = { ...resumeFields, guidance: guidanceGate.texts[0] || undefined };
+  }
+
+  try {
+    resumeFields = {
+      ...resumeFields,
+      tool_inputs: resumeFields.tool_inputs.map((entry) => ({
+        ...entry,
+        input_responses: redactSecretsFromValue(entry.input_responses).value,
+      })),
+    };
+  } catch (error) {
+    if (error instanceof SecretRedactionIncompleteError) {
+      return jsonError(SECRET_IN_RESUME_MESSAGE, 400);
+    }
+    throw error;
   }
 
   const { db } = await getUserScopedDb(request);
