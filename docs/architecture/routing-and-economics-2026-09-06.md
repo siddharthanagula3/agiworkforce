@@ -82,9 +82,9 @@ its evidence.
 2. **The router's cost signal is a static sheet, not a measurement.** Ranking
    uses `route.pricing` from the registry. OpenRouter prices are synced by
    script; every other marketplace price was read by hand on a date. Cheaper
-   Inference publishes discounts of 15 to 24 percent on the GPT-5.6 family and
-   GPT-6 Astra against a registry minimum of 30 percent, so those routes are
-   refused by the gateway on every request until supply qualifies. Experiential
+   Inference publishes discounts of 15 to 24 percent on OpenAI's current
+   flagship families against a registry minimum of 30 percent, so those routes
+   are refused by the gateway on every request until supply qualifies. Experiential
    Labs is priced at the ceiling of its waterfall, so it never wins on price
    and only serves as failover. Neither is wrong, both are blind.
 3. **Auto's biggest lever is a single policy line.** `autoProfileByTask` sends

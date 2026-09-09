@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 15 unresolved issues: 0 P0, 1 P1, 10 P2, 4 P3, plus 3 items needing
+- 14 unresolved issues: 0 P0, 1 P1, 9 P2, 4 P3, plus 3 items needing
   validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
   `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
 - Five are blocked on a decision rather than on code, and each says whose and
@@ -69,6 +69,7 @@ went, and so nobody re-files them:
 | `AGI-8`  | The US-only preference never reached the web resolver              | `request-processor.us-only.test.ts`                  |
 | `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                       |
 | `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                      |
+| `AGI-24` | Any function tool blocked cross-provider failover for a whole turn | `managed-failover.test.ts`, red on the old predicate |
 
 ## 2. P0, critical
 
@@ -435,47 +436,13 @@ log, not here: a concrete id in this file would go stale and would defeat
 **Not an environment failure:** the setting is ours, on our own account, and so
 is the catalog entry. No user can resolve it.
 **User impact:** a model in the picker that never answers on the first attempt.
-**Dependencies:** None. `AGI-24` prevents the rotation from completing on any
-turn carrying tools, so both are needed before this reads as fixed to a user.
+**Dependencies:** None. `AGI-24` used to prevent the rotation from completing
+on any turn carrying tools; that pin is now narrowed to the steps it protects,
+so the refusal this entry describes does reach another route.
 **Acceptance criteria:** the route is not offered, or one refusal withdraws it
 for the window.
 **Validation:** the classification test in `provider-runtime`, plus a route
 health assertion.
-
-### `AGI-24` A turn carrying any function tool cannot fail over to another provider
-
-**Severity:** P2
-**Status:** Open, observed but not diagnosed.
-**Area:** Provider routing, failover
-**Root cause:** `mustStayOnProvider = requestCarriesTools(processed)`, and
-`requestCarriesTools` is true when the request carries any tool that is NOT a
-provider-native search, which is every ordinary function tool. Every candidate
-on a different provider is then skipped with "provider-native tools cannot
-transfer providers", a message that describes the opposite of the predicate.
-**Current behavior (observed live 2026-09-08):** a turn whose route was refused
-outright rotated through its whole fallback list and skipped every candidate, on two
-different providers, because a function tool was attached. The turn failed with no answer despite Auto having working routes
-available.
-**Why it might be deliberate:** a mid-turn provider switch could invalidate
-tool-call ids already in the transcript. That would justify the restriction from
-the second provider step onward, not on the first, and function tool schemas are
-translated per provider by design.
-**Required behavior:** determine which of the two the restriction is for, and
-say so in the code. Either narrow it to provider-native tools, which is what its
-own message claims, or narrow it to steps after the first, or document why a
-first-step rotation is unsafe.
-**Evidence:** `apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts`
-`requestCarriesTools` and the `mustStayOnProvider` skip; dev log 2026-09-08
-22:56:54 UTC, four consecutive skips on one turn.
-**User impact:** Auto stops being Auto for any turn with a tool attached, which
-is most agentic turns.
-**Dependencies:** None. Compounds `AGI-23`.
-**Implementation direction:** Do not change the predicate before establishing
-which invariant it protects; there is no comment and the message contradicts the
-code, so one of the two is wrong and guessing which would be a regression.
-**Acceptance criteria:** a first-step route failure on a tool-carrying Auto turn
-reaches a working route, or the restriction carries a stated reason.
-**Validation:** failover unit tests over a tool-carrying request.
 
 ## 5. P3, lower priority
 
@@ -592,11 +559,12 @@ Dependency-aware, not severity-ordered.
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
    trade-off is now pinned so it cannot drift while that is pending.
-4. `AGI-24`, then `AGI-23`. One implementer, in that order: until failover can
-   complete, nothing downstream of it is observable, and `AGI-23` is what
-   exposed `AGI-24`. Do not run these concurrently with `AGI-4`, both touch the
-   chat request processor. `AGI-22` is not in this sequence: it is blocked on a
-   disclosure decision, not on the threading `AGI-8` established.
+4. `AGI-23`. `AGI-24`, the failover pin that stopped its rotation from
+   completing, is closed, so the remaining half is the catalog offering a route
+   the account's own data policy refuses. Do not run it concurrently with
+   `AGI-4`, both touch the chat request processor. `AGI-22` is not in this
+   sequence: it is blocked on a disclosure decision, not on the threading
+   `AGI-8` established.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
    same provenance story as `AGI-4`.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized at 6.0s to first audio, and
@@ -626,7 +594,6 @@ Dependency-aware, not severity-ordered.
 | `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
-| `AGI-24` | failover tests over a tool-carrying request         | none                                | a tool turn reaches a working route       |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -636,7 +603,7 @@ Every web change closes with `apps/web` typecheck run on its own.
 AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
-AGI-24 ──> AGI-23          routing, one implementer, ordered
+AGI-23                     routing, independent now that the pin is narrowed
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
