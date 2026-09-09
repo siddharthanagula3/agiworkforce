@@ -91,7 +91,12 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
   });
 
   it('rejects a second custom remote MCP for a free user before network work', async () => {
-    mocks.query.mockResolvedValueOnce([{ count: '1' }]);
+    // Routed by SQL: the connector policy gate resolves the caller's workspace
+    // before the entitlement count runs, so a queued single response would be
+    // answered to the wrong query.
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('user_custom_connectors') ? [{ count: '1' }] : [],
+    );
 
     const response = await POST(request());
 
@@ -102,32 +107,40 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
 
   it('uses the Pro plan limit from the shared billing catalog', async () => {
     mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
-    mocks.query
-      .mockResolvedValueOnce([{ count: '1' }])
-      .mockResolvedValueOnce([{ exists: false }])
-      .mockResolvedValueOnce([
-        {
-          id: 'connector-1',
-          short_id: 'abc123',
-          name: 'My MCP',
-          url: 'https://mcp.example.com/sse',
-          transport: 'sse',
-          created_at: '2026-07-17T00:00:00.000Z',
-          updated_at: '2026-07-17T00:00:00.000Z',
-        },
-      ]);
+    mocks.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('user_custom_connectors')) return [{ count: '1' }];
+      if (text.includes('assert_user_resource_limit')) {
+        return [
+          {
+            id: 'connector-1',
+            short_id: 'abc123',
+            name: 'My MCP',
+            url: 'https://mcp.example.com/sse',
+            transport: 'sse',
+            created_at: '2026-07-17T00:00:00.000Z',
+            updated_at: '2026-07-17T00:00:00.000Z',
+          },
+        ];
+      }
+      return [];
+    });
 
     const response = await POST(request());
 
     expect(response.status).toBe(201);
-    const [sql, params] = mocks.query.mock.calls[2] as [string, unknown[]];
-    expect(sql).toContain("assert_user_resource_limit('custom_connectors'");
-    expect(params).toContain(25);
+    const insert = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes("assert_user_resource_limit('custom_connectors'"),
+    ) as [string, unknown[]] | undefined;
+    expect(insert, 'the insert must assert the plan limit').toBeDefined();
+    expect(insert![1]).toContain(25);
   });
 
   it('fails closed for an unknown subscription before network work', async () => {
     mocks.getSubscription.mockResolvedValue({ plan_tier: 'starter' });
-    mocks.query.mockResolvedValueOnce([{ count: '0' }]);
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('user_custom_connectors') ? [{ count: '0' }] : [],
+    );
 
     const response = await POST(request());
 

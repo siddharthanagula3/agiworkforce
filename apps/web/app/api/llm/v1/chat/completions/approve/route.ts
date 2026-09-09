@@ -18,7 +18,8 @@ import {
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { runAuthGate } from '../lib/auth-gate';
+import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
+import { withManagedTurnSlot } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
@@ -113,9 +114,7 @@ function checkpointError(error: unknown): NextResponse | null {
   return null;
 }
 
-async function handleToolApproval(request: NextRequest) {
-  const authResult = await runAuthGate(request);
-  if (!authResult.ok) return authResult.response;
+async function handleToolApproval(request: NextRequest, authResult: AuthGateSuccess) {
   const { userId, subscription } = authResult;
 
   const isFreeTierRequest =
@@ -392,7 +391,17 @@ async function handleToolApproval(request: NextRequest) {
   return new NextResponse(turn.readable, { headers: streamHeaders });
 }
 
-export const POST = withCorsRoute(withErrorHandler(handleToolApproval));
+async function admitAndDispatchApproval(request: NextRequest): Promise<NextResponse | Response> {
+  const authResult = await runAuthGate(request);
+  if (!authResult.ok) return authResult.response;
+
+  return withManagedTurnSlot(
+    { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
+    () => handleToolApproval(request, authResult),
+  );
+}
+
+export const POST = withCorsRoute(withErrorHandler(admitAndDispatchApproval));
 
 export function OPTIONS(request: NextRequest) {
   return (

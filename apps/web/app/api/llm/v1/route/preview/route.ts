@@ -137,10 +137,23 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
 
   const { db, organizationId } = await getUserScopedDb(request, { apiKeyScope: 'inference:write' });
 
+  // Ownership is proved on the scoped handle before the affinity is read: the
+  // conversation id arrives from the caller, and the affinity store is keyed on
+  // it alone, so an unowned id would otherwise disclose which model and task
+  // type that conversation last served.
+  const ownsConversation = conversationId
+    ? (
+        await db.query<{ id: string }>(
+          'select id from public.web_conversations where id = $1 and user_id = $2 limit 1',
+          [conversationId, userId],
+        )
+      ).length > 0
+    : false;
+
   const [workspacePolicy, zeroDataRetentionPolicy, routeAffinity] = await Promise.all([
     readWorkspacePolicyForPreview(db, organizationId, userId),
     resolveZeroDataRetentionPolicy(db, userId),
-    conversationId ? getServedRouteAffinity(conversationId) : Promise.resolve(null),
+    ownsConversation ? getServedRouteAffinity(conversationId!) : Promise.resolve(null),
   ]);
 
   const routingRequest = buildWebCloudAutoRoutingRequest(

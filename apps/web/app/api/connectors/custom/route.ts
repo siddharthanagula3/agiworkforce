@@ -66,7 +66,7 @@ interface CreateBody {
 }
 
 async function handlePost(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -79,10 +79,12 @@ async function handlePost(request: NextRequest) {
   // exactly that. It was consulted only when tools were read, so the endpoint
   // was created, probed and stored first and hidden afterwards. Refused before
   // the body is parsed, so nothing is reached and nothing is written.
+  // organizationId is omitted, not passed: this route reads the database on a
+  // deliberately null-org scope, and the gate reads an explicit null as
+  // "personal account, skip policy" before its own workspace lookup runs.
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
-    organizationId,
     connectorId: null,
     isCustom: true,
     request,
