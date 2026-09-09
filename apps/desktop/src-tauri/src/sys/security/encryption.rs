@@ -1,6 +1,6 @@
+use super::aead_nonce::random_nonce;
 use crate::core::sync_utils::RwLockExt;
 use crate::sys::security::machine_key::{self, KeyPurpose};
-use super::aead_nonce::random_nonce;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -9,7 +9,6 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedSecret {

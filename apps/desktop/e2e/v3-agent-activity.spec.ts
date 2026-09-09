@@ -245,11 +245,20 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   const expandedActivityToggle = assistant.getByRole('button', { name: /hide agent activity/i });
   await expect(expandedActivityToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(assistant.getByText('Planning the research pass')).toBeVisible();
+  // The trace row states what was searched, not what came back: the summary
+  // carries the query beside it.
   await expect(
-    assistant.getByRole('button', { name: 'Searching official sources', exact: true }),
+    assistant.getByRole('button', {
+      name: 'Searching official sources · AGI official documentation',
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(assistant.getByText('Official AGI documentation')).toBeVisible();
-  await expect(assistant.getByText('example.com')).toBeVisible();
+  // The result rows themselves stay out of the transcript. One source list
+  // serves the whole turn from the dock; repeating it under every search buried
+  // the answer under the same links. What the transcript owes the reader is the
+  // count, which the collapsed toggle above already states.
+  await expect(assistant.getByText('Official AGI documentation')).toHaveCount(0);
+  await expect(assistant.getByText('example.com')).toHaveCount(0);
   await expect(assistant.getByText('Done', { exact: true })).toBeVisible();
   expect(unexpectedDiagnostics).toEqual([]);
 });
