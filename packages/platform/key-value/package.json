@@ -34,6 +34,6 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
     "ioredis": "^5.9.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
