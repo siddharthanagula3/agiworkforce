@@ -145,16 +145,30 @@ function callerCorpus(): string[] {
     });
 }
 
+// A route segment is a path taken from disk, so it can carry any character the
+// filesystem allows. Escaping only the slash left every other metacharacter
+// live: a directory named `c++` compiled to a quantifier and either threw or,
+// worse, matched text that is not a call to this route. Each literal segment is
+// escaped whole, and only the `[param]` segments become patterns.
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
+
+function segmentPattern(segment: string): string {
+  if (segment.startsWith('[...')) return '.+';
+  if (segment.startsWith('[')) return '[^"\'`\\s]+';
+  return escapeRegExp(segment);
+}
+
 function callerlessUrls(): string[] {
   const corpus = callerCorpus();
   return routeUrls()
-    .filter(({ url, segments }) => {
-      const literal = url.replace(/\[\.\.\.[^\]]+\]/g, '.+').replace(/\[[^\]]+\]/g, '[^"\'`\\s]+');
-      const patterns = [new RegExp(literal.replace(/\//g, '\\/'))];
+    .filter(({ segments }) => {
+      const patterns = [new RegExp(`\\/api\\/${segments.map(segmentPattern).join('\\/')}`)];
       const firstDynamic = segments.findIndex((segment) => segment.startsWith('['));
       if (firstDynamic > 0) {
-        const prefix = `/api/${segments.slice(0, firstDynamic).join('/')}`;
-        patterns.push(new RegExp(`${prefix.replace(/\//g, '\\/')}['"\`/]`));
+        const prefix = segments.slice(0, firstDynamic).map(escapeRegExp).join('\\/');
+        patterns.push(new RegExp(`\\/api\\/${prefix}['"\`/]`));
       }
       return !corpus.some((text) => patterns.some((pattern) => pattern.test(text)));
     })

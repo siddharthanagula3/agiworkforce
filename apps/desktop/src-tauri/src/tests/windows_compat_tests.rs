@@ -52,6 +52,7 @@ mod windows_compat_tests {
     // Internal modules under test
     use crate::features::terminal::shells::{detect_available_shells, get_default_shell};
     use crate::features::terminal::ShellType;
+    use crate::sys::security::aead_nonce::random_nonce;
     use crate::sys::security::encryption::{decrypt_secret, encrypt_secret};
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use crate::sys::security::secret_manager::SecretManager;
@@ -334,16 +335,14 @@ mod windows_compat_tests {
         let key: &Key<Aes256Gcm> = Key::<Aes256Gcm>::from_slice(&raw_key_bytes);
         let cipher = Aes256Gcm::new(key);
 
-        let mut nonce_bytes = [0u8; 12];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = random_nonce();
 
         let msg = b"agi-workforce-windows-test";
         let ciphertext = cipher
-            .encrypt(nonce, msg.as_ref())
+            .encrypt(&nonce, msg.as_ref())
             .expect("raw AES-GCM encrypt failed");
         let decrypted = cipher
-            .decrypt(nonce, ciphertext.as_ref())
+            .decrypt(&nonce, ciphertext.as_ref())
             .expect("raw AES-GCM decrypt failed");
 
         assert_eq!(&decrypted, msg);
