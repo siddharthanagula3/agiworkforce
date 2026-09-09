@@ -21,6 +21,17 @@ import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
 const BOT_MENTION = '@agi-workforce';
 
+/**
+ * GitHub's own statement of the commenter's standing on the repository. OWNER,
+ * MEMBER and COLLABORATOR are the ones who can already push; everyone else is a
+ * passer-by whose mention must not spend the installation's review quota.
+ */
+const REVIEW_TRIGGER_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  'OWNER',
+  'MEMBER',
+  'COLLABORATOR',
+]);
+
 const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 
 const MAX_REVIEWS_PER_INSTALLATION_PER_30_DAYS = Number(
@@ -132,6 +143,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const sender = payload['sender'] as Record<string, unknown> | undefined;
   if (sender?.['type'] === 'Bot' || sender?.['login'] === GITHUB_BOT_LOGIN) {
+    return NextResponse.json({ received: true });
+  }
+
+  // A mention from anyone at all used to mint an installation token, fetch the
+  // diff and spend a model call, so any passer-by on a public repository could
+  // spend the installation's quota. GitHub reports the commenter's standing on
+  // the repository, and only someone who belongs to it may start a review.
+  const comment = payload['comment'] as Record<string, unknown> | undefined;
+  const authorAssociation = String(comment?.['author_association'] ?? '');
+  if (!REVIEW_TRIGGER_ASSOCIATIONS.has(authorAssociation)) {
+    logger.info(
+      { authorAssociation },
+      'GitHub webhook: ignoring a review mention from outside the repository',
+    );
     return NextResponse.json({ received: true });
   }
 

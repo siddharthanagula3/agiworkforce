@@ -2159,12 +2159,25 @@ export async function* runToolLoop(
     return { verdict: unattended ? 'deny' : 'ask', reason };
   }
 
-  function resolveToolCallGate(toolCall: PendingToolCall): ToolCallGate {
+  function resolveToolCallGate(
+    toolCall: PendingToolCall,
+    batch: readonly PendingToolCall[] = [],
+  ): ToolCallGate {
     const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
     if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
 
+    // A whole batch is gated before any of it runs, while the flag below is only
+    // set once a result comes back, so one turn asking for url_fetch and an
+    // egress tool together used to gate the egress call with the flag still
+    // false and auto-allow it on an unattended run. Another call in the same
+    // batch counts; the call being gated does not, because the content it
+    // fetches does not exist until after it has run.
+    const batchIntroducesUntrustedContent = batch.some(
+      (other) => other.id !== toolCall.id && toolAcceptsUntrustedContent(other.qualifiedName),
+    );
+
     const trifecta =
-      untrustedContentInContext &&
+      (untrustedContentInContext || batchIntroducesUntrustedContent) &&
       sensitiveSourceAvailable &&
       toolCreatesEgressPath(toolCall.qualifiedName);
 
@@ -3761,7 +3774,10 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      const gatedCalls = pendingToolCalls.map((tc) => ({ tc, gate: resolveToolCallGate(tc) }));
+      const gatedCalls = pendingToolCalls.map((tc) => ({
+        tc,
+        gate: resolveToolCallGate(tc, pendingToolCalls),
+      }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
       const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
       const autoRunCalls = gatedCalls
