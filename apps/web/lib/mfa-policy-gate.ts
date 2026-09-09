@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type { NextRequest } from 'next/server';
 import { AppError, ErrorCode, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -73,8 +72,8 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   return enrolled;
 }
 
-export async function assertMfaPolicy(userId: string, request: NextRequest): Promise<void> {
-  const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId, request);
+export async function assertMfaPolicy(userId: string): Promise<void> {
+  const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId);
   if (!policy || !policy.requireMfa || !organizationId) return;
 
   const mfaEnrolled = await resolveMfaEnrolled(userId);

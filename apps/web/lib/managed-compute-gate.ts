@@ -5,7 +5,7 @@ import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts
 import { logger } from '@/lib/logger';
 import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
 import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
@@ -229,16 +229,19 @@ export async function buildExternalSharingGateResponse(
  * Ungoverned on any failure, including an unresolvable workspace or an
  * unreachable database: a billing lookup failing is an infrastructure fault, and
  * refusing every member's work over it is worse than briefly overshooting.
+ *
+ * The budget is resolved against the funding organization, never the workspace
+ * the request selected: a member who has reached the cap could otherwise send
+ * `x-agi-organization-id: personal` and keep spending.
  */
 export async function buildSpendLimitGateResponse(
   userId: string,
-  request: NextRequest,
   headers?: HeadersInit,
 ): Promise<NextResponse | null> {
   let decision;
   try {
     const db = getNeonDb();
-    const organizationId = await resolveActiveOrganizationId(db, userId, request);
+    const organizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
     decision = await evaluateSpendLimit(db, organizationId);
   } catch (error) {
     logger.error({ error, userId }, '[spend-limit] unavailable; request treated as ungoverned');

@@ -384,7 +384,7 @@ async function dispatchChatCompletions(
     ),
     // The workspace budget, checked before any credit is reserved so a turn
     // that a spend cap will refuse never spends anything first.
-    timePhase(CHAT_TURN_PHASE.spendGate, () => buildSpendLimitGateResponse(userId, request)),
+    timePhase(CHAT_TURN_PHASE.spendGate, () => buildSpendLimitGateResponse(userId)),
   ]);
   if (policyGateResponse) return policyGateResponse;
   if (spendGateResponse) return spendGateResponse;

@@ -146,7 +146,7 @@ async function handleToolInputResume(request: NextRequest) {
 
   // The workspace budget, checked before any credit is reserved so a turn a
   // spend cap will refuse never spends anything first.
-  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  const spendGateResponse = await buildSpendLimitGateResponse(userId);
   if (spendGateResponse) return spendGateResponse;
 
   let resumeFields;
