@@ -54,7 +54,7 @@ function applyRedactedSpans(
   }));
 
   spans.forEach((span, spanIndex) => {
-    const text = redactedTexts[spanIndex] ?? span.text;
+    const text = redactedTexts[spanIndex]!;
     const target = redacted[span.messageIndex]!;
     if (span.multimodalIndex === null) {
       target.content = text;
@@ -96,6 +96,38 @@ function partitionByConfidence(detections: readonly SecretDetection[]): {
   return { high, low };
 }
 
+/**
+ * The same policy applied to loose strings a caller supplies outside the
+ * message array: resume guidance and tool input responses reach the model on
+ * the very next turn, so they cannot bypass the gate the messages go through.
+ */
+export async function applySecretHandlingToTexts(
+  userId: string,
+  texts: readonly string[],
+): Promise<{ action: SecretHandlingOutcome['action']; texts: string[] }> {
+  const present = texts.filter((text) => text.length > 0);
+  if (present.length === 0) return { action: 'clean', texts: [...texts] };
+
+  const detections = scanForSecrets(present.join(MESSAGE_SCAN_BOUNDARY));
+  if (detections.length === 0) return { action: 'clean', texts: [...texts] };
+
+  const { mode } = await resolveSecretHandlingPolicy(getNeonDb(), userId);
+  const { high } = partitionByConfidence(detections);
+  if (high.length === 0) return { action: 'warned', texts: [...texts] };
+
+  const action = actionForMode(mode);
+  if (action !== 'redacted') return { action, texts: [...texts] };
+
+  const names = new Set(high.map((detection) => detection.name));
+  const redacted = texts.map((text) => (text ? redactSecrets(text, names) : text));
+  const residue = scanForSecrets(redacted.join(MESSAGE_SCAN_BOUNDARY)).filter((detection) =>
+    names.has(detection.name),
+  );
+  if (residue.length > 0) return { action: 'blocked', texts: [...texts] };
+
+  return { action: 'redacted', texts: redacted };
+}
+
 export async function applySecretHandlingToRequest(
   userId: string,
   request: NextRequest,
@@ -113,7 +145,7 @@ export async function applySecretHandlingToRequest(
   const { high: highConfidenceDetections, low: lowConfidenceDetections } =
     partitionByConfidence(detections);
   const hasHighConfidence = highConfidenceDetections.length > 0;
-  const action = hasHighConfidence ? actionForMode(mode) : 'warned';
+  let action = hasHighConfidence ? actionForMode(mode) : 'warned';
   const relevantDetections = hasHighConfidence ? highConfidenceDetections : lowConfidenceDetections;
   const patternNames = [...new Set(relevantDetections.map((detection) => detection.name))];
   let notice: string | null = null;
@@ -122,13 +154,31 @@ export async function applySecretHandlingToRequest(
     const highConfidenceNames = new Set(
       highConfidenceDetections.map((detection) => detection.name),
     );
-    const redactedTexts = redactSecrets(joined, highConfidenceNames).split(MESSAGE_SCAN_BOUNDARY);
-    processed.llmRequest.messages = applyRedactedSpans(
-      processed.llmRequest.messages,
-      spans,
-      redactedTexts,
+
+    // Redacted one span at a time. Joining the spans, redacting the join and
+    // splitting it apart again loses the mapping whenever a replacement eats a
+    // boundary, and the fallback for a short split was the caller's own
+    // unredacted text.
+    const redactedTexts = spans.map((span) => redactSecrets(span.text, highConfidenceNames));
+
+    const residue = scanForSecrets(redactedTexts.join(MESSAGE_SCAN_BOUNDARY)).filter((detection) =>
+      highConfidenceNames.has(detection.name),
     );
-    notice = buildSecretRedactionNotice(highConfidenceDetections.length);
+
+    if (residue.length > 0) {
+      logger.error(
+        { userId, organizationId, patternNames: [...new Set(residue.map((d) => d.name))] },
+        '[secret-handling] redaction left a high-confidence match; refusing the turn',
+      );
+      action = 'blocked';
+    } else {
+      processed.llmRequest.messages = applyRedactedSpans(
+        processed.llmRequest.messages,
+        spans,
+        redactedTexts,
+      );
+      notice = buildSecretRedactionNotice(highConfidenceDetections.length);
+    }
   }
 
   await recordAuditEvent({
