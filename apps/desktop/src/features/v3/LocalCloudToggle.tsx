@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Laptop, Cloud, type LucideIcon } from 'lucide-react';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
-import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
+import { isElectronHost, supportsLocalAppMode } from '../../lib/runtimeEnvironment';
 
 export interface LocalCloudToggleProps {
   collapsed?: boolean;
@@ -77,6 +77,20 @@ function Segment({
 
 export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
   const { t } = useTranslation('v3');
+  /**
+   * Not rendered in the Electron build.
+   *
+   * Local mode is Tauri's: `supportsLocalAppMode` is `isTauri ||
+   * isDesktopUiDevLocal`, and `appModeStore` refuses the mode three separate
+   * ways without it. So in Electron this toggle can only ever be the disabled
+   * half, whose label reads "Local mode runs in the AGI Workforce desktop app.
+   * Download it to keep chats and files on this machine." Shown inside the
+   * desktop app, to someone who downloaded it.
+   *
+   * On the web that sentence is doing a real job, so the control stays there.
+   * The Electron app is the website plus local folder access, not a second
+   * place to advertise a download. Same correction as the header banner.
+   */
   const mode = useAppModeStore(selectMode);
   const setMode = useAppModeStore((s) => s.setMode);
   const isLocal = mode === 'local';
@@ -84,6 +98,10 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
   const localLabel = t('sidebar.mode.local');
   const cloudLabel = t('sidebar.mode.cloud');
   const localUnavailable = t('sidebar.mode.localUnavailable');
+
+  // After the hooks, not before: the value is a build constant so the order is
+  // stable either way, but the rule is right to refuse a conditional hook.
+  if (isElectronHost) return null;
 
   if (collapsed) {
     const Icon = isLocal ? Laptop : Cloud;
