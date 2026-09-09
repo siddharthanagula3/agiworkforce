@@ -10,12 +10,35 @@ import {
   useAgentTaskStore,
 } from '../../stores/agentTaskStore';
 import { useIsMounted } from '../../hooks/useIsMounted';
-import { invoke, isTauri, relaunchApp } from '../../lib/tauri-mock';
+import { canRunNativeAgentExecution, invoke, isTauri, relaunchApp } from '../../lib/tauri-mock';
+import { isCloudWeb, isDesktopUiDevLocal, isTestEnvironment } from '../../lib/runtimeEnvironment';
 import { getAgiTaskModelEligibility } from '../../lib/modelCapabilityGates';
 import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 type ExecutionMode = 'auto' | 'sequential' | 'parallel' | 'swarm';
-type TaskAutomationState = 'checking' | 'ready' | 'blocked' | 'restart-required' | 'error';
+type TaskAutomationState =
+  | 'checking'
+  | 'ready'
+  | 'blocked'
+  | 'restart-required'
+  | 'error'
+  | 'unsupported';
+
+/**
+ * Whether this build can run a task at all, asked before the screen claims it
+ * can.
+ *
+ * The previous default was `isTauri ? 'checking' : 'ready'`, which reported
+ * ready in every shipped Electron build, because Electron is not Tauri and has
+ * no transport to the automation service. The user saw a ready control, filled
+ * in a goal, pressed Launch, and only then met the failure. This asks the
+ * dispatch layer's own question first.
+ */
+const NATIVE_EXECUTION_AVAILABLE = canRunNativeAgentExecution({
+  test: isTestEnvironment,
+  cloudWeb: isCloudWeb,
+  desktopUiDev: isDesktopUiDevLocal,
+});
 
 interface AutomationReadiness {
   accessibility: boolean;
@@ -50,11 +73,15 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
   const isMounted = useIsMounted();
   const [swarmRecommended, setSwarmRecommended] = useState(false);
   const [accessibilityState, setAccessibilityState] = useState<TaskAutomationState>(
-    isTauri ? 'checking' : 'ready',
+    NATIVE_EXECUTION_AVAILABLE ? (isTauri ? 'checking' : 'ready') : 'unsupported',
   );
   const [requestingAccessibility, setRequestingAccessibility] = useState(false);
 
   const refreshAccessibility = useCallback(async () => {
+    if (!NATIVE_EXECUTION_AVAILABLE) {
+      setAccessibilityState('unsupported');
+      return;
+    }
     if (!isTauri) {
       setAccessibilityState('ready');
       return;
@@ -311,16 +338,20 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
           <p className="font-medium">
             {accessibilityState === 'checking'
               ? 'Checking macOS Accessibility…'
-              : accessibilityState === 'error'
-                ? 'Accessibility status could not be verified'
-                : accessibilityState === 'restart-required'
-                  ? 'Restart AGI to finish enabling Tasks'
-                  : 'Enable Accessibility to launch Tasks'}
+              : accessibilityState === 'unsupported'
+                ? 'Tasks are not available in this build'
+                : accessibilityState === 'error'
+                  ? 'Accessibility status could not be verified'
+                  : accessibilityState === 'restart-required'
+                    ? 'Restart AGI to finish enabling Tasks'
+                    : 'Enable Accessibility to launch Tasks'}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
-            {accessibilityState === 'restart-required'
-              ? 'macOS now allows Accessibility, but the protected automation service is created only when AGI starts. Quit and reopen AGI before launching a Task.'
-              : 'Tasks can control approved apps while executing a plan, so macOS requires this system permission. AGI will still ask before privileged actions.'}
+            {accessibilityState === 'unsupported'
+              ? 'Tasks control approved apps through a local automation service that this build cannot reach, so a Task launched here would fail. Chat, voice and everything else on this screen are unaffected.'
+              : accessibilityState === 'restart-required'
+                ? 'macOS now allows Accessibility, but the protected automation service is created only when AGI starts. Quit and reopen AGI before launching a Task.'
+                : 'Tasks can control approved apps while executing a plan, so macOS requires this system permission. AGI will still ask before privileged actions.'}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {accessibilityState === 'blocked' && (
@@ -338,7 +369,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
                 Open Accessibility settings
               </button>
             )}
-            {accessibilityState !== 'checking' && (
+            {accessibilityState !== 'checking' && accessibilityState !== 'unsupported' && (
               <button
                 type="button"
                 onClick={() => void refreshAccessibility()}

@@ -94,6 +94,29 @@ function mockMcpBundles() {
   ];
 }
 
+/**
+ * Whether this build can execute a native agent task at all.
+ *
+ * The same question `shouldRejectNativeExecutionFallback` answers at dispatch,
+ * asked before a control is drawn rather than after a user has pressed it.
+ * Electron is `isCloudWeb` here, because `supportsLocalAppMode` deliberately
+ * excludes it, so the shipped desktop binary answers false: its renderer has
+ * no transport to the Rust automation service.
+ *
+ * Exported so a surface can refuse to advertise a capability it cannot
+ * deliver. Before this existed, the task screen defaulted to "ready" whenever
+ * it was not running under Tauri, which is every shipped Electron build, and
+ * the failure surfaced only on submit.
+ */
+export function canRunNativeAgentExecution(runtime: {
+  test: boolean;
+  cloudWeb: boolean;
+  desktopUiDev: boolean;
+}): boolean {
+  if (runtime.test) return true;
+  return !runtime.cloudWeb && !runtime.desktopUiDev;
+}
+
 export function shouldRejectNativeExecutionFallback(
   command: string,
   runtime: { test: boolean; cloudWeb: boolean; desktopUiDev: boolean },

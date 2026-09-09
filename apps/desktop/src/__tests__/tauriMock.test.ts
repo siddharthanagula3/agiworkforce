@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 async function getRealInvoke() {
@@ -222,6 +221,31 @@ describe('Native agent execution honesty', () => {
         desktopUiDev: false,
       }),
     ).toBe(false);
+  });
+
+  /**
+   * The screen that offers Tasks must answer the same question the dispatch
+   * layer answers, and answer it before drawing a ready control.
+   *
+   * The Electron build is `cloudWeb` here, because `supportsLocalAppMode`
+   * excludes it, so it must come back false. It previously came back ready,
+   * and the user met the failure only after pressing Launch.
+   */
+  it('agrees with the dispatch guard about which runtimes can execute a task', async () => {
+    const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
+
+    const runtimes = [
+      { label: 'electron or cloud web', test: false, cloudWeb: true, desktopUiDev: false },
+      { label: 'desktop ui preview', test: false, cloudWeb: false, desktopUiDev: true },
+      { label: 'tauri', test: false, cloudWeb: false, desktopUiDev: false },
+      { label: 'unit test', test: true, cloudWeb: false, desktopUiDev: false },
+    ];
+
+    for (const { label, ...runtime } of runtimes) {
+      const rejected = mod.shouldRejectNativeExecutionFallback('agi_submit_goal', runtime);
+      const available = mod.canRunNativeAgentExecution(runtime);
+      expect(available, `${label} must not advertise what dispatch would refuse`).toBe(!rejected);
+    }
   });
 });
 

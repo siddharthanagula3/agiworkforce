@@ -164,6 +164,10 @@ vi.mock('../lib/tauri-mock', async () => {
     isElectronHost: false,
     supportsLocalAppMode: false,
     isTauriContext: () => false,
+    // Unit tests run as the `test` runtime, which the real predicate treats as
+    // capable so a component under test is not permanently disabled.
+    canRunNativeAgentExecution: () => true,
+    shouldRejectNativeExecutionFallback: () => false,
     listen: vi.fn().mockResolvedValue(() => {}),
     emit: vi.fn().mockResolvedValue(undefined),
     once: vi.fn().mockResolvedValue(() => {}),
