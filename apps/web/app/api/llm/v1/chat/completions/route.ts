@@ -29,7 +29,7 @@ import {
 import { resolveAuthenticatedSurface } from './lib/request-surface';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
-import { acquireManagedTurnSlot, type ManagedTurnSlotResult } from '@/lib/rate-limit';
+import { withManagedTurnSlot } from './lib/turn-slot';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { applySecretHandlingToRequest } from './lib/secret-handling-gate';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
@@ -1142,96 +1142,6 @@ async function dispatchChatCompletions(
 }
 
 /**
- * GOV-3: the plan's concurrent-turn ceiling is already occupied.
- *
- * Actionable rather than generic: the user's own other turns are the cause and
- * stopping one is the immediate fix, so say that and name the ceiling.
- */
-function managedTurnSlotExhaustedResponse(slot: ManagedTurnSlotResult): NextResponse {
-  const limit = slot.limit ?? 0;
-  const headers: Record<string, string> = { ...getSecurityHeaders() };
-  if (slot.limit !== null) headers['X-AGI-Concurrent-Turn-Limit'] = String(slot.limit);
-  headers['X-AGI-Concurrent-Turns-Active'] = String(slot.active);
-
-  if (slot.denial === 'limiter-unavailable') {
-    return NextResponse.json(
-      {
-        error: {
-          message:
-            'We cannot verify your concurrent-response limit right now. Please retry in a moment.',
-          type: 'server_error',
-          code: 'concurrency_limiter_unavailable',
-        },
-      },
-      { status: 503, headers: { ...headers, 'Retry-After': '30' } },
-    );
-  }
-
-  return NextResponse.json(
-    {
-      error: {
-        message:
-          limit > 0
-            ? `Your plan allows ${limit} response${limit === 1 ? '' : 's'} at a time and ${limit === 1 ? 'one is' : 'all of them are'} already running. Stop a running response or wait for it to finish, then send this message again. Upgrading raises this limit.`
-            : 'Your plan does not include concurrent managed responses. Upgrade to send this message.',
-        type: 'rate_limit_error',
-        code: 'concurrent_turn_limit_reached',
-        concurrent_turn_limit: slot.limit,
-        active_turns: slot.active,
-      },
-    },
-    { status: 429, headers },
-  );
-}
-
-/**
- * GOV-3: hand slot ownership to a streaming response.
- *
- * A streaming turn OUTLIVES this handler: the route returns as soon as the SSE
- * body exists, while the provider keeps producing for minutes afterwards.
- * Releasing in the handler's `finally` would therefore free the slot while the
- * turn is still running and make the ceiling meaningless. Instead the body is
- * passed through an identity `TransformStream` whose completion, error, and
- * cancel all land in the same `finally`, which is exactly when the underlying
- * stream's own terminal/`cancel()` hooks settle billing, because cancelling the
- * branch propagates upstream and triggers them.
- *
- * One choke point for all three streaming shapes (research loop, agentic tool
- * loop, single-turn adapter), so no dispatch path can leak a slot. Release is
- * idempotent, and unreleased slots additionally age out of the Redis set, so
- * the worst case of a missed edge is a bounded, self-healing over-count.
- */
-function attachTurnSlotToStream(
-  response: NextResponse | Response,
-  release: () => Promise<void>,
-): Response {
-  const body = response.body;
-  if (!body) {
-    void release();
-    return response;
-  }
-  const passthrough = new TransformStream<Uint8Array, Uint8Array>();
-  void body
-    .pipeTo(passthrough.writable)
-    .catch(() => {
-      // Client aborts and upstream failures are already reported by the
-      // stream's own settlement hooks; this pipe only owns the slot.
-    })
-    .finally(() => {
-      void release();
-    });
-  return new Response(passthrough.readable, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-}
-
-function isEventStreamResponse(response: NextResponse | Response): boolean {
-  return (response.headers.get('content-type') ?? '').includes('text/event-stream');
-}
-
-/**
  * GOV-3: bound CONCURRENT managed turns per plan.
  *
  * `maxConcurrentTurns` existed in the billing catalog but nothing enforced it:
@@ -1240,9 +1150,10 @@ function isEventStreamResponse(response: NextResponse | Response): boolean {
  * per-minute limiter cleanly, so this was the single control standing between
  * a plan's advertised ceiling and unbounded parallel provider spend.
  *
- * Acquired after the auth gate (the first point with a userId AND a plan tier)
- * and released on EVERY exit: non-streaming returns and thrown errors via the
- * `finally` here, streaming responses via `attachTurnSlotToStream` above.
+ * Acquired after the auth gate, the first point with a userId AND a plan tier.
+ * The acquire-and-attach pair lives in lib/turn-slot.ts so that the approve and
+ * resume-input routes, which start the same kind of turn, inherit the ceiling
+ * rather than having to remember it.
  */
 async function handleChatCompletions(request: NextRequest): Promise<NextResponse | Response> {
   return runWithPhaseTimer((timer) =>
@@ -1261,45 +1172,12 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   const authResult = await timePhase(CHAT_TURN_PHASE.authGate, () => runAuthGate(request));
   if (!authResult.ok) return authResult.response;
 
-  const turnSlot = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
-    acquireManagedTurnSlot({
-      userId: authResult.userId,
-      planTier: authResult.subscription.plan_tier,
-      turnId: crypto.randomUUID(),
-    }),
+  return timePhase(CHAT_TURN_PHASE.turnSlot, () =>
+    withManagedTurnSlot(
+      { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
+      () => dispatchChatCompletions(request, authResult),
+    ),
   );
-  if (!turnSlot.admitted) {
-    logger.info(
-      {
-        userId: authResult.userId,
-        planTier: authResult.subscription.plan_tier,
-        limit: turnSlot.limit,
-        active: turnSlot.active,
-      },
-      'GOV-3: concurrent-turn ceiling reached; rejecting turn',
-    );
-    return managedTurnSlotExhaustedResponse(turnSlot);
-  }
-
-  const slot = turnSlot.slot;
-  const releaseTurnSlot = async (): Promise<void> => {
-    await slot?.release();
-  };
-
-  let streamOwnsSlot = false;
-  try {
-    const response = await dispatchChatCompletions(request, authResult);
-    if (isEventStreamResponse(response)) {
-      // Flag set only AFTER the pipe is installed, so a throw while wrapping
-      // still falls through to the `finally` release below.
-      const owned = attachTurnSlotToStream(response, releaseTurnSlot);
-      streamOwnsSlot = true;
-      return owned;
-    }
-    return response;
-  } finally {
-    if (!streamOwnsSlot) await releaseTurnSlot();
-  }
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleChatCompletions));

@@ -16,6 +16,11 @@ import {
   readCloudCodeNotebookFile,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeAccess,
+} from '@/lib/services/managed-compute-access';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 
 export const runtime = 'nodejs';
@@ -47,6 +52,16 @@ async function handleDownload(request: NextRequest, context: RouteContext) {
   }
   const { sessionId, path } = await context.params;
   const subscription = await SubscriptionService.getSubscription(db, userId);
+
+  // Reading a file claims the session and provisions the sandbox, so it buys
+  // managed compute and answers to the same gate the write paths do.
+  const accessGateResponse = buildManagedComputeAccessGateResponse(
+    await evaluateManagedComputeAccess(db, userId, subscription, resolveCloudChatSurface(request), {
+      request,
+    }),
+  );
+  if (accessGateResponse) return accessGateResponse;
+
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
     const { bytes } = await readCloudCodeNotebookFile(
