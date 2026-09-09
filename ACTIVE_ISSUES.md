@@ -70,6 +70,7 @@ went, and so nobody re-files them:
 | `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                       |
 | `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                      |
 | `AGI-24` | Any function tool blocked cross-provider failover for a whole turn | `managed-failover.test.ts`, red on the old predicate |
+| `AGI-25` | A turn holding an approval said it had finished with no response   | live on `:3100`; the line is gone, the row remains   |
 
 ## 2. P0, critical
 
@@ -103,18 +104,19 @@ shape. Project knowledge reaches a turn only through a conversation row
 carrying `project_id`, which only a project's own composer sets, and that
 composer sends AGI Work. AGI Work is an agent loop: asked for a value sitting
 in an uploaded file it reached for code execution every time, stopped for
-approval, and left the turn with no answer, which is `AGI-25`. Choosing Chat is
+approval, and stayed stopped when the tool was refused, which is `AGI-26`.
+Choosing Chat is
 not a way around it, because `handleWorkModeChange` in `ChatInput.tsx` clears
 the project when Chat is picked, deliberately: a conversation created that way
 was confirmed to carry `project_id` null and the model said it could not reach
 project files. Rejecting the tool request from the activity row did not release
 the turn either. `apps/web/e2e/project-knowledge-retrieval.spec.ts` carries the
-whole procedure and is skipped against `AGI-25`; the upload half of it runs.
+whole procedure and is skipped against `AGI-26`; the upload half of it runs.
 **Remaining known limits, unchanged by this:** long documents are still
 truncated at extraction (`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a
 250 page PDF cap), and there is still no docx, xlsx or pptx extraction. Those
 are extraction gaps, not retrieval gaps.
-**Dependencies:** `AGI-25` for the live check only.
+**Dependencies:** `AGI-26` for the live check only.
 **Acceptance criteria:** a question aimed at the back half of a long project
 file is answered from it, in a browser.
 **Validation:** the passage tests above, plus one live project question.
@@ -418,44 +420,29 @@ migration test over the consent record.
 coverage", which is why a second sweep on 2026-09-08 reported this as a new
 finding; the row now names the jurisdiction angle and points here.
 
-### `AGI-25` A turn paused for approval reports itself finished with no response
+### `AGI-26` A refused tool does not release the turn to answer without it
 
 **Severity:** P2
-**Status:** Open, observed live 2026-09-08.
-**Area:** AGI Work, tool approval, chat transcript
-**Root cause:** Not diagnosed. The transcript's terminal-state text is chosen
-without consulting whether the turn has a pending approval.
-**Current behavior:** An AGI Work turn that reaches for a tool stops for
-approval, correctly. The assistant bubble then reads, all at once:
-
-```
-Agent activity paused
-Review Execute Code action
-The model finished without returning a response. Use Regenerate below to run it again.
-```
-
-At that moment the header carries `Approvals (1 pending)`, the task dock reads
-`1/2`, the activity row's own label says `Running`, and expanding that row
-reveals the `Approve` and `Reject` buttons one click away. Nothing has
-finished, and Regenerate is the wrong instruction: it abandons a decision the
-user has been asked to make and starts the turn again.
-**Required behavior:** A turn with a pending approval says so and points at the
-decision. The finished-with-no-response text belongs only to a turn that
-actually ended without one.
-**Evidence:** four consecutive live runs on `:3100` against a project
-conversation, questions as ordinary as "What is 2+2 times 3?"; the controls
-above were read from the rendered accessibility tree, not from source.
-**User impact:** The product asks for a decision and simultaneously tells the
-user the request failed. The likely response is Regenerate, which discards the
-pending approval and repeats the same stop.
-**Dependencies:** None.
-**Blocks:** `AGI-4`'s live verification, and
-`apps/web/e2e/project-knowledge-retrieval.spec.ts`, which is skipped against
-this id.
-**Acceptance criteria:** a turn with a pending approval never renders the
-finished-without-a-response text, and offers the approval decision instead.
-**Validation:** a transcript test over a turn holding a pending approval, plus
-the skipped e2e spec above, enabled.
+**Status:** Open, observed but not diagnosed.
+**Area:** AGI Work, tool approval
+**Current behavior (observed live 2026-09-08):** An AGI Work turn that stops
+for approval stays stopped. Refusing the tool from the activity row left the
+turn on `Agent activity paused` with no answer, on repeated attempts, with the
+model's own context carrying everything the question needed. What a refusal
+should mean is "answer without that tool", which is what the transcript's own
+`Tool use denied` result is for.
+**Not established:** whether the reject click registered on every attempt. The
+control is inside a collapsed row and the run reported `1/2` steps, so a second
+request may have replaced the first. Diagnose before changing the loop.
+**Evidence:** four live runs on `:3100`, `apps/web/e2e/project-knowledge-retrieval.spec.ts`,
+which is skipped against this id and whose upload half runs.
+**User impact:** Refusing one tool costs the whole turn.
+**Dependencies:** None. `AGI-25`, the false terminal message this used to be
+hidden behind, is closed.
+**Blocks:** `AGI-4`'s live verification.
+**Acceptance criteria:** a refused tool leaves the turn running and the model
+answers from what it already has, or the transcript says why it cannot.
+**Validation:** the skipped e2e spec above, enabled.
 
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
@@ -598,9 +585,9 @@ Neither of these is a confirmed defect.
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-25`, then `AGI-4`. Retrieval is written and unit-verified; what is left
-   of it is a browser pass that cannot be performed while a paused turn reports
-   itself finished. One implementer, in that order.
+1. `AGI-26`, then `AGI-4`. Retrieval is written and unit-verified; what is left
+   of it is a browser pass that cannot be performed while a refused tool ends
+   the turn. One implementer, in that order.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
@@ -640,7 +627,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
-| `AGI-25` | transcript test over a pending approval             | a project question in AGI Work      | no finished text while a decision is open |
+| `AGI-26` | the skipped retrieval spec, enabled                 | refuse a tool in AGI Work           | the turn answers without that tool        |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -651,7 +638,7 @@ AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
-AGI-25 ──> AGI-4           the approval transcript, then the live retrieval pass
+AGI-26 ──> AGI-4           release a refused turn, then the live retrieval pass
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
