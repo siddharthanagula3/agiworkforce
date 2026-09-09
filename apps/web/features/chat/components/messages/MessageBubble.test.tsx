@@ -1702,6 +1702,12 @@ describe('MessageBubble', () => {
             content: '',
             metadata: {
               agentActivity: {
+                schemaVersion: 1,
+                sessionId: 'session-1',
+                turnId: 'turn-1',
+                lastSequence: 1,
+                startedAtMs: 0,
+                updatedAtMs: 0,
                 status: 'paused',
                 entries: [
                   {
@@ -1709,9 +1715,11 @@ describe('MessageBubble', () => {
                     id: 'tool:1',
                     toolCallId: 'call-1',
                     name: 'execute_code',
+                    category: 'code-execution',
                     summary: 'Review Execute Code action',
                     status: 'awaiting-approval',
                     approval: { id: 'approval-1' },
+                    startedAtMs: 0,
                   },
                 ],
               },
@@ -1730,6 +1738,12 @@ describe('MessageBubble', () => {
             content: '',
             metadata: {
               agentActivity: {
+                schemaVersion: 1,
+                sessionId: 'session-1',
+                turnId: 'turn-1',
+                lastSequence: 2,
+                startedAtMs: 0,
+                updatedAtMs: 0,
                 status: 'partial',
                 entries: [
                   {
@@ -1737,9 +1751,11 @@ describe('MessageBubble', () => {
                     id: 'tool:1',
                     toolCallId: 'call-1',
                     name: 'execute_code',
+                    category: 'code-execution',
                     summary: 'Review Execute Code action',
                     status: 'failed',
                     approval: { id: 'approval-1', decision: 'denied' },
+                    startedAtMs: 0,
                   },
                 ],
               },

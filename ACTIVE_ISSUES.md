@@ -40,9 +40,9 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 15 unresolved issues: 0 P0, 1 P1, 10 P2, 4 P3, plus 3 items needing
-  validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
-  `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
+- 13 unresolved issues: 0 P0, 0 P1, 9 P2, 4 P3, plus 3 items needing
+  validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
+  and `AGI-23`, are partly fixed in this pass and say which part.
 - Five are blocked on a decision rather than on code, and each says whose and
   what it costs: `AGI-5` (CI budget), `AGI-11` (default expiry), `AGI-14` (a
   second speech-to-text vendor), `AGI-17` (conform to CommonMark or forgive it),
@@ -79,47 +79,6 @@ corruption, double charge or trust-boundary failure was found. Reservation
 settlement is idempotent and concurrency-safe.
 
 ## 3. P1, high
-
-### `AGI-4` Project retrieval is fixed but not yet seen working in a browser
-
-**Severity:** P1
-**Status:** Fixed and unit-verified. Live verification outstanding.
-**Area:** Project knowledge retrieval
-**What was fixed:** Ranking and selection are now one pass. `scoreKnowledgeFile`
-scored the whole `extractedText` while selection took `content.slice(0, limit)`,
-so the passage that earned a file its rank was routinely not in what was sent.
-`project-knowledge-passages.ts` cuts a document into overlapping windows, ranks
-them with the BM25 retriever the support agent already uses, and spends the same
-prompt budget on the passages that answer the question, in document order, each
-carrying the character range it came from. A document that fits is still sent
-whole; with no query, or with a query the document matches nowhere, it still
-falls back to the head, which is the only defensible choice there.
-**Verified:** `project-knowledge-passages.test.ts` drives the real
-`loadProjectContext` and `formatProjectSystemPrompt` with the answer placed at
-the beginning, the middle and the end of a document several times the per-file
-budget. All three reach the prompt; before the change only the first did.
-**What is outstanding:** a browser pass, and it is blocked on one thing rather
-than the three first recorded here. Driving it on 2026-09-08 established the
-shape. Project knowledge reaches a turn only through a conversation row
-carrying `project_id`, which only a project's own composer sets, and that
-composer sends AGI Work. AGI Work is an agent loop: asked for a value sitting
-in an uploaded file it reached for code execution every time, stopped for
-approval, and stayed stopped when the tool was refused, which is `AGI-26`.
-Choosing Chat is
-not a way around it, because `handleWorkModeChange` in `ChatInput.tsx` clears
-the project when Chat is picked, deliberately: a conversation created that way
-was confirmed to carry `project_id` null and the model said it could not reach
-project files. Rejecting the tool request from the activity row did not release
-the turn either. `apps/web/e2e/project-knowledge-retrieval.spec.ts` carries the
-whole procedure and is skipped against `AGI-26`; the upload half of it runs.
-**Remaining known limits, unchanged by this:** long documents are still
-truncated at extraction (`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a
-250 page PDF cap), and there is still no docx, xlsx or pptx extraction. Those
-are extraction gaps, not retrieval gaps.
-**Dependencies:** `AGI-26` for the live check only.
-**Acceptance criteria:** a question aimed at the back half of a long project
-file is answered from it, in a browser.
-**Validation:** the passage tests above, plus one live project question.
 
 ## 4. P2, important
 
@@ -420,30 +379,6 @@ migration test over the consent record.
 coverage", which is why a second sweep on 2026-09-08 reported this as a new
 finding; the row now names the jurisdiction angle and points here.
 
-### `AGI-26` A refused tool does not release the turn to answer without it
-
-**Severity:** P2
-**Status:** Open, observed but not diagnosed.
-**Area:** AGI Work, tool approval
-**Current behavior (observed live 2026-09-08):** An AGI Work turn that stops
-for approval stays stopped. Refusing the tool from the activity row left the
-turn on `Agent activity paused` with no answer, on repeated attempts, with the
-model's own context carrying everything the question needed. What a refusal
-should mean is "answer without that tool", which is what the transcript's own
-`Tool use denied` result is for.
-**Not established:** whether the reject click registered on every attempt. The
-control is inside a collapsed row and the run reported `1/2` steps, so a second
-request may have replaced the first. Diagnose before changing the loop.
-**Evidence:** four live runs on `:3100`, `apps/web/e2e/project-knowledge-retrieval.spec.ts`,
-which is skipped against this id and whose upload half runs.
-**User impact:** Refusing one tool costs the whole turn.
-**Dependencies:** None. `AGI-25`, the false terminal message this used to be
-hidden behind, is closed.
-**Blocks:** `AGI-4`'s live verification.
-**Acceptance criteria:** a refused tool leaves the turn running and the model
-answers from what it already has, or the transcript says why it cannot.
-**Validation:** the skipped e2e spec above, enabled.
-
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
 **Severity:** P2
@@ -585,9 +520,8 @@ Neither of these is a confirmed defect.
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-26`, then `AGI-4`. Retrieval is written and unit-verified; what is left
-   of it is a browser pass that cannot be performed while a refused tool ends
-   the turn. One implementer, in that order.
+1. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
+   what is left is bounded and visible.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
@@ -595,11 +529,11 @@ Dependency-aware, not severity-ordered.
 4. `AGI-23`. `AGI-24`, the failover pin that stopped its rotation from
    completing, is closed, so the remaining half is the catalog offering a route
    the account's own data policy refuses. Do not run it concurrently with
-   `AGI-4`, both touch the chat request processor. `AGI-22` is not in this
+   `AGI-3`, both touch the chat request processor. `AGI-22` is not in this
    sequence: it is blocked on a disclosure decision, not on the threading
    `AGI-8` established.
-5. `AGI-16`, citation canonicalisation. Independent, and the visible half of the
-   same provenance story as `AGI-4`.
+5. `AGI-16`, citation canonicalisation. Independent, and the visible half of
+   the same provenance story project retrieval closed.
 6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized at 6.0s to first audio, and
    starts with a barge-in test rather than with chunking.
 7. `AGI-10`. Enterprise sharing, independent. `AGI-14` needs a vendor decision
@@ -614,7 +548,6 @@ Dependency-aware, not severity-ordered.
 | Issue    | Automated                                           | Manual or live                      | Gate                                      |
 | -------- | --------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
 | `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer    | nothing the transcript rendered is lost   |
-| `AGI-4`  | passage retrieval unit tests                        | question set over a long document   | beginning, middle and end all answered    |
 | `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break | required check fails on the PR            |
 | `AGI-6`  | a barge-in spec that drives AudioContext            | measured time to first audio        | audio starts early AND is interruptible   |
 | `AGI-7`  | spec gate ledger                                    | signed build                        | 12 of 12 gates, or surface removed        |
@@ -627,18 +560,15 @@ Dependency-aware, not severity-ordered.
 | `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
-| `AGI-26` | the skipped retrieval spec, enabled                 | refuse a tool in AGI Work           | the turn answers without that tool        |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
 ## 9. Dependencies and parallel work
 
 ```
-AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
-AGI-26 ──> AGI-4           release a refused turn, then the live retrieval pass
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
@@ -648,6 +578,5 @@ AGI-11, AGI-12             background
 AGI-17, AGI-20             polish, independent of everything
 ```
 
-Four tracks can run at once without touching the same files: retrieval
-(`AGI-4`), web chat (`AGI-3`), CI (`AGI-5`), and voice (`AGI-6`). `AGI-8` and
-`AGI-4` both touch the chat request processor, so do not run them concurrently.
+Three tracks can run at once without touching the same files: web chat
+(`AGI-3`), CI (`AGI-5`), and voice (`AGI-6`).
