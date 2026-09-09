@@ -23,6 +23,7 @@ describe('applyOpenRouterProviderRouting', () => {
     applyOpenRouterProviderRouting(params, undefined, undefined, true);
     expect((params as unknown as { provider?: unknown }).provider).toEqual({
       data_collection: 'deny',
+      zdr: true,
     });
   });
 
@@ -42,6 +43,7 @@ describe('applyOpenRouterProviderRouting', () => {
     );
     expect((params as unknown as { provider?: unknown }).provider).toEqual({
       data_collection: 'deny',
+      zdr: true,
     });
   });
 
@@ -87,6 +89,40 @@ describe('applyOpenRouterProviderRouting', () => {
       order: ['anthropic'],
       allow_fallbacks: false,
     });
+  });
+
+  it('sends the price sort and a max_price ceiling from the adapter config', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { sort: 'price', maxPrice: { prompt: 0.075, completion: 0.25 } },
+      undefined,
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      sort: 'price',
+      max_price: { prompt: 0.075, completion: 0.25 },
+    });
+  });
+
+  it('keeps the config sort while request metadata supplies the ceiling', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { sort: 'price' },
+      { openRouterProviderRouting: { maxPrice: { prompt: 2, completion: 12 } } },
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      sort: 'price',
+      max_price: { prompt: 2, completion: 12 },
+    });
+  });
+
+  it('drops a malformed sort or a negative ceiling from request metadata', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(params, undefined, {
+      openRouterProviderRouting: { sort: 'cheapest', maxPrice: { prompt: -1, completion: 'x' } },
+    });
+    expect((params as unknown as { provider?: unknown }).provider).toBeUndefined();
   });
 
   it('ignores malformed request metadata rather than throwing', () => {
