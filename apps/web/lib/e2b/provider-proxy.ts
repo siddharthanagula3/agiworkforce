@@ -20,6 +20,30 @@ export function providerProxyAuthHeader(providerId: string): string | undefined 
   return PROVIDER_PROXY_AUTH_HEADER[providerId];
 }
 
+/**
+ * The upstream paths a harness actually calls, per provider.
+ *
+ * The proxy attaches the platform's own provider key, so whatever path it
+ * forwards is called with that credential. Relaying any path the sandbox names
+ * turned the proxy into a general-purpose credential for the whole provider
+ * API, including endpoints that spend differently or that no usage parser can
+ * meter. A path added here has to be one a harness needs.
+ */
+const PROVIDER_PROXY_ALLOWED_PATHS: Readonly<Record<string, readonly string[]>> = {
+  anthropic: ['messages', 'messages/count_tokens', 'models'],
+  openai: ['responses', 'chat/completions', 'embeddings', 'models'],
+};
+
+export function isProviderProxyPathAllowed(providerId: string, upstreamPath: string): boolean {
+  const allowed = PROVIDER_PROXY_ALLOWED_PATHS[providerId];
+  if (!allowed) return false;
+  // Whether the version segment is part of the path or already part of the
+  // configured root differs by provider, and a deployment may override the
+  // root, so it is accepted in either position.
+  const normalized = upstreamPath.replace(/^v1\//, '');
+  return allowed.includes(normalized);
+}
+
 export function providerProxyDefaultBaseUrl(providerId: string): string | undefined {
   if (!providerProxyAuthHeader(providerId) || !isManagedProviderId(providerId)) return undefined;
   return resolveProviderApiRoot(providerId);

@@ -64,8 +64,31 @@ const READ_ONLY_COMMANDS = new Set([
   'which',
   'whoami',
   'date',
+]);
+
+/**
+ * A command runner takes the rest of the line as the program to run, so the
+ * first token says nothing about what executes. `env` is the reason this list
+ * exists: it was classified read-only, and `env sh -c "cat /etc/environment"`
+ * carries no shell metacharacter and matches no denied pattern, so it ran with
+ * no approval at all. `printenv` is not a runner but dumps the credentials the
+ * sandbox was given, which is not read-only in any sense that matters here.
+ */
+const COMMAND_RUNNERS = new Set([
   'env',
-  'printenv',
+  'nice',
+  'nohup',
+  'timeout',
+  'xargs',
+  'time',
+  'stdbuf',
+  'setsid',
+  'chroot',
+  'busybox',
+  'sudo',
+  'doas',
+  'nsenter',
+  'unshare',
 ]);
 
 /**
@@ -184,6 +207,12 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
 
   const tokens = command.split(/\s+/);
   const firstToken = tokens[0] ?? '';
+  if (COMMAND_RUNNERS.has(firstToken) || firstToken === 'printenv') {
+    return {
+      risk: 'requires_approval',
+      reason: `"${firstToken}" runs another program or exposes the sandbox environment, so it needs your approval.`,
+    };
+  }
   if (READ_ONLY_COMMANDS.has(firstToken)) {
     return { risk: 'safe', reason: 'Read-only, workspace-scoped command.' };
   }

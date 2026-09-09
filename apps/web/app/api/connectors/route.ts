@@ -17,6 +17,7 @@ import {
   getUserCustomConnectorSummaries,
 } from '@/lib/user-connector-tools';
 import {
+  deleteGitHubAppInstallation,
   getGitHubAppInstallUrl,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
@@ -689,6 +690,54 @@ async function handleDeleteConnector(request: NextRequest) {
   }
 
   if (connectorId === GITHUB_CONNECTOR_ID) {
+    // Deleting the row on its own left the App installed with its granted
+    // repository access intact, while the product reported success. The
+    // installation is revoked first, and a failure is surfaced rather than
+    // reported as a disconnect, exactly as /api/github/installations does.
+    let installationRows: Array<{ installation_id: number }> = [];
+    try {
+      installationRows = await db.query<{ installation_id: number }>(
+        'select installation_id from github_installations where user_id = $1',
+        [userId],
+      );
+    } catch (error) {
+      if (!isUndefinedTableError(error)) throw error;
+    }
+
+    for (const { installation_id: installationId } of installationRows) {
+      const revocation = await deleteGitHubAppInstallation(installationId);
+      if (revocation.status === 'failed' || revocation.status === 'unavailable') {
+        logger.error(
+          { userId, installationId, reason: revocation.reason },
+          'GitHub App installation was not revoked; connector left connected',
+        );
+        await recordAuditEvent({
+          userId,
+          eventType: 'connector_removed',
+          request,
+          outcome: 'failure',
+          severity: 'critical',
+          detail: {
+            resourceType: 'github_installation',
+            resourceId: String(installationId),
+            source: 'github',
+            reason: revocation.reason,
+          },
+        });
+        return NextResponse.json(
+          {
+            error:
+              revocation.status === 'unavailable'
+                ? 'This deployment cannot revoke GitHub App installations, so the app is still installed on your account. Remove it from GitHub, under Settings then Applications.'
+                : 'The GitHub App is still installed on your account, so nothing was disconnected. Try again, or remove it from GitHub under Settings then Applications.',
+            reason: revocation.reason,
+            retryable: revocation.status === 'failed',
+          },
+          { status: revocation.status === 'unavailable' ? 503 : 502 },
+        );
+      }
+    }
+
     try {
       await db.execute(`delete from github_installations where user_id = $1`, [userId]);
     } catch (error) {
