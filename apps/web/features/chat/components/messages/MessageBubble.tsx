@@ -93,6 +93,7 @@ import {
   BranchNavigator,
   getManagedModelPresentationLabel,
   hasCanonicalToolActivity,
+  hasOpenApprovalDecision,
   hasStreamError,
   resolveModelEscalation,
   type BranchItem,
@@ -1391,6 +1392,11 @@ const MessageBubbleComponent = function MessageBubble({
   const producedNoVisibleOutput = useMemo(() => {
     if (isUser || message.isStreaming) return false;
     if (message.metadata?.finishReason === 'stopped') return false;
+    // A turn holding an approval has not finished, and Regenerate is the wrong
+    // instruction for it: it abandons the decision and repeats the same stop.
+    // Observed live on a project turn whose header read "Approvals (1 pending)"
+    // and whose activity row carried Approve and Reject, under this notice.
+    if (hasOpenApprovalDecision(message.metadata?.agentActivity)) return false;
     if (hasStreamError({ metadata: message.metadata })) return false;
     // The persisted "no text" placeholder is a zero-width space, not "". Written
     // as escapes: the literal characters are invisible in review and in a diff,
