@@ -19,6 +19,7 @@ import {
   getOrganizationMonthToDateSpendCents,
   recordSettledProviderCost,
 } from '@/lib/services/cogs-ledger-service';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
@@ -233,6 +234,31 @@ async function queryOne(
   );
 }
 
+/**
+ * The organization whose spend cap binds this turn.
+ *
+ * The caller's scoped organization is null on a personal-scope request, which
+ * the caller selects with `x-agi-organization-id`. A member who has reached the
+ * cap could otherwise send that header and keep spending, so an unscoped turn
+ * falls back to the funding organization rather than to no cap at all.
+ */
+async function resolveSpendCapOrganizationId(
+  db: DatabaseAdapter,
+  organizationId: string | null | undefined,
+  userId: string,
+): Promise<string | null> {
+  if (organizationId) return organizationId;
+  try {
+    return await resolveEnterpriseFundingOrganizationId(db, userId);
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[managed-usage] funding organization lookup failed; spend cap treated as ungoverned',
+    );
+    return null;
+  }
+}
+
 async function assertOrganizationSpendCap(
   db: DatabaseAdapter,
   organizationId: string,
@@ -384,8 +410,13 @@ export async function reserveManagedUsageRequest(input: {
   isFlagship: boolean;
   quotaFeature?: string;
 }): Promise<ManagedUsageRequestReservation> {
-  if (input.organizationId) {
-    await assertOrganizationSpendCap(input.db, input.organizationId, input.userId);
+  const spendCapOrganizationId = await resolveSpendCapOrganizationId(
+    input.db,
+    input.organizationId,
+    input.userId,
+  );
+  if (spendCapOrganizationId) {
+    await assertOrganizationSpendCap(input.db, spendCapOrganizationId, input.userId);
   }
 
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);

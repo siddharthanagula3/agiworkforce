@@ -729,7 +729,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // The workspace budget, checked before any credit is reserved so a turn
   // that a spend cap will refuse never spends anything first.
-  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  const spendGateResponse = await buildSpendLimitGateResponse(userId);
   if (spendGateResponse) return spendGateResponse;
 
   const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);

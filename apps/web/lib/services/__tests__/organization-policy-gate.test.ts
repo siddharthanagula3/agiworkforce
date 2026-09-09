@@ -13,6 +13,7 @@ import {
 import { clearIpAllowListCacheForTests } from '../organization-ip-allow-list-cache';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+const SECOND_ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
 
 function harness() {
   const query = vi.fn();
@@ -365,7 +366,7 @@ describe('evaluateActiveWorkspacePolicy', () => {
 describe('resolveSecretHandlingPolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('defaults a personal-scope request to warn', async () => {
+  it('defaults a caller with no organization to warn', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
 
@@ -405,7 +406,7 @@ describe('resolveSecretHandlingPolicy', () => {
     expect(result).toEqual({ mode: 'redact', organizationId: ORGANIZATION_ID });
   });
 
-  it('falls back to warn when the active workspace cannot be resolved', async () => {
+  it('falls back to warn when the governing organizations cannot be resolved', async () => {
     const h = harness();
     h.query.mockRejectedValueOnce(new Error('connection reset'));
 
@@ -418,7 +419,7 @@ describe('resolveSecretHandlingPolicy', () => {
 describe('resolveMfaPolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns no policy for a personal-scope request', async () => {
+  it('returns no policy for a caller who belongs to no organization', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
 
@@ -448,7 +449,7 @@ describe('resolveMfaPolicy', () => {
     expect(result.policy?.requireMfa).toBe(true);
   });
 
-  it('treats a policy read failure as ungoverned', async () => {
+  it('treats an organization whose policy cannot be read as ungoverned', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
@@ -456,14 +457,30 @@ describe('resolveMfaPolicy', () => {
 
     const result = await resolveMfaPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ policy: null, organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({ policy: null, organizationId: null });
+  });
+
+  it('still binds a second membership when the first organization cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce([policyRow({ metadata: { requireMfa: true } })]);
+
+    const result = await resolveMfaPolicy(h.db, 'user-1');
+
+    expect(result.organizationId).toBe(ORGANIZATION_ID);
+    expect(result.policy?.requireMfa).toBe(true);
   });
 });
 
 describe('resolveZeroDataRetentionPolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('defaults a personal-scope request to unrequired', async () => {
+  it('defaults a caller with no organization to unrequired', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
 
@@ -500,7 +517,7 @@ describe('resolveZeroDataRetentionPolicy', () => {
 
     const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ required: false, organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({ required: false, organizationId: null });
   });
 });
 
@@ -510,13 +527,13 @@ describe('resolveIpAllowListPolicy', () => {
     clearIpAllowListCacheForTests();
   });
 
-  it('defaults a personal-scope request to an empty allow list', async () => {
+  it('reports nothing governed for a caller who belongs to no organization', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ cidrs: [], organizationId: null });
+    expect(result).toEqual({ governed: [] });
   });
 
   it('defaults an organization with no saved policy to an empty allow list', async () => {
@@ -525,7 +542,7 @@ describe('resolveIpAllowListPolicy', () => {
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ cidrs: [], organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({ governed: [{ organizationId: ORGANIZATION_ID, cidrs: [] }] });
   });
 
   it('binds an organization saved allow list', async () => {
@@ -536,7 +553,9 @@ describe('resolveIpAllowListPolicy', () => {
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({
+      governed: [{ organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] }],
+    });
   });
 
   it('caches the resolved allow list so a second call for the same organization skips the policy read', async () => {
@@ -549,12 +568,13 @@ describe('resolveIpAllowListPolicy', () => {
     const first = await resolveIpAllowListPolicy(h.db, 'user-1');
     const second = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(first).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
-    expect(second).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+    const expected = { governed: [{ organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] }] };
+    expect(first).toEqual(expected);
+    expect(second).toEqual(expected);
     expect(h.query).toHaveBeenCalledTimes(3);
   });
 
-  it('fails open (empty allow list) when the policy read fails', async () => {
+  it('fails open (nothing governed) when the policy read fails', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
@@ -562,6 +582,26 @@ describe('resolveIpAllowListPolicy', () => {
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ cidrs: [], organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({ governed: [] });
+  });
+
+  it('reports every membership so a second workspace cannot dilute the first', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
+
+    const result = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({
+      governed: [
+        { organizationId: SECOND_ORGANIZATION_ID, cidrs: [] },
+        { organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] },
+      ],
+    });
   });
 });

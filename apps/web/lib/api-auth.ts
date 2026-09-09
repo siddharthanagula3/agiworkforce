@@ -47,13 +47,9 @@ async function isExemptOrganizationOwner(userId: string): Promise<boolean> {
  * exemption opt-in and the requester actually being an owner skip it; the ip
  * allow list is never exempted here.
  */
-async function assertMfaPolicyUnlessExemptOwner(
-  userId: string,
-  request: NextRequest,
-  exempt: boolean,
-): Promise<void> {
+async function assertMfaPolicyUnlessExemptOwner(userId: string, exempt: boolean): Promise<void> {
   if (exempt && (await isExemptOrganizationOwner(userId))) return;
-  await assertMfaPolicy(userId, request);
+  await assertMfaPolicy(userId);
 }
 
 const ACCOUNT_STATUS_ATTEMPTS = 2;
@@ -223,7 +219,6 @@ export async function getClerkAuthUser(
         setTenantScope({ userId: result.userId });
         await assertMfaPolicyUnlessExemptOwner(
           result.userId,
-          request,
           options.mfaGateExemptForOwner ?? false,
         );
         await assertIpAllowList(result.userId, request);
@@ -236,11 +231,7 @@ export async function getClerkAuthUser(
     if (result) {
       await assertAccountActive(result.userId);
       setTenantScope({ userId: result.userId });
-      await assertMfaPolicyUnlessExemptOwner(
-        result.userId,
-        request,
-        options.mfaGateExemptForOwner ?? false,
-      );
+      await assertMfaPolicyUnlessExemptOwner(result.userId, options.mfaGateExemptForOwner ?? false);
       await assertIpAllowList(result.userId, request);
       return result;
     }
@@ -253,7 +244,7 @@ export async function getClerkAuthUser(
   if (userId) {
     await assertAccountActive(userId);
     setTenantScope({ userId });
-    await assertMfaPolicyUnlessExemptOwner(userId, request, options.mfaGateExemptForOwner ?? false);
+    await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);
     await assertIpAllowList(userId, request);
     return { userId };
   }

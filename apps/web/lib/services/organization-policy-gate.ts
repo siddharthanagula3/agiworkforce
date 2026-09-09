@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
+  strictestSecretHandlingMode,
   type AdminPolicy,
   type SecretHandlingMode,
 } from '@agiworkforce/types';
@@ -14,6 +15,7 @@ import {
   readOrganizationCollectionState,
 } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
+import { resolveGoverningOrganizationIds } from '@/lib/services/governing-organizations';
 import {
   getCachedIpAllowList,
   setCachedIpAllowList,
@@ -75,6 +77,18 @@ async function evaluateFundingOrganizationBillingHold(
     '[org-policy] personal-scope request denied by funding organization billing hold',
   );
   return { ...billingHold, organizationId: fundingOrganizationId };
+}
+
+async function governingOrganizationIds(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<readonly string[] | null> {
+  try {
+    return await resolveGoverningOrganizationIds(db, userId);
+  } catch (error) {
+    logger.warn({ error, userId }, '[org-policy] governing organizations could not be resolved');
+    return null;
+  }
 }
 
 /**
@@ -180,34 +194,38 @@ export interface SecretHandlingPolicyResult {
 export async function resolveSecretHandlingPolicy(
   db: DatabaseAdapter,
   userId: string,
-  request?: ScopedRequest,
 ): Promise<SecretHandlingPolicyResult> {
-  let organizationId: string | null = null;
-
-  try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
-  } catch (error) {
-    logger.warn({ error, userId }, '[secret-handling] active workspace could not be resolved');
+  const organizationIds = await governingOrganizationIds(db, userId);
+  if (!organizationIds || organizationIds.length === 0) {
     return { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null };
   }
 
-  if (!organizationId) {
-    return { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null };
+  let mode: SecretHandlingMode | null = null;
+  let strictestOrganizationId: string | null = null;
+
+  for (const organizationId of organizationIds) {
+    let organizationMode: SecretHandlingMode;
+    try {
+      const policy = await readOrganizationPolicy(db, organizationId);
+      organizationMode = policy?.secretHandling ?? SECRET_HANDLING_MODE_DEFAULT.organization;
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId },
+        '[secret-handling] policy read failed; falling back to the organization default',
+      );
+      organizationMode = SECRET_HANDLING_MODE_DEFAULT.organization;
+    }
+
+    if (mode === null || strictestSecretHandlingMode(mode, organizationMode) !== mode) {
+      mode = organizationMode;
+      strictestOrganizationId = organizationId;
+    }
   }
 
-  try {
-    const policy = await readOrganizationPolicy(db, organizationId);
-    return {
-      mode: policy?.secretHandling ?? SECRET_HANDLING_MODE_DEFAULT.organization,
-      organizationId,
-    };
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId },
-      '[secret-handling] policy read failed; falling back to the organization default',
-    );
-    return { mode: SECRET_HANDLING_MODE_DEFAULT.organization, organizationId };
-  }
+  return {
+    mode: mode ?? SECRET_HANDLING_MODE_DEFAULT.personal,
+    organizationId: strictestOrganizationId,
+  };
 }
 
 export interface MfaPolicyResult {
@@ -218,29 +236,29 @@ export interface MfaPolicyResult {
 export async function resolveMfaPolicy(
   db: DatabaseAdapter,
   userId: string,
-  request?: ScopedRequest,
 ): Promise<MfaPolicyResult> {
-  let organizationId: string | null = null;
+  const organizationIds = await governingOrganizationIds(db, userId);
+  if (!organizationIds) return { policy: null, organizationId: null };
 
-  try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
-  } catch (error) {
-    logger.warn({ error, userId }, '[mfa-policy] active workspace could not be resolved');
-    return { policy: null, organizationId: null };
+  let firstGoverned: MfaPolicyResult | null = null;
+
+  for (const organizationId of organizationIds) {
+    let policy: AdminPolicy | null;
+    try {
+      policy = await readOrganizationPolicy(db, organizationId);
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId },
+        '[mfa-policy] policy read failed; organization treated as ungoverned',
+      );
+      continue;
+    }
+
+    if (policy?.requireMfa) return { policy, organizationId };
+    firstGoverned ??= { policy, organizationId };
   }
 
-  if (!organizationId) return { policy: null, organizationId: null };
-
-  try {
-    const policy = await readOrganizationPolicy(db, organizationId);
-    return { policy, organizationId };
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId },
-      '[mfa-policy] policy read failed; request treated as ungoverned',
-    );
-    return { policy: null, organizationId };
-  }
+  return firstGoverned ?? { policy: null, organizationId: null };
 }
 
 export interface ZeroDataRetentionPolicyResult {
@@ -251,65 +269,68 @@ export interface ZeroDataRetentionPolicyResult {
 export async function resolveZeroDataRetentionPolicy(
   db: DatabaseAdapter,
   userId: string,
-  request?: ScopedRequest,
 ): Promise<ZeroDataRetentionPolicyResult> {
-  let organizationId: string | null = null;
+  const organizationIds = await governingOrganizationIds(db, userId);
+  if (!organizationIds) return { required: false, organizationId: null };
 
-  try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
-  } catch (error) {
-    logger.warn({ error, userId }, '[zero-data-retention] active workspace could not be resolved');
-    return { required: false, organizationId: null };
+  let firstGoverned: ZeroDataRetentionPolicyResult | null = null;
+
+  for (const organizationId of organizationIds) {
+    let policy: AdminPolicy | null;
+    try {
+      policy = await readOrganizationPolicy(db, organizationId);
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId },
+        '[zero-data-retention] policy read failed; organization treated as ungoverned',
+      );
+      continue;
+    }
+
+    if (policy?.zeroDataRetentionOnly) return { required: true, organizationId };
+    firstGoverned ??= { required: false, organizationId };
   }
 
-  if (!organizationId) return { required: false, organizationId: null };
+  return firstGoverned ?? { required: false, organizationId: null };
+}
 
-  try {
-    const policy = await readOrganizationPolicy(db, organizationId);
-    return { required: policy?.zeroDataRetentionOnly ?? false, organizationId };
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId },
-      '[zero-data-retention] policy read failed; request treated as ungoverned',
-    );
-    return { required: false, organizationId };
-  }
+export interface GovernedIpAllowList {
+  organizationId: string;
+  cidrs: readonly string[];
 }
 
 export interface IpAllowListPolicyResult {
-  cidrs: readonly string[];
-  organizationId: string | null;
+  governed: readonly GovernedIpAllowList[];
 }
 
 export async function resolveIpAllowListPolicy(
   db: DatabaseAdapter,
   userId: string,
-  request?: ScopedRequest,
 ): Promise<IpAllowListPolicyResult> {
-  let organizationId: string | null = null;
+  const organizationIds = await governingOrganizationIds(db, userId);
+  if (!organizationIds) return { governed: [] };
 
-  try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
-  } catch (error) {
-    logger.warn({ error, userId }, '[ip-allow-list] active workspace could not be resolved');
-    return { cidrs: [], organizationId: null };
+  const governed: GovernedIpAllowList[] = [];
+
+  for (const organizationId of organizationIds) {
+    const cached = getCachedIpAllowList(organizationId);
+    if (cached !== undefined) {
+      governed.push({ organizationId, cidrs: cached });
+      continue;
+    }
+
+    try {
+      const policy = await readOrganizationPolicy(db, organizationId);
+      const cidrs = policy?.ipAllowList ?? [];
+      setCachedIpAllowList(organizationId, cidrs);
+      governed.push({ organizationId, cidrs });
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId },
+        '[ip-allow-list] policy read failed; organization treated as ungoverned',
+      );
+    }
   }
 
-  if (!organizationId) return { cidrs: [], organizationId: null };
-
-  const cached = getCachedIpAllowList(organizationId);
-  if (cached !== undefined) return { cidrs: cached, organizationId };
-
-  try {
-    const policy = await readOrganizationPolicy(db, organizationId);
-    const cidrs = policy?.ipAllowList ?? [];
-    setCachedIpAllowList(organizationId, cidrs);
-    return { cidrs, organizationId };
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId },
-      '[ip-allow-list] policy read failed; request treated as ungoverned',
-    );
-    return { cidrs: [], organizationId };
-  }
+  return { governed };
 }

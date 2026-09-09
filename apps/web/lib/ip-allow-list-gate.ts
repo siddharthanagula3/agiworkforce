@@ -28,11 +28,15 @@ export function isIpNotAllowedError(error: unknown): error is IpNotAllowedError 
 }
 
 export async function assertIpAllowList(userId: string, request: NextRequest): Promise<void> {
-  const { cidrs, organizationId } = await resolveIpAllowListPolicy(getNeonDb(), userId, request);
-  if (cidrs.length === 0 || !organizationId) return;
+  const { governed } = await resolveIpAllowListPolicy(getNeonDb(), userId);
+  const enforcing = governed.filter((entry) => entry.cidrs.length > 0);
+  if (enforcing.length === 0) return;
 
   const clientIp = getClientIp(request);
-  if (isIpAllowed(clientIp, cidrs)) return;
+  const refusing = enforcing.find((entry) => !isIpAllowed(clientIp, entry.cidrs));
+  if (!refusing) return;
+
+  const organizationId = refusing.organizationId;
 
   logger.warn(
     { userId, organizationId },

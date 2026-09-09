@@ -2548,7 +2548,7 @@ export async function processRequest(
       chatRequest.conversation_id
         ? getServedRouteAffinity(chatRequest.conversation_id)
         : Promise.resolve(null),
-      scopedDbPromise.then((scoped) => resolveZeroDataRetentionPolicy(scoped.db, userId, request)),
+      scopedDbPromise.then((scoped) => resolveZeroDataRetentionPolicy(scoped.db, userId)),
       scopedDbPromise.then((scoped) => readWorkspaceModelPolicy(scoped, requestId)),
       // Joins the block rather than adding a round trip of its own: it is
       // needed at exactly the same moment as the three beside it.
