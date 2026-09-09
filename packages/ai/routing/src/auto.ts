@@ -158,6 +158,28 @@ export interface AutoRoutingRequest {
   usOnly?: boolean;
   zeroDataRetentionOnly?: boolean;
   zeroDataRetentionProviders?: ReadonlySet<string>;
+  /**
+   * Providers Auto may not choose on its own, whatever the ranking says.
+   *
+   * Distinct from `usOnly`, which is a user preference gated on tier. This is
+   * an admission rule the caller applies to every request, and it exists
+   * because a provider can carry an obligation the service cannot yet
+   * discharge: the founder's 2026-09-08 decision was to keep Auto off the
+   * Chinese-HQ providers entirely rather than build a consent record for them,
+   * since nothing server-side records that consent today.
+   *
+   * Auto only. A model named explicitly is still served, because naming it is
+   * the user's own decision and is the same act the mobile consent gate asks
+   * for. `resolveAutoRoute` drops this before the explicit branch's
+   * eligibility call for exactly that reason.
+   *
+   * Caller-supplied rather than compiled into the catalog, like
+   * `zeroDataRetentionProviders` and `preferSlots` above, so the TS/Rust
+   * conformance fixture is unaffected and the Rust resolver needs no
+   * counterpart. That also bounds it: this governs the server routing path,
+   * not a desktop or CLI runtime resolving against its own credentials.
+   */
+  excludedProviders?: ReadonlySet<string>;
   capabilityDocument?: EffectiveCapabilityDocument | null;
   capabilityRequirements?: readonly CapabilityRequirement[];
   fallbackToAutoForCapabilityMismatch?: boolean;
@@ -585,6 +607,13 @@ const WARM_ROUTE_CACHE_HIT_FRACTION = 0.9;
 const PREFERRED_ROUTE_COST_CEILING_MULTIPLE = 1.25;
 
 const MAX_FALLBACK_ROUTES = 4;
+/**
+ * How many other hosts of the SAME model the substitution plan keeps ahead of a
+ * different model. A model served by many hosts would otherwise fill the whole
+ * plan with itself, and a failure that is about the model, not the host, would
+ * find no substitute to rotate onto.
+ */
+const MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION = 2;
 
 export const OBSERVED_HEALTH_ENV = 'AGI_ROUTING_OBSERVED_HEALTH';
 const OBSERVED_HEALTH_ENABLED_VALUE = '1';
@@ -1028,6 +1057,9 @@ function evaluateEligibility(
   ) {
     reasons.push(`provider ${model.identity.provider} is excluded by the US-only policy`);
   }
+  if (request.excludedProviders?.has(model.identity.provider)) {
+    reasons.push(`provider ${model.identity.provider} is not available to automatic routing`);
+  }
 
   const trustModeRoutes = (routesByModelKey.get(modelKey) ?? []).filter(([, route]) =>
     route.trustModes.includes(request.trustMode),
@@ -1176,9 +1208,11 @@ function sameModelFallbackPlan(
   selectedModelKey: string,
   selectedModelRoutes: readonly RankedRoute[],
   seenProviders: Set<string>,
+  limit = Number.POSITIVE_INFINITY,
 ): FallbackPlan {
   const plan: FallbackPlan = { dispatchable: [], parked: [] };
   for (const candidate of selectedModelRoutes) {
+    if (plan.dispatchable.length + plan.parked.length >= limit) break;
     if (seenProviders.has(candidate.route.provider)) continue;
     seenProviders.add(candidate.route.provider);
     const bucket = isDispatchableNow(candidate) ? plan.dispatchable : plan.parked;
@@ -1236,7 +1270,12 @@ function buildProviderFallbacks(
 ): AutoFallbackRoute[] {
   const seenModels = new Set([selectedModelKey]);
   const seenProviders = new Set([selectedProvider]);
-  const plan = sameModelFallbackPlan(selectedModelKey, selectedModelRoutes, seenProviders);
+  const plan = sameModelFallbackPlan(
+    selectedModelKey,
+    selectedModelRoutes,
+    seenProviders,
+    MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION,
+  );
 
   for (const slotId of fallbackCandidateSlots(policy, task, orderedSlots, tierSlotOrder)) {
     if (!allowedSlots.has(slotId)) continue;
@@ -1245,8 +1284,10 @@ function buildProviderFallbacks(
     seenModels.add(modelKey);
 
     const eligibility = evaluateEligibility(modelKey, task, request);
-    const best = eligibility.rankedRoutes[0];
-    if (!best || seenProviders.has(best.route.provider)) continue;
+    const best = eligibility.rankedRoutes.find(
+      (candidate) => !seenProviders.has(candidate.route.provider),
+    );
+    if (!best) continue;
 
     seenProviders.add(best.route.provider);
     const bucket = isDispatchableNow(best) ? plan.dispatchable : plan.parked;
@@ -1305,7 +1346,13 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         reasons: [`unknown model selection: ${requestedSelection}`],
       };
     }
-    const eligibility = evaluateEligibility(requestedSelection, task, request);
+    // A model the user named is not Auto choosing it, so the automatic-routing
+    // exclusion does not apply. The capability fallback below re-enters through
+    // the alias, carrying the unmodified request, where it does.
+    const eligibility = evaluateEligibility(requestedSelection, task, {
+      ...request,
+      excludedProviders: undefined,
+    });
     if (eligibility.route) {
       return selectedDecision(
         request,
