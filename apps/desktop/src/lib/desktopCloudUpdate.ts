@@ -1,4 +1,3 @@
-
 export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
   'https://agiworkforce.com/api/releases/desktop-cloud/latest';
 export type DesktopCloudMacArchitecture = 'arm64' | 'x64';
@@ -135,6 +134,16 @@ export async function checkDesktopCloudUpdate(
     cache: 'no-store',
     signal: AbortSignal.timeout(10_000),
   });
+  // A 404 from this endpoint is the honest answer to "is there a newer
+  // build?" before any release has been published: the route looks for a
+  // tagged GitHub release carrying a signed .dmg and says "No cloud desktop
+  // release is published" when it finds none. That is not a failure, and
+  // throwing on it put an unhandled 'agi:check-update' error in the log on
+  // every single launch. Every other status still throws, because those do
+  // mean the check itself did not work.
+  if (response.status === 404) {
+    return { available: false, currentVersion, version: currentVersion, downloadUrl: '' };
+  }
   if (!response.ok) {
     throw new Error(`AGI Cloud update information is unavailable (${response.status}).`);
   }
