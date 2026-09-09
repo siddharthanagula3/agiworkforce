@@ -29,11 +29,11 @@
     "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
-    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/icons": "workspace:*",
     "@agiworkforce/identity": "workspace:*",
     "@agiworkforce/key-value": "workspace:*",
+    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/object-storage": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
@@ -114,7 +114,7 @@
     "lucide-react": "^1.14.0",
     "mammoth": "^1.12.0",
     "mermaid": "^11.15.0",
-    "next": "^16.3.0",
+    "next": "^16.3.3",
     "next-themes": "^0.4.6",
     "openai": "^6.38.0",
     "pdfjs-dist": "^6.2.108",
@@ -159,8 +159,8 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/ui": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.0",
     "ioredis": "^5.9.0",
@@ -168,6 +168,6 @@
     "msw": "^2.12.10",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }

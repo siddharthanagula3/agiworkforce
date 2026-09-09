@@ -42,8 +42,8 @@
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/desktop-command-client": "workspace:*",
-    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/i18n": "workspace:*",
+    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
@@ -127,8 +127,8 @@
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "@vitejs/plugin-react-swc": "^4.2.3",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/ui": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "@wdio/cli": "^9.29.1",
     "@wdio/globals": "^9.29.1",
     "@wdio/mocha-framework": "^9.29.1",
@@ -150,6 +150,6 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "6.0.3",
     "vite": "^7.3.1",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
