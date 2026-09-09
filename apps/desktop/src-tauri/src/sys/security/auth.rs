@@ -466,6 +466,13 @@ impl AuthManager {
     }
 }
 
+/// Bucket key for token-validation rate limiting.
+///
+/// SHA-256 is the right primitive here and deliberately not a password hash:
+/// the input is a 256-bit bearer token, not a user-chosen secret, so there is
+/// no low-entropy guessing space for an expensive KDF to defend. Hashing keeps
+/// the raw token out of the in-memory limiter map; passwords take the Argon2id
+/// path in `hash_password` instead.
 fn validation_rate_key(access_token: &str) -> String {
     hex::encode(Sha256::digest(access_token.as_bytes()))
 }

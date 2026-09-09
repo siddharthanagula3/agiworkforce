@@ -7,9 +7,10 @@ use crate::data::settings::{
     repository,
     validation::{self, ValidationError},
 };
+use crate::sys::security::aead_nonce::random_nonce;
 use crate::sys::security::machine_key::{self, KeyPurpose};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
@@ -111,16 +112,13 @@ impl SettingsService {
             SettingsServiceError::Encryption("Failed to acquire cipher lock".into())
         })?;
 
-        let mut nonce_bytes = [0u8; 12];
-        use rand::RngCore;
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from(nonce_bytes);
+        let nonce = random_nonce();
 
         let ciphertext = cipher
             .encrypt(&nonce, plaintext.as_bytes())
             .map_err(|e| SettingsServiceError::Encryption(format!("Encryption failed: {}", e)))?;
 
-        let mut combined = nonce_bytes.to_vec();
+        let mut combined = nonce.to_vec();
         combined.extend_from_slice(&ciphertext);
 
         Ok(general_purpose::STANDARD.encode(combined))

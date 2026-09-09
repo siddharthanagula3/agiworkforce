@@ -4,6 +4,7 @@
 //! comes from the per-install secret held by the OS credential service, never
 //! from machine identifiers alone.
 
+use super::aead_nonce::random_nonce;
 use super::machine_key::{self, KeyPurpose};
 use crate::core::sync_utils::{MutexExt, RwLockExt};
 use aes_gcm::{
@@ -156,19 +157,16 @@ impl SecureStorage {
             .map_err(|e| format!("Failed to create cipher: {}", e))?;
 
         // Generate random nonce
-        use aes_gcm::aead::rand_core::RngCore;
-        let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = random_nonce();
 
         // Encrypt
         let ciphertext = cipher
-            .encrypt(nonce, plaintext)
+            .encrypt(&nonce, plaintext)
             .map_err(|e| format!("Encryption failed: {}", e))?;
 
         Ok(EncryptedData {
             ciphertext: general_purpose::STANDARD.encode(&ciphertext),
-            nonce: general_purpose::STANDARD.encode(nonce_bytes),
+            nonce: general_purpose::STANDARD.encode(nonce),
             salt: general_purpose::STANDARD.encode(generate_salt()),
         })
     }
@@ -379,13 +377,10 @@ pub fn encrypt_file_with_key(
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
-    use aes_gcm::aead::rand_core::RngCore;
-    let mut nonce_bytes = [0u8; NONCE_SIZE];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_ref())
+        .encrypt(&nonce, plaintext.as_ref())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
     // Format: [salt (32 bytes)][nonce (12 bytes)][ciphertext]
@@ -395,7 +390,7 @@ pub fn encrypt_file_with_key(
 
     let mut output = Vec::new();
     output.extend_from_slice(&dummy_salt);
-    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(nonce.as_slice());
     output.extend_from_slice(&ciphertext);
 
     fs::write(output_path, output).map_err(|e| format!("Failed to write encrypted file: {}", e))?;
@@ -453,19 +448,16 @@ pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Resu
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
-    use aes_gcm::aead::rand_core::RngCore;
-    let mut nonce_bytes = [0u8; NONCE_SIZE];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_ref())
+        .encrypt(&nonce, plaintext.as_ref())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
     // Format: [salt (32 bytes)][nonce (12 bytes)][ciphertext]
     let mut output = Vec::new();
     output.extend_from_slice(&salt);
-    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(nonce.as_slice());
     output.extend_from_slice(&ciphertext);
 
     fs::write(output_path, output).map_err(|e| format!("Failed to write encrypted file: {}", e))?;
@@ -533,15 +525,12 @@ mod tests {
 
         // Encrypt
         let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
-        use aes_gcm::aead::rand_core::RngCore;
-        let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = random_nonce();
 
-        let ciphertext = cipher.encrypt(nonce, plaintext.as_ref()).unwrap();
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
 
         // Decrypt
-        let decrypted = cipher.decrypt(nonce, ciphertext.as_ref()).unwrap();
+        let decrypted = cipher.decrypt(&nonce, ciphertext.as_ref()).unwrap();
         assert_eq!(plaintext, decrypted.as_slice());
     }
 

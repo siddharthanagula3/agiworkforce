@@ -14,6 +14,7 @@ use crate::core::mcp::config::{
 };
 use crate::core::mcp::{emit_mcp_event, McpEvent, McpServerConfig};
 use crate::sys::commands::mcp::McpState;
+use crate::sys::security::aead_nonce::random_nonce;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use aes_gcm::{
     aead::{Aead, OsRng},
@@ -636,17 +637,15 @@ fn encrypt_tokens(tokens: &StoredTokens) -> Result<String, String> {
         serde_json::to_string(tokens).map_err(|e| format!("Failed to serialize tokens: {}", e))?;
 
     // Generate random nonce
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     // Encrypt
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
     // Combine nonce + ciphertext and encode as base64
-    let mut combined = nonce_bytes.to_vec();
+    let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
 
     Ok(general_purpose::STANDARD.encode(combined))
@@ -1816,15 +1815,13 @@ fn encrypt_credential_machine_only(value: &str) -> Result<String, String> {
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     let ciphertext = cipher
-        .encrypt(nonce, value.as_bytes())
+        .encrypt(&nonce, value.as_bytes())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    let mut combined = nonce_bytes.to_vec();
+    let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
 
     Ok(general_purpose::STANDARD.encode(combined))
