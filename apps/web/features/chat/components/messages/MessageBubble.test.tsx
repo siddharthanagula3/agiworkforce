@@ -1682,6 +1682,74 @@ describe('MessageBubble', () => {
       expect(noOutputNotice()).toBeInTheDocument();
     });
 
+    /**
+     * Observed live on 2026-09-08: a project turn reached for code execution,
+     * stopped for approval, and rendered this notice while the header read
+     * "Approvals (1 pending)", the task dock read 1/2, and Approve and Reject
+     * sat inside the activity row. Regenerate, which the notice recommends,
+     * abandons the decision and repeats the same stop.
+     *
+     * The run status is deliberately `paused` here, not `awaiting-approval`:
+     * that is what a real paused turn reported, because `task-state-changed`
+     * overwrites the status `approval-requested` set. The unresolved approval
+     * on the entry is what survives, so it is what the check reads.
+     */
+    it('stays quiet while the turn is holding an approval the user has not answered', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              agentActivity: {
+                status: 'paused',
+                entries: [
+                  {
+                    kind: 'tool',
+                    id: 'tool:1',
+                    toolCallId: 'call-1',
+                    name: 'execute_code',
+                    summary: 'Review Execute Code action',
+                    status: 'awaiting-approval',
+                    approval: { id: 'approval-1' },
+                  },
+                ],
+              },
+            },
+          })}
+        />,
+      );
+      expect(noOutputNotice()).not.toBeInTheDocument();
+    });
+
+    it('reports the empty turn once that approval has been answered', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              agentActivity: {
+                status: 'partial',
+                entries: [
+                  {
+                    kind: 'tool',
+                    id: 'tool:1',
+                    toolCallId: 'call-1',
+                    name: 'execute_code',
+                    summary: 'Review Execute Code action',
+                    status: 'failed',
+                    approval: { id: 'approval-1', decision: 'denied' },
+                  },
+                ],
+              },
+            },
+          })}
+        />,
+      );
+      expect(noOutputNotice()).toBeInTheDocument();
+    });
+
     it('stays quiet on an empty turn the provider rejected, which has its own notice', () => {
       render(
         <MessageBubble

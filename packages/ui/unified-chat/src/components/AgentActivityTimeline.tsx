@@ -83,6 +83,29 @@ export function hasCanonicalToolActivity(
   return activity?.entries.some((entry) => entry.kind === 'tool') ?? false;
 }
 
+/**
+ * The run is holding a decision the user has not made yet.
+ *
+ * Read from the entries rather than from `activity.status`, because the run
+ * status does not survive the race: `approval-requested` sets
+ * `awaiting-approval` and a later `task-state-changed` with `paused` overwrites
+ * it, so a turn genuinely waiting on a decision was observed reporting
+ * `paused`. The tool entry keeps its unresolved `approval` through both, so
+ * that is what the question is asked of.
+ */
+export function hasOpenApprovalDecision(
+  activity: Pick<AgentActivityState, 'entries'> | undefined,
+): boolean {
+  return (
+    activity?.entries.some(
+      (entry) =>
+        entry.kind === 'tool' &&
+        entry.approval !== undefined &&
+        entry.approval.decision === undefined,
+    ) ?? false
+  );
+}
+
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
