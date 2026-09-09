@@ -31,7 +31,8 @@ const STOP_BUTTON_LABEL = /stop the current response/i;
 const LOAD_TIMEOUT_MS = 30_000;
 const EXTRACTION_TIMEOUT_MS = 90_000;
 const ANSWER_TIMEOUT_MS = 180_000;
-const APPROVAL_SETTLE_MS = 12_000;
+const APPROVAL_POLL_INTERVAL_MS = 5_000;
+const APPROVAL_POLLS = 30;
 const MAX_TOOL_REJECTIONS = 4;
 
 /** `MAX_FILE_CONTENT_CHARS` in `project-context-service.ts` at the time of writing. */
@@ -140,20 +141,51 @@ async function removeKnowledgeFile(page: Page): Promise<void> {
  * The approve and reject controls are inside the collapsed agent activity row,
  * so the row has to be expanded before either is reachable.
  */
-async function rejectAgentToolRequest(page: Page): Promise<number> {
+/**
+ * Refuse whatever the agent reaches for, and let it answer from the file.
+ *
+ * A project's composer sends AGI Work, which is an agent loop, and it reaches
+ * for code execution even on a question that only needs to read a file. That
+ * correctly stops for approval. Approving a code run from a test would be the
+ * wrong way out; refusing is the same decision a user makes when the tool is
+ * not what they asked for, and it leaves the retrieval path under test.
+ *
+ * The wait is the whole trick. The approval row does not exist until the agent
+ * actually asks, which took over a minute on a first turn, and an earlier
+ * version of this helper looked once after a fixed delay, found no button, and
+ * made the loop look unbreakable. Refusal does work: it posts to the approve
+ * endpoint with `decision: "rejected"` and the run resumes.
+ */
+async function rejectAgentToolRequests(page: Page): Promise<number> {
   let rejected = 0;
-  for (let attempt = 0; attempt < MAX_TOOL_REJECTIONS; attempt += 1) {
-    const collapsed = page.getByLabel(AGENT_ACTIVITY_LABEL).first();
-    if (await collapsed.isVisible().catch(() => false)) {
-      await collapsed.click().catch(() => undefined);
+  const reject = page.getByRole('button', { name: REJECT_LABEL, exact: true }).first();
+  for (let round = 0; round < MAX_TOOL_REJECTIONS; round += 1) {
+    let appeared = false;
+    for (let poll = 0; poll < APPROVAL_POLLS; poll += 1) {
+      const collapsed = page.getByLabel(AGENT_ACTIVITY_LABEL).first();
+      if (await collapsed.isVisible().catch(() => false)) {
+        await collapsed.click().catch(() => undefined);
+      }
+      if (await reject.isVisible().catch(() => false)) {
+        appeared = true;
+        break;
+      }
+      if (await turnHasSettled(page)) break;
+      await page.waitForTimeout(APPROVAL_POLL_INTERVAL_MS);
     }
-    const reject = page.getByRole('button', { name: REJECT_LABEL, exact: true }).first();
-    if (!(await reject.isVisible().catch(() => false))) break;
+    if (!appeared) break;
     await reject.click().catch(() => undefined);
     rejected += 1;
-    await page.waitForTimeout(APPROVAL_SETTLE_MS);
+    await page.waitForTimeout(APPROVAL_POLL_INTERVAL_MS);
   }
   return rejected;
+}
+
+async function turnHasSettled(page: Page): Promise<boolean> {
+  return page
+    .getByLabel(STOP_BUTTON_LABEL)
+    .isHidden()
+    .catch(() => false);
 }
 
 async function settledAnswer(page: Page): Promise<string> {
@@ -165,32 +197,7 @@ async function settledAnswer(page: Page): Promise<string> {
 }
 
 test.describe('project knowledge retrieval reaches the back of a long file', () => {
-  /**
-   * Skipped, and the skip records what is still missing.
-   *
-   * Project knowledge only reaches a turn through a conversation whose row
-   * carries `project_id`, and the only composer that sets it is a project's
-   * own, which sends AGI Work. AGI Work is an agent loop: asked for a value
-   * sitting in an uploaded file, it reached for code execution on every
-   * attempt and stopped for approval. `handleWorkModeChange` in
-   * `ChatInput.tsx` clears the project when the user picks Chat, by design, so
-   * there is no mode in which this question can be asked without entering that
-   * loop, and refusing the tool from the activity row did not release the turn
-   * to answer from context either.
-   *
-   * `AGI-25`, the false "finished without returning a response" this used to
-   * hit, is fixed: the paused turn now reads "Agent activity paused / Review
-   * Execute Code action" and nothing more, confirmed by this spec's own last
-   * run. What remains is `AGI-26`, the turn not resuming.
-   *
-   * Everything up to the question is verified and left executable: the upload
-   * lands, the Sources panel takes it, and the document is four times the
-   * per-file budget with its canary at nine tenths. It must not be turned
-   * green by approving a code run.
-   *
-   * llm-guardrail-allow: AGI-26, a refused tool does not release the turn
-   */
-  test.skip('answers from a passage far past the per-file budget', async ({ page }) => {
+  test('answers from a passage far past the per-file budget', async ({ page }) => {
     await signIn(page);
     await openFirstProject(page);
 
@@ -212,9 +219,7 @@ test.describe('project knowledge retrieval reaches the back of a long file', () 
       await expect(page.locator(ASSISTANT_BUBBLE).last()).toBeVisible({
         timeout: ANSWER_TIMEOUT_MS,
       });
-      await page.waitForTimeout(APPROVAL_SETTLE_MS);
-      const rejected = await rejectAgentToolRequest(page);
-      expect(rejected).toBeGreaterThanOrEqual(0);
+      await rejectAgentToolRequests(page);
 
       const answer = await settledAnswer(page);
       expect(answer).toContain(CANARY);
