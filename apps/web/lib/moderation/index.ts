@@ -38,12 +38,20 @@ export function moderateManagedPrompt(
   let flagged = false;
   let budget = MAX_MODERATED_CHARS;
 
+  // Every segment is classified at least in part. Spending the whole budget on
+  // the newest segment let a caller pad one message past the ceiling and have
+  // every earlier segment skipped unread, so the classifier reported clean on a
+  // request it had barely looked at.
+  const present = input.segments.filter((segment) => segment.length > 0);
+  const perSegmentFloor = present.length > 0 ? Math.floor(MAX_MODERATED_CHARS / present.length) : 0;
+
   for (let index = input.segments.length - 1; index >= 0; index -= 1) {
     const segment = input.segments[index] ?? '';
     if (!segment) continue;
-    if (budget <= 0) break;
-    const verdict = classifyModerationText(segment.slice(0, budget));
-    budget -= segment.length;
+    const allowance = Math.max(perSegmentFloor, Math.min(budget, segment.length));
+    if (allowance <= 0) continue;
+    const verdict = classifyModerationText(segment.slice(0, allowance));
+    budget -= allowance;
 
     for (const category of verdict.categories) categories.add(category);
     for (const ruleId of verdict.ruleIds) ruleIds.add(ruleId);

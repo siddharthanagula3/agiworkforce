@@ -121,12 +121,28 @@ export async function clearPluginIngestLease(): Promise<void> {
   await cacheStore.delete(key(INGEST_LEASE_CACHE_METHOD));
 }
 
+/**
+ * Every input the fetch actually follows is in the key.
+ *
+ * The entry is shared across tenants, which is correct only while the key fully
+ * determines the bytes. It did not: an own-source install fetches from a branch
+ * ref while the key carried the content hash alone, so two installs of one
+ * plugin key at different refs shared an entry and one tenant's fetched skill
+ * body could be served for another's ref.
+ */
 export function installedSkillsCacheParams(
   marketplaceRepositoryUrl: string,
   pluginKey: string,
   sha: string,
+  ref: string | null,
 ): string {
-  return `${CACHE_PARAMS_VERSION}|${marketplaceRepositoryUrl.toLowerCase()}|${pluginKey}|${sha}`;
+  return [
+    CACHE_PARAMS_VERSION,
+    marketplaceRepositoryUrl.toLowerCase(),
+    pluginKey,
+    sha,
+    ref ?? '',
+  ].join('|');
 }
 
 export async function readInstalledSkills(

@@ -173,7 +173,7 @@ export async function installDirectoryPlugin(
     return { status: 'skills-unavailable', message: INSTALL_SKILLS_UNAVAILABLE_MESSAGE };
   }
   await writeInstalledSkills(
-    installedSkillsCacheParams(record.marketplace.repositoryUrl, record.id, sha),
+    installedSkillsCacheParams(record.marketplace.repositoryUrl, record.id, sha, sha),
     skills,
   );
 

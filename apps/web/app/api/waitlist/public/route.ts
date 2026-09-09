@@ -161,7 +161,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
        values ($1, $2, $3, $4, $5)
        on conflict (email, source)
        do update set
-         user_id = coalesce(excluded.user_id, cloud_managed_waitlist.user_id),
+         user_id = coalesce(cloud_managed_waitlist.user_id, excluded.user_id),
          updated_at = excluded.updated_at`,
       [userId, email, source, now, now],
     );
