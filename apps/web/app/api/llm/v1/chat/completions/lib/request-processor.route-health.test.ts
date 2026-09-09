@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { emptyRuntimeState, type RouteHealthSnapshot } from '@agiworkforce/routing';
 import { getModelsForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
 import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+import { isNonUsVendorTransport } from '@agiworkforce/compliance';
 
 const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
   const snapshots: Record<string, RouteHealthSnapshot> = {};
@@ -43,9 +44,26 @@ if (!anthropicPremiumModel) {
 }
 
 const MODEL = requireProviderDefaultModel('zhipu');
-const modelRoutes = getRoutePricingForModel(MODEL);
-const DEFAULT_ROUTE_ID = modelRoutes.find((route) => route.isDefault)!.routeId;
-const NON_DEFAULT_SAME_MODEL_ROUTE_ID = modelRoutes.find((route) => !route.isDefault)!.routeId;
+/**
+ * Routes this model can actually be served on, which is not the same as every
+ * route the catalog lists for it.
+ *
+ * This model's catalog default is the vendor's own endpoint, and managed
+ * routing no longer dispatches through those: `EXCLUDED_ROUTE_HOSTS` in
+ * `request-processor.ts` keeps processing off endpoints the model vendors run
+ * outside the United States. The model is unaffected and is still served, on a
+ * gateway.
+ *
+ * This file is about route health and warm-route affinity, so it wants "the
+ * route the resolver will settle on" rather than "the catalog's default". The
+ * filter is applied here so the subject stays route health, and so a change to
+ * that exclusion shows up as one edit rather than as two mystery assertions.
+ */
+const servableRoutes = getRoutePricingForModel(MODEL).filter(
+  (route) => !isNonUsVendorTransport(route.routeId.split(ROUTE_ID_SEPARATOR)[0] ?? ''),
+);
+const DEFAULT_ROUTE_ID = servableRoutes[0]!.routeId;
+const NON_DEFAULT_SAME_MODEL_ROUTE_ID = servableRoutes[1]!.routeId;
 const OTHER_MODEL_ROUTE_ID = getRoutePricingForModel(anthropicPremiumModel.id).find(
   (route) => route.isDefault,
 )!.routeId;

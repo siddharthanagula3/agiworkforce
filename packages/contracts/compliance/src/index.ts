@@ -1,4 +1,3 @@
-
 export {
   ARTICLE_50_1_VERBATIM,
   ARTICLE_50_2_VERBATIM,
@@ -40,6 +39,14 @@ export {
   type Jurisdiction,
   type NamedProviderConsent,
 } from './provider-jurisdiction';
+
+export {
+  NON_US_VENDOR_TRANSPORTS,
+  isNonUsVendorTransport,
+  transportResidency,
+  type NonUsVendorTransport,
+  type ProcessingResidency,
+} from './transport-residency';
 
 export {
   Article50DisclosureRequiredError,
