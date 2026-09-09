@@ -212,6 +212,26 @@ function managedUsageErrorResponse(
   );
 }
 
+/**
+ * Fixed copy per status rather than the upstream body.
+ *
+ * The provider's own error text was relayed verbatim, which is how a request id,
+ * an account or organization identifier, or a quota message meant for the key's
+ * owner reached the caller. The image and video routes already map failures this
+ * way.
+ */
+function describeTranscriptionFailure(status: number): string {
+  if (status === 400) return 'That audio could not be transcribed. Try a different recording.';
+  if (status === 401 || status === 403) {
+    return 'Transcription is unavailable for this account right now.';
+  }
+  if (status === 413) return 'That recording is too large to transcribe.';
+  if (status === 415) return 'That audio format is not supported.';
+  if (status === 429) return 'Transcription is busy right now. Try again in a moment.';
+  if (status >= 500) return 'The transcription provider is unavailable. Try again shortly.';
+  return 'Transcription failed.';
+}
+
 async function handleTranscriptions(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
@@ -538,7 +558,7 @@ async function handleTranscriptions(request: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: responseText || 'Transcription failed',
+          message: describeTranscriptionFailure(response.status),
           type: 'api_error',
         },
       },

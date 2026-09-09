@@ -1927,8 +1927,10 @@ export async function processRequest(
     [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
   );
 
+  // Every message the request will dispatch, not a role subset: prohibited text
+  // placed in an assistant or tool message was dispatched to the provider
+  // unexamined while the moderation gate reported the turn clean.
   const clientAuthoredPromptSegments = chatRequest.messages
-    .filter((message) => message.role === 'user' || message.role === 'system')
     .map((message) => extractTextContent(message.content))
     .filter((text) => text.length > 0);
 
