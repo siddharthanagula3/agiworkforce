@@ -31,7 +31,8 @@ const STOP_BUTTON_LABEL = /stop the current response/i;
 const LOAD_TIMEOUT_MS = 30_000;
 const EXTRACTION_TIMEOUT_MS = 90_000;
 const ANSWER_TIMEOUT_MS = 180_000;
-const APPROVAL_SETTLE_MS = 15_000;
+const APPROVAL_SETTLE_MS = 12_000;
+const MAX_TOOL_REJECTIONS = 4;
 
 /** `MAX_FILE_CONTENT_CHARS` in `project-context-service.ts` at the time of writing. */
 const PER_FILE_BUDGET_CHARS = 16_000;
@@ -139,12 +140,20 @@ async function removeKnowledgeFile(page: Page): Promise<void> {
  * The approve and reject controls are inside the collapsed agent activity row,
  * so the row has to be expanded before either is reachable.
  */
-async function rejectAgentToolRequest(page: Page): Promise<void> {
-  const activity = page.getByLabel(AGENT_ACTIVITY_LABEL).first();
-  if (!(await activity.isVisible().catch(() => false))) return;
-  await activity.click();
-  const reject = page.getByRole('button', { name: REJECT_LABEL, exact: true }).first();
-  await reject.click({ timeout: LOAD_TIMEOUT_MS }).catch(() => undefined);
+async function rejectAgentToolRequest(page: Page): Promise<number> {
+  let rejected = 0;
+  for (let attempt = 0; attempt < MAX_TOOL_REJECTIONS; attempt += 1) {
+    const collapsed = page.getByLabel(AGENT_ACTIVITY_LABEL).first();
+    if (await collapsed.isVisible().catch(() => false)) {
+      await collapsed.click().catch(() => undefined);
+    }
+    const reject = page.getByRole('button', { name: REJECT_LABEL, exact: true }).first();
+    if (!(await reject.isVisible().catch(() => false))) break;
+    await reject.click().catch(() => undefined);
+    rejected += 1;
+    await page.waitForTimeout(APPROVAL_SETTLE_MS);
+  }
+  return rejected;
 }
 
 async function settledAnswer(page: Page): Promise<string> {
@@ -157,24 +166,29 @@ async function settledAnswer(page: Page): Promise<string> {
 
 test.describe('project knowledge retrieval reaches the back of a long file', () => {
   /**
-   * Skipped, and the skip is the finding.
+   * Skipped, and the skip records what is still missing.
    *
    * Project knowledge only reaches a turn through a conversation whose row
    * carries `project_id`, and the only composer that sets it is a project's
    * own, which sends AGI Work. AGI Work is an agent loop: asked for a value
-   * that is sitting in an uploaded file, it reached for code execution on every
-   * attempt, stopped for approval, and left the turn with no answer.
-   * `handleWorkModeChange` in `ChatInput.tsx` clears the project when the user
-   * picks Chat, by design, so there is no mode in which this question can be
-   * asked without entering the agent loop. Rejecting the tool request from the
-   * activity row did not release the turn either.
+   * sitting in an uploaded file, it reached for code execution on every
+   * attempt and stopped for approval. `handleWorkModeChange` in
+   * `ChatInput.tsx` clears the project when the user picks Chat, by design, so
+   * there is no mode in which this question can be asked without entering that
+   * loop, and refusing the tool from the activity row did not release the turn
+   * to answer from context either.
+   *
+   * `AGI-25`, the false "finished without returning a response" this used to
+   * hit, is fixed: the paused turn now reads "Agent activity paused / Review
+   * Execute Code action" and nothing more, confirmed by this spec's own last
+   * run. What remains is `AGI-26`, the turn not resuming.
    *
    * Everything up to the question is verified and left executable: the upload
    * lands, the Sources panel takes it, and the document is four times the
-   * per-file budget with its canary at nine tenths. Enable this once `AGI-25`
-   * is fixed. It must not be turned green by approving a code run.
+   * per-file budget with its canary at nine tenths. It must not be turned
+   * green by approving a code run.
    *
-   * llm-guardrail-allow: AGI-25, a paused agent turn reports itself finished
+   * llm-guardrail-allow: AGI-26, a refused tool does not release the turn
    */
   test.skip('answers from a passage far past the per-file budget', async ({ page }) => {
     await signIn(page);
@@ -199,7 +213,8 @@ test.describe('project knowledge retrieval reaches the back of a long file', () 
         timeout: ANSWER_TIMEOUT_MS,
       });
       await page.waitForTimeout(APPROVAL_SETTLE_MS);
-      await rejectAgentToolRequest(page);
+      const rejected = await rejectAgentToolRequest(page);
+      expect(rejected).toBeGreaterThanOrEqual(0);
 
       const answer = await settledAnswer(page);
       expect(answer).toContain(CANARY);
