@@ -60,7 +60,7 @@ import {
   applyToolResultSecretPolicy,
 } from './tool-loop';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
-import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
+import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { enrichWebSearchResultTitles } from '@/lib/web-search/web-search-tool';
 import {
   accumulateObservedProviderUsage,
@@ -1265,7 +1265,7 @@ export async function* runResearchLoop(
         });
         if (outcome.ok) {
           sources.add({ url: outcome.url, title: outcome.title });
-          content = `Fetched ${outcome.url}, ${outcome.title}\n\n${outcome.content}`;
+          content = fenceFetchedPage(outcome.url, outcome.title, outcome.content);
           isError = false;
         } else {
           content = `Fetch failed (${outcome.errorCode}): ${outcome.error}`;
