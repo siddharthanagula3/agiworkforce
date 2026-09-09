@@ -1642,7 +1642,18 @@ const DesktopShell = () => {
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
-        {!isTauri && !import.meta.env.DEV && (
+        {/*
+          The banner that tells a browser visitor there is a desktop app to
+          download. `!isTauri` is not that audience: Electron is not Tauri
+          either, so the shipped desktop build rendered "Web Chat" and a
+          a download link to someone who had already downloaded and opened the
+          desktop app. Observed 2026-09-08 in the built Electron binary.
+
+          Same root cause as the Tasks readiness state: `isTauri` was standing
+          in for "is the desktop app", and Electron falls on the wrong side of
+          it. The audience here is a real browser, so both hosts are excluded.
+        */}
+        {!isTauri && !isElectronHost && !import.meta.env.DEV && (
           <div className="border-b border-[var(--chat-border)] bg-[var(--chat-accent-secondary)] px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[var(--chat-accent-primary-contrast)] font-semibold text-sm">
