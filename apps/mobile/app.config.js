@@ -212,6 +212,14 @@ const config = {
       {
         android: {
           minSdkVersion: 26,
+          // Google Play has required API 36 for new submissions and updates
+          // since 2026-08-31; API 35 now only keeps an already-published app
+          // available to existing users. Expo's own default is still 35
+          // (ExpoRootProjectPlugin.kt), so without these three lines every
+          // build we upload is rejected at submission.
+          compileSdkVersion: 36,
+          targetSdkVersion: 36,
+          buildToolsVersion: '36.0.0',
         },
       },
     ],
