@@ -1,3 +1,4 @@
+import type { DesktopRuntimeResponse } from '@agiworkforce/local-runtime-contract';
 import type { DesktopCloudUpdateAvailability } from '../desktopCloudUpdate';
 
 export const ELECTRON_BRIDGE_COMMANDS = [
@@ -21,6 +22,7 @@ export function isElectronBridgeCommand(command: string): command is ElectronBri
 
 export const ELECTRON_IPC_CHANNELS = {
   invokeBridge: 'agi:invoke-bridge',
+  invokeRuntime: 'agi:desktop-runtime',
   openExternal: 'agi:open-external',
   windowControl: 'agi:window-control',
   dialog: 'agi:dialog',
@@ -68,6 +70,15 @@ export interface ElectronHostBridge {
   readonly appVersion: string;
   handles(command: string): boolean;
   invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown>;
+  /**
+   * Dispatches to the privileged local runtime. Resolves with a result
+   * envelope rather than throwing, so a refusal carries the capability the
+   * caller would need to request.
+   */
+  invokeRuntime(
+    command: string,
+    args?: Record<string, unknown>,
+  ): Promise<DesktopRuntimeResponse<unknown>>;
   onDeepLink(callback: (url: string) => void): () => void;
   onVoiceHotkey(callback: () => void): () => void;
   openExternal(url: string): Promise<void>;

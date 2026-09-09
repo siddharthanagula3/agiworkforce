@@ -19,6 +19,8 @@ export type { DesktopPreferredWarning } from './errors';
 
 export { resolveCommandCapability } from './registry';
 
+export { desktopRuntimeHandles, invokeDesktopRuntime, isElectronDesktop } from './electronRuntime';
+
 export { listen, once, emit } from './events';
 export type { EventCallback, UnlistenFn } from './events';
 

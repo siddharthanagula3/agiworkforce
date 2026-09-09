@@ -21,6 +21,7 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "dependencies": {
+    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/types": "workspace:*"
   },
   "peerDependencies": {

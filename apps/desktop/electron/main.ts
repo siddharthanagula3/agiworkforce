@@ -23,7 +23,11 @@ import {
   type ElectronNotifyRequest,
   type ElectronWindowControlRequest,
 } from '../src/lib/tauri-electron/bridgeContract';
+import { DESKTOP_RUNTIME_CHANNEL } from '@agiworkforce/local-runtime-contract';
 import { handleBridgeCommand } from './accountBridge';
+import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
+import { installAppMenu } from './appMenu';
+import { applyLaunchAtLogin } from './launchAtLogin';
 import {
   CLOUD_APP_ORIGIN,
   DEEP_LINK_SCHEME,
@@ -159,6 +163,16 @@ function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
 }
 
 function registerIpcHandlers(): void {
+  ipcMain.handle(DESKTOP_RUNTIME_CHANNEL, async (event, command, args) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (typeof command !== 'string') throw new Error('Unknown runtime command.');
+    const safeArgs =
+      args && typeof args === 'object' && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : undefined;
+    return dispatchDesktopRuntime(mainWindow, command, safeArgs);
+  });
+
   ipcMain.handle(ELECTRON_IPC_CHANNELS.invokeBridge, async (event, command, args) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     if (typeof command !== 'string' || !isElectronBridgeCommand(command)) {
@@ -512,6 +526,16 @@ function openNewChat(): void {
   void mainWindow?.loadURL(target);
 }
 
+function openSettings(): void {
+  showMainWindow();
+  if (RENDERER_MODE !== 'remote') return;
+  void mainWindow?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
+}
+
+function openLogsFolder(): void {
+  void shell.openPath(app.getPath('logs'));
+}
+
 async function checkForCloudUpdate(): Promise<void> {
   try {
     const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
@@ -611,6 +635,14 @@ if (!hasSingleInstanceLock) {
       onCheckForUpdates: () => void checkForCloudUpdate(),
     };
     createTray(garnishHandlers);
+    installAppMenu({
+      newChat: garnishHandlers.onNewChat,
+      toggleQuickAsk: garnishHandlers.onQuickAsk,
+      captureScreenshot: garnishHandlers.onScreenshot,
+      openSettings,
+      openLogs: openLogsFolder,
+    });
+    applyLaunchAtLogin();
     registerGarnishShortcuts({
       onQuickAsk: garnishHandlers.onQuickAsk,
       onScreenshot: garnishHandlers.onScreenshot,
