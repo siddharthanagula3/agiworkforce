@@ -20,7 +20,10 @@ vi.mock('../../chat/completions/lib/auth-gate', () => ({
 }));
 
 const scopedDbMocks = vi.hoisted(() => ({
-  db: { query: vi.fn(async () => []), execute: vi.fn(async () => 0) },
+  db: {
+    query: vi.fn(async (_sql: string, _params?: unknown[]): Promise<unknown[]> => []),
+    execute: vi.fn(async () => 0),
+  },
   getUserScopedDb: vi.fn(),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -83,6 +86,11 @@ function authenticated(userId = 'user-preview-1', planTier = PAID_TIER) {
     userId,
     organizationId: null,
   });
+  // The route proves the caller owns the conversation before reading its route
+  // affinity, so the scoped handle answers that lookup.
+  scopedDbMocks.db.query.mockImplementation(async (sql: string) =>
+    String(sql).includes('web_conversations') ? [{ id: 'conv-1' }] : [],
+  );
 }
 
 function request(body: unknown): NextRequest {

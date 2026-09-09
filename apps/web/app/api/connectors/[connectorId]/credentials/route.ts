@@ -107,7 +107,7 @@ async function handlePost(
   const limited = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (limited) return limited;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
   const target = await requireTarget(context);
 
   if (!isConnectorTokenStorageAvailable()) {
@@ -118,10 +118,12 @@ async function handlePost(
   // lib/services/connector-policy-gate.ts: the policy used to apply only when
   // tools were read for a chat turn, so a forbidden connector could be
   // connected and its credential kept.
+  // organizationId is omitted, not passed: this route reads the database on a
+  // deliberately null-org scope, and the gate reads an explicit null as
+  // "personal account, skip policy" before its own workspace lookup runs.
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
-    organizationId,
     connectorId: target.serverId,
     isCustom: true,
     request,

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -48,11 +47,6 @@ function rethrowCloudCodeError(error: unknown): never {
   throw error;
 }
 
-async function planTierFor(db: DatabaseAdapter, userId: string): Promise<string> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  return effectivePlanTier(subscription?.plan_tier, subscription?.status);
-}
-
 async function handleList(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'files-serve', `user:${userId}`);
@@ -61,7 +55,19 @@ async function handleList(request: NextRequest, context: RouteContext) {
     throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
   }
   const { sessionId } = await context.params;
-  const planTier = await planTierFor(db, userId);
+
+  // Listing a session's files claims the session and provisions the sandbox, so
+  // it buys managed compute exactly as the upload below does and answers to the
+  // same gate.
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const accessGateResponse = buildManagedComputeAccessGateResponse(
+    await evaluateManagedComputeAccess(db, userId, subscription, resolveCloudChatSurface(request), {
+      request,
+    }),
+  );
+  if (accessGateResponse) return accessGateResponse;
+
+  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
     return NextResponse.json(
       await listCloudCodeNotebookFiles(db, { userId, organizationId }, sessionId, planTier),

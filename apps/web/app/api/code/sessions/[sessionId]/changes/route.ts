@@ -17,6 +17,11 @@ import {
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeAccess,
+} from '@/lib/services/managed-compute-access';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 export const runtime = 'nodejs';
 
@@ -54,6 +59,16 @@ async function handleChanges(request: NextRequest, context: RouteContext) {
 
   const { sessionId } = await context.params;
   const subscription = await SubscriptionService.getSubscription(db, userId);
+
+  // Reading a session's changes claims the session and provisions the sandbox,
+  // so it buys managed compute and answers to the same gate the write paths do.
+  const accessGateResponse = buildManagedComputeAccessGateResponse(
+    await evaluateManagedComputeAccess(db, userId, subscription, resolveCloudChatSurface(request), {
+      request,
+    }),
+  );
+  if (accessGateResponse) return accessGateResponse;
+
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
     return NextResponse.json(
