@@ -153,11 +153,11 @@ describe('transports excluded from routing', () => {
 
   it('applies to a model the user named, because they chose a model and not a datacentre', () => {
     const decision = resolveAutoRoute(
-      withoutVendorHosts({ taskType: 'reasoning', selection: 'qwen-3.8-flash' }),
+      withoutVendorHosts({ taskType: 'reasoning', selection: EXCLUDED_MODEL_ID }),
     );
     expect(decision.status).toBe('selected');
     if (decision.status === 'selected') {
-      expect(decision.modelKey).toBe('qwen-3.8-flash');
+      expect(decision.modelKey).toBe(EXCLUDED_MODEL_ID);
       expect(VENDOR_OWN_HOSTS.has(decision.provider)).toBe(false);
     }
   });
