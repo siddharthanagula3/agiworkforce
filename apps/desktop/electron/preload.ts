@@ -7,6 +7,7 @@
  * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import type { DesktopRuntimeResponse } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
   ELECTRON_IPC_CHANNELS,
@@ -36,6 +37,14 @@ const agiHost: ElectronHostBridge = {
       throw new Error(`Unknown bridge command: ${command}`);
     }
     return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.invokeBridge, command, args);
+  },
+
+  async invokeRuntime(command: string, args?: Record<string, unknown>) {
+    return (await ipcRenderer.invoke(
+      ELECTRON_IPC_CHANNELS.invokeRuntime,
+      command,
+      args,
+    )) as DesktopRuntimeResponse<unknown>;
   },
 
   onDeepLink(callback: (url: string) => void): () => void {

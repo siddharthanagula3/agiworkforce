@@ -42,6 +42,7 @@
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/desktop-command-client": "workspace:*",
+    "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/routing": "workspace:*",

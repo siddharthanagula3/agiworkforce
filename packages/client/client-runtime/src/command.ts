@@ -1,5 +1,5 @@
-
 import { isTauri, isTest } from './detect';
+import { desktopRuntimeHandles, invokeDesktopRuntime } from './electronRuntime';
 import { DesktopRequiredError, createDesktopPreferredWarning } from './errors';
 import type { DesktopPreferredWarning } from './errors';
 import { resolveCommandCapability } from './registry';
@@ -25,6 +25,10 @@ export async function command<T>(name: string, args?: Record<string, unknown>): 
   if (isTauri) {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<T>(name, args);
+  }
+
+  if (desktopRuntimeHandles(name)) {
+    return invokeDesktopRuntime<T>(name, args);
   }
 
   if (isTest) {
@@ -55,6 +59,10 @@ export async function commandWithWarning<T>(
     const { invoke } = await import('@tauri-apps/api/core');
     const data = await invoke<T>(name, args);
     return { data };
+  }
+
+  if (desktopRuntimeHandles(name)) {
+    return { data: await invokeDesktopRuntime<T>(name, args) };
   }
 
   if (isTest) {
