@@ -61,6 +61,31 @@ describe('desktop cloud update contract', () => {
     );
   });
 
+  /**
+   * Observed 2026-09-08: launching the built app logged an unhandled
+   * 'agi:check-update' error every time, because the endpoint 404s until a
+   * release is tagged on GitHub with a signed .dmg, and the client threw on
+   * any non-OK status.
+   *
+   * The distinction this keeps: a 404 is a real answer, "nothing is
+   * published". A 503 is the check itself failing, and must still throw
+   * rather than quietly reporting the user is up to date.
+   */
+  it('reports no update, without throwing, before any release is published', async () => {
+    const notPublished = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+
+    const result = await checkDesktopCloudUpdate('1.2.0', 'arm64', notPublished as typeof fetch);
+
+    expect(result.available).toBe(false);
+    expect(result.currentVersion).toBe('1.2.0');
+  });
+
   it('treats an unavailable or malformed release response as an error, not up to date', async () => {
     const unavailable = vi.fn(async () => new Response(null, { status: 503 }));
     const malformed = vi.fn(async () => Response.json({ version: '1.3.0' }));
