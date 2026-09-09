@@ -126,6 +126,22 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
     });
   });
 
+  it('ignores a review mention from outside the repository', async () => {
+    // A mention from anyone at all used to mint an installation token, fetch the
+    // diff and spend a model call, so a passer-by on a public repository could
+    // spend the installation's quota.
+    const response = await POST(
+      makeWebhookRequest({
+        ...BASE_PAYLOAD,
+        comment: { body: '@agi-workforce please review', author_association: 'NONE' },
+      }),
+    );
+    await waitForProcessReview();
+
+    expect(response.status).toBe(200);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('wraps diff content in <untrusted_pr_diff> fence', async () => {
     mockGetPrDiff.mockResolvedValue('+ added line\n- removed line');
     const req = makeWebhookRequest(BASE_PAYLOAD);
