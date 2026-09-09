@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 14 unresolved issues: 0 P0, 1 P1, 9 P2, 4 P3, plus 3 items needing
+- 15 unresolved issues: 0 P0, 1 P1, 10 P2, 4 P3, plus 3 items needing
   validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
   `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
 - Five are blocked on a decision rather than on code, and each says whose and
@@ -97,17 +97,24 @@ falls back to the head, which is the only defensible choice there.
 `loadProjectContext` and `formatProjectSystemPrompt` with the answer placed at
 the beginning, the middle and the end of a document several times the per-file
 budget. All three reach the prompt; before the change only the first did.
-**What is outstanding:** a browser pass. Three unrelated things blocked it on
-2026-09-08: the project composer inherits AGI Work mode from `AGI-18`, an agent
-run reaches for code execution which now correctly stops for approval, and Auto
-selected the route in `AGI-23`. None of them are retrieval, and none should be
-worked around inside a retrieval test. Re-run once `AGI-23` and `AGI-18` are
-closed.
+**What is outstanding:** a browser pass, and it is blocked on one thing rather
+than the three first recorded here. Driving it on 2026-09-08 established the
+shape. Project knowledge reaches a turn only through a conversation row
+carrying `project_id`, which only a project's own composer sets, and that
+composer sends AGI Work. AGI Work is an agent loop: asked for a value sitting
+in an uploaded file it reached for code execution every time, stopped for
+approval, and left the turn with no answer, which is `AGI-25`. Choosing Chat is
+not a way around it, because `handleWorkModeChange` in `ChatInput.tsx` clears
+the project when Chat is picked, deliberately: a conversation created that way
+was confirmed to carry `project_id` null and the model said it could not reach
+project files. Rejecting the tool request from the activity row did not release
+the turn either. `apps/web/e2e/project-knowledge-retrieval.spec.ts` carries the
+whole procedure and is skipped against `AGI-25`; the upload half of it runs.
 **Remaining known limits, unchanged by this:** long documents are still
 truncated at extraction (`MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000`, plus a
 250 page PDF cap), and there is still no docx, xlsx or pptx extraction. Those
 are extraction gaps, not retrieval gaps.
-**Dependencies:** `AGI-23` for the live check only.
+**Dependencies:** `AGI-25` for the live check only.
 **Acceptance criteria:** a question aimed at the back half of a long project
 file is answered from it, in a browser.
 **Validation:** the passage tests above, plus one live project question.
@@ -411,6 +418,45 @@ migration test over the consent record.
 coverage", which is why a second sweep on 2026-09-08 reported this as a new
 finding; the row now names the jurisdiction angle and points here.
 
+### `AGI-25` A turn paused for approval reports itself finished with no response
+
+**Severity:** P2
+**Status:** Open, observed live 2026-09-08.
+**Area:** AGI Work, tool approval, chat transcript
+**Root cause:** Not diagnosed. The transcript's terminal-state text is chosen
+without consulting whether the turn has a pending approval.
+**Current behavior:** An AGI Work turn that reaches for a tool stops for
+approval, correctly. The assistant bubble then reads, all at once:
+
+```
+Agent activity paused
+Review Execute Code action
+The model finished without returning a response. Use Regenerate below to run it again.
+```
+
+At that moment the header carries `Approvals (1 pending)`, the task dock reads
+`1/2`, the activity row's own label says `Running`, and expanding that row
+reveals the `Approve` and `Reject` buttons one click away. Nothing has
+finished, and Regenerate is the wrong instruction: it abandons a decision the
+user has been asked to make and starts the turn again.
+**Required behavior:** A turn with a pending approval says so and points at the
+decision. The finished-with-no-response text belongs only to a turn that
+actually ended without one.
+**Evidence:** four consecutive live runs on `:3100` against a project
+conversation, questions as ordinary as "What is 2+2 times 3?"; the controls
+above were read from the rendered accessibility tree, not from source.
+**User impact:** The product asks for a decision and simultaneously tells the
+user the request failed. The likely response is Regenerate, which discards the
+pending approval and repeats the same stop.
+**Dependencies:** None.
+**Blocks:** `AGI-4`'s live verification, and
+`apps/web/e2e/project-knowledge-retrieval.spec.ts`, which is skipped against
+this id.
+**Acceptance criteria:** a turn with a pending approval never renders the
+finished-without-a-response text, and offers the approval decision instead.
+**Validation:** a transcript test over a turn holding a pending approval, plus
+the skipped e2e spec above, enabled.
+
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
 **Severity:** P2
@@ -552,9 +598,9 @@ Neither of these is a confirmed defect.
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-4`, project passage retrieval. The largest remaining user-visible gap,
-   and the second half of the project workflow the conversation-creation fix
-   reopened.
+1. `AGI-25`, then `AGI-4`. Retrieval is written and unit-verified; what is left
+   of it is a browser pass that cannot be performed while a paused turn reports
+   itself finished. One implementer, in that order.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
@@ -594,6 +640,7 @@ Dependency-aware, not severity-ordered.
 | `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
+| `AGI-25` | transcript test over a pending approval             | a project question in AGI Work      | no finished text while a decision is open |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -604,6 +651,7 @@ AGI-4                      retrieval, independent
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
+AGI-25 ──> AGI-4           the approval transcript, then the live retrieval pass
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building

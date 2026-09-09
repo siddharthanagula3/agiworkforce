@@ -27,6 +27,34 @@ function walk(dir, out = []) {
 const TEST_CALL = /^\s*test\s*\(/gm;
 const CONDITIONAL_SKIP = /test\.skip\s*\(\s*!/g;
 
+/**
+ * The same annotation `check-llm-failure-guardrails.mjs` honours, read the same
+ * way: within two lines of the skip.
+ *
+ * A parameterised suite is one `test(` call site generating one test per row, so
+ * a per-row availability skip counts as "every test can skip itself" here even
+ * though the suite skips only the rows a build does not serve. Rather than
+ * teach this script to evaluate a loop, it defers to the justification the
+ * repository already has one place for. An unannotated conditional skip is
+ * still a finding.
+ */
+function annotatedSkipCount(src) {
+  const lines = src.split('\n');
+  let annotated = 0;
+  CONDITIONAL_SKIP.lastIndex = 0;
+  let match;
+  while ((match = CONDITIONAL_SKIP.exec(src)) !== null) {
+    const lineNo = src.slice(0, match.index).split('\n').length;
+    for (let i = lineNo - 2; i <= lineNo + 2; i += 1) {
+      if (/llm-guardrail-allow:/.test(lines[i - 1] ?? '')) {
+        annotated += 1;
+        break;
+      }
+    }
+  }
+  return annotated;
+}
+
 const vacuous = [];
 let scanned = 0;
 
@@ -38,8 +66,11 @@ for (const file of walk(root)) {
   if (tests === 0) continue;
   scanned += 1;
 
-  const skips = (src.match(CONDITIONAL_SKIP) || []).length;
-  if (skips === 0) continue;
+  const allSkips = (src.match(CONDITIONAL_SKIP) || []).length;
+  if (allSkips === 0) continue;
+
+  const skips = allSkips - annotatedSkipCount(src);
+  if (skips <= 0) continue;
 
   if (skips >= tests) vacuous.push({ rel, tests, skips });
 }
