@@ -286,7 +286,9 @@ describe('getUserScopedDb on a cookie session', () => {
     const scoped = await getUserScopedDb(request, { resolveOrganization: false });
 
     expect(scoped.userId).toBe('user_cookie');
-    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie', request);
+    // The mfa gate resolves its scope from membership, so it takes no request;
+    // the ip allow list still needs one, to read the client address.
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie');
     expect(mockAssertIpAllowList).toHaveBeenCalledWith('user_cookie', request);
   });
 

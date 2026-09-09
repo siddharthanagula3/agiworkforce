@@ -74,6 +74,20 @@ function makeProcessed(): ProcessedRequest {
   };
 }
 
+// A real turn only ever dispatches a tool it offered, so the fixture offers
+// them: runMcpTool refuses a connector call for a tool absent from the catalog,
+// the way every other branch already did.
+function connectorToolDefs() {
+  return ['get_pull_request_diff', 'post_issue_comment'].map((toolName) => ({
+    qualifiedName: `mcp__github__${toolName}`,
+    serverId: 'github',
+    toolName,
+    description: toolName,
+    origin: 'connector' as const,
+    inputSchema: {},
+  }));
+}
+
 async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   const decoder = new TextDecoder();
   let out = '';
@@ -126,7 +140,12 @@ describe('runToolLoop end-to-end, user connector tool execution', () => {
     });
 
     const output = await drain(
-      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1', connectorExecutor }),
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        connectorExecutor,
+        mcpTools: connectorToolDefs(),
+      }),
     );
 
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
@@ -184,7 +203,12 @@ describe('runToolLoop end-to-end, user connector tool execution', () => {
     }));
 
     const output = await drain(
-      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1', connectorExecutor }),
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        connectorExecutor,
+        mcpTools: connectorToolDefs(),
+      }),
     );
 
     expect(output).toContain('"status":"failed"');
@@ -223,7 +247,21 @@ describe('runToolLoop end-to-end, user connector tool execution', () => {
     }));
 
     await drain(
-      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1', connectorExecutor }),
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        connectorExecutor,
+        mcpTools: [
+          {
+            qualifiedName: 'mcp__operator__do_thing',
+            serverId: 'operator',
+            toolName: 'do_thing',
+            description: 'do_thing',
+            origin: 'operator' as const,
+            inputSchema: {},
+          },
+        ],
+      }),
     );
 
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
