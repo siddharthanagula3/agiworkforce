@@ -2,7 +2,9 @@ import 'server-only';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+import type { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
+import { getClientIpForRateLimit } from '@/lib/rate-limit';
 
 function digest(value: string): Buffer {
   return createHash('sha256').update(value, 'utf8').digest();
@@ -18,9 +20,14 @@ const MIN_CRON_SECRET_LENGTH = 32;
 const failuresByClient = new Map<string, { count: number; windowStart: number }>();
 let weakSecretWarned = false;
 
+/**
+ * The leftmost x-forwarded-for entry is whatever the caller wrote, so a caller
+ * brute forcing CRON_SECRET could spend a fresh throttle window per guess
+ * simply by changing it. The trusted-proxy-aware resolution is the one the rate
+ * limiter uses, and it is the same question.
+ */
 function clientKey(request: Pick<Request, 'headers'>): string {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwarded || request.headers.get('x-real-ip')?.trim() || 'unknown';
+  return getClientIpForRateLimit(request as NextRequest);
 }
 
 function isThrottled(key: string, now: number): boolean {

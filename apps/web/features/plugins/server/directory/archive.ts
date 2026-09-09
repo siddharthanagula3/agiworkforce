@@ -92,6 +92,51 @@ function declaredSize(file: JSZip.JSZipObject): number {
   return typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : 0;
 }
 
+/**
+ * The uncompressed size in a ZIP header is written by whoever made the archive,
+ * so a member that declares a kilobyte and inflates to a gigabyte passed the
+ * ceiling check and was then decompressed whole into memory. Counting while
+ * inflating is the only bound that does not trust the archive, and the running
+ * total is carried across members so many small lies cost no more than one big
+ * one.
+ */
+async function readBounded(
+  file: JSZip.JSZipObject,
+  memberPath: string,
+  budget: { remaining: number },
+): Promise<Uint8Array> {
+  const limit = Math.min(PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES, Math.max(budget.remaining, 0));
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  await new Promise<void>((resolve, reject) => {
+    const stream = file.nodeStream('nodebuffer');
+    const fail = (error: unknown): void => {
+      stream.removeAllListeners();
+      const destroy = (stream as { destroy?: () => void }).destroy;
+      if (typeof destroy === 'function') destroy.call(stream);
+      reject(error);
+    };
+    stream.on('data', (chunk: Buffer) => {
+      total += chunk.byteLength;
+      if (total > limit) {
+        fail(
+          new PluginArchiveError([
+            uploadMemberTooLargeMessage(memberPath, PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES),
+          ]),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    });
+    stream.on('error', fail);
+    stream.on('end', () => resolve());
+  });
+
+  budget.remaining -= total;
+  return new Uint8Array(Buffer.concat(chunks, total));
+}
+
 function isSymlink(file: JSZip.JSZipObject): boolean {
   const mode = file.unixPermissions;
   if (typeof mode !== 'number') return false;
@@ -170,6 +215,10 @@ async function readMembers(archive: Uint8Array): Promise<Map<string, ArchiveMemb
   }
 
   const root = commonRootPrefix(files.map(({ path }) => path));
+  // The loop above trusts the declared sizes, which is fine as a cheap early
+  // refusal. This budget is what actually holds, because it counts bytes as
+  // they inflate.
+  const budget = { remaining: PLUGIN_UPLOAD_MAX_TOTAL_BYTES };
   const members = new Map<string, ArchiveMember>();
   for (const { path, file } of files) {
     const relative = root.length > 0 ? path.slice(root.length) : path;
@@ -177,7 +226,7 @@ async function readMembers(archive: Uint8Array): Promise<Map<string, ArchiveMemb
     members.set(relative, {
       path: relative,
       size: declaredSize(file),
-      read: () => file.async('uint8array'),
+      read: () => readBounded(file, relative, budget),
     });
   }
   return members;
