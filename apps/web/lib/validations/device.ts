@@ -43,12 +43,19 @@ export const DeviceFingerprintSchema = z
   .max(255, 'device_fingerprint must be 255 characters or less')
   .regex(/^[a-f0-9]+$/, 'device_fingerprint must be a valid hex string');
 
-export const DeviceLinkRequestSchema = z.object({
-  device_id: DeviceIdSchema,
-  device_name: DeviceNameSchema,
-  device_type: DeviceTypeSchema.optional(),
-  device_fingerprint: DeviceFingerprintSchema,
-});
+/**
+ * The pairing identity is minted server side and returned to the caller that
+ * started the flow, so it is absent here on purpose. A caller that chooses its
+ * own `device_id` can hand that value to someone else, have them approve it,
+ * and then poll for the token it mints; a caller that chooses its own
+ * `device_fingerprint` defeats the only check `/api/device/poll` applies.
+ */
+export const DeviceLinkRequestSchema = z
+  .object({
+    device_name: DeviceNameSchema,
+    device_type: DeviceTypeSchema.optional(),
+  })
+  .strict();
 
 export const DevicePollRequestSchema = z.object({
   device_id: DeviceIdSchema,

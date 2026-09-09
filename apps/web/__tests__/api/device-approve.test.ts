@@ -31,6 +31,12 @@ vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
+const mockGetClerkAuthUser = vi.fn();
+
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
@@ -83,6 +89,8 @@ describe('Device Approve API', () => {
       getToken: vi.fn().mockResolvedValue('clerk-session-token'),
     });
 
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+
     mockQuery.mockResolvedValue([makePendingRecord()]);
 
     mockExecute.mockResolvedValue(undefined);
@@ -95,10 +103,7 @@ describe('Device Approve API', () => {
   describe('POST /api/device/approve', () => {
     describe('Authentication', () => {
       it('should return 401 for unauthenticated request', async () => {
-        mockClerkAuth.mockResolvedValueOnce({
-          userId: null,
-          getToken: vi.fn().mockResolvedValue(null),
-        });
+        mockGetClerkAuthUser.mockRejectedValueOnce(new Error('unauthenticated'));
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',

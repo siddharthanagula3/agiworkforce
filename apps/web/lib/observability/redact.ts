@@ -43,6 +43,7 @@ const DENIED_KEY_SUBSTRINGS = [
   'client_secret',
   'cookie',
   'credential',
+  'fingerprint',
   'password',
   'private_key',
   'refresh_token',

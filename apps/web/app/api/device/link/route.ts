@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
 import { getEnv } from '@shared/utils/env';
@@ -51,7 +52,7 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.validation('Invalid request body', validationResult.error);
     }
 
-    const { device_id, device_name, device_type, device_fingerprint } = validationResult.data;
+    const { device_name, device_type } = validationResult.data;
     const resolvedDeviceType = device_type || 'desktop';
 
     const db = getNeonDb();
@@ -70,10 +71,12 @@ async function handleDeviceLink(request: NextRequest) {
     }
 
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    let device_id = '';
     let link_code = '';
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      device_id = randomUUID();
       link_code = generateQrLinkCode();
       try {
         await db.execute(
@@ -81,31 +84,13 @@ async function handleDeviceLink(request: NextRequest) {
              (device_id, device_name, device_type, device_fingerprint, user_code, status,
               user_id, user_email, user_name, access_token, refresh_token,
               authorized_at, consumed_at, denied_at, revoked_at, expires_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, 'pending',
+           VALUES ($1, $2, $3, NULL, $4, 'pending',
                    NULL, NULL, NULL, NULL, NULL,
-                   NULL, NULL, NULL, NULL, $6, $7)
-           ON CONFLICT (device_id) DO UPDATE SET
-             device_name        = EXCLUDED.device_name,
-             device_type        = EXCLUDED.device_type,
-             device_fingerprint = EXCLUDED.device_fingerprint,
-             user_code          = EXCLUDED.user_code,
-             status             = 'pending',
-             user_id            = NULL,
-             user_email         = NULL,
-             user_name          = NULL,
-             access_token       = NULL,
-             refresh_token      = NULL,
-             authorized_at      = NULL,
-             consumed_at        = NULL,
-             denied_at          = NULL,
-             revoked_at         = NULL,
-             expires_at         = EXCLUDED.expires_at,
-             updated_at         = EXCLUDED.updated_at`,
+                   NULL, NULL, NULL, NULL, $5, $6)`,
           [
             device_id,
             device_name || null,
             resolvedDeviceType,
-            device_fingerprint || null,
             link_code,
             expiresAt.toISOString(),
             new Date().toISOString(),
