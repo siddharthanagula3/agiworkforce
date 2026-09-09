@@ -294,9 +294,11 @@ shows: `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:377` refuses a
 resolved model whose provider is not `openai`, `:521` calls
 `providerApiUrl('openai', 'audio/transcriptions')` directly, and the key is read
 as `OPENAI_API_KEY`. Checked on 2026-09-08, the catalog is the same shape: the
-authored catalog contains exactly two STT models, `gpt-4o-transcribe` and
-`gpt-4o-mini-transcribe`, both OpenAI, both under the `openai` family, and the
-`voice_transcription` slot resolves to one of them. The route is not hiding a
+authored catalog contains exactly two STT models, a balanced one and a fast one,
+both OpenAI, both under the `openai` family, and the `voice_transcription` slot
+resolves to one of them. They are not named here: `check:model-id-literals`
+exists because a document quoting concrete ids goes stale, and
+`models.curation.json` is where they live. The route is not hiding a
 choice; there is no second choice to make.
 **Why the route is not being generalised first:** an abstraction with one
 implementation and no second vendor to test it against is speculative
