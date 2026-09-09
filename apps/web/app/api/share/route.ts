@@ -11,7 +11,10 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { redactSecretsFromValue } from '@/lib/security/secrets-audit';
+import {
+  redactSecretsFromValue,
+  SecretRedactionIncompleteError,
+} from '@/lib/security/secrets-audit';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 export function OPTIONS(request: NextRequest) {
@@ -113,11 +116,22 @@ async function handleCreateShare(request: NextRequest) {
 
   const token = randomBytes(18).toString('base64url');
 
-  const {
-    messages: sanitizedMessages,
-    secretPatternNames,
-    secretMatchCount,
-  } = sanitizeMessages(messages);
+  let sanitized: SanitizedMessages;
+  try {
+    sanitized = sanitizeMessages(messages);
+  } catch (error) {
+    if (error instanceof SecretRedactionIncompleteError) {
+      logger.error(
+        { userId, patternNames: error.patternNames },
+        '[share] redaction left a credential in the transcript; refusing to publish',
+      );
+      throw createError.validation(
+        'This conversation contains a credential that could not be removed. Remove it and share again.',
+      );
+    }
+    throw error;
+  }
+  const { messages: sanitizedMessages, secretPatternNames, secretMatchCount } = sanitized;
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
   const [data] = await db.query<SharedSessionRow>(

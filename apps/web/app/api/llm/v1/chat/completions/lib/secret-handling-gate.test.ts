@@ -142,7 +142,7 @@ describe('applySecretHandlingToRequest', () => {
     expect(JSON.stringify(event)).not.toContain(STRIPE_KEY);
   });
 
-  it('scans the whole request once regardless of message count', async () => {
+  it('detects across the whole request in a fixed number of passes, then redacts per message', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: null });
     const messages = Array.from({ length: 30 }, (_, index) => ({
       role: 'user' as const,
@@ -153,8 +153,12 @@ describe('applySecretHandlingToRequest', () => {
 
     await applySecretHandlingToRequest('user-1', request, processed);
 
-    expect(secretsAudit.scanForSecrets).toHaveBeenCalledTimes(1);
-    expect(secretsAudit.redactSecrets).toHaveBeenCalledTimes(1);
+    // One pass to detect over the joined request, one to prove the redacted
+    // result carries nothing high-confidence. Neither grows with the message
+    // count; redaction does, because each message is redacted on its own
+    // rather than round-tripped through a delimiter that a replacement can eat.
+    expect(secretsAudit.scanForSecrets).toHaveBeenCalledTimes(2);
+    expect(secretsAudit.redactSecrets).toHaveBeenCalledTimes(messages.length);
   });
 });
 

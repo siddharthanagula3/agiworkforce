@@ -44,6 +44,10 @@ import {
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
 import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
+import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
+
+const SECRET_IN_GUIDANCE_MESSAGE =
+  'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
 
 function jsonError(message: string, status: number): NextResponse {
   return NextResponse.json(
@@ -156,6 +160,16 @@ async function handleToolApproval(request: NextRequest) {
     resumeFields = parsed.data;
   } catch {
     return jsonError('Invalid JSON in approval resume request.', 400);
+  }
+
+  // Guidance reaches the model on the very next turn, so it goes through the
+  // same gate the message array does rather than around it.
+  const guidanceGate = await applySecretHandlingToTexts(userId, [resumeFields.guidance ?? '']);
+  if (guidanceGate.action === 'blocked') {
+    return jsonError(SECRET_IN_GUIDANCE_MESSAGE, 400);
+  }
+  if (guidanceGate.action === 'redacted') {
+    resumeFields = { ...resumeFields, guidance: guidanceGate.texts[0] || undefined };
   }
 
   const { db } = await getUserScopedDb(request);
