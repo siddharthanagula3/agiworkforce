@@ -70,7 +70,7 @@ describe('the bounds still match the credentials they are there to catch', () =>
   });
 
   it('matches a postgres url carrying credentials', () => {
-    const url = 'postgres://app_user:s3cr3t-password@db.example.com/appdb';
+    const url = 'postgres://user:PLACEHOLDER-NOT-A-CREDENTIAL@db.example.com/appdb';
 
     expect(scanForSecrets(url).map((entry) => entry.name)).toContain(
       'Database URL with Credentials',
@@ -78,7 +78,7 @@ describe('the bounds still match the credentials they are there to catch', () =>
   });
 
   it('matches a mongodb url carrying credentials', () => {
-    const url = 'mongodb+srv://app_user:s3cr3t-password@cluster0.example.net/appdb';
+    const url = 'mongodb+srv://user:PLACEHOLDER-NOT-A-CREDENTIAL@cluster0.example.net/appdb';
 
     expect(scanForSecrets(url).map((entry) => entry.name)).toContain(
       'MongoDB URL with Credentials',
