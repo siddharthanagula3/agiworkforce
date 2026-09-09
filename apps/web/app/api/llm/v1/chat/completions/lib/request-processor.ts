@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { ResearchStep } from '@agiworkforce/types';
+import { NON_US_VENDOR_TRANSPORTS } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { AgiWorkGoalSchema } from './agiwork-plan';
@@ -1430,6 +1431,27 @@ const AUTO_ROUTE_UNAVAILABLE_MESSAGE =
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 
+/**
+ * Transports managed routing will not dispatch through.
+ *
+ * Not a vendor boycott. These are the endpoints the model vendors run
+ * themselves, outside the United States, and every model reachable through one
+ * is also carried by a gateway that re-hosts it at the same published price.
+ * Measured 2026-09-08 across 240 tier by task by alias combinations, exactly
+ * one route was affected: the economy reasoning slot, which moves from
+ * Alibaba's Singapore endpoint to a gateway and keeps the same model.
+ *
+ * The reason to do this before the residency map is complete is that it is
+ * free. Excluding the models themselves would cost the whole reasoning ladder
+ * and invert the coding escalation rung; excluding these transports costs
+ * nothing, and it is the half of the answer that survives whatever the
+ * remaining jurisdiction research concludes.
+ *
+ * A model the user names is still served, through a permitted host: they chose
+ * a model, not a datacentre.
+ */
+const EXCLUDED_ROUTE_HOSTS: ReadonlySet<string> = new Set(NON_US_VENDOR_TRANSPORTS);
+
 export function buildWebCloudAutoRoutingRequest(
   model: string,
   subscriptionTier: string | undefined,
@@ -1521,6 +1543,7 @@ export function buildWebCloudAutoRoutingRequest(
       : {}),
     ...(organizationPolicy ? { organizationPolicy } : {}),
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
+    excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
   };
 }
 

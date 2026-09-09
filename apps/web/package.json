@@ -26,6 +26,7 @@
     "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
+    "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/i18n": "workspace:*",
