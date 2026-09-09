@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
@@ -79,6 +79,52 @@ corruption, double charge or trust-boundary failure was found. Reservation
 settlement is idempotent and concurrency-safe.
 
 ## 3. P1, high
+
+### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
+
+**Severity:** P1
+**Status:** 46 of 57 findings fixed across ten commits; 11 registered in
+`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`.
+**Area:** `apps/web/app/api` and the code it reaches
+
+**What the scan was.** A panel-verified read of the 744 files under
+`apps/web/app/api`, run 2026-09-09 against commit `e2a9e898b`. The report is in
+`CLAUDE-SECURITY-20260909-050816/`. 57 findings survived a three-voter panel: 3
+HIGH, 40 MEDIUM, 14 LOW.
+
+**The root causes, not the finding list.** The 57 were six causes and a tail:
+
+1. A caller-supplied header decided which scope a security gate evaluated, while
+   the handler acted on a different, server-resolved one. `x-agi-organization-id:
+personal` switched off require-MFA, the IP allow list, zero-data-retention,
+   the workspace secret-handling mode and the spend cap. Fixed by resolving
+   account-level controls from membership and taking the strictest answer across
+   every organization the caller belongs to. `check:policy-gate-scope` keeps it
+   fixed.
+2. Device pairing let the caller choose the pairing identity, so one victim click
+   on a crafted `/connect` link minted a 7-day account token for the attacker.
+   Fixed by minting the identity server side and removing the flow that took it
+   from a URL.
+3. Secret redaction round-tripped through an in-band delimiter and fell back to
+   the caller's unredacted text when the split did not realign, while reporting
+   the turn redacted. Fixed by redacting per span and proving the result.
+4. Three secret patterns had two open-ended runs either side of a required
+   literal. A megabyte of `eyJ` took 402 seconds in a measured run, from routes
+   as cheap as an unauthenticated support handoff.
+5. Untrusted external content bypassed the fence helper that already existed,
+   including a compaction summary re-injected as a bare system message and
+   persisted on the conversation row.
+6. Four controls existed on one handler and not on its siblings.
+
+**What is left and why.** Each remaining row names its own blocker: three need a
+migration or a deployment secret, three change a shipped contract other code
+already ships against, and one (F88) has no fix that closes the hole without
+degrading legitimate copy, because the real answer is pinning surface into the
+credential at issuance.
+
+**Next step.** F21 and F23 are the two that want a migration; they are the
+natural next pass. F8, F35 and F38 are contained refactors that need their own
+verification rather than riding a security batch.
 
 ## 4. P2, important
 
