@@ -33,6 +33,10 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
   get supportsLocalAppMode() {
     return mocks.supportsLocalAppMode;
   },
+  // This file is about the browser build, where the control renders and
+  // refuses. The Electron build removes it entirely, which
+  // `LocalCloudToggle.electron.test.tsx` covers.
+  isElectronHost: false,
 }));
 
 async function renderToggle(collapsed = false) {
