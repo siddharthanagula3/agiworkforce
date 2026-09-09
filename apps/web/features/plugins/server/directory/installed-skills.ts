@@ -135,7 +135,12 @@ async function skillsForRow(
   const sha = shaFromInstalledVersion(row.installed_version);
   const plan = sha ? await directorySourcePlan(row, sha) : await ownSourcePlan(row, repositoryUrl);
   if (!plan) return [];
-  const params = installedSkillsCacheParams(repositoryUrl, row.plugin_key, plan.revision);
+  const params = installedSkillsCacheParams(
+    repositoryUrl,
+    row.plugin_key,
+    plan.revision,
+    plan.location.sha ?? plan.location.ref,
+  );
   let cached = await readInstalledSkills(params);
   if (!cached) {
     const fetched = await fetchPluginSkillFiles(plan.location, plan.skillPaths, fetchImpl);

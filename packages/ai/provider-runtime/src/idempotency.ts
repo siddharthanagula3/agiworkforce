@@ -41,15 +41,27 @@ export function deriveIdempotencyKey(input: IdempotencyKeyInput): string {
     .join(SEGMENT_SEPARATOR);
 }
 
+/**
+ * The tenant is part of the key, not an assumption about the request key.
+ *
+ * A settled record is returned without re-executing the call, so two callers
+ * that derive the same key share a tool result. requestKey comes from a client
+ * header on the managed path and toolCallId is minted by the adapter, and some
+ * adapters number theirs per stream (`gemini-tool-1`), so neither carries
+ * tenancy on its own.
+ */
 export function toolInvocationIdempotencyKey(input: {
   requestKey: string;
   step: number;
   toolCallId: string;
+  userId: string;
+  organizationId?: string | null;
   /** Present only for a call resumed after asking the user for input. */
   resumeRound?: number;
 }): string {
+  const tenant = input.organizationId ? `${input.userId}@${input.organizationId}` : input.userId;
   return deriveIdempotencyKey({
-    requestKey: input.requestKey,
+    requestKey: `${tenant}:${input.requestKey}`,
     step: input.step,
     operation:
       input.resumeRound === undefined

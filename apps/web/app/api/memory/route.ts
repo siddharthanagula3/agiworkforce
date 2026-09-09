@@ -6,6 +6,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
+
+const MAX_MEMORY_CATEGORY_CHARS = 200;
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 
@@ -88,6 +90,20 @@ async function handleCreateMemory(request: NextRequest) {
 
   if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
     throw createError.validation('pinned must be a boolean');
+  }
+
+  // The category is injected verbatim into the memory context a later turn
+  // sends to the model, so it is bounded and typed here rather than accepted as
+  // whatever the caller sent.
+  if (body.category !== undefined && body.category !== null) {
+    if (typeof body.category !== 'string') {
+      throw createError.validation('category must be a string');
+    }
+    if (body.category.trim().length > MAX_MEMORY_CATEGORY_CHARS) {
+      throw createError.validation(
+        `category must be ${MAX_MEMORY_CATEGORY_CHARS} characters or less`,
+      );
+    }
   }
 
   const validSources = ['mobile', 'desktop', 'web', 'auto'];

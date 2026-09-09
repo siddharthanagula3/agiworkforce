@@ -41,7 +41,12 @@ beforeEach(() => {
 });
 
 function key(step: number, toolCallId = 'call_1'): string {
-  return toolInvocationIdempotencyKey({ requestKey: REQUEST_KEY, step, toolCallId });
+  return toolInvocationIdempotencyKey({
+    requestKey: REQUEST_KEY,
+    step,
+    toolCallId,
+    userId: 'user-1',
+  });
 }
 
 describe('a retried step does not run a mutating tool twice', () => {

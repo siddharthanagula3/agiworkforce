@@ -2821,6 +2821,8 @@ export async function* runToolLoop(
         requestKey: processed.managedUsage?.idempotencyKey ?? processed.requestId,
         step: suspendContext.completedSteps,
         toolCallId: tc.id,
+        userId: options.userId ?? '',
+        organizationId: processed.organizationId ?? null,
         ...(resumeInput ? { resumeRound: resumeInput.round } : {}),
       });
       const run = options.toolExecutor
