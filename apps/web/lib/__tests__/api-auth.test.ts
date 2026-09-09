@@ -548,6 +548,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     function bindOrgPolicy(organizationId: string | null, requireMfa: boolean) {
       mockNeonQuery.mockImplementation(async (sql: string) => {
         const s = sql.toLowerCase();
+        if (s.includes(') governing')) {
+          return organizationId ? [{ organization_id: organizationId }] : [];
+        }
         if (s.includes('from public.user_settings')) {
           return organizationId ? [{ organization_id: organizationId }] : [];
         }
@@ -615,6 +618,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     function bindOrgIpPolicy(organizationId: string | null, ipAllowList: string[]) {
       mockNeonQuery.mockImplementation(async (sql: string) => {
         const s = sql.toLowerCase();
+        if (s.includes(') governing')) {
+          return organizationId ? [{ organization_id: organizationId }] : [];
+        }
         if (s.includes('from public.user_settings')) {
           return organizationId ? [{ organization_id: organizationId }] : [];
         }
@@ -707,6 +713,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     ) {
       mockNeonQuery.mockImplementation(async (sql: string) => {
         const s = sql.toLowerCase();
+        if (s.includes(') governing')) {
+          return [{ organization_id: organizationId }];
+        }
         if (s.includes('from public.user_settings')) {
           return [{ organization_id: organizationId }];
         }

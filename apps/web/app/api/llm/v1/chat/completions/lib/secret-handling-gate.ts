@@ -109,7 +109,7 @@ export async function applySecretHandlingToRequest(
     return { action: 'clean', patternNames: [], matchCount: 0, notice: null };
   }
 
-  const { mode, organizationId } = await resolveSecretHandlingPolicy(getNeonDb(), userId, request);
+  const { mode, organizationId } = await resolveSecretHandlingPolicy(getNeonDb(), userId);
   const { high: highConfidenceDetections, low: lowConfidenceDetections } =
     partitionByConfidence(detections);
   const hasHighConfidence = highConfidenceDetections.length > 0;

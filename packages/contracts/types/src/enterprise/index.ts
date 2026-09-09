@@ -32,6 +32,23 @@ export const SECRET_HANDLING_MODE_DEFAULT: Readonly<
   personal: 'warn',
 });
 
+const SECRET_HANDLING_MODE_STRICTNESS: Readonly<Record<SecretHandlingMode, number>> = Object.freeze(
+  {
+    warn: 0,
+    redact: 1,
+    block: 2,
+  },
+);
+
+export function strictestSecretHandlingMode(
+  left: SecretHandlingMode,
+  right: SecretHandlingMode,
+): SecretHandlingMode {
+  return SECRET_HANDLING_MODE_STRICTNESS[right] > SECRET_HANDLING_MODE_STRICTNESS[left]
+    ? right
+    : left;
+}
+
 export interface Organization {
   id: string;
   name: string;

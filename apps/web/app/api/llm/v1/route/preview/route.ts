@@ -139,7 +139,7 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
 
   const [workspacePolicy, zeroDataRetentionPolicy, routeAffinity] = await Promise.all([
     readWorkspacePolicyForPreview(db, organizationId, userId),
-    resolveZeroDataRetentionPolicy(db, userId, request),
+    resolveZeroDataRetentionPolicy(db, userId),
     conversationId ? getServedRouteAffinity(conversationId) : Promise.resolve(null),
   ]);
 
