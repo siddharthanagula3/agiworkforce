@@ -55,7 +55,7 @@ import {
 import { recordFailedTurn } from './lib/failed-turn-record';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
-import { createFailoverPlan } from './lib/managed-failover';
+import { createFailoverPlan, FIRST_PROVIDER_STEP } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
@@ -1004,7 +1004,9 @@ async function dispatchChatCompletions(
               'First-token budget for this turn is spent; refusing to try another route',
             );
           }
-          const nextAttempt = budgetLeft ? failover.next(error) : null;
+          const nextAttempt = budgetLeft
+            ? failover.next(error, { step: FIRST_PROVIDER_STEP })
+            : null;
           const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
           if (nextAttempt && nextAdapterProvider) {
             attemptProcessed = nextAttempt.processed;
@@ -1093,7 +1095,7 @@ async function dispatchChatCompletions(
           attemptAdapterProvider.wireMode,
         );
       } catch (error) {
-        const nextAttempt = failover.next(error);
+        const nextAttempt = failover.next(error, { step: FIRST_PROVIDER_STEP });
         const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
         if (nextAttempt && nextAdapterProvider) {
           attemptProcessed = nextAttempt.processed;

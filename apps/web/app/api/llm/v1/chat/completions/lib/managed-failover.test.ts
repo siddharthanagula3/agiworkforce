@@ -33,6 +33,7 @@ import {
   createFailoverPlan,
   buildFailoverAttemptView,
   isNeverRotateCategory,
+  FIRST_PROVIDER_STEP,
 } from './managed-failover';
 import { EmptyProviderResponseError } from '@agiworkforce/provider-runtime';
 import type { ProcessedRequest } from './request-processor';
@@ -318,6 +319,77 @@ describe('rotation eligibility (gateway parity)', () => {
 
     expect(attempt?.model).toBe('candidate-b');
     expect(attempt?.provider).toBe('google');
+  });
+
+  /**
+   * Observed live on 2026-09-08: an Auto turn whose route was refused outright
+   * rotated through its whole fallback list and skipped every candidate on two
+   * different providers, because a function tool was attached, and failed with
+   * no answer while working routes were available.
+   *
+   * The pin exists for the tool-call ids a provider mints into the transcript.
+   * At the first provider step it has minted none: both rotation paths in
+   * `tool-loop.ts` only rotate when nothing reached the client, so the next
+   * route gets the request Auto would have sent it had it been chosen first.
+   */
+  it('lets a function-tool request cross providers at the first step, before any tool call is minted', () => {
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === 'candidate-a' ? 'anthropic' : 'google',
+    );
+    const processed = makeProcessed({ provider: 'openai' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { type: 'function', function: { name: 'get_weather', parameters: {} } },
+    ];
+
+    const attempt = makePlan(processed).next(httpError(503), { step: FIRST_PROVIDER_STEP });
+
+    expect(attempt?.model).toBe('candidate-a');
+    expect(attempt?.provider).toBe('anthropic');
+  });
+
+  it('pins a function-tool request from the second step onward', () => {
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === 'candidate-a' ? 'anthropic' : 'openai',
+    );
+    const processed = makeProcessed({ provider: 'openai' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { type: 'function', function: { name: 'get_weather', parameters: {} } },
+    ];
+
+    const attempt = makePlan(processed).next(httpError(503), { step: FIRST_PROVIDER_STEP + 1 });
+
+    expect(attempt?.model).toBe('candidate-b');
+    expect(attempt?.provider).toBe('openai');
+  });
+
+  it('pins a function-tool request when the caller cannot say which step it is on', () => {
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === 'candidate-a' ? 'anthropic' : 'openai',
+    );
+    const processed = makeProcessed({ provider: 'openai' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { type: 'function', function: { name: 'get_weather', parameters: {} } },
+    ];
+
+    const attempt = makePlan(processed).next(httpError(503));
+
+    expect(attempt?.model).toBe('candidate-b');
+    expect(attempt?.provider).toBe('openai');
+  });
+
+  it('does not let the first step cross providers for a reason the pin never covered', () => {
+    // A safety refusal is in NEVER_ROTATE_CATEGORIES; narrowing the tool pin
+    // must not reach past it.
+    mockResolveProviderFromModel.mockImplementation(() => 'anthropic');
+    const processed = makeProcessed({ provider: 'openai' });
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { type: 'function', function: { name: 'get_weather', parameters: {} } },
+    ];
+
+    const error = httpError(400, 'blocked by safety policy');
+    (error as { category?: string }).category = 'safety';
+
+    expect(makePlan(processed).next(error, { step: FIRST_PROVIDER_STEP })).toBeNull();
   });
 });
 
