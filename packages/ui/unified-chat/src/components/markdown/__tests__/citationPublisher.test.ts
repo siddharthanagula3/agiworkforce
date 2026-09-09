@@ -39,7 +39,7 @@ describe('citationPublisherDomain', () => {
     // A grounded title is usually a domain, but not always. Showing a sentence
     // in the host slot is a different wrong answer to the same question.
     expect(
-      citationPublisherDomain({ url: GROUNDING_REDIRECT, title: 'Claude Opus release notes' }),
+      citationPublisherDomain({ url: GROUNDING_REDIRECT, title: 'A release note headline' }),
     ).toBe('vertexaisearch.cloud.google.com');
   });
 
