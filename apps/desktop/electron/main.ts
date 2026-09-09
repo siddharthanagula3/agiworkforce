@@ -131,10 +131,31 @@ async function serveRenderer(request: Request): Promise<Response> {
   return new Response(new Uint8Array(body), { status: 200, headers });
 }
 
+/**
+ * Which document may call the bridge.
+ *
+ * Main-frame only, so an embedded iframe never reaches it, and then the origin
+ * must be one this build serves: the bundled `agi://cloud` renderer, or the
+ * cloud app itself when the window is wrapping the website.
+ *
+ * `windowPolicy.ts` deliberately allows top-level navigation to the sign-in
+ * providers, Google, Microsoft, Apple and Clerk, because that is how OAuth
+ * completes. The preload is attached to the webContents rather than to a page,
+ * so it runs on those documents too. This is what stops them calling in: a
+ * script on an identity provider's page is not the audience for the account
+ * bridge, and the check lives here rather than in the preload because the main
+ * process is the side that cannot be lied to about who is calling.
+ */
 function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
-  return frame.url.startsWith(`${RENDERER_ORIGIN}/`) || frame.url === RENDERER_ORIGIN;
+  if (frame.url.startsWith(`${RENDERER_ORIGIN}/`) || frame.url === RENDERER_ORIGIN) return true;
+  if (RENDERER_MODE !== 'remote') return false;
+  try {
+    return new URL(frame.url).origin === new URL(CLOUD_APP_ORIGIN).origin;
+  } catch {
+    return false;
+  }
 }
 
 function registerIpcHandlers(): void {
@@ -296,7 +317,8 @@ function registerIpcHandlers(): void {
   });
 }
 
-const DEEP_LINK_BRIDGE_ATTACHED = RENDERER_MODE === 'bundled';
+// Both modes attach a preload, so both have an IPC receiver for a deep link.
+const DEEP_LINK_BRIDGE_ATTACHED = true;
 
 function deepLinkRoute(url: string): string {
   try {
@@ -423,12 +445,19 @@ function createMainWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
-      ...(isRemote
-        ? { partition: REMOTE_SESSION_PARTITION }
-        : {
-            preload: path.join(__dirname, 'preload.cjs'),
-            additionalArguments: [`--agi-app-version=${app.getVersion()}`],
-          }),
+      // The preload is attached in BOTH modes now. Remote used to go without
+      // one, which is why deep links, the account bridge and the update check
+      // were all dead there; the window was a browser tab pointed at the site.
+      // `preload.ts` only exposes the bridge on the app's own origin, so the
+      // sign-in providers `windowPolicy.ts` allows do not receive it.
+      preload: path.join(__dirname, 'preload.cjs'),
+      additionalArguments: [
+        `--agi-app-version=${app.getVersion()}`,
+        `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
+      ],
+      // Remote keeps a persistent partition so the site's session survives a
+      // restart. Bundled has no cross-origin session to keep.
+      ...(isRemote ? { partition: REMOTE_SESSION_PARTITION } : {}),
     },
   });
 
@@ -559,9 +588,13 @@ if (!hasSingleInstanceLock) {
   });
 
   void app.whenReady().then(() => {
+    // The IPC handlers are registered in both modes. They used to be inside
+    // the bundled branch, so the remote window had a preload with nothing on
+    // the other end of it. `isTrustedSender` is what decides who may call, not
+    // which mode we booted in.
+    registerIpcHandlers();
     if (RENDERER_MODE === 'bundled') {
       protocol.handle(RENDERER_SCHEME, serveRenderer);
-      registerIpcHandlers();
       configureSession(session.defaultSession);
     } else {
       configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));

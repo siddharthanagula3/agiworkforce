@@ -88,4 +88,13 @@ const agiHost: ElectronHostBridge = {
   },
 };
 
+/**
+ * Exposed unconditionally; the main process decides who may actually call.
+ *
+ * An earlier version of this checked `location.origin` here and refused to
+ * expose the object off-origin. It never exposed anything at all: a sandboxed
+ * preload runs before the document exists, so there was no location to read.
+ * `isTrustedSender` in `main.ts` is the real gate, and it is the better place
+ * for one, because the main process cannot be lied to about the caller.
+ */
 contextBridge.exposeInMainWorld('agiHost', agiHost);
