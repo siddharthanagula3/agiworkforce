@@ -23,6 +23,7 @@
       "@agiworkforce/key-value",
       "@agiworkforce/licensing",
       "@agiworkforce/local-llm",
+      "@agiworkforce/local-runtime-contract",
       "@agiworkforce/mcp",
       "@agiworkforce/mobile",
       "@agiworkforce/model-registry",
@@ -77,6 +78,10 @@
       },
       {
         "from": "@agiworkforce/client-runtime",
+        "to": "@agiworkforce/local-runtime-contract"
+      },
+      {
+        "from": "@agiworkforce/client-runtime",
         "to": "@agiworkforce/types"
       },
       {
@@ -122,6 +127,10 @@
       {
         "from": "@agiworkforce/desktop",
         "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/local-runtime-contract"
       },
       {
         "from": "@agiworkforce/desktop",
@@ -657,6 +666,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/compliance"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/data-layer"
       },
       {
@@ -678,6 +691,10 @@
       {
         "from": "@agiworkforce/web",
         "to": "@agiworkforce/key-value"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/local-runtime-contract"
       },
       {
         "from": "@agiworkforce/web",
