@@ -1,4 +1,3 @@
-
 const FRONTMATTER_FENCE =
   /^---[ \t]{0,32}\r?\n([\s\S]{0,131072}?)\r?\n---[ \t]{0,32}(?:\r?\n[ \t]{0,256}){0,64}/;
 
@@ -61,7 +60,7 @@ function parseYamlBlock(text: string): Record<string, unknown> {
   }
 
   for (const rawLine of lines) {
-    const stripped = rawLine.replace(/\s{1,4096}$/, '');
+    const stripped = rawLine.trimEnd();
     if (!stripped.trim()) {
       flushList();
       continue;
