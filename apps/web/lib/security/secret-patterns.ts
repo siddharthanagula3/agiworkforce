@@ -1,3 +1,12 @@
+/**
+ * Every quantifier here is bounded, and the bounds are load bearing rather than
+ * cosmetic. A pattern with two unbounded runs either side of a required literal
+ * backtracks quadratically: `eyJ` repeated with no `.` made the JWT pattern scan
+ * to end of input from every third character. The first run's bound is what
+ * decides the cost, because that is the work repeated at each failed start, so
+ * it is sized to the value the segment actually holds, not to the longest one
+ * imaginable. `lib/security/__tests__/secret-patterns.redos.test.ts` measures it.
+ */
 export type SecretSeverity = 'critical' | 'high' | 'medium';
 
 export type SecretConfidence = 'high' | 'low';
@@ -34,7 +43,7 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
   },
   {
     name: 'JWT',
-    pattern: /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/,
+    pattern: /eyJ[A-Za-z0-9_-]{20,256}\.[A-Za-z0-9_-]{20,4096}/,
     severity: 'critical',
     assertable: true,
     confidence: 'low',
@@ -91,14 +100,14 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
   },
   {
     name: 'Database URL with Credentials',
-    pattern: /postgres(ql)?:\/\/[^:]+:[^@]+@[^/]+/i,
+    pattern: /postgres(ql)?:\/\/[^\s:/@]{1,256}:[^\s@/]{1,256}@[^\s/]{1,256}/i,
     severity: 'critical',
     assertable: false,
     confidence: 'high',
   },
   {
     name: 'MongoDB URL with Credentials',
-    pattern: /mongodb(\+srv)?:\/\/[^:]+:[^@]+@[^/]+/i,
+    pattern: /mongodb(\+srv)?:\/\/[^\s:/@]{1,256}:[^\s@/]{1,256}@[^\s/]{1,256}/i,
     severity: 'critical',
     assertable: false,
     confidence: 'high',

@@ -49,7 +49,23 @@ export function normalizeTranscript(turns: HandoffTranscriptTurn[]): NormalizedT
     retained = retained.slice(-MAX_TRANSCRIPT_TURNS);
   }
 
-  let working = retained.map((turn) => ({
+  // The character budget is spent before redaction, not after. Clamping every
+  // retained turn first put 200 turns through the scanner to keep 60,000
+  // characters, so the per-turn bound above held while the per-request work did
+  // not.
+  const withinBudget: HandoffTranscriptTurn[] = [];
+  let budget = MAX_TRANSCRIPT_CHARS;
+  for (let index = retained.length - 1; index >= 0; index -= 1) {
+    if (budget <= 0) {
+      dropped += index + 1;
+      break;
+    }
+    const turn = retained[index]!;
+    withinBudget.unshift(turn);
+    budget -= Math.min(turn.content.length, MAX_TURN_CHARS);
+  }
+
+  let working = withinBudget.map((turn) => ({
     role: turn.role,
     content: clampTurnText(turn.content),
     at: turn.at,

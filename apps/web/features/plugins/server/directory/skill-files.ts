@@ -1,4 +1,5 @@
 import { parseFrontmatter } from '@agiworkforce/skills';
+import { PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES } from '@agiworkforce/cloud-contracts';
 import {
   GITHUB_API_USER_AGENT,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
@@ -54,7 +55,18 @@ async function fetchSkillFile(
       signal: AbortSignal.timeout(PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return null;
-    return parseSkillFile(path, await response.text());
+
+    // A remote marketplace chooses this body's size, and the ZIP upload path
+    // already refuses a member past the same ceiling. Only a fetch timeout
+    // bounded it here.
+    const declaredBytes = Number(response.headers.get('content-length') ?? '');
+    if (Number.isFinite(declaredBytes) && declaredBytes > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES) {
+      return null;
+    }
+    const body = await response.text();
+    if (Buffer.byteLength(body, 'utf8') > PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES) return null;
+
+    return parseSkillFile(path, body);
   } catch {
     return null;
   }

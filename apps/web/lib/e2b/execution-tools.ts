@@ -373,19 +373,20 @@ export async function routeExecutionTool(
       default:
         return { ok: false, output: '', error: `Not an execution tool: ${name}` };
     }
+    // Capped before redaction, not after: runCode returns the sandbox's stdout
+    // untruncated, so redacting first ran four regexes over however much the
+    // executed code chose to print.
     return {
       ...result,
-      output: capOutput(redactSandboxVendor(result.output)),
-      error: result.error ? capOutput(redactSandboxVendor(result.error)) : result.error,
+      output: redactSandboxVendor(capOutput(result.output)),
+      error: result.error ? redactSandboxVendor(capOutput(result.error)) : result.error,
     };
   } catch (err) {
     return {
       ok: false,
       output: '',
-      error: capOutput(
-        redactSandboxVendor(
-          `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+      error: redactSandboxVendor(
+        capOutput(`Execution failed: ${err instanceof Error ? err.message : String(err)}`),
       ),
     };
   }
