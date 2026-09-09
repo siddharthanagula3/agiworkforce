@@ -59,7 +59,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
