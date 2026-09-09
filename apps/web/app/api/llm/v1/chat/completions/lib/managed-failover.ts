@@ -29,14 +29,17 @@ import 'server-only';
  * govern it. It is checked against the policy snapshot directly (`modelPolicy`
  * option), and a refusal falls through to the candidate rotation.
  *
- * Deliberately NARROWER than the gateway in one dimension: requests carrying
- * function tools (provider-native tool definitions ride `llmRequest.tools` in
- * the provider's own wire shape) may rotate only within the same provider. A
- * different provider could not consume those definitions safely. A request
- * whose only tools are provider-native search markers is exempt: those carry
- * no state to lose (`appendWebSearchTool` reconstructs whichever shape the
- * new provider needs, or the Perplexity fallback if none), so it may rotate
- * across providers like any other availability failure.
+ * Deliberately NARROWER than the gateway in one dimension: once a provider has
+ * minted tool-call ids for this turn, the turn stays on that provider. See
+ * `toolStateBindsProvider` for what that does and does not cover. The reason
+ * recorded here until 2026-09-08 was that tool definitions ride
+ * `llmRequest.tools` in the provider's own wire shape and another provider
+ * could not consume them; that is not true. `llmRequest` is the product's
+ * canonical Chat-Completions shape and every adapter translates its tools
+ * (`translateTool` in each provider's `translate.ts`); `rawVendorTools` is the
+ * separate escape hatch for genuinely provider-native definitions. The real
+ * bound state is the transcript, not the schema, which is why the pin starts at
+ * the second provider step rather than at the request.
  *
  * A request carrying any provider-native search tool, exempt or not, still
  * gets at most `MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST` candidates on
@@ -138,7 +141,13 @@ const BILLING_EXHAUSTED_CATEGORY = 'billing_exhausted';
 
 const REQUEST_REJECTION_CATEGORY = 'client_error';
 const REQUEST_REJECTION_STATUS = 400;
-const FIRST_PROVIDER_STEP = 1;
+/**
+ * Provider steps are 1-based, so this is the attempt that has produced nothing
+ * yet. Exported because the single-shot completion paths in `route.ts` make one
+ * provider call per attempt and never advance a step, so they must say so
+ * rather than inherit the conservative default for a caller with no step.
+ */
+export const FIRST_PROVIDER_STEP = 1;
 
 export function isNeverRotateCategory(category: string): boolean {
   return NEVER_ROTATE_CATEGORIES.has(category);
@@ -195,10 +204,40 @@ export interface FailoverAttempt {
   processed: ProcessedRequest;
 }
 
-function requestCarriesTools(processed: ProcessedRequest): boolean {
+function requestCarriesFunctionTools(processed: ProcessedRequest): boolean {
   const tools = processed.llmRequest.tools;
   if (!Array.isArray(tools) || tools.length === 0) return false;
   return tools.some((tool) => nativeSearchToolName(tool) === '');
+}
+
+/**
+ * A function tool binds a turn to the provider that minted its tool-call ids,
+ * but only once one has been minted.
+ *
+ * `3bb332c19` set the rule this narrows, and stated the invariant while doing
+ * it: a request whose only tool is a provider-native search marker "carries no
+ * state to lose", because `appendWebSearchTool` rebuilds whichever native shape
+ * the next provider needs. A real function tool does carry state, and the state
+ * is the `tool_call` ids in the transcript, which the next provider would have
+ * to accept as its own.
+ *
+ * None of that state exists at the first provider step. Both rotation paths in
+ * `tool-loop.ts` are already gated on nothing having reached the client, so a
+ * first-step rotation hands the next route exactly the request it would have
+ * received had Auto selected it to begin with. Auto does that across providers
+ * anyway, at turn boundaries, when a pinned model's routes are all unhealthy,
+ * `request-processor.model-continuity.test.ts`.
+ *
+ * From the second step onward the transcript carries ids the previous provider
+ * minted, so the pin stands. A caller that cannot say which step it is on gets
+ * the pin too: the safe reading of an unknown step is the later one.
+ */
+function toolStateBindsProvider(
+  processed: ProcessedRequest,
+  context: FailoverStepContext | undefined,
+): boolean {
+  if (!requestCarriesFunctionTools(processed)) return false;
+  return !context || context.step !== FIRST_PROVIDER_STEP;
 }
 
 export function buildFailoverAttemptView(
@@ -304,7 +343,7 @@ export function createFailoverPlan(
 ): { next: (error: unknown, context?: FailoverStepContext) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
-  const mustStayOnProvider = requestCarriesTools(processed);
+  let mustStayOnProvider = true;
   const isGroundedRequest = (processed.llmRequest.tools ?? []).some(
     (tool) => nativeSearchToolName(tool) !== '',
   );
@@ -358,7 +397,7 @@ export function createFailoverPlan(
       if (mustStayOnProvider && provider !== processed.provider) {
         logger.warn(
           { requestId: processed.requestId, model: candidate, provider },
-          'Managed failover candidate skipped: provider-native tools cannot transfer providers',
+          'Managed failover candidate skipped: a function tool call already bound this turn to its provider',
         );
         continue;
       }
@@ -447,7 +486,7 @@ export function createFailoverPlan(
       if (mustStayOnProvider && route.provider !== processed.provider) {
         logger.warn(
           { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
-          'Free-lane failover candidate skipped: provider-native tools cannot transfer providers',
+          'Free-lane failover candidate skipped: a function tool call already bound this turn to its provider',
         );
         continue;
       }
@@ -536,6 +575,7 @@ export function createFailoverPlan(
   return {
     next: (error: unknown, context?: FailoverStepContext): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
+      mustStayOnProvider = toolStateBindsProvider(processed, context);
       const classified = classifyError(error);
       const category = classified.category;
       // Reported before any rotation branch, so a class that must never rotate
