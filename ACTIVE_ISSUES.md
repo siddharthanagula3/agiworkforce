@@ -40,9 +40,13 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 13 unresolved issues: 0 P0, 1 P1, 10 P2, 2 P3, plus 3 items needing
+- 15 unresolved issues: 0 P0, 1 P1, 10 P2, 4 P3, plus 3 items needing
   validation this session could not perform. Four of them, `AGI-3`, `AGI-4`,
   `AGI-16` and `AGI-23`, are partly fixed in this pass and say which part.
+- Five are blocked on a decision rather than on code, and each says whose and
+  what it costs: `AGI-5` (CI budget), `AGI-11` (default expiry), `AGI-14` (a
+  second speech-to-text vendor), `AGI-17` (conform to CommonMark or forgive it),
+  `AGI-22` (the disclosure, and whether existing users are grandfathered).
 
 ### Closed in this pass
 
