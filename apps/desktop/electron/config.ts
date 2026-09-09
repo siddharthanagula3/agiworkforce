@@ -16,16 +16,26 @@ const CLOUD_APP_ORIGIN_ENV = 'AGI_CLOUD_APP_ORIGIN';
 export type RendererMode = 'remote' | 'bundled';
 
 /**
- * Bundled is the shipped mode: it is the only one that attaches `preload.cjs`,
- * so it is the only one in which the IPC bridge, the account bridge, quick ask,
- * screenshot capture, the secret store and, critically, the
- * `agiworkforce-cloud://` OAuth callback have any receiver. Nothing sets this
- * variable at package or launch time, so defaulting to `remote` meant every
- * installed build silently dropped its own deep links and never loaded the
- * renderer it ships. `remote` stays available as an explicit opt-out.
+ * Remote is the shipped mode: the desktop app is the website in a shell.
+ *
+ * The reason bundled was the default no longer holds. It used to be the only
+ * mode that attached `preload.cjs`, so remote dropped deep links, the account
+ * bridge and the update check; the window was a browser tab pointed at the
+ * site. Both modes attach it now, and `preload.ts` exposes the bridge only on
+ * this origin, so the sign-in providers `windowPolicy.ts` allows for OAuth do
+ * not receive it.
+ *
+ * What bundled actually shipped was the Tauri renderer with its `@tauri-apps`
+ * imports aliased to Electron stubs: 946 distinct `invoke` commands, 10 of
+ * them answered. Everything behind the other 936 was either dead or gated to a
+ * local mode this build can never enter. Loading the website instead means the
+ * desktop app has whatever the website has, which is the point of it.
+ *
+ * `bundled` stays available as an explicit opt-out for anyone who needs to run
+ * the old renderer.
  */
 export const RENDERER_MODE: RendererMode =
-  process.env['AGI_CLOUD_RENDERER'] === 'remote' ? 'remote' : 'bundled';
+  process.env['AGI_CLOUD_RENDERER'] === 'bundled' ? 'bundled' : 'remote';
 
 export const REMOTE_SESSION_PARTITION = 'persist:agi-cloud';
 

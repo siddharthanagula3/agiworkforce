@@ -141,21 +141,22 @@ describe('deep-link delivery', () => {
     expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
   });
 
-  it('reports the drop instead of pushing into a renderer with no IPC bridge', async () => {
+  /**
+   * This used to assert the opposite: that remote mode dropped the link and
+   * said so. That was true while remote attached no preload, which is the
+   * limitation the wrap removed. Both modes now carry the bridge, so the
+   * guarantee worth pinning is that an OAuth callback actually arrives, and
+   * that the secret inside it still never reaches a log.
+   */
+  it('delivers the callback over IPC in remote mode too', async () => {
     await bootMain('remote');
-
-    expect(warn.mock.calls.flat().join(' ')).toContain('will be dropped');
     warn.mockClear();
 
     openUrl(SSO_DEEP_LINK);
 
-    expect(webContentsSend).not.toHaveBeenCalledWith(
-      ELECTRON_IPC_CHANNELS.deepLink,
-      expect.anything(),
-    );
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, SSO_DEEP_LINK);
     const warned = warn.mock.calls.flat().join(' ');
-    expect(warned).toContain('agiworkforce-cloud://sso-callback');
-    expect(warned).toContain('AGI_CLOUD_RENDERER');
+    expect(warned).not.toContain('dropped');
     expect(warned).not.toContain('nonce-abc123');
   });
 
