@@ -1023,10 +1023,10 @@
   },
   "dependencies": {
     "@agiworkforce/agent-core": "workspace:*",
+    "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
-    "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
@@ -1055,6 +1055,6 @@
     "mocha": "^11.7.5",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
