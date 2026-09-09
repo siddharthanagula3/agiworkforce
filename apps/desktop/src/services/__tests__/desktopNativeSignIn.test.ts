@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
@@ -228,6 +227,30 @@ describe('exchangeClerkSessionForCloudCredential', () => {
 
     expect(failure.kind).toBe('network');
     expect(failure.message).toMatch(/could not reach agi cloud/i);
+  });
+
+  /**
+   * Observed on 2026-09-08 by launching the built Electron app with no
+   * reachable account service. The sign-in card rendered the transport error
+   * verbatim: Electron's IPC channel name, an internal URL and an errno, to
+   * someone whose actual problem was that they were offline.
+   */
+  it('does not put transport detail in front of the user', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_store_api_base_url') return undefined;
+      throw new Error(
+        "Error invoking remote method 'agi:invoke-bridge': Error: Could not reach the AGI " +
+          'account service at http://localhost:3000: fetch failed (ECONNREFUSED: )',
+      );
+    });
+
+    const failure = (await exchangeClerkSessionForCloudCredential(CLERK_SESSION).catch(
+      (error: unknown) => error,
+    )) as NativeSignInExchangeError;
+
+    expect(failure.kind).toBe('network');
+    expect(failure.message).not.toMatch(/invoke-bridge|localhost|ECONNREFUSED|remote method/);
+    expect(failure.message).toMatch(/internet connection/i);
   });
 
   it('reports an unreadable native response instead of proceeding', async () => {

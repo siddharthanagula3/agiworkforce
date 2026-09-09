@@ -1,4 +1,3 @@
-
 import {
   pollDeviceAuthorization,
   requestDeviceAuthorization,
@@ -238,11 +237,23 @@ export async function exchangeClerkSessionForCloudCredential(
     authorization = await requestDeviceAuthorization(WEB_APP_URL, post, 'desktop');
   } catch (error) {
     if (error instanceof NativeSignInExchangeError) throw error;
+    // The underlying error is a transport error and reads like one. Observed on
+    // 2026-09-08, launching the built app with no reachable account service put
+    // this on the sign-in card, verbatim:
+    //
+    //   Could not reach AGI Cloud to start sign-in: Error invoking remote
+    //   method 'agi:invoke-bridge': Error: Could not reach the AGI account
+    //   service at http://localhost:3000: fetch failed (ECONNREFUSED: )
+    //
+    // Electron's IPC channel name, an internal URL and an errno, shown to
+    // someone whose actual problem is that their wifi is off. Every other
+    // thrower in this file writes copy for a person; this one passed the cause
+    // through. It now does the same as its neighbours, and the cause goes to
+    // the console where support can ask for it.
+    console.error('[sign-in] device authorization request failed', error);
     throw new NativeSignInExchangeError(
       'network',
-      `Could not reach AGI Cloud to start sign-in: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      'Could not reach AGI Cloud to start sign-in. Check your internet connection and try again.',
     );
   }
 
