@@ -9,6 +9,12 @@ function installHost(openExternal: ElectronHostBridge['openExternal']): void {
     appVersion: '1.2.0',
     handles: () => false,
     invokeBridge: async () => undefined,
+    // The updater under test never dispatches to the privileged runtime, so the
+    // stub refuses rather than pretending a command succeeded.
+    invokeRuntime: async () => ({
+      ok: false as const,
+      error: { code: 'unsupported-platform' as const, message: 'not available in this test host' },
+    }),
     onDeepLink: () => () => undefined,
     onVoiceHotkey: () => () => undefined,
     openExternal,
