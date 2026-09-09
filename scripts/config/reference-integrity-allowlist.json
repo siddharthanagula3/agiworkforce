@@ -16,6 +16,11 @@
       "pathPrefix": "docs/architecture/render-layer.md",
       "reason": "The render-layer spec carries Status: Draft for build. Every repo path it cites names a file the design would create, not a file it claims exists. Filed as debt these read as rot to whoever ratchets next; they are proposals, and they resolve when the design ships.",
       "kinds": ["md-path"]
+    },
+    {
+      "pathPrefix": "scripts/check-boundaries.mjs",
+      "reason": "The comment names the generated devkit bundle at apps/web/app/.well-known/workflow/v1/flow/route.js, which is exactly the file the guard below exists to ignore. It is written by `next dev`, gitignored beside itself, and never tracked, so citing it is the point rather than a stale reference.",
+      "kinds": ["path"]
     }
   ],
   "knownContradictions": [
