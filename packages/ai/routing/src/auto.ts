@@ -1373,10 +1373,8 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     // A model the user named is not Auto choosing it, so the automatic-routing
     // exclusion does not apply. The capability fallback below re-enters through
     // the alias, carrying the unmodified request, where it does.
-    const eligibility = evaluateEligibility(requestedSelection, task, {
-      ...request,
-      excludedProviders: undefined,
-    });
+    const { excludedProviders: _autoRoutingExclusion, ...namedSelectionRequest } = request;
+    const eligibility = evaluateEligibility(requestedSelection, task, namedSelectionRequest);
     if (eligibility.route) {
       return selectedDecision(
         request,
