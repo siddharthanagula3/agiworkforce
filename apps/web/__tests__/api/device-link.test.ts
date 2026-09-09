@@ -54,10 +54,8 @@ import { POST, OPTIONS } from '@/app/api/device/link/route';
 
 describe('Device Link API', () => {
   const validRequest = {
-    device_id: 'device-123',
     device_name: 'My Desktop',
     device_type: 'desktop',
-    device_fingerprint: 'abc123def456',
   };
 
   beforeEach(() => {
@@ -78,25 +76,33 @@ describe('Device Link API', () => {
         expect(response.status).toBe(400);
       });
 
-      it('should return 400 for missing device_id', async () => {
+      it('should return 400 for a caller-supplied device_id', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_name: 'Test' }),
+          body: JSON.stringify({ ...validRequest, device_id: 'attacker-chosen' }),
         });
 
         const response = await POST(request);
         expect(response.status).toBe(400);
       });
 
-      it('should accept request with only required fields', async () => {
+      it('should return 400 for a caller-supplied device_fingerprint', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            device_id: 'device-123',
-            device_fingerprint: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-          }),
+          body: JSON.stringify({ ...validRequest, device_fingerprint: 'deadbeef' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(400);
+      });
+
+      it('should accept a request that names only the device', async () => {
+        const request = new NextRequest('http://localhost/api/device/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
         });
 
         const response = await POST(request);
@@ -115,7 +121,9 @@ describe('Device Link API', () => {
 
         const data = await response.json();
         expect(data.link_code).toBeDefined();
-        expect(data.device_id).toBe('device-123');
+        expect(data.device_id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        );
         expect(data.verify_url).toBeDefined();
         expect(data.expires_at).toBeDefined();
       });
@@ -171,7 +179,7 @@ describe('Device Link API', () => {
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ ...validRequest, device_id: `device-${Math.random()}` }),
+              body: JSON.stringify(validRequest),
             }),
           );
 
@@ -214,13 +222,13 @@ describe('Device Link API', () => {
     });
 
     describe('Expired / invalid token rejection', () => {
-      it('returns 400 when device_fingerprint contains non-hex characters', async () => {
+      it('returns 400 for a device_fingerprint whatever its shape', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...validRequest,
-            device_fingerprint: 'zzzzzzzzzzzz', // non-hex
+            device_fingerprint: 'zzzzzzzzzzzz',
           }),
         });
 
@@ -228,7 +236,7 @@ describe('Device Link API', () => {
         expect(response.status).toBe(400);
       });
 
-      it('returns 400 when device_id is empty string', async () => {
+      it('returns 400 for a device_id whatever its shape', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -284,17 +292,19 @@ describe('Device Link API', () => {
         expect(d1.link_code).not.toBe(d2.link_code);
       });
 
-      it('device_id is reflected back in the response', async () => {
-        const request = new NextRequest('http://localhost/api/device/link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...validRequest, device_id: 'unique-device-xyz' }),
-        });
+      it('mints a distinct device_id the caller never chose', async () => {
+        const post = async () => {
+          const response = await POST(
+            new NextRequest('http://localhost/api/device/link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(validRequest),
+            }),
+          );
+          return (await response.json()).device_id as string;
+        };
 
-        const response = await POST(request);
-        const data = await response.json();
-
-        expect(data.device_id).toBe('unique-device-xyz');
+        expect(await post()).not.toBe(await post());
       });
     });
   });

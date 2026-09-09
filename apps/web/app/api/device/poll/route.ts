@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { devicePairingFlow, DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -11,6 +12,18 @@ import {
   createDeviceRefreshCredential,
 } from '@/lib/server/device-refresh-token';
 import { issueDeveloperToken } from '@/lib/server/developer-token';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+
+/**
+ * The stored fingerprint is the only authenticator this unauthenticated route
+ * has, so it is compared in constant time and never logged.
+ */
+function fingerprintsMatch(stored: string, provided: string): boolean {
+  const storedBytes = Buffer.from(stored, 'utf8');
+  const providedBytes = Buffer.from(provided, 'utf8');
+  if (storedBytes.length !== providedBytes.length) return false;
+  return timingSafeEqual(storedBytes, providedBytes);
+}
 
 interface DeviceAuthRow {
   device_id: string;
@@ -104,12 +117,11 @@ async function handleDevicePoll(request: NextRequest) {
     }
 
     if (data.device_fingerprint) {
-      if (!device_fingerprint || data.device_fingerprint !== device_fingerprint) {
+      if (!device_fingerprint || !fingerprintsMatch(data.device_fingerprint, device_fingerprint)) {
         logger.warn(
           {
-            deviceId: device_id,
-            expectedFingerprint: data.device_fingerprint,
-            providedFingerprint: device_fingerprint,
+            deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12),
+            fingerprintProvided: Boolean(device_fingerprint),
           },
           'Device fingerprint mismatch - potential unauthorized access attempt',
         );
@@ -123,10 +135,13 @@ async function handleDevicePoll(request: NextRequest) {
             AND device_fingerprint IS NULL`,
         [device_fingerprint, new Date().toISOString(), device_id],
       );
-      logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
+      logger.info(
+        { deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12) },
+        'Device fingerprint backfilled for legacy session',
+      );
     } else {
       logger.warn(
-        { deviceId: device_id },
+        { deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12) },
         'DEPRECATED: Device poll without fingerprint rejected - legacy path is sunset. Client must update.',
       );
       return NextResponse.json(
@@ -201,7 +216,7 @@ async function handleDevicePoll(request: NextRequest) {
 
       if (!consumed.user_id) {
         logger.warn(
-          { deviceId: device_id, status: consumed.status },
+          { deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12), status: consumed.status },
           'Device code approved but carries no account after consumption',
         );
         return NextResponse.json({ status: 'pending' });
@@ -221,7 +236,10 @@ async function handleDevicePoll(request: NextRequest) {
           sessionFamilyId: familyId,
         }));
       } catch (error) {
-        logger.error({ error, deviceId: device_id }, 'Device poll: signing is not configured');
+        logger.error(
+          { error, deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12) },
+          'Device poll: signing is not configured',
+        );
         throw createError.internal('Token signing is not configured');
       }
 

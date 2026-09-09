@@ -14,7 +14,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 const DeviceApproveRequestSchema = z.object({
   code: QrLinkCodeSchema,
@@ -36,13 +39,17 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
 
+  let userId: string;
   try {
-    const { subject: userId } = await getRequestIdentity();
-
-    if (!userId) {
-      throw createError.unauthorized('Please sign in to continue');
+    ({ userId } = await getClerkAuthUser(request));
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
     }
+    throw createError.unauthorized('Please sign in to continue');
+  }
 
+  try {
     let body: unknown;
     try {
       body = await request.json();
