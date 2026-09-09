@@ -8,7 +8,11 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
-import { providerProxyAuthHeader, providerProxyDefaultBaseUrl } from '@/lib/e2b/provider-proxy';
+import {
+  providerProxyAuthHeader,
+  isProviderProxyPathAllowed,
+  providerProxyDefaultBaseUrl,
+} from '@/lib/e2b/provider-proxy';
 import { verifyProviderProxyToken } from '@/lib/e2b/provider-proxy-token';
 import { MANAGED_CLOUD_E2B_TENANT_ID, getE2BSession } from '@/lib/e2b/session-store';
 import {
@@ -349,6 +353,20 @@ async function handleProxy(
     );
   }
   const upstreamPath = path.map(encodeURIComponent).join('/');
+
+  // The forward below carries the platform's own provider key, so the path it
+  // calls is decided here rather than by the sandbox.
+  if (!isProviderProxyPathAllowed(providerId, upstreamPath)) {
+    logger.warn(
+      { providerId, sessionId, path: upstreamPath },
+      '[e2b] provider-proxy refused an upstream path outside the allowlist',
+    );
+    return proxyError(
+      403,
+      'provider_proxy_path_not_allowed',
+      'This provider endpoint is not available through the session proxy.',
+    );
+  }
   const upstreamCandidate = `${upstreamBase.replace(/\/+$/, '')}/${upstreamPath}${request.nextUrl.search}`;
   const validated = validateBaseUrl(upstreamCandidate, {
     allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
