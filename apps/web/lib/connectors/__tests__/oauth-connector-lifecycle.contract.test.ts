@@ -48,6 +48,7 @@ vi.mock('@/lib/github-app', () => ({
   missingGitHubInstallationLinkingVars: vi.fn(() => ['GITHUB_APP_ID']),
   getInstallationAccessToken: vi.fn(),
   getPrDiff: vi.fn(),
+  deleteGitHubAppInstallation: vi.fn(async () => ({ status: 'deleted' as const })),
   postIssueComment: vi.fn(),
   postPrReview: vi.fn(),
 }));
