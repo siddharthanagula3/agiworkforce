@@ -232,7 +232,9 @@ describe('POST /api/waitlist/public, security tests', () => {
 
       const [sql] = mockExecute.mock.calls[0] as [string, unknown[]];
       expect(sql).toContain('on conflict (email, source)');
-      expect(sql).toContain('coalesce(excluded.user_id, cloud_managed_waitlist.user_id)');
+      // The stored owner wins. The other order let a signed-in caller claim
+      // someone else's row by posting their email.
+      expect(sql).toContain('coalesce(cloud_managed_waitlist.user_id, excluded.user_id)');
     });
   });
 

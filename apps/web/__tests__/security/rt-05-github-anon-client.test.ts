@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createHmac } from 'crypto';
@@ -92,7 +91,7 @@ function makeWebhookRequest(payload: unknown, overrideSig?: string): NextRequest
 
 const VALID_PAYLOAD = {
   action: 'created',
-  comment: { body: '@agi-workforce please review' },
+  comment: { body: '@agi-workforce please review', author_association: 'COLLABORATOR' },
   sender: { type: 'User', login: 'contributor' },
   issue: { number: 1, pull_request: {} },
   installation: { id: 42 },
