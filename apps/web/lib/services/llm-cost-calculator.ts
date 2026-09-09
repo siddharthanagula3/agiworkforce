@@ -207,6 +207,45 @@ export class LLMCostCalculator {
     return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
   }
 
+  /**
+   * The route a model's official price is published on: its own developer's
+   * API. Every alternative route serves the same model at or under this sheet,
+   * and it is the price a user is billed regardless of which route served.
+   */
+  static listPriceRoute(model: string): { provider: string; routeId: string } | null {
+    const canonicalModelId = normalizeModelId(model) ?? model;
+    const metadata = getModelMetadataById(canonicalModelId);
+    if (!metadata) return null;
+    return { provider: metadata.provider, routeId: `${metadata.provider}/${canonicalModelId}` };
+  }
+
+  static calculateListCost(
+    model: string,
+    usage: TokenUsage,
+    now: Date = new Date(),
+  ): number | null {
+    const list = this.listPriceRoute(model);
+    if (!list) return null;
+    return this.calculateCost(list.provider, model, usage, now, list.routeId);
+  }
+
+  static estimateListCost(
+    model: string,
+    estimatedPromptTokens: number,
+    estimatedCompletionTokens?: number,
+    now: Date = new Date(),
+  ): number | null {
+    const list = this.listPriceRoute(model);
+    if (!list) return null;
+    return this.estimateCost(
+      list.provider,
+      model,
+      estimatedPromptTokens,
+      estimatedCompletionTokens,
+      now,
+    );
+  }
+
   static calculateCostMicrousd(
     provider: string,
     model: string,
