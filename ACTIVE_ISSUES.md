@@ -54,21 +54,21 @@ Seven issues were fixed and verified, and their sections are gone from this
 file. Named here only so a reader coming from an older copy knows where they
 went, and so nobody re-files them:
 
-| Was       | What it was                                                    | Verified by                                       |
-| --------- | -------------------------------------------------------------- | ------------------------------------------------- |
-| `AGI-15`  | Local development ran against the shared database              | dev server on `:3100` now writes `agiworkforce_dev` |
-| `AGI-1`   | Managed usage leases clamped to one hour, never renewed        | `pnpm db:lease-probe` against real Postgres        |
-| `AGI-2`   | Stranded reservations waited up to a day for recovery          | cron scope test, `/api/cron/recover-reservations`  |
-| browser   | Non-image chat attachments failed on every route               | `apps/web/e2e/chat-document-attachment.spec.ts`    |
-| browser   | Starting a conversation inside a project failed every time     | `apps/web/e2e/project-first-conversation.spec.ts`  |
-| browser   | Tool Approvals did not gate web search in either mode          | `apps/web/e2e/tool-approval-web-search.spec.ts`    |
-| latent    | Approval checkpoints 500'd on a jsonb parameter                | found by the first turn to reach that path         |
-| `AGI-13`  | Unimplemented native commands answered with mock success       | the guard was unreachable; rule extracted and tested |
-| `AGI-19`  | Marketing nav panels stayed open while the page scrolled       | `NavGroup.scroll.test.tsx`                        |
-| `AGI-21`  | A cancelled settings query logged at error level               | `use-settings-queries.abort.test.tsx`             |
-| `AGI-8`   | The US-only preference never reached the web resolver          | `request-processor.us-only.test.ts`               |
-| `AGI-18`  | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                |
-| `AGI-9`   | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`               |
+| Was      | What it was                                                        | Verified by                                          |
+| -------- | ------------------------------------------------------------------ | ---------------------------------------------------- |
+| `AGI-15` | Local development ran against the shared database                  | dev server on `:3100` now writes `agiworkforce_dev`  |
+| `AGI-1`  | Managed usage leases clamped to one hour, never renewed            | `pnpm db:lease-probe` against real Postgres          |
+| `AGI-2`  | Stranded reservations waited up to a day for recovery              | cron scope test, `/api/cron/recover-reservations`    |
+| browser  | Non-image chat attachments failed on every route                   | `apps/web/e2e/chat-document-attachment.spec.ts`      |
+| browser  | Starting a conversation inside a project failed every time         | `apps/web/e2e/project-first-conversation.spec.ts`    |
+| browser  | Tool Approvals did not gate web search in either mode              | `apps/web/e2e/tool-approval-web-search.spec.ts`      |
+| latent   | Approval checkpoints 500'd on a jsonb parameter                    | found by the first turn to reach that path           |
+| `AGI-13` | Unimplemented native commands answered with mock success           | the guard was unreachable; rule extracted and tested |
+| `AGI-19` | Marketing nav panels stayed open while the page scrolled           | `NavGroup.scroll.test.tsx`                           |
+| `AGI-21` | A cancelled settings query logged at error level                   | `use-settings-queries.abort.test.tsx`                |
+| `AGI-8`  | The US-only preference never reached the web resolver              | `request-processor.us-only.test.ts`                  |
+| `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                       |
+| `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                      |
 
 ## 2. P0, critical
 
@@ -406,7 +406,9 @@ selected for any tier, on any surface.
 **Validation:** auto-route conformance fixtures on the web path, plus a
 migration test over the consent record.
 **Already tracked as:** `COMPLIANCE-LLM-GATE-SURFACE-COVERAGE-01` in
-`known-flaws.md`.
+`known-flaws.md`. That row's summary said only "compliance llm gate surface
+coverage", which is why a second sweep on 2026-09-08 reported this as a new
+finding; the row now names the jurisdiction angle and points here.
 
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
@@ -573,10 +575,10 @@ visible.
 
 Neither of these is a confirmed defect.
 
-| id       | Question                                                      | Why it is still open                                                                                                                                                              |
-| -------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed. |
-| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                          |
+| id       | Question                                                      | Why it is still open                                                                                                                                                                                                                     |
+| -------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                       |
+| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                |
 | `LIVE-6` | Do scheduled tasks actually fire?                             | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect. |
 
 ## 7. Execution order
@@ -608,23 +610,23 @@ Dependency-aware, not severity-ordered.
 
 ## 8. Acceptance matrix
 
-| Issue    | Automated                                       | Manual or live                     | Gate                                   |
-| -------- | ----------------------------------------------- | ---------------------------------- | -------------------------------------- |
-| `AGI-3`  | per-class snapshot tests, e2e reload            | reload after a tool-using answer   | nothing the transcript rendered is lost |
-| `AGI-4`  | passage retrieval unit tests                    | question set over a long document  | beginning, middle and end all answered |
-| `AGI-5`  | the four native lanes are pinned together       | a PR with a deliberate native break | required check fails on the PR         |
-| `AGI-6`  | a barge-in spec that drives AudioContext        | measured time to first audio       | audio starts early AND is interruptible |
-| `AGI-7`  | spec gate ledger                                | signed build                       | 12 of 12 gates, or surface removed     |
-| `AGI-10` | RLS tests mirroring 0086                        | member and non-member open attempt | revocation takes effect                |
-| `AGI-11` | service and cron tests                          | none                               | expired token stops resolving          |
-| `AGI-12` | `check:boundaries`, desktop tests               | none                               | zero `task-1.3` markers                |
-| `AGI-14` | per-provider route tests, registry contract     | none                               | a second STT vendor exists and fails over |
-| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn       | a citation survives redirect expiry     |
-| `AGI-17` | none until the decision is taken                | none                               | founder decides conform or forgive     |
-| `AGI-20` | e2e retry in a long thread                      | none                               | retried message stays in view          |
-| `AGI-22` | conformance fixtures, consent record migration  | none                               | no Chinese-HQ route without consent    |
-| `AGI-23` | classification test over the observed 404       | none                               | excluded route is not offered          |
-| `AGI-24` | failover tests over a tool-carrying request     | none                               | a tool turn reaches a working route    |
+| Issue    | Automated                                           | Manual or live                      | Gate                                      |
+| -------- | --------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
+| `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer    | nothing the transcript rendered is lost   |
+| `AGI-4`  | passage retrieval unit tests                        | question set over a long document   | beginning, middle and end all answered    |
+| `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break | required check fails on the PR            |
+| `AGI-6`  | a barge-in spec that drives AudioContext            | measured time to first audio        | audio starts early AND is interruptible   |
+| `AGI-7`  | spec gate ledger                                    | signed build                        | 12 of 12 gates, or surface removed        |
+| `AGI-10` | RLS tests mirroring 0086                            | member and non-member open attempt  | revocation takes effect                   |
+| `AGI-11` | service and cron tests                              | none                                | expired token stops resolving             |
+| `AGI-12` | `check:boundaries`, desktop tests                   | none                                | zero `task-1.3` markers                   |
+| `AGI-14` | per-provider route tests, registry contract         | none                                | a second STT vendor exists and fails over |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn            | a citation survives redirect expiry       |
+| `AGI-17` | none until the decision is taken                    | none                                | founder decides conform or forgive        |
+| `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
+| `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
+| `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
+| `AGI-24` | failover tests over a tool-carrying request         | none                                | a tool turn reaches a working route       |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
