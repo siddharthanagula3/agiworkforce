@@ -13,7 +13,7 @@
 //! surface the unlock modal before retrying.
 use std::sync::{Arc, Mutex};
 
-use aes_gcm::aead::rand_core::{OsRng, RngCore};
+use super::aead_nonce::random_nonce;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::engine::general_purpose;
@@ -70,17 +70,14 @@ impl MasterPasswordEncryption {
         let cipher = Aes256Gcm::new_from_slice(&key)
             .map_err(|e| MasterPasswordError::CryptoError(format!("invalid key length: {e}")))?;
 
-        let mut nonce_bytes = [0_u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        #[allow(deprecated)]
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = random_nonce();
 
         let ciphertext = cipher
-            .encrypt(nonce, plaintext.as_bytes())
+            .encrypt(&nonce, plaintext.as_bytes())
             .map_err(|e| MasterPasswordError::CryptoError(format!("AES-GCM encrypt: {e}")))?;
 
         let mut combined = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
-        combined.extend_from_slice(&nonce_bytes);
+        combined.extend_from_slice(nonce.as_slice());
         combined.extend_from_slice(&ciphertext);
         Ok(general_purpose::STANDARD.encode(combined))
     }

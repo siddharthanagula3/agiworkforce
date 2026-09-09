@@ -4,6 +4,7 @@
 //! [`secret_manager`] encrypts API keys via Argon2id + AES-256-GCM. [`auth`] and [`auth_db`]
 //! manage sessions with constant-time token comparison. [`rbac`] provides role-based access.
 
+pub mod aead_nonce;
 pub mod api;
 pub mod approval_workflow;
 pub mod audit_logger;

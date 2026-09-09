@@ -9,9 +9,10 @@
 //! Every entry point is idempotent: a payload already under the per-install key
 //! is left byte-for-byte alone.
 
+use super::aead_nonce::random_nonce;
 use super::machine_key::{self, KeyDerivationError, KeyPurpose};
 use aes_gcm::{
-    aead::{rand_core::RngCore, Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
@@ -30,13 +31,10 @@ const ENCRYPTED_AT_REST_PREFIX: &str = "<enc:";
 pub fn encrypt_combined(key: &[u8], plaintext: &str) -> Option<String> {
     let cipher = Aes256Gcm::new_from_slice(key).ok()?;
 
-    let mut nonce_bytes = [0u8; NONCE_SIZE];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    #[allow(deprecated)]
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).ok()?;
+    let nonce = random_nonce();
+    let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes()).ok()?;
 
-    let mut combined = nonce_bytes.to_vec();
+    let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
     Some(general_purpose::STANDARD.encode(combined))
 }

@@ -1,7 +1,8 @@
 use crate::core::sync_utils::RwLockExt;
 use crate::sys::security::machine_key::{self, KeyPurpose};
+use super::aead_nonce::random_nonce;
 use aes_gcm::{
-    aead::{rand_core::OsRng, Aead, KeyInit},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
@@ -9,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-const NONCE_SIZE: usize = 12;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedSecret {
@@ -85,19 +85,15 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
-    use aes_gcm::aead::rand_core::RngCore;
-    let mut nonce_bytes = [0u8; NONCE_SIZE];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    #[allow(deprecated)]
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
     Ok(EncryptedSecret {
         ciphertext: general_purpose::STANDARD.encode(&ciphertext),
-        nonce: general_purpose::STANDARD.encode(nonce_bytes),
+        nonce: general_purpose::STANDARD.encode(nonce),
     })
 }
 

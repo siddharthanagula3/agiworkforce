@@ -1480,27 +1480,25 @@ pub(super) fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecry
 /// Uses the same encryption scheme as MCP credentials (AES-256-GCM with
 /// machine-derived keys via KeyPurpose::McpCredentials).
 pub fn encrypt_oauth_token(plaintext: &str) -> Option<String> {
+    use crate::sys::security::aead_nonce::random_nonce;
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{
-        aead::{Aead, OsRng},
-        Aes256Gcm, KeyInit, Nonce,
+        aead::Aead,
+        Aes256Gcm, KeyInit,
     };
     use base64::{engine::general_purpose, Engine as _};
-    use rand::RngCore;
 
     let key = derive_key(KeyPurpose::McpCredentials);
     let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
 
     // Generate random nonce
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     // Encrypt
-    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).ok()?;
+    let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes()).ok()?;
 
     // Combine nonce + ciphertext and encode as base64
-    let mut combined = nonce_bytes.to_vec();
+    let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
 
     Some(general_purpose::STANDARD.encode(combined))
@@ -1517,27 +1515,25 @@ pub fn decrypt_mcp_credential(encrypted: &str) -> Result<String, ConfigDecryptio
 
 /// Encrypt an MCP credential using machine-derived keys
 pub fn encrypt_mcp_credential(plaintext: &str) -> Option<String> {
+    use crate::sys::security::aead_nonce::random_nonce;
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{
-        aead::{Aead, OsRng},
-        Aes256Gcm, KeyInit, Nonce,
+        aead::Aead,
+        Aes256Gcm, KeyInit,
     };
     use base64::{engine::general_purpose, Engine as _};
-    use rand::RngCore;
 
     let key = derive_key(KeyPurpose::McpCredentials);
     let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
 
     // Generate random nonce
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = random_nonce();
 
     // Encrypt
-    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).ok()?;
+    let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes()).ok()?;
 
     // Combine nonce + ciphertext and encode as base64
-    let mut combined = nonce_bytes.to_vec();
+    let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
 
     Some(general_purpose::STANDARD.encode(combined))
