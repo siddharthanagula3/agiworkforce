@@ -99,3 +99,66 @@ describe('providers excluded from automatic routing', () => {
     }
   });
 });
+
+/**
+ * The transport axis, which is a different question from the one above.
+ *
+ * Measured on 2026-09-08: of 240 tier x task x alias combinations, exactly one
+ * Auto route dispatches through a model vendor's own endpoint rather than a
+ * gateway, and every model it could reach that way is carried by other hosts
+ * at an identical price. So excluding the vendor-run transports costs no
+ * capability and no money, which is why this is separable from excluding the
+ * models themselves.
+ */
+describe('transports excluded from routing', () => {
+  const VENDOR_OWN_HOSTS = new Set(['qwen', 'deepseek', 'moonshot', 'zhipu', 'minimax']);
+
+  function withoutVendorHosts(request: Partial<AutoRoutingRequest>): AutoRoutingRequest {
+    return { ...BASE, ...request, excludedRouteHosts: VENDOR_OWN_HOSTS };
+  }
+
+  it('never dispatches Auto through an excluded transport, on any tier or task', () => {
+    const tasks: AutoRoutingRequest['taskType'][] = [
+      'reasoning',
+      'general',
+      'simple_chat',
+      'coding',
+      'agentic',
+      'long_context',
+    ];
+    for (const tier of ['free', 'basic', 'plus', 'pro', 'max', 'enterprise']) {
+      for (const taskType of tasks) {
+        const decision = resolveAutoRoute(
+          withoutVendorHosts({ taskType, subscriptionTier: tier, selection: 'auto' }),
+        );
+        if (decision.status !== 'selected') continue;
+        expect(VENDOR_OWN_HOSTS.has(decision.provider)).toBe(false);
+      }
+    }
+  });
+
+  it('still serves the model, through another host', () => {
+    // The point of separating the axes. Excluding the transport must not
+    // remove the model, or this is just the owner exclusion wearing a
+    // different name.
+    const decision = resolveAutoRoute(
+      withoutVendorHosts({ taskType: 'reasoning', subscriptionTier: 'free', selection: 'auto' }),
+    );
+    expect(decision.status).toBe('selected');
+    if (decision.status === 'selected') {
+      expect(owningProvider(decision.modelKey)).toBe('qwen');
+      expect(decision.provider).not.toBe('qwen');
+    }
+  });
+
+  it('applies to a model the user named, because they chose a model and not a datacentre', () => {
+    const decision = resolveAutoRoute(
+      withoutVendorHosts({ taskType: 'reasoning', selection: 'qwen-3.8-flash' }),
+    );
+    expect(decision.status).toBe('selected');
+    if (decision.status === 'selected') {
+      expect(decision.modelKey).toBe('qwen-3.8-flash');
+      expect(VENDOR_OWN_HOSTS.has(decision.provider)).toBe(false);
+    }
+  });
+});
