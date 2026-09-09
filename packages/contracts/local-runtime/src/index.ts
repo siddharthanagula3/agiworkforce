@@ -3,7 +3,7 @@
  *
  * The typed surface between the desktop renderer and the privileged local
  * runtime. Pure types, constants and containment logic; no I/O, no Electron,
- * no Node built-ins beyond `process.platform`. Both `apps/web` (running as the
+ * no Node built-ins at all. Both `apps/web` (running as the
  * desktop renderer) and the Electron main process import from here so the two
  * sides of the IPC boundary cannot drift.
  *

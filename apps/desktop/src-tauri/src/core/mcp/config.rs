@@ -1482,10 +1482,7 @@ pub(super) fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecry
 pub fn encrypt_oauth_token(plaintext: &str) -> Option<String> {
     use crate::sys::security::aead_nonce::random_nonce;
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
-    use aes_gcm::{
-        aead::Aead,
-        Aes256Gcm, KeyInit,
-    };
+    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit};
     use base64::{engine::general_purpose, Engine as _};
 
     let key = derive_key(KeyPurpose::McpCredentials);
@@ -1517,10 +1514,7 @@ pub fn decrypt_mcp_credential(encrypted: &str) -> Result<String, ConfigDecryptio
 pub fn encrypt_mcp_credential(plaintext: &str) -> Option<String> {
     use crate::sys::security::aead_nonce::random_nonce;
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
-    use aes_gcm::{
-        aead::Aead,
-        Aes256Gcm, KeyInit,
-    };
+    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit};
     use base64::{engine::general_purpose, Engine as _};
 
     let key = derive_key(KeyPurpose::McpCredentials);

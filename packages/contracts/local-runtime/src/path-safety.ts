@@ -29,6 +29,21 @@ function defaultCaseSensitivity(platform: PathPlatform): boolean {
   return platform === 'posix';
 }
 
+/**
+ * The platform to assume when a caller names none.
+ *
+ * This contract is compiled by browser surfaces as well as Node ones, and the
+ * chrome extension declares a `process` that carries only `env`. Reaching for
+ * the ambient global made the whole package fail to typecheck there, and at
+ * runtime a bare `process.platform` would throw rather than fall back. Read it
+ * off `globalThis` so its absence is the posix default, which is what a
+ * browser wants anyway.
+ */
+function hostPlatform(): PathPlatform {
+  const runtime = (globalThis as { process?: { platform?: string } }).process;
+  return runtime?.platform === 'win32' ? 'win32' : 'posix';
+}
+
 export function isUncPath(value: string): boolean {
   return value.startsWith('\\\\') || value.startsWith('//');
 }
@@ -86,7 +101,7 @@ export function isPathInside(
   candidate: string,
   options: ContainmentOptions = {},
 ): boolean {
-  const platform = options.platform ?? (process.platform === 'win32' ? 'win32' : 'posix');
+  const platform = options.platform ?? hostPlatform();
   const caseSensitive = options.caseSensitive ?? defaultCaseSensitivity(platform);
 
   const rootSegments = toComparableSegments(root, platform, caseSensitive);
@@ -108,7 +123,7 @@ export function relativeWithinRoot(
   candidate: string,
   options: ContainmentOptions = {},
 ): string | null {
-  const platform = options.platform ?? (process.platform === 'win32' ? 'win32' : 'posix');
+  const platform = options.platform ?? hostPlatform();
   if (!isPathInside(root, candidate, options)) return null;
 
   const sep = separator(platform);
