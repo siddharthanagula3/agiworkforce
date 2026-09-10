@@ -178,13 +178,16 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
 
     if (hasSearch || hasFetch) {
       sections.push(
-        'When a claim in your answer comes from a search result or a page you fetched, mark it ' +
-          'with a bracketed number, e.g. [1], in the order those sources first appear, or write ' +
-          'the claim as a markdown link straight to that source URL. The app turns either form ' +
-          'into a clickable citation for the exact source. Reuse the same number for a source ' +
-          'cited again. Do this for every source you used, including a single fetched page, not ' +
-          'only when there are several. Do not end the answer with a Sources, References or ' +
-          'bibliography section: the app lists every cited source under the answer.',
+        'The app numbers the sources of this turn in the order the tools returned them, and ' +
+          "lists them under your answer. Cite a claim by putting that source's number in " +
+          'brackets, e.g. [1], immediately after the sentence it supports, or by writing the ' +
+          'claim as a markdown link straight to that source URL; the app turns either form ' +
+          'into a clickable citation. Reuse the same number for a source cited again. Every ' +
+          'claim you took from a search result or a fetched page carries a marker, including ' +
+          'when there is only one source and including when you already named the outlet in ' +
+          'the sentence: naming an outlet in prose or italics is not a citation. Do not end ' +
+          'the answer with a Sources, References or bibliography section, and do not renumber ' +
+          'or reorder the list yourself.',
       );
     }
 

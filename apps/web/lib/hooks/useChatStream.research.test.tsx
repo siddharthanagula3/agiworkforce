@@ -554,3 +554,81 @@ describe('useChatStream native web search citation annotations', () => {
     ]);
   });
 });
+
+function groundedSearchResults(spans: Array<{ endIndex: number; positions: number[] }>) {
+  return {
+    choices: [
+      {
+        delta: {
+          x_search_results: {
+            content: [
+              { type: 'web_search_result', url: 'https://a.com', title: 'A', position: 1 },
+              { type: 'web_search_result', url: 'https://b.com', title: 'B', position: 2 },
+            ],
+            citation_spans: spans,
+          },
+        },
+        index: 0,
+      },
+    ],
+  };
+}
+
+describe('useChatStream grounded citation spans', () => {
+  it('places markers a grounded provider reported as spans onto prose that carries none', async () => {
+    installFetch([
+      groundedSearchResults([
+        { endIndex: 13, positions: [1] },
+        { endIndex: 27, positions: [2] },
+      ]),
+      contentDelta('Headline one. Headline two.'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('two headlines today');
+    });
+
+    await waitFor(() =>
+      expect(assistantMessage()?.content).toBe('Headline one.[1] Headline two.[2]'),
+    );
+    expect(saveBodies.at(-1)?.['content']).toBe('Headline one.[1] Headline two.[2]');
+  });
+
+  it('leaves prose the model numbered itself untouched', async () => {
+    installFetch([
+      groundedSearchResults([{ endIndex: 13, positions: [1] }]),
+      contentDelta('Headline one.[2] Headline two.'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('two headlines today');
+    });
+
+    await waitFor(() => expect(assistantMessage()?.content).toBe('Headline one.[2] Headline two.'));
+  });
+
+  it('ignores spans on a turn that delivered no source list', async () => {
+    installFetch([
+      {
+        choices: [
+          {
+            delta: {
+              x_search_results: { content: [], citation_spans: [{ endIndex: 5, positions: [1] }] },
+            },
+            index: 0,
+          },
+        ],
+      },
+      contentDelta('Plain answer.'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('anything');
+    });
+
+    await waitFor(() => expect(assistantMessage()?.content).toBe('Plain answer.'));
+  });
+});

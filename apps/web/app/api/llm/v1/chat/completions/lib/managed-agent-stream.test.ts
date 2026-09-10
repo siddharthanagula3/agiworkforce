@@ -202,6 +202,35 @@ async function* cardGenerator(count = 1): AsyncGenerator<Uint8Array> {
   yield encoder.encode('data: [DONE]\n\n');
 }
 
+async function* researchGenerator(): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  const line = (delta: unknown) =>
+    encoder.encode(`data: ${JSON.stringify({ choices: [{ delta, index: 0 }] })}\n\n`);
+  yield line({ content: '<thinking>I should check two outlets.</thinking>' });
+  yield line({ content: '# Report\n\nHeadline one.[1] Headline two.[2]' });
+  yield line({
+    x_search_results: {
+      content: [
+        {
+          type: 'web_search_result',
+          url: 'https://a.example/1',
+          title: 'Outlet A',
+          encrypted_content: 'first',
+          position: 1,
+        },
+        {
+          type: 'web_search_result',
+          url: 'https://b.example/2',
+          title: 'Outlet B',
+          encrypted_content: 'second',
+          position: 2,
+        },
+      ],
+    },
+  });
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
 async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -528,6 +557,39 @@ describe('managed agent stream', () => {
     const params = call?.[1] as unknown[] | undefined;
     const metadata = JSON.parse(String(params?.[7])) as Record<string, unknown>;
     expect(metadata['interactiveCards']).toHaveLength(INTERACTIVE_CARDS_MAX_PER_MESSAGE);
+  });
+
+  it('persists a research turn as canonical text with the sources it cited', async () => {
+    persistenceMocks.execute.mockClear();
+    const persistable = {
+      ...processed,
+      requestId: 'request-research-fixture',
+      conversationId: '0190a000-0000-7000-8000-000000000005',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000006',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: researchGenerator(),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'research_loop_completed',
+        cancellationReason: 'client_cancelled_research_loop',
+        userId: 'user-fixture',
+      }),
+    );
+
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    const params = call?.[1] as unknown[] | undefined;
+    expect(params?.[2]).toBe('# Report\n\nHeadline one.[1] Headline two.[2]');
+    const metadata = JSON.parse(String(params?.[7])) as Record<string, unknown>;
+    expect(metadata['searchResults']).toEqual([
+      { url: 'https://a.example/1', title: 'Outlet A', snippet: 'first' },
+      { url: 'https://b.example/2', title: 'Outlet B', snippet: 'second' },
+    ]);
   });
 
   it('preserves awaiting-input when disconnect follows a durable approval checkpoint', async () => {
