@@ -37,6 +37,10 @@ export interface PerplexitySearchCostInput {
   organizationId?: string | null;
   turnRef: string;
   calls: number;
+  /** The client surface the turn came from, so interactive and automated search can be told apart. */
+  surface?: string | null;
+  /** What the customer was charged for these calls, when the surface is not one that includes search. */
+  customerChargeCents?: number | null;
 }
 
 /**
@@ -60,6 +64,9 @@ export async function recordPerplexitySearchCost(input: PerplexitySearchCostInpu
       sourceRef: `${PERPLEXITY_COST_SOURCE_PREFIX}:${input.turnRef}`,
       taskOutcome: 'delivered',
       taskRef: input.turnRef,
+      feature: PERPLEXITY_SEARCH_FEATURE,
+      surface: input.surface ?? null,
+      customerCanonicalCents: input.customerChargeCents ?? null,
       usage: {
         operation: 'tool',
         tool: PERPLEXITY_SEARCH_TOOL_NAME,
