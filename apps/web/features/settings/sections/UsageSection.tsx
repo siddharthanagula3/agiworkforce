@@ -2,9 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  formatCreditWindowUsage,
+  formatCredits,
+  formatPlanCreditAllowanceLine,
   formatUsageRemaining,
   formatUsageResetIn,
+  getBillingPlanPricing,
+  isBillingPlanTier,
   managedUsageBucketLabel,
+  type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import { RefreshCw } from 'lucide-react';
@@ -100,8 +106,20 @@ function UsageBar({
   );
 }
 
-function usageDetail(percentRemaining: number, resetAt: string | null, nowMs: number): string {
-  const remaining = formatUsageRemaining(percentRemaining);
+/**
+ * Credits are the only unit a customer sees, so they lead the line whenever the
+ * server states them. The percentage wording stays as the fallback for a plan
+ * with no allowance to name and for a server older than the credits block.
+ */
+function usageDetail(
+  percentRemaining: number,
+  resetAt: string | null,
+  nowMs: number,
+  window?: ManagedUsageCreditWindow | null,
+): string {
+  const remaining = window
+    ? formatCreditWindowUsage(window.used, window.allowance)
+    : formatUsageRemaining(percentRemaining);
   const resets = formatUsageResetIn(resetAt, nowMs);
   if (!resets) return remaining;
   return `${remaining} · ${resets} (${formatAbsolute(resetAt as string)})`;
@@ -126,6 +144,18 @@ export function UsageSection() {
   const flagshipWeeklyUsedPercent = normalizeUsagePercentage(
     usage?.flagship_weekly_usage_percentage,
   );
+
+  const credits = usage?.credits ?? null;
+  const planAllowanceLine = useMemo(() => {
+    if (!usage || !credits) return null;
+    const tier = usage.plan_tier.trim().toLowerCase();
+    const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : usage.plan_tier;
+    return formatPlanCreditAllowanceLine(planLabel, {
+      monthly: credits.monthly.allowance,
+      weekly: credits.weekly.allowance,
+      fiveHour: credits.five_hour.allowance,
+    });
+  }, [credits, usage]);
 
   const lastUpdatedLabel = useMemo(() => {
     if (!lastUpdatedAt) return loading ? 'Loading…' : 'Never';
@@ -188,6 +218,16 @@ export function UsageSection() {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
             Plan usage limits
           </span>
+          {planAllowanceLine && (
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 0' }}>
+              {planAllowanceLine}
+            </p>
+          )}
+          {credits && credits.purchased.remaining !== null && (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
+              {`Balance ${formatCredits(credits.purchased.remaining)} remaining`}
+            </p>
+          )}
         </div>
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -203,13 +243,23 @@ export function UsageSection() {
             unknown={usageUnknown}
             label={managedUsageBucketLabel('session')}
             percent={sessionUsedPercent}
-            detail={usageDetail(100 - sessionUsedPercent, usage?.session_reset_at ?? null, nowMs)}
+            detail={usageDetail(
+              100 - sessionUsedPercent,
+              usage?.session_reset_at ?? null,
+              nowMs,
+              credits?.five_hour,
+            )}
           />
           <UsageBar
             unknown={usageUnknown}
             label={managedUsageBucketLabel('weekly')}
             percent={weeklyUsedPercent}
-            detail={usageDetail(100 - weeklyUsedPercent, usage?.weekly_reset_at ?? null, nowMs)}
+            detail={usageDetail(
+              100 - weeklyUsedPercent,
+              usage?.weekly_reset_at ?? null,
+              nowMs,
+              credits?.weekly,
+            )}
           />
           <UsageBar
             unknown={usageUnknown}
@@ -219,13 +269,19 @@ export function UsageSection() {
               100 - flagshipWeeklyUsedPercent,
               usage?.flagship_weekly_reset_at ?? null,
               nowMs,
+              credits?.flagship_weekly,
             )}
           />
           <UsageBar
             unknown={usageUnknown}
             label={managedUsageBucketLabel('period')}
             percent={usedPercent}
-            detail={usageDetail(100 - usedPercent, usage?.usage_reset_at ?? null, nowMs)}
+            detail={usageDetail(
+              100 - usedPercent,
+              usage?.usage_reset_at ?? null,
+              nowMs,
+              credits?.monthly,
+            )}
           />
         </div>
 
