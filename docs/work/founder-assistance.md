@@ -336,3 +336,55 @@ are both calls the founder reserves.
 **What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration and are tested. Until 0183 is applied, `feature` does not exist, the per-user count fails open and every search stays included.
 **Impact** FEATURE-BLOCKING (the search bounds stay inert)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Billing] Provider cost reconciliation credentials
+
+**Why founder assistance is required**
+Both figures come from organization-level admin credentials that only an owner
+of the provider account can mint; no engineering change can produce them.
+**Exact action**
+
+1. OpenAI: create an Admin API key with the `api.usage.read` scope at the
+   organization level and set it in Vercel Production as `OPENAI_ADMIN_API_KEY`.
+   A normal project key cannot read the Costs API and returns 401.
+2. Anthropic: create an organization Admin API key and set it in Vercel
+   Production as `ANTHROPIC_ADMIN_API_KEY`. The workspace key already used for
+   inference cannot read the cost report.
+
+**Where** OpenAI platform settings, Anthropic Console organization settings,
+then Vercel Production environment variables. No code change either way.
+**Needed input** Two credentials, pasted into Vercel.
+**How to verify completion** `/api/cron/reconcile-provider-costs` answers with
+`status: "reported"` for openai and anthropic instead of `not_configured`, and
+the admin economics page shows a reported figure and a gap for yesterday.
+**What remains after founder action** Nothing; the daily cron, the storage
+table and the gap comparison ship with this change. Until each variable is set
+that provider is skipped and its ledger cost stays an unverified estimate.
+**Impact** NON-BLOCKING (margin stays estimate-only)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Billing] Reconciliation storage (migration 0184)
+
+**Why founder assistance is required**
+Applying a production migration is a call the founder reserves.
+**Exact action** Approve and apply
+`0184_provider_cost_reconciliation_days.sql` after a branch rehearsal.
+**Where** Neon production. No dashboard or environment change.
+**Needed input** One approval to apply.
+**How to verify completion** `provider_cost_reconciliation_days` exists; after
+the next nightly run it holds one row per provider that answered, and the
+admin economics page stops reporting the table as absent.
+**What remains after founder action** Nothing. Until it is applied the cron
+records nothing and the economics page reports provider reports as unavailable.
+**Impact** NON-BLOCKING
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## Known unmetered COGS
+
+Not founder actions. Recorded at the team lead's request so the telemetry
+workstream can carry them; the engineering work belongs in `ACTIVE_ISSUES.md`.
+
+- A live voice session delegates to a backend responses model with web search
+  (`apps/web/app/api/voice/live/sessions/route.ts`), which the provider bills
+  separately from the per-minute session rate, and no usage report reaches the
+  close route, so those tokens are never metered.
