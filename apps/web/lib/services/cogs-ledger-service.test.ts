@@ -41,6 +41,8 @@ import {
   LLMCostCalculator,
   setRouteRegistryPricingLookup,
 } from '@/lib/services/llm-cost-calculator';
+import { listCanonicalModels } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -307,6 +309,39 @@ describe('cogs ledger · retail-equivalent cost and value multiplier', () => {
         usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
       }),
     ).toBe(200);
+  });
+
+  it('prices usage served through a discounted route at the model list price, not the route price', () => {
+    const discounted = listCanonicalModels()
+      .flatMap((model) => getRoutePricingForModel(model.id))
+      .find((route) => route.discount !== null && route.inputPerMillion && route.outputPerMillion);
+    if (!discounted) throw new Error('The registry declares no discounted route to exercise');
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    const retail = resolveRetailCostCents({
+      capability: 'chat',
+      provider: discounted.provider,
+      model: discounted.modelKey,
+      usage,
+    });
+    const routeCents = LLMCostCalculator.calculateCost(
+      discounted.provider,
+      discounted.modelKey,
+      {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: 2_000_000,
+      },
+      undefined,
+      discounted.routeId,
+    );
+    expect(retail).toBe(
+      LLMCostCalculator.calculateListCost(discounted.modelKey, {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: 2_000_000,
+      }),
+    );
+    expect(retail).toBeGreaterThan(routeCents);
   });
 
   it('is null for non-token capabilities and for an unknown model', () => {

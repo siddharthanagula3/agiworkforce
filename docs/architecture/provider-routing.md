@@ -35,6 +35,10 @@ are not derivable from the catalog.
 
 ## Model identity and serving routes
 
+The whole pipeline, its gaps and the target design are recorded in
+[`routing-and-economics-2026-09-06.md`](routing-and-economics-2026-09-06.md);
+this section is the contract it builds on.
+
 A canonical model (`models.curation.json`) has one developer, resolved from
 `catalog/developers.json`, and one or more serving routes compiled from
 `model-routes.json`, `harnesses.json` and `gateways.json`. The developer answers
@@ -58,3 +62,14 @@ allocation is a quota pool with an expiry in `apps/web/config/free-pools.json`,
 and an exhausted allocation is a routing event (`quota_exhausted`), never a
 credential failure. The operator Routes tab renders all of it; the chat picker
 shows the model, its developer and the routes that can serve it now.
+
+Billing follows the model, cost follows the route. A managed settlement debits
+the model's official price, the sheet on its own developer's route
+(`LLMCostCalculator.calculateListCost`), and records the served route's price
+as provider cost on the same ledger event, so a cheaper host is the company's
+saving, never a change in what the user pays. Users see credits, fifty per
+dollar, and a usage row is labelled by the model, not the route. On OpenRouter
+a managed request sorts providers by price and carries the registry route's
+price as `max_price`; a zero-retention workspace also sets `zdr`, and a route
+whose retention is conditional is refused for that workspace unless its harness
+honours the requirement per request.

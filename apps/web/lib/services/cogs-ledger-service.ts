@@ -265,11 +265,14 @@ function sumRetailCostCentsFromObservations(
     const tokens = extractChatTokens(observation);
     if (tokens.promptTokens === 0 && tokens.completionTokens === 0) continue;
     pricedCalls += 1;
+    const observedModel = text(observation['model']) ?? fallback.model;
+    const list = LLMCostCalculator.listPriceRoute(observedModel);
     summedDollars += LLMCostCalculator.calculateCostDollars(
-      text(observation['provider']) ?? fallback.provider,
-      text(observation['model']) ?? fallback.model,
+      list?.provider ?? text(observation['provider']) ?? fallback.provider,
+      observedModel,
       chatTokenUsageInput(tokens),
       pricedAt,
+      list?.routeId,
     );
   }
   if (pricedCalls === 0) return null;
@@ -299,11 +302,13 @@ export function resolveRetailCostCents(input: {
   }
 
   const tokens = extractChatTokens(input.usage);
+  const list = LLMCostCalculator.listPriceRoute(model);
   return LLMCostCalculator.calculateCost(
-    input.provider,
+    list?.provider ?? input.provider,
     model,
     chatTokenUsageInput(tokens),
     pricedAt,
+    list?.routeId,
   );
 }
 

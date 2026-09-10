@@ -240,9 +240,9 @@ describe('BillingSection', () => {
 
     render(<BillingSection />);
 
-    expect(screen.getByText('50 units for every $1')).toBeTruthy();
+    expect(screen.getByText('50 credits for every $1')).toBeTruthy();
     expect(screen.getByText(/Minimum \$10/)).toBeTruthy();
-    const buyButton = screen.getByRole('button', { name: 'Buy 500 units · $10' });
+    const buyButton = screen.getByRole('button', { name: 'Buy 500 credits · $10' });
     fireEvent.click(buyButton);
     await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(10));
   });

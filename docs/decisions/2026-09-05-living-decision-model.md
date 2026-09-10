@@ -9,6 +9,41 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-06-17 Users pay a model's official price in credits; the company keeps the routing saving
+
+- Question: what a managed user is billed when a request is served through a cheaper host than
+  the model's own developer, what the ledger records, and in what unit the user sees it.
+- Evidence: the founder's 2026-09-06 direction: charge the same official price to users, save
+  by dispatching through hosts and marketplaces that discount the same model, and show balances
+  and history in AGI Credits rather than dollars. OpenRouter's Providers tab lists the same GLM
+  5.3 Flash at half price on Novita, DeepInfra and Z.ai and the OpenAI flagship at half price on
+  OpenAI Flex; Cheaper Inference guarantees a minimum discount per request; Experiential Labs
+  routes a slug through a provider waterfall at zero markup. In the repo the settlement debited
+  the served route's price, the ledger's "retail" figure was the served provider's route price
+  rather than the developer's list price, the billing screen printed credit cents as dollars,
+  and every usage row named the route it was reserved against.
+- Current implementation: the registry prices every route, the router ranks admissible routes by
+  expected cost, the ledger separates billed cents from provider cost, and the top-up unit is
+  fifty credits per dollar.
+- Options: bill the served route's price (the user shares the saving); bill list and record
+  route cost as cost of goods; bill list with a per-plan discount.
+- Decision: bill the model's official price, the price sheet of its own developer's route, in
+  every managed settlement and reservation; record the served route's price as the provider
+  cost of goods on the same event; show balances, history and top-ups as credits at fifty per
+  dollar; label a usage row by the model, never by the route. On OpenRouter every managed request
+  asks for price-sorted providers and carries the registry route's price as max_price, so a
+  dearer host is refused rather than billed, and a zero-retention workspace also sets zdr. A
+  marketplace or gateway route whose retention is conditional stays refused for a
+  zero-retention workspace unless its harness honours the requirement per request.
+- Why: the user buys the model, the company buys the compute; a ceiling the marketplace enforces
+  is the only price a ledger can promise; an enterprise's retention guarantee is not for sale.
+- Tradeoff: a route priced above list (an Experiential Labs waterfall ceiling) bills the user
+  less than it costs and only wins on failover; a registry price that lags a marketplace rise
+  refuses the OpenRouter route until the sync runs, and failover moves on.
+- Reversibility: high; the split is one field on settlement and one formatter on the screen.
+- Revisit trigger: a plan is sold at a discount to list; a marketplace stops honouring
+  max_price; the founder sets a different credit unit.
+
 ## D-2026-09-06-16 A model's developer is not its provider, and a discovered model is not a public one
 
 - Question: how the catalogue represents who trained a model, who serves it, what each serving

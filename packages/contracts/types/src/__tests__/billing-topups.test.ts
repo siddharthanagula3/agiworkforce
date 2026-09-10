@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  creditsFromCents,
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
   TOP_UP_UNITS_PER_USD,
@@ -28,5 +29,13 @@ describe('billing top-ups', () => {
     expect(isValidTopUpPurchase({ amountCents: 1_000, units: 500 })).toBe(true);
     expect(isValidTopUpPurchase({ amountCents: 1_000, units: 1_000 })).toBe(false);
     expect(isValidTopUpPurchase({ amountCents: 999, units: 500 })).toBe(false);
+  });
+});
+
+describe('creditsFromCents', () => {
+  it('shows a dollar of ledger balance as fifty credits and a cent as half a credit', () => {
+    expect(creditsFromCents(100)).toBe(TOP_UP_UNITS_PER_USD);
+    expect(creditsFromCents(1)).toBe(0.5);
+    expect(creditsFromCents(0)).toBe(0);
   });
 });
