@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse, after } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ALLOWED_MANAGED_PROVIDER_HOSTS, validateBaseUrl } from '@agiworkforce/provider-runtime';
+import { getSlotForModel, normalizeModelId } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -12,7 +13,19 @@ import {
   providerProxyAuthHeader,
   isProviderProxyPathAllowed,
   providerProxyDefaultBaseUrl,
+  providerProxyMeteredEndpoint,
+  type ProviderProxyMeteredEndpoint,
 } from '@/lib/e2b/provider-proxy';
+import {
+  parseProviderProxyMeteredRequest,
+  ProviderProxyRequestShapeError,
+} from '@/lib/e2b/provider-proxy-metering';
+import {
+  CODE_HARNESS_DAILY_CEILING_CODE,
+  CODE_HARNESS_IDEMPOTENCY_PREFIX,
+  CODE_HARNESS_QUOTA_FEATURE,
+  evaluateCodeHarnessDailyCeiling,
+} from '@/lib/e2b/provider-proxy-budget';
 import { verifyProviderProxyToken } from '@/lib/e2b/provider-proxy-token';
 import { MANAGED_CLOUD_E2B_TENANT_ID, getE2BSession } from '@/lib/e2b/session-store';
 import {
@@ -29,13 +42,28 @@ import {
   type ManagedComputeAccessDecision,
 } from '@/lib/services/managed-compute-access';
 import { resolveCloudCodeSessionOwnerOrganizationId } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import { LLMCostCalculator, UnpricedModelError } from '@/lib/services/llm-cost-calculator';
+import {
+  fingerprintManagedUsageRequest,
+  finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
+  ManagedUsageRequestError,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from '@/lib/services/managed-usage-request-service';
 
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ sessionId: string; path: string[] }> };
+
+const FLAGSHIP_SLOTS: ReadonlySet<string> = new Set([
+  'flagship_coding_pro_plus',
+  'flagship_general_pro_plus',
+]);
+
+const PROXY_LEASE_SECONDS = 900;
+const MAX_IDEMPOTENCY_SESSION_CHARS = 64;
 
 const HOP_BY_HOP_REQUEST_HEADERS: ReadonlySet<string> = new Set([
   'host',
@@ -59,6 +87,43 @@ function bearerToken(header: string | null): string | null {
   return header.slice('Bearer '.length).trim() || null;
 }
 
+function anthropicErrorType(status: number): string {
+  if (status === 429) return 'rate_limit_error';
+  if (status === 402 || status === 403) return 'permission_error';
+  if (status === 400) return 'invalid_request_error';
+  if (status === 503) return 'overloaded_error';
+  return 'api_error';
+}
+
+/**
+ * A refusal the harness has to understand. The sandboxed client is a vendor
+ * SDK, not our own, so a quota block reaches the developer as a readable
+ * provider error only if it is shaped the way that SDK parses errors.
+ */
+function providerNativeError(
+  providerId: string,
+  status: number,
+  code: string,
+  message: string,
+): NextResponse {
+  if (providerId === 'anthropic') {
+    return NextResponse.json(
+      { type: 'error', error: { type: anthropicErrorType(status), message, code } },
+      { status },
+    );
+  }
+  return NextResponse.json(
+    {
+      error: {
+        message,
+        type: status === 402 || status === 429 ? 'insufficient_quota' : 'invalid_request_error',
+        code,
+      },
+    },
+    { status },
+  );
+}
+
 /**
  * The gate every other platform-funded compute entry point under
  * `api/code` already runs before a billable call. This is the highest-volume
@@ -75,15 +140,16 @@ async function evaluateProviderProxyAccess(
   db: DatabaseAdapter,
   userId: string,
   sessionId: string,
+  subscription: () => Promise<SubscriptionInfo | null>,
 ): Promise<ManagedComputeAccessDecision> {
   const cached = await readCachedProviderProxyAccess(sessionId);
   if (cached) return cached;
 
-  const [subscription, organizationId] = await Promise.all([
-    SubscriptionService.getSubscription(db, userId),
+  const [resolvedSubscription, organizationId] = await Promise.all([
+    subscription(),
     resolveCloudCodeSessionOwnerOrganizationId(db, userId, sessionId),
   ]);
-  const decision = await evaluateManagedComputeAccess(db, userId, subscription, 'cli', {
+  const decision = await evaluateManagedComputeAccess(db, userId, resolvedSubscription, 'cli', {
     organizationId,
   });
 
@@ -117,58 +183,80 @@ function usageToLedgerTokens(usage: ProviderProxyUsage): {
   };
 }
 
-/**
- * Settle one proxied call's provider spend, the same funnel
- * `finalizeManagedUsageRequest` uses. Never thrown out of: this runs inside
- * `after()`, well after the proxied response has already reached the
- * sandbox, so a failure here can only be logged, never surfaced to the
- * caller.
- */
-async function settleProviderProxyUsage(input: {
-  userId: string;
-  sessionId: string;
+interface ProviderProxyMetering {
+  reservation: ManagedUsageRequestReservation;
   providerId: string;
-  usage: ProviderProxyUsage;
-  delivered: boolean;
-}): Promise<void> {
-  const { usage } = input;
-  if (usage.inputTokens <= 0 && usage.outputTokens <= 0) return;
-  if (!usage.model) {
-    logger.warn(
-      { sessionId: input.sessionId, providerId: input.providerId },
-      '[e2b] provider-proxy observed token usage with no model id; cost not recorded',
-    );
-    return;
-  }
+  sessionId: string;
+  reservedModel: string;
+}
+
+/**
+ * Close one proxied call against the customer's ledger, the same funnel chat
+ * settles through: the customer is billed the model's official list price and
+ * the company records what the served route actually cost. Never thrown out
+ * of: this runs inside `after()`, well after the proxied response has already
+ * reached the sandbox, so a failure here can only be logged.
+ *
+ * No observed tokens is a full refund. An upstream error, a dropped
+ * connection before the first token and a client abort all land here the same
+ * way, and the reservation is released rather than charged.
+ */
+async function settleProviderProxyUsage(
+  metering: ProviderProxyMetering,
+  usage: ProviderProxyUsage | null,
+): Promise<void> {
+  const billable = usage !== null && (usage.inputTokens > 0 || usage.outputTokens > 0);
+  const servedModel = usage?.model
+    ? (normalizeModelId(usage.model) ?? usage.model)
+    : metering.reservedModel;
+  const routeId = `${metering.providerId}/${servedModel}`;
 
   try {
-    const actualCostCents = LLMCostCalculator.calculateCost(
-      input.providerId,
-      usage.model,
-      usageToLedgerTokens(usage),
+    if (!billable) {
+      await finalizeManagedUsageRequest({
+        ...metering.reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+      });
+      return;
+    }
+
+    const tokens = usageToLedgerTokens(usage);
+    const providerCostCents = LLMCostCalculator.calculateCost(
+      metering.providerId,
+      servedModel,
+      tokens,
+      undefined,
+      routeId,
     );
-    await recordSettledProviderCost({
-      userId: input.userId,
-      provider: input.providerId,
-      model: usage.model,
-      actualCostCents,
-      sourceRef: `provider_proxy:${input.sessionId}:${randomUUID()}`,
-      taskOutcome: input.delivered ? 'delivered' : 'undelivered',
-      taskRef: input.sessionId,
+    const actualCostCents = LLMCostCalculator.calculateListCost(servedModel, tokens);
+
+    await finalizeManagedUsageRequest({
+      ...metering.reservation,
+      outcome: 'completed',
+      actualCostCents: actualCostCents ?? providerCostCents,
+      providerCostCents,
       usage: {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         cacheReadTokens: usage.cacheReadTokens,
         cacheWriteTokens: usage.cacheWriteTokens,
         cacheWrite1hTokens: usage.cacheWrite1hTokens,
+        codeSessionId: metering.sessionId,
+        providerCallObservations: [{ provider: metering.providerId, model: servedModel, routeId }],
       },
     });
   } catch (err) {
     logger.error(
-      { err, sessionId: input.sessionId, providerId: input.providerId },
-      '[e2b] provider-proxy could not record settled provider cost',
+      { err, sessionId: metering.sessionId, providerId: metering.providerId },
+      '[e2b] provider-proxy could not settle a proxied call against the managed usage ledger',
     );
   }
+}
+
+function releaseUnservedReservation(metering: ProviderProxyMetering | null): void {
+  if (!metering) return;
+  after(settleProviderProxyUsage(metering, null));
 }
 
 /**
@@ -177,24 +265,28 @@ async function settleProviderProxyUsage(input: {
  * stream ends (clean completion) or aborts (the sandbox or the client
  * disconnects), recording whatever usage was observed either way, without
  * delaying a single byte of the response the harness is waiting on.
- *
- * `getProviderProxyUsageParser` selects the parser by provider id: today only
- * Anthropic is covered, an OpenAI-compatible parser slots in there without
- * this function or the route changing.
  */
 function attachUsageSettlement(
   upstreamResponse: Response,
-  input: { userId: string; sessionId: string; providerId: string },
+  metering: ProviderProxyMetering | null,
 ): ReadableStream<Uint8Array> | null {
   const body = upstreamResponse.body;
-  if (!body) return null;
+  if (!metering) return body;
+  // As with `resolvedParser` below, the closures this function installs would
+  // otherwise see the pre-guard nullable type.
+  const meteredCall = metering;
+  if (!body) {
+    releaseUnservedReservation(meteredCall);
+    return null;
+  }
 
-  const resolvedParser = getProviderProxyUsageParser(input.providerId);
+  const resolvedParser = getProviderProxyUsageParser(meteredCall.providerId);
   if (!resolvedParser) {
     logger.error(
-      { sessionId: input.sessionId, providerId: input.providerId },
+      { sessionId: meteredCall.sessionId, providerId: meteredCall.providerId },
       '[e2b] provider-proxy has no usage parser for a credential-proxy-covered provider; spend on this call will not be recorded',
     );
+    releaseUnservedReservation(meteredCall);
     return body;
   }
   // Narrowing a `const` this way, rather than referencing `resolvedParser`
@@ -210,15 +302,11 @@ function attachUsageSettlement(
   let jsonBuffer = '';
   let settled = false;
   let resolveUsage!: (usage: ProviderProxyUsage | null) => void;
-  let resolveDelivered!: (delivered: boolean) => void;
   const usageSignal = new Promise<ProviderProxyUsage | null>((resolve) => {
     resolveUsage = resolve;
   });
-  const deliveredSignal = new Promise<boolean>((resolve) => {
-    resolveDelivered = resolve;
-  });
 
-  function settleOnce(delivered: boolean): void {
+  function settleOnce(): void {
     if (settled) return;
     settled = true;
     let usage: ProviderProxyUsage | null = null;
@@ -230,12 +318,11 @@ function attachUsageSettlement(
       }
     } catch (err) {
       logger.warn(
-        { err, sessionId: input.sessionId, providerId: input.providerId },
+        { err, sessionId: meteredCall.sessionId, providerId: meteredCall.providerId },
         '[e2b] provider-proxy could not parse usage from the upstream response',
       );
     }
     resolveUsage(usage);
-    resolveDelivered(delivered);
   }
 
   // The DOM lib's `Transformer` type predates the Streams spec update that
@@ -255,24 +342,192 @@ function attachUsageSettlement(
       else jsonBuffer += text;
     },
     flush() {
-      settleOnce(true);
+      settleOnce();
     },
     cancel() {
-      settleOnce(false);
+      settleOnce();
     },
   };
   const transform = new TransformStream<Uint8Array, Uint8Array>(transformer);
 
   after(
     (async () => {
-      const usage = await usageSignal;
-      if (!usage) return;
-      const delivered = await deliveredSignal;
-      await settleProviderProxyUsage({ ...input, usage, delivered });
+      await settleProviderProxyUsage(meteredCall, await usageSignal);
     })(),
   );
 
   return body.pipeThrough(transform);
+}
+
+function buildIdempotencyKey(sessionId: string): string {
+  const scrubbed = sessionId
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .slice(0, MAX_IDEMPOTENCY_SESSION_CHARS);
+  return `${CODE_HARNESS_IDEMPOTENCY_PREFIX}${scrubbed}:${randomUUID()}`;
+}
+
+interface ReserveInput {
+  db: DatabaseAdapter;
+  userId: string;
+  sessionId: string;
+  providerId: string;
+  organizationId: string | null;
+  planTier: string;
+  endpoint: ProviderProxyMeteredEndpoint;
+  rawBody: string;
+}
+
+type ReserveOutcome =
+  | { ok: true; metering: ProviderProxyMetering; forwardBody: string }
+  | { ok: false; response: NextResponse };
+
+/**
+ * Reserve before egress. Nothing reaches the provider on this path until the
+ * customer's balance, every rolling window, the organization spend cap and the
+ * plan's own daily coding ceiling have all admitted the estimate.
+ */
+async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> {
+  let parsed;
+  try {
+    parsed = parseProviderProxyMeteredRequest(input.endpoint, input.rawBody);
+  } catch (err) {
+    if (err instanceof ProviderProxyRequestShapeError) {
+      return {
+        ok: false,
+        response: providerNativeError(input.providerId, 400, err.code, err.message),
+      };
+    }
+    throw err;
+  }
+
+  let estimatedCostCents: number;
+  try {
+    estimatedCostCents =
+      LLMCostCalculator.estimateListCost(
+        parsed.model,
+        parsed.estimatedPromptTokens,
+        parsed.estimatedCompletionTokens,
+      ) ??
+      LLMCostCalculator.estimateCost(
+        input.providerId,
+        parsed.model,
+        parsed.estimatedPromptTokens,
+        parsed.estimatedCompletionTokens,
+      );
+  } catch (err) {
+    if (err instanceof UnpricedModelError) {
+      logger.error(
+        { err, providerId: input.providerId, model: parsed.requestedModel },
+        '[e2b] provider-proxy refused a model with no declared price',
+      );
+      return {
+        ok: false,
+        response: providerNativeError(
+          input.providerId,
+          400,
+          'provider_proxy_model_unpriced',
+          `No price is declared for ${parsed.requestedModel}, so this call cannot be billed and was not forwarded.`,
+        ),
+      };
+    }
+    throw err;
+  }
+
+  const ceiling = await evaluateCodeHarnessDailyCeiling({
+    db: input.db,
+    userId: input.userId,
+    planTier: input.planTier,
+    estimatedCostCents,
+  });
+  if (!ceiling.allowed) {
+    logger.warn(
+      {
+        sessionId: input.sessionId,
+        planTier: input.planTier,
+        ceilingCents: ceiling.ceilingCents,
+        spentCents: ceiling.spentCents,
+      },
+      '[e2b] provider-proxy refused a call over the plan coding-harness daily ceiling',
+    );
+    return {
+      ok: false,
+      response: providerNativeError(
+        input.providerId,
+        402,
+        CODE_HARNESS_DAILY_CEILING_CODE,
+        'This plan’s daily AGI Code spending ceiling is reached. Wait for earlier usage to leave the 24-hour window or upgrade for a higher ceiling.',
+      ),
+    };
+  }
+
+  const reservation = await (async () => {
+    try {
+      return await reserveManagedUsageRequest({
+        db: input.db,
+        userId: input.userId,
+        organizationId: input.organizationId,
+        idempotencyKey: buildIdempotencyKey(input.sessionId),
+        requestHash: fingerprintManagedUsageRequest(parsed.body),
+        provider: input.providerId,
+        model: parsed.model,
+        estimatedCostCents,
+        leaseSeconds: PROXY_LEASE_SECONDS,
+        planTier: input.planTier,
+        isFlagship: FLAGSHIP_SLOTS.has(getSlotForModel(parsed.model) ?? ''),
+        quotaFeature: CODE_HARNESS_QUOTA_FEATURE,
+      });
+    } catch (err) {
+      const managed =
+        err instanceof ManagedUsageRequestError
+          ? err
+          : new ManagedUsageRequestError(
+              'Managed usage billing is temporarily unavailable.',
+              503,
+              'billing_unavailable',
+            );
+      return managed;
+    }
+  })();
+
+  if (reservation instanceof ManagedUsageRequestError) {
+    return {
+      ok: false,
+      response: providerNativeError(
+        input.providerId,
+        reservation.status,
+        reservation.code,
+        reservation.message,
+      ),
+    };
+  }
+
+  const metering: ProviderProxyMetering = {
+    reservation,
+    providerId: input.providerId,
+    sessionId: input.sessionId,
+    reservedModel: parsed.model,
+  };
+
+  try {
+    await markManagedUsageProviderStarted(reservation);
+  } catch (err) {
+    logger.error(
+      { err, sessionId: input.sessionId },
+      '[e2b] provider-proxy could not mark the reservation provider-started',
+    );
+    releaseUnservedReservation(metering);
+    return {
+      ok: false,
+      response: providerNativeError(
+        input.providerId,
+        503,
+        'billing_unavailable',
+        'Managed usage billing is temporarily unavailable.',
+      ),
+    };
+  }
+
+  return { ok: true, metering, forwardBody: parsed.forwardBody };
 }
 
 async function handleProxy(
@@ -309,7 +564,16 @@ async function handleProxy(
   }
 
   const db = getNeonDb();
-  const accessDecision = await evaluateProviderProxyAccess(db, verified.userId, sessionId);
+  let subscriptionPromise: Promise<SubscriptionInfo | null> | null = null;
+  const subscription = (): Promise<SubscriptionInfo | null> =>
+    (subscriptionPromise ??= SubscriptionService.getSubscription(db, verified.userId));
+
+  const accessDecision = await evaluateProviderProxyAccess(
+    db,
+    verified.userId,
+    sessionId,
+    subscription,
+  );
   if (!accessDecision.allowed) {
     return proxyError(403, accessDecision.code, accessDecision.reason);
   }
@@ -394,16 +658,49 @@ async function handleProxy(
 
   const method = request.method.toUpperCase();
   const forwardsBody = method !== 'GET' && method !== 'HEAD';
+  const meteredEndpoint = providerProxyMeteredEndpoint(providerId, upstreamPath);
+
+  let metering: ProviderProxyMetering | null = null;
+  let meteredBody: string | null = null;
+  if (meteredEndpoint) {
+    if (!forwardsBody) {
+      return providerNativeError(
+        providerId,
+        400,
+        'provider_proxy_body_required',
+        'This endpoint spends provider credit and cannot be called without a request body.',
+      );
+    }
+    const planTier = (await subscription())?.plan_tier ?? '';
+    const reserved = await reserveProxiedCall({
+      db,
+      userId: verified.userId,
+      sessionId,
+      providerId,
+      organizationId: accessDecision.organizationId,
+      planTier,
+      endpoint: meteredEndpoint,
+      rawBody: await request.text(),
+    });
+    if (!reserved.ok) return reserved.response;
+    metering = reserved.metering;
+    meteredBody = reserved.forwardBody;
+  }
 
   let upstreamResponse: Response;
   try {
     upstreamResponse = await fetch(validated.url, {
       method,
       headers: forwardHeaders,
-      ...(forwardsBody ? { body: request.body, duplex: 'half' } : {}),
+      ...(meteredBody !== null
+        ? { body: meteredBody }
+        : forwardsBody
+          ? { body: request.body, duplex: 'half' }
+          : {}),
     } as RequestInit);
   } catch (err) {
     logger.error({ err, providerId, sessionId }, '[e2b] provider-proxy upstream request failed');
+    releaseUnservedReservation(metering);
     return proxyError(
       502,
       'provider_proxy_unavailable',
@@ -419,12 +716,7 @@ async function handleProxy(
   const responseHeaders = new Headers(upstreamResponse.headers);
   responseHeaders.delete('content-encoding');
   responseHeaders.delete('content-length');
-  const meteredBody = attachUsageSettlement(upstreamResponse, {
-    userId: verified.userId,
-    sessionId,
-    providerId,
-  });
-  return new Response(meteredBody, {
+  return new Response(attachUsageSettlement(upstreamResponse, metering), {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
