@@ -1,4 +1,4 @@
--- 0183 : make every column on the COGS ledger mean what its name says.
+-- 0180 : make every column on the COGS ledger mean what its name says.
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --

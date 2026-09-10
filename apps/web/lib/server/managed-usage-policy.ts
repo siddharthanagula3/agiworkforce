@@ -111,7 +111,7 @@ export function getPlanFlagshipWeeklyUsageCapCents(
 }
 
 /**
- * The ledger settles in microUSD since 0185. These are the same ceilings the
+ * The ledger settles in microUSD since 0182. These are the same ceilings the
  * cents getters return, scaled, rather than a second derivation from the unit
  * table: a cap is a whole number of ledger cents by construction, so scaling
  * loses nothing, and a plan whose allowance the two derivations disagree on

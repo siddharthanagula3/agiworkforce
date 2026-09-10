@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MIGRATION = '0185_managed_usage_microusd_ledger.sql';
+const MIGRATION = '0182_managed_usage_microusd_ledger.sql';
 
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, MIGRATION), 'utf8');
 const down = fs.readFileSync(
@@ -47,7 +47,7 @@ const MICROUSD_FUNCTIONS = [
   'finalize_managed_usage_request_microusd',
 ] as const;
 
-/** Every cents signature that must survive 0185 as a delegating wrapper. */
+/** Every cents signature that must survive 0182 as a delegating wrapper. */
 const CENTS_WRAPPERS = [
   'get_credit_balance',
   'check_credits_available',
@@ -65,7 +65,7 @@ const CENTS_WRAPPERS = [
   'finalize_managed_usage_request',
 ] as const;
 
-describe('0185 managed usage microUSD ledger', () => {
+describe('0182 managed usage microUSD ledger', () => {
   it('is a draft until someone approves running it', () => {
     expect(migration).toContain('NOT YET APPLIED');
   });
@@ -174,7 +174,7 @@ describe('0185 managed usage microUSD ledger', () => {
     );
   });
 
-  it('reads a pre-0185 settlement result through the cents key', () => {
+  it('reads a pre-0182 settlement result through the cents key', () => {
     expect(migration).toContain('create or replace function public.settlement_result_microusd');
     expect(migration).toContain('(p_result->>p_cents_key)::bigint * 10000');
   });
@@ -209,7 +209,9 @@ describe('0185 managed usage microUSD ledger', () => {
 
   it('restores the cents bodies before dropping what the wrappers call', () => {
     const restoreAt = down.indexOf('create or replace function public.enqueue_credit_settlement(');
-    const dropAt = down.indexOf('drop function if exists public.enqueue_credit_settlement_microusd');
+    const dropAt = down.indexOf(
+      'drop function if exists public.enqueue_credit_settlement_microusd',
+    );
     expect(restoreAt).toBeGreaterThan(-1);
     expect(dropAt).toBeGreaterThan(restoreAt);
   });

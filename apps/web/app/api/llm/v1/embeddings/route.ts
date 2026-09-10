@@ -65,7 +65,7 @@ const MICROUSD_PER_LEDGER_CENT = 10_000;
 /**
  * An embedding call is the clearest case the one-cent floor got wrong: a few
  * hundred tokens cost a small fraction of a cent, and the floor charged a full
- * one. The ledger settles in microUSD since 0185.
+ * one. The ledger settles in microUSD since 0182.
  */
 export function estimateEmbeddingCostMicrousd(
   model: PricedModel,

@@ -53,7 +53,7 @@ export function resolveSearchCallerKind(input: {
   return AUTOMATED_SURFACES.has((input.surface ?? '').toLowerCase()) ? 'automated' : 'interactive';
 }
 
-/** The rate card's exact figure. The ledger settles in this unit since 0185. */
+/** The rate card's exact figure. The ledger settles in this unit since 0182. */
 export function searchChargeMicrousd(feature: RateCardFeature): number {
   return customerChargeMicrousd(feature, { included: false });
 }
