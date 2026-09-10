@@ -54,8 +54,8 @@ vi.mock('@/lib/services/video-incident-alert-service', () => ({
 import {
   reconcileVideoGenerationWorkflowStep,
   recoverVideoProviderTaskAttachmentWorkflowStep,
-  videoProviderTaskAttachmentWorkflow,
-} from './video-generation-workflow';
+} from './steps/reconcile-video-generation';
+import { videoProviderTaskAttachmentWorkflow } from './video-generation-workflow';
 
 const JOB_ID = '11111111-1111-4111-8111-111111111111';
 const WORKFLOW_INPUT = {

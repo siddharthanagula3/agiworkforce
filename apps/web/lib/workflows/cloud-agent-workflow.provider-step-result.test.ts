@@ -8,7 +8,7 @@ import type {
 import {
   parseCloudAgentProviderStepResult,
   parseCloudAgentToolResult,
-} from './cloud-agent-workflow';
+} from './steps/execute-cloud-agent-invocation';
 
 /**
  * The durable workflow's `providerExecutor` and `toolExecutor` validate every
