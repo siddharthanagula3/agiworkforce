@@ -19,12 +19,14 @@ export interface ManagedMemoryPolicy {
   enabled: boolean;
   generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
+  searchPastChats: boolean;
 }
 
 export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
   enabled: false,
   generateFromHistory: false,
   allowToolAssistedGeneration: false,
+  searchPastChats: false,
 };
 
 const MAX_MEMORIES = 30;
@@ -43,7 +45,7 @@ function truncate(value: string, maxChars: number): string {
  * explicitly enables it, and a read failure must not silently open that
  * gate for every member.
  */
-async function organizationAllowsMemory(
+export async function organizationAllowsMemory(
   db: ManagedMemoryContextDb,
   organizationId: string,
 ): Promise<boolean> {
@@ -63,6 +65,14 @@ async function organizationAllowsMemory(
     );
     return false;
   }
+}
+
+export async function organizationMemoryGate(
+  db: ManagedMemoryContextDb,
+  organizationId: string | null | undefined,
+): Promise<boolean> {
+  if (!organizationId) return true;
+  return organizationAllowsMemory(db, organizationId);
 }
 
 export async function loadManagedMemoryPolicy(
@@ -88,6 +98,7 @@ export async function loadManagedMemoryPolicy(
     generateFromHistory:
       capabilities['memory'] === true && capabilities['generateFromHistory'] !== false,
     allowToolAssistedGeneration: capabilities['allowToolAssistedGeneration'] === true,
+    searchPastChats: capabilities['searchPastChats'] === true,
   };
 }
 
@@ -317,9 +328,15 @@ export interface ManagedAutoMemoryResult {
   excluded: number;
 }
 
+// organization_id is written explicitly: the durable settle runs on an unscoped adapter where the column default is NULL.
 export async function persistManagedAutoMemoryFacts(
   db: ManagedMemoryContextDb,
-  params: { userId: string; candidates: readonly string[]; projectId?: string | null },
+  params: {
+    userId: string;
+    candidates: readonly string[];
+    projectId?: string | null;
+    organizationId?: string | null;
+  },
 ): Promise<ManagedAutoMemoryResult> {
   const extracted = params.candidates.length;
   if (extracted === 0) return { extracted: 0, inserted: 0, excluded: 0 };
@@ -379,8 +396,8 @@ export async function persistManagedAutoMemoryFacts(
               item ->> 'normalizedKey' as normalized_key
          from jsonb_array_elements($2::jsonb) as source(item)
      )
-     insert into user_memories (id, user_id, content, category, source, project_id)
-     select incoming.id::uuid, $1, incoming.content, incoming.category, 'auto', $3::uuid
+     insert into user_memories (id, user_id, content, category, source, project_id, organization_id)
+     select incoming.id::uuid, $1, incoming.content, incoming.category, 'auto', $3::uuid, $4::uuid
        from incoming
       where not exists (
         select 1
@@ -393,7 +410,7 @@ export async function persistManagedAutoMemoryFacts(
       )
      on conflict (id) do nothing
      returning id::text`,
-    [params.userId, JSON.stringify(batch), params.projectId ?? null],
+    [params.userId, JSON.stringify(batch), params.projectId ?? null, params.organizationId ?? null],
   );
 
   return { extracted, inserted: inserted.length, excluded };

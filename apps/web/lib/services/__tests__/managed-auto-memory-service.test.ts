@@ -50,6 +50,58 @@ describe('recordManagedAutoMemoryTurn', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it('keeps its facts when tools were offered but the turn ran none', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: {
+        ...processed(['User prefers concise answers']),
+        autoMemoryFactsRequireToolFreeTurn: true,
+      },
+      outcome: 'completed',
+    });
+
+    const statements = query.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(true);
+  });
+
+  it('drops its facts when a tool actually ran and the policy forbids it', async () => {
+    const query = vi.fn();
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: {
+        ...processed(['User prefers concise answers']),
+        autoMemoryFactsRequireToolFreeTurn: true,
+        toolExecutionObserved: true,
+      },
+      outcome: 'completed',
+    });
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('keeps its facts from a tool-assisted turn the policy allows', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: {
+        ...processed(['User prefers concise answers']),
+        autoMemoryFactsRequireToolFreeTurn: false,
+        toolExecutionObserved: true,
+      },
+      outcome: 'completed',
+    });
+
+    const statements = query.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(true);
+  });
+
   it('swallows persistence failures so memory cannot break a successful response', async () => {
     const query = vi.fn().mockRejectedValue(new Error('memory unavailable'));
 

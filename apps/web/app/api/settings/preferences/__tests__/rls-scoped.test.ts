@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   query: vi.fn(),
   invalidateActiveOrganizationCache: vi.fn(),
+  resolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: h.getUserScopedDb }));
@@ -14,6 +15,10 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/active-workspace-service')>();
+  return { ...actual, resolveActiveOrganizationId: h.resolveActiveOrganizationId };
+});
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: h.invalidateActiveOrganizationCache,
   getCachedActiveOrganizationId: vi.fn(),
@@ -27,6 +32,60 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } } }]);
   h.getUserScopedDb.mockResolvedValue({ db: { query: h.query }, userId: 'user-1' });
+  h.resolveActiveOrganizationId.mockResolvedValue(null);
+});
+
+// The Memory section's four switches are gated by the workspace policy, and the
+// policy route is admin-only, so this GET is the only place a member can learn
+// the gate is shut.
+describe('the capabilities namespace reports the workspace memory gate', () => {
+  function capabilitiesRequest() {
+    return new NextRequest('http://localhost:3000/api/settings/preferences?namespace=capabilities');
+  }
+
+  it('reports the gate open for a personal-scope account', async () => {
+    const response = await GET(capabilitiesRequest());
+
+    expect(await response.json()).toMatchObject({ organizationMemoryAllowed: true });
+  });
+
+  it('reports the gate shut when the workspace policy has memory off', async () => {
+    h.resolveActiveOrganizationId.mockResolvedValue('org-1');
+    h.query.mockImplementation(async (sql: string) =>
+      sql.includes('organization_admin_policies')
+        ? [{ allow_memory: false }]
+        : [{ settings: { capabilities: { memory: true } } }],
+    );
+
+    const response = await GET(capabilitiesRequest());
+
+    expect(await response.json()).toMatchObject({ organizationMemoryAllowed: false });
+  });
+
+  it('reports the gate open when the workspace policy allows memory', async () => {
+    h.resolveActiveOrganizationId.mockResolvedValue('org-1');
+    h.query.mockImplementation(async (sql: string) =>
+      sql.includes('organization_admin_policies')
+        ? [{ allow_memory: true }]
+        : [{ settings: { capabilities: { memory: true } } }],
+    );
+
+    const response = await GET(capabilitiesRequest());
+
+    expect(await response.json()).toMatchObject({
+      organizationMemoryAllowed: true,
+      settings: { memory: true },
+    });
+  });
+
+  it('leaves every other namespace read free of the gate lookup', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=general'),
+    );
+
+    expect(await response.json()).not.toHaveProperty('organizationMemoryAllowed');
+    expect(h.resolveActiveOrganizationId).not.toHaveBeenCalled();
+  });
 });
 
 // 0134 puts a FORCE'd policy on user_settings. Verified on a branch off

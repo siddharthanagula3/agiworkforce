@@ -2701,6 +2701,7 @@ export async function* runToolLoop(
       resumeInput?: Map<string, ResumeInputResponse>;
     },
   ): AsyncGenerator<Uint8Array> {
+    if (calls.length > 0) processed.toolExecutionObserved = true;
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
@@ -3557,7 +3558,10 @@ export async function* runToolLoop(
           .find((name) => name.length > 0);
         let capAnnounced = false;
         for await (const entry of liveLines.drain()) {
-          if (providerLineShowsSearch(entry)) searchObserved = true;
+          if (providerLineShowsSearch(entry)) {
+            searchObserved = true;
+            processed.toolExecutionObserved = true;
+          }
           if (stepNativeSearchTool) {
             const grounded =
               (entry.serverToolStart ? 1 : 0) +

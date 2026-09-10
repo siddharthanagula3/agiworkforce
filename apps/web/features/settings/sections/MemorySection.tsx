@@ -16,6 +16,8 @@ const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
 const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
 const SAVE_RETRY_LABEL = 'Try again';
 const CONTROL_HEIGHT = 30;
+const WORKSPACE_MEMORY_OFF_NOTICE =
+  'Your workspace has memory turned off, so none of these settings apply until an owner or admin turns it back on in Workspace → Policy.';
 
 function memoryRow(title: string, description: string, control: ReactNode) {
   return (
@@ -40,7 +42,9 @@ function memoryRow(title: string, description: string, control: ReactNode) {
 }
 
 export function MemorySection() {
-  const { settings, saveError, retrySave, loadError, setBoolean } = useCapabilitiesPreferences();
+  const { settings, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } =
+    useCapabilitiesPreferences();
+  const togglesDisabled = loadError !== null || !organizationMemoryAllowed;
   const memoryCount = useMemoryStore(selectMemoryCount);
   const clearAllMemories = useMemoryStore((s) => s.clear);
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
@@ -98,6 +102,22 @@ export function MemorySection() {
           padding: 16,
         }}
       >
+        {organizationMemoryAllowed ? null : (
+          <p
+            role="status"
+            style={{
+              margin: 0,
+              padding: '10px 16px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-1)',
+              fontSize: 13,
+            }}
+          >
+            {WORKSPACE_MEMORY_OFF_NOTICE}
+          </p>
+        )}
+
         {saveError ? (
           <div
             role="alert"
@@ -144,7 +164,7 @@ export function MemorySection() {
           <Switch
             aria-label="Persistent memory"
             checked={settings.memory}
-            disabled={loadError !== null}
+            disabled={togglesDisabled}
             onCheckedChange={(value) => setBoolean('memory', value)}
           />,
         )}
@@ -234,7 +254,7 @@ export function MemorySection() {
           <Switch
             aria-label="Generate from past chats"
             checked={settings.generateFromHistory}
-            disabled={loadError !== null || !settings.memory}
+            disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
           />,
         )}
@@ -245,7 +265,7 @@ export function MemorySection() {
           <Switch
             aria-label="Search past chats"
             checked={settings.searchPastChats}
-            disabled={loadError !== null}
+            disabled={togglesDisabled}
             onCheckedChange={(value) => setBoolean('searchPastChats', value)}
           />,
         )}
@@ -256,7 +276,7 @@ export function MemorySection() {
           <Switch
             aria-label="Allow memory generation from tool-assisted chats"
             checked={settings.allowToolAssistedGeneration}
-            disabled={loadError !== null || !settings.memory}
+            disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
           />,
         )}
