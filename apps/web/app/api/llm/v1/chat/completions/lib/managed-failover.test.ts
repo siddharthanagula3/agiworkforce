@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { listCanonicalModels } from '@agiworkforce/types';
+import {
+  GATEWAY_BACKED_HARNESS_IDS,
+  listCanonicalModels,
+  REGISTRY_HARNESS_IDS,
+} from '@agiworkforce/types';
 
 const ANTHROPIC_FAILOVER_MODEL = listCanonicalModels().find(
   (model) => model.provider === 'anthropic' && !!model.openRouterSlug,
@@ -390,6 +394,102 @@ describe('rotation eligibility (gateway parity)', () => {
     (error as { category?: string }).category = 'safety';
 
     expect(makePlan(processed).next(error, { step: FIRST_PROVIDER_STEP })).toBeNull();
+  });
+});
+
+describe('same-model route failover for an explicitly selected model', () => {
+  const GATEWAY_HARNESS = GATEWAY_BACKED_HARNESS_IDS[0];
+  const VENDOR_HARNESS = REGISTRY_HARNESS_IDS.find(
+    (harnessId) => !GATEWAY_BACKED_HARNESS_IDS.includes(harnessId),
+  );
+  if (!GATEWAY_HARNESS || !VENDOR_HARNESS) {
+    throw new Error('The registry declares no gateway-backed and vendor harness pair to test with');
+  }
+
+  function pinnedOnGateway(routes: ProcessedRequest['fallbackRoutes']): ProcessedRequest {
+    return makeProcessed({
+      requestedModel: 'primary-model',
+      originalModel: 'primary-model',
+      provider: 'cheaperinference',
+      servingHarnessId: GATEWAY_HARNESS,
+      fallbackModels: (routes ?? []).map((route) => route.modelKey),
+      fallbackRoutes: routes,
+    });
+  }
+
+  const sameModelRoute = (provider: string, harnessId: string) => ({
+    modelKey: 'primary-model',
+    provider,
+    routeId: `${provider}/primary-model`,
+    harnessId,
+  });
+
+  it('serves the next route of the same model when the gateway refuses the request', () => {
+    const processed = pinnedOnGateway([sameModelRoute('google', VENDOR_HARNESS)]);
+
+    const attempt = makePlan(processed).next(httpError(400, 'bad request'), {
+      step: FIRST_PROVIDER_STEP,
+    });
+
+    expect(attempt?.provider).toBe('google');
+    expect(attempt?.model).toBe('primary-model');
+    expect(attempt?.processed.provider).toBe('google');
+    expect(attempt?.processed.llmRequest.model).toBe('primary-model');
+    expect(mockResolveProviderFromModel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the turn on the model the user picked, whichever route serves it', () => {
+    const processed = pinnedOnGateway([sameModelRoute('google', VENDOR_HARNESS)]);
+
+    const attempt = makePlan(processed).next(httpError(503), { step: FIRST_PROVIDER_STEP });
+
+    expect(attempt?.processed.chatRequest.model).toBe(processed.chatRequest.model);
+  });
+
+  it('leaves a pinned model on a 400 the vendor route itself refused', () => {
+    const processed = makeProcessed({
+      requestedModel: 'primary-model',
+      originalModel: 'primary-model',
+      provider: 'google',
+      servingHarnessId: VENDOR_HARNESS,
+      fallbackModels: ['primary-model'],
+      fallbackRoutes: [sameModelRoute('vercel_gateway', VENDOR_HARNESS)],
+    });
+
+    expect(
+      makePlan(processed).next(httpError(400, 'bad request'), { step: FIRST_PROVIDER_STEP }),
+    ).toBeNull();
+  });
+
+  it('stops after the gateway hands the turn to a vendor route that refuses it too', () => {
+    const processed = pinnedOnGateway([
+      sameModelRoute('google', VENDOR_HARNESS),
+      sameModelRoute('experientiallabs', VENDOR_HARNESS),
+    ]);
+    const plan = makePlan(processed);
+
+    expect(plan.next(httpError(400, 'bad request'), { step: FIRST_PROVIDER_STEP })?.provider).toBe(
+      'google',
+    );
+    expect(plan.next(httpError(400, 'bad request'), { step: FIRST_PROVIDER_STEP })).toBeNull();
+  });
+
+  it('never replays the route that just failed, however often the plan names it', () => {
+    const processed = pinnedOnGateway([
+      sameModelRoute('cheaperinference', GATEWAY_HARNESS),
+      sameModelRoute('google', VENDOR_HARNESS),
+    ]);
+
+    const attempt = makePlan(processed).next(httpError(503), { step: FIRST_PROVIDER_STEP });
+
+    expect(attempt?.provider).toBe('google');
+  });
+
+  it('still resolves the provider from the model when the plan carries no routes', () => {
+    const attempt = makePlan(makeProcessed()).next(httpError(503));
+
+    expect(attempt?.provider).toBe('openai');
+    expect(mockResolveProviderFromModel).toHaveBeenCalledWith('candidate-a');
   });
 });
 

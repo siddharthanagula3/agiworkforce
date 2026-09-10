@@ -1,0 +1,228 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { GATEWAY_BACKED_HARNESS_IDS, REGISTRY_HARNESS_IDS } from '@agiworkforce/types';
+
+const mockBuildToolLoopStream = vi.fn();
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
+  buildServingRouteId: (provider: string, model: string) => `${provider}/${model}`,
+}));
+
+vi.mock('@/lib/e2b/runtime', () => ({
+  getE2BExecutor: vi.fn(),
+  pauseE2BSession: vi.fn(),
+}));
+
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  return {
+    ...actual,
+    reserveManagedUsageProviderStep: vi.fn(),
+    ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
+  };
+});
+
+const mockRecordRouteOutcome = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: vi.fn(async () => ({})),
+  providerOfRouteId: (routeId: string) => routeId.split('/')[0],
+  recordRouteOutcome: (...args: unknown[]) => mockRecordRouteOutcome(...args),
+  recordServedRouteAffinity: vi.fn(async () => undefined),
+  routeAffinityTtlMs: () => 3_600_000,
+  getRouteHealthSnapshot: vi.fn(async () => ({})),
+  getServedRouteAffinity: vi.fn(async () => null),
+  getFreeLaneRuntimeState: vi.fn(async () => ({})),
+}));
+
+import { runToolLoop } from './tool-loop';
+import { createFailoverPlan } from './managed-failover';
+import type { ProcessedRequest } from './request-processor';
+
+const GATEWAY_HARNESS = GATEWAY_BACKED_HARNESS_IDS[0];
+const VENDOR_HARNESS = REGISTRY_HARNESS_IDS.find(
+  (harnessId) => !GATEWAY_BACKED_HARNESS_IDS.includes(harnessId),
+);
+if (!GATEWAY_HARNESS || !VENDOR_HARNESS) {
+  throw new Error('The registry declares no gateway-backed and vendor harness pair to test with');
+}
+
+const PINNED_MODEL = 'pinned-model';
+const GATEWAY_PROVIDER = 'cheaperinference';
+const VENDOR_PROVIDER = 'google';
+
+function gatewayRejection(): Error & { status: number } {
+  return Object.assign(
+    new Error(`${GATEWAY_PROVIDER} API error (400): This request could not be completed`),
+    { status: 400 },
+  );
+}
+
+function textStream(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            choices: [{ index: 0, delta: { content: text }, finish_reason: 'stop' }],
+          })}\n\n`,
+        ),
+      );
+      controller.close();
+    },
+  });
+}
+
+/**
+ * Erroring a controller discards whatever is still queued, so the delta has to
+ * be pulled and delivered before the failure is raised, or the test proves
+ * nothing about a client that has already read it.
+ */
+function streamThatBreaksAfter(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let delivered = false;
+  return new ReadableStream({
+    pull(controller) {
+      if (!delivered) {
+        delivered = true;
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: text } }] })}\n\n`,
+          ),
+        );
+        return;
+      }
+      controller.error(gatewayRejection());
+    },
+  });
+}
+
+/** A model the user picked, dispatched on the cheapest route, which is a gateway. */
+function pinnedOnGateway(): ProcessedRequest {
+  return {
+    chatSurface: 'web' as const,
+    requestId: 'req-same-model-route-1',
+    chatRequest: { model: PINNED_MODEL, messages: [], stream: true } as never,
+    conversationId: undefined,
+    requestedModel: PINNED_MODEL,
+    provider: GATEWAY_PROVIDER,
+    servingHarnessId: GATEWAY_HARNESS,
+    estimatedCostCents: 0,
+    estimatedPromptTokens: 0,
+    maxTokens: 1000,
+    usedFallback: false,
+    fallbackReason: undefined,
+    originalModel: PINNED_MODEL,
+    fallbackModels: [PINNED_MODEL],
+    fallbackRoutes: [
+      {
+        modelKey: PINNED_MODEL,
+        provider: VENDOR_PROVIDER,
+        routeId: `${VENDOR_PROVIDER}/${PINNED_MODEL}`,
+        harnessId: VENDOR_HARNESS as string,
+      },
+    ],
+    resolvedTaskType: 'general' as never,
+    classifierConfidence: 1,
+    resolvedSlot: null,
+    quotaFeature: 'chat' as never,
+    quotaWarningHeader: null,
+    isFlagshipRequest: false,
+    indicResult: undefined as never,
+    llmRequest: {
+      model: PINNED_MODEL,
+      messages: [{ role: 'user', content: 'run this csv through code execution' }],
+      max_tokens: 1000,
+      stream: true,
+    } as never,
+  } as ProcessedRequest;
+}
+
+function realFailoverPlan(processed: ProcessedRequest) {
+  return createFailoverPlan(processed, {
+    signal: new AbortController().signal,
+    isProviderDispatchable: (provider: string) => provider !== 'openrouter',
+  });
+}
+
+async function drain(generator: AsyncGenerator<Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder();
+  let out = '';
+  for await (const value of generator) out += decoder.decode(value);
+  return out;
+}
+
+function streamErrorFrom(output: string): { message: string; code?: string } {
+  const line = output.split('\n').find((entry) => entry.includes('x_stream_error'));
+  expect(line).toBeDefined();
+  return JSON.parse(line!.replace(/^data: /, '')).choices[0].delta.x_stream_error;
+}
+
+describe('runToolLoop, a gateway that refuses a pinned model before it says anything', () => {
+  beforeEach(() => {
+    mockBuildToolLoopStream.mockReset();
+    mockRecordRouteOutcome.mockClear();
+  });
+
+  it('serves the turn from the next route of the same model', async () => {
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(gatewayRejection())
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const processed = pinnedOnGateway();
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(mockBuildToolLoopStream.mock.calls[1]?.[0]).toBe(VENDOR_PROVIDER);
+    expect(output).toContain('Answered on the direct route.');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('records the outcome against the route that actually served', async () => {
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(gatewayRejection())
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const processed = pinnedOnGateway();
+    await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
+      `${VENDOR_PROVIDER}/${PINNED_MODEL}`,
+      expect.objectContaining({ class: 'success' }),
+      expect.any(Number),
+    );
+  });
+
+  it('never answers with a different model than the one the user picked', async () => {
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(gatewayRejection())
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const processed = pinnedOnGateway();
+    await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    const secondAttempt = mockBuildToolLoopStream.mock.calls[1]?.[2] as { model: string };
+    expect(secondAttempt.model).toBe(PINNED_MODEL);
+  });
+
+  it('does not retry once a text delta has already reached the client', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      streamThatBreaksAfter('Half of an answer the user can already read.'),
+    );
+
+    const processed = pinnedOnGateway();
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Half of an answer the user can already read.');
+    expect(streamErrorFrom(output).message).not.toBe('');
+  });
+});
