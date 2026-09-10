@@ -42,6 +42,7 @@ import type {
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
+import { CHAT_MODEL_TYPES } from '@agiworkforce/types';
 import {
   detectOpenAICompletionsCompat,
   resolveOpenAIResponsesPayloadPolicy,
@@ -178,9 +179,11 @@ function isNativeOpenAIResponsesRoute(
   return endpointClass === 'default' || endpointClass === 'openai-public';
 }
 
+const RESPONSES_MODEL_TYPES: ReadonlySet<string> = new Set(CHAT_MODEL_TYPES);
+
 function modelMetadataSupportsResponses(req: ChatRequest): boolean {
   const model = findCatalogModel(req.model);
-  if (!model) return false;
+  if (!model?.modelType || !RESPONSES_MODEL_TYPES.has(model.modelType)) return false;
 
   const capabilities = model.capabilities;
   if (capabilities?.streaming === false) return false;
