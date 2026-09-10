@@ -16,6 +16,7 @@ const PREFERENCES_SNAPSHOT_TTL_MS = 60_000;
 let snapshotInFlight: Promise<Record<string, unknown>> | null = null;
 let snapshotLoadedAt = 0;
 let storedVersion: string | null = null;
+let organizationMemoryAllowed = true;
 
 export class PreferenceVersionConflictError extends Error {
   readonly namespace: string;
@@ -51,8 +52,13 @@ async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
     };
     throw new Error(data.error?.message ?? data.message ?? 'Failed to load settings');
   }
-  const data = (await response.json()) as { settings?: unknown; version?: unknown };
+  const data = (await response.json()) as {
+    settings?: unknown;
+    version?: unknown;
+    organizationMemoryAllowed?: unknown;
+  };
   storedVersion = readVersion(data.version);
+  organizationMemoryAllowed = data.organizationMemoryAllowed !== false;
   return data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
     ? (data.settings as Record<string, unknown>)
     : {};
@@ -61,6 +67,11 @@ async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
 export async function readPreferencesVersion(): Promise<string | null> {
   await loadPreferencesSnapshot();
   return storedVersion;
+}
+
+export async function readOrganizationMemoryAllowed(): Promise<boolean> {
+  await loadPreferencesSnapshot();
+  return organizationMemoryAllowed;
 }
 
 function loadPreferencesSnapshot(): Promise<Record<string, unknown>> {

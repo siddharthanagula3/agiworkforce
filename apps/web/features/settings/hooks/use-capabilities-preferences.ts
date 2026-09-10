@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PreferenceVersionConflictError,
   fetchPreferenceNamespace,
+  readOrganizationMemoryAllowed,
   readPreferencesVersion,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
@@ -79,28 +80,13 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
         setSettings(value);
         setLoadError(null);
         storedVersion.current = await readPreferencesVersion().catch(() => null);
+        setOrganizationMemoryAllowed(await readOrganizationMemoryAllowed().catch(() => true));
       })
       .catch((error) => {
         if (!cancelled) {
           setLoadError(toUserMessage(error, 'Failed to load settings'));
         }
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/settings/preferences?namespace=${CAPABILITIES_NAMESPACE}`, {
-      credentials: 'include',
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { organizationMemoryAllowed?: unknown } | null) => {
-        if (cancelled || !payload) return;
-        setOrganizationMemoryAllowed(payload.organizationMemoryAllowed !== false);
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

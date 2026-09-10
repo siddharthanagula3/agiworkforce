@@ -82,12 +82,12 @@ async function handleGet(request: NextRequest) {
   const namespace = new URL(request.url).searchParams.get('namespace');
   const stored = await readSettings(db, userId);
 
-  if (namespace) {
-    const organizationMemoryAllowed =
-      namespace === CAPABILITIES_NAMESPACE
-        ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
-        : undefined;
+  const organizationMemoryAllowed =
+    !namespace || namespace === CAPABILITIES_NAMESPACE
+      ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
+      : undefined;
 
+  if (namespace) {
     return NextResponse.json({
       settings: stored.settings[namespace] ?? {},
       version: stored.version,
@@ -95,7 +95,11 @@ async function handleGet(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ settings: stored.settings, version: stored.version });
+  return NextResponse.json({
+    settings: stored.settings,
+    version: stored.version,
+    organizationMemoryAllowed,
+  });
 }
 
 async function handlePut(request: NextRequest) {
