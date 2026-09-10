@@ -143,6 +143,8 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
   const modelResult = await callSupportModel({
     userMessage,
     planTier: input.viewer.planTier,
+    userId: input.viewer.userId,
+    surface: input.surface,
     signal: rawInput.signal,
   });
   if (modelResult.status !== 'ok') {
