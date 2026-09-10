@@ -263,6 +263,7 @@ export interface BillingPlanProductLimits {
   sandboxTtlMs: number;
   maxConnectorTools: BillingPlanLimit;
   maxScheduledTasks: BillingPlanLimit;
+  codeHarnessDailyCeilingCents: BillingPlanLimit;
 }
 
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
@@ -277,6 +278,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 0,
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
+    codeHarnessDailyCeilingCents: 0,
   },
   byok: {
     projects: 'unlimited',
@@ -287,6 +289,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 0,
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
+    codeHarnessDailyCeilingCents: 0,
   },
   free: {
     projects: 1,
@@ -297,6 +300,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 0,
     maxConnectorTools: 25,
     maxScheduledTasks: 0,
+    codeHarnessDailyCeilingCents: 0,
   },
   basic: {
     projects: 5,
@@ -307,6 +311,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 10 * MINUTE_MS,
     maxConnectorTools: 50,
     maxScheduledTasks: 2,
+    codeHarnessDailyCeilingCents: 100,
   },
   pro: {
     projects: 25,
@@ -317,6 +322,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
+    codeHarnessDailyCeilingCents: 500,
   },
   max: {
     projects: 'unlimited',
@@ -327,6 +333,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 30 * MINUTE_MS,
     maxConnectorTools: 300,
     maxScheduledTasks: 10,
+    codeHarnessDailyCeilingCents: 2500,
   },
   max_15x: {
     projects: 'unlimited',
@@ -337,6 +344,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 500,
     maxScheduledTasks: 25,
+    codeHarnessDailyCeilingCents: 7500,
   },
   team: {
     projects: 25,
@@ -347,6 +355,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
+    codeHarnessDailyCeilingCents: 500,
   },
   enterprise: {
     projects: 'custom',
@@ -357,6 +366,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
+    codeHarnessDailyCeilingCents: 'custom',
   },
 });
 
@@ -393,6 +403,21 @@ export function getPlanMaxConnectorTools(plan: string | null | undefined): numbe
 
 export function getPlanMaxScheduledTasks(plan: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxScheduledTasks);
+}
+
+/**
+ * A contract-priced plan declares no published ceiling, so the coding harness
+ * still gets one: without it `custom` would read as unbounded and the second
+ * layer would protect every tier but the largest.
+ */
+export const ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS = 25_000;
+
+export function getPlanCodeHarnessDailyCeilingCents(plan: string | null | undefined): number {
+  const limit = getBillingPlanProductLimits(plan)?.codeHarnessDailyCeilingCents;
+  if (limit === undefined) return 0;
+  if (limit === 'custom') return ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS;
+  if (limit === 'unlimited') return Number.POSITIVE_INFINITY;
+  return limit;
 }
 
 export function getNextUpgradeTier(
