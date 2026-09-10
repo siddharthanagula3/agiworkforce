@@ -4,8 +4,12 @@ import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
 import { MANAGED_USAGE_LIMITS, type ManagedUsageLimit } from '@/lib/billing/managed-usage-caps';
 
 export type ManagedUsageCapCents = number | null;
+export type ManagedUsageCapMicrousd = number | null;
 
 export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS = 100_000_000;
+export const MICROUSD_PER_LEDGER_CENT = 10_000;
+export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_MICROUSD =
+  MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS * MICROUSD_PER_LEDGER_CENT;
 
 const INTERNAL_USAGE_UNITS_PER_LEDGER_CENT = 2;
 const MICROUSD_PER_INTERNAL_USAGE_UNIT = 5_000;
@@ -104,6 +108,55 @@ export function getPlanFlagshipWeeklyUsageCapCents(
   plan: string | null | undefined,
 ): ManagedUsageCapCents {
   return isPlanUsageUncapped(plan) ? null : getPlanFlagshipWeeklyUsageBudgetCents(plan);
+}
+
+/**
+ * The ledger settles in microUSD since 0185. These are the same ceilings the
+ * cents getters return, scaled, rather than a second derivation from the unit
+ * table: a cap is a whole number of ledger cents by construction, so scaling
+ * loses nothing, and a plan whose allowance the two derivations disagree on
+ * (free, which declares five-hour units and a zero paid budget) cannot end up
+ * with two different ceilings.
+ */
+function toCapMicrousd(cap: ManagedUsageCapCents): ManagedUsageCapMicrousd {
+  return cap === null ? null : cap * MICROUSD_PER_LEDGER_CENT;
+}
+
+export function getPlanUsageBudgetMicrousd(
+  plan: string | null | undefined,
+  interval: BillingInterval = 'monthly',
+): number {
+  return getPlanUsageBudgetCents(plan, interval) * MICROUSD_PER_LEDGER_CENT;
+}
+
+export function getPlanSessionUsageBudgetMicrousd(plan: string | null | undefined): number {
+  return getPlanSessionUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
+}
+
+export function getPlanWeeklyUsagePaidBudgetMicrousd(plan: string | null | undefined): number {
+  return getPlanWeeklyUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
+}
+
+export function getPlanFlagshipWeeklyUsageBudgetMicrousd(plan: string | null | undefined): number {
+  return getPlanFlagshipWeeklyUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
+}
+
+export function getPlanSessionUsageCapMicrousd(
+  plan: string | null | undefined,
+): ManagedUsageCapMicrousd {
+  return toCapMicrousd(getPlanSessionUsageCapCents(plan));
+}
+
+export function getPlanWeeklyUsageCapMicrousd(
+  plan: string | null | undefined,
+): ManagedUsageCapMicrousd {
+  return toCapMicrousd(getPlanWeeklyUsageCapCents(plan));
+}
+
+export function getPlanFlagshipWeeklyUsageCapMicrousd(
+  plan: string | null | undefined,
+): ManagedUsageCapMicrousd {
+  return toCapMicrousd(getPlanFlagshipWeeklyUsageCapCents(plan));
 }
 
 export const QUOTA_WARNING_THRESHOLD_PERCENT = 80;
