@@ -146,12 +146,12 @@ third-party account, and vendor consent screens require a person.
 **Why founder assistance is required**
 Breach-notice wording needs a lawyer; the grievance officer, notice address
 and mailbox are facts about the business.
-**Exact action** Send `docs/runbooks/personal-data-breach.md` sections 3 to 5 to counsel; name a Grievance Officer or confirm a role account is acceptable under Indian law; confirm or replace `NOTICE_ADDRESS`; decide whether `privacy@` and `grievance@` exist and who watches them against the 30-day target.
+**Exact action** Send `docs/runbooks/personal-data-breach.md` §3, §4 and §5 (both notice templates) to counsel; name a Grievance Officer or confirm a role account is acceptable under Indian law; confirm or replace `NOTICE_ADDRESS`; decide whether `privacy@` and `grievance@` exist and who watches them against the 30-day target.
 **Where** `apps/web/lib/legal-constants.ts`, the runbook.
 **Needed input** One counsel pass and a few confirmations.
 **How to verify completion** Runbook header reads counsel-approved; `GRIEVANCE_OFFICER_DESIGNATE` is set or the role-account decision is written down.
 **What remains after founder action** Nothing; code and tests exist.
-**Impact** NON-BLOCKING today, legal exposure if an incident lands first
+**Impact** NON-BLOCKING today, legal exposure if an incident lands first. This is not a hold on sending.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Trust & Safety] Minimum-age policy
@@ -200,12 +200,12 @@ changes what a credential carries.
 Pinning is built and report-only; choosing which CA keys to trust per host is
 a security-owner call, and a wrong choice hard-fails every installed app.
 **Exact action** Pick two or more keys per host (issuing CA and root, never the leaf); decide whether the OpenAI and Anthropic hosts are pinned at all; then run the four-step provisioning in `apps/mobile/lib/pinning.ts` and flip `PINNING_ROLLOUT`.
-**Where** `apps/mobile/lib/pinning.ts`.
+**Where** `apps/mobile/lib/pinning.ts`; the build plugin `./native/withAGITlsPinning.cjs` stamps the pins.
 **Needed input** The key selection.
 **How to verify completion** `apps/mobile/__tests__/pinning.test.ts` passes with real hashes and a release build logs no report-only refusals.
-**What remains after founder action** Route the pairing WebSocket and upload paths through `secureFetch` (engineering).
+**What remains after founder action** Route the pairing WebSocket and upload paths through `secureFetch` (engineering). Closes CLAUDE-SECURITY-20260821-170634 F6 (CWE-295).
 **Impact** RELEASE-BLOCKING (mobile MITM exposure)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+**Status** BLOCKED_BY_HUMAN, FOUNDER ACTION REQUIRED
 
 ## [Infra] `ALLOWED_ORIGINS` on the signaling deploy
 
