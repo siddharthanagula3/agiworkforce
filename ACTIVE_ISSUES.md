@@ -82,7 +82,7 @@ issue turned out to be is in the commit that closed it.
   stream on the streaming, non-streaming and research paths, a Stop reaches
   the provider call inside a durable step, the reaper cancels world runs, and
   the Google adapter bounds only its wait for headers. Exercised on `:3100`:
-  "hi" on OpenRouter Free Auto answers in 2.1 s over the durable transport
+  "hi" on the free router route answers in 2.1 s over the durable transport
   with one request, Stop settles in under 300 ms, two rapid sends produce one
   request each. Deployed verification is `LIVE-8`. The same pass found no
   other function alive past its budget: crons are batch- and time-bounded,
