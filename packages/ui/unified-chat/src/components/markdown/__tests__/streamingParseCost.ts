@@ -16,7 +16,7 @@ const WARMUP_ITERATIONS = 1;
 const SAMPLE_HEADROOM_FACTOR = 2;
 
 export const MAX_TAIL_COST_GROWTH = 4;
-export const MIN_FULL_REPARSE_GROWTH = 4;
+export const MIN_FULL_REPARSE_GROWTH = 2;
 
 export interface ParseCostProfile {
   readonly sizes: readonly number[];
