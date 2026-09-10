@@ -72,8 +72,24 @@ describe('forkConversation -> artifact indexing', () => {
     const { db, query, execute } = adapter();
     execute.mockResolvedValue(1);
     mockThroughFork(query, [
-      { id: 'copied-assistant-1', content: 'first assistant reply' },
-      { id: 'copied-assistant-2', content: 'second assistant reply' },
+      {
+        id: 'copied-user-1',
+        source_message_id: 'source-user-1',
+        role: 'user',
+        content: 'question',
+      },
+      {
+        id: 'copied-assistant-1',
+        source_message_id: 'source-assistant-1',
+        role: 'assistant',
+        content: 'first assistant reply',
+      },
+      {
+        id: 'copied-assistant-2',
+        source_message_id: 'source-assistant-2',
+        role: 'assistant',
+        content: 'second assistant reply',
+      },
     ]);
 
     await expect(fork(db)).resolves.toEqual(targetConversation);

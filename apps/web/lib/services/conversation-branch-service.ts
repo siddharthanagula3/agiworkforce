@@ -13,6 +13,11 @@ type CopiedAssistantMessage = {
   content: string;
 };
 
+type CopiedMessage = CopiedAssistantMessage & {
+  source_message_id: string;
+  role: string;
+};
+
 type BranchGroupRow = {
   local_message_id: string | null;
   source_conversation_id: string;
@@ -299,7 +304,7 @@ export async function forkConversation(
     // than left as a bare CTE) so Postgres cannot skip evaluating it: a
     // data-modifying CTE only runs if the primary query's FROM/JOIN chain
     // actually reaches it.
-    copiedAssistantMessages = await tx.query<CopiedAssistantMessage>(
+    const copied = await tx.query<CopiedMessage>(
       `with ordered_messages as (
          select message.*,
                 row_number() over (
@@ -347,23 +352,32 @@ export async function forkConversation(
            from messages_to_copy
           order by message_position
          returning id, role, content
-       ),
-       branch_map as (
-         insert into public.conversation_branch_messages
-           (branch_id, source_message_id, target_message_id)
-         select $4, source.id, source.target_message_id
-           from messages_to_copy as source
-           join inserted_messages as inserted
-             on inserted.id = source.target_message_id
-         returning target_message_id
        )
-       select inserted_messages.id, inserted_messages.content
-         from inserted_messages
-         join branch_map
-           on branch_map.target_message_id = inserted_messages.id
-        where inserted_messages.role = 'assistant'`,
-      [input.sourceConversationId, input.messageId, target.id, input.requestId],
+       select source.id as source_message_id,
+              inserted.id,
+              inserted.role,
+              inserted.content
+         from messages_to_copy as source
+         join inserted_messages as inserted
+           on inserted.id = source.target_message_id`,
+      [input.sourceConversationId, input.messageId, target.id],
     );
+
+    await tx.execute(
+      `insert into public.conversation_branch_messages
+         (branch_id, source_message_id, target_message_id)
+       select $1, map.source_message_id, map.target_message_id
+         from unnest($2::uuid[], $3::uuid[]) as map(source_message_id, target_message_id)`,
+      [
+        input.requestId,
+        copied.map((message) => message.source_message_id),
+        copied.map((message) => message.id),
+      ],
+    );
+
+    copiedAssistantMessages = copied
+      .filter((message) => message.role === 'assistant')
+      .map((message) => ({ id: message.id, content: message.content }));
 
     return target;
   });
