@@ -250,6 +250,42 @@ describe('durable cloud agent workflow settlement', () => {
     expect(String(writes[0]?.[0])).toContain('on conflict (id) do update');
   });
 
+  /**
+   * The rotated route has to reach settlement, not merely the stream.
+   *
+   * `execute-cloud-agent-invocation.ts` keeps a serving view of the request the
+   * way the inline transport does, and hands it here. Without it a turn the
+   * gateway refused and another route answered was billed to the refusing
+   * provider and shown to the user under a model that never replied.
+   */
+  it('attributes the turn to the route managed failover rotated onto', async () => {
+    const input = makeInput();
+    const serving = {
+      ...input.processed,
+      provider: 'google',
+      chatRequest: { ...input.processed.chatRequest, model: 'rotated-model' },
+      llmRequest: { ...input.processed.llmRequest, model: 'rotated-model' },
+      usedFallback: true,
+      fallbackReason: 'managed_failover',
+    } as unknown as Parameters<typeof settleWorkflowInvocation>[2];
+
+    await settleWorkflowInvocation(input, 'completed', serving);
+
+    expect(persistedTurn()).toMatchObject({ provider: 'google', model: 'rotated-model' });
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'google', model: 'rotated-model' }),
+    );
+  });
+
+  it('attributes the turn to the opening route when nothing rotated', async () => {
+    await settleWorkflowInvocation(makeInput(), 'completed');
+
+    expect(persistedTurn()).toMatchObject({ provider: 'anthropic', model: 'claude-test' });
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'anthropic', model: 'claude-test' }),
+    );
+  });
+
   it('skips persistence when the caller supplied no assistant message id', async () => {
     await settleWorkflowInvocation(makeInput({ assistantMessageId: undefined }), 'completed');
 

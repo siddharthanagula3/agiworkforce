@@ -19,8 +19,9 @@ const MIN_OPERATION_LEASE_SECONDS = 60;
 export const MAX_OPERATION_LEASE_SECONDS = 300;
 const DEFAULT_OPERATION_LEASE_SECONDS = 240;
 const MAX_OPERATION_REPLAY_ATTEMPTS = 5;
+export const OPERATION_REPLAY_LIMIT_CODE = 'operation_replay_limit_exceeded';
 const OPERATION_REPLAY_LIMIT_ERROR = {
-  code: 'operation_replay_limit_exceeded',
+  code: OPERATION_REPLAY_LIMIT_CODE,
   message: 'The durable operation exceeded its maximum replay attempts.',
 } as const;
 const MILLISECONDS_PER_SECOND = 1000;
