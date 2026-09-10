@@ -1,7 +1,8 @@
 {
   "version": 2,
-  "lastUpdated": "2026-09-07",
+  "lastUpdated": "2026-09-08",
   "currentSourcesOfTruth": [
+    "ACTIVE_ISSUES.md",
     "AGENTS.md",
     "CLAUDE.md",
     "ARCHITECTURE.md",
