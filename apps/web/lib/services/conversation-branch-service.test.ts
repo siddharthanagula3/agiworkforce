@@ -96,7 +96,20 @@ describe('conversation branch service', () => {
       .mockResolvedValueOnce([{ id: '0190a000-0000-7000-8000-0000000000bb' }])
       .mockResolvedValueOnce([{ sibling_count: 0, group_count: 0 }])
       .mockResolvedValueOnce([targetConversation])
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([
+        {
+          source_message_id: '0190a000-0000-7000-8000-0000000000aa',
+          id: '0190a000-0000-7000-8000-0000000000e1',
+          role: 'user',
+          content: 'hello',
+        },
+        {
+          source_message_id: '0190a000-0000-7000-8000-0000000000bb',
+          id: '0190a000-0000-7000-8000-0000000000e2',
+          role: 'assistant',
+          content: 'hi',
+        },
+      ]);
     execute.mockResolvedValue(1);
 
     await expect(
@@ -109,7 +122,6 @@ describe('conversation branch service', () => {
 
     expect(db.transaction).toHaveBeenCalledOnce();
     expect(query.mock.calls[1]![0]).toContain('for update');
-    expect(execute).toHaveBeenCalledTimes(1);
     const [relationSql, relationParams] = execute.mock.calls[0]!;
     expect(relationSql).toContain('insert into public.conversation_branches');
     expect(relationParams).toEqual([
@@ -123,13 +135,22 @@ describe('conversation branch service', () => {
     expect(copySql).toContain('row_number() over');
     expect(copySql).toContain('insert into public.web_messages');
     expect(copySql).toContain('cost_cents');
-    expect(copySql).toContain('insert into public.conversation_branch_messages');
-    expect(copySql).toContain("where inserted_messages.role = 'assistant'");
+    expect(copySql).not.toContain('insert into public.conversation_branch_messages');
     expect(copyParams).toEqual([
       sourceConversation.id,
       '0190a000-0000-7000-8000-0000000000bb',
       targetConversation.id,
+    ]);
+
+    const [mapSql, mapParams] = execute.mock.calls.find(([sql]) =>
+      String(sql).includes('conversation_branch_messages'),
+    )!;
+    expect(mapSql).toContain('insert into public.conversation_branch_messages');
+    expect(mapSql).toContain('unnest($2::uuid[], $3::uuid[])');
+    expect(mapParams).toEqual([
       targetConversation.id,
+      ['0190a000-0000-7000-8000-0000000000aa', '0190a000-0000-7000-8000-0000000000bb'],
+      ['0190a000-0000-7000-8000-0000000000e1', '0190a000-0000-7000-8000-0000000000e2'],
     ]);
   });
 
