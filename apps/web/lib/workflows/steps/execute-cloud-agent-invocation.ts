@@ -6,8 +6,10 @@ import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { FatalError, RetryableError, getWritable } from 'workflow';
 
+import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   runToolLoop,
@@ -265,8 +267,15 @@ type WorkflowInvocationResult =
   | { kind: 'continue'; input: CloudAgentWorkflowInput }
   | { kind: 'terminal'; outcome: WorkflowTerminalOutcome };
 
+// A turn settles in its last invocation, so the rotated route travels with the continuation; reservations come off first.
+function continuationRequest(serving: ProcessedRequest): CloudAgentWorkflowInput['processed'] {
+  const { managedUsage: _managedUsage, freeTrial: _freeTrial, ...rest } = serving;
+  return rest as CloudAgentWorkflowInput['processed'];
+}
+
 function workflowContinuation(
   input: CloudAgentWorkflowInput,
+  serving: ProcessedRequest,
   checkpoint: {
     sessionId: string;
     turnId: string;
@@ -275,13 +284,14 @@ function workflowContinuation(
     messages: ProcessedRequest['llmRequest']['messages'];
   },
 ): CloudAgentWorkflowInput {
+  const processed = continuationRequest(serving);
   return parseCloudAgentWorkflowInput(
     JSON.parse(
       JSON.stringify({
         ...input,
         processed: {
-          ...input.processed,
-          llmRequest: { ...input.processed.llmRequest, messages: checkpoint.messages },
+          ...processed,
+          llmRequest: { ...processed.llmRequest, messages: checkpoint.messages },
         },
         continuation: {
           eventSessionId: checkpoint.sessionId,
@@ -326,6 +336,13 @@ export async function executeCloudAgentWorkflowInvocation(
   let inputCheckpointSaved = false;
   let reportedFailure = false;
   let lastTaskState: AgentTaskState | undefined;
+  const cancellation = new AbortController();
+  let serving: ProcessedRequest = processed;
+  const failover = createFailoverPlan(processed, {
+    signal: cancellation.signal,
+    isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+    modelPolicy: processed.modelPolicy ?? null,
+  });
 
   const generator = runToolLoop(processed, {
     mcpTools: input.mcpTools,
@@ -343,8 +360,21 @@ export async function executeCloudAgentWorkflowInvocation(
     initialCompletedSteps: input.continuation?.initialCompletedSteps,
     invocationContinuation: input.continuation?.invocationContinuation,
     maxDurationMs: 210_000,
-    isCancellationRequested: () =>
-      isCloudAgentRunCancellationRequested(db, { userId: input.userId, runId: input.runId }),
+    isCancellationRequested: async () => {
+      const cancelled = await isCloudAgentRunCancellationRequested(db, {
+        userId: input.userId,
+        runId: input.runId,
+      });
+      if (cancelled) cancellation.abort();
+      return cancelled;
+    },
+    failover: {
+      next: (error, context) => {
+        const attempt = failover.next(error, context);
+        if (attempt) serving = attempt.processed;
+        return attempt;
+      },
+    },
     shouldPropagateExecutionError: (error) =>
       error instanceof FatalError || error instanceof RetryableError,
     providerExecutor: ({ operationKey, step, request, execute }) =>
@@ -379,7 +409,7 @@ export async function executeCloudAgentWorkflowInvocation(
       });
     },
     onInvocationCheckpoint: async (checkpoint) => {
-      nextInput = workflowContinuation(input, checkpoint);
+      nextInput = workflowContinuation(input, serving, checkpoint);
     },
     onApprovalCheckpoint: async (checkpoint) => {
       await saveCloudAgentApprovalCheckpoint(db, {
@@ -454,6 +484,6 @@ export async function executeCloudAgentWorkflowInvocation(
         : reportedFailure || lastTaskState === 'failed'
           ? 'failed'
           : 'completed';
-  await settleWorkflowInvocation(input, outcome);
+  await settleWorkflowInvocation(input, outcome, serving);
   return { kind: 'terminal', outcome };
 }
