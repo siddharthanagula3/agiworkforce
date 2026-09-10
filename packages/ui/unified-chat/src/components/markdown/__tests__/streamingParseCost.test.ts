@@ -27,6 +27,7 @@ describe('streaming markdown parse cost', () => {
 
   it('measures a full reparse whose cost does track the whole message', () => {
     expect(growth.fullReparse).toBeGreaterThanOrEqual(MIN_FULL_REPARSE_GROWTH);
+    expect(growth.fullReparse).toBeGreaterThan(growth.tail);
   });
 
   it('leaves the tail bounded at every measured size', () => {
