@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveAutoRoute, type AutoRoutingRequest, type SelectedAutoRoute } from '../auto';
 
+const registryRoutes: Record<string, { harnessId: string }> = modelRegistry.routes;
 const WEB_RUNTIME_PROFILE = 'web/cloud-chat';
 const MANAGED = 'managed_cloud' as const;
 const PAID_TIER = 'pro';
@@ -71,7 +72,7 @@ describe('the fallback plan for a model the user pinned', () => {
 
     for (const fallback of decision.fallbacks) {
       expect(declared).toContain(fallback.routeId);
-      expect(modelRegistry.routes[fallback.routeId]?.harnessId).toBe(fallback.harnessId);
+      expect(registryRoutes[fallback.routeId]?.harnessId).toBe(fallback.harnessId);
     }
   });
 });
