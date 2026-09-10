@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 114 of 201 database-backed hosted API route files. Counted against the 201 route files that reach the database; the other 87 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 87 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-08.',
+      'Partial: 116 of 203 database-backed hosted API route files. Counted against the 203 route files that reach the database; the other 87 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 87 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-10.',
   },
   {
     label: 'Authentication and CSRF',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-10',
+                        value:
+                          'Re-measured after the two live voice session routes shipped, both bound to row-level policy. The database-backed total moved from 201 to 203 and the row-level-isolation count from 114 to 116. The owner-connection count stays at 87 and the routes excluded from both sides stay at 87.',
+                      },
                       {
                         label: '2026-09-08',
                         value:
