@@ -28,6 +28,7 @@ function writeDeviceFavourites(modelIds: readonly string[]): void {
 }
 
 async function persistFavourites(modelIds: readonly string[]): Promise<void> {
+  storedFavourites = Promise.resolve(modelIds);
   try {
     const csrf = await getCsrfToken();
     await fetch(PREFERENCES_ENDPOINT, {
@@ -49,28 +50,39 @@ export interface ModelFavourites {
   toggleFavourite: (modelId: string) => void;
 }
 
+let storedFavourites: Promise<readonly string[] | null> | null = null;
+
+function loadStoredFavourites(): Promise<readonly string[] | null> {
+  storedFavourites ??= fetch(`${PREFERENCES_ENDPOINT}?namespace=${PREFERENCES_NAMESPACE}`)
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const body = (await response.json()) as { settings?: Record<string, unknown> };
+      const stored = body.settings?.[FAVOURITES_KEY];
+      return Array.isArray(stored)
+        ? stored.filter((id): id is string => typeof id === 'string')
+        : null;
+    })
+    .catch(() => {
+      storedFavourites = null;
+      return null;
+    });
+  return storedFavourites;
+}
+
 export function useModelFavourites(): ModelFavourites {
   const [favouriteModelIds, setFavouriteModelIds] = useState<readonly string[]>([]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let cancelled = false;
     setFavouriteModelIds(readDeviceFavourites());
-    fetch(`${PREFERENCES_ENDPOINT}?namespace=${PREFERENCES_NAMESPACE}`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as { settings?: Record<string, unknown> };
-      })
-      .then((body) => {
-        const stored = body?.settings?.[FAVOURITES_KEY];
-        if (!Array.isArray(stored)) return;
-        const ids = stored.filter((id): id is string => typeof id === 'string');
-        setFavouriteModelIds(ids);
-        writeDeviceFavourites(ids);
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
+    void loadStoredFavourites().then((ids) => {
+      if (cancelled || !ids) return;
+      setFavouriteModelIds(ids);
+      writeDeviceFavourites(ids);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const toggleFavourite = useCallback((modelId: string) => {
