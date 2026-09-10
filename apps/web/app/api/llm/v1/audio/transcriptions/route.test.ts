@@ -115,14 +115,17 @@ beforeEach(() => {
     requested: 0,
     softLimitReached: false,
   });
-  mocks.reserve.mockImplementation(async (input: { estimatedCostCents: number }) => ({
+  mocks.reserve.mockImplementation(
+    async (input: { estimatedCostMicrousd: number; estimatedCostCents: number }) => ({
     db: { query: vi.fn() },
     userId: 'user-1',
     idempotencyKey: 'key-1',
     requestHash: 'hash-1',
     leaseToken: 'lease-1',
-    estimatedCostCents: input.estimatedCostCents,
-  }));
+      estimatedCostMicrousd: input.estimatedCostMicrousd,
+      estimatedCostCents: input.estimatedCostCents,
+    }),
+  );
   mocks.finalize.mockResolvedValue({ requestStatus: 'completed', operationResult: 'finalized' });
   mocks.providerStarted.mockResolvedValue(undefined);
   mocks.clientDelivered.mockResolvedValue(undefined);
