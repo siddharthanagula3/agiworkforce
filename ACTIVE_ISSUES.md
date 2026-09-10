@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
@@ -40,9 +40,29 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 13 unresolved issues: 0 P0, 0 P1, 9 P2, 4 P3, plus 3 items needing
+- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 4 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
-  and `AGI-23`, are partly fixed in this pass and say which part.
+  and `AGI-23`, are partly fixed and say which part.
+- Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
+  every fix exercised in the browser before commit): closed and deleted from
+  this file rather than archived: settings saves answering 412 on every
+  versioned write (933f5b8af), the durable workflow bundle crashing on a pino
+  import (496cd42da), signed-in visitors shown the sign-in form (049c0bd3d),
+  empty conversations in history (2c681788b), branching failing on row
+  security (070ada117, d107dea4d), pinned-model route failover (1cd019d50),
+  memory and past-chat recall (a7ba7e903, 013a2f3af), temporary chats saved
+  and listed (637411f26, dbacf8196), gateway adapters in the shared server
+  path (97e76f63d), the AGI Work approval notice and the premature no-results
+  fallback (9e4505417), artifacts stored interrupted with a missing last line
+  and code fences read as a request to run code (e2ef2e196), oversized mermaid
+  figures (676564cf7, 0461fd9b9), generated images as thumbnails (1c540c875),
+  favourites fetched on every composer mount (1652052a2), the durable
+  transport never rotating routes (2f042794f, validation `LIVE-7`), deep
+  research without search on harnesses lacking native search (c00dc8cb8), and
+  the routing conformance fixture that had drifted since 972328011
+  (1a3f2b568), and the approval flow that collapsed after the first inline
+  decision while labelling the wait as running (cd01fe255). What each was
+  is in its commit. New root causes opened below: `AGI-27` to `AGI-31`.
 - Five are blocked on a decision rather than on code, and each says whose and
   what it costs: `AGI-5` (CI budget), `AGI-11` (default expiry), `AGI-14` (a
   second speech-to-text vendor), `AGI-17` (conform to CommonMark or forgive it),
@@ -458,6 +478,53 @@ for the window.
 **Validation:** the classification test in `provider-runtime`, plus a route
 health assertion.
 
+### `AGI-27` Attachments are not in the sandbox the model runs code in
+
+**Severity:** P2
+**Status:** Open.
+**Area:** Code execution, files
+**What is wrong:** a file attached to the turn is never staged into the
+execution sandbox, so the model's first action is `write_file` with the whole
+attachment as its content, which needs an approval, before it can run anything.
+ChatGPT mounts uploads under `/mnt/data` and Claude's analysis tool reads the
+attachment directly.
+**Evidence:** live 2026-09-10, conversation a36a8054 on `:3100`;
+`apps/web/lib/e2b/runtime.ts` `getE2BExecutor`, tool-loop.ts around the
+executor acquisition.
+**User impact:** medium. One extra approval and a copied file on every analysis.
+**Dependencies:** None.
+**Acceptance criteria:** a CSV attached to a code-execution turn is present in
+the sandbox before the first `execute_code`, the model is told where, and no
+`write_file` copy is needed.
+**Validation:** tool-loop code-execution tests, a live CSV total on a
+non-gateway model.
+
+### `AGI-28` Citations are prose, and a research reload keeps thinking and loses sources
+
+**Severity:** P2
+**Status:** Open.
+**Area:** Web search, research, persistence
+**What is wrong:** on a native-search turn the model writes outlet names as
+italic prose with no `[n]` markers, and the Sources control counts one source
+for two outlets. After a reload of a completed deep-research run the stored
+content opens with the model's `<thinking>` prose and the row's metadata holds
+no research sources, so the `[n]` markers render with nothing behind them and
+the activity header is gone; the report and its citations sit in
+`research_reports` with no link from the message.
+**Evidence:** live 2026-09-10, conversations 3ea3a37e and 38afe47d on `:3100`;
+`apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts` persistence,
+`research-loop.ts` `canonicalText` and `sources.toCitations()`,
+`apps/web/features/chat/utils/research-sources.ts`.
+**User impact:** medium. Answers cite less than the leaders and a saved research
+run reads worse than the live one. Related: `AGI-16` (the href is still the
+provider's redirect).
+**Dependencies:** None.
+**Acceptance criteria:** numbered markers open the right source on native and
+runtime search turns; a reloaded research run shows the same citations and
+Sources count as the live session and no thinking prose.
+**Validation:** stream-transform and research-loop wire tests, MessageBubble
+citation cases, a live headline search and a reloaded research run.
+
 ## 5. P3, lower priority
 
 ### `AGI-11` Published artifacts never expire
@@ -552,22 +619,66 @@ id after the list settles, rather than to an index.
 visible.
 **Validation:** An e2e case in a thread longer than the overscan window.
 
+### `AGI-29` Memory facts come from a regular-expression extractor
+
+**Severity:** P3
+**Status:** Open.
+**Area:** Memory
+**What is wrong:** auto-memory candidates are the sentences that match a fixed
+list of patterns ("my name is", "I prefer", "remember that"); the leaders
+extract with a model and keep facts the patterns never see.
+**Evidence:** `packages/ai/agent-core/src/memory.ts` `extractCandidateMemoryFacts`.
+**User impact:** low. Memory works for the phrasings it knows.
+**Dependencies:** a cheap extraction call on the serving route's own adapter.
+**Acceptance criteria:** a fact stated without a trigger phrase is remembered.
+**Validation:** memory service tests, a live two-chat recall.
+
+### `AGI-30` The conversation list is fetched ten times during one turn
+
+**Severity:** P3
+**Status:** Open.
+**Area:** Chat performance
+**What is wrong:** one send produces about ten `GET /api/chat/conversations`
+and four `GET /api/usage`; the list hook refetches on every message update.
+**Evidence:** network log 2026-09-10, conversation 87a3bec7 on `:3100`;
+`apps/web/lib/hooks/useConversations.ts` mount effect and its dependencies.
+**User impact:** low. Wasted requests and rate-limit pressure on the QA account.
+**Dependencies:** None.
+**Acceptance criteria:** one list refetch per completed turn.
+**Validation:** hook test with a request counter, one live turn.
+
+### `AGI-31` A chat turn logs a MaxListenersExceededWarning
+
+**Severity:** P3
+**Status:** Open.
+**Area:** Server hygiene
+**What is wrong:** "Possible EventEmitter memory leak detected. 11 error
+listeners added" appears during a chat turn; the registration site was not
+found in the adapter, factory, runtime or error-handler modules.
+**Evidence:** dev log 2026-09-10; the warning's full stack is needed from a
+fresh occurrence.
+**User impact:** none visible; a leak would surface as memory growth.
+**Dependencies:** None.
+**Acceptance criteria:** no warning across a hundred turns.
+**Validation:** the stack, then a targeted test.
+
 ## 6. Needs live validation
 
 Neither of these is a confirmed defect.
 
-| id       | Question                                                      | Why it is still open                                                                                                                                                                                                                     |
-| -------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                       |
-| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                |
-| `LIVE-6` | Do scheduled tasks actually fire?                             | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect. |
+| id       | Question                                                      | Why it is still open                                                                                                                                                                                                                                                                             |
+| -------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                                                                               |
+| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                                                                        |
+| `LIVE-7` | Does the durable transport rotate routes after 2f042794f?     | The step bundle at `apps/web/app/.well-known/workflow/v1/step/route.js` is generated when the dev server starts, so the running server on `:3100` still executes the old step code. Tests cover the rotation; a live pinned-model turn on a gateway route must be re-run after the next restart. |
+| `LIVE-6` | Do scheduled tasks actually fire?                             | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect.                                                         |
 
 ## 7. Execution order
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
-   what is left is bounded and visible.
+1. `AGI-28` then `AGI-27`, citations and research persistence, then sandbox
+   staging. Both touch the tool loop's terminal path, so one at a time.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
@@ -584,8 +695,8 @@ Dependency-aware, not severity-ordered.
    starts with a barge-in test rather than with chunking.
 7. `AGI-10`. Enterprise sharing, independent. `AGI-14` needs a vendor decision
    before it needs an implementer.
-8. `AGI-11`, `AGI-20`. Background and polish. `AGI-17` needs a decision before
-   it needs an implementer.
+8. `AGI-11`, `AGI-20`, `AGI-29`, `AGI-30`, `AGI-31`. Background and polish.
+   `AGI-17` needs a decision before it needs an implementer.
 
 `AGI-12` belongs to whoever is next in `apps/desktop`.
 
@@ -606,12 +717,15 @@ Dependency-aware, not severity-ordered.
 | `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
+| `AGI-27` | tool-loop staging cases                             | a CSV total on a non-gateway model  | no write_file copy before execute_code    |
+| `AGI-28` | wire, persistence and citation cases                | a headline search, a reloaded run   | markers open sources; reload equals live  |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
 ## 9. Dependencies and parallel work
 
 ```
+AGI-28 ──> AGI-27          both touch the tool loop's terminal path
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
