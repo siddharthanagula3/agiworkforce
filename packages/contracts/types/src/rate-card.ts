@@ -1,15 +1,8 @@
-import { TOP_UP_UNITS_PER_USD } from './billing-topups';
+import { MICROUSD_PER_CREDIT, MICROUSD_PER_USD, creditsFromMicrousd } from './credits';
 
-export const MICROUSD_PER_USD = 1_000_000;
+export { MICROUSD_PER_CREDIT, MICROUSD_PER_USD, creditsFromMicrousd };
+
 export const MICROUSD_PER_CENT = 10_000;
-
-/** One credit is a fiftieth of a dollar, so a credit is this many microUSD. */
-export const MICROUSD_PER_CREDIT = MICROUSD_PER_USD / TOP_UP_UNITS_PER_USD;
-
-export function creditsFromMicrousd(microusd: number): number {
-  if (!Number.isFinite(microusd) || microusd <= 0) return 0;
-  return microusd / MICROUSD_PER_CREDIT;
-}
 
 export function microusdFromCents(cents: number): number {
   return Math.round(cents * MICROUSD_PER_CENT);
