@@ -1,41 +1,39 @@
 import 'server-only';
 
+import {
+  MICROUSD_PER_CENT,
+  MICROUSD_PER_USD,
+  RATE_CARD_PROVIDER_COGS_ENV,
+  resolveFeatureRate,
+} from '@agiworkforce/types';
+
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
 
-export const GOOGLE_GROUNDING_UNIT_PRICE_ENV = 'AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL';
+export const GOOGLE_GROUNDING_FEATURE = 'web_search_grounding';
+export const GOOGLE_GROUNDING_UNIT_PRICE_ENV = RATE_CARD_PROVIDER_COGS_ENV.web_search_grounding;
 const GOOGLE_GROUNDING_TOOL_NAME = 'google_search_grounding';
 const GROUNDING_COST_SOURCE_PREFIX = 'google_grounding';
 
-const MICROUSD_PER_CENT = 10_000;
-const USD_TO_MICROUSD = 1_000_000;
 const REQUESTS_PER_PRICED_BLOCK = 1_000;
 
-function configuredUnitPriceMicrousd(): number | null {
-  const raw = process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
-  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
-  const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    logger.error(
-      { env: GOOGLE_GROUNDING_UNIT_PRICE_ENV, value: raw },
-      '[grounding] invalid unit price override; falling back to the published rate',
-    );
-    return null;
-  }
-  return parsed;
-}
-
 /**
- * The published per-call rate for grounded requests beyond the free pool,
- * for the tier `model` resolves to in `web-search-pricing.json`. An env
- * override applies uniformly across tiers.
+ * The per-call rate for grounded requests beyond the free pool, for the tier
+ * `model` resolves to. The current tier is the rate card's published figure;
+ * an env override applies uniformly across tiers.
  */
 export function googleGroundingMicrousdPerCall(model: string): number {
-  const configured = configuredUnitPriceMicrousd();
-  if (configured !== null) return configured;
+  const rate = resolveFeatureRate(GOOGLE_GROUNDING_FEATURE);
+  if (rate.overrideInvalid) {
+    logger.error(
+      { env: rate.overrideEnv, value: process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] },
+      '[grounding] invalid unit price override; falling back to the published rate',
+    );
+  }
+  if (rate.overrideApplied) return rate.providerCogsMicrousd ?? 0;
   const tier = resolveGoogleGroundingPricingTier(model);
-  return Math.round((tier.usdPerThousandBeyondPool / REQUESTS_PER_PRICED_BLOCK) * USD_TO_MICROUSD);
+  return Math.round((tier.usdPerThousandBeyondPool / REQUESTS_PER_PRICED_BLOCK) * MICROUSD_PER_USD);
 }
 
 export function googleGroundingCostCents(billableCalls: number, model: string): number {
