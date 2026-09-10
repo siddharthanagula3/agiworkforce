@@ -433,6 +433,8 @@ function validateProviderVideoRequest(
   }
 }
 
+const VIDEO_RESOLUTION_UNPRICED_CODE = 'video_resolution_unpriced';
+
 function getVideoCostCents(
   model: ModelMetadata,
   resolution: VideoResolution,
@@ -454,11 +456,18 @@ function getVideoCostCents(
     return calculated;
   }
   const resolutionPrices = model.videoPerSecondCostByResolution;
-  const pricePerSecond = resolutionPrices ? resolutionPrices[resolution] : model.videoPerSecondCost;
+  // A by-resolution sheet that omits the requested resolution has no price for
+  // what was asked for. The flat rate is the cheapest resolution's rate, so
+  // falling back to it would settle 4K output at the 720p price.
+  if (resolutionPrices && resolutionPrices[resolution] === undefined) {
+    throw new ManagedUsageRequestError(
+      `${model.name} publishes no price for ${resolution} output.`,
+      400,
+      VIDEO_RESOLUTION_UNPRICED_CODE,
+    );
+  }
+  const pricePerSecond = resolutionPrices?.[resolution] ?? model.videoPerSecondCost;
   if (pricePerSecond === undefined) {
-    if (resolutionPrices) {
-      throw createError.validation(`${model.name} does not support ${resolution} output`);
-    }
     throw createError.serviceUnavailable(`Pricing is not configured for ${model.name}`);
   }
   return Math.ceil(Number((pricePerSecond * durationSecs * 100).toFixed(8)));
@@ -953,13 +962,21 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const billableDurationSecs = duration_secs;
   const estimatedDuration = estimateVideoDuration(provider, billableDurationSecs);
 
-  const estimatedCostCents = getVideoCostCents(
-    model,
-    resolution,
-    aspectRatio,
-    billableDurationSecs,
-    generateAudio,
-  );
+  let estimatedCostCents: number;
+  try {
+    estimatedCostCents = getVideoCostCents(
+      model,
+      resolution,
+      aspectRatio,
+      billableDurationSecs,
+      generateAudio,
+    );
+  } catch (error) {
+    if (error instanceof ManagedUsageRequestError) {
+      return managedUsageErrorResponse(request, error);
+    }
+    throw error;
+  }
   try {
     await assertTierUnitAllowance({
       db: scopedDb,
