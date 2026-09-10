@@ -378,13 +378,3 @@ admin economics page stops reporting the table as absent.
 records nothing and the economics page reports provider reports as unavailable.
 **Impact** NON-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## Known unmetered COGS
-
-Not founder actions. Recorded at the team lead's request so the telemetry
-workstream can carry them; the engineering work belongs in `ACTIVE_ISSUES.md`.
-
-- A live voice session delegates to a backend responses model with web search
-  (`apps/web/app/api/voice/live/sessions/route.ts`), which the provider bills
-  separately from the per-minute session rate, and no usage report reaches the
-  close route, so those tokens are never metered.
