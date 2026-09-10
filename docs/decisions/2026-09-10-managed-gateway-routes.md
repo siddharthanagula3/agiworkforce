@@ -9,6 +9,30 @@ Decisions in the living decision model's shape
 model itself carried uncommitted edits when this was written. Fold them in
 when the founder decides.
 
+## D-2026-09-10-03 Project chats keep landing in AGI Work
+
+- Question: whether a chat started from a project page or "New chat in
+  project" should open as an ordinary chat, as it does in ChatGPT and Claude
+  projects, or in AGI Work as it does today.
+- Evidence: observed 2026-09-10 with the QA account. A project knowledge
+  question ("What is the mooring designation for the north berth? Use the
+  project files.") asked from the project composer opened in AGI Work and the
+  agent asked to run `read berths.txt` in the sandbox, although the file's
+  text was already in its context; two different models did the same. The
+  composer lands eligible accounts in AGI Work on purpose and its tests pin
+  the rule that Chat carries no hidden project scope (switching to Chat
+  clears the project).
+- Decision: taken by Fable under the decision hierarchy, existing deliberate
+  behaviour first: the default stays. The knowledge preamble now states that
+  contents are inline and no copy exists in any sandbox (61f3d5c96).
+- Why: reversing the default means moving the project scope out of the AGI
+  Work bar, a composer design the founder set, not a bug.
+- Tradeoff: a plain knowledge question in a project can still cost an
+  approval click on models that reach for tools.
+- Reversibility: high; one effect in ChatComposerNew.tsx and three tests.
+- Revisit trigger: the founder's answer, or user feedback naming the approval
+  friction in projects.
+
 ## D-2026-09-10-02 Tool-approval defaults versus the leaders
 
 - Question: whether sandboxed code execution and web search may run without
@@ -82,6 +106,10 @@ when the founder decides.
 - Tradeoff: until decided, the two DeepSeek defaults and the Moonshot
   flagship are unroutable for managed users while still listed, and the Zhipu default has a
   single managed route.
-- Reversibility: high; a catalogue edit and a registry regenerate.
+- Reversibility: high; a catalogue edit and a registry regenerate. The
+  promotion gives several models extra hosts, so whoever lands it must
+  re-record `auto-route-conformance.json` (`AGI_UPDATE_ROUTING_CONFORMANCE=1`)
+  and re-run the Rust replay in the same change; the fixture recorded on
+  2026-09-10 is correct for main only.
 - Revisit trigger: the founder's answer, or a user report of the 422 on an
   explicit DeepSeek or Moonshot selection.

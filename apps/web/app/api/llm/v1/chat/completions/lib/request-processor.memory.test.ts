@@ -160,6 +160,23 @@ describe('enrichPastChatContext', () => {
     expect(params[2]).toBe('conversation-current');
   });
 
+  it('recalls nothing when the chat has memory switched off', async () => {
+    const query = vi.fn();
+    const chatRequest = { ...makeRecallRequest(), memory_enabled: false };
+
+    await expect(
+      enrichPastChatContext({
+        db: { query },
+        userId: 'user-1',
+        chatRequest,
+        isTemporary: false,
+        surface: 'web',
+        policy: RECALL_POLICY,
+      }),
+    ).resolves.toBe(false);
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('recalls nothing for a Temporary Chat', async () => {
     const query = vi.fn();
     const chatRequest = makeRecallRequest();
