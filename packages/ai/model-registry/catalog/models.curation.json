@@ -3240,6 +3240,54 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_transcription"
       }
     },
+    "gpt-live-1": {
+      "id": "gpt-live-1",
+      "apiModelId": "gpt-live-1",
+      "name": "GPT Live 1",
+      "provider": "openai",
+      "modelType": "audio",
+      "inputModalities": ["text", "audio"],
+      "outputModalities": ["text", "audio"],
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Live Voice Conversation", "Full-duplex Speech", "Voice Agents"],
+      "knowledgeCutoff": "2025-07-31",
+      "deprecation_date": null,
+      "openWeight": false,
+      "license": "proprietary",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "very-fast",
+      "endpoints": ["v1/live/sessions"],
+      "pricingNote": "Priced per minute of session rather than per token: $0.05 per minute of voice session, billed per second, so the per-token fields on this entry are zero rather than a rate. The delegated backend model and any tool usage are billed separately. Only v1/live/sessions serves this model and it is not offered on OpenRouter. Audio and text in, audio and text out, with streaming and function calling; image and video are unsupported. Default voice marin. Knowledge cutoff 2025-07-31. Verified against https://developers.openai.com/api/docs/models/gpt-live-1 and https://developers.openai.com/api/docs/guides/live on 2026-09-10.",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-10",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_live"
+      }
+    },
     "gpt-4o-mini-transcribe": {
       "id": "gpt-4o-mini-transcribe",
       "apiModelId": "gpt-4o-mini-transcribe",

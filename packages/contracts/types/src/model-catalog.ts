@@ -141,6 +141,7 @@ export type ModelType =
   | 'search'
   | 'tts'
   | 'stt'
+  | 'audio'
   | 'music';
 
 export type ModelSpeed = 'very-fast' | 'fast' | 'medium' | 'slow';
@@ -947,7 +948,13 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
   free: {
     tier: 'free',
     surfacedUx: 'auto_only',
-    allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
+    allowedSlots: [
+      'workhorse_general',
+      'voice_transcription',
+      'voice_live',
+      'voice_live_backend',
+      'voice_rewrite',
+    ],
     allowedProviderSurfaces: ['managed_cloud'],
     manualModelSelection: false,
     allowManualSelection: false,
@@ -981,6 +988,8 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'search_fast',
       'search_premium',
       'voice_transcription',
+      'voice_live',
+      'voice_live_backend',
       'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok'],
@@ -1027,6 +1036,8 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'image_generation',
       'video_generation',
       'voice_transcription',
+      'voice_live',
+      'voice_live_backend',
       'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
@@ -1077,6 +1088,8 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'image_generation',
       'video_generation',
       'voice_transcription',
+      'voice_live',
+      'voice_live_backend',
       'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
