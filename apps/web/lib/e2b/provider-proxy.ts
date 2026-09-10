@@ -34,14 +34,50 @@ const PROVIDER_PROXY_ALLOWED_PATHS: Readonly<Record<string, readonly string[]>> 
   openai: ['responses', 'chat/completions', 'embeddings', 'models'],
 };
 
-export function isProviderProxyPathAllowed(providerId: string, upstreamPath: string): boolean {
-  const allowed = PROVIDER_PROXY_ALLOWED_PATHS[providerId];
-  if (!allowed) return false;
+function normalizeProviderProxyPath(upstreamPath: string): string {
   // Whether the version segment is part of the path or already part of the
   // configured root differs by provider, and a deployment may override the
   // root, so it is accepted in either position.
-  const normalized = upstreamPath.replace(/^v1\//, '');
-  return allowed.includes(normalized);
+  return upstreamPath.replace(/^v1\//, '');
+}
+
+export function isProviderProxyPathAllowed(providerId: string, upstreamPath: string): boolean {
+  const allowed = PROVIDER_PROXY_ALLOWED_PATHS[providerId];
+  if (!allowed) return false;
+  return allowed.includes(normalizeProviderProxyPath(upstreamPath));
+}
+
+/**
+ * Which allowlisted paths spend money, and in whose request shape.
+ *
+ * `models` and `messages/count_tokens` are deliberately absent: they carry no
+ * provider charge, so metering them would reserve against the customer's
+ * balance for a call that costs nothing.
+ */
+export type ProviderProxyMeteredEndpoint =
+  | 'anthropic_messages'
+  | 'openai_responses'
+  | 'openai_chat_completions'
+  | 'openai_embeddings';
+
+const PROVIDER_PROXY_METERED_PATHS: Readonly<
+  Record<string, Readonly<Record<string, ProviderProxyMeteredEndpoint>>>
+> = {
+  anthropic: { messages: 'anthropic_messages' },
+  openai: {
+    responses: 'openai_responses',
+    'chat/completions': 'openai_chat_completions',
+    embeddings: 'openai_embeddings',
+  },
+};
+
+export function providerProxyMeteredEndpoint(
+  providerId: string,
+  upstreamPath: string,
+): ProviderProxyMeteredEndpoint | null {
+  return (
+    PROVIDER_PROXY_METERED_PATHS[providerId]?.[normalizeProviderProxyPath(upstreamPath)] ?? null
+  );
 }
 
 export function providerProxyDefaultBaseUrl(providerId: string): string | undefined {
