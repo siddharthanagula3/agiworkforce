@@ -70,6 +70,7 @@ function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
     promptTokens: observation.inputTokens,
     completionTokens: observation.outputTokens,
     totalTokens: observation.inputTokens + observation.outputTokens,
+    reasoningTokens: observation.reasoningTokens,
     cacheReadInputTokens: observation.cacheReadTokens,
     cacheCreationInputTokens: observation.cacheWriteTokens,
     cacheCreation1hInputTokens: observation.cacheWrite1hTokens,
@@ -219,12 +220,75 @@ export function calculateObservedProviderUsageCostDollars(
   );
 }
 
+/**
+ * What the user owes for observed usage: the model's official list price,
+ * whichever route actually served it.
+ *
+ * The chat paths have always billed `calculateListCost` and reported the served
+ * route's cost separately as COGS. This path billed the served route's cost
+ * itself, so the same turn cost a different amount depending on whether it ran
+ * durably. An observation whose model has no published list sheet falls back to
+ * its route cost, which is what the caller would have been charged anyway.
+ */
+export function calculateObservedListCostDollars(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  const observations = usage.providerCallObservations;
+  if (observations?.length === usage.providerCalls && observations.length > 0) {
+    return observations.reduce((total, observation) => {
+      const tokenUsage = toTokenUsage(observation);
+      const listCost = LLMCostCalculator.calculateListCost(
+        observation.model ?? fallbackPricing.model,
+        tokenUsage,
+      );
+      if (listCost !== null) return total + listCost;
+      const recordedCost = observation.costDollars;
+      if (Number.isFinite(recordedCost) && recordedCost !== undefined && recordedCost >= 0) {
+        return total + recordedCost;
+      }
+      return (
+        total +
+        LLMCostCalculator.calculateCostDollars(
+          observation.provider ?? fallbackPricing.provider,
+          observation.model ?? fallbackPricing.model,
+          tokenUsage,
+          undefined,
+          observation.routeId ?? fallbackPricing.routeId,
+        )
+      );
+    }, 0);
+  }
+
+  const aggregateUsage: TokenUsage = {
+    promptTokens: usage.inputTokens,
+    completionTokens: usage.outputTokens,
+    totalTokens: usage.inputTokens + usage.outputTokens,
+    cacheReadInputTokens: usage.cacheReadTokens,
+    cacheCreationInputTokens: usage.cacheWriteTokens,
+    cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
+  };
+  const listCost = LLMCostCalculator.calculateListCost(fallbackPricing.model, aggregateUsage);
+  if (listCost !== null) return listCost;
+  return calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
+}
+
+function toLedgerCents(dollars: number): number {
+  return dollars > 0 ? Math.max(1, Math.ceil(dollars * 100)) : 0;
+}
+
+export function observedListLedgerCents(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  return toLedgerCents(calculateObservedListCostDollars(usage, fallbackPricing));
+}
+
 export function observedProviderUsageLedgerCents(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
-  const dollars = calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
-  return dollars > 0 ? Math.max(1, Math.ceil(dollars * 100)) : 0;
+  return toLedgerCents(calculateObservedProviderUsageCostDollars(usage, fallbackPricing));
 }
 
 export function hasObservedProviderUsage(usage: ObservedProviderUsage): boolean {
@@ -275,15 +339,18 @@ export function finalizeObservedManagedUsage(
   }
 
   const totalTokens = input.usage.inputTokens + input.usage.outputTokens;
-  const actualCostCents = observedProviderUsageLedgerCents(input.usage, {
+  const pricing: ProviderUsagePricingContext = {
     provider: input.provider,
     model: input.model,
-  });
+  };
+  const actualCostCents = observedListLedgerCents(input.usage, pricing);
+  const providerCostCents = observedProviderUsageLedgerCents(input.usage, pricing);
 
   return finalizeManagedUsageRequest({
     ...input.reservation,
     outcome: 'completed',
     actualCostCents,
+    providerCostCents,
     usage: {
       accounting: 'observed_provider_usage',
       reason: input.reason,

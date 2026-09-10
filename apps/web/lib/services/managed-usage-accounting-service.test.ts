@@ -341,6 +341,48 @@ describe('managed usage accounting', () => {
     ).toEqual([75, 75, 150]);
   });
 
+  it('bills the observed usage at list and reports the served route as provider cost', async () => {
+    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(0.4);
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockReset().mockReturnValue(0.1);
+    const pricing = { provider: 'open_router', model: ANTHROPIC_MODEL };
+
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 100, outputTokens: 20 }, pricing);
+    accumulateObservedProviderUsage(usage, { inputTokens: 100, outputTokens: 20 }, pricing);
+
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage,
+      reason: 'fixture_list_billing',
+    });
+
+    const finalized = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
+    expect(finalized?.actualCostCents).toBe(80);
+    expect(finalized?.providerCostCents).toBe(20);
+    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(null);
+  });
+
+  it('bills the served route when the model publishes no list sheet', async () => {
+    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(null);
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockReset().mockReturnValue(0.1);
+    const pricing = { provider: 'open_router', model: 'fixture-unlisted-model' };
+
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 100, outputTokens: 20 }, pricing);
+
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage,
+      reason: 'fixture_unlisted',
+    });
+
+    const finalized = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
+    expect(finalized?.actualCostCents).toBe(10);
+    expect(finalized?.providerCostCents).toBe(10);
+  });
+
   it('does not apply a catalog input tier across two request boundaries', async () => {
     const threshold = TIERED_MODEL.firstTier.thresholdTokens;
     const subthresholdTokens = Math.floor(threshold * 0.75);
