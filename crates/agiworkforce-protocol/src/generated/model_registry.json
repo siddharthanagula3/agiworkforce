@@ -23630,7 +23630,7 @@
       "imageInput": false,
       "audioInput": true,
       "videoInput": false,
-      "textOutput": true,
+      "textOutput": false,
       "imageOutput": false,
       "audioOutput": true,
       "videoOutput": false,

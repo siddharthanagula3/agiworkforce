@@ -3247,7 +3247,7 @@
       "provider": "openai",
       "modelType": "audio",
       "inputModalities": ["text", "audio"],
-      "outputModalities": ["text", "audio"],
+      "outputModalities": ["audio"],
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Live Voice Conversation", "Full-duplex Speech", "Voice Agents"],
@@ -3281,7 +3281,7 @@
       },
       "speedOverride": "very-fast",
       "endpoints": ["v1/live/sessions"],
-      "pricingNote": "Priced per minute of session rather than per token: $0.05 per minute of voice session, billed per second, so the per-token fields on this entry are zero rather than a rate. The delegated backend model and any tool usage are billed separately. Only v1/live/sessions serves this model and it is not offered on OpenRouter. Audio and text in, audio and text out, with streaming and function calling; image and video are unsupported. Default voice marin. Knowledge cutoff 2025-07-31. Verified against https://developers.openai.com/api/docs/models/gpt-live-1 and https://developers.openai.com/api/docs/guides/live on 2026-09-10.",
+      "pricingNote": "Priced per minute of session rather than per token: $0.05 per minute of voice session, billed per second, so the per-token fields on this entry are zero rather than a rate. The delegated backend model and any tool usage are billed separately. Only v1/live/sessions serves this model and it is not offered on OpenRouter. Audio and text in, audio out with the transcript delivered as session events, with streaming and function calling; image and video are unsupported. Default voice marin. Knowledge cutoff 2025-07-31. Verified against https://developers.openai.com/api/docs/models/gpt-live-1 and https://developers.openai.com/api/docs/guides/live on 2026-09-10.",
       "lifecycle": {
         "stage": "promoted",
         "stagedOn": "2026-09-10",
