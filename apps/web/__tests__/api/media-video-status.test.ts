@@ -94,6 +94,9 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
   }),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   markManagedUsageClientDelivered: (...args: unknown[]) => durableMocks.delivered(...args),
 }));
 vi.mock('@/lib/services/video-incident-alert-service', () => ({

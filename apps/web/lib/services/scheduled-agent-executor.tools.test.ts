@@ -57,6 +57,9 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   UPGRADE_HREF: '/pricing',
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
