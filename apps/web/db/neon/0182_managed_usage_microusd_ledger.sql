@@ -1,4 +1,4 @@
--- 0185 : give the managed-usage ledger a microUSD unit.
+-- 0182 : give the managed-usage ledger a microUSD unit.
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
@@ -184,7 +184,7 @@ alter table public.managed_usage_request_extensions
   check (estimated_cost_microusd >= 0);
 
 comment on column public.token_credits.credits_used_microusd is
-  'Authoritative spend. credits_used_cents is its round-half-up mirror, kept for readers that predate 0185.';
+  'Authoritative spend. credits_used_cents is its round-half-up mirror, kept for readers that predate 0182.';
 comment on column public.credit_transactions.amount_microusd is
   'Authoritative ledger amount. Rolling windows sum this column; amount_cents is a per-row mirror and does not sum to it.';
 
@@ -851,7 +851,7 @@ as $$
   );
 $$;
 
--- A result written before 0185 carries only the cents key. Reading it as
+-- A result written before 0182 carries only the cents key. Reading it as
 -- microUSD is exact for those rows, because they were whole cents.
 create or replace function public.settlement_result_microusd(
   p_result jsonb,

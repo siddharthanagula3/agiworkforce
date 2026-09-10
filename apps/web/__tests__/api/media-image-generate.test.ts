@@ -50,7 +50,7 @@ vi.mock('@agiworkforce/types', async () => {
   imageRouteFixtures.liveGeminiApiModelId =
     liveGeminiImageModel.apiModelId ?? liveGeminiImageModel.id;
   // The published per-image price, charged exactly: the ledger settles in
-  // microUSD since 0185, so this no longer rounds up to a whole cent.
+  // microUSD since 0182, so this no longer rounds up to a whole cent.
   imageRouteFixtures.liveGeminiCostMicrousd = Math.ceil(
     (liveGeminiImageModel.imagePerImageCost ?? 0) * 1_000_000,
   );

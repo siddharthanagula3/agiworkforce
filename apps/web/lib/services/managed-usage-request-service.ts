@@ -100,7 +100,7 @@ export interface ManagedUsageRequestReservation {
   leaseToken: string;
   /**
    * What the ledger reserved. The cents field is its round-half-up mirror.
-   * Optional only so a reservation rebuilt from a record written before 0185
+   * Optional only so a reservation rebuilt from a record written before 0182
    * still satisfies the type; read it through `estimateMicrousdOf`, never
    * directly, so the cents fallback is always applied.
    */
@@ -115,7 +115,7 @@ export interface ManagedUsageRequestReservation {
 /**
  * A caller supplies whichever unit it already holds. `*Cents` is the
  * deprecated alias: it is scaled by 10,000 and takes the same path, so a call
- * site that has not migrated bills exactly what it billed before 0185.
+ * site that has not migrated bills exactly what it billed before 0182.
  */
 export type ManagedUsageAmount =
   | { estimatedCostMicrousd: number; estimatedCostCents?: number }

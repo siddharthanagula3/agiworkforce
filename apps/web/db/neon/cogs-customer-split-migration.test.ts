@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MIGRATION = '0183_provider_cost_events_customer_and_cogs_split.sql';
+const MIGRATION = '0180_provider_cost_events_customer_and_cogs_split.sql';
 
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, MIGRATION), 'utf8');
 const down = fs.readFileSync(
@@ -25,7 +25,7 @@ const ADDED_COLUMNS = [
   'reasoning_tokens',
 ] as const;
 
-describe('0183 cogs customer and provider split', () => {
+describe('0180 cogs customer and provider split', () => {
   it('is a draft until someone approves running it', () => {
     expect(migration).toContain('NOT YET APPLIED');
   });

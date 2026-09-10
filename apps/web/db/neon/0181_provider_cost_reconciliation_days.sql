@@ -1,9 +1,9 @@
--- 0184 : record what each provider says a day cost, next to what the ledger thinks.
+-- 0181 : record what each provider says a day cost, next to what the ledger thinks.
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- provider_cost_events prices every call from the published rate at settle
--- time. 0183 gave that estimate its own column and left room for a figure the
+-- time. 0180 gave that estimate its own column and left room for a figure the
 -- provider itself reports, but nothing fetches one, so every row still stands
 -- on reconciliation_status = 'estimated' and no one can say whether the
 -- estimate is right. A wrong rate, a discount we forgot, a route billed under
