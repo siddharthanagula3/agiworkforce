@@ -1,40 +1,30 @@
 import 'server-only';
 
+import {
+  MICROUSD_PER_CENT,
+  RATE_CARD_PROVIDER_COGS_ENV,
+  resolveFeatureRate,
+} from '@agiworkforce/types';
+
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
-import { perplexitySearchUsdPerThousandRequests } from '@/lib/web-search/web-search-pricing';
 
-export const PERPLEXITY_SEARCH_UNIT_PRICE_ENV = 'AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL';
+export const PERPLEXITY_SEARCH_FEATURE = 'web_search_perplexity';
+export const PERPLEXITY_SEARCH_UNIT_PRICE_ENV = RATE_CARD_PROVIDER_COGS_ENV.web_search_perplexity;
 const PERPLEXITY_SEARCH_TOOL_NAME = 'perplexity_search';
 const PERPLEXITY_SEARCH_PROVIDER_ID = 'perplexity';
 const PERPLEXITY_COST_SOURCE_PREFIX = 'perplexity_search';
 
-const MICROUSD_PER_CENT = 10_000;
-const USD_TO_MICROUSD = 1_000_000;
-const REQUESTS_PER_PRICED_BLOCK = 1_000;
-
-function configuredUnitPriceMicrousd(): number | null {
-  const raw = process.env[PERPLEXITY_SEARCH_UNIT_PRICE_ENV];
-  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
-  const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+/** The rate card's per-request provider rate: one billing unit per successful call. */
+export function perplexitySearchMicrousdPerCall(): number {
+  const rate = resolveFeatureRate(PERPLEXITY_SEARCH_FEATURE);
+  if (rate.overrideInvalid) {
     logger.error(
-      { env: PERPLEXITY_SEARCH_UNIT_PRICE_ENV, value: raw },
+      { env: rate.overrideEnv, value: process.env[PERPLEXITY_SEARCH_UNIT_PRICE_ENV] },
       '[web-search] invalid Perplexity unit price override; falling back to the published rate',
     );
-    return null;
   }
-  return parsed;
-}
-
-/** The published per-request rate: one billing unit per successful call. */
-export function perplexitySearchMicrousdPerCall(): number {
-  return (
-    configuredUnitPriceMicrousd() ??
-    Math.round(
-      (perplexitySearchUsdPerThousandRequests() / REQUESTS_PER_PRICED_BLOCK) * USD_TO_MICROUSD,
-    )
-  );
+  return rate.providerCogsMicrousd ?? 0;
 }
 
 export function perplexitySearchCostCents(calls: number): number {

@@ -1,32 +1,31 @@
 import 'server-only';
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { FEATURE_RATE_CARD, MICROUSD_PER_USD } from '@agiworkforce/types';
 
 import pricingConfig from './web-search-pricing.json';
 
-interface GroundingPricingTier {
+const REQUESTS_PER_PRICED_BLOCK = 1_000;
+
+export interface GroundingPricingTier {
   poolWindow: 'month' | 'day';
   poolFreeRequests: number;
   usdPerThousandBeyondPool: number;
 }
 
-interface GoogleGroundingPricingConfig {
-  source: string;
-  fetchedAt: string;
-  provider: string;
-  currentTier: GroundingPricingTier;
-  previousTier: GroundingPricingTier;
+interface GroundingPoolTierConfig {
+  poolWindow: 'month' | 'day';
+  poolFreeRequests: number;
 }
 
-interface PerplexitySearchPricingConfig {
-  source: string;
-  fetchedAt: string;
-  usdPerThousandRequests: number;
+interface GoogleGroundingPricingConfig {
+  provider: string;
+  currentTier: GroundingPoolTierConfig;
+  previousTier: GroundingPricingTier;
 }
 
 interface WebSearchPricingConfig {
   googleGrounding: GoogleGroundingPricingConfig;
-  perplexitySearch: PerplexitySearchPricingConfig;
 }
 
 interface RegistryModelEntry {
@@ -36,6 +35,10 @@ interface RegistryModelEntry {
 type RegistryModelsMap = Record<string, RegistryModelEntry>;
 
 const config = pricingConfig as WebSearchPricingConfig;
+
+function usdPerThousand(microusdPerCall: number): number {
+  return (microusdPerCall / MICROUSD_PER_USD) * REQUESTS_PER_PRICED_BLOCK;
+}
 
 export function isActivelyRoutedModel(modelId: string): boolean {
   const models = modelRegistry.models as unknown as RegistryModelsMap;
@@ -47,22 +50,27 @@ export function isActivelyRoutedModel(modelId: string): boolean {
 }
 
 /**
- * The grounding pricing tier for `modelId`. `currentTier` covers every
- * actively routed model in this app's registry (`lifecycle.status ===
- * 'active'`), the tier row `web-search-pricing.json` sources from the
- * vendor's current pricing page. `previousTier` is the vendor's older,
- * lower-volume row, kept for completeness and for anything outside this
- * app's active registry, rather than guessing that an unrecognized model
- * gets the newer terms.
+ * The grounding pricing tier for `modelId`. The current tier's rate is the
+ * rate card's published grounding figure; this file owns only the pool shape
+ * around it. `previousTier` is the vendor's older, lower-volume row, kept for
+ * anything outside this app's active registry rather than guessing that an
+ * unrecognized model gets the newer terms.
  */
 export function resolveGoogleGroundingPricingTier(modelId: string): GroundingPricingTier {
-  return isActivelyRoutedModel(modelId)
-    ? config.googleGrounding.currentTier
-    : config.googleGrounding.previousTier;
+  if (!isActivelyRoutedModel(modelId)) return config.googleGrounding.previousTier;
+  return {
+    ...config.googleGrounding.currentTier,
+    usdPerThousandBeyondPool: usdPerThousand(
+      FEATURE_RATE_CARD.web_search_grounding.providerCogsMicrousd ?? 0,
+    ),
+  };
 }
 
 export function googleGroundingPricingSource(): { source: string; fetchedAt: string } {
-  return { source: config.googleGrounding.source, fetchedAt: config.googleGrounding.fetchedAt };
+  return {
+    source: FEATURE_RATE_CARD.web_search_grounding.source,
+    fetchedAt: FEATURE_RATE_CARD.web_search_grounding.verifiedOn,
+  };
 }
 
 /**
@@ -71,9 +79,12 @@ export function googleGroundingPricingSource(): { source: string; fetchedAt: str
  * query per call, so one call is one billed unit.
  */
 export function perplexitySearchUsdPerThousandRequests(): number {
-  return config.perplexitySearch.usdPerThousandRequests;
+  return usdPerThousand(FEATURE_RATE_CARD.web_search_perplexity.providerCogsMicrousd ?? 0);
 }
 
 export function perplexitySearchPricingSource(): { source: string; fetchedAt: string } {
-  return { source: config.perplexitySearch.source, fetchedAt: config.perplexitySearch.fetchedAt };
+  return {
+    source: FEATURE_RATE_CARD.web_search_perplexity.source,
+    fetchedAt: FEATURE_RATE_CARD.web_search_perplexity.verifiedOn,
+  };
 }
