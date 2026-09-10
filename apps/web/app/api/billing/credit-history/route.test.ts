@@ -17,6 +17,7 @@ vi.mock('@/lib/logger', () => ({
 
 import { GET } from './route';
 import { MfaRequiredError } from '@/lib/mfa-policy-gate';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 function req(url = 'http://localhost:3000/api/billing/credit-history') {
   return new Request(url) as never;
@@ -52,6 +53,46 @@ describe('GET /api/billing/credit-history', () => {
     const body = (await response.json()) as { transactions: unknown[]; has_more: boolean };
     expect(body.transactions).toHaveLength(1);
     expect(body.has_more).toBe(false);
+  });
+
+  it('labels a usage debit by the model and hides the route it was reserved against', async () => {
+    const model = listCanonicalModels()[0];
+    if (!model) throw new Error('The registry must list a canonical model');
+    mockQuery.mockResolvedValue([
+      {
+        id: 'tx-2',
+        transaction_type: 'deduction',
+        amount_cents: 3,
+        description: `Managed usage reservation: ${model.provider}/${model.id}`,
+        metadata: null,
+        created_at: '2026-06-01T00:00:00.000Z',
+      },
+      {
+        id: 'tx-3',
+        transaction_type: 'deduction',
+        amount_cents: 1,
+        description: 'Managed usage actual-cost reconciliation',
+        metadata: null,
+        created_at: '2026-06-01T00:00:01.000Z',
+      },
+      {
+        id: 'tx-4',
+        transaction_type: 'purchase',
+        amount_cents: 1000,
+        description: null,
+        metadata: null,
+        created_at: '2026-06-01T00:00:02.000Z',
+      },
+    ]);
+
+    const response = await GET(req());
+    const body = (await response.json()) as { transactions: Array<{ label: string | null }> };
+
+    expect(body.transactions.map((row) => row.label)).toEqual([
+      `Usage: ${model.name}`,
+      'Usage adjustment',
+      null,
+    ]);
   });
 
   it('rejects when authentication fails', async () => {

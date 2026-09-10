@@ -29,6 +29,8 @@ vi.mock('./tool-loop-anthropic', () => ({
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
+    calculateListCost: vi.fn(() => null),
+    estimateListCost: vi.fn(() => null),
     calculateCost: vi.fn(() => 7),
     calculateCostDollars: vi.fn(() => 0.07),
   },

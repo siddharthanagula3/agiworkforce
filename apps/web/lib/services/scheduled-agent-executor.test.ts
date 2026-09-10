@@ -34,6 +34,8 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
+    calculateListCost: vi.fn(() => null),
+    estimateListCost: vi.fn(() => null),
     estimateCost: vi.fn(() => 2),
     calculateCost: vi.fn(() => 3),
   },

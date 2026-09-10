@@ -5,7 +5,7 @@ import {
   requireProviderDefaultModel,
   resolveEffectiveModelPricing,
 } from '@agiworkforce/types';
-import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 
 import {
   LLMCostCalculator,
@@ -879,13 +879,13 @@ describe('AGI_PRICING_UNPRICED_POLICY=warn', () => {
 
 describe('isCacheTokensDisjointFromInput, registry-sourced cache billing shape', () => {
   it('reads additional_to_input for anthropic and every anthropic-protocol proxy from the registry', () => {
-    for (const providerId of [
-      'anthropic',
-      'cheaperinference_anthropic',
-      'deepseek_anthropic',
-      'moonshot_anthropic',
-      'zhipu_anthropic',
-    ]) {
+    const anthropicProtocolProviders = new Set(['anthropic']);
+    for (const harness of Object.values(modelRegistry.harnesses)) {
+      if (harness.protocol === 'anthropic_messages')
+        anthropicProtocolProviders.add(harness.provider);
+    }
+    expect(anthropicProtocolProviders.size).toBeGreaterThan(1);
+    for (const providerId of anthropicProtocolProviders) {
       expect(isCacheTokensDisjointFromInput(providerId)).toBe(true);
     }
   });
@@ -900,5 +900,51 @@ describe('isCacheTokensDisjointFromInput, registry-sourced cache billing shape',
     expect(isCacheTokensDisjointFromInput('not-a-real-provider')).toBe(false);
     expect(isCacheTokensDisjointFromInput(null)).toBe(false);
     expect(isCacheTokensDisjointFromInput(undefined)).toBe(false);
+  });
+});
+
+describe('list price billing, registry-sourced', () => {
+  it('bills a model at its own developer route price even when a cheaper route served it', () => {
+    const discounted = listCanonicalModels()
+      .flatMap((model) => getRoutePricingForModel(model.id))
+      .find(
+        (route) =>
+          route.discount !== null &&
+          route.inputPerMillion !== null &&
+          route.outputPerMillion !== null,
+      );
+    if (!discounted) throw new Error('The registry declares no discounted route to exercise');
+    const usage = { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 };
+    const list = LLMCostCalculator.listPriceRoute(discounted.modelKey);
+    if (!list) throw new Error('A canonical model must resolve a list price route');
+    const listCents = LLMCostCalculator.calculateListCost(discounted.modelKey, usage);
+    const routeCents = LLMCostCalculator.calculateCost(
+      discounted.provider,
+      discounted.modelKey,
+      usage,
+      undefined,
+      discounted.routeId,
+    );
+    expect(listCents).toBe(
+      LLMCostCalculator.calculateCost(
+        list.provider,
+        discounted.modelKey,
+        usage,
+        undefined,
+        list.routeId,
+      ),
+    );
+    expect(listCents).toBeGreaterThan(routeCents);
+  });
+
+  it('has no list price for a model the registry does not know', () => {
+    expect(LLMCostCalculator.listPriceRoute('not-a-real-catalog-model')).toBeNull();
+    expect(
+      LLMCostCalculator.calculateListCost('not-a-real-catalog-model', {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+      }),
+    ).toBeNull();
   });
 });

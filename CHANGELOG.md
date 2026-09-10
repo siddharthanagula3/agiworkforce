@@ -10,6 +10,16 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Added
 
+- **Cheapest-host dispatch on OpenRouter.** Managed requests ask OpenRouter to
+  sort providers by price and carry the registry route's price as `max_price`,
+  so a dearer host is refused rather than billed; a zero-retention workspace
+  also sets `zdr`.
+- **Official price to the user, route cost to the ledger.** A managed
+  settlement bills the model's own developer price and records the served
+  route's price as provider cost; the reservation estimates at the same list
+  price. Balances, history and top-ups read in credits (fifty per dollar) and
+  a usage row is labelled by the model instead of the reserved route.
+
 - **Developer identity, separate from the serving provider.**
   `packages/ai/model-registry/catalog/developers.json` names who trained each
   model; the compiler resolves it per model (first-party providers inherit it,

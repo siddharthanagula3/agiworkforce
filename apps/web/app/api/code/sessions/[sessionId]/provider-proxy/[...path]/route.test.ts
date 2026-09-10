@@ -64,7 +64,11 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: mockRecordSettledProviderCost,
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
-  LLMCostCalculator: { calculateCost: mockCalculateCost },
+  LLMCostCalculator: {
+    calculateListCost: vi.fn(() => null),
+    estimateListCost: vi.fn(() => null),
+    calculateCost: mockCalculateCost,
+  },
 }));
 vi.mock('@/lib/e2b/provider-proxy-access-cache', () => ({
   readCachedProviderProxyAccess: mockReadCachedAccess,
