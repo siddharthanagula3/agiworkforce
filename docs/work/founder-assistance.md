@@ -324,16 +324,16 @@ render their empty states.
 **Impact** NON-BLOCKING (coverage debt)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Billing] Search bounds and the COGS ledger split (migration 0183)
+## [Billing] Search bounds and the COGS ledger split (migration 0180)
 
 **Why founder assistance is required**
 Running a production migration and changing what a paying customer is charged
 are both calls the founder reserves.
-**Exact action** Approve and apply `0183_provider_cost_events_customer_and_cogs_split.sql`, and confirm the search bounds shipping with it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
+**Exact action** Approve and apply `0180_provider_cost_events_customer_and_cogs_split.sql`, and confirm the search bounds shipping with it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
 **Where** Neon production (migration), no dashboard or env change; the two existing rate overrides `AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL` and `AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL` are unchanged and stay unset.
 **Needed input** One approval to apply, one confirmation of the bounds.
 **How to verify completion** `provider_cost_events` carries `customer_canonical_microusd` and `feature`; a search on a paid account writes a row with `feature = 'web_search_perplexity'`; the per-user count the bounds read is non-zero.
-**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration and are tested. Until 0183 is applied, `feature` does not exist, the per-user count fails open and every search stays included.
+**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration and are tested. Until 0180 is applied, `feature` does not exist, the per-user count fails open and every search stays included.
 **Impact** FEATURE-BLOCKING (the search bounds stay inert)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -363,12 +363,12 @@ that provider is skipped and its ledger cost stays an unverified estimate.
 **Impact** NON-BLOCKING (margin stays estimate-only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Billing] Reconciliation storage (migration 0184)
+## [Billing] Reconciliation storage (migration 0181)
 
 **Why founder assistance is required**
 Applying a production migration is a call the founder reserves.
 **Exact action** Approve and apply
-`0184_provider_cost_reconciliation_days.sql` after a branch rehearsal.
+`0181_provider_cost_reconciliation_days.sql` after a branch rehearsal.
 **Where** Neon production. No dashboard or environment change.
 **Needed input** One approval to apply.
 **How to verify completion** `provider_cost_reconciliation_days` exists; after

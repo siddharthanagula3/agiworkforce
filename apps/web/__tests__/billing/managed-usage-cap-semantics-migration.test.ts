@@ -48,7 +48,7 @@ function withoutComments(sql: string): string {
 }
 
 /**
- * Since 0185 the cap semantics live in the microUSD bodies, and the cents
+ * Since 0182 the cap semantics live in the microUSD bodies, and the cents
  * signatures survive as wrappers that scale by 10,000 and delegate. The
  * contract is unchanged; only the unit its parameters are named for moved, so
  * this guard follows the body that decides, not the name that used to hold it.

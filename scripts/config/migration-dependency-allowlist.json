@@ -134,12 +134,12 @@
     {
       "file": "apps/web/app/api/billing/overage/route.ts",
       "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
       "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/memory/import-store.ts",
@@ -359,17 +359,17 @@
     {
       "file": "apps/web/lib/server/spendable-credits.ts",
       "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/services/credit-service.ts",
       "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/services/managed-usage-request-service.ts",
       "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps serve every unmigrated caller unchanged."
     }
   ]
 }
