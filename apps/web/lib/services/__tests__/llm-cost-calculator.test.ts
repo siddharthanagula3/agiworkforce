@@ -568,6 +568,7 @@ describe('LLMCostCalculator, route-aware pricing fallback tiers', () => {
       cachedWriteCostPer1MTokens: 1.5,
       cachedWrite1hCostPer1MTokens: undefined,
       cacheTokensDisjointFromInput: false,
+      reasoningTokensDisjointFromOutput: false,
     });
   });
 
