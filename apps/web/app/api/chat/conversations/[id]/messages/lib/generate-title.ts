@@ -16,6 +16,7 @@ import 'server-only';
  * the stage-1 truncated title simply stands.
  */
 
+import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
@@ -31,6 +32,8 @@ import {
   storeExactResponseCache,
   type ExactResponseCacheKeyFields,
 } from '@/lib/services/exact-response-cache-service';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -216,6 +219,34 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         },
         { bypass: cacheBypass },
       );
+
+      const usage = {
+        promptTokens: response.promptTokens,
+        completionTokens: response.completionTokens,
+        totalTokens: response.totalTokens,
+        cacheReadInputTokens: response.cachedInputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+      };
+      await recordSettledProviderCost({
+        userId: input.userId,
+        organizationId: input.organizationId,
+        provider: route.provider,
+        model: route.modelKey,
+        routeId: route.routeId,
+        actualCostCents: LLMCostCalculator.calculateCost(
+          route.provider,
+          route.modelKey,
+          usage,
+          undefined,
+          route.routeId,
+        ),
+        sourceRef: `title:${input.conversationId}:${randomUUID()}`,
+        taskOutcome: 'delivered',
+        surface: 'conversation_title',
+        customerCanonicalMicrousd: 0,
+        usage,
+      });
     } catch (error) {
       logger.warn(
         { error, conversationId: input.conversationId, provider: route.provider },

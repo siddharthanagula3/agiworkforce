@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
@@ -8,6 +9,8 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/shared/utils/env';
@@ -32,6 +35,8 @@ export function isSupportAgentEnabled(): boolean {
 export interface SupportModelCallInput {
   userMessage: string;
   planTier: string | null;
+  userId: string | null;
+  surface: 'app' | 'marketing';
   signal?: AbortSignal;
 }
 
@@ -82,6 +87,33 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
       (chunk) => toGenericUpstreamError(route.provider, chunk),
       wireMode,
     );
+    const usage = {
+      promptTokens: response.promptTokens,
+      completionTokens: response.completionTokens,
+      totalTokens: response.totalTokens,
+      cacheReadInputTokens: response.cachedInputTokens,
+      cacheCreationInputTokens: response.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+    };
+    await recordSettledProviderCost({
+      userId: input.userId ?? 'anonymous',
+      provider: route.provider,
+      model: route.modelKey,
+      routeId: route.routeId,
+      actualCostCents: LLMCostCalculator.calculateCost(
+        route.provider,
+        route.modelKey,
+        usage,
+        undefined,
+        route.routeId,
+      ),
+      sourceRef: `support:${randomUUID()}`,
+      taskOutcome: 'delivered',
+      surface: input.surface,
+      customerCanonicalMicrousd: 0,
+      usage,
+    });
+
     const text = response.content.trim();
     if (!text) return { status: 'unavailable', reason: 'empty_response', route: routeInfo };
     return { status: 'ok', text, route: routeInfo };
