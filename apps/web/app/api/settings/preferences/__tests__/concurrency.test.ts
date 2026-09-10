@@ -35,9 +35,9 @@ function stubStore(options: {
     if (String(sql).includes('insert into public.user_settings')) {
       if (options.writeAccepted === false) return [];
       const delta = JSON.parse(String(params?.[1])) as Record<string, unknown>;
-      return [{ settings: { ...options.settings, ...delta }, updated_at: NEXT_VERSION }];
+      return [{ settings: { ...options.settings, ...delta }, version: NEXT_VERSION }];
     }
-    return [{ settings: options.settings, updated_at: options.version }];
+    return [{ settings: options.settings, version: options.version }];
   });
 }
 
@@ -61,6 +61,19 @@ beforeEach(() => {
 });
 
 describe('the preferences PUT can be made conditional', () => {
+  it('hands out the revision in the same form the write precondition compares', async () => {
+    stubStore({ settings: { capabilities: { memory: true } }, version: STORED_VERSION });
+    await GET(new NextRequest('http://localhost:3000/api/settings/preferences'));
+    await PUT(
+      put({ namespace: 'capabilities', patch: { memory: false }, expectedVersion: STORED_VERSION }),
+    );
+    const readSql = String(h.query.mock.calls[0]?.[0]);
+    const writeSql = String(writeCalls()[0]?.[0]);
+    expect(readSql).toContain('updated_at::text as version');
+    expect(writeSql).toContain('user_settings.updated_at::text = $3::text');
+    expect(writeSql).toContain('returning settings, updated_at::text as version');
+  });
+
   it('reports the stored revision on read so a caller can send it back', async () => {
     stubStore({ settings: { capabilities: { memory: true } }, version: STORED_VERSION });
 
