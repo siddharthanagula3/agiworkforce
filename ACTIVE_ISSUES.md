@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 5 items needing
+- 17 unresolved issues: 0 P0, 0 P1, 10 P2, 7 P3, plus 5 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
   and `AGI-23`, are partly fixed and say which part.
 - Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
@@ -100,23 +100,24 @@ Seven issues were fixed and verified, and their sections are gone from this
 file. Named here only so a reader coming from an older copy knows where they
 went, and so nobody re-files them:
 
-| Was      | What it was                                                        | Verified by                                          |
-| -------- | ------------------------------------------------------------------ | ---------------------------------------------------- |
-| `AGI-15` | Local development ran against the shared database                  | dev server on `:3100` now writes `agiworkforce_dev`  |
-| `AGI-1`  | Managed usage leases clamped to one hour, never renewed            | `pnpm db:lease-probe` against real Postgres          |
-| `AGI-2`  | Stranded reservations waited up to a day for recovery              | cron scope test, `/api/cron/recover-reservations`    |
-| browser  | Non-image chat attachments failed on every route                   | `apps/web/e2e/chat-document-attachment.spec.ts`      |
-| browser  | Starting a conversation inside a project failed every time         | `apps/web/e2e/project-first-conversation.spec.ts`    |
-| browser  | Tool Approvals did not gate web search in either mode              | `apps/web/e2e/tool-approval-web-search.spec.ts`      |
-| latent   | Approval checkpoints 500'd on a jsonb parameter                    | found by the first turn to reach that path           |
-| `AGI-13` | Unimplemented native commands answered with mock success           | the guard was unreachable; rule extracted and tested |
-| `AGI-19` | Marketing nav panels stayed open while the page scrolled           | `NavGroup.scroll.test.tsx`                           |
-| `AGI-21` | A cancelled settings query logged at error level                   | `use-settings-queries.abort.test.tsx`                |
-| `AGI-8`  | The US-only preference never reached the web resolver              | `request-processor.us-only.test.ts`                  |
-| `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                       |
-| `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                      |
-| `AGI-24` | Any function tool blocked cross-provider failover for a whole turn | `managed-failover.test.ts`, red on the old predicate |
-| `AGI-25` | A turn holding an approval said it had finished with no response   | live on `:3100`; the line is gone, the row remains   |
+| Was      | What it was                                                        | Verified by                                                                              |
+| -------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `AGI-15` | Local development ran against the shared database                  | dev server on `:3100` now writes `agiworkforce_dev`                                      |
+| `AGI-1`  | Managed usage leases clamped to one hour, never renewed            | `pnpm db:lease-probe` against real Postgres                                              |
+| `AGI-2`  | Stranded reservations waited up to a day for recovery              | cron scope test, `/api/cron/recover-reservations`                                        |
+| browser  | Non-image chat attachments failed on every route                   | `apps/web/e2e/chat-document-attachment.spec.ts`                                          |
+| browser  | Starting a conversation inside a project failed every time         | `apps/web/e2e/project-first-conversation.spec.ts`                                        |
+| browser  | Tool Approvals did not gate web search in either mode              | `apps/web/e2e/tool-approval-web-search.spec.ts`                                          |
+| latent   | Approval checkpoints 500'd on a jsonb parameter                    | found by the first turn to reach that path                                               |
+| `AGI-13` | Unimplemented native commands answered with mock success           | the guard was unreachable; rule extracted and tested                                     |
+| `AGI-19` | Marketing nav panels stayed open while the page scrolled           | `NavGroup.scroll.test.tsx`                                                               |
+| `AGI-21` | A cancelled settings query logged at error level                   | `use-settings-queries.abort.test.tsx`                                                    |
+| `AGI-8`  | The US-only preference never reached the web resolver              | `request-processor.us-only.test.ts`                                                      |
+| `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                                                           |
+| `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                                                          |
+| `AGI-24` | Any function tool blocked cross-provider failover for a whole turn | `managed-failover.test.ts`, red on the old predicate                                     |
+| `AGI-25` | A turn holding an approval said it had finished with no response   | live on `:3100`; the line is gone, the row remains                                       |
+| `AGI-6`  | Web voice could not speak until the whole reply was written        | live session on `:3100`, audio about a second after the user stops, interruptions native |
 
 ## 2. P0, critical
 
@@ -252,58 +253,6 @@ in the main-only lane. Update `NATIVE_MAIN_ONLY_JOBS` in the same commit.
 required check on a pull request.
 **Validation:** A draft pull request carrying a known break.
 
-### `AGI-6` Web voice cannot start speaking until the whole reply is written
-
-**Severity:** P2
-**Status:** Open. The design constraint is now known and is not what it looked
-like.
-**Area:** Voice, web
-**Root cause:** The speak effect returns while `turnActive` is true and reads
-`reply.content` once, fully assembled. There is no sentence-boundary chunking
-and no partial dispatch. Output is `SpeechSynthesisUtterance`, so voice and
-playback are whatever the browser provides, with no provider abstraction.
-**Measured 2026-09-08:** a two-sentence answer, routed by Auto to its fastest
-tier model, took **6.0s** from send to response complete. Because `tts.speak()`
-fires only on `replyComplete`, that 6.0s is the time to first audio. A live
-voice mode starts speaking in a few hundred milliseconds.
-**The constraint found on 2026-09-08, which changes the shape of the work:**
-this is not a hook-local change. Barge-in is armed inside the analyser loop
-behind `if (speaking)`
-(`apps/web/features/chat/hooks/use-voice-session.ts:236-243`), and `speaking` is
-the machine state that `voice-session-machine.ts:147-150` enters only on
-`replyComplete`. Speaking chunks during `streaming` without moving that arming
-would play audio the user cannot interrupt, which is worse than slow audio. So
-the machine has to treat "has begun speaking" as its own condition, separate
-from "the reply is finished", and barge-in has to arm on the first chunk.
-**Why it was not attempted in this pass:** barge-in is real wired code and
-entirely untested. The unit suite mocks `tts` as a plain object and never drives
-`AudioContext`, there is no voice spec under `apps/web/e2e/`, and echo
-suppression relies on the browser's `echoCancellation` constraint with nothing
-confirming it cancels synthesized speech. Changing the arming condition without
-being able to exercise a microphone would be shipping an unverified change to
-the one interaction that lets a user stop the machine talking.
-**Required behavior:** speech begins on the first complete sentence, barge-in is
-armed from that moment, and the speech engine is selectable rather than fixed to
-the browser.
-**Evidence:** `use-voice-session.ts:271-290` (the speak effect), `:229-249` (the
-analyser and barge-in), `packages/ui/unified-chat/src/voice/voice-session-machine.ts:147-150`,
-`apps/web/lib/hooks/useTTS.ts` (`speak` cancels and replaces, so incremental
-speech also needs an enqueueing variant). Mobile STT is genuinely on-device with
-live partial results and is the strongest voice implementation in the tree.
-**User impact:** Voice replies feel slow next to a live voice mode.
-**Dependencies:** A way to exercise barge-in first. That is the real blocker,
-and it is worth its own piece of work: a voice spec that drives `AudioContext`
-with synthesized input, which would also cover the echo-suppression claim
-nothing currently tests.
-**Implementation direction:** in order, and not out of it: a barge-in test; then
-the machine's speaking condition split from reply completion; then sentence
-chunking with an enqueueing `speak`; then a speech provider interface, before
-any vendor, so this stays provider-neutral.
-**Acceptance criteria:** First audio begins before generation completes.
-Barge-in still cancels cleanly, from the first sentence. No echo-triggered
-self-interruption.
-**Validation:** Instrumented latency capture, plus a barge-in spec that exists.
-
 ### `AGI-7` Desktop global voice does not meet its own release gates
 
 **Severity:** P2
@@ -320,7 +269,7 @@ text injection, dictionary and snippet precedence, and a signed build.
 in shipped builds.
 **Evidence:** `docs/specs/desktop-global-voice/spec.md:16-20, :59-61, :78, :82-95`.
 **User impact:** Global dictation cannot be relied on.
-**Dependencies:** Independent of `AGI-6`.
+**Dependencies:** None.
 **Implementation direction:** Work the spec's own gate ledger in order. Keep
 the ledger as the acceptance record.
 **Acceptance criteria:** Every gate in the ledger is met, or the entry point is
@@ -718,8 +667,8 @@ Dependency-aware, not severity-ordered.
    `AGI-8` established.
 5. `AGI-16`, citation canonicalisation. Independent, and the visible half of
    the same provenance story project retrieval closed.
-6. `AGI-6` then `AGI-7`, voice. `AGI-6` is sized at 6.0s to first audio, and
-   starts with a barge-in test rather than with chunking.
+6. `AGI-7`, desktop voice. Web voice is now a live session; the desktop
+   gates are its own ledger.
 7. `AGI-10`. Enterprise sharing, independent. `AGI-14` needs a vendor decision
    before it needs an implementer.
 8. `AGI-11`, `AGI-20`, `AGI-29`, `AGI-30`, `AGI-31`. Background and polish.
@@ -733,7 +682,6 @@ Dependency-aware, not severity-ordered.
 | -------- | --------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
 | `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer    | nothing the transcript rendered is lost   |
 | `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break | required check fails on the PR            |
-| `AGI-6`  | a barge-in spec that drives AudioContext            | measured time to first audio        | audio starts early AND is interruptible   |
 | `AGI-7`  | spec gate ledger                                    | signed build                        | 12 of 12 gates, or surface removed        |
 | `AGI-10` | RLS tests mirroring 0086                            | member and non-member open attempt  | revocation takes effect                   |
 | `AGI-11` | service and cron tests                              | none                                | expired token stops resolving             |
@@ -758,12 +706,12 @@ AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
-LIVE-5 ──> AGI-6 ──> AGI-7 voice, measure before building
+LIVE-5 ──> AGI-7          desktop voice, measure before building
 AGI-10                     enterprise sharing, independent
 AGI-14                     blocked on a second STT vendor, not on code
 AGI-11, AGI-12             background
 AGI-17, AGI-20             polish, independent of everything
 ```
 
-Three tracks can run at once without touching the same files: web chat
-(`AGI-3`), CI (`AGI-5`), and voice (`AGI-6`).
+Two tracks can run at once without touching the same files: web chat
+(`AGI-3`) and CI (`AGI-5`).
