@@ -1,11 +1,8 @@
-export const TOP_UP_UNITS_PER_USD = 50;
+import { CENTS_PER_USD, CREDITS_PER_USD, creditsFromCents } from './credits';
 
-export const CENTS_PER_USD = 100;
+export const TOP_UP_UNITS_PER_USD = CREDITS_PER_USD;
 
-/** Ledger cents to the credits a user sees; one credit is a fiftieth of a dollar. */
-export function creditsFromCents(cents: number): number {
-  return (cents * TOP_UP_UNITS_PER_USD) / CENTS_PER_USD;
-}
+export { CENTS_PER_USD, creditsFromCents };
 
 export const MIN_TOP_UP_AMOUNT_USD = 10;
 

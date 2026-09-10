@@ -6,6 +6,7 @@ import {
   MIN_TOP_UP_AMOUNT_USD,
   TOP_UP_PRESET_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
+  formatCredits,
   topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
@@ -168,7 +169,7 @@ export function BillingSettings() {
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Usage top-up</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {TOP_UP_UNITS_PER_USD} units for every $1. Minimum ${MIN_TOP_UP_AMOUNT_USD},
+                  {TOP_UP_UNITS_PER_USD} credits for every $1. Minimum ${MIN_TOP_UP_AMOUNT_USD},
                   self-serve maximum ${MAX_TOP_UP_AMOUNT_USD}. A top-up adds managed-usage balance
                   and does not change your plan or renewal date.
                 </p>
@@ -216,7 +217,7 @@ export function BillingSettings() {
                   ? 'Opening checkout…'
                   : selectedTopUpUnits === null
                     ? `Enter $${MIN_TOP_UP_AMOUNT_USD}–$${MAX_TOP_UP_AMOUNT_USD} in whole dollars`
-                    : `Buy ${selectedTopUpUnits.toLocaleString('en-US')} units · $${topUpAmountUsd}`}
+                    : `Buy ${formatCredits(selectedTopUpUnits)} · $${topUpAmountUsd}`}
               </Button>
             </section>
           )}

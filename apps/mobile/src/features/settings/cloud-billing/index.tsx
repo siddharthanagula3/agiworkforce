@@ -26,6 +26,7 @@ import {
   MIN_TOP_UP_AMOUNT_USD,
   TOP_UP_UNITS_PER_USD,
   canUseBillingPlanCapability,
+  formatCredits,
   getBillingPlanPricing,
   getNextUpgradeTier,
   isEntitledSubscriptionStatus,
@@ -425,7 +426,7 @@ export default function CloudBillingScreen() {
                     return (
                       <SettingsRow
                         key={product.key}
-                        label={`${product.units.toLocaleString('en-US')} units`}
+                        label={formatCredits(product.units)}
                         value={
                           busy ? 'Opening store…' : (storeProduct?.displayPrice ?? 'Unavailable')
                         }
@@ -468,7 +469,7 @@ export default function CloudBillingScreen() {
               title="Purchase verified"
               body={
                 nativeIap.lastResult.kind === 'top_up'
-                  ? `${(nativeIap.lastResult.unitsGranted ?? 0).toLocaleString('en-US')} units were added to your account.`
+                  ? `${formatCredits(nativeIap.lastResult.unitsGranted ?? 0)} were added to your account.`
                   : 'Your subscription was verified and your plan has been refreshed.'
               }
               icon={Check}
