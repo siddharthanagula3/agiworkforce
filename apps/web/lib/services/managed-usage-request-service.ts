@@ -19,6 +19,7 @@ import {
   getOrganizationMonthToDateSpendCents,
   recordSettledProviderCost,
 } from '@/lib/services/cogs-ledger-service';
+import { CreditService, type CreditSettlementResult } from '@/lib/services/credit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
@@ -578,6 +579,69 @@ export function markManagedUsageClientDelivered(
   return transition(reservation, 'mark_managed_usage_client_delivered');
 }
 
+/**
+ * Recovery refunded the reservation because the lease expired, then the turn
+ * delivered anyway. The user has the work; without this the company pays the
+ * provider and bills nothing. A separate durable settlement is the only way to
+ * charge it, because the request's own finalization key is already consumed.
+ *
+ * It carries no managed-usage `type`, so `enqueue_credit_settlement` routes it
+ * down the ordinary deduction path rather than the lifecycle helper, whose
+ * idempotency keys are derived from the request id and already spent.
+ */
+async function settleLateManagedUsage(
+  input: ManagedUsageRequestReservation & { outcome: 'completed' | 'failed' },
+  amountCents: number,
+): Promise<CreditSettlementResult | null> {
+  try {
+    const result = await CreditService.settleCreditsDurably(
+      {
+        userId: input.userId,
+        amountCents,
+        description: 'Managed usage late settlement after recovery',
+        metadata: {
+          idempotency_key: input.idempotencyKey,
+          request_hash: input.requestHash,
+          is_late_settlement: true,
+          ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
+        },
+        idempotencyKey: CreditService.generateIdempotencyKey(
+          input.userId,
+          'reconciliation',
+          `${input.idempotencyKey}:late`,
+        ),
+      },
+      input.db,
+    );
+    if (!result.success) {
+      logger.error(
+        {
+          event: 'managed_usage_late_settlement_rejected',
+          userId: input.userId,
+          idempotencyKey: input.idempotencyKey,
+          amountCents,
+          code: result.code ?? null,
+          settlementStatus: result.status,
+        },
+        'Late settlement for a recovered managed usage turn was rejected; the cost stays absorbed',
+      );
+    }
+    return result;
+  } catch (error) {
+    logger.error(
+      {
+        event: 'managed_usage_late_settlement_failed',
+        error,
+        userId: input.userId,
+        idempotencyKey: input.idempotencyKey,
+        amountCents,
+      },
+      'Late settlement for a recovered managed usage turn could not be enqueued',
+    );
+    return null;
+  }
+}
+
 export async function finalizeManagedUsageRequest(
   input: ManagedUsageRequestReservation & {
     outcome: 'completed' | 'failed';
@@ -663,6 +727,11 @@ export async function finalizeManagedUsageRequest(
   // delivered path uses keeps the COGS ledger honest, and `billedCents` is
   // already zero for an undelivered outcome, so no user is charged twice.
   if (operationResult === 'already_finalized' && requestStatus === 'outcome_unknown') {
+    const lateSettlement =
+      input.outcome === 'completed' && actualCostCents > 0
+        ? await settleLateManagedUsage(input, actualCostCents)
+        : null;
+
     logger.error(
       {
         event: 'managed_usage_finalize_after_recovery',
@@ -672,8 +741,12 @@ export async function finalizeManagedUsageRequest(
         model: servedRoute?.model ?? input.model ?? null,
         actualCostCents,
         providerCostCents,
+        lateSettlementStatus: lateSettlement?.status ?? 'not_attempted',
+        lateSettlementSucceeded: lateSettlement?.success ?? false,
       },
-      'Managed usage turn completed after its lease was recovered; provider cost absorbed and nothing billed',
+      lateSettlement?.success === true
+        ? 'Managed usage turn completed after its lease was recovered; the delivered work was settled late'
+        : 'Managed usage turn completed after its lease was recovered; provider cost absorbed and nothing billed',
     );
   }
 
