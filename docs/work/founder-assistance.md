@@ -27,14 +27,16 @@ Dashboard.
    live prices that contradict it; revoke the temporary write permission.
 4. Repoint every Vercel `STRIPE_PRICE_*` variable in the same change as the
    live key; redeploy; run one real-card checkout and refund.
-   **Where** Stripe Dashboard, Vercel Production environment.
-   **Needed input** The go/no-go call and about ten minutes of dashboard edits.
-   **How to verify completion** `/api/pricing/localized` reports checkout-ready
-   ids for every plan; one live checkout provisions once; zero contradicting
-   active prices.
-   **What remains after founder action** Nothing; checkout, webhook and ledger code ship and are tested.
-   **Impact** RELEASE-BLOCKING
-   **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+**Where** Stripe Dashboard, Vercel Production environment.
+**Needed input** The go/no-go call and about ten minutes of dashboard edits.
+**How to verify completion** `/api/pricing/localized` reports checkout-ready
+ids for every plan; one live checkout provisions once; zero contradicting
+active prices.
+
+**What remains after founder action** Nothing; checkout, webhook and ledger code ship and are tested.
+**Impact** RELEASE-BLOCKING
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Mobile] Store submission accounts, products, listing facts
 
@@ -49,12 +51,13 @@ exist only in the store consoles and belong to the account owner.
 4. Copy the App Store Connect Issuer ID and create the Play service-account JSON for `pnpm release:asc-probe` and `release:preflight`.
 5. Replace the three `__FOUNDER_TO_FILL__` phone fields and supply the two `__DESIGN_TO_PRODUCE__` graphics.
 6. Register India OIDAR, EU OSS and UK VAT before the first sale.
-   **Where** App Store Connect, Google Play Console, `apps/mobile/store-listing/`, `apps/mobile/eas.json`.
-   **Needed input** Signatures, a contact phone, tax registrations, about ninety minutes.
-   **How to verify completion** `pnpm --filter @agiworkforce/mobile release:preflight` passes for the production profile; no placeholder tokens remain in the listing files.
-   **What remains after founder action** Sandbox purchase verification, then `MOBILE_IAP_ENABLED=true`.
-   **Impact** RELEASE-BLOCKING (mobile stores)
-   **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+**Where** App Store Connect, Google Play Console, `apps/mobile/store-listing/`, `apps/mobile/eas.json`.
+**Needed input** Signatures, a contact phone, tax registrations, about ninety minutes.
+**How to verify completion** `pnpm --filter @agiworkforce/mobile release:preflight` passes for the production profile; no placeholder tokens remain in the listing files.
+**What remains after founder action** Sandbox purchase verification, then `MOBILE_IAP_ENABLED=true`.
+**Impact** RELEASE-BLOCKING (mobile stores)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Mobile / India] RBI auto-renewal ceiling and Razorpay
 
