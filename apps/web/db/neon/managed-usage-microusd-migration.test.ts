@@ -179,6 +179,42 @@ describe('0182 managed usage microUSD ledger', () => {
     expect(migration).toContain('(p_result->>p_cents_key)::bigint * 10000');
   });
 
+  it('keeps the mirror maintained for writers that still speak cents', () => {
+    // The backfill is one-shot. Without these, a row written afterwards in
+    // cents alone leaves the microUSD twin at zero, and because the functions
+    // read microUSD such an account holds no spendable balance and every
+    // reservation against it is declined.
+    for (const table of [
+      'token_credits',
+      'credit_transactions',
+      'credit_settlement_jobs',
+      'managed_usage_requests',
+      'managed_usage_request_extensions',
+    ]) {
+      expect(migration).toMatch(new RegExp(`create trigger \\w+\\s+before insert or update on public\\.${table}`));
+    }
+    expect(migration).toContain('create or replace function public.sync_token_credits_units()');
+    expect(migration).toContain('new.credits_allocated_cents::bigint * 10000');
+  });
+
+  it('lets the microUSD side win whenever the writer supplied it', () => {
+    // Reading cents only when microUSD was left at its default is what keeps
+    // every function in this migration authoritative over its own writes.
+    expect(migration).toContain('if new.credits_allocated_microusd = 0 and new.credits_allocated_cents <> 0');
+    expect(migration).toContain(
+      'new.credits_allocated_microusd is not distinct from old.credits_allocated_microusd',
+    );
+  });
+
+  it('orders the transaction trigger after the flagship labeller', () => {
+    // Same-timing row triggers fire in name order and each returns NEW, so the
+    // two compose, but only one may be the last word on the amount columns.
+    expect(migration).toContain('sync_zz_credit_transactions_units');
+    expect('label_managed_usage_transaction_flagship' < 'sync_zz_credit_transactions_units').toBe(
+      true,
+    );
+  });
+
   it('changes no plan allowance, cap ratio or price', () => {
     expect(migration).not.toMatch(/MANAGED_USAGE_LIMITS|monthlyUnits|FLAGSHIP_OF_WEEKLY/);
     expect(migration).not.toMatch(/insert into public\.subscriptions/);
@@ -196,6 +232,15 @@ describe('0182 managed usage microUSD ledger', () => {
       expect(down).toContain(`drop function if exists public.${name}(`);
     }
     expect(down).toContain(`filename = '${MIGRATION}'`);
+    for (const trigger of [
+      'sync_token_credits_units',
+      'sync_zz_credit_transactions_units',
+      'sync_credit_settlement_jobs_units',
+      'sync_managed_usage_request_units',
+      'sync_managed_usage_extension_units',
+    ]) {
+      expect(down).toContain(`drop trigger if exists ${trigger}`);
+    }
   });
 
   it('restores every cents body inline, so the reversal is one file', () => {
@@ -205,6 +250,15 @@ describe('0182 managed usage microUSD ledger', () => {
     expect(down).toContain('recover_stale_managed_usage_requests');
     expect(down).toContain('process_credit_settlement_queue');
     expect(down).not.toContain('microusd_to_cents_mirror(reservation.estimated_cost_microusd)');
+  });
+
+  it('drops the unit triggers before the columns and helper they depend on', () => {
+    const triggerAt = down.indexOf('drop trigger if exists sync_token_credits_units');
+    const columnAt = down.indexOf('drop column if exists credits_allocated_microusd');
+    const helperAt = down.indexOf('drop function if exists public.microusd_to_cents_mirror');
+    expect(triggerAt).toBeGreaterThan(-1);
+    expect(columnAt).toBeGreaterThan(triggerAt);
+    expect(helperAt).toBeGreaterThan(triggerAt);
   });
 
   it('restores the cents bodies before dropping what the wrappers call', () => {
