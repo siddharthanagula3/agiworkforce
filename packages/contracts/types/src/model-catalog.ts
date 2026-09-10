@@ -31,6 +31,7 @@ import {
 export {
   getRoutePricing,
   getProviderCacheTokenBillingClass,
+  getProviderReasoningTokenBillingClass,
   getProviderComputePricing,
   lifecycleStageAtOrAfter,
   LIFECYCLE_STAGES,
@@ -40,6 +41,7 @@ export type {
   RoutePriceSheet,
   RouteCommercialStatus,
   CacheTokenBillingClass,
+  ReasoningTokenBillingClass,
   ComputePricingUnit,
   ProviderComputePricing,
 } from '@agiworkforce/model-registry';
@@ -446,6 +448,8 @@ export interface ModelMetadata {
   cached_write?: number;
   cached_write_1h?: number;
   imagePerImageCost?: number;
+  /** Published price for one minute of a live session, for models the provider bills by session duration rather than by token. */
+  sessionPerMinuteCost?: number;
   imageApi?: 'gemini' | 'imagen' | 'openai' | 'stability';
   imageOutputMimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
   videoPerSecondCost?: number;
