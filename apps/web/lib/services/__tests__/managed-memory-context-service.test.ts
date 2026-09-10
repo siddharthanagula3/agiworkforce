@@ -42,6 +42,7 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: false,
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
+      searchPastChats: false,
     });
 
     const enabledQuery = vi.fn().mockResolvedValue([
@@ -58,6 +59,7 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: true,
       generateFromHistory: true,
       allowToolAssistedGeneration: true,
+      searchPastChats: false,
     });
 
     const generationDisabledQuery = vi.fn().mockResolvedValue([
@@ -74,6 +76,7 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: true,
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
+      searchPastChats: false,
     });
   });
 
@@ -99,6 +102,7 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: false,
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
+      searchPastChats: false,
     });
     expect(query).toHaveBeenCalledTimes(1);
   });
@@ -123,7 +127,28 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: true,
       generateFromHistory: true,
       allowToolAssistedGeneration: true,
+      searchPastChats: false,
     });
+  });
+
+  it('reads Search past chats independently of the memory switch', async () => {
+    const query = vi.fn().mockResolvedValue([{ capabilities: { searchPastChats: true } }]);
+
+    await expect(loadManagedMemoryPolicy({ query }, { userId: 'user-1' })).resolves.toMatchObject({
+      enabled: false,
+      searchPastChats: true,
+    });
+  });
+
+  it('closes Search past chats with the organization memory gate', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (/organization_admin_policies/.test(sql)) return [{ allow_memory: false }];
+      return [{ capabilities: { searchPastChats: true } }];
+    });
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: 'org-1' }),
+    ).resolves.toMatchObject({ searchPastChats: false });
   });
 
   it('fails closed and logs once when the organization policy read errors', async () => {
@@ -138,6 +163,7 @@ describe('loadManagedMemoryPolicy', () => {
       enabled: false,
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
+      searchPastChats: false,
     });
     expect(query).toHaveBeenCalledTimes(1);
   });

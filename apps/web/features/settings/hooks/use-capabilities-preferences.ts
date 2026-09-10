@@ -30,6 +30,7 @@ export const DEFAULT_CAPABILITIES_SETTINGS: CapabilitiesSettings = {
 
 export interface UseCapabilitiesPreferencesResult {
   settings: CapabilitiesSettings;
+  organizationMemoryAllowed: boolean;
   saving: boolean;
   saveError: string | null;
   savedAt: number | null;
@@ -53,6 +54,7 @@ function knownCapabilities(value: unknown): CapabilitiesPatch {
 
 export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [settings, setSettings] = useState<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
+  const [organizationMemoryAllowed, setOrganizationMemoryAllowed] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -83,6 +85,22 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
           setLoadError(toUserMessage(error, 'Failed to load settings'));
         }
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/settings/preferences?namespace=${CAPABILITIES_NAMESPACE}`, {
+      credentials: 'include',
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { organizationMemoryAllowed?: unknown } | null) => {
+        if (cancelled || !payload) return;
+        setOrganizationMemoryAllowed(payload.organizationMemoryAllowed !== false);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -153,6 +171,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
 
   return {
     settings,
+    organizationMemoryAllowed,
     saving,
     saveError,
     savedAt,

@@ -8,7 +8,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { touchesActiveOrganizationNamespace } from '@/lib/services/active-workspace-service';
+import {
+  resolveActiveOrganizationId,
+  touchesActiveOrganizationNamespace,
+} from '@/lib/services/active-workspace-service';
+import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 
 const SettingsPatchSchema = z.object({
@@ -38,6 +42,8 @@ function namespaceObject(settings: Record<string, unknown>, namespace: string) {
     ? (value as Record<string, unknown>)
     : {};
 }
+
+const CAPABILITIES_NAMESPACE = 'capabilities';
 
 const PG_UNDEFINED_TABLE = '42P01';
 
@@ -77,9 +83,15 @@ async function handleGet(request: NextRequest) {
   const stored = await readSettings(db, userId);
 
   if (namespace) {
+    const organizationMemoryAllowed =
+      namespace === CAPABILITIES_NAMESPACE
+        ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
+        : undefined;
+
     return NextResponse.json({
       settings: stored.settings[namespace] ?? {},
       version: stored.version,
+      ...(organizationMemoryAllowed === undefined ? {} : { organizationMemoryAllowed }),
     });
   }
 

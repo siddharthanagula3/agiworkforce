@@ -178,6 +178,7 @@ import {
   type ManagedMemoryContextDb,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
+import { retrievePastChatContext } from '@/lib/services/past-chat-context-service';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
@@ -718,6 +719,8 @@ export type ProcessedRequest = {
   conversationIsTemporary?: boolean;
   assistantMessageId?: string | undefined;
   autoMemoryFacts?: string[];
+  autoMemoryFactsRequireToolFreeTurn?: boolean;
+  toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
   estimatedCostCents: number;
@@ -1034,6 +1037,49 @@ export async function enrichManagedMemoryContext(params: {
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
 }
 
+export async function enrichPastChatContext(params: {
+  db: ManagedMemoryContextDb;
+  userId: string;
+  chatRequest: ChatCompletionRequest;
+  isTemporary: boolean;
+  surface: CloudChatSurface;
+  policy: ManagedMemoryPolicy;
+  organizationId?: string | null;
+  conversationId?: string | null;
+  projectId?: string | null;
+}): Promise<boolean> {
+  if (!params.policy.searchPastChats || params.isTemporary || params.surface === 'api') {
+    return false;
+  }
+
+  const query = lastUserMessageText(params.chatRequest);
+  if (!query) return false;
+
+  const scope = await loadProjectMemoryScope(params.db, {
+    userId: params.userId,
+    projectId: params.projectId ?? null,
+  });
+  const prompt = await retrievePastChatContext(params.db, {
+    userId: params.userId,
+    query,
+    organizationId: params.organizationId ?? null,
+    currentConversationId: params.conversationId ?? null,
+    scope,
+  });
+  if (!prompt) return false;
+
+  params.chatRequest.messages.unshift({ role: 'system', content: prompt });
+  return true;
+}
+
+function lastUserMessageText(request: ChatCompletionRequest): string {
+  for (let index = request.messages.length - 1; index >= 0; index -= 1) {
+    const message = request.messages[index];
+    if (message?.role === 'user') return extractTextContent(message.content).trim();
+  }
+  return '';
+}
+
 export function prepareManagedAutoMemoryFacts(params: {
   message: string;
   isTemporary: boolean;
@@ -1054,19 +1100,9 @@ export function prepareManagedAutoMemoryFacts(params: {
   return extractCandidateMemoryFacts(params.message).slice(0, 5);
 }
 
-export function isManagedMemoryToolAssistedTurn(
-  request: ChatCompletionRequest,
-  resolvedTools: readonly unknown[] | undefined,
-): boolean {
-  return Boolean(
-    request.web_search ||
-    request.web_fetch ||
-    request.research ||
-    request.code_execution ||
-    request.office_creation ||
-    request.work_mode === 'agiwork' ||
-    (resolvedTools?.length ?? 0) > 0,
-  );
+// Research and AGI Work turns settle without the tool loop's observation; every other flag reaches runToolLoop.
+export function isUnreportedToolAssistedTurn(request: ChatCompletionRequest): boolean {
+  return Boolean(request.research || request.work_mode === 'agiwork');
 }
 
 // Exported so it can be unit-tested without importing the full processRequest stack.
@@ -2247,6 +2283,29 @@ export async function processRequest(
           { status: 503 },
         ),
       };
+    }
+  }
+
+  if (managedMemoryPolicy.searchPastChats) {
+    try {
+      const scoped = await scopedDbPromise;
+      const injected = await enrichPastChatContext({
+        db: scoped.db,
+        userId,
+        chatRequest,
+        isTemporary: conversationIsTemporary,
+        surface: chatSurface,
+        policy: managedMemoryPolicy,
+        organizationId: scoped.organizationId,
+        conversationId: chatRequest.conversation_id ?? null,
+        projectId: conversationProjectId,
+      });
+      if (injected) dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+    } catch (error) {
+      logger.error(
+        { error, userId, conversationId: chatRequest.conversation_id },
+        'Past-chat recall failed; continuing without excerpts',
+      );
     }
   }
 
@@ -3556,10 +3615,8 @@ export async function processRequest(
     codeExecutionUnavailable = turnCodeExecution.unavailable;
   }
 
-  if (
-    !managedMemoryPolicy.allowToolAssistedGeneration &&
-    isManagedMemoryToolAssistedTurn(chatRequest, resolvedTools)
-  ) {
+  const autoMemoryFactsRequireToolFreeTurn = !managedMemoryPolicy.allowToolAssistedGeneration;
+  if (autoMemoryFactsRequireToolFreeTurn && isUnreportedToolAssistedTurn(chatRequest)) {
     autoMemoryFacts = [];
   }
 
@@ -3717,6 +3774,7 @@ export async function processRequest(
     conversationIsTemporary,
     assistantMessageId: chatRequest.assistant_message_id,
     autoMemoryFacts,
+    autoMemoryFactsRequireToolFreeTurn,
     requestedModel,
     provider,
     estimatedCostCents,
