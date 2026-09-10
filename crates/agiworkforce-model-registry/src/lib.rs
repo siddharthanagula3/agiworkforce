@@ -660,13 +660,20 @@ fn rank_routes(mut candidates: Vec<RankedRoute<'_>>) -> Vec<RankedRoute<'_>> {
     candidates
 }
 
+/// Same-model hosts kept ahead of a different model, so a model-level failure still has something to rotate onto.
+const MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION: usize = 2;
+
 fn same_model_fallbacks(
     selected_model_key: &str,
     ranked_routes: &[RankedRoute<'_>],
     seen_providers: &mut HashSet<String>,
+    limit: usize,
 ) -> Vec<AutoFallbackRoute> {
     let mut fallbacks = Vec::new();
     for candidate in ranked_routes {
+        if fallbacks.len() >= limit {
+            break;
+        }
         if !seen_providers.insert(candidate.route.provider.clone()) {
             continue;
         }
@@ -1005,6 +1012,7 @@ fn build_provider_fallbacks(
         selected_model_key,
         selected_model_routes,
         &mut seen_providers,
+        MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION,
     );
 
     for slot_id in candidate_slots {
@@ -1023,19 +1031,21 @@ fn build_provider_fallbacks(
         }
 
         let eligibility = evaluate_eligibility(registry, model_key, task, request, runtime_profile);
-        let (Some(route_id), Some(route)) = (eligibility.route_id, eligibility.route) else {
+        let Some(candidate) = eligibility
+            .ranked_routes
+            .iter()
+            .find(|candidate| !seen_providers.contains(&candidate.route.provider))
+        else {
             continue;
         };
-        if !seen_providers.insert(route.provider.clone()) {
-            continue;
-        }
+        seen_providers.insert(candidate.route.provider.clone());
 
         fallbacks.push(AutoFallbackRoute {
             model_key: model_key.to_owned(),
-            provider: route.provider.clone(),
-            provider_model_id: route.provider_model_id.clone(),
-            route_id: route_id.to_owned(),
-            harness_id: route.harness_id.clone(),
+            provider: candidate.route.provider.clone(),
+            provider_model_id: candidate.route.provider_model_id.clone(),
+            route_id: candidate.route_id.to_owned(),
+            harness_id: candidate.route.harness_id.clone(),
         });
     }
 
@@ -1142,6 +1152,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 &requested_selection,
                 &eligibility.ranked_routes,
                 &mut seen_providers,
+                usize::MAX,
             );
             selected_decision(
                 request,
