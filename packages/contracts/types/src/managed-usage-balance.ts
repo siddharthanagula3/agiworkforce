@@ -5,6 +5,9 @@ export interface ManagedUsageBalance {
   has_usage_remaining: boolean;
   usage_visible: boolean;
   usage_allocation?: 'provisioned' | 'pending';
+  allowance_credits?: number | null;
+  used_credits?: number | null;
+  remaining_credits?: number | null;
 }
 
 export interface ManagedUsageSubscription {
@@ -17,6 +20,32 @@ export interface ManagedUsageBalanceResponse {
   object: 'credit_balance';
   subscription: ManagedUsageSubscription;
   credits: ManagedUsageBalance;
+}
+
+/**
+ * One usage window stated in the single unit a customer ever sees. Fractional
+ * throughout: a sub-cent turn still costs a fraction of a credit, and rounding
+ * it away at the contract would make small usage invisible.
+ */
+export interface ManagedUsageCreditWindow {
+  allowance: number;
+  used: number;
+  remaining: number;
+  reset_at: string | null;
+}
+
+export interface ManagedUsagePurchasedCredits {
+  /** Null when the balance lookup failed: unknown, which is not the same as none. */
+  remaining: number | null;
+  overage_enabled: boolean;
+}
+
+export interface ManagedUsageCredits {
+  monthly: ManagedUsageCreditWindow;
+  weekly: ManagedUsageCreditWindow;
+  five_hour: ManagedUsageCreditWindow;
+  flagship_weekly: ManagedUsageCreditWindow | null;
+  purchased: ManagedUsagePurchasedCredits;
 }
 
 export interface ManagedUsageSummaryResponse {
@@ -42,6 +71,12 @@ export interface ManagedUsageSummaryResponse {
    * budget at the same time.
    */
   usage_allocation?: 'provisioned' | 'pending';
+  /**
+   * Absent for a plan with no managed allowance to state (BYOK, local-only,
+   * uncapped) and on any server older than this field. Every reader falls back
+   * to the percentages above rather than printing a zero allowance.
+   */
+  credits?: ManagedUsageCredits;
 }
 
 export function normalizeUsagePercentage(value: unknown): number {
@@ -83,6 +118,53 @@ function readNullableCents(record: Record<string, unknown>, key: string): number
   return value;
 }
 
+function readCredits(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new TypeError(`${key} must be a non-negative credit amount`);
+  }
+  return value;
+}
+
+function readCreditWindow(value: unknown, key: string): ManagedUsageCreditWindow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${key} must be a credit window object`);
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    allowance: readCredits(record, 'allowance'),
+    used: readCredits(record, 'used'),
+    remaining: readCredits(record, 'remaining'),
+    reset_at: readNullableTimestamp(record, 'reset_at'),
+  };
+}
+
+function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('credits must be an object');
+  }
+  const record = value as Record<string, unknown>;
+  const purchased = record['purchased'];
+  if (!purchased || typeof purchased !== 'object' || Array.isArray(purchased)) {
+    throw new TypeError('credits.purchased must be an object');
+  }
+  const purchasedRecord = purchased as Record<string, unknown>;
+  return {
+    monthly: readCreditWindow(record['monthly'], 'credits.monthly'),
+    weekly: readCreditWindow(record['weekly'], 'credits.weekly'),
+    five_hour: readCreditWindow(record['five_hour'], 'credits.five_hour'),
+    flagship_weekly:
+      record['flagship_weekly'] === null || record['flagship_weekly'] === undefined
+        ? null
+        : readCreditWindow(record['flagship_weekly'], 'credits.flagship_weekly'),
+    purchased: {
+      remaining:
+        purchasedRecord['remaining'] === null ? null : readCredits(purchasedRecord, 'remaining'),
+      overage_enabled: purchasedRecord['overage_enabled'] === true,
+    },
+  };
+}
+
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('managed usage summary must be an object');
@@ -112,5 +194,8 @@ export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSu
     ...(record['overage_enabled'] === undefined
       ? {}
       : { overage_enabled: record['overage_enabled'] === true }),
+    ...(record['credits'] === undefined || record['credits'] === null
+      ? {}
+      : { credits: readManagedUsageCredits(record['credits']) }),
   };
 }
