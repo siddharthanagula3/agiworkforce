@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -140,5 +143,26 @@ describe('plan ceilings are unchanged by the unit', () => {
     const TOP_UP_CENTS = 1_000;
     expect(microusdFromLedgerCents(TOP_UP_CENTS)).toBe(10_000_000);
     expect(ledgerCentsFromMicrousd(microusdFromLedgerCents(TOP_UP_CENTS))).toBe(TOP_UP_CENTS);
+  });
+});
+
+describe('overage headroom', () => {
+  const requestService = fs.readFileSync(
+    path.resolve(import.meta.dirname, '..', 'managed-usage-request-service.ts'),
+    'utf8',
+  );
+
+  it('is the lesser of what is left and what was purchased, never more, in microUSD', () => {
+    expect(requestService).toContain('greatest(');
+    expect(requestService).toContain(
+      'least(\n                  credits.credits_allocated_microusd - credits.credits_used_microusd,\n                  credits.top_up_allocated_microusd\n                ), 0) as headroom_microusd',
+    );
+    // A plan allowance the customer did not buy must never fund overage.
+    expect(requestService).not.toContain('credits_allocated_microusd as headroom_microusd');
+  });
+
+  it('treats an unreadable headroom as none rather than as unlimited', () => {
+    expect(requestService).toContain('Overage headroom lookup failed; treating as no headroom');
+    expect(requestService).toMatch(/catch \(error\) \{[\s\S]{0,220}return 0;/);
   });
 });
