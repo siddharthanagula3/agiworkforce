@@ -18,6 +18,21 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
   getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
 }));
 
+const settleCreditsDurably = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]) => ({
+    status: 'succeeded',
+    success: true,
+    attempt_count: 1,
+  })),
+);
+vi.mock('@/lib/services/credit-service', () => ({
+  CreditService: {
+    settleCreditsDurably: (...args: unknown[]) => settleCreditsDurably(...args),
+    generateIdempotencyKey: (userId: string, operationType: string, requestId: string) =>
+      `${userId}:${operationType}:${requestId}`,
+  },
+}));
+
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
@@ -486,6 +501,113 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       taskRef: 'b'.repeat(64),
       usage: { operation: 'image', outputCount: 2, quotaFeature: 'image' },
     });
+  });
+
+  it('settles the delivered work late when a turn finishes after recovery reclaimed it', async () => {
+    settleCreditsDurably.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'outcome_unknown',
+        operation_result: 'already_finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 0,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_late',
+      requestHash: 'c'.repeat(64),
+      leaseToken: 'lease-late',
+      estimatedCostCents: 20,
+      provider: 'anthropic',
+      model: 'fixture-model',
+      quotaFeature: 'chat',
+      outcome: 'completed',
+      actualCostCents: 31,
+    });
+
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      {
+        userId: 'user_1',
+        amountCents: 31,
+        description: 'Managed usage late settlement after recovery',
+        metadata: {
+          idempotency_key: 'agi.chat.web.turn_late',
+          request_hash: 'c'.repeat(64),
+          is_late_settlement: true,
+          quotaFeature: 'chat',
+        },
+        idempotencyKey: `user_1:reconciliation:agi.chat.web.turn_late:late`,
+      },
+      db,
+    );
+  });
+
+  it('leaves a recovered failure and a zero-cost recovery unsettled', async () => {
+    settleCreditsDurably.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'outcome_unknown',
+        operation_result: 'already_finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 0,
+      },
+    ]);
+
+    const base = {
+      db,
+      userId: 'user_1',
+      requestHash: 'd'.repeat(64),
+      leaseToken: 'lease-late',
+      estimatedCostCents: 20,
+      provider: 'anthropic',
+      model: 'fixture-model',
+    } as const;
+
+    await finalizeManagedUsageRequest({
+      ...base,
+      idempotencyKey: 'agi.chat.web.turn_late_failed',
+      outcome: 'failed',
+      actualCostCents: 31,
+    });
+    await finalizeManagedUsageRequest({
+      ...base,
+      idempotencyKey: 'agi.chat.web.turn_late_free',
+      outcome: 'completed',
+      actualCostCents: 0,
+    });
+
+    expect(settleCreditsDurably).not.toHaveBeenCalled();
+  });
+
+  it('never throws out of finalize when the late settlement cannot be enqueued', async () => {
+    settleCreditsDurably.mockClear();
+    settleCreditsDurably.mockRejectedValueOnce(new Error('insufficient balance'));
+    const db = fakeDb([
+      {
+        request_status: 'outcome_unknown',
+        operation_result: 'already_finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 0,
+      },
+    ]);
+
+    await expect(
+      finalizeManagedUsageRequest({
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'agi.chat.web.turn_late_broke',
+        requestHash: 'f'.repeat(64),
+        leaseToken: 'lease-late',
+        estimatedCostCents: 20,
+        provider: 'anthropic',
+        model: 'fixture-model',
+        outcome: 'completed',
+        actualCostCents: 31,
+      }),
+    ).resolves.toMatchObject({ requestStatus: 'outcome_unknown' });
   });
 
   it('records the absorbed provider cost when a turn finishes after recovery reclaimed it', async () => {
