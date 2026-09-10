@@ -38,7 +38,7 @@ import {
 } from '@agiworkforce/types';
 import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import {
   MAX_EXECUTION_OUTPUT_BYTES,
@@ -121,7 +121,7 @@ function resolveSandboxLimits(planTier: string | null | undefined): {
 async function resolveScopePlanTier(scope: E2BSessionScope): Promise<string | null> {
   if (scope.planTier) return scope.planTier;
   try {
-    const subscription = await SubscriptionService.getSubscription(
+    const subscription = await resolveEffectiveSubscription(
       createClaimedUserScopedDb(getNeonDb(), { userId: scope.userId, organizationId: null }),
       scope.userId,
     );

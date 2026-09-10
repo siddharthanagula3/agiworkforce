@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
 
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
 process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
@@ -32,8 +33,12 @@ vi.mock('../compute-metering', () => ({
     getSandboxComputeMicrousdPerSecond(shape),
 }));
 
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
+const resolveEffectiveSubscription = vi.fn(
+  async (_db: unknown, _userId: string) => ({ plan_tier: 'pro' }) as unknown,
+);
+vi.mock('@/lib/services/effective-subscription-service', () => ({
+  resolveEffectiveSubscription: (db: unknown, userId: string) =>
+    resolveEffectiveSubscription(db, userId),
 }));
 
 const buildServerProviderAdapter = vi.fn((providerId: string): { config: { apiKey?: string } } => {
@@ -1021,6 +1026,27 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
 
     listedSandboxes = liveSandboxesFor('user-max15', 2);
     expect(await getE2BExecutor(scope('conv-m', 'user-max15', 'max_15x'))).not.toBeNull();
+  });
+
+  it('gives an organization seat member the team plan ceiling and lifetime, not the free plan', async () => {
+    resolveEffectiveSubscription.mockResolvedValue({ plan_tier: 'team' });
+    const seatScope = {
+      tenantId: 'managed-cloud',
+      userId: 'user-seat',
+      conversationId: 'conv-seat',
+    };
+    const { getE2BExecutor } = await import('../runtime');
+
+    listedSandboxes = liveSandboxesFor('user-seat', getPlanMaxSandboxes('team') - 1);
+    const executor = await getE2BExecutor(seatScope);
+    expect(executor).not.toBeNull();
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('team'));
+
+    listedSandboxes = liveSandboxesFor('user-seat', getPlanMaxSandboxes('team'));
+    expect(await getE2BExecutor({ ...seatScope, conversationId: 'conv-seat-2' })).toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+    resolveEffectiveSubscription.mockResolvedValue({ plan_tier: 'pro' });
   });
 
   it('refuses managed sandboxes to tiers that are not entitled to them', async () => {
