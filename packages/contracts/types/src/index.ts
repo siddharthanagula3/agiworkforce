@@ -72,6 +72,7 @@ export * from './user';
 
 export * from './billing-catalog';
 export * from './credits';
+export * from './model-price-copy';
 export * from './billing-topups';
 export * from './rate-card';
 export * from './mobile-iap';

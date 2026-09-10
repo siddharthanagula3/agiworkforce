@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   MANAGED_USAGE_BUCKET_COPY,
   MANAGED_USAGE_BUCKET_ORDER,
+  formatCreditWindowUsage,
+  formatPlanCreditAllowanceLine,
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
@@ -152,5 +154,38 @@ describe('selectUsageWarning', () => {
       const warning = selectUsageWarning([{ bucket, percentRemaining: 10 }]);
       expect(warning?.headline).not.toContain(MANAGED_USAGE_BUCKET_COPY[bucket].label);
     }
+  });
+});
+
+describe('usage copy stated in credits', () => {
+  it('names the amount and the window rather than a share', () => {
+    const warning = selectUsageWarning([
+      { bucket: 'session', percentRemaining: 8, allowanceCredits: 25, usedCredits: 23 },
+    ]);
+    expect(warning?.headline).toBe('You have used 23 of your 25 credits for this 5-hour window');
+    expect(warning?.headline).not.toContain('%');
+    expect(warning?.headline).not.toContain('$');
+  });
+
+  it('drops the "of" clause once the window is spent', () => {
+    const warning = selectUsageWarning([
+      { bucket: 'session', percentRemaining: 0, allowanceCredits: 25, usedCredits: 25 },
+    ]);
+    expect(warning?.headline).toBe('You have used your 25 credits for this 5-hour window');
+  });
+
+  it('falls back to the share wording when the server names no allowance', () => {
+    const warning = selectUsageWarning([{ bucket: 'session', percentRemaining: 8 }]);
+    expect(warning?.headline).toBe("You've used 92% of your current session limit");
+  });
+
+  it('keeps a fractional credit visible in a bar label', () => {
+    expect(formatCreditWindowUsage(1.25, 3.75)).toBe('Used 1.3 of 3.8 credits · 2.5 left');
+  });
+
+  it('states a plan allowance across all three windows', () => {
+    expect(formatPlanCreditAllowanceLine('Pro', { monthly: 500, weekly: 125, fiveHour: 25 })).toBe(
+      'Pro · 500 credits/month · 125 credits/week · 25 credits per 5 hours',
+    );
   });
 });
