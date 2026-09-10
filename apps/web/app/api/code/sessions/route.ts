@@ -35,7 +35,7 @@ import {
   isCloudCodeSchemaUnavailable,
   listCloudCodeSessions,
 } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -75,7 +75,7 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
 }
 
 async function resolvePlan(db: DatabaseAdapter, userId: string): Promise<string> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const subscription = await resolveEffectiveSubscription(db, userId);
   return effectivePlanTier(subscription?.plan_tier, subscription?.status);
 }
 
@@ -186,7 +186,7 @@ async function handleCreate(request: NextRequest) {
       { status: 422 },
     );
   }
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const subscription = await resolveEffectiveSubscription(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,

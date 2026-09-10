@@ -6,6 +6,10 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  isSeatBearingBillingPlan,
+  provisionSeatMemberCreditAccounts,
+} from '@/lib/services/effective-subscription-service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -65,6 +69,7 @@ export async function GET(request: NextRequest) {
     let cursorId: string | null = null;
     let considered = 0;
     let resetCount = 0;
+    let seatCount = 0;
     let errorCount = 0;
     let drained = false;
 
@@ -93,6 +98,14 @@ export async function GET(request: NextRequest) {
             { db, stripePriceId: subscription.stripe_price_id },
           );
           if (accountId) resetCount++;
+          if (isSeatBearingBillingPlan(subscription.plan_tier)) {
+            seatCount += await provisionSeatMemberCreditAccounts(db, {
+              ownerUserId: subscription.user_id,
+              subscriptionId: subscription.id,
+              periodStart: new Date(subscription.current_period_start),
+              periodEnd: new Date(subscription.current_period_end),
+            });
+          }
         } catch (error) {
           errorCount++;
           logger.error(
@@ -120,13 +133,13 @@ export async function GET(request: NextRequest) {
     // night that ran out of budget with paying accounts still unallocated.
     if (!drained) {
       logger.warn(
-        { considered, reset: resetCount, errors: errorCount },
+        { considered, reset: resetCount, seatLedgers: seatCount, errors: errorCount },
         'Credit reset ran out of budget before draining active subscriptions',
       );
     }
 
     logger.info(
-      { considered, reset: resetCount, errors: errorCount, drained },
+      { considered, reset: resetCount, seatLedgers: seatCount, errors: errorCount, drained },
       'Credit reset cron job completed',
     );
 
@@ -134,6 +147,7 @@ export async function GET(request: NextRequest) {
       message: 'Credit reset completed',
       total: considered,
       reset: resetCount,
+      seatLedgers: seatCount,
       errors: errorCount,
       drained,
     });
