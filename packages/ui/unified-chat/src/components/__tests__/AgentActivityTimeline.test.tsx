@@ -348,6 +348,191 @@ describe('AgentActivityTimeline', () => {
     expect(onReject).toHaveBeenCalledWith('shell-1');
   });
 
+  it('keeps a paused turn that still holds an undecided approval open, with its buttons and the step before it', () => {
+    const onApprove = vi.fn();
+    const pausedWithOpenApproval = activity({
+      status: 'paused',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-1',
+          toolCallId: 'call-1',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Running code',
+          status: 'completed',
+          input: { code: 'read_csv()' },
+          output: { stdout: 'rows: 42' },
+          startedAtMs: 1_100,
+          completedAtMs: 1_500,
+          approval: { id: 'approval-1', decision: 'approved' },
+        },
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Review Execute Code action',
+          status: 'awaiting-approval',
+          input: { code: 'plot()' },
+          startedAtMs: 1_600,
+          approval: { id: 'approval-2' },
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={pausedWithOpenApproval} onApprove={onApprove} />);
+
+    expect(screen.getByRole('button', { name: /hide agent activity/i }).textContent).toContain(
+      'Needs approval',
+    );
+    const completedStep = screen.getByRole('button', { name: 'Running code' });
+    fireEvent.click(completedStep);
+    expect(screen.getByRole('region', { name: 'Running code details' }).textContent).toContain(
+      'rows: 42',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onApprove).toHaveBeenCalledWith('call-2');
+  });
+
+  it('announces a turn waiting on a decision as needing approval, not as paused', () => {
+    const pausedWithOpenApproval = activity({
+      status: 'paused',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Review Execute Code action',
+          status: 'awaiting-approval',
+          input: { code: 'plot()' },
+          startedAtMs: 1_600,
+          approval: { id: 'approval-2' },
+        },
+      ],
+    });
+
+    const { container } = render(<AgentActivityTimeline activity={pausedWithOpenApproval} />);
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    expect(liveRegion?.textContent).toBe('Approval needed: Review Execute Code action');
+  });
+
+  it('settles a recovered partial run on its last step, in the past tense', () => {
+    const recovered = activity({
+      status: 'partial',
+      startedAtMs: 1_000,
+      completedAtMs: 4_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-1',
+          toolCallId: 'call-1',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Running code',
+          status: 'failed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_400,
+          error: 'NameError: pd is not defined',
+        },
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Running code',
+          status: 'completed',
+          startedAtMs: 1_500,
+          completedAtMs: 3_500,
+        },
+      ],
+    });
+
+    const { container } = render(<AgentActivityTimeline activity={recovered} />);
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.textContent).toContain('Worked for 3s');
+    expect(trigger.textContent).not.toContain('Running code');
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      'Agent activity completed',
+    );
+  });
+
+  it('still reports errors on a partial run whose last step failed', () => {
+    const stillBroken = activity({
+      status: 'partial',
+      startedAtMs: 1_000,
+      completedAtMs: 4_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-1',
+          toolCallId: 'call-1',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Ran the setup step',
+          status: 'completed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_400,
+        },
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'The tool failed',
+          status: 'failed',
+          startedAtMs: 1_500,
+          completedAtMs: 3_500,
+          error: 'NameError: pd is not defined',
+        },
+      ],
+    });
+
+    const { container } = render(<AgentActivityTimeline activity={stillBroken} />);
+    expect(screen.getByRole('button', { name: /agent activity/i }).textContent).toContain(
+      'The tool failed',
+    );
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      'Agent activity finished with errors',
+    );
+  });
+
+  it('never announces a step awaiting approval as running', () => {
+    const pending = activity({
+      status: 'awaiting-approval',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Review Execute Code action',
+          status: 'awaiting-approval',
+          input: { code: 'plot()' },
+          startedAtMs: 1_600,
+          approval: { id: 'approval-2' },
+        },
+      ],
+    });
+
+    const { container } = render(
+      <AgentActivityTimeline activity={pending} defaultExpanded onApprove={vi.fn()} />,
+    );
+
+    const row = container.querySelector('[data-tool-id="call-2"]');
+    expect(row?.textContent).not.toContain('Running');
+    expect(row?.querySelector('.animate-spin')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Review Execute Code action, Waiting for your approval' }),
+    ).toBeTruthy();
+  });
+
   it('shows completed artifacts and context compaction in the same spine', () => {
     const completed = activity({
       status: 'completed',

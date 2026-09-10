@@ -261,7 +261,9 @@ function toInlineStatus(
   requiresApproval?: boolean,
   expired?: boolean,
 ): InlineToolCallStatus {
-  if (requiresApproval || status === 'awaiting_approval') return expired ? 'partial' : 'running';
+  if (requiresApproval || status === 'awaiting_approval') {
+    return expired ? 'partial' : 'awaiting-approval';
+  }
   switch (status) {
     case 'complete':
       return 'success';

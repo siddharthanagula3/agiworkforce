@@ -25,11 +25,18 @@ import {
   BookOpen,
   Wrench,
   Clock,
+  PauseCircle,
   type LucideProps,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-export type InlineToolCallStatus = 'pending' | 'running' | 'success' | 'error' | 'partial';
+export type InlineToolCallStatus =
+  | 'pending'
+  | 'running'
+  | 'awaiting-approval'
+  | 'success'
+  | 'error'
+  | 'partial';
 
 export type InlineToolIconStyle = 'lucide' | 'badge';
 
@@ -197,6 +204,16 @@ function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
       />
     );
   }
+  if (status === 'awaiting-approval') {
+    return (
+      <PauseCircle
+        size={14}
+        strokeWidth={2}
+        className="text-[color:var(--chat-warning-fg)]"
+        aria-hidden="true"
+      />
+    );
+  }
   if (status === 'error') {
     return (
       <CircleAlert
@@ -226,6 +243,8 @@ function labelSuffix(status: InlineToolCallStatus, errorMessage?: string): strin
       return '…';
     case 'running':
       return 'Running';
+    case 'awaiting-approval':
+      return 'Waiting for your approval';
     case 'error':
       return errorMessage ? `Error: ${errorMessage}` : 'Error';
     case 'partial':
@@ -240,6 +259,7 @@ function colorClassForStatus(status: InlineToolCallStatus): string {
   switch (status) {
     case 'error':
       return 'text-[color:var(--chat-destructive-text)]';
+    case 'awaiting-approval':
     case 'partial':
       return 'text-[color:var(--chat-warning-fg)]';
     case 'pending':

@@ -39,6 +39,76 @@ describe('what the live region tells a screen reader when a turn ends', () => {
     expect(buildStreamAnnouncement(partial)).toBe('Response finished with errors');
   });
 
+  it('says a turn holding an undecided approval is waiting, not complete', () => {
+    const paused = assistant({
+      metadata: {
+        agentActivity: {
+          status: 'paused',
+          entries: [
+            {
+              kind: 'tool',
+              id: 'tool:call-2',
+              toolCallId: 'call-2',
+              name: 'execute_code',
+              status: 'awaiting-approval',
+              approval: { id: 'approval-2' },
+            },
+          ],
+        },
+      },
+    } as Partial<ChatMessage>);
+    expect(buildStreamAnnouncement(paused)).toBe('Response paused, waiting for your approval');
+  });
+
+  it('reports a paused turn as paused even with no approval outstanding', () => {
+    const paused = assistant({
+      metadata: { agentActivity: { status: 'paused', entries: [] } },
+    } as Partial<ChatMessage>);
+    expect(buildStreamAnnouncement(paused)).toBe('Response paused');
+  });
+
+  it('does not report errors on a run whose last step recovered', () => {
+    const recovered = assistant({
+      metadata: {
+        agentActivity: {
+          status: 'partial',
+          entries: [
+            { kind: 'tool', id: 'tool:a', toolCallId: 'a', name: 'execute_code', status: 'failed' },
+            {
+              kind: 'tool',
+              id: 'tool:b',
+              toolCallId: 'b',
+              name: 'execute_code',
+              status: 'completed',
+            },
+          ],
+        },
+      },
+    } as Partial<ChatMessage>);
+    expect(buildStreamAnnouncement(recovered)).toBe('Response complete. Here is the answer.');
+  });
+
+  it('keeps reporting errors when the last step is the one that failed', () => {
+    const stillBroken = assistant({
+      metadata: {
+        agentActivity: {
+          status: 'partial',
+          entries: [
+            {
+              kind: 'tool',
+              id: 'tool:a',
+              toolCallId: 'a',
+              name: 'execute_code',
+              status: 'completed',
+            },
+            { kind: 'tool', id: 'tool:b', toolCallId: 'b', name: 'execute_code', status: 'failed' },
+          ],
+        },
+      },
+    } as Partial<ChatMessage>);
+    expect(buildStreamAnnouncement(stillBroken)).toBe('Response finished with errors');
+  });
+
   it('reports an outright failure', () => {
     const failed = assistant({
       metadata: { agentActivity: { status: 'failed' } },
