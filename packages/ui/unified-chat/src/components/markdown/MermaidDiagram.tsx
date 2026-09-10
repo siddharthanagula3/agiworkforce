@@ -50,8 +50,10 @@ function fitToNaturalSize(root: Element): void {
     .trim()
     .split(/[\s,]+/)
     .map(Number);
-  const [, , width, height] = viewBox;
-  if (viewBox.length !== 4 || !(width > 0) || !(height > 0)) return;
+  const width = viewBox[2];
+  const height = viewBox[3];
+  if (viewBox.length !== 4 || width === undefined || height === undefined) return;
+  if (!(width > 0) || !(height > 0)) return;
   if (!/%$/.test(root.getAttribute('width') ?? '%')) return;
   root.setAttribute('width', String(Math.ceil(width)));
   root.setAttribute('height', String(Math.ceil(height)));
