@@ -40,6 +40,8 @@ import {
   type ClaimedCloudAgentApprovalCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
+import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
+import { withSseHeartbeat } from '../lib/sse-heartbeat';
 import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
@@ -49,6 +51,9 @@ import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 
 const SECRET_IN_GUIDANCE_MESSAGE =
   'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
+
+// Same tool loop as route.ts, same limit; a literal because Next reads it statically.
+export const maxDuration = 300;
 
 function jsonError(message: string, status: number): NextResponse {
   return NextResponse.json(
@@ -388,7 +393,19 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
     streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
   }
 
-  return new NextResponse(turn.readable, { headers: streamHeaders });
+  const body =
+    turn.transport === 'durable' && turn.workflowRunId
+      ? boundDurableTurnStream({
+          readable: turn.readable,
+          db,
+          userId,
+          runId: claim.checkpoint.runId,
+          workflowRunId: turn.workflowRunId,
+          requestId: processed.requestId,
+        })
+      : turn.readable;
+
+  return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }
 
 async function admitAndDispatchApproval(request: NextRequest): Promise<NextResponse | Response> {

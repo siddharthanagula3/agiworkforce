@@ -6,6 +6,21 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { listCanonicalModels } from '@agiworkforce/types';
 const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('./cloud-agent-run-service', () => ({ appendCloudAgentEvents: appendEvents }));
+const cancelWorldRun = vi.hoisted(() => vi.fn(async (_workflowRunId: string) => undefined));
+const inFlight = vi.hoisted(() => ({ now: 0, peak: 0 }));
+vi.mock('workflow/api', () => ({
+  getRun: (runId: string) => ({
+    cancel: async () => {
+      inFlight.now += 1;
+      inFlight.peak = Math.max(inFlight.peak, inFlight.now);
+      try {
+        await cancelWorldRun(runId);
+      } finally {
+        inFlight.now -= 1;
+      }
+    },
+  }),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -41,6 +56,7 @@ const REAPED = {
   request_id: 'agi.chat.web.send.turn-1',
   model: ZERO_COST_MODEL.id,
   last_event_sequence: 4,
+  workflow_run_id: 'wfr_reaped_1',
 };
 const REAPED_AFTER_STOP = {
   ...REAPED,
@@ -53,6 +69,9 @@ let db: DatabaseAdapter;
 beforeEach(() => {
   vi.clearAllMocks();
   appendEvents.mockResolvedValue(undefined);
+  cancelWorldRun.mockResolvedValue(undefined);
+  inFlight.now = 0;
+  inFlight.peak = 0;
   db = database();
 });
 
@@ -133,6 +152,8 @@ describe('reaping a run whose invocation is gone', () => {
     expect(await reapOrphanedCloudAgentRuns(db)).toEqual({
       reaped: 0,
       stoppedByUser: 0,
+      worldRunsCancelled: 0,
+      worldRunsUncancelled: 0,
       remaining: false,
     });
   });
@@ -166,5 +187,75 @@ describe('reaping a run whose invocation is gone', () => {
     });
 
     expect(report.remaining).toBe(true);
+  });
+});
+
+/**
+ * The half of the reap that was missing: `cloud_agent_runs.workflow_run_id` was
+ * stored but never used, so a reaped row left its world invocation running. The
+ * world redelivered the flow every 15 minutes and each redelivery burned the
+ * whole 800 s invocation limit.
+ */
+describe('cancelling the world run behind a reaped row', () => {
+  it('cancels the invocation every reaped row names', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([REAPED, REAPED_AFTER_STOP]);
+
+    const report = await reapOrphanedCloudAgentRuns(db);
+
+    expect(cancelWorldRun).toHaveBeenCalledTimes(2);
+    expect(cancelWorldRun).toHaveBeenCalledWith(REAPED.workflow_run_id);
+    expect(report.worldRunsCancelled).toBe(2);
+    expect(report.worldRunsUncancelled).toBe(0);
+  });
+
+  it('reads the workflow run id back from the update, so a row cannot be reaped blind', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([REAPED]);
+
+    await reapOrphanedCloudAgentRuns(db);
+
+    const [sql] = vi.mocked(db.query).mock.calls[0] as [string];
+    expect(sql).toMatch(/returning[\s\S]*workflow_run_id/);
+  });
+
+  it('skips a row that never reached the workflow platform', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([{ ...REAPED, workflow_run_id: null }]);
+
+    const report = await reapOrphanedCloudAgentRuns(db);
+
+    expect(cancelWorldRun).not.toHaveBeenCalled();
+    expect(report.reaped).toBe(1);
+  });
+
+  it('reaps the rest when one run refuses to cancel, and says so', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...REAPED, workflow_run_id: 'wfr_gone' },
+      REAPED_AFTER_STOP,
+    ]);
+    cancelWorldRun.mockRejectedValueOnce(new Error('run not found'));
+
+    const report = await reapOrphanedCloudAgentRuns(db);
+
+    expect(report.reaped).toBe(2);
+    expect(report.worldRunsUncancelled).toBe(1);
+    expect(report.worldRunsCancelled).toBe(1);
+    expect(appendEvents).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds how many cancels are in flight at once', async () => {
+    const batch = Array.from({ length: 200 }, (_unused, index) => ({
+      ...REAPED,
+      id: `0190a000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+      workflow_run_id: `wfr_${index}`,
+    }));
+    vi.mocked(db.query).mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+    cancelWorldRun.mockImplementation(
+      () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1)),
+    );
+
+    const report = await reapOrphanedCloudAgentRuns(db);
+
+    expect(report.worldRunsCancelled).toBe(200);
+    expect(inFlight.peak).toBeGreaterThan(1);
+    expect(inFlight.peak).toBeLessThanOrEqual(8);
   });
 });

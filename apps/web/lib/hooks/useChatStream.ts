@@ -2259,6 +2259,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
+          // The function budget ended this connection, not the run; follow it in the journal.
+          if (parsed.choices?.[0]?.delta?.x_run_detached && runHandle) {
+            return await replayDurableRun();
+          }
+
           const approvalReq = parsed.choices?.[0]?.delta?.x_tool_approval_request;
           if (approvalReq && typeof approvalReq === 'object') {
             const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
