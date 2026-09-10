@@ -8,8 +8,12 @@ import {
   CLOUD_CODE_COMMAND_DEADLINE_MS,
   CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
   CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS,
+  CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+  CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS,
   CLOUD_CODE_TURN_BUDGET_MS,
   DEADLINE_HIERARCHY,
+  DURABLE_STREAM_DETACH_DEADLINE_MS,
+  DURABLE_STREAM_SILENCE_DEADLINE_MS,
   FUNCTION_TEARDOWN_RESERVE_MS,
   IMAGE_GENERATION_FUNCTION_LIMIT_MS,
   MIN_CHILD_DEADLINE_MS,
@@ -42,6 +46,29 @@ describe('deadline hierarchy', () => {
     const declared = /export const maxDuration = (\d+)/.exec(routeSource);
     expect(declared, 'route.ts must declare maxDuration').not.toBeNull();
     expect(Number(declared![1]) * 1000).toBe(CHAT_COMPLETIONS_FUNCTION_LIMIT_MS);
+  });
+
+  it('holds the same limit on the two routes that run the same tool loop', () => {
+    for (const route of ['approve', 'resume-input']) {
+      const routeSource = readFileSync(
+        join(__dirname, `../../app/api/llm/v1/chat/completions/${route}/route.ts`),
+        'utf8',
+      );
+      const declared = /export const maxDuration = (\d+)/.exec(routeSource);
+      expect(declared, `${route}/route.ts must declare maxDuration`).not.toBeNull();
+      expect(Number(declared![1]) * 1000).toBe(CHAT_COMPLETIONS_FUNCTION_LIMIT_MS);
+    }
+  });
+
+  it('keeps the durable step limit in the policy file rather than at the call site', () => {
+    const stepSource = readFileSync(
+      join(__dirname, '../workflows/steps/execute-cloud-agent-invocation.ts'),
+      'utf8',
+    );
+    expect(stepSource).toContain('maxDurationMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS');
+    expect(CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS).toBeLessThan(
+      CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS,
+    );
   });
 
   it("matches the cloud code commands route's declared maxDuration", () => {
@@ -141,5 +168,29 @@ describe('resolveCloudCodeCommandDeadlineMs', () => {
     expect(resolveCloudCodeCommandDeadlineMs('   claude -p "hi"', HARNESS_IDS)).toBe(
       CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
     );
+  });
+});
+
+/**
+ * Production, last 30 days: 1,785 invocations killed at 800 s across the chat
+ * route and the workflow flow, about 674 of the 876.6 GB-hours billed. Every
+ * one of them was a stream nobody bounded once it had started.
+ */
+describe('the durable transport is bounded in both directions', () => {
+  it('tolerates the longest legitimate gap, a whole tool call', () => {
+    expect(DURABLE_STREAM_SILENCE_DEADLINE_MS).toBeGreaterThan(TOOL_CALL_DEADLINE_MS);
+  });
+
+  it('judges a stream dead before the step feeding it would end on its own', () => {
+    expect(DURABLE_STREAM_SILENCE_DEADLINE_MS).toBeLessThan(CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS);
+  });
+
+  it('detaches on the tool-loop budget, inside the function limit', () => {
+    expect(DURABLE_STREAM_DETACH_DEADLINE_MS).toBe(CHAT_TOOL_LOOP_BUDGET_MS);
+    expect(DURABLE_STREAM_DETACH_DEADLINE_MS).toBeLessThan(CHAT_COMPLETIONS_FUNCTION_LIMIT_MS);
+  });
+
+  it('judges silence before it detaches, so a dead run is never handed back as live', () => {
+    expect(DURABLE_STREAM_SILENCE_DEADLINE_MS).toBeLessThan(DURABLE_STREAM_DETACH_DEADLINE_MS);
   });
 });

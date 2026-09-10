@@ -28,6 +28,7 @@ import {
   saveCloudAgentInputCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
+import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -353,13 +354,14 @@ export async function executeCloudAgentWorkflowInvocation(
       : {}),
     userId: input.userId,
     connectorExecutor,
+    signal: cancellation.signal,
     resume: input.continuation?.resume,
     eventSessionId: input.continuation?.eventSessionId,
     eventTurnId: input.continuation?.eventTurnId,
     initialEventSequence: input.continuation?.initialEventSequence,
     initialCompletedSteps: input.continuation?.initialCompletedSteps,
     invocationContinuation: input.continuation?.invocationContinuation,
-    maxDurationMs: 210_000,
+    maxDurationMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
     isCancellationRequested: async () => {
       const cancelled = await isCloudAgentRunCancellationRequested(db, {
         userId: input.userId,
