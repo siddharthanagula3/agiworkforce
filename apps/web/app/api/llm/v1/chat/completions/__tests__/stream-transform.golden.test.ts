@@ -9,6 +9,10 @@ vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/credit-service', () => ({
+  MICROUSD_PER_LEDGER_CENT: 10_000,
+  microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
+  ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
+
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
     deductCredits: vi.fn(() => Promise.resolve()),

@@ -37,7 +37,11 @@ const creditMocks = vi.hoisted(() => ({
   getBalance: vi.fn().mockResolvedValue({ credits_remaining_cents: 1500 }),
   deductCredits: vi.fn().mockResolvedValue({ success: true }),
 }));
-vi.mock('@/lib/services/credit-service', () => ({ CreditService: creditMocks }));
+vi.mock('@/lib/services/credit-service', () => ({
+  MICROUSD_PER_LEDGER_CENT: 10_000,
+  microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
+  ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
+ CreditService: creditMocks }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
