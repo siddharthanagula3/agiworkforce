@@ -18,6 +18,8 @@ import {
   getPlanMaxConnectorTools,
   getPlanMaxSandboxes,
   getPlanMaxScheduledTasks,
+  getPlanCodeHarnessDailyCeilingCents,
+  ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS,
   getPlanSandboxTtlMs,
   canUseBillingPlanCapability,
   isSelfServePaidPlanTier,
@@ -270,6 +272,23 @@ describe('billing catalog', () => {
       expect(getPlanMaxConnectorTools('enterprise')).toBeNull();
       expect(getPlanMaxScheduledTasks('enterprise')).toBeNull();
       expect(getPlanSandboxTtlMs('enterprise')).toBeGreaterThan(0);
+    });
+
+    it('gives the coding harness a daily ceiling that rises with the plan and is zero off managed cloud', () => {
+      const paid = ['basic', 'pro', 'max', 'max_15x'] as const;
+      const ceilings = paid.map((tier) => getPlanCodeHarnessDailyCeilingCents(tier));
+      for (let index = 1; index < ceilings.length; index += 1) {
+        expect(ceilings[index]!).toBeGreaterThan(ceilings[index - 1]!);
+      }
+      expect(getPlanCodeHarnessDailyCeilingCents('team')).toBe(
+        getPlanCodeHarnessDailyCeilingCents('pro'),
+      );
+      expect(getPlanCodeHarnessDailyCeilingCents('enterprise')).toBe(
+        ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS,
+      );
+      for (const tier of ['free', 'local-only', 'byok', 'hobby', undefined, null] as const) {
+        expect(getPlanCodeHarnessDailyCeilingCents(tier)).toBe(0);
+      }
     });
 
     it('denies managed sandboxes and scheduled tasks to the local trust boundary', () => {
