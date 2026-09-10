@@ -1,4 +1,3 @@
-
 export type PaywallFeature =
   | 'video_generation'
   | 'opus_5'
@@ -61,8 +60,8 @@ export const PAYWALL_FEATURE_COPY: Readonly<Record<PaywallFeature, PaywallFeatur
       limitHeadline: 'You have reached a plan limit',
     },
     rolling_capacity: {
-      upgradeLabel: 'more capacity per window',
-      limitHeadline: 'You have used your capacity for this window',
+      upgradeLabel: 'more credits per window',
+      limitHeadline: 'You have used your credits for this window',
     },
     request_rate: {
       upgradeLabel: 'a higher request rate',
