@@ -10,16 +10,21 @@ import {
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 import {
-  getPlanFlagshipWeeklyUsageCapCents,
-  getPlanSessionUsageCapCents,
-  getPlanWeeklyUsageCapCents,
+  getPlanFlagshipWeeklyUsageCapMicrousd,
+  getPlanSessionUsageCapMicrousd,
+  getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
 import { logger } from '@/lib/logger';
 import {
   getOrganizationMonthToDateSpendCents,
   recordSettledProviderCost,
 } from '@/lib/services/cogs-ledger-service';
-import { CreditService, type CreditSettlementResult } from '@/lib/services/credit-service';
+import {
+  CreditService,
+  ledgerCentsFromMicrousd,
+  microusdFromLedgerCents,
+  type CreditSettlementResult,
+} from '@/lib/services/credit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
@@ -93,11 +98,43 @@ export interface ManagedUsageRequestReservation {
   idempotencyKey: string;
   requestHash: string;
   leaseToken: string;
+  /**
+   * What the ledger reserved. The cents field is its round-half-up mirror.
+   * Optional only so a reservation rebuilt from a record written before 0185
+   * still satisfies the type; read it through `estimateMicrousdOf`, never
+   * directly, so the cents fallback is always applied.
+   */
+  estimatedCostMicrousd?: number;
   estimatedCostCents: number;
   quotaFeature?: string;
   provider?: string;
   model?: string;
   routeId?: string | null;
+}
+
+/**
+ * A caller supplies whichever unit it already holds. `*Cents` is the
+ * deprecated alias: it is scaled by 10,000 and takes the same path, so a call
+ * site that has not migrated bills exactly what it billed before 0185.
+ */
+export type ManagedUsageAmount =
+  | { estimatedCostMicrousd: number; estimatedCostCents?: number }
+  | { estimatedCostCents: number; estimatedCostMicrousd?: number };
+
+/** The reserved amount in the ledger's unit, from whichever field carries it. */
+export function estimateMicrousdOf(source: {
+  estimatedCostMicrousd?: number | undefined;
+  estimatedCostCents: number;
+}): number {
+  return source.estimatedCostMicrousd ?? microusdFromLedgerCents(source.estimatedCostCents);
+}
+
+function resolveEstimatedMicrousd(input: {
+  estimatedCostMicrousd?: number | undefined;
+  estimatedCostCents?: number | undefined;
+}): number {
+  if (input.estimatedCostMicrousd !== undefined) return Math.round(input.estimatedCostMicrousd);
+  return microusdFromLedgerCents(input.estimatedCostCents ?? 0);
 }
 
 export interface ServedRoute {
@@ -153,11 +190,13 @@ export interface ManagedUsageFinalization {
   requestStatus: 'completed' | 'released' | 'outcome_unknown';
   operationResult: 'finalized' | 'already_finalized';
   settlementStatus: 'succeeded' | 'pending' | 'terminal' | null;
+  actualCostMicrousd?: number;
   actualCostCents: number;
 }
 
 export interface ManagedUsageProviderStepReservation {
   operationResult: 'covered' | 'extended' | 'already_extended';
+  estimatedCostMicrousd?: number;
   estimatedCostCents: number;
 }
 
@@ -200,6 +239,16 @@ export function fingerprintManagedUsageRequest(value: unknown): string {
 }
 
 const QUERY_LOG_PREVIEW_CHARS = 80;
+
+/** A bigint column arrives as a string once it exceeds 2^31. */
+function ledgerAmount(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 
 function databaseErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' &&
@@ -371,14 +420,18 @@ function reservationError(decision: string): ManagedUsageRequestError {
   }
 }
 
-async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string): Promise<number> {
+/** Headroom is the lesser of what is left and what was purchased, never more. */
+async function resolveOverageHeadroomMicrousd(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<number> {
   try {
-    const rows = await db.query<{ headroom_cents: number | string | null }>(
+    const rows = await db.query<{ headroom_microusd: number | string | null }>(
       `select greatest(
                 least(
-                  credits.credits_allocated_cents - credits.credits_used_cents,
-                  credits.top_up_allocated_cents
-                ), 0)::integer as headroom_cents
+                  credits.credits_allocated_microusd - credits.credits_used_microusd,
+                  credits.top_up_allocated_microusd
+                ), 0) as headroom_microusd
          from public.token_credits credits
          join public.subscriptions subscription on subscription.user_id = credits.user_id
         where credits.user_id = $1
@@ -388,7 +441,7 @@ async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string):
         limit 1`,
       [userId],
     );
-    const value = Number(rows[0]?.headroom_cents ?? 0);
+    const value = Number(rows[0]?.headroom_microusd ?? 0);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   } catch (error) {
     logger.warn({ error, userId }, 'Overage headroom lookup failed; treating as no headroom');
@@ -396,21 +449,22 @@ async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string):
   }
 }
 
-export async function reserveManagedUsageRequest(input: {
-  db: DatabaseAdapter;
-  userId: string;
-  organizationId?: string | null;
-  idempotencyKey: string;
-  requestHash: string;
-  provider: string;
-  model: string;
-  estimatedCostCents: number;
-  leaseToken?: string;
-  leaseSeconds?: number;
-  planTier: string;
-  isFlagship: boolean;
-  quotaFeature?: string;
-}): Promise<ManagedUsageRequestReservation> {
+export async function reserveManagedUsageRequest(
+  input: {
+    db: DatabaseAdapter;
+    userId: string;
+    organizationId?: string | null;
+    idempotencyKey: string;
+    requestHash: string;
+    provider: string;
+    model: string;
+    leaseToken?: string;
+    leaseSeconds?: number;
+    planTier: string;
+    isFlagship: boolean;
+    quotaFeature?: string;
+  } & ManagedUsageAmount,
+): Promise<ManagedUsageRequestReservation> {
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
     input.db,
     input.organizationId,
@@ -422,16 +476,16 @@ export async function reserveManagedUsageRequest(input: {
 
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
-  const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
-  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
-  const topUpHeadroomCents = await resolveOverageHeadroomCents(input.db, input.userId);
+  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(input.planTier);
+  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(input.planTier);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(input.planTier);
+  const topUpHeadroomMicrousd = await resolveOverageHeadroomMicrousd(input.db, input.userId);
   const row = await queryOne(
     input.db,
-    `select * from public.reserve_managed_usage_request_with_limits(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
-      $7::text, $8::integer, $9::integer, $10::integer, $11::integer, $12::boolean,
-      $13::integer
+    `select * from public.reserve_managed_usage_request_with_limits_microusd(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+      $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean,
+      $13::bigint
     )`,
     [
       input.userId,
@@ -439,24 +493,25 @@ export async function reserveManagedUsageRequest(input: {
       input.requestHash,
       input.provider,
       input.model,
-      input.estimatedCostCents,
+      resolveEstimatedMicrousd(input),
       leaseToken,
       input.leaseSeconds ?? 900,
-      sessionCapCents,
-      weeklyCapCents,
-      flagshipWeeklyCapCents,
+      sessionCapMicrousd,
+      weeklyCapMicrousd,
+      flagshipWeeklyCapMicrousd,
       input.isFlagship,
-      topUpHeadroomCents,
+      topUpHeadroomMicrousd,
     ],
   );
 
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';
   if (decision !== 'acquired') throw reservationError(decision);
+  const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||
     typeof row['lease_token'] !== 'string' ||
-    typeof row['estimated_cost_cents'] !== 'number'
+    reservedMicrousd === null
   ) {
     throw new ManagedUsageRequestError(
       'Managed usage billing returned an invalid reservation.',
@@ -471,7 +526,8 @@ export async function reserveManagedUsageRequest(input: {
     idempotencyKey,
     requestHash: input.requestHash,
     leaseToken: row['lease_token'],
-    estimatedCostCents: row['estimated_cost_cents'],
+    estimatedCostMicrousd: reservedMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(reservedMicrousd),
     provider: input.provider,
     model: input.model,
     routeId: buildRouteId(input.provider, input.model),
@@ -479,17 +535,19 @@ export async function reserveManagedUsageRequest(input: {
   };
 }
 
-export async function reserveManagedUsageProviderStep(input: {
-  reservation: ManagedUsageRequestReservation;
-  operationKey: string;
-  estimatedCostCents: number;
-  planTier: string;
-  isFlagship: boolean;
-}): Promise<ManagedUsageProviderStepReservation> {
+export async function reserveManagedUsageProviderStep(
+  input: {
+    reservation: ManagedUsageRequestReservation;
+    operationKey: string;
+    planTier: string;
+    isFlagship: boolean;
+  } & ManagedUsageAmount,
+): Promise<ManagedUsageProviderStepReservation> {
+  const stepMicrousd = resolveEstimatedMicrousd(input);
   if (
     !PROVIDER_OPERATION_KEY_PATTERN.test(input.operationKey) ||
-    !Number.isInteger(input.estimatedCostCents) ||
-    input.estimatedCostCents < 0
+    !Number.isInteger(stepMicrousd) ||
+    stepMicrousd < 0
   ) {
     throw new ManagedUsageRequestError(
       'Managed usage provider-step reservation is invalid.',
@@ -498,15 +556,15 @@ export async function reserveManagedUsageProviderStep(input: {
     );
   }
 
-  const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
-  const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
-  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
+  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(input.planTier);
+  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(input.planTier);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(input.planTier);
   const reservation = input.reservation;
   const row = await queryOne(
     reservation.db,
-    `select * from public.extend_managed_usage_request_provider_step(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
-      $7::integer, $8::integer, $9::integer, $10::boolean
+    `select * from public.extend_managed_usage_request_provider_step_microusd(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+      $7::bigint, $8::bigint, $9::bigint, $10::boolean
     )`,
     [
       reservation.userId,
@@ -514,10 +572,10 @@ export async function reserveManagedUsageProviderStep(input: {
       reservation.requestHash,
       reservation.leaseToken,
       input.operationKey,
-      input.estimatedCostCents,
-      sessionCapCents,
-      weeklyCapCents,
-      flagshipWeeklyCapCents,
+      stepMicrousd,
+      sessionCapMicrousd,
+      weeklyCapMicrousd,
+      flagshipWeeklyCapMicrousd,
       input.isFlagship,
     ],
   );
@@ -526,10 +584,8 @@ export async function reserveManagedUsageProviderStep(input: {
   if (decision !== 'covered' && decision !== 'extended' && decision !== 'already_extended') {
     throw reservationError(decision);
   }
-  if (
-    row['request_status'] !== 'provider_started' ||
-    typeof row['estimated_cost_cents'] !== 'number'
-  ) {
+  const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
+  if (row['request_status'] !== 'provider_started' || reservedMicrousd === null) {
     throw new ManagedUsageRequestError(
       'Managed usage billing returned an invalid provider-step reservation.',
       503,
@@ -537,10 +593,12 @@ export async function reserveManagedUsageProviderStep(input: {
     );
   }
 
-  reservation.estimatedCostCents = row['estimated_cost_cents'];
+  reservation.estimatedCostMicrousd = reservedMicrousd;
+  reservation.estimatedCostCents = ledgerCentsFromMicrousd(reservedMicrousd);
   return {
     operationResult: decision,
-    estimatedCostCents: row['estimated_cost_cents'],
+    estimatedCostMicrousd: reservedMicrousd,
+    estimatedCostCents: reservation.estimatedCostCents,
   };
 }
 
@@ -591,13 +649,13 @@ export function markManagedUsageClientDelivered(
  */
 async function settleLateManagedUsage(
   input: ManagedUsageRequestReservation & { outcome: 'completed' | 'failed' },
-  amountCents: number,
+  amountMicrousd: number,
 ): Promise<CreditSettlementResult | null> {
   try {
     const result = await CreditService.settleCreditsDurably(
       {
         userId: input.userId,
-        amountCents,
+        amountMicrousd,
         description: 'Managed usage late settlement after recovery',
         metadata: {
           idempotency_key: input.idempotencyKey,
@@ -619,7 +677,7 @@ async function settleLateManagedUsage(
           event: 'managed_usage_late_settlement_rejected',
           userId: input.userId,
           idempotencyKey: input.idempotencyKey,
-          amountCents,
+          amountMicrousd,
           code: result.code ?? null,
           settlementStatus: result.status,
         },
@@ -634,7 +692,7 @@ async function settleLateManagedUsage(
         error,
         userId: input.userId,
         idempotencyKey: input.idempotencyKey,
-        amountCents,
+        amountMicrousd,
       },
       'Late settlement for a recovered managed usage turn could not be enqueued',
     );
@@ -645,16 +703,31 @@ async function settleLateManagedUsage(
 export async function finalizeManagedUsageRequest(
   input: ManagedUsageRequestReservation & {
     outcome: 'completed' | 'failed';
-    /** What the user is billed: the model's official price for the usage. */
-    actualCostCents: number;
+    /**
+     * What the user is billed: the model's official price for the usage.
+     * `*Cents` is the deprecated alias, scaled by 10,000.
+     */
+    actualCostMicrousd?: number;
+    actualCostCents?: number;
     /** What the served route cost the company; defaults to the billed amount. */
+    providerCostMicrousd?: number;
     providerCostCents?: number;
     usage?: Record<string, unknown>;
   },
 ): Promise<ManagedUsageFinalization> {
-  const actualCostCents = input.outcome === 'failed' ? 0 : Math.max(0, input.actualCostCents);
-  const providerCostCents =
-    input.outcome === 'failed' ? 0 : Math.max(0, input.providerCostCents ?? actualCostCents);
+  const billedMicrousd =
+    input.actualCostMicrousd !== undefined
+      ? Math.round(input.actualCostMicrousd)
+      : microusdFromLedgerCents(input.actualCostCents ?? 0);
+  const providerSuppliedMicrousd =
+    input.providerCostMicrousd !== undefined
+      ? Math.round(input.providerCostMicrousd)
+      : input.providerCostCents !== undefined
+        ? microusdFromLedgerCents(input.providerCostCents)
+        : undefined;
+  const actualCostMicrousd = input.outcome === 'failed' ? 0 : Math.max(0, billedMicrousd);
+  const providerCostMicrousd =
+    input.outcome === 'failed' ? 0 : Math.max(0, providerSuppliedMicrousd ?? actualCostMicrousd);
   const quotaTaggedUsage = input.quotaFeature
     ? { ...(input.usage ?? {}), quotaFeature: input.quotaFeature }
     : (input.usage ?? {});
@@ -672,8 +745,8 @@ export async function finalizeManagedUsageRequest(
     : quotaTaggedUsage;
   const row = await queryOne(
     input.db,
-    `select * from public.finalize_managed_usage_request(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer, $7::jsonb
+    `select * from public.finalize_managed_usage_request_microusd(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint, $7::jsonb
     )`,
     [
       input.userId,
@@ -681,7 +754,7 @@ export async function finalizeManagedUsageRequest(
       input.requestHash,
       input.leaseToken,
       input.outcome,
-      actualCostCents,
+      actualCostMicrousd,
       JSON.stringify(usage),
     ],
   );
@@ -707,8 +780,8 @@ export async function finalizeManagedUsageRequest(
     );
   }
 
-  const settledCostCents =
-    typeof row['actual_cost_cents'] === 'number' ? row['actual_cost_cents'] : actualCostCents;
+  const settledCostMicrousd = ledgerAmount(row['actual_cost_microusd']) ?? actualCostMicrousd;
+  const settledCostCents = ledgerCentsFromMicrousd(settledCostMicrousd);
 
   // The request fingerprint is the task identity: a regenerated turn sends the
   // same payload and hashes the same, so the ledger can separate what the first
@@ -728,8 +801,8 @@ export async function finalizeManagedUsageRequest(
   // already zero for an undelivered outcome, so no user is charged twice.
   if (operationResult === 'already_finalized' && requestStatus === 'outcome_unknown') {
     const lateSettlement =
-      input.outcome === 'completed' && actualCostCents > 0
-        ? await settleLateManagedUsage(input, actualCostCents)
+      input.outcome === 'completed' && actualCostMicrousd > 0
+        ? await settleLateManagedUsage(input, actualCostMicrousd)
         : null;
 
     logger.error(
@@ -739,8 +812,8 @@ export async function finalizeManagedUsageRequest(
         idempotencyKey: input.idempotencyKey,
         provider: servedRoute?.provider ?? input.provider ?? 'unknown',
         model: servedRoute?.model ?? input.model ?? null,
-        actualCostCents,
-        providerCostCents,
+        actualCostMicrousd,
+        providerCostMicrousd,
         lateSettlementStatus: lateSettlement?.status ?? 'not_attempted',
         lateSettlementSucceeded: lateSettlement?.success ?? false,
       },
@@ -760,7 +833,15 @@ export async function finalizeManagedUsageRequest(
       provider: servedRoute?.provider ?? input.provider ?? 'unknown',
       model: servedRoute?.model ?? input.model ?? null,
       routeId: servedRoute?.routeId ?? input.routeId ?? buildRouteId(input.provider, input.model),
-      actualCostCents: input.providerCostCents === undefined ? settledCostCents : providerCostCents,
+      actualCostCents: ledgerCentsFromMicrousd(
+        providerSuppliedMicrousd === undefined ? settledCostMicrousd : providerCostMicrousd,
+      ),
+      // The customer side goes over in microUSD, which is the unit it is now
+      // settled in. The provider side stays in cents: CostEventAttribution
+      // declares no microUSD field for it, and providerReportedCostCents is
+      // not it either, that column means the provider itself reported a
+      // figure and setting it would mark an estimate as reconciled.
+      customerCanonicalMicrousd: settledCostMicrousd,
       sourceRef: `managed_usage:${input.userId}:${input.idempotencyKey}:${input.requestHash}`,
       taskOutcome: settledTaskOutcome,
       taskRef: input.requestHash,
@@ -772,6 +853,7 @@ export async function finalizeManagedUsageRequest(
     requestStatus,
     operationResult,
     settlementStatus: settlementStatus ?? null,
+    actualCostMicrousd: settledCostMicrousd,
     actualCostCents: settledCostCents,
   };
 }
