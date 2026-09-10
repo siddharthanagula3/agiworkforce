@@ -271,7 +271,6 @@ describe('public marketing copy regressions', () => {
 
   it('presents managed cloud as open by default, not waitlist-gated (WEB-12)', () => {
     const home = [
-      'features/marketing/components/MarketingLanding.tsx',
       'features/marketing/components/landing/LandingPage.tsx',
       'features/marketing/components/landing/landing-content.ts',
     ]
@@ -281,7 +280,7 @@ describe('public marketing copy regressions', () => {
     expect(home).not.toContain('Join the Waitlist');
     expect(home).not.toContain('Private beta via waitlist');
     expect(home).not.toContain('Account & Cloud waitlist');
-    expect(home).toContain('Sign in and start, no waitlist');
+    expect(home).toContain('The free plan needs no card');
   });
 
   it('does not claim managed cloud is waitlist/invite-only on the waitlist page (WEB-12)', () => {

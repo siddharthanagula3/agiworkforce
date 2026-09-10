@@ -161,24 +161,20 @@ const CATALOG_PROVIDER_COUNT = Object.keys(modelsCatalogJson.providers).length;
 
 export const CATALOG_AS_OF = modelsCatalogJson.lastUpdated;
 
+const HUNDRED = 100;
+const TEN = 10;
+
 export const MARKETING = {
   providers: {
     count: CATALOG_PROVIDER_COUNT,
-    display: '10+',
+    display: approximateCount(CATALOG_PROVIDER_COUNT),
     label: 'AI Providers',
   },
-  skills: { count: 150, display: '150+', label: 'AI Skills' },
-  categories: { count: 23, display: '23', label: 'Skill Categories' },
-  tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
   models: { count: CATALOG_MODEL_COUNT, display: `${CATALOG_MODEL_COUNT}`, label: 'Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
-  appSize: { value: 0, display: 'Native', label: 'Desktop Build' },
   tagline:
     'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;
-
-const HUNDRED = 100;
-const TEN = 10;
 
 export function approximateCount(count: number): string {
   if (count >= HUNDRED) return `${Math.floor(count / HUNDRED) * HUNDRED}+`;
