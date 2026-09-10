@@ -379,19 +379,24 @@ export async function listCloudCodeRuntimes(): Promise<CloudCodeRuntime[]> {
   }
 }
 
+const MB_PER_GIB = 1024;
+
 /**
- * The vCPU count of a template, when the catalogue reports one. The
+ * The billable size of a template, when the catalogue reports one. The
  * declared coding harnesses report 0 (unknown) unless a team template of the
  * same id overrides them; the caller decides the fallback for an unknown
  * count.
  */
-export async function templateVcpuCount(
+export async function templateComputeShape(
   templateId: string | null | undefined,
-): Promise<number | null> {
-  if (!templateId) return null;
+): Promise<{ vcpuCount: number | null; memoryGib: number | null }> {
+  if (!templateId) return { vcpuCount: null, memoryGib: null };
   const runtimes = await listCloudCodeRuntimes();
   const match = runtimes.find((runtime) => runtime.id === templateId);
-  return match && match.cpuCount > 0 ? match.cpuCount : null;
+  return {
+    vcpuCount: match && match.cpuCount > 0 ? match.cpuCount : null,
+    memoryGib: match && match.memoryMB > 0 ? match.memoryMB / MB_PER_GIB : null,
+  };
 }
 
 export function harnessTemplates(): readonly { id: string; name: string; summary: string }[] {
