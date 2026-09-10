@@ -14,7 +14,6 @@ import {
   buildPerplexityAdapter,
   buildGroqAdapter,
   buildNvidiaNimAdapter,
-  buildWorkersAiAdapter,
   buildVercelGatewayAdapter,
 } from './adapter-factory';
 import {
@@ -38,7 +37,6 @@ import {
   toPerplexityUpstreamError,
   toGroqUpstreamError,
   toNvidiaNimUpstreamError,
-  toWorkersAiUpstreamError,
   toVercelGatewayUpstreamError,
   makeUpstreamErrorMapper,
 } from './adapter-errors';
@@ -202,12 +200,6 @@ const BESPOKE_ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
     buildAdapter: buildNvidiaNimAdapter,
     buildChatRequest: toCanonicalChatRequest,
     mapError: toNvidiaNimUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  workers_ai: {
-    buildAdapter: buildWorkersAiAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toWorkersAiUpstreamError,
     wireMode: 'openai-passthrough',
   },
   vercel_gateway: {

@@ -13,6 +13,27 @@ function buildParams(): OpenAIChatCompletionCreateParams {
 }
 
 describe('applyVercelGatewayProviderOptions', () => {
+  it('requests zero data retention when the request carries the requirement', () => {
+    const params = buildParams();
+    applyVercelGatewayProviderOptions(params, { sort: 'cost' }, undefined, true);
+    expect((params as unknown as { providerOptions?: unknown }).providerOptions).toEqual({
+      gateway: { sort: 'cost', zeroDataRetention: true },
+    });
+  });
+
+  it('never drops the requirement for a caller preference that turns it off', () => {
+    const params = buildParams();
+    applyVercelGatewayProviderOptions(
+      params,
+      undefined,
+      { vercelGatewayProviderOptions: { zeroDataRetention: false } },
+      true,
+    );
+    expect((params as unknown as { providerOptions?: unknown }).providerOptions).toEqual({
+      gateway: { zeroDataRetention: true },
+    });
+  });
+
   it('sends no providerOptions field on the wire when nothing is configured (never forces routing or caching by default)', () => {
     const params = buildParams();
     applyVercelGatewayProviderOptions(params, undefined, undefined);

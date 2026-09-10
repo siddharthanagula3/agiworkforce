@@ -76,6 +76,20 @@ const PROTOCOL_ROUTE_HARNESSES: ReadonlyMap<string, ProtocolHarness> = (() => {
 
 export const PROTOCOL_ROUTE_PROVIDER_IDS: readonly string[] = [...PROTOCOL_ROUTE_HARNESSES.keys()];
 
+/**
+ * Managed OpenRouter traffic asks OpenRouter to try the cheapest host serving
+ * the model first. The registry prices the OpenRouter route at that host, and
+ * the request builder pairs this with a max_price ceiling from the same sheet.
+ */
+type OpenRouterProviderRoutingPreferences = NonNullable<
+  ProviderAdapterConfigMap['open_router']['providerRouting']
+>;
+type VercelGatewayProviderOptions = NonNullable<
+  ProviderAdapterConfigMap['vercel_gateway']['providerOptions']
+>;
+const OPENROUTER_MANAGED_PROVIDER_ROUTING: OpenRouterProviderRoutingPreferences = { sort: 'price' };
+const VERCEL_GATEWAY_MANAGED_PROVIDER_OPTIONS: VercelGatewayProviderOptions = { sort: 'cost' };
+
 export interface ServerProviderAdapterOptions {
   anthropicCache?: Readonly<
     Pick<ProviderAdapterConfigMap['anthropic'], 'enableCacheControl' | 'cacheRetention'>
@@ -292,10 +306,19 @@ export function buildServerProviderAdapter(
   if (providerId === 'anthropic' && options.anthropicCache) {
     return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
   }
-  if (adapterId === 'open_router' && options.openRouterCacheRetention !== undefined) {
+  if (adapterId === 'open_router') {
     return createProviderAdapter('open_router', {
       ...baseConfig,
-      anthropicCacheRetention: options.openRouterCacheRetention,
+      providerRouting: OPENROUTER_MANAGED_PROVIDER_ROUTING,
+      ...(options.openRouterCacheRetention !== undefined
+        ? { anthropicCacheRetention: options.openRouterCacheRetention }
+        : {}),
+    });
+  }
+  if (adapterId === 'vercel_gateway') {
+    return createProviderAdapter('vercel_gateway', {
+      ...baseConfig,
+      providerOptions: VERCEL_GATEWAY_MANAGED_PROVIDER_OPTIONS,
     });
   }
   if (providerId === 'openai') {
