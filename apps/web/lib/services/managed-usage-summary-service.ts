@@ -1,7 +1,14 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { isFreeBillingPlanTier, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
+import {
+  creditsFromCents,
+  creditsFromMicrousd,
+  isFreeBillingPlanTier,
+  type ManagedUsageCredits,
+  type ManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
+import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
 import {
   getPlanFlagshipWeeklyUsageBudgetCents,
   getPlanSessionUsageBudgetCents,
@@ -67,6 +74,57 @@ export async function getManagedUsageSummary(
     (sessionCapCents <= 0 || session.usedCents < sessionCapCents) &&
     (weeklyCapCents <= 0 || weekly.usedCents < weeklyCapCents);
 
+  const sessionResetAt =
+    freeUsage?.sessionResetAt ?? rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS);
+  const weeklyResetAt =
+    freeUsage?.weeklyResetAt ?? rollingResetAt(weekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS);
+  const flagshipWeeklyResetAt = rollingResetAt(
+    flagshipWeekly.oldestAt,
+    ROLLING_WEEKLY_WINDOW_HOURS,
+  );
+
+  const planAllowance = resolvePlanCreditAllowance(planTier);
+  const credits: ManagedUsageCredits | null = planAllowance
+    ? {
+        monthly: creditWindow(
+          planAllowance.monthly,
+          freeUsage
+            ? creditsFromMicrousd(freeUsage.monthlyUsedMicrousd)
+            : creditsFromCents(creditsUsed),
+          usageResetAt,
+        ),
+        weekly: creditWindow(
+          planAllowance.weekly,
+          freeUsage
+            ? creditsFromMicrousd(freeUsage.weeklyUsedMicrousd)
+            : creditsFromCents(weekly.usedCents),
+          weeklyResetAt,
+        ),
+        five_hour: creditWindow(
+          planAllowance.fiveHour,
+          freeUsage
+            ? creditsFromMicrousd(freeUsage.fiveHourUsedMicrousd)
+            : creditsFromCents(session.usedCents),
+          sessionResetAt,
+        ),
+        flagship_weekly:
+          planAllowance.flagshipWeekly === null
+            ? null
+            : creditWindow(
+                planAllowance.flagshipWeekly,
+                creditsFromCents(flagshipWeekly.usedCents),
+                flagshipWeeklyResetAt,
+              ),
+        purchased: {
+          remaining:
+            spendableCredits.availableCents === null
+              ? null
+              : creditsFromCents(spendableCredits.availableCents),
+          overage_enabled: spendableCredits.overageEnabled,
+        },
+      }
+    : null;
+
   return {
     plan_tier: planTier,
     usage_percentage: usagePercentage,
@@ -78,19 +136,18 @@ export async function getManagedUsageSummary(
     session_usage_percentage:
       freeUsage?.sessionUsagePercentage ??
       toPublicUsagePercentage(session.usedCents, sessionCapCents),
-    session_reset_at:
-      freeUsage?.sessionResetAt ?? rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS),
+    session_reset_at: sessionResetAt,
     weekly_usage_percentage:
       freeUsage?.weeklyUsagePercentage ?? toPublicUsagePercentage(weekly.usedCents, weeklyCapCents),
-    weekly_reset_at:
-      freeUsage?.weeklyResetAt ?? rollingResetAt(weekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS),
+    weekly_reset_at: weeklyResetAt,
     flagship_weekly_usage_percentage: toPublicUsagePercentage(
       flagshipWeekly.usedCents,
       flagshipWeeklyCapCents,
     ),
-    flagship_weekly_reset_at: rollingResetAt(flagshipWeekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS),
+    flagship_weekly_reset_at: flagshipWeeklyResetAt,
     credit_balance_cents: spendableCredits.availableCents,
     overage_enabled: spendableCredits.overageEnabled,
     ...(isFreePlan ? {} : { usage_allocation: isUnallocated ? 'pending' : 'provisioned' }),
+    ...(credits ? { credits } : {}),
   };
 }
