@@ -24,17 +24,12 @@ const SettingsPatchSchema = z.object({
 
 type UserSettingsRow = {
   settings: Record<string, unknown> | null;
-  updated_at?: string | Date | null;
+  version?: string | null;
 };
 
 interface StoredSettings {
   settings: Record<string, unknown>;
   version: string | null;
-}
-
-function toVersion(value: string | Date | null | undefined): string | null {
-  if (value === null || value === undefined) return null;
-  return value instanceof Date ? value.toISOString() : value;
 }
 
 function namespaceObject(settings: Record<string, unknown>, namespace: string) {
@@ -60,10 +55,10 @@ type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 async function readSettings(db: ScopedDb, userId: string): Promise<StoredSettings> {
   try {
     const [row] = await db.query<UserSettingsRow>(
-      'select settings, updated_at from public.user_settings where user_id = $1 limit 1',
+      'select settings, updated_at::text as version from public.user_settings where user_id = $1 limit 1',
       [userId],
     );
-    return { settings: row?.settings ?? {}, version: toVersion(row?.updated_at) };
+    return { settings: row?.settings ?? {}, version: row?.version ?? null };
   } catch (error) {
     if (isUndefinedTable(error)) {
       logger.error({ error, userId }, 'user_settings table is missing; run migrations');
@@ -140,12 +135,12 @@ async function handlePut(request: NextRequest) {
        do update set settings = user_settings.settings || excluded.settings,
                      updated_at = excluded.updated_at
        where $3::text is null or user_settings.updated_at::text = $3::text
-       returning settings, updated_at`,
+       returning settings, updated_at::text as version`,
       [userId, JSON.stringify(delta), expectedVersion],
     );
     if (!row && expectedVersion !== null) return settingsVersionConflict(db, userId, parsed);
     if (row?.settings) merged = row.settings;
-    version = toVersion(row?.updated_at) ?? version;
+    version = row?.version ?? version;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
