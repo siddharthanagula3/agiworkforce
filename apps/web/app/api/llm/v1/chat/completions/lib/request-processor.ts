@@ -1048,7 +1048,12 @@ export async function enrichPastChatContext(params: {
   conversationId?: string | null;
   projectId?: string | null;
 }): Promise<boolean> {
-  if (!params.policy.searchPastChats || params.isTemporary || params.surface === 'api') {
+  if (
+    !params.policy.searchPastChats ||
+    params.isTemporary ||
+    params.surface === 'api' ||
+    params.chatRequest.memory_enabled === false
+  ) {
     return false;
   }
 
