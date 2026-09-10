@@ -132,6 +132,16 @@
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     },
     {
+      "file": "apps/web/app/api/billing/overage/route.ts",
+      "migration": 185,
+      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "migration": 185,
+      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/lib/memory/import-store.ts",
       "migration": 47,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -345,6 +355,21 @@
       "file": "apps/web/lib/services/cloud-code-session-service.ts",
       "migration": 177,
       "reason": "the Code session base branch column is founder-gated; the deploy runbook applies migration 0177 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/spendable-credits.ts",
+      "migration": 185,
+      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/lib/services/credit-service.ts",
+      "migration": 185,
+      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 185,
+      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
     }
   ]
 }
