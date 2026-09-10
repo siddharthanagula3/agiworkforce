@@ -35,6 +35,11 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: (...args: unknown[]) => drainToLlmResponseMock(...args),
 }));
 
+const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCostMock(...args),
+}));
+
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
@@ -121,6 +126,27 @@ describe('exact-response cache integration', () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(drainToLlmResponseMock).toHaveBeenCalledTimes(1);
     expect(dbSecond.executed[0]?.[0]).toBe('Refactor auth module');
+  });
+
+  it('records a zero-charge COGS event on a cache miss and skips recording on the cache hit', async () => {
+    const dbFirst = fakeDb();
+    scheduleConversationTitleGeneration(scheduleInput(dbFirst));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
+    expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        customerCanonicalMicrousd: 0,
+        surface: 'conversation_title',
+        taskOutcome: 'delivered',
+        sourceRef: expect.stringContaining(`title:${CONVERSATION_ID}:`),
+      }),
+    );
+
+    const dbSecond = fakeDb();
+    scheduleConversationTitleGeneration(scheduleInput(dbSecond));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
   });
 
   it('bypasses the cache for a temporary conversation and never reads or writes a cached entry', async () => {
