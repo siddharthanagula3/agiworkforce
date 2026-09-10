@@ -14,6 +14,10 @@
 -- nothing, so those ceilings stop binding for that traffic until 0182 is
 -- reapplied.
 --
+-- The unit-sync triggers go first: they reference microusd_to_cents_mirror and
+-- the columns this file drops, and a trigger left behind would fail every
+-- write to the table it guards.
+--
 -- ROLLBACK ORDER. Deploy the cents-shaped application code FIRST, then run
 -- this file. The reverse order leaves running code calling
 -- reserve_managed_usage_request_with_limits_microusd, which this file drops,
@@ -2065,6 +2069,19 @@ begin
   end loop;
 end;
 $$;
+
+drop trigger if exists sync_token_credits_units on public.token_credits;
+drop trigger if exists sync_zz_credit_transactions_units on public.credit_transactions;
+drop trigger if exists sync_credit_settlement_jobs_units on public.credit_settlement_jobs;
+drop trigger if exists sync_managed_usage_request_units on public.managed_usage_requests;
+drop trigger if exists sync_managed_usage_extension_units
+  on public.managed_usage_request_extensions;
+
+drop function if exists public.sync_token_credits_units();
+drop function if exists public.sync_credit_transactions_units();
+drop function if exists public.sync_credit_settlement_jobs_units();
+drop function if exists public.sync_managed_usage_request_units();
+drop function if exists public.sync_managed_usage_extension_units();
 
 drop function if exists public.reserve_managed_usage_request_with_limits_microusd(
   text, text, text, text, text, bigint, text, integer, bigint, bigint, bigint, boolean, bigint
