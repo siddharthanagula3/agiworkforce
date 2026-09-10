@@ -28,6 +28,12 @@ export interface SubscriptionInfo {
   stripe_price_id: string | null;
   apple_original_transaction_id?: string | null;
   google_purchase_token?: string | null;
+  /**
+   * Present only on a subscription derived from an organization seat, where
+   * `id` and `stripe_subscription_id` belong to the owner and `user_id` is the
+   * member holding the seat.
+   */
+  seat_source?: { organizationId: string; ownerUserId: string };
 }
 
 interface CreditAllocationOptions {

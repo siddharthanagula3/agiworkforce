@@ -18,7 +18,7 @@ import {
 import { getSpendableCredits } from '@/lib/server/spendable-credits';
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 
 export async function getManagedUsageSummary(
   db: DatabaseAdapter,
@@ -26,7 +26,7 @@ export async function getManagedUsageSummary(
 ): Promise<ManagedUsageSummaryResponse> {
   const [balance, subscription, spendableCredits] = await Promise.all([
     CreditService.getBalance(db, userId),
-    SubscriptionService.getSubscription(db, userId),
+    resolveEffectiveSubscription(db, userId),
     getSpendableCredits(db, userId),
   ]);
 
