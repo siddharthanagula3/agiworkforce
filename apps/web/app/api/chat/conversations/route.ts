@@ -55,7 +55,11 @@ async function handleGetConversations(request: NextRequest) {
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
 
   try {
-    const where = ['user_id = $1', 'organization_id is not distinct from $2'];
+    const where = [
+      'user_id = $1',
+      'organization_id is not distinct from $2',
+      'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id)',
+    ];
     where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
     const params: unknown[] = [userId, organizationId];
     if (projectId) {
