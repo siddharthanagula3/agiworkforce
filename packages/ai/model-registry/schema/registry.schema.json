@@ -763,19 +763,36 @@
         },
         "cacheTokenBillingNote": {
           "$ref": "#/definitions/nonEmptyString"
+        },
+        "reasoningTokenBillingClass": {
+          "description": "Whether this provider's usage object reports reasoning/thinking tokens as additional to its completion/output token count, or already included within it. Drives whether reasoning tokens are priced at the output rate on top of the reported output tokens. Absent means included_in_output, the shape every OpenAI-compatible and Anthropic adapter reports.",
+          "enum": ["included_in_output", "additional_to_output"]
+        },
+        "reasoningTokenBillingSource": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "reasoningTokenBillingVerifiedOn": {
+          "$ref": "#/definitions/isoDate"
+        },
+        "reasoningTokenBillingNote": {
+          "$ref": "#/definitions/nonEmptyString"
         }
       }
     },
     "providerComputePricing": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One non-LLM compute provider's published unit price, for metering costs that are not per-token (e.g. sandbox seconds). source and verifiedOn are always required, there is no unverified state for a priced entry.",
+      "description": "One non-LLM compute provider's published unit prices, for metering costs that are not per-token (e.g. sandbox seconds). ratePerUnit is the USD rate for the unit named in unit; ramRatePerGibSecond is the separate USD rate per GiB-second of memory, for providers that bill memory alongside vCPU. source and verifiedOn are always required, there is no unverified state for a priced entry.",
       "required": ["unit", "ratePerUnit", "source", "verifiedOn"],
       "properties": {
         "unit": {
           "enum": ["usd_per_vcpu_second"]
         },
         "ratePerUnit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ramRatePerGibSecond": {
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -923,6 +940,11 @@
         "imagePerImage": {
           "type": "number",
           "minimum": 0
+        },
+        "sessionPerMinute": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Published price for one minute of a live session, for models the provider bills by session duration rather than by token."
         },
         "videoPerSecond": {
           "type": "number",
