@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyTaskFamily } from '@agiworkforce/routing';
+import { classifyTaskFamily, TASK_FAMILY_STAGE_ENV } from '@agiworkforce/routing';
 
 import { buildTaskFamilySignals, resolveWebCloudModelRoute } from './request-processor';
 
@@ -88,21 +88,28 @@ describe('buildTaskFamilySignals', () => {
 
 describe('resolveWebCloudModelRoute · family forwarding', () => {
   it('routes identically with and without a family while the stage is off', () => {
-    const withoutFamily = resolveWebCloudModelRoute('auto', 'max', 'coding', {
-      estimatedInputTokens: 1000,
-    });
-    const withFamily = resolveWebCloudModelRoute('auto', 'max', 'coding', {
-      estimatedInputTokens: 1000,
-      taskFamily: 'code_execution',
-    });
-    expect(withoutFamily.status).toBe('selected');
-    expect(withFamily).toMatchObject({
-      status: 'selected',
-      modelKey: withoutFamily.status === 'selected' ? withoutFamily.modelKey : '',
-    });
-    expect(withFamily.status === 'selected' && withFamily.taskFamilyDecision?.reasonCode).toBe(
-      'task_family_stage_disabled',
-    );
+    const previousStageEnv = process.env[TASK_FAMILY_STAGE_ENV];
+    process.env[TASK_FAMILY_STAGE_ENV] = 'off';
+    try {
+      const withoutFamily = resolveWebCloudModelRoute('auto', 'max', 'coding', {
+        estimatedInputTokens: 1000,
+      });
+      const withFamily = resolveWebCloudModelRoute('auto', 'max', 'coding', {
+        estimatedInputTokens: 1000,
+        taskFamily: 'code_execution',
+      });
+      expect(withoutFamily.status).toBe('selected');
+      expect(withFamily).toMatchObject({
+        status: 'selected',
+        modelKey: withoutFamily.status === 'selected' ? withoutFamily.modelKey : '',
+      });
+      expect(withFamily.status === 'selected' && withFamily.taskFamilyDecision?.reasonCode).toBe(
+        'task_family_stage_disabled',
+      );
+    } finally {
+      if (previousStageEnv === undefined) delete process.env[TASK_FAMILY_STAGE_ENV];
+      else process.env[TASK_FAMILY_STAGE_ENV] = previousStageEnv;
+    }
   });
 
   it('keeps the managed-cloud trust boundary and runtime profile', () => {
