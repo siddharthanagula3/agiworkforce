@@ -153,6 +153,7 @@ vi.mock('@/lib/services/aggregator-routing', () => ({
 vi.mock('@/lib/services/gateway-routing', () => ({
   gatewayRoutesEnabled: mocks.gatewayRoutesEnabled,
   hasGatewayRouteCredentials: mocks.hasGatewayRouteCredentials,
+  buildGatewayRouteAdapter: vi.fn(),
   listCredentialedGatewayProviderIds: vi.fn(() => []),
 }));
 
