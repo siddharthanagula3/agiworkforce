@@ -70,6 +70,7 @@ const {
   audioMimeEssence,
   estimateAudioSeconds,
   estimateTranscriptionCostCents,
+  estimateTranscriptionCostMicrousd,
   settleTranscriptionTokens,
 } = await import('./route');
 
@@ -146,7 +147,8 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
       planTier: 'pro',
     });
     expect(
-      (mocks.reserve.mock.calls[0]![0] as { estimatedCostCents: number }).estimatedCostCents,
+      (mocks.reserve.mock.calls[0]![0] as { estimatedCostMicrousd: number })
+        .estimatedCostMicrousd,
     ).toBeGreaterThan(0);
   });
 
@@ -161,7 +163,11 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect(mocks.finalize.mock.calls[0]![0]).toMatchObject({
       outcome: 'completed',
-      actualCostCents: estimateTranscriptionCostCents(TRANSCRIPTION_MODEL, 400_000, 100_000),
+      actualCostMicrousd: estimateTranscriptionCostMicrousd(
+        TRANSCRIPTION_MODEL,
+        400_000,
+        100_000,
+      ),
       usage: {
         operation: 'transcription',
         model: TRANSCRIPTION_MODEL.id,
@@ -187,7 +193,7 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect(mocks.finalize.mock.calls[0]![0]).toMatchObject({
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: { operation: 'transcription', reason: 'provider_failed' },
     });
   });
@@ -199,7 +205,7 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
 
     expect(mocks.finalize.mock.calls[0]![0]).toMatchObject({
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: { reason: 'provider_unreachable' },
     });
   });
@@ -335,6 +341,9 @@ describe('transcription cost model', () => {
 
   it('never settles a billed request at zero cents', () => {
     expect(estimateTranscriptionCostCents(TRANSCRIPTION_MODEL, 1, 0)).toBe(1);
+    // The ledger no longer floors: one token is priced at what it costs.
+    expect(estimateTranscriptionCostMicrousd(TRANSCRIPTION_MODEL, 1, 0)).toBeLessThan(10_000);
+    expect(estimateTranscriptionCostMicrousd(TRANSCRIPTION_MODEL, 1, 0)).toBeGreaterThan(0);
     expect(estimateTranscriptionCostCents({ inputCost: 0, outputCost: 0 }, 1_000, 1_000)).toBe(0);
   });
 });

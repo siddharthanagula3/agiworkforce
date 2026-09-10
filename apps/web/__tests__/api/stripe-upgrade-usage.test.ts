@@ -41,11 +41,13 @@ describe('paid-plan upgrade usage carry-forward', () => {
       'subscription-123',
       periodStart.toISOString(),
       periodEnd.toISOString(),
-      4_000,
+      40_000_000,
+      // The receipt key stays in cents so an upgrade recorded before the
+      // microUSD ledger is still recognised and not applied a second time.
       `subscription-123:${periodStart.toISOString()}:${periodEnd.toISOString()}:4000`,
     ]);
     expect(normalizedSql).toContain(
-      'credits_allocated_cents = token_credits.credits_allocated_cents + $5',
+      'credits_allocated_microusd = token_credits.credits_allocated_microusd + $5',
     );
     expect(normalizedSql).not.toContain('credits_used_cents = 0');
     expect(normalizedSql).not.toContain('flagship_used_today_cents = 0');

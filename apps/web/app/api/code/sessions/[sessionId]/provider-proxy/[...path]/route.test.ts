@@ -16,6 +16,10 @@ const {
   mockCalculateListCost,
   mockEstimateListCost,
   mockEstimateCost,
+  mockCalculateCostMicrousd,
+  mockCalculateListCostMicrousd,
+  mockEstimateListCostMicrousd,
+  mockEstimateCostMicrousd,
   mockReserve,
   mockMarkProviderStarted,
   mockFinalize,
@@ -38,6 +42,10 @@ const {
   mockCalculateListCost: vi.fn(),
   mockEstimateListCost: vi.fn(),
   mockEstimateCost: vi.fn(),
+  mockCalculateCostMicrousd: vi.fn(),
+  mockCalculateListCostMicrousd: vi.fn(),
+  mockEstimateListCostMicrousd: vi.fn(),
+  mockEstimateCostMicrousd: vi.fn(),
   mockReserve: vi.fn(),
   mockMarkProviderStarted: vi.fn(),
   mockFinalize: vi.fn(),
@@ -103,9 +111,13 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   UnpricedModelError: MockUnpricedModelError,
   LLMCostCalculator: {
     calculateListCost: mockCalculateListCost,
+    calculateListCostMicrousd: mockCalculateListCostMicrousd,
     estimateListCost: mockEstimateListCost,
+    estimateListCostMicrousd: mockEstimateListCostMicrousd,
     estimateCost: mockEstimateCost,
+    estimateCostMicrousd: mockEstimateCostMicrousd,
     calculateCost: mockCalculateCost,
+    calculateCostMicrousd: mockCalculateCostMicrousd,
   },
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
@@ -134,7 +146,7 @@ const RESERVATION = {
   idempotencyKey: `code-proxy:${SESSION_ID}:reserved`,
   requestHash: 'a'.repeat(64),
   leaseToken: 'lease-1',
-  estimatedCostCents: 20,
+  estimatedCostMicrousd: 200000,
   provider: 'anthropic',
   model: MODEL,
   routeId: `anthropic/${MODEL}`,
@@ -204,7 +216,11 @@ beforeEach(() => {
   mockCalculateCost.mockReturnValue(7);
   mockCalculateListCost.mockReturnValue(9);
   mockEstimateListCost.mockReturnValue(20);
+  mockCalculateCostMicrousd.mockReturnValue(70_000);
+  mockCalculateListCostMicrousd.mockReturnValue(90_000);
+  mockEstimateListCostMicrousd.mockReturnValue(200_000);
   mockEstimateCost.mockReturnValue(20);
+  mockEstimateCostMicrousd.mockReturnValue(200_000);
   mockDbQuery.mockResolvedValue([{ spent_cents: 0 }]);
   mockReserve.mockResolvedValue({ ...RESERVATION });
   mockMarkProviderStarted.mockResolvedValue(undefined);
@@ -212,7 +228,7 @@ beforeEach(() => {
     requestStatus: 'completed',
     operationResult: 'finalized',
     settlementStatus: 'succeeded',
-    actualCostCents: 9,
+    actualCostMicrousd: 90000,
   });
   mockAfter.mockImplementation((value: unknown) => value);
 });
@@ -449,8 +465,8 @@ describe('provider-proxy route', () => {
 
   describe('managed usage ledger', () => {
     it('reserves the list-price estimate before egress and finalizes a non-stream Anthropic call at list price with the route cost', async () => {
-      mockCalculateCost.mockReturnValue(12);
-      mockCalculateListCost.mockReturnValue(18);
+      mockCalculateCostMicrousd.mockReturnValue(120_000);
+      mockCalculateListCostMicrousd.mockReturnValue(180_000);
       const fetchMock = vi.fn(
         async () =>
           new Response(
@@ -483,10 +499,10 @@ describe('provider-proxy route', () => {
       expect(reserved['userId']).toBe(USER_ID);
       expect(reserved['provider']).toBe('anthropic');
       expect(reserved['model']).toBe(MODEL);
-      expect(reserved['estimatedCostCents']).toBe(20);
+      expect(reserved['estimatedCostMicrousd']).toBe(200_000);
       expect(reserved['quotaFeature']).toBe('code_harness');
       expect(String(reserved['idempotencyKey'])).toMatch(new RegExp(`^code-proxy:${SESSION_ID}:`));
-      expect(mockEstimateListCost).toHaveBeenCalledWith(MODEL, expect.any(Number), 512);
+      expect(mockEstimateListCostMicrousd).toHaveBeenCalledWith(MODEL, expect.any(Number), 512);
       expect(mockMarkProviderStarted).toHaveBeenCalledTimes(1);
       expect(mockReserve.mock.invocationCallOrder[0]!).toBeLessThan(
         fetchMock.mock.invocationCallOrder[0]!,
@@ -495,20 +511,20 @@ describe('provider-proxy route', () => {
       expect(mockFinalize).toHaveBeenCalledTimes(1);
       const finalized = mockFinalize.mock.calls[0]?.[0] as {
         outcome: string;
-        actualCostCents: number;
-        providerCostCents: number;
+        actualCostMicrousd: number;
+        providerCostMicrousd: number;
         leaseToken: string;
         usage: Record<string, unknown>;
       };
       expect(finalized.outcome).toBe('completed');
-      expect(finalized.actualCostCents).toBe(18);
-      expect(finalized.providerCostCents).toBe(12);
+      expect(finalized.actualCostMicrousd).toBe(180_000);
+      expect(finalized.providerCostMicrousd).toBe(120_000);
       expect(finalized.leaseToken).toBe(RESERVATION.leaseToken);
-      expect(mockCalculateListCost).toHaveBeenCalledWith(
+      expect(mockCalculateListCostMicrousd).toHaveBeenCalledWith(
         MODEL,
         expect.objectContaining({ promptTokens: 100, completionTokens: 40 }),
       );
-      expect(mockCalculateCost).toHaveBeenCalledWith(
+      expect(mockCalculateCostMicrousd).toHaveBeenCalledWith(
         'anthropic',
         MODEL,
         expect.objectContaining({
@@ -586,8 +602,8 @@ describe('provider-proxy route', () => {
         if (providerId === 'openai') return { config: { apiKey: 'sk-managed-openai' } };
         throw new Error(`no managed key for ${providerId}`);
       });
-      mockCalculateCost.mockReturnValue(4);
-      mockCalculateListCost.mockReturnValue(6);
+      mockCalculateCostMicrousd.mockReturnValue(40_000);
+      mockCalculateListCostMicrousd.mockReturnValue(60_000);
       const sseBody =
         `data: ${JSON.stringify({ id: 'c1', model: 'test-openai-model', choices: [{ delta: { content: 'hi' } }] })}\n\n` +
         `data: ${JSON.stringify({
@@ -632,13 +648,13 @@ describe('provider-proxy route', () => {
       expect(mockFinalize).toHaveBeenCalledTimes(1);
       const finalized = mockFinalize.mock.calls[0]?.[0] as {
         outcome: string;
-        actualCostCents: number;
-        providerCostCents: number;
+        actualCostMicrousd: number;
+        providerCostMicrousd: number;
         usage: Record<string, unknown>;
       };
       expect(finalized.outcome).toBe('completed');
-      expect(finalized.actualCostCents).toBe(6);
-      expect(finalized.providerCostCents).toBe(4);
+      expect(finalized.actualCostMicrousd).toBe(60_000);
+      expect(finalized.providerCostMicrousd).toBe(40_000);
       expect(finalized.usage).toMatchObject({
         inputTokens: 210,
         outputTokens: 60,
@@ -662,7 +678,7 @@ describe('provider-proxy route', () => {
       expect(mockFinalize).toHaveBeenCalledTimes(1);
       expect(mockFinalize.mock.calls[0]?.[0]).toMatchObject({
         outcome: 'failed',
-        actualCostCents: 0,
+        actualCostMicrousd: 0,
       });
 
       vi.unstubAllGlobals();
@@ -733,7 +749,7 @@ describe('provider-proxy route', () => {
     });
 
     it('refuses an unpriced model with 400 and never forwards it', async () => {
-      mockEstimateListCost.mockImplementation(() => {
+      mockEstimateListCostMicrousd.mockImplementation(() => {
         throw new MockUnpricedModelError('anthropic', 'made-up-model');
       });
       const fetchMock = vi.fn();

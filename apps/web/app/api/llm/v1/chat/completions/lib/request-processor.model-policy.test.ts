@@ -166,6 +166,7 @@ beforeEach(() => {
     credits_used_cents: 10_000,
   } as Awaited<ReturnType<typeof CreditService.getBalance>>);
   vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+  vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
 describe('workspace model policy is re-checked on every model this request can rotate onto', () => {
@@ -221,7 +222,7 @@ describe('workspace model policy is re-checked on every model this request can r
     const economy = getEconomyFallbackModels().map((model) => model.model);
     expect(economy.length).toBeGreaterThan(1);
 
-    const spend = vi.spyOn(CreditService, 'checkAvailable');
+    const spend = vi.spyOn(CreditService, 'checkAvailableMicrousd');
     spend.mockResolvedValueOnce(false).mockResolvedValue(true);
 
     const unrestricted = await run('policy-downgrade-baseline', PRO_CHAT_MODEL);
@@ -248,6 +249,7 @@ describe('workspace model policy is re-checked on every model this request can r
     serveModelPolicy({ blockedModels: blocked });
 
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(false);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
 
     const result = await run('policy-downgrade-none', PRO_CHAT_MODEL);
     expect(result.ok).toBe(false);

@@ -177,7 +177,7 @@ describe('POST /api/llm/v1/embeddings, billing on failure', () => {
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
     });
   });
 
@@ -222,7 +222,7 @@ describe('POST /api/llm/v1/embeddings, provider result integrity', () => {
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
     });
   });
 });

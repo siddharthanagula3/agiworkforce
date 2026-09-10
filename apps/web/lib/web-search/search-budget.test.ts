@@ -112,6 +112,7 @@ describe('automated and developer surfaces', () => {
     expect(decision).toEqual({
       outcome: 'charge',
       feature: 'web_search_perplexity',
+      chargeMicrousd: 10_000,
       chargeCents: 1,
     });
     expect(countUserFeatureUnitsSince).not.toHaveBeenCalled();
@@ -125,7 +126,7 @@ describe('automated and developer surfaces', () => {
       callerKind: 'automated',
       db,
     });
-    expect(decision).toMatchObject({ outcome: 'charge', chargeCents: 2 });
+    expect(decision).toMatchObject({ outcome: 'charge', chargeMicrousd: 20_000, chargeCents: 2 });
   });
 });
 
@@ -154,6 +155,7 @@ describe('paid plan interactive bound', () => {
     expect(decision).toEqual({
       outcome: 'charge',
       feature: 'web_search_perplexity',
+      chargeMicrousd: 10_000,
       chargeCents: 1,
     });
   });
@@ -183,16 +185,16 @@ describe('settleSearchCharge', () => {
       requestId: 'req-1',
       callOrdinal: 1,
       feature: 'web_search_perplexity',
-      chargeCents: 1,
+      chargeMicrousd: 10_000,
       surface: 'cli',
       db,
     });
     const operation = settleCreditsDurably.mock.calls[0]?.[0] as {
-      amountCents: number;
+      amountMicrousd: number;
       idempotencyKey: string;
       metadata: Record<string, unknown>;
     };
-    expect(operation.amountCents).toBe(1);
+    expect(operation.amountMicrousd).toBe(10_000);
     expect(operation.idempotencyKey).toBe('search:req-1:1');
     expect(operation.metadata['quotaFeature']).toBe('search');
     expect(operation.metadata['surface']).toBe('cli');

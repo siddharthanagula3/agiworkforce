@@ -976,7 +976,7 @@ export async function* runResearchLoop(
         requestId: processed.requestId,
         callOrdinal,
         feature: decision.feature,
-        chargeCents: decision.chargeCents,
+        chargeMicrousd: decision.chargeMicrousd,
         surface: processed.chatSurface,
         db: createClaimedUserScopedDb(getNeonDb(), {
           userId: _billing.userId,

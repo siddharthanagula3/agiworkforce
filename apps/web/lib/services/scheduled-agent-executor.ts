@@ -38,7 +38,7 @@ import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-acc
 import {
   createObservedProviderUsage,
   hasObservedProviderUsage,
-  observedProviderUsageLedgerCents,
+  observedProviderUsageLedgerMicrousd,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
@@ -59,6 +59,7 @@ import {
 } from '@/lib/user-connector-tools';
 import { webSearchBackendConfigured, webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import { logger } from '@/lib/logger';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import type {
   ScheduleTask,
   ScheduledExecutionResult,
@@ -199,7 +200,7 @@ interface ScheduledCompletion {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
-  costCents: number;
+  costMicrousd: number;
   toolsUsed: string[];
 }
 
@@ -212,7 +213,7 @@ function buildScheduledProcessedRequest(input: {
   route: { provider: string; modelKey: string };
   subscriptionTier: string;
   isFlagship: boolean;
-  estimatedCostCents: number;
+  estimatedCostMicrousd: number;
   estimatedPromptTokens: number;
   taskType: ReturnType<typeof classifyTaskLocally>['type'];
   organizationId?: string | null;
@@ -240,7 +241,8 @@ function buildScheduledProcessedRequest(input: {
     conversationId: undefined,
     requestedModel: input.route.modelKey,
     provider: input.route.provider,
-    estimatedCostCents: input.estimatedCostCents,
+    estimatedCostMicrousd: input.estimatedCostMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(input.estimatedCostMicrousd),
     estimatedPromptTokens: input.estimatedPromptTokens,
     maxTokens: MAX_OUTPUT_TOKENS,
     usedFallback: false,
@@ -311,8 +313,8 @@ async function runScheduledToolLoop(input: {
     promptTokens: usage.inputTokens,
     completionTokens: usage.outputTokens,
     totalTokens: usage.inputTokens + usage.outputTokens,
-    costCents: hasObservedProviderUsage(usage)
-      ? observedProviderUsageLedgerCents(usage, {
+    costMicrousd: hasObservedProviderUsage(usage)
+      ? observedProviderUsageLedgerMicrousd(usage, {
           provider: input.processed.provider,
           model: input.processed.requestedModel,
         })
@@ -349,14 +351,18 @@ async function runScheduledCompletion(input: {
     promptTokens: response.promptTokens,
     completionTokens: response.completionTokens,
     totalTokens: response.totalTokens,
-    costCents: LLMCostCalculator.calculateCost(input.route.provider, input.route.modelKey, {
-      promptTokens: response.promptTokens,
-      completionTokens: response.completionTokens,
-      totalTokens: response.totalTokens,
-      cacheReadInputTokens: response.cachedInputTokens,
-      cacheCreationInputTokens: response.cacheCreationInputTokens,
-      cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
-    }),
+    costMicrousd: LLMCostCalculator.calculateCostMicrousd(
+      input.route.provider,
+      input.route.modelKey,
+      {
+        promptTokens: response.promptTokens,
+        completionTokens: response.completionTokens,
+        totalTokens: response.totalTokens,
+        cacheReadInputTokens: response.cachedInputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+      },
+    ),
     toolsUsed: [],
   };
 }
@@ -435,7 +441,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     .join('\n\n');
 
   const estimatedPromptTokens = Math.ceil((prompt.length + systemPrompt.length) / 3.5) + 32;
-  const estimatedCostCents = LLMCostCalculator.estimateCost(
+  const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
     route.provider,
     route.modelKey,
     estimatedPromptTokens,
@@ -460,7 +466,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     requestHash,
     provider: route.provider,
     model: route.modelKey,
-    estimatedCostCents,
+    estimatedCostMicrousd,
     leaseSeconds: 120,
     planTier: subscriptionTier,
     isFlagship: isFlagshipRoute,
@@ -482,7 +488,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             route,
             subscriptionTier,
             isFlagship: isFlagshipRoute,
-            estimatedCostCents,
+            estimatedCostMicrousd,
             estimatedPromptTokens,
             taskType,
             organizationId: scope.organizationId,
@@ -500,7 +506,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     const finalization = await finalizeManagedUsageRequest({
       ...reservation,
       outcome: 'completed',
-      actualCostCents: completion.costCents,
+      actualCostMicrousd: completion.costMicrousd,
       usage: {
         type: 'scheduled_agent_execution',
         taskId: task.id,
@@ -523,7 +529,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
         promptTokens: completion.promptTokens,
         completionTokens: completion.completionTokens,
         totalTokens: completion.totalTokens,
-        costCents: completion.costCents,
+        costCents: ledgerCentsFromMicrousd(completion.costMicrousd),
       },
       billingStatus: finalization.settlementStatus ?? finalization.requestStatus,
     };
@@ -531,8 +537,8 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     if (!providerCompleted) {
       // A tool loop can fail after several billable provider steps; settling those
       // at zero would hand back spend the provider already charged for.
-      const observedCostCents = hasObservedProviderUsage(observedUsage)
-        ? observedProviderUsageLedgerCents(observedUsage, {
+      const observedCostMicrousd = hasObservedProviderUsage(observedUsage)
+        ? observedProviderUsageLedgerMicrousd(observedUsage, {
             provider: route.provider,
             model: route.modelKey,
           })
@@ -540,8 +546,8 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
       try {
         await finalizeManagedUsageRequest({
           ...reservation,
-          outcome: observedCostCents > 0 ? 'completed' : 'failed',
-          actualCostCents: observedCostCents,
+          outcome: observedCostMicrousd > 0 ? 'completed' : 'failed',
+          actualCostMicrousd: observedCostMicrousd,
           usage: {
             type: 'scheduled_agent_execution',
             taskId: task.id,

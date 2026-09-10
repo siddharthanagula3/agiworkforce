@@ -114,11 +114,13 @@ beforeEach(() => {
     credits_used_cents: 10_000,
   } as Awaited<ReturnType<typeof CreditService.getBalance>>);
   vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+  vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
 describe('budget admission control runs before any provider work', () => {
   it('refuses the request when nothing in the account can fund it', async () => {
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(false);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
 
     const result = await processRequest(chatRequest('admission-no-funds'), {
       ok: true,
@@ -197,10 +199,10 @@ describe('budget admission control runs before any provider work', () => {
     if (!result.ok) return;
     expect(mocks.reserveManagedUsage).toHaveBeenCalledOnce();
     const reservation = mocks.reserveManagedUsage.mock.calls[0]?.[0] as {
-      estimatedCostCents: number;
+      estimatedCostMicrousd: number;
       planTier: string;
     };
-    expect(reservation.estimatedCostCents).toBeGreaterThan(0);
+    expect(reservation.estimatedCostMicrousd).toBeGreaterThan(0);
     expect(reservation.planTier).toBe('pro');
     expect(result.managedUsage?.leaseToken).toBe('lease');
   });

@@ -189,6 +189,7 @@ beforeEach(() => {
     credits_used_cents: 10_000,
   } as Awaited<ReturnType<typeof CreditService.getBalance>>);
   vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+  vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
 afterAll(() => {

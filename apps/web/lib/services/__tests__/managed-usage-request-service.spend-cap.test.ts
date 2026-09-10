@@ -15,6 +15,9 @@ vi.mock('@/lib/server/managed-usage-policy', () => ({
   getPlanSessionUsageCapCents: vi.fn(() => 1_000_000),
   getPlanWeeklyUsageCapCents: vi.fn(() => 1_000_000),
   getPlanFlagshipWeeklyUsageCapCents: vi.fn(() => 1_000_000),
+  getPlanSessionUsageCapMicrousd: vi.fn(() => 10_000_000_000),
+  getPlanWeeklyUsageCapMicrousd: vi.fn(() => 10_000_000_000),
+  getPlanFlagshipWeeklyUsageCapMicrousd: vi.fn(() => 10_000_000_000),
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: vi.fn(),
@@ -34,13 +37,13 @@ const SERVED_MODEL_ID = 'served-model';
 
 function dbStub() {
   const query = vi.fn(async (sql: string) => {
-    if (String(sql).includes('reserve_managed_usage_request_with_limits')) {
+    if (String(sql).includes('reserve_managed_usage_request_with_limits_microusd')) {
       return [
         {
           reservation_decision: 'acquired',
           request_status: 'reserved',
           lease_token: 'lease-1',
-          estimated_cost_cents: 500,
+          estimated_cost_microusd: 5000000,
         },
       ];
     }
@@ -96,7 +99,7 @@ describe('reserveManagedUsageRequest, organization spend cap', () => {
 
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).includes('reserve_managed_usage_request_with_limits'),
+        String(sql).includes('reserve_managed_usage_request_with_limits_microusd'),
       ),
     ).toBe(false);
   });
