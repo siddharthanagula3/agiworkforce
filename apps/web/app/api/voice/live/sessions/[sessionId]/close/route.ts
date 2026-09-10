@@ -16,7 +16,12 @@ import {
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
-import { LIVE_VOICE_FEATURE, liveSessionCostCents } from '@/lib/voice/live-voice-billing';
+import {
+  LIVE_SESSION_PROVIDER_COST_SOURCE,
+  LIVE_VOICE_FEATURE,
+  liveSessionCostCents,
+  liveSessionProviderCostCents,
+} from '@/lib/voice/live-voice-billing';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -82,18 +87,30 @@ async function handleCloseLiveSession(
     provider: liveModel ? String(liveModel.provider) : undefined,
     model: liveModel?.id,
   };
+  const providerCostCents = liveSessionProviderCostCents(billedSeconds, reservation.model);
+  if (providerCostCents === null && billedSeconds > 0) {
+    logger.error(
+      { userId, sessionId, model: reservation.model, billedSeconds },
+      'Live voice model declares no published session rate; provider cost falls back to the customer charge',
+    );
+  }
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
     actualCostCents,
+    ...(providerCostCents === null ? {} : { providerCostCents }),
     usage: {
       operation: 'voice_live_session',
       provider: reservation.provider,
       model: reservation.model,
+      providerSku: liveModel?.apiModelId ?? reservation.model,
       sessionId,
       sessionSeconds: body.seconds,
       billedSeconds,
       reason: body.reason ?? 'close_requested',
+      ...(providerCostCents === null
+        ? {}
+        : { providerCostCents, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
     },
   });
   try {
