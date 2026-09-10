@@ -5,9 +5,10 @@
     "e2b": {
       "unit": "usd_per_vcpu_second",
       "ratePerUnit": 0.000014,
+      "ramRatePerGibSecond": 0.0000045,
       "source": "https://e2b.dev/pricing",
-      "verifiedOn": "2026-09-04",
-      "note": "Uniform across the Hobby and Pro tiers, linear across vCPU counts."
+      "verifiedOn": "2026-09-10",
+      "note": "Two rates, both billed per second of sandbox life: ratePerUnit is $0.000014 per vCPU-second and ramRatePerGibSecond is $0.0000045 per GiB-second. Uniform across the Hobby, Pro and Enterprise tiers, linear in vCPU count and memory."
     }
   }
 }
