@@ -118,6 +118,7 @@ export type CacheTokenBillingClass = 'additional_to_input' | 'included_in_input'
 
 interface ProviderGovernanceRecord {
   cacheTokenBillingClass?: CacheTokenBillingClass;
+  reasoningTokenBillingClass?: ReasoningTokenBillingClass;
 }
 
 const governanceRecords = registry.governance as unknown as Readonly<
@@ -126,6 +127,20 @@ const governanceRecords = registry.governance as unknown as Readonly<
 
 export function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {
   return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';
+}
+
+export type ReasoningTokenBillingClass = 'included_in_output' | 'additional_to_output';
+
+export const DEFAULT_REASONING_TOKEN_BILLING_CLASS: ReasoningTokenBillingClass =
+  'included_in_output';
+
+export function getProviderReasoningTokenBillingClass(
+  providerId: string,
+): ReasoningTokenBillingClass {
+  return (
+    governanceRecords[providerId]?.reasoningTokenBillingClass ??
+    DEFAULT_REASONING_TOKEN_BILLING_CLASS
+  );
 }
 
 export const LIFECYCLE_STAGES = [
@@ -175,6 +190,7 @@ export type ComputePricingUnit = 'usd_per_vcpu_second';
 export interface ProviderComputePricing {
   unit: ComputePricingUnit;
   ratePerUnit: number;
+  ramRatePerGibSecond?: number;
 }
 
 const computePricingRecords = registry.computePricing as unknown as Readonly<
