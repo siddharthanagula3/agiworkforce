@@ -60,17 +60,19 @@ function fakeCents(modelKey: string): number {
 }
 
 describe('feature flag', () => {
-  it('is OFF unless the operator env is exactly "1"', () => {
+  it('is ON unless the operator env names a kill value', () => {
     const original = process.env[TASK_FAMILY_STAGE_ENV];
     try {
       delete process.env[TASK_FAMILY_STAGE_ENV];
-      expect(taskFamilyRoutingStageEnabled()).toBe(false);
-      for (const value of ['', '0', 'true', 'on', 'yes', 'TRUE']) {
+      expect(taskFamilyRoutingStageEnabled()).toBe(true);
+      for (const value of ['0', 'false', 'off', 'OFF', ' False ']) {
         process.env[TASK_FAMILY_STAGE_ENV] = value;
         expect(taskFamilyRoutingStageEnabled()).toBe(false);
       }
-      process.env[TASK_FAMILY_STAGE_ENV] = '1';
-      expect(taskFamilyRoutingStageEnabled()).toBe(true);
+      for (const value of ['', '1', 'true', 'on', 'yes']) {
+        process.env[TASK_FAMILY_STAGE_ENV] = value;
+        expect(taskFamilyRoutingStageEnabled()).toBe(true);
+      }
     } finally {
       if (original === undefined) delete process.env[TASK_FAMILY_STAGE_ENV];
       else process.env[TASK_FAMILY_STAGE_ENV] = original;
@@ -476,11 +478,11 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     expect(decision.status).toBe('selected');
     expect(decision.status === 'selected' && decision.taskFamilyDecision).toEqual({
       family: null,
-      reasonCode: 'task_family_stage_disabled',
+      reasonCode: 'task_family_unclassified',
     });
   });
 
-  it('is gated by the operator env when no explicit override is supplied', () => {
+  it('runs by default and stops at the operator kill switch', () => {
     const original = process.env[TASK_FAMILY_STAGE_ENV];
     const request = {
       selection: 'auto',
@@ -491,6 +493,8 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     } as const;
     try {
       delete process.env[TASK_FAMILY_STAGE_ENV];
+      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
+      process.env[TASK_FAMILY_STAGE_ENV] = '0';
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
       process.env[TASK_FAMILY_STAGE_ENV] = '1';
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
