@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   dbQuery: vi.fn(),
   readOrganizationCollectionState: vi.fn(),
+  getOrCreateAccount: vi.fn(async () => 'account-1'),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -37,6 +38,10 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 vi.mock('@/lib/services/enterprise-collection-state', () => ({
   readOrganizationCollectionState: mocks.readOrganizationCollectionState,
+}));
+
+vi.mock('@/lib/services/credit-service', () => ({
+  CreditService: { getOrCreateAccount: mocks.getOrCreateAccount },
 }));
 
 import { requireCsrfToken } from '@/lib/csrf';
@@ -294,5 +299,54 @@ describe('runAuthGate first-token cost', () => {
 
     expect(result.ok).toBe(false);
     expect(mocks.withRateLimit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runAuthGate organization seats', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'member-1' });
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.getOrCreateAccount.mockResolvedValue('account-1');
+  });
+
+  it('meters a seated team member on the organization plan, not as free', async () => {
+    mocks.dbQuery.mockResolvedValue([
+      {
+        organization_id: 'org-1',
+        owner_user_id: 'owner-1',
+        billing_plan_tier: 'team',
+        licensed_seats: 5,
+        seat_rank: 2,
+        subscription_id: 'sub-owner-1',
+        status: 'active',
+        current_period_start: '2026-09-01T00:00:00.000Z',
+        current_period_end: '2026-10-01T00:00:00.000Z',
+        cancel_at_period_end: false,
+        stripe_subscription_id: 'sub_stripe_owner',
+        stripe_price_id: 'price_team',
+        apple_original_transaction_id: null,
+        google_purchase_token: null,
+      },
+    ]);
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.subscription.plan_tier).toBe('team');
+    expect(result.ok && result.subscription.seat_source).toEqual({
+      organizationId: 'org-1',
+      ownerUserId: 'owner-1',
+    });
+  });
+
+  it('still falls back to the free website plan when no seat is held', async () => {
+    mocks.dbQuery.mockResolvedValue([]);
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.subscription.seat_source).toBeUndefined();
   });
 });

@@ -3,7 +3,8 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import type { SubscriptionInfo } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -191,7 +192,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const subscriptionPromise = SubscriptionService.getSubscription(
+  const subscriptionPromise = resolveEffectiveSubscription(
     createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null }),
     userId,
   );
