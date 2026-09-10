@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 const imageRouteFixtures = vi.hoisted(() => ({
   liveGeminiModelId: '',
   liveGeminiApiModelId: '',
-  liveGeminiCostCents: 0,
+  liveGeminiCostMicrousd: 0,
   openAiModelId: '',
   openAiApiModelId: '',
   imagenModelId: 'fixture-image-model-standard',
@@ -49,8 +49,10 @@ vi.mock('@agiworkforce/types', async () => {
   imageRouteFixtures.liveGeminiModelId = liveGeminiImageModel.id;
   imageRouteFixtures.liveGeminiApiModelId =
     liveGeminiImageModel.apiModelId ?? liveGeminiImageModel.id;
-  imageRouteFixtures.liveGeminiCostCents = Math.ceil(
-    (liveGeminiImageModel.imagePerImageCost ?? 0) * 100,
+  // The published per-image price, charged exactly: the ledger settles in
+  // microUSD since 0185, so this no longer rounds up to a whole cent.
+  imageRouteFixtures.liveGeminiCostMicrousd = Math.ceil(
+    (liveGeminiImageModel.imagePerImageCost ?? 0) * 1_000_000,
   );
   imageRouteFixtures.openAiModelId = liveOpenAiImageModel.id;
   imageRouteFixtures.openAiApiModelId = liveOpenAiImageModel.apiModelId ?? liveOpenAiImageModel.id;
@@ -196,6 +198,7 @@ const mockGenerateIdempotencyKey = vi.fn();
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
+    checkAvailableMicrousd: (...args: unknown[]) => mockCheckAvailable(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
     settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
@@ -210,7 +213,7 @@ const managedUsageMocks = vi.hoisted(() => ({
     requestStatus: 'completed',
     operationResult: 'finalized',
     settlementStatus: 'succeeded',
-    actualCostCents: 5,
+    actualCostMicrousd: 50000,
   })),
   delivered: vi.fn(async () => undefined),
 }));
@@ -704,7 +707,7 @@ describe('POST /api/media/image/generate', () => {
           userId: TEST_USER.userId,
           idempotencyKey: 'agi.media.web.image.operation-123',
           provider: 'openai',
-          estimatedCostCents: 5,
+          estimatedCostMicrousd: 50000,
           planTier: 'pro',
           isFlagship: false,
         }),
@@ -713,7 +716,7 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
         expect.objectContaining({
           outcome: 'completed',
-          actualCostCents: 5,
+          actualCostMicrousd: 50000,
           usage: expect.objectContaining({ operation: 'image', outputCount: 1 }),
         }),
       );
@@ -757,7 +760,7 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(422);
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
       expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
     });
@@ -797,7 +800,7 @@ describe('POST /api/media/image/generate', () => {
       expect(response.status).toBe(422);
       expect(data).toMatchObject({ success: false, images: [] });
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
       expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
     });
@@ -1065,7 +1068,7 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(422);
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
     });
 
@@ -1096,7 +1099,7 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
         expect.objectContaining({
           outcome: 'completed',
-          actualCostCents: imageRouteFixtures.liveGeminiCostCents,
+          actualCostMicrousd: imageRouteFixtures.liveGeminiCostMicrousd,
         }),
       );
     });
@@ -1121,7 +1124,7 @@ describe('POST /api/media/image/generate', () => {
 
         expect(response.status).toBe(422);
         expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-          expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+          expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
         );
       },
     );
@@ -1156,7 +1159,7 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(422);
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
     });
 
@@ -1183,7 +1186,7 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
         expect.objectContaining({
           model: imageRouteFixtures.fastImagenModelId,
-          estimatedCostCents: 2,
+          estimatedCostMicrousd: 20000,
         }),
       );
     });
@@ -1233,7 +1236,7 @@ describe('POST /api/media/image/generate', () => {
       expect(data.images).toHaveLength(0);
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
     });
 
@@ -1292,7 +1295,7 @@ describe('POST /api/media/image/generate', () => {
       expect(response.headers.get('Retry-After')).toBe('12');
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
       );
     });
 

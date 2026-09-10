@@ -135,7 +135,10 @@ export function estimateAudioSeconds(
   return Math.max(1, Math.ceil(byteSize / bytesPerSecond));
 }
 
-export function estimateTranscriptionCostCents(
+const MICROUSD_PER_USD = 1_000_000;
+const MICROUSD_PER_LEDGER_CENT = 10_000;
+
+export function estimateTranscriptionCostMicrousd(
   model: PricedModel,
   inputTokens: number,
   outputTokens: number,
@@ -144,7 +147,19 @@ export function estimateTranscriptionCostCents(
   const pricing = resolveEffectiveModelPricingForInputTokens(model, pricedAt, inputTokens);
   const costDollars =
     (pricing.inputCost * inputTokens + pricing.outputCost * outputTokens) / 1_000_000;
-  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * 100)) : 0;
+  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * MICROUSD_PER_USD)) : 0;
+}
+
+export function estimateTranscriptionCostCents(
+  model: PricedModel,
+  inputTokens: number,
+  outputTokens: number,
+  pricedAt: Date = new Date(),
+): number {
+  return Math.ceil(
+    estimateTranscriptionCostMicrousd(model, inputTokens, outputTokens, pricedAt) /
+      MICROUSD_PER_LEDGER_CENT,
+  );
 }
 
 interface SettledTokens {
@@ -433,7 +448,7 @@ async function handleTranscriptions(request: NextRequest) {
 
   const estimatedSeconds = estimateAudioSeconds(file.size, mimeEssence, headBytes);
   const estimatedInputTokens = estimatedSeconds * INPUT_TOKENS_PER_AUDIO_SECOND;
-  const estimatedCostCents = estimateTranscriptionCostCents(
+  const estimatedCostMicrousd = estimateTranscriptionCostMicrousd(
     selectedModel,
     estimatedInputTokens,
     estimatedSeconds * OUTPUT_TOKENS_PER_AUDIO_SECOND,
@@ -486,7 +501,7 @@ async function handleTranscriptions(request: NextRequest) {
       }),
       provider: selectedModel.provider,
       model: selectedModel.id,
-      estimatedCostCents,
+      estimatedCostMicrousd,
       planTier: subscription?.plan_tier ?? 'free',
       isFlagship: false,
     });
@@ -513,7 +528,7 @@ async function handleTranscriptions(request: NextRequest) {
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'failed',
-        actualCostCents: 0,
+        actualCostMicrousd: 0,
         usage: {
           operation: 'transcription',
           provider: selectedModel.provider,
@@ -581,7 +596,7 @@ async function handleTranscriptions(request: NextRequest) {
   }
 
   const settled = settleTranscriptionTokens(parsedJson ? json : undefined, estimatedSeconds);
-  const actualCostCents = estimateTranscriptionCostCents(
+  const actualCostMicrousd = estimateTranscriptionCostMicrousd(
     selectedModel,
     settled.inputTokens,
     settled.outputTokens,
@@ -589,7 +604,7 @@ async function handleTranscriptions(request: NextRequest) {
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
-    actualCostCents,
+    actualCostMicrousd,
     usage: {
       operation: 'transcription',
       provider: selectedModel.provider,
@@ -606,8 +621,8 @@ async function handleTranscriptions(request: NextRequest) {
       userId,
       provider: selectedModel.provider,
       model: selectedModel.id,
-      estimatedCostCents,
-      actualCostCents,
+      estimatedCostMicrousd,
+      actualCostMicrousd,
       usageSource: settled.source,
     },
     'Transcription credits deducted',

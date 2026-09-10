@@ -176,7 +176,7 @@ const managedUsageMocks = vi.hoisted(() => ({
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 4,
+      actualCostMicrousd: 40000,
     }),
   ),
   delivered: vi.fn(() => Promise.resolve()),
@@ -258,6 +258,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
+    checkAvailableMicrousd: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
     generateIdempotencyKey: (userId: string, operationType: string, requestId: string) =>
@@ -276,9 +277,13 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     estimateCost: vi.fn(() => 5),
+    estimateCostMicrousd: vi.fn(() => 50000),
     calculateCost: vi.fn(() => 4),
+    calculateCostMicrousd: vi.fn(() => 40000),
     getInputCostPerMtok: vi.fn(() => 3.0),
     getCacheWriteCostPerMtok: vi.fn(() => 3.0),
   },

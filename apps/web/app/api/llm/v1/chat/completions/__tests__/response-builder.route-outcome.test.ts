@@ -19,8 +19,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 123),
+    calculateCostMicrousd: vi.fn(() => 1230000),
     getInputCostPerMtok: vi.fn(() => 300),
     getCacheWriteCostPerMtok: vi.fn(() => 300),
     getCacheReadCostPerMtok: vi.fn(() => 30),

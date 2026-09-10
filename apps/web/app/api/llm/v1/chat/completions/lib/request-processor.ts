@@ -52,7 +52,7 @@ import {
   splitSystemPromptCacheBoundary,
   prependSystemPromptAdditionAfterCacheBoundary,
 } from '@agiworkforce/provider-protocol';
-import { CreditService } from '@/lib/services/credit-service';
+import { CreditService, ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   FREE_TRIAL_MODEL,
@@ -153,6 +153,7 @@ import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
+  estimateMicrousdOf,
   fingerprintManagedUsageRequest,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
@@ -723,6 +724,7 @@ export type ProcessedRequest = {
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
+  estimatedCostMicrousd?: number;
   estimatedCostCents: number;
   estimatedPromptTokens: number;
   maxTokens: number;
@@ -3293,14 +3295,23 @@ export async function processRequest(
     maxTokens = Math.min(64000, thinkingConfig.budget_tokens + 1024);
   }
 
-  let estimatedCostCents =
-    LLMCostCalculator.estimateListCost(chatRequest.model, estimatedPromptTokens, maxTokens) ??
-    LLMCostCalculator.estimateCost(provider, chatRequest.model, estimatedPromptTokens, maxTokens);
+  let estimatedCostMicrousd =
+    LLMCostCalculator.estimateListCostMicrousd(
+      chatRequest.model,
+      estimatedPromptTokens,
+      maxTokens,
+    ) ??
+    LLMCostCalculator.estimateCostMicrousd(
+      provider,
+      chatRequest.model,
+      estimatedPromptTokens,
+      maxTokens,
+    );
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
   if (freeTrialEnabled) {
-    estimatedCostCents = 0;
+    estimatedCostMicrousd = 0;
   } else {
     let existingBalance = await timePhase(
       CHAT_TURN_PHASE.creditCheck,
@@ -3361,13 +3372,17 @@ export async function processRequest(
     }
 
     const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, async () =>
-      CreditService.checkAvailable((await scopedDbPromise).db, userId, estimatedCostCents),
+      CreditService.checkAvailableMicrousd(
+        (await scopedDbPromise).db,
+        userId,
+        estimatedCostMicrousd,
+      ),
     );
 
     logger.debug(
       {
         userId: userId,
-        estimatedCostCents,
+        estimatedCostMicrousd,
         hasCredits,
         balanceRemaining: existingBalance?.credits_remaining_cents,
       },
@@ -3408,17 +3423,17 @@ export async function processRequest(
         const fallbackProvider = resolveProviderFromModel(fallbackModel.model, fallbackRouteId, {
           trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
         });
-        const fallbackCostCents = LLMCostCalculator.estimateCost(
+        const fallbackCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
           fallbackProvider,
           fallbackModel.model,
           estimatedPromptTokens,
           maxTokens,
         );
 
-        const hasFallbackCredits = await CreditService.checkAvailable(
+        const hasFallbackCredits = await CreditService.checkAvailableMicrousd(
           (await scopedDbPromise).db,
           userId,
-          fallbackCostCents,
+          fallbackCostMicrousd,
         );
 
         if (hasFallbackCredits) {
@@ -3426,7 +3441,7 @@ export async function processRequest(
           fallbackReason = 'insufficient_credits';
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
-          estimatedCostCents = fallbackCostCents;
+          estimatedCostMicrousd = fallbackCostMicrousd;
         } else {
           return {
             ok: false,
@@ -3474,14 +3489,14 @@ export async function processRequest(
           requestHash: managedRequestHash,
           provider,
           model: chatRequest.model,
-          estimatedCostCents,
+          estimatedCostMicrousd,
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
           quotaFeature,
         }),
       );
-      estimatedCostCents = managedUsage.estimatedCostCents;
+      estimatedCostMicrousd = estimateMicrousdOf(managedUsage);
     } catch (error) {
       const managedError =
         error instanceof ManagedUsageRequestError
@@ -3499,7 +3514,7 @@ export async function processRequest(
         planTier: subscription.plan_tier,
         creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
         creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
-        estimatedCostCents,
+        estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
       }) ?? computerUseSoftCapWarning;
   }
 
@@ -3782,7 +3797,8 @@ export async function processRequest(
     autoMemoryFactsRequireToolFreeTurn,
     requestedModel,
     provider,
-    estimatedCostCents,
+    estimatedCostMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
     estimatedPromptTokens,
     maxTokens,
     usedFallback,

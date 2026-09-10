@@ -243,6 +243,7 @@ import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service'
 import {
   reserveManagedUsageProviderStep,
   ManagedUsageRequestError,
+  estimateMicrousdOf,
 } from '@/lib/services/managed-usage-request-service';
 import {
   CHAT_TOOL_LOOP_BUDGET_MS,
@@ -2657,7 +2658,7 @@ export async function* runToolLoop(
         requestId: processed.requestId,
         callOrdinal,
         feature: decision.feature,
-        chargeCents: decision.chargeCents,
+        chargeMicrousd: decision.chargeMicrousd,
         surface: processed.chatSurface,
         db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
       });
@@ -3636,7 +3637,7 @@ export async function* runToolLoop(
           await reserveManagedUsageProviderStep({
             reservation: processed.managedUsage,
             operationKey: `provider:${step}`,
-            estimatedCostCents: processed.estimatedCostCents,
+            estimatedCostMicrousd: estimateMicrousdOf(processed),
             planTier: processed.subscriptionTier ?? '',
             isFlagship: processed.isFlagshipRequest,
           });

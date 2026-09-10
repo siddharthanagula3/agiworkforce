@@ -42,21 +42,25 @@ beforeEach(() => {
 
 describe('GET /api/billing/overage', () => {
   it('reads the overage state through the rls-scoped connection', async () => {
-    mockQuery.mockResolvedValue([{ overage_enabled: true, available_cents: 500 }]);
+    mockQuery.mockResolvedValue([{ overage_enabled: true, available_microusd: 5_000_000 }]);
 
     const response = await GET(req());
 
     expect(response.status).toBe(200);
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user-1']);
-    expect(await response.json()).toEqual({ enabled: true, available_cents: 500 });
+    expect(await response.json()).toEqual({
+      enabled: true,
+      available_microusd: 5_000_000,
+      available_cents: 500,
+    });
   });
 });
 
 describe('PUT /api/billing/overage', () => {
   it('updates the caller subscription through the rls-scoped connection', async () => {
     mockQuery
-      .mockResolvedValueOnce([{ overage_enabled: false, available_cents: 0 }])
-      .mockResolvedValueOnce([{ overage_enabled: false, available_cents: 0 }]);
+      .mockResolvedValueOnce([{ overage_enabled: false, available_microusd: 0 }])
+      .mockResolvedValueOnce([{ overage_enabled: false, available_microusd: 0 }]);
 
     const response = await PUT(req('PUT', { enabled: false }));
 

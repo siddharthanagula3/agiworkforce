@@ -101,10 +101,10 @@ describe('verified mobile IAP ledger', () => {
         verified: verified(),
       }),
     ).resolves.toMatchObject({ status: 'granted', unitsGranted: 500 });
-    expect(h.execute).toHaveBeenCalledWith('select public.add_credits($1, $2, $3, $4, $5)', [
+    expect(h.execute).toHaveBeenCalledWith('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
       'user-1',
       'account-1',
-      1_000,
+      10_000_000,
       expect.stringContaining('transaction-1'),
       'purchase',
     ]);

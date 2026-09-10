@@ -59,7 +59,15 @@ function managedUsageErrorResponse(
   );
 }
 
-export function estimateEmbeddingCostCents(
+const MICROUSD_PER_USD = 1_000_000;
+const MICROUSD_PER_LEDGER_CENT = 10_000;
+
+/**
+ * An embedding call is the clearest case the one-cent floor got wrong: a few
+ * hundred tokens cost a small fraction of a cent, and the floor charged a full
+ * one. The ledger settles in microUSD since 0185.
+ */
+export function estimateEmbeddingCostMicrousd(
   model: PricedModel,
   estimatedTokens: number,
   pricedAt: Date = new Date(),
@@ -70,7 +78,17 @@ export function estimateEmbeddingCostCents(
     estimatedTokens,
   ).inputCost;
   const costDollars = (inputRate * estimatedTokens) / 1_000_000;
-  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * 100)) : 0;
+  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * MICROUSD_PER_USD)) : 0;
+}
+
+export function estimateEmbeddingCostCents(
+  model: PricedModel,
+  estimatedTokens: number,
+  pricedAt: Date = new Date(),
+): number {
+  return Math.ceil(
+    estimateEmbeddingCostMicrousd(model, estimatedTokens, pricedAt) / MICROUSD_PER_LEDGER_CENT,
+  );
 }
 
 function estimateTokens(inputs: readonly string[]): number {
@@ -235,7 +253,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
       requestHash: fingerprintManagedUsageRequest(parsed.data),
       provider: model.provider,
       model: model.id,
-      estimatedCostCents: estimateEmbeddingCostCents(model, estimatedTokens),
+      estimatedCostMicrousd: estimateEmbeddingCostMicrousd(model, estimatedTokens),
       planTier: subscription?.plan_tier ?? 'free',
       isFlagship: false,
     });
@@ -258,7 +276,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     await finalizeManagedUsageRequest({
       ...reservation,
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: { type: 'embeddings', model: model.id, inputs: inputs.length },
     }).catch((releaseError) => {
       logger.error({ releaseError, userId }, 'Failed to release embeddings reservation');
@@ -266,11 +284,11 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     throw error;
   }
 
-  const actualCostCents = estimateEmbeddingCostCents(model, estimatedTokens);
+  const actualCostMicrousd = estimateEmbeddingCostMicrousd(model, estimatedTokens);
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
-    actualCostCents,
+    actualCostMicrousd,
     usage: {
       type: 'embeddings',
       model: model.id,
