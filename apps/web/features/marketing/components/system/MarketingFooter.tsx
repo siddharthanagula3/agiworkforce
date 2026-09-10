@@ -29,12 +29,8 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
               AGI
             </span>
             <p className="agi-ds-footer-statement">
-              {BRAND_STATEMENT.lead} <em className="agi-ds-accent">{BRAND_STATEMENT.accent}</em>{' '}
-              {BRAND_STATEMENT.tail}
+              {BRAND_STATEMENT.lead} {BRAND_STATEMENT.accent} {BRAND_STATEMENT.tail}
             </p>
-            <span className="agi-ds-footer-watermark" aria-hidden="true">
-              AGI
-            </span>
           </div>
         )}
         {!condensed && (

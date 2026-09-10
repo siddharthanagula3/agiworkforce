@@ -1620,37 +1620,37 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  --agi-ground: #0b0a08;
-  --agi-ground-2: #13110d;
-  --agi-ground-3: #1c1913;
-  --agi-ink: #f1ebe1;
-  --agi-ink-2: #a49b8d;
-  --agi-rule: rgba(241, 235, 225, 0.1);
-  --agi-frame: rgba(241, 235, 225, 0.16);
-
-  --agi-lane-local: #3fbd82;
-  --agi-lane-local-text: #3fbd82;
-  --agi-lane-local-on-primary: #04140c;
-  --agi-lane-byok: #a98bff;
-  --agi-lane-byok-text: #a98bff;
-  --agi-lane-byok-on-primary: #0d0620;
-  --agi-lane-cloud: #5fb0f0;
-  --agi-lane-cloud-text: #5fb0f0;
-  --agi-lane-cloud-on-primary: #04131f;
-
+  --agi-ground: #0e1013;
+  --agi-ground-2: #14171c;
+  --agi-ground-3: #1c2027;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #100e0b;
-  --agi-rule-strong: rgba(241, 235, 225, 0.2);
-  --agi-ink-quiet: #8a8174;
-  --agi-ink-faint: #8a8174;
-  --agi-ink-3: #8a8174;
+  --agi-card: #121519;
+  --agi-ink: #f3f4f6;
+  --agi-ink-2: #a3abb8;
+  --agi-ink-3: #848d9b;
+  --agi-ink-quiet: #848d9b;
+  --agi-ink-faint: #848d9b;
+  --agi-rule: rgba(255, 255, 255, 0.08);
+  --agi-rule-strong: rgba(255, 255, 255, 0.14);
+  --agi-frame: rgba(255, 255, 255, 0.14);
 
-  /* Retired from the design system: still read by the marketing CSS and pages
-     that Phase B2 rebuilds. No new call site may reference it. */
-  --agi-amber: #e9a23b;
-  --agi-amber-soft: rgba(233, 162, 59, 0.14);
+  --agi-accent: #2f6fe4;
+  --agi-accent-hover: #2a63d0;
+  --agi-accent-ink: #ffffff;
+  --agi-accent-text: #6ea3ff;
+  --agi-accent-soft: rgba(110, 163, 255, 0.12);
+
+  --agi-lane-local: #d9a441;
+  --agi-lane-local-text: #d9a441;
+  --agi-lane-local-on-primary: #1a1300;
+  --agi-lane-byok: #b39cff;
+  --agi-lane-byok-text: #b39cff;
+  --agi-lane-byok-on-primary: #160a33;
+  --agi-lane-cloud: #6ea3ff;
+  --agi-lane-cloud-text: #6ea3ff;
+  --agi-lane-cloud-on-primary: #04142e;
 
   --agi-surface-wash: rgba(255, 255, 255, 0.03);
   --agi-line-soft: rgba(255, 255, 255, 0.05);
@@ -1658,26 +1658,27 @@ html[data-contrast='more'] *:focus-visible {
   --agi-console-tint: rgba(16, 17, 19, 0.62);
   --agi-console-tint-strong: rgba(16, 17, 19, 0.84);
   --agi-button-bg: var(--agi-ink);
-  --agi-button-bg-hover: #d9d2c5;
+  --agi-button-bg-hover: var(--agi-ink-2);
   --agi-button-ink: var(--agi-ground);
   --agi-error: #eb6a55;
   --agi-success: #58bd7f;
-  --agi-shadow: rgba(0, 0, 0, 0.5);
+  --agi-shadow: rgba(0, 0, 0, 0.6);
+  --agi-shadow-window: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
   --agi-header-sheen: rgba(255, 255, 255, 0.02);
-  --agi-code-bg: rgba(255, 255, 255, 0.055);
-  --agi-selection-bg: rgba(241, 235, 225, 0.24);
+  --agi-code-bg: rgba(255, 255, 255, 0.05);
+  --agi-selection-bg: rgba(110, 163, 255, 0.3);
   --agi-selection-text: var(--agi-ink);
   --agi-code-function: #7bb0f5;
   --agi-code-type: #4ec9b0;
 
-  --agi-font: var(--font-ibm-plex-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-jetbrains), var(--font-geist-mono), ui-monospace, monospace;
-  --agi-font-display: var(--font-newsreader), Georgia, 'Times New Roman', serif;
-  --agi-terminal: #060503;
-  --agi-terminal-ink: #d9d2c5;
-  --agi-terminal-dim: #8f877a;
+  --agi-font-display: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-terminal: #0a0c0f;
+  --agi-terminal-ink: #d7dbe2;
+  --agi-terminal-dim: #848d9b;
   --agi-phone: #000;
-  --agi-shadow-lift: 0 40px 100px -50px rgba(0, 0, 0, 0.9);
+  --agi-shadow-lift: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
 
   --agi-text-xs: 0.75rem;
   --agi-text-sm: 0.875rem;
@@ -1700,17 +1701,18 @@ html[data-contrast='more'] *:focus-visible {
   --agi-space-7: 4rem;
   --agi-space-8: 5rem;
   --agi-gutter: 1.5rem;
-  --agi-container: 80rem;
-  --agi-display-1: clamp(2.75rem, 1rem + 4.2vw, 5.5rem);
-  --agi-display-2: clamp(2rem, 1.2rem + 2.4vw, 3.6rem);
-  --agi-display-3: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
+  --agi-container: 72rem;
+  --agi-display-1: clamp(2.25rem, 1.35rem + 3vw, 3.75rem);
+  --agi-display-2: clamp(1.75rem, 1.25rem + 1.6vw, 2.5rem);
+  --agi-display-3: 1.25rem;
   --agi-section-y-xs: 3.5rem;
   --agi-section-y-sm: 4.5rem;
   --agi-section-y-md: 7rem;
   --agi-section-y-lg: 8.75rem;
 
-  --agi-radius-control: 4px;
+  --agi-radius-control: 6px;
   --agi-radius-frame: 8px;
+  --agi-radius-window: 10px;
   --agi-radius-pill: 999px;
 
   --agi-shadow-none: none;
@@ -1721,6 +1723,7 @@ html[data-contrast='more'] *:focus-visible {
   --agi-dur-slow: 720ms;
   --agi-dur-hover: 150ms;
   --agi-dur-hero: 700ms;
+  --agi-dur-fade: 160ms;
   --agi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --agi-ease-expo: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -1748,49 +1751,56 @@ html[data-contrast='more'] *:focus-visible {
 [data-theme='light'][data-design='agi'] {
   color-scheme: light;
   --agi-ground: #ffffff;
-  --agi-ground-2: #f4f7fb;
-  --agi-ground-3: #e8eef6;
+  --agi-ground-2: #f5f7fa;
+  --agi-ground-3: #e9edf3;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-ink: #0f172a;
-  --agi-ink-2: #475569;
-  --agi-ink-3: #5b6b7f;
-  --agi-ink-quiet: #5b6b7f;
-  --agi-ink-faint: #5b6b7f;
-  --agi-rule: rgba(15, 23, 42, 0.1);
-  --agi-rule-strong: rgba(15, 23, 42, 0.18);
-  --agi-frame: rgba(15, 23, 42, 0.14);
   --agi-card: #ffffff;
-  --agi-amber: #0a66b3;
-  --agi-amber-soft: rgba(14, 165, 233, 0.12);
-  --agi-surface-wash: rgba(14, 165, 233, 0.05);
-  --agi-line-soft: rgba(15, 23, 42, 0.06);
-  --agi-glow-soft: rgba(14, 165, 233, 0.08);
-  --agi-console-tint: rgba(244, 247, 251, 0.7);
-  --agi-console-tint-strong: rgba(244, 247, 251, 0.9);
-  --agi-button-bg: #0f172a;
-  --agi-button-bg-hover: #1e293b;
-  --agi-button-ink: #ffffff;
+  --agi-ink: #111827;
+  --agi-ink-2: #4b5563;
+  --agi-ink-3: #5f6b7a;
+  --agi-ink-quiet: #5f6b7a;
+  --agi-ink-faint: #5f6b7a;
+  --agi-rule: rgba(17, 24, 39, 0.09);
+  --agi-rule-strong: rgba(17, 24, 39, 0.16);
+  --agi-frame: rgba(17, 24, 39, 0.14);
+
+  --agi-accent: #1d5fd6;
+  --agi-accent-hover: #174fb5;
+  --agi-accent-ink: #ffffff;
+  --agi-accent-text: #1d5fd6;
+  --agi-accent-soft: rgba(29, 95, 214, 0.08);
+
+  --agi-lane-local: #8a5d00;
+  --agi-lane-local-text: #8a5d00;
+  --agi-lane-local-on-primary: #ffffff;
+  --agi-lane-byok: #6d3fd6;
+  --agi-lane-byok-text: #6d3fd6;
+  --agi-lane-byok-on-primary: #ffffff;
+  --agi-lane-cloud: #1d5fd6;
+  --agi-lane-cloud-text: #1d5fd6;
+  --agi-lane-cloud-on-primary: #ffffff;
+
+  --agi-surface-wash: rgba(17, 24, 39, 0.03);
+  --agi-line-soft: rgba(17, 24, 39, 0.06);
+  --agi-glow-soft: rgba(29, 95, 214, 0.06);
+  --agi-console-tint: rgba(245, 247, 250, 0.7);
+  --agi-console-tint-strong: rgba(245, 247, 250, 0.9);
   --agi-error: #b91c1c;
   --agi-success: #127538;
-  --agi-shadow: rgba(15, 23, 42, 0.12);
-  --agi-shadow-lift: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
+  --agi-shadow: rgba(17, 24, 39, 0.1);
+  --agi-shadow-lift: 0 16px 40px -28px rgba(17, 24, 39, 0.25);
+  --agi-shadow-window: none;
   --agi-header-sheen: rgba(255, 255, 255, 0.6);
-  --agi-code-bg: rgba(15, 23, 42, 0.05);
+  --agi-code-bg: rgba(17, 24, 39, 0.05);
   --agi-code-function: #245b96;
   --agi-code-type: #176555;
-  --agi-selection-bg: rgba(14, 165, 233, 0.25);
-  --agi-selection-text: #0f172a;
-  --agi-lane-local: #0e6f47;
-  --agi-lane-local-text: #0e6f47;
-  --agi-lane-local-on-primary: #ffffff;
-  --agi-lane-byok: #6234c4;
-  --agi-lane-byok-text: #6234c4;
-  --agi-lane-byok-on-primary: #ffffff;
-  --agi-lane-cloud: #12609e;
-  --agi-lane-cloud-text: #12609e;
-  --agi-lane-cloud-on-primary: #ffffff;
+  --agi-selection-bg: rgba(29, 95, 214, 0.2);
+  --agi-selection-text: #111827;
+  --agi-terminal: #0e1013;
+  --agi-terminal-ink: #d7dbe2;
+  --agi-terminal-dim: #9aa3b0;
 }
 
 [data-design='agi'] *,
@@ -1856,96 +1866,6 @@ html[data-contrast='more'] *:focus-visible {
   flex-direction: column;
   gap: 6px;
 }
-[data-design='agi'].agi-home {
-  --agi-ground: #0e1013;
-  --agi-ground-2: #14171c;
-  --agi-ground-3: #1c2027;
-  --agi-bg: var(--agi-ground);
-  --agi-bg-2: var(--agi-ground-2);
-  --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #121519;
-  --agi-ink: #f3f4f6;
-  --agi-ink-2: #a3abb8;
-  --agi-ink-3: #848d9b;
-  --agi-ink-quiet: #848d9b;
-  --agi-ink-faint: #848d9b;
-  --agi-rule: rgba(255, 255, 255, 0.08);
-  --agi-rule-strong: rgba(255, 255, 255, 0.14);
-  --agi-frame: rgba(255, 255, 255, 0.14);
-  --agi-accent: #2f6fe4;
-  --agi-accent-hover: #2a63d0;
-  --agi-accent-ink: #ffffff;
-  --agi-accent-text: #6ea3ff;
-  --agi-accent-soft: rgba(110, 163, 255, 0.12);
-  --agi-lane-local: #d9a441;
-  --agi-lane-local-text: #d9a441;
-  --agi-lane-local-on-primary: #1a1300;
-  --agi-lane-byok: #b39cff;
-  --agi-lane-byok-text: #b39cff;
-  --agi-lane-byok-on-primary: #160a33;
-  --agi-lane-cloud: #6ea3ff;
-  --agi-lane-cloud-text: #6ea3ff;
-  --agi-lane-cloud-on-primary: #04142e;
-  --agi-button-bg: var(--agi-accent);
-  --agi-button-bg-hover: var(--agi-accent-hover);
-  --agi-button-ink: var(--agi-accent-ink);
-  --agi-terminal: #0a0c0f;
-  --agi-terminal-ink: #d7dbe2;
-  --agi-terminal-dim: #848d9b;
-  --agi-shadow: rgba(0, 0, 0, 0.6);
-  --agi-shadow-lift: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
-  --agi-home-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
-  --agi-code-bg: rgba(255, 255, 255, 0.05);
-  --agi-selection-bg: rgba(110, 163, 255, 0.3);
-  --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
-  --agi-font-display: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
-  --agi-container: 75rem;
-}
-
-[data-theme='light'] [data-design='agi'].agi-home,
-[data-theme='light'][data-design='agi'].agi-home {
-  --agi-ground: #ffffff;
-  --agi-ground-2: #f5f7fa;
-  --agi-ground-3: #e9edf3;
-  --agi-bg: var(--agi-ground);
-  --agi-bg-2: var(--agi-ground-2);
-  --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #ffffff;
-  --agi-ink: #111827;
-  --agi-ink-2: #4b5563;
-  --agi-ink-3: #5f6b7a;
-  --agi-ink-quiet: #5f6b7a;
-  --agi-ink-faint: #5f6b7a;
-  --agi-rule: rgba(17, 24, 39, 0.09);
-  --agi-rule-strong: rgba(17, 24, 39, 0.16);
-  --agi-frame: rgba(17, 24, 39, 0.14);
-  --agi-accent: #1d5fd6;
-  --agi-accent-hover: #174fb5;
-  --agi-accent-ink: #ffffff;
-  --agi-accent-text: #1d5fd6;
-  --agi-accent-soft: rgba(29, 95, 214, 0.08);
-  --agi-lane-local: #8a5d00;
-  --agi-lane-local-text: #8a5d00;
-  --agi-lane-local-on-primary: #ffffff;
-  --agi-lane-byok: #6d3fd6;
-  --agi-lane-byok-text: #6d3fd6;
-  --agi-lane-byok-on-primary: #ffffff;
-  --agi-lane-cloud: #1d5fd6;
-  --agi-lane-cloud-text: #1d5fd6;
-  --agi-lane-cloud-on-primary: #ffffff;
-  --agi-button-bg: var(--agi-accent);
-  --agi-button-bg-hover: var(--agi-accent-hover);
-  --agi-button-ink: var(--agi-accent-ink);
-  --agi-terminal: #0e1013;
-  --agi-terminal-ink: #d7dbe2;
-  --agi-terminal-dim: #9aa3b0;
-  --agi-shadow: rgba(17, 24, 39, 0.1);
-  --agi-shadow-lift: 0 16px 40px -28px rgba(17, 24, 39, 0.25);
-  --agi-home-shadow: none;
-  --agi-code-bg: rgba(17, 24, 39, 0.05);
-  --agi-selection-bg: rgba(29, 95, 214, 0.2);
-}
-
 [data-design='agi'] .agi-msg-role {
   font-size: 12px;
   font-weight: 500;
@@ -1999,7 +1919,7 @@ html[data-contrast='more'] *:focus-visible {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--agi-amber);
+  background: var(--agi-accent);
   flex-shrink: 0;
 }
 [data-design='agi'] .agi-cursor {
@@ -2102,218 +2022,8 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] {
   --agi-font-heading: var(--agi-font);
-} /* ══════════════════════════════════════════════════════════════════════
- * Surface stages
- *
- * The site was dark end to end, which is most of why it read as repetitive:
- * with one canvas, every section needs a border or a card to say where it
- * begins, and thirty hairline dividers is what that looks like.
- *
- * A stage retints the token layer rather than restyling components, so
- * everything inside - rules, cards, quiet text, code wells - adapts without
- * knowing which canvas it landed on. The canvas change is then strong enough
- * to be the divider itself, and the hairline can go.
- *
- * Measured on the light stages: ink 14.71:1 at worst, secondary 6.72:1, quiet
- * 5.16:1, accent 4.82:1. The accent darkens on light ground because the dark
- * amber would not hold 4.5:1 there - same role, different value, which is the
- * point of naming roles rather than hues.
- * ══════════════════════════════════════════════════════════════════════ */
-
-[data-design='agi'] .agi-stage {
-  padding: clamp(72px, 10vw, 132px) 0;
-} /* A stage's canvas has to reach the viewport edge or it reads as a wide card
-   rather than a change of ground - and the seam at the shell's max-width is
-   exactly the bordered-rectangle look these stages exist to remove. The
-   content inside stays on the text column; only the surface breaks out. */
-[data-design='agi'] .agi-shell > .agi-stage {
-  margin-inline: calc(50% - 50vw);
-  padding-inline: max(28px, calc(50vw - 590px + 28px));
-  width: 100vw;
-  max-width: 100vw;
-} /* No hairline between stages: the canvas change separates them. A rule is only
-   needed where two stages share a tone. */
-[data-design='agi'] .agi-stage + .agi-stage {
-  border-top: 0;
 }
 
-[data-design='agi'] .agi-stage--warm,
-[data-design='agi'] .agi-stage--pearl {
-  --agi-ink: #16161a;
-  --agi-ink-2: #4e4e56;
-  --agi-ink-quiet: #5f5f67;
-  --agi-ink-faint: #5f5f67;
-  --agi-amber: #6f4709;
-  --agi-amber-soft: rgba(111, 71, 9, 0.12);
-  --agi-rule: rgba(22, 22, 26, 0.1);
-  --agi-rule-strong: rgba(22, 22, 26, 0.18);
-  --agi-surface-wash: rgba(22, 22, 26, 0.03);
-  --agi-line-soft: rgba(22, 22, 26, 0.06);
-  --agi-glow-soft: rgba(22, 22, 26, 0.04);
-  --agi-button-bg: #16161a;
-  --agi-button-bg-hover: #2a2a30;
-  --agi-button-ink: #faf9f6;
-  --agi-code-bg: rgba(22, 22, 26, 0.05);
-  --agi-shadow: rgba(22, 22, 26, 0.14);
-
-  /* Everything below is a token whose dark-ground value is actively wrong
-     here, not merely suboptimal. --agi-console-tint is rgba(16, 16, 18, 0.62):
-     a near-black wash that reads as a recessed panel over #0a0a0b and as flat
-     mid-grey over #faf9f6, which is what it composited to before this block
-     existed - the device mockups' chrome went grey and their labels fell to
-     about 1.5:1. A retint that stops at ink and background is not a retint;
-     every token that carries a hue or an alpha has to come with it. */
-  --agi-error: #c23a2c;
-  --agi-success: #1f6b43;
-  --agi-code-function: #245b96;
-  --agi-code-type: #176555;
-  --agi-header-sheen: rgba(22, 22, 26, 0.04);
-  --agi-selection-bg: rgba(111, 71, 9, 0.22);
-  --agi-selection-text: var(--agi-ink);
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-stage--warm {
-  --agi-bg: #faf9f6;
-  --agi-bg-2: #f2f1ed;
-  --agi-bg-3: #e9e8e3;
-  --agi-card: #ffffff;
-  --agi-console-tint: rgba(238, 237, 232, 0.85);
-  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
-  background: var(--agi-bg);
-}
-
-[data-design='agi'] .agi-stage--pearl {
-  --agi-bg: #f2f1ed;
-  --agi-bg-2: #e9e8e3;
-  --agi-bg-3: #dedcd6;
-  --agi-card: #faf9f6;
-  --agi-console-tint: rgba(230, 229, 223, 0.85);
-  --agi-console-tint-strong: rgba(250, 249, 246, 0.92);
-  background: var(--agi-bg);
-} /* Product-first hero.
- *
- * The flagship hero put a wordmark in the primary position and the product in
- * a column beside it, where a phone rendered around 250px in a 1440px viewport
- * - too small for its interface to be read, which makes it decoration.
- *
- * The statement goes above and the product takes the stage beneath it, so the
- * thing being sold is the thing you look at. Copy is short enough to sit on
- * one column; the product is not constrained to one.
- */ /* ── shared section scaffolding ─────────────────────────────────────── */ /* Section label. Used on 43 pages, and until now amber on every one of them -
-   the single most repeated reason the site read as amber-washed. A section
-   label is orientation, not signal, so it takes quiet ink and leaves the
-   accent for state that actually changes. The em-dash prefix went with it:
-   it was decoration standing in for hierarchy the type already carries. */ /* CTAs */ /* Press feedback.
- *
- * The whole marketing surface carried exactly one :active rule, and
- * .agi-fl-cta went as far as declaring a transform transition for a transform
- * that was never written. So every CTA on the site confirmed a press only by
- * navigating - which, on a slow route, reads as a click that did not land.
- *
- * Feedback belongs on pointer-down, not on release, and it has to be quick
- * enough to feel like the surface answering rather than animating: 90ms, and a
- * scale small enough to register as pressure rather than movement.
- *
- * Under reduced motion the scale is dropped - a transform is the part worth
- * removing - and the press is carried by a brightness shift instead, so the
- * feedback survives in a form with no vestibular cost. */ /* ── reveal (IntersectionObserver adds .is-revealed) ────────────────── */ /* ══════════════════════════════════════════════════════════════════════
-   DEVICE MOCKUPS (agi-dev), the one exact-size system for every
-   illustrated device on marketing/product pages. ProductFrame,
-   HeroAppWindow, and SurfaceMockups all render into it.
-
-   Geometry contract: each device type declares its canonical design-space
-   size via --dev-w/--dev-h (inline style from DEVICE_GEOMETRY in
-   DeviceMockups.tsx, the single source of truth). The root is a size
-   container and --u is one design pixel (container width / --dev-w);
-   every internal dimension is authored in --u, so a device scales ONLY
-   proportionally, identical shape at every container width, and renders
-   at exactly its design size in slots wider than --dev-w. Hairline
-   borders stay a constant 1px at every scale for crispness.
-   ══════════════════════════════════════════════════════════════════════ */ /* ── shared window bar, one chrome DNA for every windowed device ──── */ /* ── shared primitives: typed placeholder, caret, send, composer ───── */
-
-/* ── shared side-panel pieces (Chrome panel + panel card) ──────────── */ /* ── desktop app window (720 × 480) ────────────────────────────────── */ /* ── browser window · AGI Web (720 × 450) ──────────────────────────── */
-
-/* ── full Chrome window with side panel (720 × 480) ────────────────── */ /* Legibility floor inside a product frame.
-   The frame renders at ~96% of its design width, so a design size below 12.5
-   lands under the 12px floor this repository already enforces everywhere else.
-   Browser furniture - tab labels, mode chips - stays small because it is small
-   in a real browser and carries no story. The narrative does have to be read:
-   the conversation, the page being acted on, and what is typed into it. */ /* ── standalone side-panel card (400 × 520) ────────────────────────── */ /* ── VS Code window with @agi panel (720 × 450) ────────────────────── */ /* ── terminal window (640 × 400) ───────────────────────────────────── */ /* ── phone (270 × 585) ─────────────────────────────────────────────── */ /* ── motion opt-out ─────────────────────────────────────────────────── */ /* web-interface-guidelines compliance, modal scroll containment + numerals */ /* ── auth shell (login / signup) ────────────────────────────────────── */ /* Two columns: the brand story takes the flexible left column, the card
-   column hugs the Clerk card (max-w-28.5rem + breathing room) instead of
-   leaving dead margins around it. Top-aligned so the brand block anchors
-   to the card's top edge rather than floating in the vertical center of a
-   viewport-height band. The card renders first in the DOM (focus order +
-   mobile stacking); grid placement puts the brand panel on the left. */ /* Single column: the sign-in card leads (auth is the page's job), the
-   brand story condenses below it. The panel logo is hidden, the header
-   wordmark directly above already brands the page, and the duplicate ate
-   the first mobile viewport. */ /* ── inline anonymous waitlist form (/waitlist page) ────────────────── */ /* ── per-purpose consent checkboxes (DPDP s.6) ──────────────────────────
-   Shared by the inline waitlist form and the waitlist modal, so the block
-   takes a full row inside either flex form. Deliberately plain: an unticked
-   box must not look like the discouraged option, or the "clear affirmative
-   action" the Act asks for becomes a nudge. Required and optional purposes
-   get identical weight for the same reason. */ /* Anchored sections land under any sticky chrome rather than flush to it. */
-[data-design='agi'] section[id^='s-'] {
-  scroll-margin-top: 88px;
-} /* ── data-rights request form (/privacy/requests) ───────────────────── */ /* ══════════════════════════════════════════════════════════════════════
-   FULL-BLEED BANDS, 2026-06-11 landing review fix.
-   Sections live inside the centered .agi-shell (max-width 1180px), so
-   their backgrounds, glows, and rule lines stopped at the column edge and
-   the page read as a card floating on dead margins. These rules stretch
-   each band to the viewport edge (negative inline margins) while the
-   matching inline padding keeps text aligned to the shell column.
-   ══════════════════════════════════════════════════════════════════════ */
-
-[data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope) {
-  /* 50vw includes the scrollbar gutter; clip the 0-15px spill instead of
-     letting it create a horizontal scrollbar. */
-  overflow-x: clip;
-} /* The hero clips its backdrop; now that it bleeds, the glow and dot grid
-   reach the real viewport edges instead of forming a hard-edged box. */ /* monochrome provider marks inherit theme ink */
-[data-design='agi'] .agi-provider-mark {
-  flex: 0 0 auto;
-  color: var(--agi-ink-2);
-} /* ══════════════════════════════════════════════════════════════════════
-   ROUTE FLOW (agi-rf), animated provider → router → surface diagram.
-   ══════════════════════════════════════════════════════════════════════ */ /* The hub was a pulsing amber halo - the glowing-orb idiom this design set out
-   to avoid, and a four-second loop running forever on a page nobody is
-   interacting with. The router earns its weight from precise geometry and real
-   provider names, not from throb. A still ring reads as an instrument. */ /* ══════════════════════════════════════════════════════════════════════
-   SHOWCASE SCENES, diff window (agi-dw) + approval panel (agi-ap).
-   ══════════════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════════
-   MOBILE RESPONSIVENESS, 640px and 480px breakpoints
-   ══════════════════════════════════════════════════════════════════ */
-@media (max-width: 640px) {
-  /* Shell padding */ /* Hero text */ /* Section padding */ /* CTA row: stack buttons on very small screens */ /* Mode ribbon: wrap pills */ /* Trust grid: single column already at 860px but keep gap small */ /* Cap grid: 2 columns at 640px */
-}
-@media (max-width: 480px) {
-  /* Hero h1: ensure it doesn't overflow */
-}
-
-[data-design='agi'] code,
-[data-design='agi'] kbd,
-[data-design='agi'] samp {
-  font-size: max(0.92em, 12px);
-} /* ── Responsive ───────────────────────────────────────────────────────── */ /* AUDIT-FIX ART-9: the highlight.js theme imported by unified-chat's
-   MarkdownContent ships CONTAINER styling as well as token colours -
-   `.hljs { background: #0d1117 }` and `pre code.hljs { padding: 1em }` - which
-   paints a second, differently coloured box inside `.code-block-container` and
-   doubles the code padding on top of `.code-block-body pre`'s `p-4`. Keep the
-   theme's token colours, drop its container styling.
-   Deliberately UNLAYERED: the theme stylesheet is unlayered too, and anything
-   inside `@layer components` loses to unlayered rules regardless of specificity. */
-.code-block-body pre code.hljs {
-  background: transparent;
-  padding: 0;
-} /*
- * The composer can become narrow even on a wide viewport when both the chat
- * sidebar and Artifacts panel are open. The field took a row of its own only
- * below a 560px container until 2026-09-05, when the founder made the two-row
- * face the layout at every width: the field is row one, and row two carries
- * the leading controls at the left with everything after them pushed right.
- */
 .chat-composer-container {
   container-type: inline-size;
   /* No consent inset here on purpose: the /chat shell already ends at
@@ -2459,7 +2169,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-ds-btn:focus-visible {
-  outline: 2px solid var(--agi-ink);
+  outline: 2px solid var(--agi-accent-text);
   outline-offset: 2px;
 }
 
@@ -2552,7 +2262,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-ds-consent-close:focus-visible {
-  outline: 2px solid var(--agi-ink);
+  outline: 2px solid var(--agi-accent-text);
   outline-offset: 2px;
 }
 

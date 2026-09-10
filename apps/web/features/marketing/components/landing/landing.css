@@ -1,10 +1,8 @@
 [data-design='agi'].agi-home {
-  --agi-home-h1: clamp(2.25rem, 1.35rem + 3vw, 3.75rem);
-  --agi-home-h2: clamp(1.75rem, 1.25rem + 1.6vw, 2.5rem);
-  --agi-home-h3: 1.25rem;
+  --agi-home-h1: var(--agi-display-1);
+  --agi-home-h2: var(--agi-display-2);
+  --agi-home-h3: var(--agi-display-3);
   --agi-home-section-y: clamp(3rem, 2rem + 4vw, 6rem);
-  --agi-home-radius: 10px;
-  --agi-home-fade: 160ms;
 }
 
 [data-design='agi'].agi-home .agi-ds-container {
@@ -96,23 +94,6 @@
   border-radius: 2px;
 }
 
-.agi-home .agi-ds-btn[data-variant='primary'] {
-  background: var(--agi-accent);
-  color: var(--agi-accent-ink);
-}
-
-.agi-home .agi-ds-btn[data-variant='primary']:hover {
-  background: var(--agi-accent-hover);
-}
-
-.agi-home .agi-ds-btn:focus-visible {
-  outline-color: var(--agi-accent-text);
-}
-
-.agi-home .agi-ds-btn {
-  border-radius: 6px;
-}
-
 .agi-home .agi-home-heading {
   display: grid;
   gap: 1rem;
@@ -180,9 +161,9 @@
 .agi-home .agi-home-window {
   overflow: hidden;
   border: 1px solid var(--agi-rule-strong);
-  border-radius: var(--agi-home-radius);
+  border-radius: var(--agi-radius-window);
   background: var(--agi-ground-2);
-  box-shadow: var(--agi-home-shadow);
+  box-shadow: var(--agi-shadow-window);
 }
 
 .agi-home .agi-home-window .agi-ds-frame {
@@ -207,6 +188,11 @@
   font-family: var(--agi-font-mono);
   font-size: var(--agi-text-xs);
   color: var(--agi-ink-3);
+}
+
+.agi-home .agi-home-window[data-inset='true'] .agi-ds-frame-media {
+  padding-top: 1rem;
+  background: var(--agi-ground);
 }
 
 .agi-home .agi-home-window[data-tone='dark'],
@@ -263,6 +249,7 @@
   font-size: var(--agi-text-xs);
   font-weight: 500;
   color: var(--agi-ink-2);
+  white-space: nowrap;
   cursor: pointer;
   transition:
     color var(--agi-dur-hover) var(--agi-ease-expo),
@@ -339,7 +326,7 @@
   margin: 0;
   font-size: var(--agi-text-sm);
   color: var(--agi-ink-2);
-  animation: agi-home-fade var(--agi-home-fade) var(--agi-ease-expo) both;
+  animation: agi-home-fade var(--agi-dur-fade) var(--agi-ease-expo) both;
 }
 
 .agi-home .agi-home-activity-dot {
@@ -386,7 +373,7 @@
   margin: 0;
   font-size: var(--agi-text-sm);
   color: var(--agi-ink-2);
-  animation: agi-home-fade var(--agi-home-fade) var(--agi-ease-expo) both;
+  animation: agi-home-fade var(--agi-dur-fade) var(--agi-ease-expo) both;
 }
 
 .agi-home .agi-home-actions {
@@ -412,7 +399,7 @@
   font-family: var(--agi-font-mono);
   font-size: var(--agi-text-xs);
   font-variant-numeric: tabular-nums;
-  animation: agi-home-fade var(--agi-home-fade) var(--agi-ease-expo) both;
+  animation: agi-home-fade var(--agi-dur-fade) var(--agi-ease-expo) both;
 }
 
 .agi-home .agi-home-receipt-row {
@@ -585,7 +572,6 @@
   gap: 0.25rem;
   margin: 0;
   padding: 1rem 1.125rem 1.125rem;
-  overflow-x: auto;
   background: var(--agi-terminal);
   font-family: var(--agi-font-mono);
   font-size: 0.75rem;
@@ -594,7 +580,8 @@
 }
 
 .agi-home .agi-home-terminal-line {
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agi-home .agi-home-terminal-line[data-kind='cmd']::before {
@@ -611,7 +598,7 @@
   border: 1px solid var(--agi-rule-strong);
   border-radius: 22px;
   background: var(--agi-ground-2);
-  box-shadow: var(--agi-home-shadow);
+  box-shadow: var(--agi-shadow-window);
 }
 
 .agi-home .agi-home-phone .agi-ds-frame {
@@ -822,21 +809,6 @@
 .agi-home .agi-home-close-inner > div {
   display: grid;
   gap: 0.75rem;
-}
-
-.agi-home .agi-ds-footer-statement .agi-ds-accent {
-  font-style: normal;
-  color: var(--agi-ink);
-}
-
-.agi-home .agi-ds-footer-wordmark,
-.agi-home .agi-ds-footer-statement,
-.agi-home .agi-ds-footer-watermark {
-  font-family: var(--agi-font);
-}
-
-.agi-home .agi-ds-footer-watermark {
-  display: none;
 }
 
 @media (max-width: 1100px) {

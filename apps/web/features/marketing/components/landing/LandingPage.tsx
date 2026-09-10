@@ -48,9 +48,19 @@ const REVEAL_STEP_S = 0.08;
 
 const stagger = (position: number) => ({ '--i': position }) as CSSProperties;
 
-function Window({ url, children, tone }: { url: string; children: ReactNode; tone?: 'dark' }) {
+function Window({
+  url,
+  children,
+  tone,
+  inset,
+}: {
+  url: string;
+  children: ReactNode;
+  tone?: 'dark';
+  inset?: boolean;
+}) {
   return (
-    <div className="agi-home-window" data-tone={tone}>
+    <div className="agi-home-window" data-tone={tone} data-inset={inset ? 'true' : undefined}>
       <WindowBar url={url} />
       {children}
     </div>
@@ -185,7 +195,7 @@ export function LandingPage() {
                     <p className="agi-home-body">{approvals.body}</p>
                   </div>
                   <MotionReveal delay={REVEAL_STEP_S}>
-                    <Window url={approvals.url}>
+                    <Window url={approvals.url} inset>
                       <ProductFrame
                         src={approvals.image.dark}
                         srcLight={approvals.image.light}
