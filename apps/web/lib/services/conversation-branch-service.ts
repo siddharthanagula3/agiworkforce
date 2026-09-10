@@ -366,12 +366,16 @@ export async function forkConversation(
     await tx.execute(
       `insert into public.conversation_branch_messages
          (branch_id, source_message_id, target_message_id)
-       select $1, map.source_message_id, map.target_message_id
-         from unnest($2::uuid[], $3::uuid[]) as map(source_message_id, target_message_id)`,
+       select branch.id, map.source_message_id, map.target_message_id
+         from unnest($2::uuid[], $3::uuid[]) as map(source_message_id, target_message_id)
+         join public.conversation_branches as branch
+           on branch.id = $1
+          and branch.user_id = $4`,
       [
         input.requestId,
         copied.map((message) => message.source_message_id),
         copied.map((message) => message.id),
+        userId,
       ],
     );
 
