@@ -53,8 +53,8 @@ The output must feel:
 - visually strong
 - faithful enough to build from
 - clean on first view
-- responsive in spirit
-- realistic on a small laptop viewport
+- responsive in spiri
+- realistic on a small laptop viewpor
 
 IMPORTANT:
 For visual website tasks, you must first generate the design image(s) yourself.
@@ -67,8 +67,8 @@ The generated image(s) are the primary visual source of truth.
 
 The required workflow is:
 
-image generation first  
-deep image analysis second  
+image generation firs
+deep image analysis second
 implementation third
 
 If the task is mainly visual, this order is mandatory.
@@ -77,23 +77,23 @@ If the task is mainly visual, this order is mandatory.
 
 ## 1. ACTIVE BASELINE CONFIGURATION
 
-- DESIGN_VARIANCE: 8  
+- DESIGN_VARIANCE: 8
   `(1 = rigid / conventional, 10 = highly art-directed / asymmetric)`
-- VISUAL_DENSITY: 3  
+- VISUAL_DENSITY: 3
   `(1 = airy / calm, 10 = dense / packed)`
-- ART_DIRECTION: 8  
+- ART_DIRECTION: 8
   `(1 = safe commercial, 10 = bold creative statement)`
-- IMPLEMENTATION_CLARITY: 9  
+- IMPLEMENTATION_CLARITY: 9
   `(1 = loose moodboard, 10 = highly buildable UI reference)`
-- IMAGE_USAGE_PRIORITY: 9  
+- IMAGE_USAGE_PRIORITY: 9
   `(1 = mostly typographic, 10 = strongly image-led when appropriate)`
-- SPACING_GENEROSITY: 9  
+- SPACING_GENEROSITY: 9
   `(1 = compact / tight, 10 = spacious / breathable)`
-- ANALYSIS_PRECISION: 10  
+- ANALYSIS_PRECISION: 10
   `(1 = broad vibe only, 10 = deep extraction of design details)`
-- IMAGE_GENERATION_EAGERNESS: 10  
+- IMAGE_GENERATION_EAGERNESS: 10
   `(1 = minimal image count, 10 = generate as many images as needed for excellent extraction)`
-- UI_SIMPLICITY_DISCIPLINE: 9  
+- UI_SIMPLICITY_DISCIPLINE: 9
   `(1 = willing to add many micro-elements, 10 = aggressively reduce clutter and unnecessary UI chrome)`
 
 AI Instruction:
@@ -121,10 +121,10 @@ For website design requests where visual quality matters, image generation is ma
 
 This means:
 
-1. generate the design image or image set yourself first
+1. generate the design image or image set yourself firs
 2. deeply inspect and analyze the generated image(s)
 3. extract the design system from them
-4. implement the frontend only after that
+4. implement the frontend only after tha
 
 Do not:
 
@@ -202,7 +202,7 @@ This is preferred because:
 Do not default to:
 
 - one giant multi-column collage
-- one long compressed board with tiny unreadable text
+- one long compressed board with tiny unreadable tex
 - one image containing many sections if that reduces extraction quality
 
 If necessary, generate more images rather than shrinking everything.
@@ -257,14 +257,14 @@ This standalone regeneration should:
 - keep the same typography mood
 - keep the same button style
 - keep the same radius logic
-- keep the same image treatment
+- keep the same image treatmen
 - keep the same overall brand world
 
 But it should also:
 
 - make text larger and more readable
 - make spacing more visible
-- make buttons easier to inspect
+- make buttons easier to inspec
 - make component structure easier to analyze
 - make layout proportions clearer
 - make the section cleaner if the previous render was too busy
@@ -283,7 +283,7 @@ Examples of useful secondary images:
 - a closer hero render to read headline, subheadline, CTA, and typography
 - a detail image for pricing cards
 - a closer render for testimonials
-- a closer render for navbar / header treatment
+- a closer render for navbar / header treatmen
 - a closer render for feature cards or UI panels
 - a closer render for footer or CTA section
 - a refined variation of the first generated image that makes the section more extractable
@@ -294,7 +294,7 @@ These additional images exist to improve analysis and extraction quality.
 
 Use them when needed for:
 
-- readable text
+- readable tex
 - clearer button states
 - tighter spacing analysis
 - card and component inspection
@@ -332,7 +332,7 @@ The analysis should feel:
 
 - calm
 - structured
-- exact
+- exac
 - faithful
 - design-aware
 - implementation-aware
@@ -356,7 +356,7 @@ Carefully inspect and extract:
 - typography character
 - type scale relationships
 - font mood
-- line count
+- line coun
 - line wrapping behavior
 - alignment logic
 - section spacing
@@ -371,9 +371,9 @@ Carefully inspect and extract:
 - hover-implied styling if visually suggested
 - color palette
 - accent colors
-- background treatment
-- image treatment
-- icon treatment
+- background treatmen
+- image treatmen
+- icon treatmen
 - shadows / depth logic
 - grid logic
 - layout structure
@@ -394,8 +394,8 @@ When this skill is used inside Codex or any environment that supports image gene
 
 Preferred execution order:
 
-1. infer the section count
-2. generate section reference images first
+1. infer the section coun
+2. generate section reference images firs
 3. generate extra detail/extraction images where needed
 4. if needed, regenerate unclear sections as fresh standalone images
 5. deeply inspect all generated images
@@ -426,7 +426,7 @@ Trigger image-first workflow when the user asks for:
 - a polished marketing page
 - a portfolio site
 - a startup site where visual taste matters heavily
-- a multi-section website concept
+- a multi-section website concep
 - anything described mainly in visual terms
 
 Direct-code first is more acceptable only when:
@@ -478,12 +478,12 @@ Choose 1:
 
 Choose 1:
 
-1. cinematic centered minimalist
+1. cinematic centered minimalis
 2. asymmetric split hero
 3. floating polaroid scatter
 4. inline typography behemoth
 5. editorial offset composition
-6. massive image-first hero with restrained text
+6. massive image-first hero with restrained tex
 
 ### Section System
 
@@ -496,18 +496,18 @@ Choose 1:
 5. Swiss grid discipline
 6. asymmetric premium marketing flow
 
-### Signature Component Set
+### Signature Component Se
 
 Choose exactly 4 unique components:
 
 - diagonal staggered square masonry
 - 3D cascading card deck
-- hover-accordion slice layout
+- hover-accordion slice layou
 - pristine gapless bento grid
 - infinite brand marquee strip
 - turning polaroid arc
 - vertical rhythm lines
-- off-grid editorial layout
+- off-grid editorial layou
 - product UI panel stack
 - split testimonial quote wall
 - layered image crop frames
@@ -532,13 +532,13 @@ They are visual-direction cues the design should imply.
 
 Every generated website section image must clearly communicate:
 
-- layout
+- layou
 - hierarchy
 - spacing
 - typography scale
 - CTA priority
 - component styling
-- image treatment
+- image treatmen
 - overall design system
 
 A developer or coding model should be able to look at the image(s) and understand how to build the website.
@@ -556,13 +556,13 @@ The hero must feel cinematic, clear, and intentional.
 
 - the hero must feel like a strong opening scene
 - keep the hero composition very clean
-- do not overcrowd the first viewport
+- do not overcrowd the first viewpor
 - the main headline must feel short and powerful
 - the hero headline should ideally stay within 1–3 lines
 - do not allow long wrapped hero headlines
 - if the headline starts becoming too long, reduce words instead of forcing more lines
 - keep supporting text concise
-- prioritize negative space and contrast
+- prioritize negative space and contras
 - avoid stuffing the hero with pills, fake stats, badges, tiny logos, and nonsense detail
 - avoid extra micro-labels, control tags, system markers, or decorative utility text that does not meaningfully help the hero
 - keep the first screen readable on a small laptop without feeling overfilled
@@ -573,12 +573,12 @@ The hero should feel calm, premium, and immediately readable.
 
 Do:
 
-- use a strong single focal point
+- use a strong single focal poin
 - keep the hierarchy obvious
 - let the hero breathe
 - keep the visual system tight and controlled
 - make the first screen feel polished and deliberate
-- keep the amount of visible content restrained enough that the hero still feels elegant on a smaller desktop viewport
+- keep the amount of visible content restrained enough that the hero still feels elegant on a smaller desktop viewpor
 
 Do not:
 
@@ -600,7 +600,7 @@ Avoid:
 
 - 4+ line hero headlines
 - paragraph-like hero copy
-- weak headline-to-subheadline contrast
+- weak headline-to-subheadline contras
 
 ---
 
@@ -611,7 +611,7 @@ The first visible website screen must feel usable and clean on a small laptop.
 This means:
 
 - do not overload the above-the-fold area
-- do not force too many content blocks into the hero viewport
+- do not force too many content blocks into the hero viewpor
 - do not rely on giant nested panels that consume space without improving clarity
 - make the first section feel intentionally composed, not overstuffed
 
@@ -625,10 +625,10 @@ The hero and immediate first-view area should:
 A smaller laptop should still see:
 
 - a clear headline
-- readable supporting text
+- readable supporting tex
 - clean spacing
 - a visible CTA
-- a believable, balanced visual focal point
+- a believable, balanced visual focal poin
 
 ---
 
@@ -674,7 +674,7 @@ Avoid:
 - filler chips
 - tiny badges everywhere
 - fake dashboard jargon
-- overdesigned labels that distract from the main layout
+- overdesigned labels that distract from the main layou
 
 Examples of things to avoid unless they are truly necessary:
 
@@ -690,7 +690,7 @@ Prefer:
 - fewer labels
 - real hierarchy
 - clearer spacing
-- simpler supporting text
+- simpler supporting tex
 - stronger typography instead of decorative clutter
 
 ---
@@ -714,7 +714,7 @@ General preference:
 
 This section-first generation rule exists to prevent:
 
-- tiny unreadable text
+- tiny unreadable tex
 - tiny buttons
 - unclear spacing
 - weak extraction quality
@@ -743,7 +743,7 @@ Rules:
 
 - image usage must feel deliberate
 - image count should match the complexity of the site
-- do not rely on one single hero image if many sections need visual support
+- do not rely on one single hero image if many sections need visual suppor
 - keep image usage balanced and clean
 - all image moments must still feel like one coherent design world
 
@@ -797,7 +797,7 @@ Especially inspect and extract:
 - feature names
 - testimonial names and roles if clearly shown
 - navbar labels
-- footer labels if relevant
+- footer labels if relevan
 
 If the text is too small to extract reliably:
 
@@ -818,11 +818,11 @@ Extract and observe:
 
 - size relationships
 - weight relationships
-- line count
+- line coun
 - line height feel
 - tracking feel
 - serif vs sans behavior
-- display vs body contrast
+- display vs body contras
 - section heading rhythm
 - CTA text scale
 - whether the design uses calm or aggressive type
@@ -875,7 +875,7 @@ Inspect:
 - shadows
 - borders
 - pill logic
-- input styling if present
+- input styling if presen
 
 If button or card detail is too small, generate a closer image.
 
@@ -942,7 +942,7 @@ During implementation:
 
 - do not simplify into default templates
 - do not replace distinctive sections with generic rows
-- do not compress generous spacing into dense layout
+- do not compress generous spacing into dense layou
 - do not replace strong typography with plain hierarchy
 - do not remove the page’s visual identity for convenience
 - do not merge section logic into repetitive patterns that were not present in the source images
@@ -993,7 +993,7 @@ Strictly avoid these patterns unless explicitly requested.
 - floating blobs everywhere
 - glassmorphism stacked without reason
 - random futuristic details with no structure
-- over-rendered noise that hides the layout
+- over-rendered noise that hides the layou
 
 ### Typography slop
 
@@ -1018,7 +1018,7 @@ Avoid fake brand slop:
 
 - Acme
 - Nexus
-- Flowbit
+- Flowbi
 - Quantumly
 - NovaCore
 
@@ -1034,7 +1034,7 @@ Avoid fake complexity slop:
 - over-packed sections
 - card overload
 - tiny spacing between major sections
-- visually exhausting walls of content
+- visually exhausting walls of conten
 
 ---
 
@@ -1044,10 +1044,10 @@ Typography is a primary design material.
 
 Always ensure:
 
-- clear size contrast
+- clear size contras
 - obvious reading order
 - strong display moments
-- readable body text
+- readable body tex
 - concise copy
 - section headings that reinforce structure
 
@@ -1069,7 +1069,7 @@ Vary section rhythm across the page by changing:
 
 - density
 - image-to-text ratio
-- alignment
+- alignmen
 - scale
 - whitespace
 - card grouping
@@ -1078,7 +1078,7 @@ Vary section rhythm across the page by changing:
 
 But:
 
-- keep the page coherent
+- keep the page coheren
 - keep spacing controlled
 - avoid random jumps
 - keep each section clean enough to analyze well
@@ -1107,7 +1107,7 @@ A premium website should feel:
 - open
 - composed
 - balanced
-- confident
+- confiden
 - breathable
 
 Not:
@@ -1168,7 +1168,7 @@ For multi-image websites, enforce:
 - same spacing discipline
 - same CTA styling
 - same icon mood
-- same image treatment
+- same image treatmen
 - same tonal language
 - same component family
 
@@ -1212,17 +1212,17 @@ When the user asks for a website design in an image-to-code workflow:
 
 1. infer site type
 2. infer number of sections
-3. if image generation is available and visual quality is central, generate the design image(s) first
+3. if image generation is available and visual quality is central, generate the design image(s) firs
 4. inside Codex, prefer one large image per section
 5. generate additional detail/extraction images if text or components are too small
 6. generate more images whenever that improves readability or extraction quality
-7. do not be lazy with image count
+7. do not be lazy with image coun
 8. do not crop old images for section extraction
 9. regenerate sections as fresh standalone images when needed
 10. choose a strong visual combination
 11. choose 4 signature components
 12. choose 2 motion-implied cues
-13. enforce hero cleanliness and short hero line count
+13. enforce hero cleanliness and short hero line coun
 14. reduce unnecessary pills, labels, and micro-UI clutter
 15. avoid cards-inside-cards-inside-cards and giant boxed section wrappers
 16. keep the first screen readable and balanced on a small laptop
