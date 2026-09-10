@@ -46,15 +46,15 @@
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "@clerk/chrome-extension": "^3.1.52",
-    "dompurify": "^3.3.3"
+    "@clerk/chrome-extension": "^3.1.81",
+    "dompurify": "^3.4.15"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.40",
+    "@types/chrome": "^0.2.9",
     "jsdom": "^27.4.0",
-    "terser": "^5.46.2",
+    "terser": "^5.51.2",
     "typescript": "5.9.3",
-    "vite": "^7.3.2",
+    "vite": "^8.2.2",
     "vite-plugin-static-copy": "^3.4.0",
     "vitest": "^4.1.11"
   },
