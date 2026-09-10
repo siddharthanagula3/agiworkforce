@@ -50,7 +50,9 @@ import { createObservedProviderUsage } from '@/lib/services/managed-usage-accoun
 import {
   firstTokenDeadlineMs,
   hasFirstTokenBudgetLeft,
-  startProviderStreamWithinFirstTokenDeadline,
+  markFirstProviderChunk,
+  startProviderStreamWithinTurnDeadlines,
+  withProviderDeadlines,
 } from './lib/provider-deadlines';
 import { recordFailedTurn } from './lib/failed-turn-record';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
@@ -58,7 +60,13 @@ import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan, FIRST_PROVIDER_STEP } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
+import {
+  CHAT_TOOL_LOOP_BUDGET_MS,
+  PROVIDER_STREAM_DEADLINE_MS,
+  nestedDeadlineMs,
+} from '@/lib/deadline-policy';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import {
   claimDurableStreamWithinBudget,
   claimLiveDurableStream,
@@ -803,7 +811,15 @@ async function dispatchChatCompletions(
           const durableHeaders = baseAgentHeaders();
           durableHeaders['X-AGI-Tool-Loop'] = 'durable';
           durableHeaders['X-AGI-Workflow-Run-Id'] = workflow.workflowRunId;
-          return new NextResponse(withSseHeartbeat(live), {
+          const bounded = boundDurableTurnStream({
+            readable: live,
+            db: runDb,
+            userId,
+            runId: run.id,
+            workflowRunId: workflow.workflowRunId,
+            requestId: processed.requestId,
+          });
+          return new NextResponse(withSseHeartbeat(bounded), {
             headers: durableHeaders,
           });
         } catch (error) {
@@ -983,12 +999,19 @@ async function dispatchChatCompletions(
           const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
           const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
           chunks = await timePhase(CHAT_TURN_PHASE.providerStream, () =>
-            startProviderStreamWithinFirstTokenDeadline(
+            startProviderStreamWithinTurnDeadlines(
               adapter,
               chatRequest,
               request.signal,
               attemptAdapterProvider.mapError,
-              firstTokenDeadlineMs(Date.now() - streamStartedAt),
+              {
+                firstTokenMs: firstTokenDeadlineMs(Date.now() - streamStartedAt),
+                streamMs: nestedDeadlineMs(
+                  PROVIDER_STREAM_DEADLINE_MS,
+                  CHAT_TOOL_LOOP_BUDGET_MS,
+                  Date.now() - streamStartedAt,
+                ),
+              },
             ),
           );
         } catch (error) {
@@ -1082,17 +1105,31 @@ async function dispatchChatCompletions(
     });
     let attemptProcessed: ProcessedRequest = processed;
     let attemptAdapterProvider = nonStreamAdapterProvider;
+    const nonStreamStartedAt = Date.now();
     for (;;) {
       let llmResponse;
       try {
         const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
         const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
-        const chunks = adapter.stream(chatRequest, request.signal);
-        llmResponse = await drainToLlmResponse(
-          chunks,
-          attemptProcessed.llmRequest.model,
-          attemptAdapterProvider.mapError,
-          attemptAdapterProvider.wireMode,
+        const elapsedMs = Date.now() - nonStreamStartedAt;
+        llmResponse = await withProviderDeadlines(
+          (derived, markFirstToken) =>
+            drainToLlmResponse(
+              markFirstProviderChunk(adapter.stream(chatRequest, derived), markFirstToken),
+              attemptProcessed.llmRequest.model,
+              attemptAdapterProvider.mapError,
+              attemptAdapterProvider.wireMode,
+            ),
+          {
+            firstTokenMs: firstTokenDeadlineMs(elapsedMs),
+            streamMs: nestedDeadlineMs(
+              PROVIDER_STREAM_DEADLINE_MS,
+              CHAT_TOOL_LOOP_BUDGET_MS,
+              elapsedMs,
+            ),
+            model: chatRequest.model,
+          },
+          request.signal,
         );
       } catch (error) {
         const nextAttempt = failover.next(error, { step: FIRST_PROVIDER_STEP });

@@ -51,6 +51,7 @@ const GOOGLE_AUTH_METHODS: readonly AuthMethod[] = [
 export interface GoogleAdapterConfig extends ProviderAdapterConfig {
   baseUrl?: string;
   skipDiscovery?: boolean;
+  headersTimeoutMs?: number;
 }
 
 function trimTrailingSlashes(url: string): string {
@@ -115,13 +116,22 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       const url = `${baseUrl}/${GEMINI_API_VERSION_SEGMENT}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
       const hasServerSideTools = (req.rawVendorTools?.length ?? 0) > 0;
-      const headersTimeoutMs = hasServerSideTools
-        ? GROUNDED_HEADERS_TIMEOUT_MS
-        : HEADERS_TIMEOUT_MS;
+      const headersTimeoutMs =
+        config.headersTimeoutMs ??
+        (hasServerSideTools ? GROUNDED_HEADERS_TIMEOUT_MS : HEADERS_TIMEOUT_MS);
 
       let res: Response;
+      // Bounds the wait for headers only; AbortSignal.timeout would abort the body too.
+      const headersDeadline = new AbortController();
+      const headersTimer = setTimeout(
+        () =>
+          headersDeadline.abort(
+            new DOMException('Timed out waiting for Google response headers', 'TimeoutError'),
+          ),
+        headersTimeoutMs,
+      );
       try {
-        const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(headersTimeoutMs)]);
+        const combinedSignal = AbortSignal.any([signal, headersDeadline.signal]);
         res = await fetchFn(url, {
           method: 'POST',
           headers: {
@@ -132,6 +142,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
           signal: combinedSignal,
         });
       } catch (err) {
+        clearTimeout(headersTimer);
         const classified = classifyError(err);
         yield {
           type: 'error',
@@ -145,6 +156,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         yield { type: 'stop', reason: 'error' };
         return;
       }
+      clearTimeout(headersTimer);
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');

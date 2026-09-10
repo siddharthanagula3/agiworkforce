@@ -844,6 +844,90 @@ describe('useChatStream', () => {
       });
     });
 
+    /**
+     * The route detaches on its own budget rather than riding to the platform
+     * kill at 800 s. A clean SSE close with no terminal frame reads to the
+     * client as a finished turn, so the detach is explicit and the client picks
+     * the run up from the journal.
+     */
+    it('re-attaches through the journal when the server detaches a still-working run', async () => {
+      const base = {
+        schemaVersion: 4,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-detach',
+      };
+      const event = (sequence: number, agentEvent: Record<string, unknown>) => ({
+        ...base,
+        sequence,
+        emittedAtMs: 2_000 + sequence,
+        event: agentEvent,
+      });
+      const encoder = new TextEncoder();
+
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/llm/v1/chat/completions') {
+          const frames =
+            `data: ${JSON.stringify({
+              choices: [
+                {
+                  delta: {
+                    content: 'Still ',
+                    x_agent_event: event(0, { type: 'lifecycle', phase: 'started' }),
+                  },
+                },
+              ],
+            })}\n\n` +
+            `data: ${JSON.stringify({
+              choices: [{ delta: { x_run_detached: { reason: 'function_budget' } }, index: 0 }],
+            })}\n\n` +
+            'data: [DONE]\n\n';
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(frames));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: managedRunHeaders() },
+          );
+        }
+        if (url.startsWith(MANAGED_RUN_PATH)) {
+          return new Response(
+            JSON.stringify(
+              managedRunSnapshot(
+                'ready_for_review',
+                [
+                  event(1, { type: 'text-delta', delta: 'Still ' }),
+                  event(2, { type: 'text-delta', delta: 'working, then done' }),
+                  event(3, { type: 'stop', reason: 'end-turn' }),
+                ],
+                3,
+              ),
+            ),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('keep working', {
+          conversationId: TEMP_CONVERSATION.id,
+          workMode: 'agiwork',
+        });
+      });
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.content).toBe('Still working, then done');
+      expect(assistant?.error).not.toBe(true);
+      expect(assistant?.metadata?.cloudAgentRun?.state).toBe('ready_for_review');
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith(MANAGED_RUN_PATH)),
+      ).not.toHaveLength(0);
+    });
+
     it('sends Stop to the active server run instead of cancelling only the browser stream', async () => {
       const encoder = new TextEncoder();
       let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;

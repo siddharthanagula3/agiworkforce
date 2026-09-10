@@ -61,6 +61,12 @@ import {
   trimToolResultHistory,
   applyToolResultSecretPolicy,
 } from './tool-loop';
+import { armProviderDeadlines } from './provider-deadlines';
+import {
+  PROVIDER_FIRST_TOKEN_DEADLINE_MS,
+  PROVIDER_STREAM_DEADLINE_MS,
+  nestedDeadlineMs,
+} from '@/lib/deadline-policy';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import {
@@ -1157,36 +1163,54 @@ export async function* runResearchLoop(
     // attempt can never leak partial text. Research turns carry the url_fetch
     // tool definition, so `createFailoverPlan` keeps rotation within the same
     // provider by construction.
+    const streamMs = nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, budgetMs, now() - startedAt);
+    const armed = armProviderDeadlines(
+      {
+        firstTokenMs: nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamMs, 0),
+        streamMs,
+        model: servingProcessed.llmRequest.model,
+      },
+      options.signal,
+    );
+
     let stream: ReadableStream;
-    for (;;) {
-      const attempt = servingProcessed;
-      try {
-        stream = await buildToolLoopStream(
-          attempt.provider.toLowerCase(),
-          attempt,
-          {
-            ...stepRequest,
-            model: attempt.llmRequest.model,
-            effort: attempt.llmRequest.effort,
-            thinking: attempt.llmRequest.thinking,
-          },
-          responseModel,
-          stepSink,
-          options.signal,
-        );
-        break;
-      } catch (error) {
-        const nextAttempt = options.failover?.next(error);
-        if (!nextAttempt) throw error;
-        servingProcessed = nextAttempt.processed;
+    try {
+      for (;;) {
+        const attempt = servingProcessed;
+        try {
+          stream = await buildToolLoopStream(
+            attempt.provider.toLowerCase(),
+            attempt,
+            {
+              ...stepRequest,
+              model: attempt.llmRequest.model,
+              effort: attempt.llmRequest.effort,
+              thinking: attempt.llmRequest.thinking,
+            },
+            responseModel,
+            stepSink,
+            armed.signal,
+          );
+          break;
+        } catch (error) {
+          const nextAttempt = options.failover?.next(armed.expiry() ?? error);
+          if (!nextAttempt) throw armed.expiry() ?? error;
+          servingProcessed = nextAttempt.processed;
+        }
       }
+    } catch (error) {
+      armed.release();
+      throw error;
     }
+    armed.markFirstToken();
     const gen = collectTurn(stream, sources, forwardContent, (delta) =>
       eventStream.emit({ type: 'text-delta', delta }),
     );
     try {
       while (true) {
-        const next = await gen.next();
+        const next = await gen.next().catch((error: unknown) => {
+          throw armed.expiry() ?? error;
+        });
         if (next.done) {
           // Unit-test streams and any future bridge that cannot expose
           // canonical StreamChunk usage still get a wire-level fallback. Do
@@ -1219,6 +1243,7 @@ export async function* runResearchLoop(
         yield encoder.encode(next.value);
       }
     } finally {
+      armed.release();
       // Best-effort cleanup when the run is cancelled mid-turn (client abort
       // finalizes this generator while suspended in the yield above).
       void gen.return(undefined as never).catch(() => {});

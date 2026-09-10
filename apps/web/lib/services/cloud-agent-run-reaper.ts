@@ -1,10 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
-import { logger } from '@/lib/logger';
-import { appendCloudAgentEvents } from './cloud-agent-run-service';
+import {
+  CLOUD_AGENT_RUN_ABANDONED_CODE,
+  cancelCloudAgentWorkflowRun,
+  explainCloudAgentRunEnding,
+} from './cloud-agent-run-termination';
 import { MAX_OPERATION_LEASE_SECONDS } from './cloud-agent-execution-service';
 
 export const CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS =
@@ -15,15 +17,18 @@ const MAX_REAP_BATCHES = 25;
 const REAP_BUDGET_MS = 240_000;
 const CANCELLED_STATE = 'cancelled';
 
+const CANCEL_CONCURRENCY = 8;
+
 const ORPHANED_RUN_MESSAGE =
   'This turn did not finish: the run working on it ended before it could report back.';
 const STOPPED_RUN_MESSAGE =
   'You stopped this turn, and the run working on it ended before it could report back.';
-const ORPHANED_RUN_CODE = 'run_abandoned';
 
 export interface CloudAgentRunReapReport {
   reaped: number;
   stoppedByUser: number;
+  worldRunsCancelled: number;
+  worldRunsUncancelled: number;
   remaining: boolean;
 }
 
@@ -35,39 +40,40 @@ interface ReapedRunRow extends Record<string, unknown> {
   request_id: string;
   model: string;
   last_event_sequence: number | string;
+  workflow_run_id: string | null;
 }
 
-async function explainReapedRun(db: DatabaseAdapter, row: ReapedRunRow): Promise<void> {
+function explainReapedRun(db: DatabaseAdapter, row: ReapedRunRow): Promise<void> {
   const stopped = row.state === CANCELLED_STATE;
-  const turnId = row.request_id;
-  const emitter = createAgentEventStreamEmitter({
-    sessionId: row.conversation_id ?? turnId,
-    turnId,
-    responseModel: row.model,
-    initialSequence: Number(row.last_event_sequence) + 1,
+  return explainCloudAgentRunEnding(db, {
+    runId: row.id,
+    userId: row.user_id,
+    conversationId: row.conversation_id,
+    turnId: row.request_id,
+    model: row.model,
+    lastEventSequence: Number(row.last_event_sequence),
+    state: stopped ? 'cancelled' : 'failed',
+    message: stopped ? STOPPED_RUN_MESSAGE : ORPHANED_RUN_MESSAGE,
+    code: CLOUD_AGENT_RUN_ABANDONED_CODE,
+    summary: stopped ? 'Stopped before it finished.' : 'Ended without finishing.',
   });
-  const envelopes = [
-    emitter.emitWithEnvelope({
-      type: 'error',
-      message: stopped ? STOPPED_RUN_MESSAGE : ORPHANED_RUN_MESSAGE,
-      code: ORPHANED_RUN_CODE,
-      retryable: true,
-    }).envelope,
-    emitter.emitWithEnvelope({
-      type: 'task-state-changed',
-      taskId: turnId,
-      state: stopped ? 'cancelled' : 'failed',
-      summary: stopped ? 'Stopped before it finished.' : 'Ended without finishing.',
-    }).envelope,
-  ];
+}
 
-  try {
-    await appendCloudAgentEvents(db, { userId: row.user_id, runId: row.id, envelopes });
-  } catch (error) {
-    logger.warn(
-      { error, runId: row.id },
-      'A reaped run was ended but its reason was not journalled',
+// A reaped row whose world run still exists is redelivered and burns a whole
+// invocation limit each time; one refusal never stops the others.
+async function cancelReapedWorldRuns(
+  rows: readonly ReapedRunRow[],
+  report: CloudAgentRunReapReport,
+): Promise<void> {
+  const pending = rows.map((row) => row.workflow_run_id).filter((id): id is string => Boolean(id));
+  for (let index = 0; index < pending.length; index += CANCEL_CONCURRENCY) {
+    const outcomes = await Promise.all(
+      pending.slice(index, index + CANCEL_CONCURRENCY).map(cancelCloudAgentWorkflowRun),
     );
+    for (const cancelled of outcomes) {
+      if (cancelled) report.worldRunsCancelled += 1;
+      else report.worldRunsUncancelled += 1;
+    }
   }
 }
 
@@ -77,7 +83,13 @@ export async function reapOrphanedCloudAgentRuns(
 ): Promise<CloudAgentRunReapReport> {
   const now = options.now ?? Date.now;
   const startedAtMs = now();
-  const report: CloudAgentRunReapReport = { reaped: 0, stoppedByUser: 0, remaining: false };
+  const report: CloudAgentRunReapReport = {
+    reaped: 0,
+    stoppedByUser: 0,
+    worldRunsCancelled: 0,
+    worldRunsUncancelled: 0,
+    remaining: false,
+  };
 
   for (let batch = 0; batch < MAX_REAP_BATCHES; batch += 1) {
     if (now() - startedAtMs > REAP_BUDGET_MS) {
@@ -98,13 +110,16 @@ export async function reapOrphanedCloudAgentRuns(
            order by updated_at
            limit $2
         )
-      returning id, user_id, state, conversation_id, request_id, model, last_event_sequence`,
+      returning id, user_id, state, conversation_id, request_id, model, last_event_sequence,
+                workflow_run_id`,
       [CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS, REAP_BATCH_SIZE],
     );
 
     if (reaped.length === 0) return report;
     report.reaped += reaped.length;
     report.stoppedByUser += reaped.filter((row) => row.state === CANCELLED_STATE).length;
+
+    await cancelReapedWorldRuns(reaped, report);
 
     for (const row of reaped) {
       await explainReapedRun(db, row);

@@ -55,71 +55,133 @@ export interface ProviderDeadlineBounds {
   model?: string | undefined;
 }
 
-export function withProviderDeadlines<T>(
-  run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
+export interface ArmedProviderDeadlines {
+  readonly signal: AbortSignal;
+  markFirstToken(): void;
+  expiry(): Error | undefined;
+  abort(reason?: unknown): void;
+  release(): void;
+}
+
+// Timers and parent-abort forwarding outlive the start promise, so a stream drained
+// after it stays bound by both deadlines and by the client's disconnect.
+export function armProviderDeadlines(
   bounds: ProviderDeadlineBounds,
   parentSignal?: AbortSignal,
-): Promise<T> {
+  onExpire?: (error: Error) => void,
+): ArmedProviderDeadlines {
   const controller = new AbortController();
+  const expired: { error?: Error } = {};
   const forwardParentAbort = (): void => controller.abort(parentSignal?.reason);
   let streamTimer: ReturnType<typeof setTimeout> | undefined;
   let firstTokenTimer: ReturnType<typeof setTimeout> | undefined;
-  const clearFirstTokenTimer = (): void => {
+  const markFirstToken = (): void => {
     if (firstTokenTimer !== undefined) clearTimeout(firstTokenTimer);
     firstTokenTimer = undefined;
   };
-  const cleanup = (): void => {
+  const release = (): void => {
     if (streamTimer !== undefined) clearTimeout(streamTimer);
-    clearFirstTokenTimer();
+    streamTimer = undefined;
+    markFirstToken();
     parentSignal?.removeEventListener('abort', forwardParentAbort);
   };
   if (parentSignal?.aborted) forwardParentAbort();
   else parentSignal?.addEventListener('abort', forwardParentAbort, { once: true });
 
+  const expire = (error: Error): void => {
+    expired.error = error;
+    controller.abort(error);
+    release();
+    onExpire?.(error);
+  };
+  if (bounds.streamMs !== undefined) {
+    const streamMs = bounds.streamMs;
+    streamTimer = setTimeout(() => expire(new ProviderStreamDeadlineError(streamMs)), streamMs);
+  }
+  if (
+    bounds.firstTokenMs !== undefined &&
+    (bounds.streamMs === undefined || bounds.firstTokenMs < bounds.streamMs)
+  ) {
+    const firstTokenMs = bounds.firstTokenMs;
+    firstTokenTimer = setTimeout(
+      () => expire(new ProviderFirstTokenDeadlineError(firstTokenMs, bounds.model)),
+      firstTokenMs,
+    );
+  }
+
+  return {
+    signal: controller.signal,
+    markFirstToken,
+    expiry: () => expired.error,
+    abort: (reason?: unknown) => controller.abort(reason),
+    release,
+  };
+}
+
+export function withProviderDeadlines<T>(
+  run: (signal: AbortSignal, markFirstToken: () => void) => Promise<T>,
+  bounds: ProviderDeadlineBounds,
+  parentSignal?: AbortSignal,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const expire = (error: Error): void => {
-      controller.abort(error);
-      cleanup();
-      reject(error);
-    };
-    if (bounds.streamMs !== undefined) {
-      const streamMs = bounds.streamMs;
-      streamTimer = setTimeout(() => expire(new ProviderStreamDeadlineError(streamMs)), streamMs);
-    }
-    if (
-      bounds.firstTokenMs !== undefined &&
-      (bounds.streamMs === undefined || bounds.firstTokenMs < bounds.streamMs)
-    ) {
-      const firstTokenMs = bounds.firstTokenMs;
-      firstTokenTimer = setTimeout(
-        () => expire(new ProviderFirstTokenDeadlineError(firstTokenMs, bounds.model)),
-        firstTokenMs,
-      );
-    }
-    run(controller.signal, clearFirstTokenTimer).then(
+    const armed = armProviderDeadlines(bounds, parentSignal, reject);
+    run(armed.signal, armed.markFirstToken).then(
       (value) => {
-        cleanup();
+        armed.release();
         resolve(value);
       },
       (error: unknown) => {
-        controller.abort(error);
-        cleanup();
-        reject(error);
+        armed.abort(error);
+        armed.release();
+        reject(armed.expiry() ?? error);
       },
     );
   });
 }
 
-export function startProviderStreamWithinFirstTokenDeadline(
+export async function startProviderStreamWithinTurnDeadlines(
   adapter: ProviderAdapter,
   chatRequest: ChatRequest,
   signal: AbortSignal,
   mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error,
-  deadlineMs: number,
+  bounds: ProviderDeadlineBounds,
 ): Promise<AsyncIterable<StreamChunk>> {
-  return withProviderDeadlines(
-    (derived) => startProviderStream(adapter, chatRequest, derived, mapError),
-    { firstTokenMs: deadlineMs, model: chatRequest.model },
+  const armed = armProviderDeadlines(
+    { ...bounds, model: bounds.model ?? chatRequest.model },
     signal,
   );
+  let chunks: AsyncIterable<StreamChunk>;
+  try {
+    chunks = await startProviderStream(adapter, chatRequest, armed.signal, mapError);
+  } catch (error) {
+    armed.abort(error);
+    armed.release();
+    throw armed.expiry() ?? error;
+  }
+  armed.markFirstToken();
+  return {
+    async *[Symbol.asyncIterator](): AsyncIterator<StreamChunk> {
+      try {
+        for await (const chunk of chunks) yield chunk;
+      } catch (error) {
+        throw armed.expiry() ?? error;
+      } finally {
+        armed.release();
+      }
+    },
+  };
+}
+
+export async function* markFirstProviderChunk(
+  chunks: AsyncIterable<StreamChunk>,
+  markFirstToken: () => void,
+): AsyncIterable<StreamChunk> {
+  let marked = false;
+  for await (const chunk of chunks) {
+    if (!marked) {
+      marked = true;
+      markFirstToken();
+    }
+    yield chunk;
+  }
 }

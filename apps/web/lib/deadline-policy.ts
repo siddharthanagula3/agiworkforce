@@ -15,7 +15,18 @@ export const PROVIDER_FIRST_TOKEN_DEADLINE_MS = 25_000;
 
 export const CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS = 800_000;
 
+export const CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS = 210_000;
+
 export const DURABLE_STREAM_WRITE_DEADLINE_MS = 10_000;
+
+// A tool call is the longest legitimate gap between durable frames; the margin
+// covers the durable write and journal flush that follow it.
+export const DURABLE_STREAM_SILENCE_MARGIN_MS = 30_000;
+
+export const DURABLE_STREAM_SILENCE_DEADLINE_MS =
+  TOOL_CALL_DEADLINE_MS + DURABLE_STREAM_SILENCE_MARGIN_MS;
+
+export const DURABLE_STREAM_DETACH_DEADLINE_MS = CHAT_TOOL_LOOP_BUDGET_MS;
 
 export const CLOUD_CODE_TURN_BUDGET_MS = 10 * 60_000;
 
@@ -91,6 +102,30 @@ export const DEADLINE_HIERARCHY = [
     parentMs: TURN_FIRST_TOKEN_BUDGET_MS,
     child: 'provider first token',
     childMs: PROVIDER_FIRST_TOKEN_DEADLINE_MS,
+  },
+  {
+    parent: 'cloud agent step invocation limit',
+    parentMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+    child: 'durable stream silence',
+    childMs: DURABLE_STREAM_SILENCE_DEADLINE_MS,
+  },
+  {
+    parent: 'durable stream silence',
+    parentMs: DURABLE_STREAM_SILENCE_DEADLINE_MS,
+    child: 'chat tool call',
+    childMs: TOOL_CALL_DEADLINE_MS,
+  },
+  {
+    parent: 'chat completions function limit',
+    parentMs: CHAT_COMPLETIONS_FUNCTION_LIMIT_MS,
+    child: 'durable stream detach',
+    childMs: DURABLE_STREAM_DETACH_DEADLINE_MS,
+  },
+  {
+    parent: 'cloud agent workflow invocation limit',
+    parentMs: CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS,
+    child: 'cloud agent step invocation limit',
+    childMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
   },
   {
     parent: 'cloud code turn budget',

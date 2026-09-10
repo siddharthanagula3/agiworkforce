@@ -4,6 +4,7 @@ const order: string[] = [];
 
 const mocks = vi.hoisted(() => ({
   runToolLoop: vi.fn(),
+  isCancellationRequested: vi.fn(async () => false),
   executeOperation: vi.fn(),
   settle: vi.fn(),
   appendEvent: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvent: mocks.appendEvent,
   appendCloudAgentEvents: vi.fn(),
   getCloudAgentRun: vi.fn(),
-  isCloudAgentRunCancellationRequested: vi.fn(async () => false),
+  isCloudAgentRunCancellationRequested: mocks.isCancellationRequested,
   saveCloudAgentApprovalCheckpoint: vi.fn(),
   saveCloudAgentInputCheckpoint: vi.fn(),
   completeCloudAgentApprovalCheckpoint: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
 
+import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
 import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 import {
@@ -188,5 +190,48 @@ describe('the liveness probe clears the handoff without waiting for the model', 
     expect(await claimLiveDurableStream(stalled, 50)).toBeNull();
     await expect(isDurableTransportCoolingDown()).resolves.toBe(true);
     recordDurableTransportClaim();
+  });
+});
+
+/**
+ * Stop wrote `cancellation_requested_at`, the step saw it, and aborted a
+ * controller that reached only `createFailoverPlan`. The provider call the
+ * cancel was meant to end kept streaming to the end of the step, so a stopped
+ * durable turn still cost a whole invocation.
+ */
+describe('a cancel reaches the provider call, not only the failover plan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.writable.mockReturnValue({ getWriter: () => mocks.writer });
+    mocks.writer.write.mockResolvedValue(undefined);
+    mocks.getNeonDb.mockReturnValue(db);
+    mocks.settle.mockResolvedValue(undefined);
+    mocks.isCancellationRequested.mockResolvedValue(false);
+    mocks.runToolLoop.mockReturnValue((async function* () {})());
+  });
+
+  it('hands the tool loop the same signal the cancellation poll aborts', async () => {
+    mocks.isCancellationRequested.mockResolvedValue(true);
+
+    await executeCloudAgentWorkflowInvocation(makeInput());
+
+    const options = mocks.runToolLoop.mock.calls[0]?.[1] as {
+      signal?: AbortSignal;
+      isCancellationRequested?: () => Promise<boolean>;
+      maxDurationMs?: number;
+    };
+    expect(options.signal, 'the durable step must pass a signal into the tool loop').toBeDefined();
+    expect(options.signal!.aborted).toBe(false);
+
+    await options.isCancellationRequested!();
+
+    expect(options.signal!.aborted).toBe(true);
+  });
+
+  it('bounds the step from the shared policy rather than a literal at the call site', async () => {
+    await executeCloudAgentWorkflowInvocation(makeInput());
+
+    const options = mocks.runToolLoop.mock.calls[0]?.[1] as { maxDurationMs?: number };
+    expect(options.maxDurationMs).toBe(CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS);
   });
 });
