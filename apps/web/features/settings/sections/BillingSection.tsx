@@ -60,7 +60,9 @@ interface CreditHistoryEntry {
   amount_cents: number;
   description: string | null;
   label?: string | null;
-  metadata: Record<string, unknown> | null;
+  credits?: number;
+  feature?: string | null;
+  model?: string | null;
   created_at: string;
 }
 
