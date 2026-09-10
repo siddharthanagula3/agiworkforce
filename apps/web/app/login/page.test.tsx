@@ -3,6 +3,18 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 const flowProps = vi.hoisted(() => vi.fn());
+const mocks = vi.hoisted(() => ({
+  identity: vi.fn(async () => ({ subject: null })),
+  redirect: vi.fn(),
+}));
+
+vi.mock('@/lib/server/identity', () => ({ getRequestIdentity: () => mocks.identity() }));
+vi.mock('next/navigation', () => ({
+  redirect: (url: string) => {
+    mocks.redirect(url);
+    throw new Error(`redirect:${url}`);
+  },
+}));
 
 vi.mock('@/features/auth/AuthFlow', () => ({
   AuthFlow: (props: Record<string, unknown>) => {
@@ -29,6 +41,27 @@ function lastRedirects(): Record<string, string> {
 describe('/login', () => {
   beforeEach(() => {
     flowProps.mockClear();
+    mocks.redirect.mockClear();
+    mocks.identity.mockResolvedValue({ subject: null });
+  });
+
+  it('sends a visitor whose session the server verifies straight to completion', async () => {
+    mocks.identity.mockResolvedValue({ subject: 'user_1' });
+
+    await expect(
+      LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }),
+    ).rejects.toThrow('redirect:/login/complete?redirectTo=%2Fchat');
+    expect(mocks.redirect).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat');
+    expect(flowProps).not.toHaveBeenCalled();
+  });
+
+  it('renders the form when the identity read fails', async () => {
+    mocks.identity.mockRejectedValue(new Error('no session context'));
+
+    render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(screen.getByTestId('auth-flow')).toBeInTheDocument();
+    expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
   it('mounts the log-in flow without a clickwrap, because terms belong to signup', async () => {
@@ -67,6 +100,17 @@ describe('/login', () => {
       ssoCallbackUrl:
         '/auth/sso-callback?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop&surface=desktop',
     });
+  });
+
+  it('does not bounce a stale-session retry back to completion', async () => {
+    mocks.identity.mockResolvedValue({ subject: 'user_1' });
+
+    render(
+      await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat', authRetry: '1' }) }),
+    );
+
+    expect(screen.getByTestId('auth-flow')).toBeInTheDocument();
+    expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
   it('carries the one stale-session retry through the completion round trip', async () => {

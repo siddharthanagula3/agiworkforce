@@ -7,11 +7,21 @@ import {
   buildSsoCallbackUrl,
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
+import { redirect } from 'next/navigation';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 const LOGIN_FALLBACK_REDIRECT = '/';
+
+async function hasVerifiedSession(): Promise<boolean> {
+  try {
+    return Boolean((await getRequestIdentity()).subject);
+  } catch {
+    return false;
+  }
+}
 
 export default async function LoginPage({
   searchParams,
@@ -30,6 +40,9 @@ export default async function LoginPage({
     LOGIN_FALLBACK_REDIRECT,
   );
   const context = readAuthRouteContext(params, redirectTo);
+  if (params.authRetry !== '1' && (await hasVerifiedSession())) {
+    redirect(buildLoginCompleteUrl(context));
+  }
 
   return (
     <AuthLayout embedded={context.desktopSurface}>
