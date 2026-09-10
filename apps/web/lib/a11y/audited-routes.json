@@ -3,6 +3,5 @@
   { "path": "/login", "name": "Sign in" },
   { "path": "/pricing", "name": "Pricing" },
   { "path": "/features/agents", "name": "Features - Agents" },
-  { "path": "/download", "name": "Download" },
-  { "path": "/dev/landing-preview", "name": "Landing preview" }
+  { "path": "/download", "name": "Download" }
 ]
