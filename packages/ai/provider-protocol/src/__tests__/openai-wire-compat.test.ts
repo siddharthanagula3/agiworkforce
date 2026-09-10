@@ -497,6 +497,37 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
     ]);
   });
 
+  it('forwards google citation spans beside the grounded sources on the streaming wire', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-spans',
+      wireMode: 'legacy-web',
+    });
+
+    const events = assembler.sseChunks({
+      type: 'server-tool-result',
+      toolUseId: 'gemini-grounding-1',
+      payload: {
+        type: 'gemini_grounding_result',
+        results: [
+          { type: 'web_search_result', url: 'https://example.com/a', title: 'A', position: 1 },
+        ],
+        citationSpans: [{ endIndex: 18, positions: [1] }],
+      },
+    });
+
+    expect(
+      (events[0] as { choices: Array<{ delta: { x_search_results: unknown } }> }).choices[0]?.delta
+        .x_search_results,
+    ).toEqual({
+      content: [
+        { type: 'web_search_result', url: 'https://example.com/a', title: 'A', position: 1 },
+      ],
+      citation_spans: [{ endIndex: 18, positions: [1] }],
+    });
+  });
+
   it('omits search_results when no grounding or web_search_tool_result payload was ingested', () => {
     const response = assembleOpenAIWireResponse(
       [

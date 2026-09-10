@@ -89,6 +89,89 @@ export function findCitationIndexForUrl(
   return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
 }
 
+export interface CitationSpan {
+  endIndex: number;
+  positions: readonly number[];
+}
+
+function fencedRegions(markdown: string): Array<[number, number]> {
+  const regions: Array<[number, number]> = [];
+  let offset = 0;
+  let openedAt: number | null = null;
+  for (const line of markdown.split('\n')) {
+    if (FENCE.test(line)) {
+      if (openedAt === null) openedAt = offset;
+      else {
+        regions.push([openedAt, offset + line.length]);
+        openedAt = null;
+      }
+    }
+    offset += line.length + 1;
+  }
+  if (openedAt !== null) regions.push([openedAt, markdown.length]);
+  return regions;
+}
+
+/**
+ * A grounded segment often stops just short of the full stop that closes its
+ * sentence, and a marker between the last word and that stop reads as a typo.
+ * Only a terminator that ends the sentence moves the marker, so the dot in
+ * `Node.js` never does.
+ */
+function afterSentencePunctuation(markdown: string, at: number): number {
+  if (!'.!?'.includes(markdown[at] ?? '')) return at;
+  const next = markdown[at + 1];
+  return next === undefined || /\s/.test(next) ? at + 1 : at;
+}
+
+/**
+ * Place `[n]` markers a provider reported as text spans rather than wrote into
+ * its own prose. Google's grounding supports are the only source of citation
+ * positions on a grounded Gemini turn: the model never sees the numbered list
+ * its sources end up in, so its own prose cannot carry numbers that match.
+ *
+ * A turn whose text already carries a marker is left alone, since the model did
+ * cite and a second pass would double every number.
+ */
+export function insertCitationMarkers(
+  markdown: string,
+  spans: readonly CitationSpan[],
+  citationCount: number,
+): string {
+  if (!markdown || citationCount <= 0 || spans.length === 0) return markdown;
+  if (MARKER_RUN.test(markdown)) {
+    MARKER_RUN.lastIndex = 0;
+    return markdown;
+  }
+  MARKER_RUN.lastIndex = 0;
+
+  const fences = fencedRegions(markdown);
+  const placed = new Map<number, number[]>();
+  for (const span of spans) {
+    const declared = Math.trunc(span.endIndex);
+    if (!Number.isFinite(declared) || declared <= 0 || declared > markdown.length) continue;
+    const at = afterSentencePunctuation(markdown, declared);
+    if (fences.some(([start, end]) => at > start && at < end)) continue;
+    const numbers = span.positions.filter(
+      (n) => Number.isInteger(n) && n >= 1 && n <= citationCount,
+    );
+    if (numbers.length === 0) continue;
+    const existing = placed.get(at) ?? [];
+    placed.set(
+      at,
+      [...new Set([...existing, ...numbers])].sort((a, b) => a - b),
+    );
+  }
+  if (placed.size === 0) return markdown;
+
+  let out = markdown;
+  for (const at of [...placed.keys()].sort((a, b) => b - a)) {
+    const numbers = placed.get(at) as number[];
+    out = `${out.slice(0, at)}${numbers.map((n) => `[${n}]`).join('')}${out.slice(at)}`;
+  }
+  return out;
+}
+
 const CITATION_MARKER_TEXT_PATTERN = /^(?:\[\d{1,3}\])+$/;
 const URL_SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//i;
 const WWW_PREFIX = /^www\./;

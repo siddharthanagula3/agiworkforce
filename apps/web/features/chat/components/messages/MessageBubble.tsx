@@ -155,6 +155,7 @@ import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
 import {
+  renumberCitationMarkersFromTrailingList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
@@ -1328,10 +1329,13 @@ const MessageBubbleComponent = function MessageBubble({
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
     const stripped = artifacts.length === 0 ? base : removeArtifactBlocks(base, artifacts);
+    const renumbered = isUser
+      ? stripped
+      : renumberCitationMarkersFromTrailingList(stripped, citationsByMarker);
     const withoutDuplicateSources =
       message.metadata?.research || searchSources.length > 0
-        ? stripTrailingSourceList(stripped)
-        : stripped;
+        ? stripTrailingSourceList(renumbered)
+        : renumbered;
     const withoutCitationTail = isUser
       ? withoutDuplicateSources
       : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
@@ -1345,6 +1349,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.research,
     isUser,
     searchSources.length,
+    citationsByMarker,
   ]);
 
   const interactiveCards = message.metadata?.interactiveCards;

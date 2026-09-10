@@ -5,6 +5,7 @@ import {
   citationGroupHref,
   citationHref,
   findCitationIndexForUrl,
+  insertCitationMarkers,
   isCitationOnlyLinkText,
   linkifyCitationMarkers,
 } from './citationMarkers';
@@ -163,5 +164,46 @@ describe('isCitationOnlyLinkText', () => {
 
   it('keeps a label that only contains the domain alongside other words', () => {
     expect(isCitationOnlyLinkText('frame.work store', BARE_DOMAIN_HREF)).toBe(false);
+  });
+});
+
+describe('insertCitationMarkers', () => {
+  const ANSWER = 'Rates held steady. Growth slowed.';
+
+  it('places a marker at the end of each grounded span, right to left', () => {
+    expect(
+      insertCitationMarkers(
+        ANSWER,
+        [
+          { endIndex: 18, positions: [1] },
+          { endIndex: 32, positions: [1, 2] },
+        ],
+        2,
+      ),
+    ).toBe('Rates held steady.[1] Growth slowed.[1][2]');
+  });
+
+  it('steps past the full stop that closes a segment, but not a dot inside a word', () => {
+    expect(
+      insertCitationMarkers('Node.js shipped v26.', [{ endIndex: 4, positions: [1] }], 1),
+    ).toBe('Node[1].js shipped v26.');
+  });
+
+  it('leaves prose the model already numbered alone', () => {
+    const cited = 'Rates held steady.[2]';
+    expect(insertCitationMarkers(cited, [{ endIndex: 18, positions: [1] }], 2)).toBe(cited);
+  });
+
+  it('drops a position past the delivered source count', () => {
+    expect(insertCitationMarkers(ANSWER, [{ endIndex: 18, positions: [7] }], 2)).toBe(ANSWER);
+  });
+
+  it('never writes a marker inside a fenced code block', () => {
+    const withFence = 'Intro.\n```\nrows[1]\n```\n';
+    expect(insertCitationMarkers(withFence, [{ endIndex: 15, positions: [1] }], 2)).toBe(withFence);
+  });
+
+  it('ignores an offset past the end of the answer', () => {
+    expect(insertCitationMarkers(ANSWER, [{ endIndex: 900, positions: [1] }], 2)).toBe(ANSWER);
   });
 });

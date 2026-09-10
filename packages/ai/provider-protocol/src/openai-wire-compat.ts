@@ -303,6 +303,24 @@ function capSearchResultPayload(payload: unknown): unknown {
   return payload;
 }
 
+/**
+ * Google reports its grounded sources and the answer spans they support in one
+ * payload. The spans travel beside the sources under the same key so a client
+ * that places `[n]` markers reads both from one last-write-wins event, and a
+ * client that ignores the extra field renders exactly what it did before.
+ */
+function groundingSearchResultsDelta(payload: unknown): Record<string, unknown> {
+  const capped = capSearchResultPayload(payload) as {
+    results?: unknown;
+    citationSpans?: unknown;
+  };
+  const spans = Array.isArray(capped.citationSpans) ? capped.citationSpans : [];
+  return {
+    content: capped.results,
+    ...(spans.length > 0 ? { citation_spans: spans } : {}),
+  };
+}
+
 export interface OpenAIWireUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -505,8 +523,7 @@ export class OpenAIWireAssembler {
         if (payloadType === 'web_search_tool_result') {
           this.searchResults.push(capSearchResultPayload(chunk.payload));
         } else if (payloadType === 'gemini_grounding_result') {
-          const capped = capSearchResultPayload(chunk.payload) as { results?: unknown };
-          this.searchResults.push({ content: capped.results });
+          this.searchResults.push(groundingSearchResultsDelta(chunk.payload));
         }
         return;
       }
@@ -652,8 +669,9 @@ export class OpenAIWireAssembler {
         } else if (payload?.type === 'web_search_tool_result') {
           out.push(this.chunkEnvelope({ x_search_results: capSearchResultPayload(payload) }, null));
         } else if (payload?.type === 'gemini_grounding_result') {
-          const results = (capSearchResultPayload(payload) as { results?: unknown }).results;
-          out.push(this.chunkEnvelope({ x_search_results: { content: results } }, null));
+          out.push(
+            this.chunkEnvelope({ x_search_results: groundingSearchResultsDelta(payload) }, null),
+          );
         } else if (payload?.type === 'web_fetch_tool_result') {
           const result = (
             payload as { content?: { type?: unknown; url?: unknown; error_code?: unknown } }

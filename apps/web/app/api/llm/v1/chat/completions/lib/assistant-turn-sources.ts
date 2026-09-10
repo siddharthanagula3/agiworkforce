@@ -75,6 +75,19 @@ function readSearchResultContent(event: unknown): Record<string, unknown>[] {
 export class AssistantTurnSourceCollector {
   private readonly byUrl = new Map<string, PersistedTurnSource>();
 
+  ingestWireBytes(value: Uint8Array): void {
+    if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+    for (const rawLine of new TextDecoder().decode(value).split('\n')) {
+      const line = rawLine.trim();
+      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+      try {
+        this.ingestWireEvent(JSON.parse(line.slice(6)));
+      } catch {
+        /* a non-JSON SSE line carries no sources */
+      }
+    }
+  }
+
   ingestWireEvent(event: unknown): void {
     if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
     for (const result of readSearchResultContent(event)) {

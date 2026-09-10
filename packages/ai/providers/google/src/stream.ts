@@ -18,6 +18,38 @@ interface GroundedCitation {
   endIndex?: number;
 }
 
+export interface GeminiGroundingCitationSpan {
+  endIndex: number;
+  positions: number[];
+}
+
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder();
+
+function charOffsetFromByteOffset(text: string, byteOffset: number): number {
+  const bytes = utf8Encoder.encode(text);
+  if (byteOffset >= bytes.length) return text.length;
+  if (byteOffset <= 0) return 0;
+  return utf8Decoder.decode(bytes.subarray(0, byteOffset)).length;
+}
+
+// Byte offsets are the hint and the literal segment text is the proof; a segment found nowhere in the answer is dropped.
+function segmentEndOffset(answerText: string, segment: GeminiGroundingSupport['segment']): number {
+  const literal = typeof segment?.text === 'string' ? segment.text : '';
+  const declaredEnd = segment?.endIndex;
+  if (!literal) {
+    if (typeof declaredEnd !== 'number') return -1;
+    const end = charOffsetFromByteOffset(answerText, declaredEnd);
+    return end > 0 && end <= answerText.length ? end : -1;
+  }
+  const approximateStart = charOffsetFromByteOffset(answerText, segment?.startIndex ?? 0);
+  if (answerText.startsWith(literal, approximateStart)) {
+    return approximateStart + literal.length;
+  }
+  const found = answerText.indexOf(literal);
+  return found === -1 ? -1 : found + literal.length;
+}
+
 function hostnameCitationTitle(url: string): string {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');
@@ -204,8 +236,16 @@ export async function* translateGeminiStream(
   let blockReason: string | undefined;
   let turnHadToolCall = false;
   let lastUsage: GeminiStreamChunk['usageMetadata'] | undefined;
-  let groundingEmitted = false;
   const emittedCitationUrls = new Set<string>();
+  const groundedPositionByUrl = new Map<string, number>();
+  const groundedResults: Array<{
+    type: 'web_search_result';
+    url: string;
+    title: string;
+    position: number;
+  }> = [];
+  const citationSpans = new Map<string, GeminiGroundingCitationSpan>();
+  let answerText = '';
 
   for await (const chunk of chunks) {
     if (chunk.usageMetadata) {
@@ -236,6 +276,7 @@ export async function* translateGeminiStream(
         continue;
       }
       if (part.text) {
+        answerText += part.text;
         yield { type: 'text-delta', delta: part.text };
         continue;
       }
@@ -252,22 +293,57 @@ export async function* translateGeminiStream(
     }
 
     const groundingChunks = candidate.groundingMetadata?.groundingChunks;
-    if (!groundingEmitted && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
-      const results = groundingChunks
-        .map((gc) => gc?.web)
-        .filter((web): web is { uri: string; title?: string } => !!web?.uri)
-        .map((web, idx) => ({
-          type: 'web_search_result' as const,
+    if (Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+      const positionOfChunk: Array<number | undefined> = [];
+      let grew = false;
+      groundingChunks.forEach((groundingChunk, index) => {
+        const web = groundingChunk?.web;
+        if (!web?.uri) return;
+        const known = groundedPositionByUrl.get(web.uri);
+        if (known !== undefined) {
+          positionOfChunk[index] = known;
+          const existing = groundedResults[known - 1];
+          if (existing && !existing.title && web.title) existing.title = web.title;
+          return;
+        }
+        const position = groundedResults.length + 1;
+        groundedPositionByUrl.set(web.uri, position);
+        groundedResults.push({
+          type: 'web_search_result',
           url: web.uri,
           title: web.title || '',
-          position: idx + 1,
-        }));
-      if (results.length > 0) {
-        groundingEmitted = true;
+          position,
+        });
+        positionOfChunk[index] = position;
+        grew = true;
+      });
+
+      for (const support of candidate.groundingMetadata?.groundingSupports ?? []) {
+        const positions = [
+          ...new Set(
+            (support.groundingChunkIndices ?? [])
+              .map((index) => positionOfChunk[index])
+              .filter((position): position is number => position !== undefined),
+          ),
+        ].sort((a, b) => a - b);
+        if (positions.length === 0) continue;
+        const endIndex = segmentEndOffset(answerText, support.segment);
+        if (endIndex < 0) continue;
+        const key = `${endIndex}:${positions.join(',')}`;
+        if (citationSpans.has(key)) continue;
+        citationSpans.set(key, { endIndex, positions });
+        grew = true;
+      }
+
+      if (grew && groundedResults.length > 0) {
         yield {
           type: 'server-tool-result',
           toolUseId: 'gemini-grounding-1',
-          payload: { type: 'gemini_grounding_result', results },
+          payload: {
+            type: 'gemini_grounding_result',
+            results: groundedResults.map((result) => ({ ...result })),
+            ...(citationSpans.size > 0 ? { citationSpans: [...citationSpans.values()] } : {}),
+          },
         };
       }
     }

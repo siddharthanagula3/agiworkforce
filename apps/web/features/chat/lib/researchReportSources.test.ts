@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { stripTrailingCitationOnlyBlock, stripTrailingSourceList } from './researchReportSources';
+import {
+  renumberCitationMarkersFromTrailingList,
+  stripTrailingCitationOnlyBlock,
+  stripTrailingSourceList,
+} from './researchReportSources';
 
 describe('stripTrailingSourceList', () => {
   it('drops a bracketed source list rendered under a bold Sources line', () => {
@@ -119,5 +123,76 @@ describe('stripTrailingCitationOnlyBlock', () => {
   it('trims trailing blank lines along with the stripped block', () => {
     const answer = 'Body [1].\n\n[1] (example.com)\n\n\n';
     expect(stripTrailingCitationOnlyBlock(answer)).toBe('Body [1].');
+  });
+});
+
+describe('renumberCitationMarkersFromTrailingList', () => {
+  const delivered = [
+    { url: 'https://www.democracynow.org/2026/9/10/headlines' },
+    { url: 'https://www.nst.com.my/news/regional/2026/09/1530078/news9' },
+    { url: 'https://nypost.com/2026/09/10/' },
+  ];
+
+  const answer = [
+    '1. **"Trump Predicts Iran War"** - *Democracy Now!* [1]',
+    '2. **"TSA Revives Pre-9/11 Tradition"** - *New York Post* [2]',
+    '',
+    'Sources:',
+    '- [1] https://www.democracynow.org/2026/9/10/headlines',
+    '- [2] https://nypost.com/2026/09/10/',
+  ].join('\n');
+
+  it('moves a marker onto the delivered position of the url the model meant', () => {
+    const out = renumberCitationMarkersFromTrailingList(answer, delivered);
+    expect(out).toContain('*Democracy Now!* [1]');
+    expect(out).toContain('*New York Post* [3]');
+  });
+
+  it('leaves the trailing block itself untouched for the stripper that follows', () => {
+    const out = renumberCitationMarkersFromTrailingList(answer, delivered);
+    expect(stripTrailingSourceList(out)).toBe(
+      [
+        '1. **"Trump Predicts Iran War"** - *Democracy Now!* [1]',
+        '2. **"TSA Revives Pre-9/11 Tradition"** - *New York Post* [3]',
+      ].join('\n'),
+    );
+  });
+
+  it('changes nothing when one bibliography entry names a page the turn never delivered', () => {
+    const withStranger = answer.replace(
+      'https://nypost.com/2026/09/10/',
+      'https://elsewhere.example/x',
+    );
+    expect(renumberCitationMarkersFromTrailingList(withStranger, delivered)).toBe(withStranger);
+  });
+
+  it('changes nothing when the model already numbered by the delivered order', () => {
+    const aligned = [
+      'One claim. [1]',
+      '',
+      'Sources:',
+      '- [1] https://www.democracynow.org/2026/9/10/headlines',
+    ].join('\n');
+    expect(renumberCitationMarkersFromTrailingList(aligned, delivered)).toBe(aligned);
+  });
+
+  it('changes nothing on an answer with no trailing source list', () => {
+    const plain = 'One claim. [2]';
+    expect(renumberCitationMarkersFromTrailingList(plain, delivered)).toBe(plain);
+  });
+
+  it('never rewrites a bracketed index inside a fenced code block', () => {
+    const withFence = [
+      'Body [2].',
+      '```',
+      'rows[2]',
+      '```',
+      '',
+      'Sources:',
+      '- [2] https://nypost.com/2026/09/10/',
+    ].join('\n');
+    const out = renumberCitationMarkersFromTrailingList(withFence, delivered);
+    expect(out).toContain('Body [3].');
+    expect(out).toContain('rows[2]');
   });
 });

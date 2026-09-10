@@ -525,6 +525,16 @@ export class SourceAggregator {
     return [...this.byUrl.values()].map((s, i) => ({ ...s, position: i + 1 }));
   }
 
+  positionOf(url: string): number | undefined {
+    const key = normalizeSourceUrlKey(url);
+    let position = 0;
+    for (const existing of this.byUrl.keys()) {
+      position += 1;
+      if (existing === key) return position;
+    }
+    return undefined;
+  }
+
   async enrichTitles(): Promise<void> {
     const entries = [...this.byUrl.entries()];
     if (entries.length === 0) return;
@@ -1289,7 +1299,7 @@ export async function* runResearchLoop(
           content = await applyToolResultSecretPolicy(
             _billing.userId,
             call.name,
-            formatWebSearchResultForModel(outcome),
+            formatWebSearchResultForModel(outcome, (url) => sources.positionOf(url)),
           );
           yield encoder.encode(
             loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),

@@ -135,9 +135,11 @@ import {
 } from '@/features/chat/lib/agent-activity-notice';
 import {
   hasCanonicalToolActivity,
+  insertCitationMarkers,
   normalizeCitationUrl,
   repairContinuationSeam,
   SEAM_INSPECTION_WINDOW,
+  type CitationSpan,
 } from '@agiworkforce/unified-chat';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
@@ -653,6 +655,18 @@ function stringifyApprovalInput(input: Record<string, unknown> | undefined): str
 
 const SOURCE_TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|msclkid|ref|mc_[ce]id)$/i;
 
+function readCitationSpans(value: unknown): CitationSpan[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const { endIndex, positions } = entry as { endIndex?: unknown; positions?: unknown };
+    if (typeof endIndex !== 'number' || !Number.isFinite(endIndex)) return [];
+    if (!Array.isArray(positions)) return [];
+    const cited = positions.filter((n): n is number => Number.isInteger(n) && n >= 1);
+    return cited.length > 0 ? [{ endIndex, positions: cited }] : [];
+  });
+}
+
 function normalizeSourceUrlKey(url: string): string {
   try {
     const parsed = new URL(url);
@@ -1122,6 +1136,27 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     currentSearchResults = merged;
     setSearchResults(assistantMessageId, merged, conversationId);
     return merged;
+  };
+
+  let providerCitationSpans: { spans: CitationSpan[]; urls: string[] } | null = null;
+
+  const withProviderCitationMarkers = (content: string): string => {
+    if (!providerCitationSpans || !content) return content;
+    const delivered = existingSearchResults();
+    const indexOfUrl = new Map(
+      delivered.map(
+        (result, index) => [normalizeCitationUrl(result.url) ?? result.url, index + 1] as const,
+      ),
+    );
+    const resolved = providerCitationSpans.spans.flatMap((span) => {
+      const positions = span.positions.flatMap((position) => {
+        const url = providerCitationSpans?.urls[position - 1];
+        const delivered = url ? indexOfUrl.get(normalizeCitationUrl(url) ?? url) : undefined;
+        return delivered === undefined ? [] : [delivered];
+      });
+      return positions.length > 0 ? [{ endIndex: span.endIndex, positions }] : [];
+    });
+    return insertCitationMarkers(content, resolved, delivered.length);
   };
 
   const appendMarkerOrderedCitation = (url: string, title: string) => {
@@ -1645,8 +1680,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   };
 
-  const persistAssistant = (fullContent: string) => {
+  const persistAssistant = (streamedContent: string) => {
+    const fullContent = withProviderCitationMarkers(streamedContent);
     const metadata = buildAssistantMetadata();
+    if (fullContent !== streamedContent) {
+      updateMessage(assistantMessageId, { content: fullContent }, conversationId);
+    }
     if (metadata) {
       updateMessage(assistantMessageId, { metadata }, conversationId);
     }
@@ -2298,6 +2337,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 snippet: (r['encrypted_content'] as string) || '',
               }));
             if (results.length > 0) {
+              const spans = readCitationSpans(searchResultsBlock.citation_spans);
+              if (spans.length > 0) {
+                providerCitationSpans = { spans, urls: results.map((r) => r.url) };
+              }
               const merged = mergeSearchResults(results);
               if (merged && currentResearch) {
                 currentResearch = { ...currentResearch, sourcesForRetry: merged };

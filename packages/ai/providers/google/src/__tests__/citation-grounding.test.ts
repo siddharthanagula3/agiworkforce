@@ -89,6 +89,69 @@ describe('Gemini grounding citation deltas', () => {
     ]);
   });
 
+  it('keeps every grounded outlet when a later chunk widens the grounding list', async () => {
+    const firstGrounded =
+      'data: {"candidates":[{"content":{"parts":[{"text":"Headline one."}],"role":"model"},' +
+      '"groundingMetadata":{"groundingChunks":[{"web":{"uri":"https://a.example/1","title":"Outlet A"}}]},' +
+      '"index":0}]}\n\n';
+    const secondGrounded =
+      'data: {"candidates":[{"content":{"parts":[{"text":" Headline two."}],"role":"model"},' +
+      '"groundingMetadata":{"groundingChunks":[' +
+      '{"web":{"uri":"https://a.example/1","title":"Outlet A"}},' +
+      '{"web":{"uri":"https://b.example/2","title":"Outlet B"}}' +
+      ']},' +
+      '"finishReason":"STOP","index":0}]}\n\n';
+
+    const chunks = await collect(firstGrounded + secondGrounded);
+    const grounded = chunks.filter(
+      (chunk): chunk is Extract<StreamChunk, { type: 'server-tool-result' }> =>
+        chunk.type === 'server-tool-result',
+    );
+
+    expect(grounded).toHaveLength(2);
+    expect((grounded[1]?.payload as { results: unknown[] }).results).toEqual([
+      { type: 'web_search_result', url: 'https://a.example/1', title: 'Outlet A', position: 1 },
+      { type: 'web_search_result', url: 'https://b.example/2', title: 'Outlet B', position: 2 },
+    ]);
+  });
+
+  it('derives citation spans from grounding supports, located by the segment text', async () => {
+    const sse =
+      'data: {"candidates":[{"content":{"parts":[{"text":"Rates held steady. Growth slowed."}],"role":"model"},' +
+      '"groundingMetadata":{"groundingChunks":[' +
+      '{"web":{"uri":"https://a.example/1","title":"Outlet A"}},' +
+      '{"web":{"uri":"https://b.example/2","title":"Outlet B"}}' +
+      '],' +
+      '"groundingSupports":[' +
+      '{"segment":{"startIndex":0,"endIndex":18,"text":"Rates held steady."},"groundingChunkIndices":[0]},' +
+      '{"segment":{"startIndex":9999,"endIndex":9999,"text":"Growth slowed."},"groundingChunkIndices":[1,0]}' +
+      ']},' +
+      '"finishReason":"STOP","index":0}]}\n\n';
+
+    const chunks = await collect(sse);
+    const grounded = chunks.find((chunk) => chunk.type === 'server-tool-result');
+
+    expect((grounded?.payload as { citationSpans: unknown }).citationSpans).toEqual([
+      { endIndex: 18, positions: [1] },
+      { endIndex: 33, positions: [1, 2] },
+    ]);
+  });
+
+  it('drops a grounding support whose segment text is nowhere in the answer', async () => {
+    const sse =
+      'data: {"candidates":[{"content":{"parts":[{"text":"Rates held steady."}],"role":"model"},' +
+      '"groundingMetadata":{"groundingChunks":[{"web":{"uri":"https://a.example/1","title":"Outlet A"}}],' +
+      '"groundingSupports":[' +
+      '{"segment":{"startIndex":0,"endIndex":10,"text":"never written"},"groundingChunkIndices":[0]}' +
+      ']},' +
+      '"finishReason":"STOP","index":0}]}\n\n';
+
+    const chunks = await collect(sse);
+    const grounded = chunks.find((chunk) => chunk.type === 'server-tool-result');
+
+    expect(grounded?.payload).not.toHaveProperty('citationSpans');
+  });
+
   it('emits nothing extra when no grounding metadata is present', async () => {
     const sse =
       'data: {"candidates":[{"content":{"parts":[{"text":"Plain answer."}],"role":"model"},' +

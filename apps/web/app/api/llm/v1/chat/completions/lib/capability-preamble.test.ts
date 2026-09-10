@@ -95,6 +95,22 @@ describe('capability preamble', () => {
     expect(preamble).not.toContain('attached as downloads');
   });
 
+  it('asks a search turn for bracketed markers on every sourced claim, named outlet included', () => {
+    const preamble = String(buildCapabilityPreamble({ tools: [{ google_search: {} }] }));
+
+    expect(preamble).toContain('[1]');
+    expect(preamble).toContain('naming an outlet in prose or italics is not a citation');
+    expect(preamble).toContain('in the order the tools returned them');
+  });
+
+  it('asks for no citation markers on a turn with neither search nor fetch', () => {
+    const preamble = String(
+      buildCapabilityPreamble({ tools: [{ type: 'function', function: { name: 'write_file' } }] }),
+    );
+
+    expect(preamble).not.toContain('[1]');
+  });
+
   it('describes create_office_file with exactly the formats its schema accepts', () => {
     const definition = createManagedOfficeFileToolDefinition();
     const formats = (
