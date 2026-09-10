@@ -54,7 +54,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 import type { ToolLoopToolExecutor } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
-import { executeCloudAgentWorkflowInvocation } from './cloud-agent-workflow';
+import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';

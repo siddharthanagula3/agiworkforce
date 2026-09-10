@@ -62,10 +62,8 @@ vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
 
-import {
-  executeCloudAgentWorkflowInvocation,
-  failCloudAgentWorkflow,
-} from './cloud-agent-workflow';
+import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
+import { failCloudAgentWorkflow } from './steps/fail-cloud-agent-workflow';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
@@ -178,7 +176,7 @@ describe('a durable turn whose reader has gone', () => {
   it('still settles the failure path when its events cannot drain', async () => {
     mocks.writable.mockReturnValue(writerThatNeverDrains());
 
-    await failCloudAgentWorkflow(makeInput(), 'the model took too long', 'provider_timeout');
+    await failCloudAgentWorkflow(makeInput(), new Error('the model took too long'));
 
     expect(mocks.settle).toHaveBeenCalledWith(expect.anything(), 'failed');
   });
@@ -186,7 +184,7 @@ describe('a durable turn whose reader has gone', () => {
   it('journals every event even though the stream took none of them', async () => {
     mocks.writable.mockReturnValue(writerThatNeverDrains());
 
-    await failCloudAgentWorkflow(makeInput(), 'the model took too long', 'provider_timeout');
+    await failCloudAgentWorkflow(makeInput(), new Error('the model took too long'));
 
     expect(mocks.appendEvent).toHaveBeenCalledTimes(3);
   });

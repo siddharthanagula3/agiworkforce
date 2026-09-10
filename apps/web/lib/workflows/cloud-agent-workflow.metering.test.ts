@@ -76,7 +76,7 @@ import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/req
 // the object the durable invocation actually produced is the difference between
 // asserting the cap would apply and proving that it does.
 import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
-import { executeCloudAgentWorkflowInvocation } from './cloud-agent-workflow';
+import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';

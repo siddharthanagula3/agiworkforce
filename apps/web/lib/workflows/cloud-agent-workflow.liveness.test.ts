@@ -59,7 +59,7 @@ vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
 
-import { executeCloudAgentWorkflowInvocation } from './cloud-agent-workflow';
+import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 import {
   claimLiveDurableStream,
