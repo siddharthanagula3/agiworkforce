@@ -3,11 +3,13 @@ import 'server-only';
 import crypto from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import type {
   OrganizationInvitationRow,
   OrganizationInvitationStatus,
   OrganizationMemberRow,
 } from '@/lib/server/neon-types';
+import { resolveEffectiveSubscription } from './effective-subscription-service';
 import { withSeatAccountingErrors } from './organization-seat-service';
 import { persistProvenActiveWorkspaceSelection } from './active-workspace-service';
 
@@ -272,7 +274,7 @@ export async function acceptInvitation(
 ): Promise<AcceptedInvitation> {
   const tokenHash = hashInvitationToken(input.token);
 
-  return withSeatAccountingErrors(() =>
+  const accepted = await withSeatAccountingErrors(() =>
     db.transaction(async (tx) => {
       const [invitation] = await tx.query<OrganizationInvitationRow>(
         `select ${INVITATION_COLUMNS}
@@ -343,6 +345,20 @@ export async function acceptInvitation(
       return { invitation: accepted, role: existingMembership?.role ?? invitation.role };
     }),
   );
+
+  // The seat only starts metering as a seat once the member holds a usage
+  // ledger of their own. Resolving their effective subscription provisions it;
+  // the nightly sweep is the backstop, so a failure here never blocks the join.
+  try {
+    await resolveEffectiveSubscription(db, input.userId);
+  } catch (error) {
+    logger.error(
+      { error, userId: input.userId, organizationId: accepted.invitation.organization_id },
+      'Seat member usage ledger was not provisioned on invitation acceptance',
+    );
+  }
+
+  return accepted;
 }
 
 export async function declineInvitation(
