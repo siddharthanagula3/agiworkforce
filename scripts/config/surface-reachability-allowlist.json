@@ -246,7 +246,6 @@
         "trackedBy": "SIX-32",
         "paths": [
           "apps/web/features/index.ts",
-          "apps/web/lib/runtime/past-chat-context.ts",
           "apps/web/shared/lib/async-hooks-stub.ts",
           "apps/web/shared/lib/empty-module.ts"
         ]
