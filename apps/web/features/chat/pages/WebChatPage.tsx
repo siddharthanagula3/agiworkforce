@@ -1697,6 +1697,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         clientConvId = existingConvId ? null : crypto.randomUUID();
         const convId = existingConvId || clientConvId!;
         resolvedUserMessageId ??= crypto.randomUUID();
+        const temporaryIntent = useChatStore.getState().pendingTemporaryChat;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -1711,7 +1712,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
         const ensureConversationId = clientConvId
           ? async (): Promise<string | null> => {
-              const c = await createConversation(NEW_CHAT_TITLE, activeModelId, sendProjectId);
+              const c = await createConversation(
+                NEW_CHAT_TITLE,
+                activeModelId,
+                sendProjectId,
+                temporaryIntent ? { isTemporary: true } : undefined,
+              );
               if (!c) return null;
               resolvedFreshConvId = c.id;
               adoptPendingComposerToggles(c.id);
@@ -4585,20 +4591,22 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
-      conversations.map((c) => ({
-        id: c.id,
-        title: c.title,
-        updatedAt: c.updatedAt,
-        pinned: c.isPinned ?? false,
-        starred: c.isStarred ?? false,
-        archived: c.isArchived ?? false,
-        projectId: c.projectId ?? undefined,
-        messageCount: c.messageCount,
-        ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
-          ? { agiWork: true }
-          : {}),
-        ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
-      })),
+      conversations
+        .filter((c) => !c.isTemporary)
+        .map((c) => ({
+          id: c.id,
+          title: c.title,
+          updatedAt: c.updatedAt,
+          pinned: c.isPinned ?? false,
+          starred: c.isStarred ?? false,
+          archived: c.isArchived ?? false,
+          projectId: c.projectId ?? undefined,
+          messageCount: c.messageCount,
+          ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
+            ? { agiWork: true }
+            : {}),
+          ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+        })),
     [conversations, runningConversationIds, workModeByConversation],
   );
 

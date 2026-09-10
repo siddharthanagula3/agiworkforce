@@ -142,6 +142,7 @@ interface UseConversationsReturn {
     title?: string,
     model?: string,
     projectId?: string | null,
+    options?: { isTemporary?: boolean },
   ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
@@ -311,6 +312,7 @@ export function useConversations(): UseConversationsReturn {
       title?: string,
       model?: string,
       projectId?: string | null,
+      options?: { isTemporary?: boolean },
     ): Promise<Conversation | null> => {
       setIsCreatingConversation(true);
       setError(null);
@@ -330,8 +332,9 @@ export function useConversations(): UseConversationsReturn {
             // message is worse than no preference at all. The account-wide
             // default and a one-off "Temporary chat" armed from the composer
             // before this conversation existed are both consumed here.
-            ...(useSettingsStore.getState().newChatsTemporary ||
-            useChatStore.getState().pendingTemporaryChat
+            ...((options?.isTemporary ??
+            (useSettingsStore.getState().newChatsTemporary ||
+              useChatStore.getState().pendingTemporaryChat))
               ? { isTemporary: true }
               : {}),
           }),

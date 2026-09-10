@@ -147,6 +147,20 @@ describe('useConversations.createConversation', () => {
     expect(findPostBody()).toMatchObject({ isTemporary: true });
   });
 
+  it('honours the temporary intent the caller captured before the active id switch cleared it', async () => {
+    useChatStore.getState().setPendingTemporaryChat(true);
+    useChatStore.getState().setActiveConversation('placeholder-1');
+    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto', null, { isTemporary: true });
+    });
+
+    expect(findPostBody()).toMatchObject({ isTemporary: true });
+  });
+
   it('consuming the pending flag at creation clears it for the next chat', async () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     const { result } = renderHook(() => useConversations());
