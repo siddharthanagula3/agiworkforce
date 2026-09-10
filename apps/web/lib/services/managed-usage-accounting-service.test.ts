@@ -18,6 +18,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   finalizeManagedUsageRequest: vi.fn(async (input) => ({
     requestStatus: 'completed',
     operationResult: 'finalized',
