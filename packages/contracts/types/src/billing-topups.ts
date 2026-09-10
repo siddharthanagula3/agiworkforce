@@ -1,5 +1,12 @@
 export const TOP_UP_UNITS_PER_USD = 50;
 
+export const CENTS_PER_USD = 100;
+
+/** Ledger cents to the credits a user sees; one credit is a fiftieth of a dollar. */
+export function creditsFromCents(cents: number): number {
+  return (cents * TOP_UP_UNITS_PER_USD) / CENTS_PER_USD;
+}
+
 export const MIN_TOP_UP_AMOUNT_USD = 10;
 
 /** Default self-serve safety cap from the current billing decision. */

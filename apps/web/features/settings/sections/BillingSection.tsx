@@ -19,6 +19,7 @@ import {
   MIN_TOP_UP_AMOUNT_USD,
   TOP_UP_PRESET_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
+  creditsFromCents,
   topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
@@ -57,6 +58,7 @@ interface CreditHistoryEntry {
   transaction_type: CreditTransactionType | string;
   amount_cents: number;
   description: string | null;
+  label?: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
@@ -83,17 +85,18 @@ function signedCreditCents(entry: CreditHistoryEntry): number {
     : entry.amount_cents;
 }
 
-function formatSignedMoney(cents: number): string {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      signDisplay: 'exceptZero',
-    }).format(cents / 100);
-  } catch {
-    const amount = (Math.abs(cents) / 100).toFixed(2);
-    return cents < 0 ? `-$${amount}` : `+$${amount}`;
-  }
+const CREDIT_FRACTION_DIGITS = 2;
+
+function formatCredits(cents: number): string {
+  const credits = creditsFromCents(Math.abs(cents)).toLocaleString('en-US', {
+    maximumFractionDigits: CREDIT_FRACTION_DIGITS,
+  });
+  return `${credits} credits`;
+}
+
+function formatSignedCredits(cents: number): string {
+  if (cents === 0) return formatCredits(cents);
+  return `${cents < 0 ? '-' : '+'}${formatCredits(cents)}`;
 }
 
 type BillingListState<T> =
@@ -945,7 +948,7 @@ export function BillingSection() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
-                {TOP_UP_UNITS_PER_USD} units for every $1
+                {TOP_UP_UNITS_PER_USD} credits for every $1
               </div>
               <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
                 Minimum ${MIN_TOP_UP_AMOUNT_USD}; self-serve maximum ${MAX_TOP_UP_AMOUNT_USD}.
@@ -1029,7 +1032,7 @@ export function BillingSection() {
                   ? 'Opening checkout…'
                   : selectedTopUpUnits === null
                     ? invalidTopUpLabel
-                    : `Buy ${selectedTopUpUnits.toLocaleString('en-US')} units · $${topUpAmountUsd}`}
+                    : `Buy ${selectedTopUpUnits.toLocaleString('en-US')} credits · $${topUpAmountUsd}`}
               </button>
             </div>
             {topUpError && (
@@ -1069,7 +1072,7 @@ export function BillingSection() {
                 </label>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
                   {overageAvailableCents > 0
-                    ? `Spend your credits when a usage limit stops you. ${formatMoney(overageAvailableCents, 'usd')} available.`
+                    ? `Spend your credits when a usage limit stops you. ${formatCredits(overageAvailableCents)} available.`
                     : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}
                 </p>
                 {overageError && (
@@ -1170,7 +1173,8 @@ export function BillingSection() {
                         {formatIsoDate(entry.created_at)}
                       </td>
                       <td style={{ padding: '12px 16px', color: 'var(--text-2)' }}>
-                        {entry.description ||
+                        {entry.label ||
+                          entry.description ||
                           CREDIT_TRANSACTION_LABELS[entry.transaction_type] ||
                           entry.transaction_type}
                       </td>
@@ -1183,7 +1187,7 @@ export function BillingSection() {
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {formatSignedMoney(cents)}
+                        {formatSignedCredits(cents)}
                       </td>
                     </tr>
                   );

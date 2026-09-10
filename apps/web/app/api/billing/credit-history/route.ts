@@ -10,6 +10,7 @@ import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { getModelMetadataById } from '@agiworkforce/types';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -39,6 +40,28 @@ interface CreditHistoryRow {
   description: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+const RESERVATION_DESCRIPTION_PREFIX = 'Managed usage reservation: ';
+const RECONCILIATION_DESCRIPTION = 'Managed usage actual-cost reconciliation';
+const USAGE_LABEL_PREFIX = 'Usage: ';
+const USAGE_ADJUSTMENT_LABEL = 'Usage adjustment';
+const ROUTE_ID_SEPARATOR = '/';
+
+/**
+ * The ledger names a debit by the route it reserved against, which is the
+ * company's routing detail. A user sees the model they used and its official
+ * price in credits, never which host served it or what that host charged.
+ */
+function labelForRow(row: CreditHistoryRow): string | null {
+  const description = row.description;
+  if (!description) return null;
+  if (description === RECONCILIATION_DESCRIPTION) return USAGE_ADJUSTMENT_LABEL;
+  if (!description.startsWith(RESERVATION_DESCRIPTION_PREFIX)) return null;
+  const routeId = description.slice(RESERVATION_DESCRIPTION_PREFIX.length);
+  const separatorIndex = routeId.indexOf(ROUTE_ID_SEPARATOR);
+  const modelId = separatorIndex >= 0 ? routeId.slice(separatorIndex + 1) : routeId;
+  return `${USAGE_LABEL_PREFIX}${getModelMetadataById(modelId)?.name ?? modelId}`;
 }
 
 /**
@@ -85,7 +108,8 @@ async function handleGetCreditHistory(request: NextRequest) {
        limit $2 offset $3`,
       [userId, limit, offset],
     );
-    return NextResponse.json({ transactions: rows, has_more: rows.length === limit });
+    const transactions = rows.map((row) => ({ ...row, label: labelForRow(row) }));
+    return NextResponse.json({ transactions, has_more: rows.length === limit });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch credit history');
     throw createError.internal('Failed to fetch credit history');
