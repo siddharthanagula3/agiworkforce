@@ -71,7 +71,9 @@ export * from './model';
 export * from './user';
 
 export * from './billing-catalog';
+export * from './credits';
 export * from './billing-topups';
+export * from './rate-card';
 export * from './mobile-iap';
 export * from './url';
 export * from './usage-vocabulary';

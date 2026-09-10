@@ -38,12 +38,15 @@ import {
 } from '@/lib/moderation';
 import {
   canUseBillingPlanCapability,
+  centsFromMicrousdCeil,
+  customerChargeMicrousd,
   getModelMetadataById,
   getModelsForProvider,
   getProviderDefaultModelId,
   isExecutableImageModel,
   type ExecutableImageModel,
   type ModelMetadata,
+  type RateCardFeature,
 } from '@agiworkforce/types';
 import {
   classifyError,
@@ -107,14 +110,18 @@ interface ImageGenerationResponse {
   provenance?: AiGeneratedProvenance[];
 }
 
+function rateCardCents(feature: RateCardFeature): number {
+  return centsFromMicrousdCeil(customerChargeMicrousd(feature));
+}
+
 const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
-  medium: 5,
-  high: 21,
+  medium: rateCardCents('image_generation_openai_medium'),
+  high: rateCardCents('image_generation_openai_high'),
 } as const;
 
 const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> = {
   openai: OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY.high,
-  google: 3,
+  google: rateCardCents('image_generation_google'),
   stability: 0,
 };
 
