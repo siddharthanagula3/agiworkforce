@@ -143,6 +143,8 @@ const EXPLANATION_FRAME_PATTERN = buildPhrasePattern(EXPLANATION_FRAME_PHRASES);
 
 const FENCED_CODE_PATTERN = /```[\s\S]*?(?:```|$)/g;
 const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
+const FORMATTING_MENTION_PATTERN =
+  /\b(?:fenced\s+code|code\s+(?:fence|block|snippet|sample)s?)\b/giu;
 
 export type ExplicitExecutionIntentSignal = 'run_directive' | 'computation';
 
@@ -165,7 +167,10 @@ export const EXPLICIT_EXECUTION_INTENT_PHRASES: Readonly<{
  * force a run.
  */
 function requestTextOnly(text: string): string {
-  return text.replace(FENCED_CODE_PATTERN, ' ').replace(INLINE_CODE_PATTERN, ' ');
+  return text
+    .replace(FENCED_CODE_PATTERN, ' ')
+    .replace(INLINE_CODE_PATTERN, ' ')
+    .replace(FORMATTING_MENTION_PATTERN, ' ');
 }
 
 function matchIndex(pattern: RegExp, text: string): number {

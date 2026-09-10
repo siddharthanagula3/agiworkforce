@@ -85,6 +85,18 @@ describe('detectExplicitCodeExecutionIntent', () => {
     expect(detectExplicitCodeExecutionIntent('sumatra is a city')).toBeNull();
   });
 
+  it('treats a request for a code fence or diagram as formatting, not a run', () => {
+    expect(
+      detectExplicitCodeExecutionIntent(
+        'Reply with exactly one mermaid code fence containing a flowchart: graph TD with A --> B.',
+      ),
+    ).toBeNull();
+    expect(detectExplicitCodeExecutionIntent('Put the answer in a code block.')).toBeNull();
+    expect(detectExplicitCodeExecutionIntent('Graph the totals with python code.')).toBe(
+      'computation',
+    );
+  });
+
   it('returns null for empty text', () => {
     expect(detectExplicitCodeExecutionIntent('')).toBeNull();
     expect(hasExplicitCodeExecutionIntent('')).toBe(false);

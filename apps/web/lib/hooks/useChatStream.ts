@@ -2401,6 +2401,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (typeof reason === 'string' && reason) {
               finishReason = reason;
             }
+            flushContentBuffer(true);
             coalescedAppends.flush();
             updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           }
