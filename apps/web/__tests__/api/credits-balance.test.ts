@@ -217,12 +217,15 @@ describe('Credits Balance API', () => {
         expect(data.credits.seconds_until_reset).toBeGreaterThanOrEqual(0);
         expect(data.credits.usage_visible).toBe(true);
         expect(Object.keys(data.credits).sort()).toEqual([
+          'allowance_credits',
           'has_usage_remaining',
+          'remaining_credits',
           'reset_at',
           'seconds_until_reset',
           'usage_allocation',
           'usage_percentage',
           'usage_visible',
+          'used_credits',
         ]);
         expect(data.credits.usage_allocation).toBe('provisioned');
         expect(JSON.stringify(data)).not.toMatch(
