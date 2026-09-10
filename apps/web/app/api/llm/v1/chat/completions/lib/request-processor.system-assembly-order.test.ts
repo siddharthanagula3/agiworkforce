@@ -147,6 +147,7 @@ beforeEach(() => {
     enabled: false,
     generateFromHistory: false,
     allowToolAssistedGeneration: false,
+    searchPastChats: false,
   });
   mocks.customInstructions.mockResolvedValue(null);
   mocks.scopedQuery.mockResolvedValue([]);
@@ -207,6 +208,7 @@ describe('managed system prompt assembly order', () => {
       enabled: true,
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
+      searchPastChats: false,
     });
     mocks.scopedQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('from user_memories')) {
@@ -241,5 +243,52 @@ describe('managed system prompt assembly order', () => {
     expect(memoryIndex).toBeGreaterThan(-1);
     expect(mcpIndex).toBeLessThan(boundaryIndex);
     expect(memoryIndex).toBeGreaterThan(boundaryIndex);
+  });
+  it('keeps recalled past chats after the boundary, behind account memory', async () => {
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: true,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from user_memories')) {
+        return [
+          { content: 'User prefers morning meetings.', category: 'preference', pinned: true },
+        ];
+      }
+      if (sql.includes('from web_messages')) {
+        return [
+          {
+            id: 'message-1',
+            conversation_id: 'conversation-1',
+            role: 'user',
+            content: 'Remember the interface polish checklist I wrote for the release.',
+            created_at: '2026-09-08T10:00:00.000Z',
+            title: 'Release polish',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const result = await processRequest(chatRequestFor('assembly-order-3'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+
+    const boundaryIndex = joined.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY);
+    const memoryIndex = joined.indexOf('User prefers morning meetings.');
+    const pastChatIndex = joined.indexOf('<past_chats>');
+
+    expect(boundaryIndex).toBeGreaterThan(-1);
+    expect(memoryIndex).toBeGreaterThan(boundaryIndex);
+    expect(pastChatIndex).toBeGreaterThan(memoryIndex);
+    expect(joined).toContain('Release polish');
   });
 });
