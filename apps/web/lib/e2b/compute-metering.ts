@@ -16,8 +16,14 @@ const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** E2B's own default sandbox size when a template does not declare one. */
 const DEFAULT_E2B_VCPU_COUNT = 2;
+const DEFAULT_E2B_MEMORY_GIB = 4;
 
 let unbilledMs = 0;
+
+export interface SandboxComputeShape {
+  vcpuCount?: number | null;
+  memoryGib?: number | null;
+}
 
 type ConfiguredRate = { ok: true; microusdPerSecond: number } | { ok: false };
 
@@ -28,40 +34,51 @@ function resolveConfiguredOverride(): ConfiguredRate | null {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     logger.error(
       { env: E2B_COMPUTE_RATE_ENV, value: raw },
-      '[e2b] invalid sandbox compute rate override; refusing to price sandbox compute',
+      '[e2b] invalid sandbox compute rate override; falling back to the declared compute pricing',
     );
     return { ok: false };
   }
   return { ok: true, microusdPerSecond: parsed };
 }
 
-function tableRate(vcpuCount: number | null | undefined): ConfiguredRate {
+function positiveOr(value: number | null | undefined, fallback: number): number {
+  return typeof value === 'number' && value > 0 ? value : fallback;
+}
+
+function tableRate(shape: SandboxComputeShape | undefined): ConfiguredRate {
   const declared = getProviderComputePricing(E2B_COMPUTE_PROVIDER_ID);
-  if (!declared) {
+  if (!declared || !(declared.ratePerUnit > 0) || !(Number(declared.ramRatePerGibSecond) > 0)) {
     logger.error(
       { provider: E2B_COMPUTE_PROVIDER_ID },
-      '[e2b] no compute-pricing entry declared in the registry; refusing to price sandbox compute',
+      '[e2b] compute pricing declares no vCPU and memory rate pair; refusing to price sandbox compute',
     );
     return { ok: false };
   }
-  const resolvedVcpuCount =
-    typeof vcpuCount === 'number' && vcpuCount > 0 ? vcpuCount : DEFAULT_E2B_VCPU_COUNT;
-  return {
-    ok: true,
-    microusdPerSecond: Math.round(resolvedVcpuCount * declared.ratePerUnit * USD_TO_MICROUSD),
-  };
+  const vcpuCount = positiveOr(shape?.vcpuCount, DEFAULT_E2B_VCPU_COUNT);
+  const memoryGib = positiveOr(shape?.memoryGib, DEFAULT_E2B_MEMORY_GIB);
+  const cpuMicrousdPerSecond = vcpuCount * declared.ratePerUnit * USD_TO_MICROUSD;
+  const ramMicrousdPerSecond =
+    memoryGib * (declared.ramRatePerGibSecond as number) * USD_TO_MICROUSD;
+  return { ok: true, microusdPerSecond: Math.round(cpuMicrousdPerSecond + ramMicrousdPerSecond) };
 }
 
-function resolveRate(vcpuCount: number | null | undefined): ConfiguredRate {
-  return resolveConfiguredOverride() ?? tableRate(vcpuCount);
+function resolveRate(shape?: SandboxComputeShape): ConfiguredRate {
+  const override = resolveConfiguredOverride();
+  if (override?.ok) return override;
+  return tableRate(shape);
 }
 
 export function sandboxComputeIsPriceable(): boolean {
-  return resolveRate(DEFAULT_E2B_VCPU_COUNT).ok;
+  return resolveRate().ok;
 }
 
-export function getSandboxComputeMicrousdPerSecond(vcpuCount?: number | null): number {
-  const resolved = resolveRate(vcpuCount);
+/**
+ * The rate a sandbox of this shape is billed at, in microUSD per second of
+ * sandbox life: vCPU seconds and memory seconds are separate published rates
+ * and a sandbox pays both for as long as it exists.
+ */
+export function getSandboxComputeMicrousdPerSecond(shape?: SandboxComputeShape): number {
+  const resolved = resolveRate(shape);
   return resolved.ok ? resolved.microusdPerSecond : 0;
 }
 
@@ -82,6 +99,13 @@ export interface SandboxComputeInterval {
   conversationId?: string | undefined;
   codeSessionId?: string | undefined;
   vcpuCount?: number | undefined;
+  memoryGib?: number | undefined;
+  /**
+   * The rate snapshotted onto the sandbox when it was provisioned. Settling
+   * from it keeps a sandbox on the terms it was admitted under, and keeps a
+   * later catalog or override change from repricing seconds already run.
+   */
+  snapshotMicrousdPerSecond?: number | undefined;
   startedAtMs: number;
   endedAtMs: number;
   reason: 'pause' | 'kill' | 'reclaim';
@@ -93,8 +117,11 @@ export async function meterSandboxComputeInterval(
   const elapsedMs = interval.endedAtMs - interval.startedAtMs;
   if (!isBillableInterval(elapsedMs)) return 0;
 
-  const override = resolveConfiguredOverride();
-  const resolved = override ?? tableRate(interval.vcpuCount);
+  const snapshot = interval.snapshotMicrousdPerSecond;
+  const resolved: ConfiguredRate =
+    typeof snapshot === 'number' && snapshot > 0
+      ? { ok: true, microusdPerSecond: snapshot }
+      : resolveRate({ vcpuCount: interval.vcpuCount, memoryGib: interval.memoryGib });
   const rate = resolved.ok ? resolved.microusdPerSecond : 0;
   const costCents = sandboxComputeCostCents(elapsedMs, rate);
   if (costCents <= 0) {
@@ -109,9 +136,7 @@ export async function meterSandboxComputeInterval(
     if (!resolved.ok) {
       logger.error(
         base,
-        override?.ok === false
-          ? '[e2b] sandbox compute is UNPRICED: the configured rate override is invalid, these seconds bill nothing and move no usage cap'
-          : '[e2b] sandbox compute is UNPRICED: no compute-pricing entry is declared in the registry, these seconds bill nothing and move no usage cap',
+        '[e2b] sandbox compute is UNPRICED: neither a provisioning snapshot nor the declared compute pricing resolved a rate, these seconds bill nothing and move no usage cap',
       );
     } else {
       logger.warn(

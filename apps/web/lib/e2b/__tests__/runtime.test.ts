@@ -9,18 +9,27 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('../gate', () => ({ e2bExecutionEnabled: vi.fn(() => true) }));
 
-const templateVcpuCount = vi.fn(async (_templateId: unknown) => null as number | null);
+const templateComputeShape = vi.fn(async (_templateId: unknown) => ({
+  vcpuCount: null as number | null,
+  memoryGib: null as number | null,
+}));
 vi.mock('../templates', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../templates')>();
-  return { ...actual, templateVcpuCount: (templateId: unknown) => templateVcpuCount(templateId) };
+  return {
+    ...actual,
+    templateComputeShape: (templateId: unknown) => templateComputeShape(templateId),
+  };
 });
 
 const meterSandboxComputeInterval = vi.fn(async (_interval: unknown) => 0);
 const sandboxComputeIsPriceable = vi.fn(() => true);
+const getSandboxComputeMicrousdPerSecond = vi.fn((_shape?: unknown) => 46);
 vi.mock('../compute-metering', () => ({
   E2B_COMPUTE_RATE_ENV: 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
   sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
+  getSandboxComputeMicrousdPerSecond: (shape?: unknown) =>
+    getSandboxComputeMicrousdPerSecond(shape),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -77,6 +86,7 @@ interface TestSession {
   activeSinceMs?: number;
   templateId?: string;
   extraHosts?: readonly string[];
+  computeMicrousdPerSecond?: number;
 }
 
 const sessions = new Map<string, TestSession>();
@@ -209,6 +219,25 @@ describe('getE2BExecutor, unpriced compute (GOV-5)', () => {
 
     await expect(getE2BExecutor()).resolves.toBeNull();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to provision when the sandbox shape resolves no rate', async () => {
+    getSandboxComputeMicrousdPerSecond.mockReturnValueOnce(0);
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(getE2BExecutor(scope('conv-unrated', 'user-unrated'))).resolves.toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('snapshots the admitted rate onto the session it persists', async () => {
+    getSandboxComputeMicrousdPerSecond.mockReturnValueOnce(92);
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(scope('conv-snapshot-write'));
+
+    expect(sessions.get(scopeKey(scope('conv-snapshot-write')))).toMatchObject({
+      computeMicrousdPerSecond: 92,
+    });
   });
 });
 
@@ -1073,8 +1102,8 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(sessions.has(scopeKey(scope('conv-6', 'user-a')))).toBe(true);
   });
 
-  it('meters with the vCPU count resolved from the sandbox session, not the caller scope', async () => {
-    templateVcpuCount.mockResolvedValueOnce(4);
+  it('meters with the sandbox shape resolved from the sandbox session, not the caller scope', async () => {
+    templateComputeShape.mockResolvedValueOnce({ vcpuCount: 4, memoryGib: 8 });
     sessions.set(scopeKey(scope('conv-vcpu')), {
       sandboxId: 'sbx-vcpu',
       contexts: {},
@@ -1085,9 +1114,26 @@ describe('pauseE2BSession / killE2BSession', () => {
     const { killE2BSession } = await import('../runtime');
     await killE2BSession(scope('conv-vcpu'));
 
-    expect(templateVcpuCount).toHaveBeenCalledWith('claude');
+    expect(templateComputeShape).toHaveBeenCalledWith('claude');
     expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
-      expect.objectContaining({ sandboxId: 'sbx-vcpu', vcpuCount: 4 }),
+      expect.objectContaining({ sandboxId: 'sbx-vcpu', vcpuCount: 4, memoryGib: 8 }),
+    );
+  });
+
+  it('settles from the rate the sandbox was admitted at', async () => {
+    sessions.set(scopeKey(scope('conv-snapshot')), {
+      sandboxId: 'sbx-snapshot',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      templateId: 'claude',
+      computeMicrousdPerSecond: 92,
+    });
+
+    const { killE2BSession } = await import('../runtime');
+    await killE2BSession(scope('conv-snapshot'));
+
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-snapshot', snapshotMicrousdPerSecond: 92 }),
     );
   });
 });
