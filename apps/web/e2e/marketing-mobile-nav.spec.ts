@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { routeIsServed } from './route-availability';
 
-const ROUTES = ['/', '/dev/landing-preview'];
+const ROUTES = ['/'];
 const PHONE = { width: 390, height: 844 };
 const MIN_TARGET_PX = 44;
 const SHEET_GROUPS = ['Product', 'Features', 'Solutions', 'Developers', 'Company'];
@@ -12,9 +11,7 @@ for (const route of ROUTES) {
     test.use({ viewport: PHONE });
 
     test.beforeEach(async ({ page }) => {
-      const response = await page.goto(route, { waitUntil: 'networkidle' });
-      // llm-guardrail-allow: the dev preview route answers 404 on a production build, so this is not a skipped check
-      test.skip(!(await routeIsServed(page, response)), `${route} is not served by this build`);
+      await page.goto(route, { waitUntil: 'networkidle' });
     });
 
     test('the header nav is unreachable without the menu button below 768px', async ({ page }) => {
