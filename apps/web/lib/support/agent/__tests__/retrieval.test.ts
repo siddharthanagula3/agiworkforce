@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { SITE_URL } from '@/lib/seo/site';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
@@ -6,6 +5,7 @@ import { getSupportCorpus } from '../corpus';
 import { MIN_ABSOLUTE_SCORE, evaluateRelevanceFloor } from '../policy/relevance-floor';
 import { buildBm25Index, scoreBm25 } from '../retrieval/bm25';
 import { tokenize } from '../retrieval/tokenize';
+import { MARKETING } from '@/lib/marketing-constants';
 
 describe('support corpus', () => {
   it('loads and contains only public paths', () => {
@@ -31,7 +31,7 @@ describe('support corpus', () => {
       .filter((chunk) => chunk.docId === 'providers-and-models')
       .map((chunk) => chunk.text)
       .join('\n');
-    expect(joined).toContain('10+');
+    expect(joined).toContain(MARKETING.providers.display);
   });
 });
 
