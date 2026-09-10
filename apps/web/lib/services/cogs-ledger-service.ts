@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromMicrousd, microusdFromCents, type RateCardFeature } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -44,7 +45,35 @@ export interface TokenClassDimensions {
   cacheWritePremiumCents: number;
 }
 
-export interface ProviderCostEvent {
+export const COGS_RECONCILIATION_STATUSES = [
+  'estimated',
+  'provider_reported',
+  'reconciled',
+] as const;
+export type CogsReconciliationStatus = (typeof COGS_RECONCILIATION_STATUSES)[number];
+
+/**
+ * The dimensions a margin question is sliced by, split out of `metadata` so a
+ * query does not scan jsonb. Every field is optional: a caller that cannot
+ * attribute one leaves the column null rather than writing a guess.
+ */
+export interface CostEventAttribution {
+  /** Canonical customer charge in microUSD. Falls back to `resolveRetailCostCents` when omitted. */
+  customerCanonicalMicrousd?: number | null;
+  /** The same charge in cents, for callers that only hold cents. */
+  customerCanonicalCents?: number | null;
+  /** What the provider itself later reported, when a report is in hand. */
+  providerReportedCostCents?: number | null;
+  feature?: RateCardFeature | null;
+  routeId?: string | null;
+  surface?: string | null;
+  inputTokens?: number | null;
+  cachedTokens?: number | null;
+  outputTokens?: number | null;
+  reasoningTokens?: number | null;
+}
+
+export interface ProviderCostEvent extends CostEventAttribution {
   userId?: string | null;
   organizationId?: string | null;
   capability: CogsCapability;
@@ -324,19 +353,49 @@ export function getValueMultiplierFromCostEvent(input: {
   return retailCostCents / input.actualCostCents;
 }
 
+function nonNegativeInt(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return Math.round(value);
+}
+
+/**
+ * The customer's canonical charge in microUSD. A caller may hand it over in
+ * either unit; a caller that hands over neither leaves the column null rather
+ * than borrowing the provider figure, which is what `billed_cents` did.
+ */
+export function resolveCustomerCanonicalMicrousd(attribution: CostEventAttribution): number | null {
+  const fromMicrousd = nonNegativeInt(attribution.customerCanonicalMicrousd);
+  if (fromMicrousd !== null) return fromMicrousd;
+  const fromCents = nonNegativeInt(attribution.customerCanonicalCents);
+  return fromCents === null ? null : microusdFromCents(fromCents);
+}
+
+function reconciliationStatus(attribution: CostEventAttribution): CogsReconciliationStatus {
+  return nonNegativeInt(attribution.providerReportedCostCents) === null
+    ? 'estimated'
+    : 'provider_reported';
+}
+
 export async function recordProviderCostEvent(
   event: ProviderCostEvent,
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<void> {
   const tokenClasses = event.tokenClasses ?? NO_TOKEN_CLASSES;
+  const customerCanonicalMicrousd = resolveCustomerCanonicalMicrousd(event);
+  const providerReportedCents = nonNegativeInt(event.providerReportedCostCents);
   await db.execute(
     `insert into public.provider_cost_events (
        user_id, capability, provider, model, unit_basis, units,
        provider_cost_cents, billed_cents, source_ref, metadata,
        cache_read_units, cache_write_units, compaction_saved_units,
        cache_savings_cents, cache_write_premium_cents,
-       task_outcome, task_ref, organization_id
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18)
+       task_outcome, task_ref, organization_id,
+       customer_canonical_microusd, customer_credits,
+       provider_estimated_cost_microusd, provider_reported_cost_microusd,
+       reconciliation_status, feature, route_id, surface,
+       input_tokens, cached_tokens, output_tokens, reasoning_tokens
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
+               $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
      on conflict (source_ref) do nothing`,
     [
       event.userId ?? null,
@@ -357,6 +416,18 @@ export async function recordProviderCostEvent(
       event.taskOutcome ?? 'delivered',
       event.taskRef ?? null,
       event.organizationId ?? null,
+      customerCanonicalMicrousd,
+      customerCanonicalMicrousd === null ? null : creditsFromMicrousd(customerCanonicalMicrousd),
+      microusdFromCents(Math.max(0, Math.round(event.providerCostCents))),
+      providerReportedCents === null ? null : microusdFromCents(providerReportedCents),
+      reconciliationStatus(event),
+      event.feature ?? null,
+      event.routeId ?? null,
+      event.surface ?? null,
+      nonNegativeInt(event.inputTokens),
+      nonNegativeInt(event.cachedTokens),
+      nonNegativeInt(event.outputTokens),
+      nonNegativeInt(event.reasoningTokens),
     ],
   );
 }
@@ -547,19 +618,21 @@ export function getServedRouteIdFromCostEventMetadata(
     : null;
 }
 
-export async function recordSettledProviderCost(input: {
-  userId: string;
-  organizationId?: string | null;
-  provider: string;
-  model?: string | null;
-  routeId?: string | null;
-  actualCostCents: number;
-  sourceRef: string;
-  taskOutcome?: CogsTaskOutcome;
-  taskRef?: string | null;
-  usage: Record<string, unknown>;
-  db?: DatabaseAdapter;
-}): Promise<void> {
+export async function recordSettledProviderCost(
+  input: CostEventAttribution & {
+    userId: string;
+    organizationId?: string | null;
+    provider: string;
+    model?: string | null;
+    routeId?: string | null;
+    actualCostCents: number;
+    sourceRef: string;
+    taskOutcome?: CogsTaskOutcome;
+    taskRef?: string | null;
+    usage: Record<string, unknown>;
+    db?: DatabaseAdapter;
+  },
+): Promise<void> {
   const db = input.db ?? getNeonDb();
   const capability = resolveCogsCapability(input.usage);
   const { unitBasis, units } = resolveCogsUnits(capability, input.usage);
@@ -604,6 +677,10 @@ export async function recordSettledProviderCost(input: {
     }
   }
 
+  // A tool, image or video row has no token counts; leaving them null keeps a
+  // per-token query from averaging zeros that were never measurements.
+  const chatTokens = unitBasis === 'token' ? extractChatTokens(input.usage) : null;
+
   try {
     await recordProviderCostEvent(
       {
@@ -620,6 +697,19 @@ export async function recordSettledProviderCost(input: {
         taskOutcome: input.taskOutcome ?? 'delivered',
         taskRef: input.taskRef ?? null,
         metadata,
+        customerCanonicalMicrousd:
+          resolveCustomerCanonicalMicrousd(input) ??
+          (retailCostCents === null ? null : microusdFromCents(retailCostCents)),
+        providerReportedCostCents: input.providerReportedCostCents ?? null,
+        feature: input.feature ?? null,
+        routeId: input.routeId ?? null,
+        surface: input.surface ?? null,
+        inputTokens: input.inputTokens ?? chatTokens?.promptTokens ?? null,
+        cachedTokens: input.cachedTokens ?? chatTokens?.cacheReadTokens ?? null,
+        outputTokens: input.outputTokens ?? chatTokens?.completionTokens ?? null,
+        reasoningTokens:
+          input.reasoningTokens ??
+          (chatTokens === null ? null : numeric(input.usage['reasoningTokens'])),
         tokenClasses: resolveTokenClassDimensions({
           capability,
           provider: input.provider,
