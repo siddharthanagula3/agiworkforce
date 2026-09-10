@@ -56,6 +56,20 @@ function fakeDb(rows: unknown[] = []) {
   };
 }
 
+/**
+ * Columns are read by name, not by position: the ledger's insert list grows,
+ * and a positional assertion silently starts checking a different column.
+ */
+function insertedColumn(db: ReturnType<typeof fakeDb>, name: string): unknown {
+  const [sql, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+  const columns = (sql.match(/\(([^)]*)\)\s*values/i)?.[1] ?? '')
+    .split(',')
+    .map((entry) => entry.trim());
+  const index = columns.indexOf(name);
+  expect(index).toBeGreaterThanOrEqual(0);
+  return params[index];
+}
+
 describe('cogs ledger · capability and unit resolution', () => {
   it('meters an image generation per image, not per token', () => {
     const usage = { operation: 'image', provider: 'openai', outputCount: 4 };
@@ -127,10 +141,10 @@ describe('cogs ledger · writes', () => {
       'managed_usage:user-1:key:hash',
       '{}',
     ]);
-    expect(params.at(-1)).toBeNull();
+    expect(insertedColumn(db, 'organization_id')).toBeNull();
   });
 
-  it('writes the given organization id as the last column', async () => {
+  it('writes the given organization id', async () => {
     const db = fakeDb();
     await recordProviderCostEvent(
       {
@@ -149,9 +163,7 @@ describe('cogs ledger · writes', () => {
       db as never,
     );
 
-    const [sql, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
-    expect(sql).toContain('organization_id');
-    expect(params.at(-1)).toBe('org-1');
+    expect(insertedColumn(db, 'organization_id')).toBe('org-1');
   });
 
   it('keeps the larger amount when a cumulative adjustment is re-imported', async () => {
