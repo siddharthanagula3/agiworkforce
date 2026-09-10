@@ -214,6 +214,7 @@ describe('resolveProviderFromModel', () => {
     );
   });
 
+  const harnesses: Record<string, { trustModes: string[] } | undefined> = modelRegistry.harnesses;
   const managedMarketplaceRoute = Object.entries(modelRegistry.routes)
     .map(([routeId, route]) => ({ routeId, ...route }))
     .find(
@@ -221,7 +222,7 @@ describe('resolveProviderFromModel', () => {
         route.modelKey === requireProviderDefaultModel('anthropic') &&
         route.provider !== 'anthropic' &&
         route.commercialStatus === 'authorized_marketplace' &&
-        modelRegistry.harnesses[route.harnessId]?.trustModes.includes('managed_cloud'),
+        harnesses[route.harnessId]?.trustModes.includes('managed_cloud'),
     );
 
   // llm-guardrail-allow: registry-derived fixture, needs an authorized marketplace route admitted to managed traffic, D-2026-09-10-01
