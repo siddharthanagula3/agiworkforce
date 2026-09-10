@@ -286,3 +286,5 @@ __pycache__/
 # Transient capability-QA evidence (raw provider streams, probes)
 .qa-evidence/
 tmp/qa/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
