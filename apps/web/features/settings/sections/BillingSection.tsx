@@ -20,6 +20,7 @@ import {
   TOP_UP_PRESET_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
   creditsFromCents,
+  formatCredits as formatCreditsShared,
   topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
@@ -88,10 +89,9 @@ function signedCreditCents(entry: CreditHistoryEntry): number {
 const CREDIT_FRACTION_DIGITS = 2;
 
 function formatCredits(cents: number): string {
-  const credits = creditsFromCents(Math.abs(cents)).toLocaleString('en-US', {
+  return formatCreditsShared(creditsFromCents(Math.abs(cents)), {
     maximumFractionDigits: CREDIT_FRACTION_DIGITS,
   });
-  return `${credits} credits`;
 }
 
 function formatSignedCredits(cents: number): string {
