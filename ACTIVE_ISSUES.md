@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 5 items needing
+- 19 unresolved issues: 0 P0, 0 P1, 12 P2, 7 P3, plus 5 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
   and `AGI-23`, are partly fixed and say which part.
 - Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
@@ -62,7 +62,7 @@ issue turned out to be is in the commit that closed it.
   the routing conformance fixture that had drifted since 972328011
   (1a3f2b568), and the approval flow that collapsed after the first inline
   decision while labelling the wait as running (cd01fe255). What each was
-  is in its commit. New root causes opened below: `AGI-27` to `AGI-32`.
+  is in its commit. New root causes opened below: `AGI-27` to `AGI-33`.
 - Production runtime pass 2026-09-10, from Vercel's own data. The billed
   876.6 GB-hours of provisioned memory against a few minutes of active CPU
   were idle functions: the runtime-error clusters show 1,785 "Task timed out
@@ -525,6 +525,32 @@ does not compute it from clocks it does not share.
 writer that ends such a row; `apps/web/app/api/llm/v1/chat/completions/runs/route.ts`, which reports the row without its age.
 **User impact:** a stalled turn looks like a working one for up to fifteen
 minutes and survives reloads.
+### `AGI-33` A live voice session's backend responses model and web search are never metered
+
+**Severity:** P2
+**Status:** Open.
+**Area:** Voice, COGS
+**What is wrong:** a live voice session delegates to a backend responses model
+with web search (`apps/web/app/api/voice/live/sessions/route.ts`), which the
+provider bills separately from the per-minute session rate, and no usage
+report reaches the close route, so those tokens are never metered.
+**Evidence:** `apps/web/app/api/voice/live/sessions/route.ts` (the session
+create path, the `responses` tool config with `tools: [{ type: 'web_search' }]`);
+`apps/web/app/api/voice/live/sessions/[sessionId]/close/route.ts` (the
+settlement path, which records only the per-minute session usage report).
+**User impact:** none directly; this is a company-cost visibility gap in the
+COGS ledger, not a user-facing defect.
+**Dependencies:** None. Not the same as the two OpenAI/Anthropic admin
+credentials under "[Billing] Provider cost reconciliation credentials" in
+`docs/work/founder-assistance.md`, which stay there because minting them is a
+founder action.
+**Acceptance criteria:** the close route accepts and records the backend
+responses model's token usage, and any `web_search` calls it made, as their
+own `provider_cost_events` row for the session, so `cogs_summary()` no longer
+omits this spend.
+**Validation:** a live voice session that triggers a backend web search closes
+with a second `provider_cost_events` row for the backend model, covered by a
+test on the close route.
 
 ## 5. P3, lower priority
 
