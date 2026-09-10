@@ -288,7 +288,7 @@ function toLedgerMicrousd(dollars: number): number {
 }
 
 function toLedgerCents(microusd: number): number {
-  return Math.floor((microusd + MICROUSD_PER_LEDGER_CENT / 2) / MICROUSD_PER_LEDGER_CENT);
+  return microusd > 0 ? Math.max(1, Math.ceil(microusd / MICROUSD_PER_LEDGER_CENT)) : 0;
 }
 
 export function observedListLedgerMicrousd(
