@@ -36,6 +36,7 @@ active prices.
 
 **What remains after founder action** Nothing; checkout, webhook and ledger code ship and are tested.
 **Impact** RELEASE-BLOCKING
+**What remains after founder action** Until the cutover, `/api/cron/reconcile-credits` answers 500 once a day because six stored subscription ids are unknown to the live Stripe account ("refusing to guess its terminal state", production log 2026-09-10 00:30 UTC); the queue itself processes fine.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Mobile] Store submission accounts, products, listing facts
