@@ -445,6 +445,7 @@ describe('LLM Constants', () => {
         'search',
         'tts',
         'stt',
+        'audio',
         'embedding',
         'music',
       ];
