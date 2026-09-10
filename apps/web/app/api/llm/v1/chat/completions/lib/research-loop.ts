@@ -19,7 +19,9 @@
  *     fallback while showing the same Deep Research badge).
  *   - Provider-native web search tools injected by request-processor.ts
  *     (google_search / web_search_preview) run inside each turn; the loop
- *     never fabricates search results.
+ *     never fabricates search results. A harness with no native search reaches
+ *     the same rounds through the runtime `web_search` function tool, executed
+ *     by this loop via `executeWebSearch` exactly as the chat tool loop does.
  *   - `x_tool_status` / `x_search_results` SSE shapes -- identical to the
  *     shapes the client (`useChatStream.ts`) already understands.
  *
@@ -61,7 +63,17 @@ import {
 } from './tool-loop';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
-import { enrichWebSearchResultTitles } from '@/lib/web-search/web-search-tool';
+import {
+  enrichWebSearchResultTitles,
+  executeWebSearch,
+  formatWebSearchResultForModel,
+  isWebSearchTool,
+  webSearchBudgetExhaustedMessage,
+  webSearchResultsToFetchedSources,
+  WEB_SEARCH_MAX_CALLS_PER_TURN,
+  WEB_SEARCH_TOOL,
+} from '@/lib/web-search/web-search-tool';
+import { classifyAttachedSearchTool, nativeSearchToolName } from '@/lib/web-search/required-search';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -100,8 +112,8 @@ const MAX_NOTE_CHARS = 6_000;
 const MAX_RESEARCH_FETCHES = 8;
 /** url_fetch executions within a single gathering round. */
 const MAX_RESEARCH_FETCHES_PER_ROUND = 3;
-/** Fetch-resolution continuation turns within a single gathering round. */
-const MAX_FETCH_PASSES_PER_ROUND = 2;
+/** Tool-resolution continuation turns within a single gathering round. */
+const MAX_TOOL_PASSES_PER_ROUND = 2;
 /** Per-page extracted-text cap inside research turns (tighter than the chat
  *  loop's 20k: fetched text rides in up to several turns per round). */
 const RESEARCH_FETCH_MAX_CONTENT_CHARS = 12_000;
@@ -807,6 +819,7 @@ function gatheringDirective(
   maxRounds: number,
   sources: SourceAggregator,
   canFetch: boolean,
+  runtimeSearch: boolean,
   plannedQueries: string[] = [],
 ): string {
   const planned =
@@ -819,6 +832,9 @@ function gatheringDirective(
         ? `Research phase, round 1: run the searches you planned.${planned}`
         : 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
       : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
+  const searchNote = runtimeSearch
+    ? ` This model has no built-in search, so every search runs through the ${WEB_SEARCH_TOOL} tool: call it (one query per call, at most ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls this round) and wait for the results before writing any notes.`
+    : '';
   const fetchNote = canFetch
     ? ' When a specific page matters (the user provided a URL, or a search result looks central to the question), call the url_fetch tool to read that page in full before writing your notes.'
     : '';
@@ -828,6 +844,7 @@ function gatheringDirective(
       : '';
   return (
     base +
+    searchNote +
     fetchNote +
     sourceNote +
     ' Reply ONLY with concise research notes: key facts found, with the source they came from.' +
@@ -1057,20 +1074,25 @@ export async function* runResearchLoop(
     return true;
   }
 
-  // Strip client-custom function tools EXCEPT the platform url_fetch tool:
-  // research turns use provider-native web search plus loop-executed url_fetch
-  // (request-processor only offers url_fetch when the resolved model supports
-  // function calling, so its presence here already implies support). No other
-  // function tool is executed by this loop, so none other is offered.
+  // Strip client-custom function tools EXCEPT the two platform tools this loop
+  // executes itself, url_fetch and the runtime web_search fallback
+  // (request-processor only offers either when the resolved model supports
+  // function calling and, for web_search, when a search backend is configured,
+  // so their presence here already implies both). No other function tool is
+  // executed by this loop, so none other is offered.
   const researchTools = (processed.llmRequest.tools ?? []).filter((t) => {
     if (!(t && typeof t === 'object')) return false;
     const fn = (t as { function?: { name?: string } }).function;
-    if (fn) return isUrlFetchTool(fn.name ?? '');
+    if (fn) return isUrlFetchTool(fn.name ?? '') || isWebSearchTool(fn.name ?? '');
     return true;
   });
   const fetchAvailable = researchTools.some((t) =>
     isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
   );
+  const runtimeSearchAvailable = researchTools.some(
+    (t) => classifyAttachedSearchTool([t]) === 'generic-function',
+  );
+  const nativeSearchAvailable = researchTools.some((t) => nativeSearchToolName(t) !== '');
   const baseRequest = {
     ...processed.llmRequest,
     tools: researchTools.length > 0 ? researchTools : undefined,
@@ -1194,21 +1216,21 @@ export async function* runResearchLoop(
   }
 
   /**
-   * Execute one batch of url_fetch tool calls a gathering turn emitted:
-   * append the assistant tool_call turn + a tool result for EVERY call
-   * (providers reject dangling tool_calls) to `turnMessages`, stream
-   * url_fetch timeline/result events, and dedupe successful pages INTO the
-   * shared SourceAggregator so they join the same cumulative x_search_results
-   * list (stable positions) as the provider search results.
+   * Execute one batch of tool calls a gathering turn emitted: append the
+   * assistant tool_call turn + a tool result for EVERY call (providers reject
+   * dangling tool_calls) to `turnMessages`, stream the tool timeline/result
+   * events, and dedupe every page and search result INTO the shared
+   * SourceAggregator so they join the same cumulative x_search_results list
+   * (stable positions) as the provider-native search results.
    *
-   * Every call gets an honest result: non-url_fetch names (never offered) and
+   * Every call gets an honest result: names this loop never offered and
    * over-budget calls get an explicit error result the model can react to.
    */
-  async function* runFetchCalls(
+  async function* runToolCalls(
     calls: ResearchToolCall[],
     turn: ResearchTurn,
     turnMessages: ProcessedRequest['llmRequest']['messages'],
-    roundFetchCount: { count: number },
+    roundCounts: { fetches: number; searches: number },
   ): AsyncGenerator<Uint8Array, boolean> {
     // Anthropic extended-thinking continuity (known-flaw
     // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01), mirroring runToolLoop: when
@@ -1237,7 +1259,46 @@ export async function* runResearchLoop(
       let content: string;
       let isError: boolean;
 
-      if (!isUrlFetchTool(call.name)) {
+      if (runtimeSearchAvailable && isWebSearchTool(call.name)) {
+        const runBudgetReached = totalSearches + roundCounts.searches >= maxSearches;
+        if (runBudgetReached || roundCounts.searches >= WEB_SEARCH_MAX_CALLS_PER_TURN) {
+          content = await applyToolResultSecretPolicy(
+            _billing.userId,
+            call.name,
+            webSearchBudgetExhaustedMessage(
+              runBudgetReached ? maxSearches : WEB_SEARCH_MAX_CALLS_PER_TURN,
+            ),
+          );
+          isError = true;
+          yield encoder.encode(
+            toolResultEvent(call.id, call.name, content, isError, responseModel),
+          );
+        } else {
+          roundCounts.searches += 1;
+          yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
+          const outcome = await executeWebSearch(call.args, {
+            userId: _billing.userId,
+            organizationId: processed.organizationId ?? null,
+            turnRef: turnId,
+            ...(options.signal ? { signal: options.signal } : {}),
+          });
+          if (outcome.ok) {
+            for (const result of webSearchResultsToFetchedSources(outcome)) sources.add(result);
+          }
+          isError = !outcome.ok;
+          content = await applyToolResultSecretPolicy(
+            _billing.userId,
+            call.name,
+            formatWebSearchResultForModel(outcome),
+          );
+          yield encoder.encode(
+            loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
+          );
+          yield encoder.encode(
+            toolResultEvent(call.id, call.name, content, isError, responseModel),
+          );
+        }
+      } else if (!isUrlFetchTool(call.name)) {
         content = await applyToolResultSecretPolicy(
           _billing.userId,
           call.name,
@@ -1247,7 +1308,7 @@ export async function* runResearchLoop(
         yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
       } else if (
         totalFetches >= MAX_RESEARCH_FETCHES ||
-        roundFetchCount.count >= MAX_RESEARCH_FETCHES_PER_ROUND
+        roundCounts.fetches >= MAX_RESEARCH_FETCHES_PER_ROUND
       ) {
         content = await applyToolResultSecretPolicy(
           _billing.userId,
@@ -1258,7 +1319,7 @@ export async function* runResearchLoop(
         yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
       } else {
         totalFetches += 1;
-        roundFetchCount.count += 1;
+        roundCounts.fetches += 1;
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
         const outcome = await executeUrlFetch(call.args, {
           maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
@@ -1285,6 +1346,28 @@ export async function* runResearchLoop(
 
   try {
     if (yield* flushCancellationIfRequested()) return;
+
+    if (!nativeSearchAvailable && !runtimeSearchAvailable) {
+      const unavailableMessage =
+        'Deep research needs web search, and this model was served by a route that had none available.' +
+        ' Pick a model whose harness searches the web, or run it again once a search backend is configured.';
+      logger.warn(
+        { provider: processed.provider, requestId: processed.requestId },
+        '[research-loop] no web search available on the serving route',
+      );
+      yield status('error', 'No web search was available on this route');
+      yield encoder.encode(
+        sseData({
+          choices: [{ delta: { content: unavailableMessage }, index: 0 }],
+          model: responseModel,
+        }),
+      );
+      await persistRun('failed', '', 'No web search was available on the serving route.');
+      yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
+      yield encoder.encode(sseDone());
+      return;
+    }
+
     yield status('planning', 'Planning research');
 
     // ── Planning turn (CAP-045 slice 2) ──
@@ -1432,6 +1515,7 @@ export async function* runResearchLoop(
               maxGatherRounds,
               sources,
               fetchAvailable,
+              runtimeSearchAvailable,
               round === 1
                 ? plan
                     .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
@@ -1444,27 +1528,28 @@ export async function* runResearchLoop(
         if (yield* flushCancellationIfRequested()) return;
         roundSearchEvents += turn.searchEvents;
 
-        // url_fetch resolution passes: when the turn ended on tool_calls,
-        // execute the fetches (bounded), feed the results back, and let the
-        // model finish its notes for this round. Fetched text lives only in
+        // Tool resolution passes: when the turn ended on tool_calls, execute
+        // them (bounded), feed the results back, and let the model finish its
+        // notes for this round. Search results and fetched text live only in
         // this round's turnMessages, the persistent thread gets the capped
         // notes below, so the token budget stays under control.
-        let fetchPasses = 0;
-        const roundFetchCount = { count: 0 }; // per-round cap spans all passes
+        let toolPasses = 0;
+        const roundCounts = { fetches: 0, searches: 0 };
         while (
           turn.finishReason === 'tool_calls' &&
           turn.toolCalls.length > 0 &&
-          fetchPasses < MAX_FETCH_PASSES_PER_ROUND
+          toolPasses < MAX_TOOL_PASSES_PER_ROUND
         ) {
-          fetchPasses += 1;
-          if (yield* runFetchCalls(turn.toolCalls, turn, turnMessages, roundFetchCount)) return;
-          const cumulativeAfterFetch = sources.toSearchResultsEvent(responseModel);
-          if (cumulativeAfterFetch) yield encoder.encode(cumulativeAfterFetch);
+          toolPasses += 1;
+          if (yield* runToolCalls(turn.toolCalls, turn, turnMessages, roundCounts)) return;
+          const cumulativeAfterTools = sources.toSearchResultsEvent(responseModel);
+          if (cumulativeAfterTools) yield encoder.encode(cumulativeAfterTools);
           if (yield* flushCancellationIfRequested()) return;
           turn = yield* runTurn(turnMessages, false);
           if (yield* flushCancellationIfRequested()) return;
           roundSearchEvents += turn.searchEvents;
         }
+        roundSearchEvents += roundCounts.searches;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);

@@ -163,6 +163,7 @@ import {
   collectMessageResearchSources,
   orderSourcesByCitation,
 } from '../../utils/research-sources';
+import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
@@ -1406,6 +1407,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (streamingBlock) return false;
     const meta = message.metadata;
     if (!meta) return true;
+    if (rendersResearchPlan(meta.research)) return false;
     return !(
       meta.imageUrl ||
       meta.imageData ||
@@ -1517,6 +1519,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (isUser || message.isStreaming) return null;
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
+    if (rendersResearchPlan(message.metadata?.research)) return null;
     if (hasStreamError({ metadata: message.metadata })) return null;
     if (message.metadata?.webSearchAskedInText !== true) return null;
     if (message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval')) return null;

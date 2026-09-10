@@ -47,3 +47,11 @@ export function completedResearchSteps(steps: ResearchStep[] | undefined): Resea
 export function approvedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
   return (steps ?? []).filter((step) => step.status === 'pending' && step.type === 'search');
 }
+
+/** A paused run streams its plan and no prose; the plan is the turn's output, not an empty reply. */
+export function rendersResearchPlan(
+  research: { phase?: string; steps?: ResearchStep[] } | undefined,
+): boolean {
+  if (!research) return false;
+  return research.phase === 'awaiting_approval' || (research.steps?.length ?? 0) > 0;
+}
