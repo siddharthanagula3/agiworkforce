@@ -73,3 +73,31 @@ a managed request sorts providers by price and carries the registry route's
 price as `max_price`; a zero-retention workspace also sets `zdr`, and a route
 whose retention is conditional is refused for that workspace unless its harness
 honours the requirement per request.
+
+## Cost-aware Auto (task-family stage)
+
+Auto resolves a family floor before it resolves a price. `classifyTaskFamily`
+labels the request from structural signals only, the family's `qualityFloor` in
+`routing-policies.json` partitions the already-admitted slot set into the
+candidates that meet the floor and the rest, and only the first group is
+reordered. Ordering is by the expected cost of the route each slot's model
+would actually dispatch on, so a model whose only routes lack an available
+credential carries no price and sinks behind every priced candidate instead of
+leading on a price nothing can charge. The authored order breaks ties and
+orders anything the floor cannot classify, and the result is always a
+permutation of the admitted set, never a narrowing of it.
+
+Difficulty still lifts the floor. Reasoning, coding, agentic, computer-use and
+long-context families keep their `balanced` or `premium` minimum band; simple
+chat and web-grounded answers may sit on `economy`. A family that authors no
+band inherits the band of its own first authored slot. Continuity survives the
+stage while the conversation's current model still meets the floor and costs no
+more than `CONTINUITY_COST_RATIO_LIMIT` times the cheapest floor-meeting
+candidate; past that the cheaper leader takes the turn. A model the user named
+explicitly is untouched by all of this.
+
+`AGI_ROUTING_TASK_FAMILY_STAGE` is a kill switch, not a launch switch. Unset
+runs the stage; `0`, `false` or `off` restores the authored order everywhere in
+one edit. Each resolution carries the decision inputs on
+`taskFamilyDecision`: the family, the floor band, every candidate with its
+route and expected microUSD, and the slot and route that were taken.
