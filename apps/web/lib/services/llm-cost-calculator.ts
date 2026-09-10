@@ -3,6 +3,7 @@ import {
   getModelMetadataById,
   getProviderCacheTokenBillingClass,
   getProviderConfig,
+  getProviderReasoningTokenBillingClass,
   listCanonicalModels,
   normalizeModelId,
   resolveEffectiveModelPricingForInputTokens,
@@ -14,6 +15,13 @@ import { getOptionalEnv } from '@shared/utils/env';
 export function isCacheTokensDisjointFromInput(providerId: string | null | undefined): boolean {
   if (!providerId) return false;
   return getProviderCacheTokenBillingClass(providerId) === 'additional_to_input';
+}
+
+export function isReasoningTokensDisjointFromOutput(
+  providerId: string | null | undefined,
+): boolean {
+  if (!providerId) return false;
+  return getProviderReasoningTokenBillingClass(providerId) === 'additional_to_output';
 }
 
 export interface RoutePriceSheet {
@@ -49,6 +57,7 @@ export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  reasoningTokens?: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
@@ -61,6 +70,7 @@ export interface ModelPricing {
   cachedWriteCostPer1MTokens?: number;
   cachedWrite1hCostPer1MTokens?: number;
   cacheTokensDisjointFromInput?: boolean;
+  reasoningTokensDisjointFromOutput?: boolean;
 }
 
 export type CacheRateInputs = Pick<
@@ -285,6 +295,7 @@ export class LLMCostCalculator {
 
       const promptTokens = Math.max(0, usage.promptTokens);
       const completionTokens = Math.max(0, usage.completionTokens);
+      const reasoningTokens = Math.max(0, usage.reasoningTokens ?? 0);
       const cacheReadTokens = Math.max(0, usage.cacheReadInputTokens ?? 0);
       const cacheCreationTokens = Math.max(0, usage.cacheCreationInputTokens ?? 0);
       const cacheCreation1hTokens = Math.min(
@@ -319,7 +330,11 @@ export class LLMCostCalculator {
       const cacheWriteCost =
         (cacheCreation5mTokens / 1_000_000) * cacheWrite5mRate +
         (cacheCreation1hTokens / 1_000_000) * cacheWrite1hRate;
-      const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
+      const billableOutput =
+        pricing.reasoningTokensDisjointFromOutput === true
+          ? completionTokens + reasoningTokens
+          : completionTokens;
+      const outputCost = (billableOutput / 1_000_000) * pricing.outputCostPer1MTokens;
 
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
       return totalCostDollars;
@@ -410,6 +425,9 @@ export class LLMCostCalculator {
       cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(
         sheet.provider ?? fallbackProviderId,
       ),
+      reasoningTokensDisjointFromOutput: isReasoningTokensDisjointFromOutput(
+        sheet.provider ?? fallbackProviderId,
+      ),
     };
   }
 
@@ -473,6 +491,7 @@ export class LLMCostCalculator {
           cachedWriteCostPer1MTokens: effective.cached_write,
           cachedWrite1hCostPer1MTokens: effective.cached_write_1h,
           cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(metadata.provider),
+          reasoningTokensDisjointFromOutput: isReasoningTokensDisjointFromOutput(metadata.provider),
         };
       }
 
@@ -486,6 +505,7 @@ export class LLMCostCalculator {
           return {
             inputCostPer1MTokens: providerConfig.defaultPricing.inputPerMillion,
             outputCostPer1MTokens: providerConfig.defaultPricing.outputPerMillion,
+            reasoningTokensDisjointFromOutput: isReasoningTokensDisjointFromOutput(providerId),
           };
         }
       }
