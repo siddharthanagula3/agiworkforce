@@ -7,11 +7,21 @@ import {
   buildSsoCallbackUrl,
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
+import { redirect } from 'next/navigation';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 const SIGNUP_FALLBACK_REDIRECT = '/chat';
+
+async function hasVerifiedSession(): Promise<boolean> {
+  try {
+    return Boolean((await getRequestIdentity()).subject);
+  } catch {
+    return false;
+  }
+}
 
 export default async function SignupPage({
   searchParams,
@@ -25,6 +35,9 @@ export default async function SignupPage({
     SIGNUP_FALLBACK_REDIRECT,
   );
   const context = readAuthRouteContext(params, redirectTo);
+  if (await hasVerifiedSession()) {
+    redirect(buildSignUpCompleteUrl(context));
+  }
 
   return (
     <AuthLayout embedded={context.desktopSurface}>
