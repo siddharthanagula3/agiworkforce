@@ -45,6 +45,9 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   calculateObservedProviderUsageCostDollars: () => 0,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   markManagedUsageClientDelivered: vi.fn(async () => undefined),
   markManagedUsageProviderStarted: vi.fn(),
   finalizeManagedUsageRequest: vi.fn(async () => undefined),
