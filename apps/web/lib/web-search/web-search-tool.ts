@@ -102,6 +102,10 @@ export interface WebSearchOverrides {
   userId?: string;
   organizationId?: string | null;
   turnRef?: string;
+  /** The client surface the turn came from, recorded on the COGS row. */
+  surface?: string | null;
+  /** What the customer is charged for this call, when the caller's plan does not include it. */
+  customerChargeCents?: number | null;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -229,6 +233,8 @@ export async function executeWebSearch(
         organizationId: overrides.organizationId ?? null,
         turnRef: overrides.turnRef ?? query,
         calls: 1,
+        surface: overrides.surface ?? null,
+        customerChargeCents: overrides.customerChargeCents ?? null,
       });
     }
 
@@ -279,6 +285,24 @@ export function formatWebSearchResultForModel(
   );
 
   return `Search results for "${outcome.query.replaceAll('<', '&lt;')}"${truncationNote}\n\n${fenced}`;
+}
+
+export function searchPlanBoundExhaustedMessage(limit: number, windowDays: number): string {
+  return (
+    `Web search is unavailable on this account right now: it has used its ${limit} ` +
+    `included searches in the last ${windowDays} days. No further searches will run. ` +
+    'Answer now from what you already know, say plainly which parts you could not ' +
+    'confirm, and tell the user their plan includes no more searches this period.'
+  );
+}
+
+export function searchUnaffordableMessage(): string {
+  return (
+    'Web search is unavailable on this account right now: this search is charged ' +
+    'and the account has no credits left for it. No further searches will run. ' +
+    'Answer now from what you already know, say plainly which parts you could not ' +
+    'confirm, and tell the user their credit balance is what stopped the search.'
+  );
 }
 
 export function webSearchBudgetExhaustedMessage(limit: number): string {

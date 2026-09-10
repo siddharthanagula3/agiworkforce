@@ -323,3 +323,16 @@ render their empty states.
 **What remains after founder action** Nothing; the agent seeds the rest through the product.
 **Impact** NON-BLOCKING (coverage debt)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Billing] Search bounds and the COGS ledger split (migration 0183)
+
+**Why founder assistance is required**
+Running a production migration and changing what a paying customer is charged
+are both calls the founder reserves.
+**Exact action** Approve and apply `0183_provider_cost_events_customer_and_cogs_split.sql`, and confirm the search bounds shipping with it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
+**Where** Neon production (migration), no dashboard or env change; the two existing rate overrides `AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL` and `AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL` are unchanged and stay unset.
+**Needed input** One approval to apply, one confirmation of the bounds.
+**How to verify completion** `provider_cost_events` carries `customer_canonical_microusd` and `feature`; a search on a paid account writes a row with `feature = 'web_search_perplexity'`; the per-user count the bounds read is non-zero.
+**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration and are tested. Until 0183 is applied, `feature` does not exist, the per-user count fails open and every search stays included.
+**Impact** FEATURE-BLOCKING (the search bounds stay inert)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED

@@ -74,11 +74,15 @@ import {
   executeWebSearch,
   formatWebSearchResultForModel,
   isWebSearchTool,
+  searchUnaffordableMessage,
   webSearchBudgetExhaustedMessage,
   webSearchResultsToFetchedSources,
   WEB_SEARCH_MAX_CALLS_PER_TURN,
   WEB_SEARCH_TOOL,
 } from '@/lib/web-search/web-search-tool';
+import { resolveSearchBudget, settleSearchCharge } from '@/lib/web-search/search-budget';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { classifyAttachedSearchTool, nativeSearchToolName } from '@/lib/web-search/required-search';
 import {
   accumulateObservedProviderUsage,
@@ -949,6 +953,43 @@ export async function* runResearchLoop(
   // credential/safety/context errors still fail fast exactly as before.
   let servingProcessed: ProcessedRequest = processed;
 
+  /**
+   * Deep research runs unattended and searches in bulk, so its calls are
+   * charged at the rate card rather than included. Anything that goes wrong in
+   * the charging path fails OPEN: the run proceeds uncharged rather than a
+   * research run dying on its own accounting. Only a refusal to pay stops a
+   * search.
+   */
+  async function chargeResearchSearch(
+    callOrdinal: number,
+  ): Promise<{ paid: boolean; chargeCents: number | null }> {
+    try {
+      const decision = await resolveSearchBudget({
+        userId: _billing.userId,
+        planTier: processed.subscriptionTier ?? null,
+        feature: 'web_search_perplexity',
+        callerKind: 'automated',
+      });
+      if (decision.outcome !== 'charge') return { paid: true, chargeCents: null };
+      const paid = await settleSearchCharge({
+        userId: _billing.userId,
+        requestId: processed.requestId,
+        callOrdinal,
+        feature: decision.feature,
+        chargeCents: decision.chargeCents,
+        surface: processed.chatSurface,
+        db: createClaimedUserScopedDb(getNeonDb(), {
+          userId: _billing.userId,
+          organizationId: processed.organizationId ?? null,
+        }),
+      });
+      return { paid, chargeCents: paid ? decision.chargeCents : null };
+    } catch (error) {
+      logger.warn({ error }, '[research] search charge skipped; the search runs uncharged');
+      return { paid: true, chargeCents: null };
+    }
+  }
+
   const sources = new SourceAggregator();
   let totalSearches = 0;
   let totalFetches = 0;
@@ -1310,11 +1351,29 @@ export async function* runResearchLoop(
           );
         } else {
           roundCounts.searches += 1;
+          // Deep research runs unattended and searches in bulk, so its calls
+          // are charged at the rate card rather than included.
+          const searchOrdinal = totalSearches + roundCounts.searches;
+          const searchCharge = await chargeResearchSearch(searchOrdinal);
+          if (!searchCharge.paid) {
+            content = await applyToolResultSecretPolicy(
+              _billing.userId,
+              call.name,
+              searchUnaffordableMessage(),
+            );
+            isError = true;
+            yield encoder.encode(
+              toolResultEvent(call.id, call.name, content, isError, responseModel),
+            );
+            continue;
+          }
           yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
           const outcome = await executeWebSearch(call.args, {
             userId: _billing.userId,
             organizationId: processed.organizationId ?? null,
             turnRef: turnId,
+            surface: processed.chatSurface,
+            customerChargeCents: searchCharge.chargeCents,
             ...(options.signal ? { signal: options.signal } : {}),
           });
           if (outcome.ok) {
