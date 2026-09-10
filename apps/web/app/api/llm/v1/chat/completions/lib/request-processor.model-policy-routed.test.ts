@@ -229,7 +229,7 @@ describe('the primary gate asks about the vendor, not the aggregator carrying it
   });
 
   it('still refuses when the workspace blocked the aggregator transport itself', async () => {
-    serveModelPolicy({ blockedProviders: ['open_router'] });
+    serveModelPolicy({ blockedProviders: ['open_router', 'vercel_gateway'] });
 
     const result = await run('routed-block-transport', ROUTED_MODEL.id);
     expect(result.ok).toBe(false);

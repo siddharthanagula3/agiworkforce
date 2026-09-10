@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { translateChatRequest } from '@agiworkforce/providers-google';
 import { translateChatRequest as translateAnthropicChatRequest } from '@agiworkforce/providers-anthropic';
 import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
   toCanonicalChatRequest,
   toCanonicalThinking,
@@ -171,6 +172,28 @@ describe('toCanonicalChatRequest', () => {
     ]);
   });
 
+  it('sends the registry OpenRouter route price as the max_price ceiling on an OpenRouter dispatch', () => {
+    const sheet = getRoutePricingForModel(ANTHROPIC_ADAPTIVE_MODEL.id).find(
+      (route) => route.provider === 'open_router',
+    );
+    if (!sheet?.inputPerMillion || !sheet.outputPerMillion) {
+      throw new Error('Canonical request test needs a priced OpenRouter route');
+    }
+    const processed = makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter');
+    const chatRequest = toCanonicalChatRequest(processed);
+    expect(chatRequest.metadata).toEqual({
+      openRouterProviderRouting: {
+        maxPrice: { prompt: sheet.inputPerMillion, completion: sheet.outputPerMillion },
+      },
+    });
+  });
+
+  it('sends no OpenRouter ceiling on a non-OpenRouter dispatch', () => {
+    const processed = makeProcessed({ messages: [{ role: 'user', content: 'hi' }] });
+    const chatRequest = toCanonicalChatRequest(processed);
+    expect(chatRequest.metadata).toBeUndefined();
+  });
+
   it('omits tools/rawVendorTools entirely when there are none', () => {
     const processed = makeProcessed({ messages: [{ role: 'user', content: 'hi' }] });
     const chatRequest = toCanonicalChatRequest(processed);
@@ -244,7 +267,6 @@ describe('toCanonicalChatRequest', () => {
       const chatRequest = toCanonicalChatRequest(processed);
 
       expect(chatRequest.zeroDataRetentionOnly).toBeUndefined();
-      expect(chatRequest.metadata).toBeUndefined();
     });
 
     it('carries the requirement whatever the provider, so each adapter answers for itself', () => {
