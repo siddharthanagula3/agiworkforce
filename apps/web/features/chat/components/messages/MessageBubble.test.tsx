@@ -1766,6 +1766,38 @@ describe('MessageBubble', () => {
       expect(noOutputNotice()).toBeInTheDocument();
     });
 
+    /**
+     * A research run paused for approval streams its plan and no message text:
+     * the queued queries and their Start/Cancel controls ARE the turn's output,
+     * so the notice under them told the user the model had said nothing while
+     * it was waiting on them.
+     */
+    it('stays quiet while a research plan is waiting for the user to start it', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              research: {
+                phase: 'awaiting_approval',
+                label: 'Review the plan to start searching',
+                steps: [
+                  {
+                    id: 'plan-1',
+                    type: 'search',
+                    description: 'solid-state battery pilot lines 2026',
+                    status: 'pending',
+                  },
+                ],
+              },
+            },
+          })}
+        />,
+      );
+      expect(noOutputNotice()).not.toBeInTheDocument();
+    });
+
     it('stays quiet on an empty turn the provider rejected, which has its own notice', () => {
       render(
         <MessageBubble
