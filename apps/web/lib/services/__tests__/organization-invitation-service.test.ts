@@ -325,7 +325,7 @@ describe('acceptInvitation', () => {
     expect(String(h.execute.mock.calls[0]?.[0]).toLowerCase()).toContain(
       'insert into public.organization_members',
     );
-    expect(h.query.mock.invocationCallOrder.at(-1)!).toBeLessThan(
+    expect(h.query.mock.invocationCallOrder[acceptSql]!).toBeLessThan(
       h.execute.mock.invocationCallOrder[0]!,
     );
   });
