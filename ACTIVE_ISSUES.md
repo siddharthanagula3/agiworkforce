@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 4 items needing
+- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 5 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
   and `AGI-23`, are partly fixed and say which part.
 - Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
@@ -63,6 +63,32 @@ issue turned out to be is in the commit that closed it.
   (1a3f2b568), and the approval flow that collapsed after the first inline
   decision while labelling the wait as running (cd01fe255). What each was
   is in its commit. New root causes opened below: `AGI-27` to `AGI-31`.
+- Production runtime pass 2026-09-10, from Vercel's own data. The billed
+  876.6 GB-hours of provisioned memory against a few minutes of active CPU
+  were idle functions: the runtime-error clusters show 1,785 "Task timed out
+  after 800 seconds" events between 2026-08-11 and 2026-09-10 05:14 UTC on
+  the chat completions route and the workflow flow route, roughly 397 hours of
+  function time at 1.7 GB, most of the bill. Cause, on the deployment of
+  8b2923fa7: the durable workflow bundle died at load (fixed on main in
+  496cd42da), the chat function then sat under its own SSE heartbeat with no
+  bound after the first durable event, and the reaper marked stranded rows
+  terminal without cancelling the workflow run behind them, so six runs
+  created 2026-09-08 06:04 to 2026-09-09 05:14 UTC were redelivered every
+  15 minutes. The six runs were cancelled through the workflow API at
+  15:33 UTC; no run is pending or running in either environment and the
+  timeout curve has been flat at zero since 05:15 UTC. The class is closed on
+  main by a1c1b6a1e: every durable entry point bounds silence and detaches
+  before the function limit, provider deadlines stay armed for the whole
+  stream on the streaming, non-streaming and research paths, a Stop reaches
+  the provider call inside a durable step, the reaper cancels world runs, and
+  the Google adapter bounds only its wait for headers. Exercised on `:3100`:
+  "hi" on OpenRouter Free Auto answers in 2.1 s over the durable transport
+  with one request, Stop settles in under 300 ms, two rapid sends produce one
+  request each. Deployed verification is `LIVE-8`. The same pass found no
+  other function alive past its budget: crons are batch- and time-bounded,
+  only the current deployment receives invocations, and the remaining
+  daily 500 is the credit reconciliation cron meeting Stripe subscription ids
+  the live account does not know (founder file, Billing entry).
 - Five are blocked on a decision rather than on code, and each says whose and
   what it costs: `AGI-5` (CI budget), `AGI-11` (default expiry), `AGI-14` (a
   second speech-to-text vendor), `AGI-17` (conform to CommonMark or forgive it),
@@ -664,14 +690,15 @@ fresh occurrence.
 
 ## 6. Needs live validation
 
-Neither of these is a confirmed defect.
+None of these is a confirmed defect.
 
-| id       | Question                                                      | Why it is still open                                                                                                                                                                                                                                                                                       |
-| -------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke? | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                                                                                         |
-| `LIVE-4` | Does web to desktop continuity complete a round trip?         | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                                                                                  |
-| `LIVE-7` | Does the durable transport rotate routes after 2f042794f?     | The generated durable step route under the web app's .well-known/workflow directory is written when the dev server starts, so the running server on `:3100` still executes the old step code. Tests cover the rotation; a live pinned-model turn on a gateway route must be re-run after the next restart. |
-| `LIVE-6` | Do scheduled tasks actually fire?                             | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect.                                                                   |
+| id       | Question                                                             | Why it is still open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVE-3` | Does a connector survive discover, authorize, expire, revoke?        | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `LIVE-4` | Does web to desktop continuity complete a round trip?                | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `LIVE-7` | Does the durable transport rotate routes after 2f042794f?            | The generated durable step route under the web app's .well-known/workflow directory is written when the dev server starts, so the running server on `:3100` still executes the old step code. Tests cover the rotation; a live pinned-model turn on a gateway route must be re-run after the next restart.                                                                                                                                                                                                                                                                                                                                                        |
+| `LIVE-6` | Do scheduled tasks actually fire?                                    | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `LIVE-8` | Do functions stop outliving their budget once a1c1b6a1e is deployed? | Production still runs 8b2923fa7 while the deploy pipeline drains. After the deploy: the runtime-error clusters must show no 800 s timeout on the chat or flow routes, a durable turn must end within the function limit, and the timeout share on the Vercel functions overview must stay at zero. Until then the six cancelled runs are the only reason the curve is flat. Separately, `/login`, `/`, `/pricing` and `/contact-sales` are rendered by a function on every hit and receive bursts of a dozen requests every ten minutes from an unidentified external monitor or crawler; cheap today, and the public-pages pass should make those routes static. |
 
 ## 7. Execution order
 
