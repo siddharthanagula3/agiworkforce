@@ -1983,6 +1983,26 @@ const MessageBubbleComponent = function MessageBubble({
                       </div>
                     );
                   }
+                  if (!isUser) {
+                    return (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        onClick={() => setLightboxAttachment(attachment)}
+                        className="group relative basis-full overflow-hidden rounded-lg border border-border/50 bg-muted/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        aria-label={`View ${attachment.name} full size`}
+                        title={attachment.name}
+                      >
+                        <img
+                          src={attachment.url}
+                          alt={attachment.name}
+                          loading="lazy"
+                          onError={() => markAttachmentBroken(attachment.id)}
+                          className="max-h-[480px] w-auto max-w-full object-contain"
+                        />
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={attachment.id}
