@@ -4,7 +4,12 @@ import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
-import { gatewayRoutesEnabled, listCredentialedGatewayProviderIds } from './gateway-routing';
+import {
+  buildGatewayRouteAdapter,
+  gatewayRoutesEnabled,
+  hasGatewayRouteCredentials,
+  listCredentialedGatewayProviderIds,
+} from './gateway-routing';
 import {
   createProviderAdapter,
   type ProviderAdapterConfigMap,
@@ -261,6 +266,9 @@ export function buildServerProviderAdapter(
 ): ProviderAdapter {
   const providerConfig = SERVER_PROVIDER_CONFIG[providerId];
   if (!providerConfig) {
+    if (gatewayRoutesEnabled() && hasGatewayRouteCredentials(providerId)) {
+      return buildGatewayRouteAdapter(providerId);
+    }
     throw new Error(`Provider "${providerId}" is not supported.`);
   }
   const { adapterId, envPrefix } = providerConfig;
