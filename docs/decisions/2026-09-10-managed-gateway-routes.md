@@ -15,7 +15,7 @@ when the founder decides.
   an approval prompt when the account's default is "run read-only actions
   without asking".
 - Evidence: observed 2026-09-10 on the dev server with the QA account. A CSV
-  analysis on GPT-5.6 Luna needed two manual approvals, one per code step,
+  analysis on the OpenAI flagship needed two manual approvals, one per code step,
   before the totals, chart and workbook appeared; a project knowledge question
   asked from the project composer paused for approval of a code action.
   Settings → Capabilities states that even the permissive mode asks before
