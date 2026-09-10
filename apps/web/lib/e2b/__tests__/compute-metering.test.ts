@@ -12,6 +12,9 @@ vi.mock('@/lib/services/credit-service', () => ({
 
 const RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 
+/** 2 vCPU at 14 microUSD plus 4 GiB at 4.5 microUSD, the published E2B default shape. */
+const DEFAULT_SHAPE_RATE = 46;
+
 function clearScopedEnv(): void {
   vi.stubEnv(RATE_ENV, undefined);
 }
@@ -50,17 +53,18 @@ describe('sandboxComputeIsPriceable, the provisioning gate', () => {
     vi.unstubAllEnvs();
   });
 
-  it('is true with no override, priced from the published per-vCPU table', async () => {
+  it('is true with no override, priced from the published vCPU and memory table', async () => {
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(true);
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('is false when the override is set but not a positive number', async () => {
+  it('falls back to the declared table when the override is not a positive number', async () => {
     vi.stubEnv(RATE_ENV, '0');
     const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(false);
-    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(mod.sandboxComputeIsPriceable()).toBe(true);
+    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(DEFAULT_SHAPE_RATE);
+    expect(logger.error).toHaveBeenCalled();
   });
 
   it('is true once a valid override is configured', async () => {
@@ -80,37 +84,34 @@ describe('getSandboxComputeMicrousdPerSecond', () => {
     vi.unstubAllEnvs();
   });
 
-  it('falls back to the published per-vCPU table default (2 vCPU) with no vcpuCount given', async () => {
+  it('prices the E2B default shape when the template declares none', async () => {
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(28);
+    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(DEFAULT_SHAPE_RATE);
   });
 
-  it('scales linearly with the declared vCPU count', async () => {
+  it('charges vCPU seconds and memory seconds together', async () => {
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond(1)).toBe(14);
-    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(28);
-    expect(mod.getSandboxComputeMicrousdPerSecond(4)).toBe(56);
-    expect(mod.getSandboxComputeMicrousdPerSecond(6)).toBe(84);
-    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(112);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 1, memoryGib: 2 })).toBe(23);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(46);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 4, memoryGib: 8 })).toBe(92);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 8, memoryGib: 16 })).toBe(184);
   });
 
-  it('treats a zero or negative vCPU count as unknown, using the default', async () => {
+  it('treats a zero, negative or unknown dimension as undeclared and uses the default', async () => {
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond(0)).toBe(28);
-    expect(mod.getSandboxComputeMicrousdPerSecond(-1)).toBe(28);
-    expect(mod.getSandboxComputeMicrousdPerSecond(null)).toBe(28);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 0, memoryGib: 0 })).toBe(
+      DEFAULT_SHAPE_RATE,
+    );
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: -1, memoryGib: null })).toBe(
+      DEFAULT_SHAPE_RATE,
+    );
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 4 })).toBe(74);
   });
 
-  it('returns 0 when the override is set but unusable, ignoring the table', async () => {
-    vi.stubEnv(RATE_ENV, 'not-a-number');
-    const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(0);
-  });
-
-  it('the override wins over the table regardless of vCPU count', async () => {
+  it('the override wins over the table regardless of sandbox shape', async () => {
     vi.stubEnv(RATE_ENV, '250');
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(250);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 8, memoryGib: 16 })).toBe(250);
   });
 });
 
@@ -124,25 +125,22 @@ describe('meterSandboxComputeInterval', () => {
     vi.unstubAllEnvs();
   });
 
-  it('reports every interval as UNPRICED when the override is explicitly invalid', async () => {
+  it('bills from the declared table rather than nothing when the override is invalid', async () => {
     vi.stubEnv(RATE_ENV, 'garbage');
     const mod = await loadModule();
+    const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
-    await expect(mod.meterSandboxComputeInterval(interval({ sandboxId: 'sbx-2' }))).resolves.toBe(
-      0,
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 17,
+        metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
+      }),
     );
-
-    expect(settleCreditsDurably).not.toHaveBeenCalled();
-    const unpricedCalls = logger.error.mock.calls.filter(
-      (call) => typeof call[0] === 'object' && call[0] !== null && 'elapsedMs' in call[0],
-    );
-    expect(unpricedCalls).toHaveLength(2);
-    expect(unpricedCalls[0]?.[0]).toMatchObject({ elapsedMs: 60_000, unbilledMs: 60_000 });
-    expect(unpricedCalls[1]?.[0]).toMatchObject({ elapsedMs: 60_000, unbilledMs: 120_000 });
+    expect(logger.error).toHaveBeenCalled();
   });
 
-  it('counts an interval that rounds to 0 cents at the default table rate as unbilled', async () => {
+  it('counts an interval that rounds to 0 cents at the table rate as unbilled', async () => {
     const mod = await loadModule();
 
     await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
@@ -151,7 +149,7 @@ describe('meterSandboxComputeInterval', () => {
     expect(logger.warn.mock.calls[0]?.[0]).toMatchObject({
       elapsedMs: 60_000,
       unbilledMs: 60_000,
-      microusdPerSecond: 28,
+      microusdPerSecond: DEFAULT_SHAPE_RATE,
     });
   });
 
@@ -182,29 +180,52 @@ describe('meterSandboxComputeInterval', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('settles a priced interval into the usage ledger from the table when no override is configured', async () => {
+  it('settles from the table when no override is configured', async () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(10);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        amountCents: 10,
-        metadata: expect.objectContaining({ microusd_per_second: 28 }),
+        amountCents: 17,
+        metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
   });
 
-  it('uses the interval vCPU count to select the table rate', async () => {
+  it('uses the interval sandbox shape to select the table rate', async () => {
     const mod = await loadModule();
-    const hour = interval({ endedAtMs: 1_000_000 + 3_600_000, vcpuCount: 4 });
+    const hour = interval({
+      endedAtMs: 1_000_000 + 3_600_000,
+      vcpuCount: 4,
+      memoryGib: 8,
+    });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(20);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(33);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountCents: 20,
-        metadata: expect.objectContaining({ microusd_per_second: 56 }),
+        amountCents: 33,
+        metadata: expect.objectContaining({ microusd_per_second: 92 }),
+      }),
+    );
+  });
+
+  it('settles from the rate snapshotted at provisioning, over both override and table', async () => {
+    vi.stubEnv(RATE_ENV, '250');
+    const mod = await loadModule();
+    const hour = interval({
+      endedAtMs: 1_000_000 + 3_600_000,
+      vcpuCount: 4,
+      memoryGib: 8,
+      snapshotMicrousdPerSecond: 46,
+    });
+
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 17,
+        metadata: expect.objectContaining({ microusd_per_second: 46 }),
       }),
     );
   });
@@ -231,12 +252,25 @@ describe('compute pricing is read from the registry, not a literal', () => {
     vi.doUnmock('@agiworkforce/types');
   });
 
-  it('reflects a different registry rate for the same vCPU count', async () => {
+  it('reflects a different registry rate for the same sandbox shape', async () => {
+    vi.doMock('@agiworkforce/types', () => ({
+      getProviderComputePricing: () => ({
+        unit: 'usd_per_vcpu_second',
+        ratePerUnit: 0.00005,
+        ramRatePerGibSecond: 0.00001,
+      }),
+    }));
+    const mod = await loadModule();
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(140);
+  });
+
+  it('refuses to price when the registry declares no memory rate', async () => {
     vi.doMock('@agiworkforce/types', () => ({
       getProviderComputePricing: () => ({ unit: 'usd_per_vcpu_second', ratePerUnit: 0.00005 }),
     }));
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(100);
+    expect(mod.sandboxComputeIsPriceable()).toBe(false);
+    expect(logger.error).toHaveBeenCalled();
   });
 
   it('is unpriced and logs an error when the registry has no compute-pricing entry', async () => {
@@ -245,7 +279,7 @@ describe('compute pricing is read from the registry, not a literal', () => {
     }));
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(false);
-    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(0);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(0);
     expect(logger.error).toHaveBeenCalled();
   });
 });

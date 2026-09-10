@@ -53,7 +53,7 @@ import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
   harnessProxyBaseUrlEnv,
-  templateVcpuCount,
+  templateComputeShape,
   type HarnessCredentialSpec,
 } from './templates';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -63,6 +63,7 @@ import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
   E2B_COMPUTE_RATE_ENV,
+  getSandboxComputeMicrousdPerSecond,
   meterSandboxComputeInterval,
   sandboxComputeIsPriceable,
 } from './compute-metering';
@@ -516,12 +517,16 @@ async function closeBillableInterval(
   const startedAtMs = session.activeSinceMs;
   if (typeof startedAtMs !== 'number') return;
 
-  const vcpuCount = (await templateVcpuCount(session.templateId ?? scope.templateId)) ?? undefined;
+  const shape = await templateComputeShape(session.templateId ?? scope.templateId);
   await meterSandboxComputeInterval({
     userId: scope.userId,
     sandboxId: session.sandboxId,
     ...scopeAttribution(scope),
-    vcpuCount,
+    ...(shape.vcpuCount === null ? {} : { vcpuCount: shape.vcpuCount }),
+    ...(shape.memoryGib === null ? {} : { memoryGib: shape.memoryGib }),
+    ...(session.computeMicrousdPerSecond === undefined
+      ? {}
+      : { snapshotMicrousdPerSecond: session.computeMicrousdPerSecond }),
     startedAtMs,
     endedAtMs: Date.now(),
     reason,
@@ -651,6 +656,15 @@ export async function getE2BExecutor(
     );
     return unavailable('policy');
   }
+  const provisioningRate = getSandboxComputeMicrousdPerSecond(await templateComputeShape(template));
+  if (scope && provisioningRate <= 0) {
+    logger.error(
+      { ...scopeLog(scope), template },
+      '[e2b] refusing to provision: sandbox compute has no resolvable rate, so its seconds could not be billed (fail-closed)',
+    );
+    return unavailable('policy');
+  }
+  const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
   const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
   const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;
   const createOpts = scope
@@ -782,6 +796,7 @@ export async function getE2BExecutor(
       ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
       ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
       ...(template ? { templateId: template } : {}),
+      ...(computeMicrousdPerSecond === undefined ? {} : { computeMicrousdPerSecond }),
     };
     await saveE2BSession(scope, session);
   }
@@ -1040,11 +1055,16 @@ export async function getE2BExecutor(
         logger.warn({ err, ...scopeLog(scope) }, '[e2b] pause (live handle) failed');
       }
       if (intervalStartedAtMs !== undefined) {
+        const shape = await templateComputeShape(template);
         await meterSandboxComputeInterval({
           userId: scope.userId,
           sandboxId,
           ...scopeAttribution(scope),
-          vcpuCount: (await templateVcpuCount(template)) ?? undefined,
+          ...(shape.vcpuCount === null ? {} : { vcpuCount: shape.vcpuCount }),
+          ...(shape.memoryGib === null ? {} : { memoryGib: shape.memoryGib }),
+          ...(computeMicrousdPerSecond === undefined
+            ? {}
+            : { snapshotMicrousdPerSecond: computeMicrousdPerSecond }),
           startedAtMs: intervalStartedAtMs,
           endedAtMs: Date.now(),
           reason: 'pause',
