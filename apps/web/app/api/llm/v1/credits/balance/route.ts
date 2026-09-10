@@ -9,8 +9,14 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
-import { isFreeBillingPlanTier, type ManagedUsageBalanceResponse } from '@agiworkforce/types';
+import {
+  creditsFromCents,
+  creditsFromMicrousd,
+  isFreeBillingPlanTier,
+  type ManagedUsageBalanceResponse,
+} from '@agiworkforce/types';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
+import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
 
 async function handleGetBalance(request: NextRequest) {
   if (request.method === 'OPTIONS') {
@@ -83,6 +89,15 @@ async function handleGetBalance(request: NextRequest) {
       ? Math.max(0, Math.floor((resetDate.getTime() - now.getTime()) / 1000))
       : 0;
 
+  const planAllowance = resolvePlanCreditAllowance(subscription.plan_tier);
+  const monthlyCredits = planAllowance
+    ? creditWindow(
+        planAllowance.monthly,
+        freeUsage ? creditsFromMicrousd(freeUsage.monthlyUsedMicrousd) : creditsFromCents(used),
+        resetAt,
+      )
+    : null;
+
   const responseBody: ManagedUsageBalanceResponse = {
     object: 'credit_balance',
     subscription: {
@@ -100,6 +115,13 @@ async function handleGetBalance(request: NextRequest) {
       seconds_until_reset: freeUsage ? secondsUntilReset : secondsUntilMonthlyReset,
       has_usage_remaining: freeUsage?.hasUsageRemaining ?? (allocated > 0 && remaining > 0),
       ...(isFreePlan ? {} : { usage_allocation: allocated > 0 ? 'provisioned' : 'pending' }),
+      ...(monthlyCredits
+        ? {
+            allowance_credits: monthlyCredits.allowance,
+            used_credits: monthlyCredits.used,
+            remaining_credits: monthlyCredits.remaining,
+          }
+        : {}),
     },
   };
 
