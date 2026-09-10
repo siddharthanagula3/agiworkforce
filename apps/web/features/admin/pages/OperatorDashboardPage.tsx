@@ -10,6 +10,7 @@ import { useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import ContentTakedownPanel from '../components/ContentTakedownPanel';
+import EconomicsSummaryPanel from '../components/EconomicsSummaryPanel';
 import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
@@ -24,6 +25,7 @@ const TABS = [
   'costs',
   'routing',
   'routes',
+  'economics',
   'content',
   'privacy',
   'support',
@@ -408,6 +410,8 @@ export function OperatorDashboardPage() {
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
 
       {tab === 'routes' ? <RouteEconomicsPanel /> : null}
+
+      {tab === 'economics' ? <EconomicsSummaryPanel /> : null}
 
       {tab === 'content' ? <ContentTakedownPanel /> : null}
 
