@@ -1,9 +1,16 @@
+import { formatCredits } from './credits';
+
 export type ManagedUsageBucket = 'session' | 'weekly' | 'weeklyFlagship' | 'period';
 
 export interface ManagedUsageBucketCopy {
   label: string;
   description: string;
   limitPhrase: string;
+  /**
+   * The window a credit figure belongs to, so a limit can be stated as an
+   * amount rather than a share: "your 25 credits for this 5-hour window".
+   */
+  creditWindowPhrase: string;
 }
 
 export const MANAGED_USAGE_BUCKET_COPY: Readonly<
@@ -13,23 +20,60 @@ export const MANAGED_USAGE_BUCKET_COPY: Readonly<
     label: 'Current session',
     description: 'Refills continuously as earlier usage ages out.',
     limitPhrase: 'your current session limit',
+    creditWindowPhrase: 'for this 5-hour window',
   },
   weekly: {
     label: 'This week',
     description: 'Across every model, refilling as the week rolls forward.',
     limitPhrase: 'your weekly limit',
+    creditWindowPhrase: 'for this week',
   },
   weeklyFlagship: {
     label: 'Most capable models',
     description: 'A share of the weekly allowance reserved for the largest models.',
     limitPhrase: 'your weekly limit for the most capable models',
+    creditWindowPhrase: 'for the most capable models this week',
   },
   period: {
     label: 'This billing period',
     description: 'Resets on your billing date.',
     limitPhrase: 'your limit for this billing period',
+    creditWindowPhrase: 'for this billing period',
   },
 });
+
+/**
+ * A credit amount without its unit word, for copy that supplies its own.
+ * One decimal: sub-cent metering means a turn can cost a fraction of a credit,
+ * and a whole-number display would report every one of them as zero.
+ */
+export function creditAmount(credits: number): string {
+  return Math.max(0, credits).toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
+export function formatCreditWindowUsage(used: number, allowance: number): string {
+  const remaining = Math.max(0, allowance - used);
+  return `Used ${creditAmount(used)} of ${creditAmount(allowance)} credits · ${creditAmount(remaining)} left`;
+}
+
+export function managedUsageCreditLimitPhrase(
+  bucket: ManagedUsageBucket,
+  allowance: number,
+): string {
+  return `your ${formatCredits(allowance)} ${MANAGED_USAGE_BUCKET_COPY[bucket].creditWindowPhrase}`;
+}
+
+export function formatPlanCreditAllowanceLine(
+  planLabel: string,
+  allowance: { monthly: number; weekly: number; fiveHour: number },
+): string {
+  return [
+    planLabel,
+    `${creditAmount(allowance.monthly)} credits/month`,
+    `${creditAmount(allowance.weekly)} credits/week`,
+    `${creditAmount(allowance.fiveHour)} credits per 5 hours`,
+  ].join(' · ');
+}
 
 export const MANAGED_USAGE_BUCKET_ORDER: readonly ManagedUsageBucket[] = Object.freeze([
   'session',
@@ -95,6 +139,13 @@ export interface ManagedUsageBucketReading {
   bucket: ManagedUsageBucket;
   percentRemaining: number;
   resetAt?: string | number | Date | null;
+  /**
+   * Present once the server states the window in credits. The percentage stays
+   * the selector's input, so a server that cannot name an allowance still
+   * produces a warning, in the older share-based wording.
+   */
+  allowanceCredits?: number;
+  usedCredits?: number;
 }
 
 export interface ManagedUsageWarning {
@@ -129,10 +180,28 @@ export function selectUsageWarning(
     bucket: binding.bucket,
     severity: bindingRemaining <= USAGE_CRITICAL_REMAINING_PERCENT ? 'critical' : 'warning',
     percentRemaining: bindingRemaining,
-    headline:
-      bindingRemaining <= 0
-        ? `You've used all of ${MANAGED_USAGE_BUCKET_COPY[binding.bucket].limitPhrase}`
-        : `You've used ${used}% of ${MANAGED_USAGE_BUCKET_COPY[binding.bucket].limitPhrase}`,
+    headline: usageWarningHeadline(binding, bindingRemaining, used),
     resetLabel: formatUsageResetIn(binding.resetAt, now),
   };
+}
+
+function usageWarningHeadline(
+  reading: ManagedUsageBucketReading,
+  percentRemaining: number,
+  usedPercent: number,
+): string {
+  const allowance = reading.allowanceCredits;
+  if (typeof allowance === 'number' && Number.isFinite(allowance) && allowance > 0) {
+    const limit = managedUsageCreditLimitPhrase(reading.bucket, allowance);
+    if (percentRemaining <= 0) return `You have used ${limit}`;
+    const usedCredits = reading.usedCredits;
+    const consumed =
+      typeof usedCredits === 'number' && Number.isFinite(usedCredits)
+        ? usedCredits
+        : (allowance * usedPercent) / 100;
+    return `You have used ${creditAmount(consumed)} of ${limit}`;
+  }
+  return percentRemaining <= 0
+    ? `You've used all of ${MANAGED_USAGE_BUCKET_COPY[reading.bucket].limitPhrase}`
+    : `You've used ${usedPercent}% of ${MANAGED_USAGE_BUCKET_COPY[reading.bucket].limitPhrase}`;
 }
