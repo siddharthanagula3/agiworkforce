@@ -43,7 +43,7 @@ async function handleCloseLiveSession(
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');
   if (rateLimitResponse) return rateLimitResponse;
-  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const { userId } = await getClerkAuthUser(request);
   const { sessionId } = await context.params;
   const headers = { ...getCorsHeaders(request), ...getSecurityHeaders() };
 
@@ -57,7 +57,7 @@ async function handleCloseLiveSession(
     );
   }
 
-  const scoped = await getUserScopedDb(request, { apiKeyScope: 'inference:write' });
+  const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
     return NextResponse.json(
       { error: { message: 'Managed usage tenant mismatch.', type: 'invalid_request_error' } },
