@@ -96,6 +96,23 @@ describe('InlineToolCall, status states', () => {
     expect(suffix?.className).toMatch(/chat-destructive-text/);
   });
 
+  it('awaiting-approval says it is waiting on the user, never Running, and never spins', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="s6"
+        label="Review Execute Code action"
+        status="awaiting-approval"
+        body={<span />}
+      />,
+    );
+    expect(within(container).queryByText('Waiting for your approval')).not.toBeNull();
+    expect(within(container).queryByText('Running')).toBeNull();
+    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Review Execute Code action, Waiting for your approval' }),
+    ).toBeTruthy();
+  });
+
   it('partial renders "Partial, see body" suffix', () => {
     const { container } = render(
       <InlineToolCall id="s5" label="fs-list" status="partial" body={<span />} />,

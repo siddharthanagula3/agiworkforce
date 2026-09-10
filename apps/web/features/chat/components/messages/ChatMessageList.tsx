@@ -18,6 +18,8 @@ import {
   type RowComponentProps,
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import { settledActivityStatus } from '@agiworkforce/unified-chat';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
@@ -916,9 +918,9 @@ const TRANSCRIPT_SCROLL_KEYS = new Set([
 
 function readAgentActivityStatus(message: ChatMessage | undefined | null): unknown {
   const activity = message?.metadata?.['agentActivity'];
-  return activity && typeof activity === 'object' && 'status' in activity
-    ? (activity as { status?: unknown }).status
-    : undefined;
+  if (!activity || typeof activity !== 'object' || !('status' in activity)) return undefined;
+  const state = activity as Pick<AgentActivityState, 'entries' | 'status'>;
+  return Array.isArray(state.entries) ? settledActivityStatus(state) : state.status;
 }
 
 export function buildStreamAnnouncement(message: ChatMessage | undefined): string {
@@ -927,11 +929,11 @@ export function buildStreamAnnouncement(message: ChatMessage | undefined): strin
   // default here told a screen-reader user the response was complete when
   // nothing had been written at all.
   if (!message || message.role !== 'assistant') return 'No response was generated';
-  const activity = message.metadata?.['agentActivity'];
-  const activityStatus =
-    activity && typeof activity === 'object' && 'status' in activity
-      ? (activity as { status?: unknown }).status
-      : undefined;
+  const activityStatus = readAgentActivityStatus(message);
+  if (activityStatus === 'awaiting-approval') {
+    return 'Response paused, waiting for your approval';
+  }
+  if (activityStatus === 'paused') return 'Response paused';
   if (activityStatus === 'cancelled') {
     return message.content.trim()
       ? 'Response cancelled. Partial response saved.'
@@ -1391,16 +1393,23 @@ const ChatMessageListComponent = ({
   }, [estimatedContentHeight, messages.length, scrollToBottomFast, userScrolledUp, viewportHeight]);
 
   const isGenerating = Boolean(isLoading || lastMessage?.isStreaming);
+  const awaitingApproval =
+    isGenerating && readAgentActivityStatus(lastMessage) === 'awaiting-approval';
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
-  const wasGeneratingRef = useRef(false);
+  const announcedPhaseRef = useRef('');
 
   useEffect(() => {
-    if (wasGeneratingRef.current === isGenerating) return;
-    wasGeneratingRef.current = isGenerating;
+    const phase = !isGenerating ? 'settled' : awaitingApproval ? 'awaiting' : 'generating';
+    if (announcedPhaseRef.current === phase) return;
+    announcedPhaseRef.current = phase;
     setStreamAnnouncement(
-      isGenerating ? 'Generating response' : buildStreamAnnouncement(lastMessage),
+      phase === 'settled'
+        ? buildStreamAnnouncement(lastMessage)
+        : phase === 'awaiting'
+          ? 'Response paused, waiting for your approval'
+          : 'Generating response',
     );
-  }, [isGenerating, lastMessage]);
+  }, [isGenerating, awaitingApproval, lastMessage]);
 
   const handleRegenerate = useCallback((id: string) => onRegenerate?.(id), [onRegenerate]);
 

@@ -106,6 +106,27 @@ export function hasOpenApprovalDecision(
   );
 }
 
+function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean {
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (!entry) continue;
+    if (entry.kind === 'error') return true;
+    if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (entry.status === 'pending' || entry.status === 'running') continue;
+    return entry.status === 'failed';
+  }
+  return false;
+}
+
+// An undecided approval reads as awaiting one whatever task-state-changed wrote later; a partial run whose last step succeeded reads as completed.
+export function settledActivityStatus(
+  activity: Pick<AgentActivityState, 'entries' | 'status'>,
+): AgentActivityState['status'] {
+  if (hasOpenApprovalDecision(activity)) return 'awaiting-approval';
+  if (activity.status === 'partial' && !lastStepFailed(activity)) return 'completed';
+  return activity.status;
+}
+
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
@@ -298,14 +319,15 @@ export function buildAgentActivitySummary(
 ): string {
   const isAgiWork = workMode === AGI_WORK_MODE;
   const active = latestActiveSummary(activity);
-  if (activity.status === 'awaiting-approval') {
+  const status = settledActivityStatus(activity);
+  if (status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
-  if (activity.status === 'paused') return active ?? 'Paused';
-  if (activity.status === 'failed') return finalSummary(activity) ?? 'Failed';
-  if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
-  if (activity.status === 'cancelled') return cancelledSummary(activity) ?? STOPPED_RUN_LABEL;
-  if (activity.status === 'completed') {
+  if (status === 'paused') return active ?? 'Paused';
+  if (status === 'failed') return finalSummary(activity) ?? 'Failed';
+  if (status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
+  if (status === 'cancelled') return cancelledSummary(activity) ?? STOPPED_RUN_LABEL;
+  if (status === 'completed') {
     return isAgiWork
       ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
       : collapsedCompletionSummary(activity);
@@ -321,14 +343,15 @@ export function buildAgentActivitySummary(
 
 function buildAgentActivityAnnouncement(activity: AgentActivityState, summary: string): string {
   const active = latestActiveSummary(activity);
-  if (activity.status === 'awaiting-approval') {
+  const status = settledActivityStatus(activity);
+  if (status === 'awaiting-approval') {
     return active ? `Approval needed: ${active}` : 'Approval needed';
   }
-  if (activity.status === 'paused') return 'Agent activity paused';
-  if (activity.status === 'failed') return 'Agent activity failed';
-  if (activity.status === 'partial') return 'Agent activity finished with errors';
-  if (activity.status === 'cancelled') return 'Agent activity stopped';
-  if (activity.status === 'completed') return 'Agent activity completed';
+  if (status === 'paused') return 'Agent activity paused';
+  if (status === 'failed') return 'Agent activity failed';
+  if (status === 'partial') return 'Agent activity finished with errors';
+  if (status === 'cancelled') return 'Agent activity stopped';
+  if (status === 'completed') return 'Agent activity completed';
   return `Agent working: ${summary}`;
 }
 
@@ -623,7 +646,9 @@ function RunStatusIcon({
       <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
     );
   }
-  if (status === 'paused') return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
+  if (status === 'paused' || status === 'awaiting-approval') {
+    return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
+  }
   if (status === 'failed') {
     return <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
   }
@@ -658,7 +683,8 @@ export function AgentActivityTimeline({
   }));
 
   const isAgiWork = workMode === AGI_WORK_MODE;
-  const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
+  const settledStatus = settledActivityStatus(activity);
+  const isActive = settledStatus === 'running' || settledStatus === 'awaiting-approval';
   const isLocalStartingActivity =
     activity.lastSequence === -1 &&
     activity.entries.length === 1 &&
@@ -783,7 +809,7 @@ export function AgentActivityTimeline({
   const expandable = visibleEntries.length > 0 || hiddenEntryCount > 0;
 
   if (
-    (activity.status === 'completed' || activity.status === 'cancelled') &&
+    (settledStatus === 'completed' || settledStatus === 'cancelled') &&
     !hasReportableWork(activity.entries)
   ) {
     return null;
@@ -803,7 +829,7 @@ export function AgentActivityTimeline({
           aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${failureLead}`}
           className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
         >
-          <RunStatusIcon status={activity.status} spinnerless={isAgiWork} />
+          <RunStatusIcon status={settledStatus} spinnerless={isAgiWork} />
           <span className="min-w-0 flex-1 truncate">{failureLead}</span>
           {expandable && (
             <ChevronRight
@@ -897,7 +923,7 @@ export function AgentActivityTimeline({
             }
             return <StaticRow key={entry.id} entry={entry} />;
           })}
-          {activity.status === 'completed' && (
+          {settledStatus === 'completed' && (
             <div className="relative pl-8 py-1.5 text-sm text-muted-foreground">
               <CheckCircle2
                 className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"

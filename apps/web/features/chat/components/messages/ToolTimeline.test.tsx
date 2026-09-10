@@ -354,6 +354,16 @@ describe('ToolTimeline · manual approval', () => {
     expect(screen.getByText('Reject')).toBeInTheDocument();
   });
 
+  it('never labels a tool awaiting approval as running, and does not claim the timeline is busy', () => {
+    const { container } = render(
+      <ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />,
+    );
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText('Running')).toBeNull();
+    expect(screen.getByText('Waiting for your approval')).toBeInTheDocument();
+  });
+
   it('calls onApprove with the exact tool_call_id', () => {
     const onApprove = vi.fn();
     render(<ToolTimeline tools={[awaitingTool]} onApprove={onApprove} onReject={() => {}} />);
