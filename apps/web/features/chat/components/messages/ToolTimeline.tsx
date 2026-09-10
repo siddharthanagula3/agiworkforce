@@ -633,7 +633,7 @@ function ToolTimeline({
   }
 
   return (
-    <div className={cn('', className)} aria-busy={hasRunning || hasAwaiting}>
+    <div className={cn('', className)} aria-busy={hasRunning}>
       {/* AUDIT-FIX GOV-29: the timeline's only live region, off-screen,
           atomic, one phrase per state change. */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream, __resetPendingTurnsForTests, isApprovalTurnLive } from './useChatStream';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
+import { hasOpenApprovalDecision, settledActivityStatus } from '@agiworkforce/unified-chat';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
@@ -221,6 +223,142 @@ describe('useChatStream, tool approval → resume', () => {
     expect(secondBody.run_id).toBe(RUN_ID);
     expect(secondBody.tool_approvals).toEqual([{ tool_call_id: 'call_2', decision: 'approved' }]);
     expect(secondBody).not.toHaveProperty('messages');
+  });
+
+  it("folds the continuation into the same message: the approved call's result, then the next card", async () => {
+    const CODE_TOOL = 'execute_code';
+    let sequence = 0;
+    const agentEvent = (event: Record<string, unknown>) => ({
+      choices: [
+        {
+          delta: {
+            x_agent_event: {
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+              sequence: sequence++,
+              emittedAtMs: 1_700_000_000_000 + sequence,
+              event,
+            },
+          },
+        },
+      ],
+    });
+
+    mockSseStream([
+      agentEvent({
+        type: 'approval-requested',
+        approvalId: 'appr_1',
+        toolCallId: 'call_1',
+        name: CODE_TOOL,
+        category: 'code-execution',
+        summary: 'Review Execute Code action',
+        input: { code: 'read_csv()' },
+      }),
+      agentEvent({ type: 'task-state-changed', taskId: 'task-1', state: 'paused' }),
+      {
+        choices: [
+          {
+            delta: {
+              x_tool_approval_request: {
+                tool_call_id: 'call_1',
+                name: CODE_TOOL,
+                args: { code: 'read_csv()' },
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize this csv', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const assistantId = assistantMessage()!.id;
+
+    mockSseStream([
+      agentEvent({ type: 'approval-resolved', approvalId: 'appr_1', decision: 'approved' }),
+      agentEvent({
+        type: 'tool-execution-end',
+        toolCallId: 'call_1',
+        name: CODE_TOOL,
+        output: { stdout: 'rows: 42' },
+        isError: false,
+        elapsedMs: 900,
+      }),
+      {
+        choices: [
+          {
+            delta: {
+              x_tool_result: {
+                tool_call_id: 'call_1',
+                name: CODE_TOOL,
+                content: 'rows: 42',
+                is_error: false,
+              },
+            },
+          },
+        ],
+      },
+      agentEvent({
+        type: 'approval-requested',
+        approvalId: 'appr_2',
+        toolCallId: 'call_2',
+        name: CODE_TOOL,
+        category: 'code-execution',
+        summary: 'Review Execute Code action',
+        input: { code: 'plot()' },
+      }),
+      agentEvent({ type: 'task-state-changed', taskId: 'task-1', state: 'paused' }),
+      {
+        choices: [
+          {
+            delta: {
+              x_tool_approval_request: {
+                tool_call_id: 'call_2',
+                name: CODE_TOOL,
+                args: { code: 'plot()' },
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
+    });
+
+    const messages = useChatStore.getState().messages.filter((m) => m.role === 'assistant');
+    expect(messages, 'the continuation stays in the same assistant message').toHaveLength(1);
+
+    const metadata = messages[0]!.metadata!;
+    const approved = metadata.tools?.find((t) => t.toolCallId === 'call_1');
+    expect(approved?.status).toBe('completed');
+    expect(approved?.result).toBe('rows: 42');
+    expect(approved?.requiresApproval).toBe(false);
+
+    const next = metadata.tools?.find((t) => t.toolCallId === 'call_2');
+    expect(next?.status).toBe('awaiting_approval');
+    expect(next?.requiresApproval).toBe(true);
+
+    const spine = metadata.agentActivity!;
+    expect(
+      spine.entries
+        .filter((entry) => entry.kind === 'tool')
+        .map((entry) => [entry.id, entry.status]),
+    ).toEqual([
+      ['tool:call_1', 'completed'],
+      ['tool:call_2', 'awaiting-approval'],
+    ]);
+    expect(hasOpenApprovalDecision(spine)).toBe(true);
+    expect(settledActivityStatus(spine)).toBe('awaiting-approval');
+
+    expect(metadata.cloudApproval?.calls.map((call) => call.toolCallId)).toEqual(['call_2']);
+    expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
 
   it('sends decision "rejected" and marks the card failed without executing', async () => {

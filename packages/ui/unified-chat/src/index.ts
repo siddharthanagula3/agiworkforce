@@ -416,6 +416,7 @@ export {
   AgentActivityTimeline,
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
+  settledActivityStatus,
   buildAgentActivitySummary,
 } from './components/AgentActivityTimeline';
 export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';
