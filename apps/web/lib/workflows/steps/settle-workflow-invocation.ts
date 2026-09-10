@@ -48,6 +48,7 @@ export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState 
 async function persistWorkflowAssistantTurn(
   db: ReturnType<typeof getNeonDb>,
   input: CloudAgentWorkflowInput,
+  serving: ProcessedRequest,
   outcome: WorkflowTerminalOutcome,
   usage: { inputTokens: number; outputTokens: number },
 ): Promise<void> {
@@ -63,8 +64,8 @@ async function persistWorkflowAssistantTurn(
     userId: input.userId,
     snapshot: {
       content: journal.text,
-      model: input.processed.chatRequest.model,
-      provider: input.processed.provider,
+      model: serving.chatRequest.model,
+      provider: serving.provider,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       truncated: outcome === 'cancelled',
@@ -92,11 +93,12 @@ async function settleBilling(
   db: ReturnType<typeof getNeonDb>,
   billing: CloudAgentWorkflowBilling,
   input: CloudAgentWorkflowInput,
+  serving: ProcessedRequest,
   outcome: WorkflowTerminalOutcome,
   usage: Awaited<ReturnType<typeof getCloudAgentExecutionUsage>>,
 ): Promise<number | null> {
-  const provider = input.processed.provider;
-  const model = input.processed.chatRequest.model;
+  const provider = serving.provider;
+  const model = serving.chatRequest.model;
 
   if (billing.kind === 'managed') {
     const { kind: _kind, ...reservation } = billing;
@@ -136,19 +138,21 @@ async function settleBilling(
   return null;
 }
 
-/** Exported for tests; not a Workflow step and not part of the public surface. */
+/** Exported for tests; not a Workflow step. `serving` is the route that answered, the opening one until failover rotates. */
 export async function settleWorkflowInvocation(
   input: CloudAgentWorkflowInput,
   outcome: WorkflowTerminalOutcome,
+  serving?: ProcessedRequest,
 ): Promise<void> {
   const db = getNeonDb();
+  const servingRequest = serving ?? (input.processed as ProcessedRequest);
   const billingLedgerKey = cloudAgentWorkflowBillingKey(input.billing);
   const usage = await getCloudAgentExecutionUsage(db, {
     userId: input.userId,
     runId: input.runId,
     billingIdempotencyKey: billingLedgerKey,
   });
-  const costCents = await settleBilling(db, input.billing, input, outcome, usage);
+  const costCents = await settleBilling(db, input.billing, input, servingRequest, outcome, usage);
 
   await recordCloudAgentRunSettledUsage(db, {
     userId: input.userId,
@@ -163,7 +167,7 @@ export async function settleWorkflowInvocation(
     },
   });
 
-  await persistWorkflowAssistantTurn(db, input, outcome, usage);
+  await persistWorkflowAssistantTurn(db, input, servingRequest, outcome, usage);
 
   await recordManagedAutoMemoryTurn({
     db,

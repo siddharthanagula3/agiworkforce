@@ -411,8 +411,14 @@ export interface ToolLoopProviderStepResult {
 export interface ToolLoopProviderExecution {
   operationKey: string;
   step: number;
+  attempt: number;
   request: ProcessedRequest['llmRequest'];
   execute: () => Promise<ToolLoopProviderStepResult>;
+}
+
+// The opening attempt keeps the bare step key so receipts written before rotation existed still replay.
+export function providerAttemptOperationKey(step: number, attempt: number): string {
+  return attempt === 0 ? `provider:${step}` : `provider:${step}:${attempt}`;
 }
 
 export type ToolLoopProviderExecutor = (
@@ -2229,6 +2235,7 @@ export async function* runToolLoop(
   ): Promise<ToolLoopProviderStepResult> {
     let rootQuotaExhaustedError: unknown | undefined;
     let liveLinesReachedClient = false;
+    let attempt = 0;
     for (;;) {
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
@@ -2284,8 +2291,9 @@ export async function* runToolLoop(
       try {
         const result = options.providerExecutor
           ? await options.providerExecutor({
-              operationKey: `provider:${step}`,
+              operationKey: providerAttemptOperationKey(step, attempt),
               step,
+              attempt,
               request: attemptRequest,
               execute: executeProviderStep,
             })
@@ -2312,6 +2320,7 @@ export async function* runToolLoop(
           if (rotated) {
             emptyResponseRotationUsed = true;
             servingProcessed = rotated.processed;
+            attempt += 1;
             continue;
           }
         }
@@ -2348,6 +2357,7 @@ export async function* runToolLoop(
             : err;
         }
         servingProcessed = nextAttempt.processed;
+        attempt += 1;
       }
     }
   }

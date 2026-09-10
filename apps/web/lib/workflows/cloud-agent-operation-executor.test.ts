@@ -214,6 +214,93 @@ describe('durable cloud agent operation executor', () => {
     ).rejects.toBeInstanceOf(FatalError);
   });
 
+  /**
+   * A recorded provider failure is that ATTEMPT's failure, not the turn's.
+   *
+   * The tool loop rotated past it on the live run; a replay that raises a
+   * `FatalError` instead ends the turn on a failure the run had already routed
+   * around, so the classification has to survive the receipt and come back on
+   * an ordinary error the loop can classify again.
+   */
+  it('replays a recorded provider failure as the attempt failure that rotated', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'failed',
+      error: { name: 'Error', message: 'This request could not be completed', status: 400 },
+    });
+
+    const rejection = await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi.fn(),
+    }).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).not.toBeInstanceOf(FatalError);
+    expect(rejection).toMatchObject({
+      message: 'This request could not be completed',
+      status: 400,
+    });
+  });
+
+  it('keeps the replay cap fatal even on a provider operation', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'failed',
+      error: { code: 'operation_replay_limit_exceeded', message: 'exceeded' },
+    });
+
+    await expect(
+      executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: {},
+        resultSchema: ResultSchema,
+        execute: vi.fn(),
+      }),
+    ).rejects.toBeInstanceOf(FatalError);
+  });
+
+  it('keeps the upstream status on a summarised provider failure receipt', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue(undefined);
+
+    const rejection = await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('503 {"error":"no supply"}'), { status: 503 })),
+    }).catch((error: unknown) => error);
+
+    // The prose is replaced, the class is not: a 503 rotates and a summary with
+    // no status does not.
+    expect(rejection).toMatchObject({ status: 503 });
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ error: expect.objectContaining({ status: 503 }) }),
+    );
+  });
+
   it('fails closed when an unsafe operation outcome cannot be proven', async () => {
     receiptMocks.claim.mockResolvedValue({ disposition: 'outcome_unknown' });
 

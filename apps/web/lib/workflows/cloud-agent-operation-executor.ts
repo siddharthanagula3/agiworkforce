@@ -10,6 +10,7 @@ import {
   fingerprintCloudAgentOperation,
   renewCloudAgentExecutionOperationLease,
   OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS,
+  OPERATION_REPLAY_LIMIT_CODE,
   type CloudAgentOperationKind,
   type CloudAgentRetrySafety,
 } from '@/lib/services/cloud-agent-execution-service';
@@ -24,23 +25,50 @@ function messageOf(error: unknown): string | null {
   return typeof error === 'string' ? error : null;
 }
 
+// The fields classifyError reads, kept through sanitisation and the durable receipt so a replay rotates the same way.
+function classificationFields(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== 'object') return {};
+  const source = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    code?: unknown;
+    type?: unknown;
+    retryAfterSeconds?: unknown;
+  };
+  const status =
+    typeof source.status === 'number'
+      ? source.status
+      : typeof source.statusCode === 'number'
+        ? source.statusCode
+        : undefined;
+  return {
+    ...(status !== undefined ? { status } : {}),
+    ...(typeof source.code === 'string' ? { code: source.code } : {}),
+    ...(typeof source.type === 'string' ? { type: source.type } : {}),
+    ...(typeof source.retryAfterSeconds === 'number'
+      ? { retryAfterSeconds: source.retryAfterSeconds }
+      : {}),
+  };
+}
+
 function sanitizeExecutionError(error: unknown): unknown {
   const message = messageOf(error);
   if (message === null || !RAW_PAYLOAD_MESSAGE_PATTERN.test(message)) return error;
-  return new Error(RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE, { cause: error });
+  return Object.assign(
+    new Error(RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE, { cause: error }),
+    classificationFields(error),
+  );
 }
 
 function executionError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-  return {
-    name: 'UnknownExecutionError',
-    message: typeof error === 'string' ? error : 'The external operation failed.',
-  };
+  const named =
+    error instanceof Error
+      ? { name: error.name, message: error.message }
+      : {
+          name: 'UnknownExecutionError',
+          message: typeof error === 'string' ? error : 'The external operation failed.',
+        };
+  return { ...named, ...classificationFields(error) };
 }
 
 function recordedFailureMessage(error: Record<string, unknown> | null): string {
@@ -48,6 +76,22 @@ function recordedFailureMessage(error: Record<string, unknown> | null): string {
   return typeof message === 'string' && message.trim().length > 0
     ? message
     : 'The durable external operation previously failed.';
+}
+
+// A recorded provider failure replays as the same classified failure; the replay cap stays fatal because it is the platform's verdict, not a provider's.
+function recordedFailure(
+  operationKind: CloudAgentOperationKind,
+  record: Record<string, unknown> | null,
+): Error {
+  const message = recordedFailureMessage(record);
+  if (operationKind !== 'provider' || !record || record['code'] === OPERATION_REPLAY_LIMIT_CODE) {
+    return new FatalError(message);
+  }
+  const replayed = new Error(message);
+  if (typeof record['name'] === 'string' && record['name'].length > 0) {
+    replayed.name = record['name'];
+  }
+  return Object.assign(replayed, classificationFields(record));
 }
 
 async function withLeaseHeartbeat<TResult>(
@@ -105,7 +149,7 @@ export async function executeCloudAgentOperation<TResult extends object>(
     case 'completed':
       return input.resultSchema.parse(claim.result);
     case 'failed':
-      throw new FatalError(recordedFailureMessage(claim.error));
+      throw recordedFailure(input.operationKind, claim.error);
     case 'in_progress':
       throw new RetryableError('Another workflow step is still executing this operation.', {
         retryAfter: '65s',
