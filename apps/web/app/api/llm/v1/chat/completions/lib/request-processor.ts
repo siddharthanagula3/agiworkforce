@@ -126,6 +126,7 @@ import type {
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
+import { buildFailoverRoutes, type FailoverRoute } from './failover-plan';
 import { modelRegistry, getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
   getCredentialCooldownSnapshot,
@@ -732,6 +733,8 @@ export type ProcessedRequest = {
   movedFromModel?: string;
   movedReason?: string;
   fallbackModels?: string[];
+  fallbackRoutes?: readonly FailoverRoute[];
+  servingHarnessId?: string;
   /**
    * The workspace model policy snapshot this request was admitted against,
    * read ONCE by the processor and carried on the request so every later hop
@@ -3692,6 +3695,15 @@ export async function processRequest(
   }
 
   const organizationId = scopedForCompaction.organizationId;
+  // Policy-filtered by the RESOLVER, not here: `organizationPolicy` is an
+  // admission input, so a candidate the workspace may not run never enters the
+  // plan and no rotation can land on one. An empty list is a rotation-free
+  // request served by the primary model.
+  // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
+  // stage's ranked tail, every member already verified zero-cost, so rotation
+  // cannot leave the lane. The trial path stays rotation-free as before.
+  const failoverRoutes =
+    freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
 
   return {
     ok: true,
@@ -3715,17 +3727,9 @@ export async function processRequest(
     originalModel,
     ...(movedFromModel ? { movedFromModel } : {}),
     ...(movedFromModel && movedReason ? { movedReason } : {}),
-    // Policy-filtered by the RESOLVER, not here: `organizationPolicy` is an
-    // admission input, so a candidate the workspace may not run never enters
-    // the plan and no rotation can land on one. An empty list is a
-    // rotation-free request served by the primary model.
-    // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
-    // stage's ranked tail, every member already verified zero-cost, so rotation
-    // cannot leave the lane. The trial path stays rotation-free as before.
-    fallbackModels:
-      freeTrialEnabled && !freeLanePlan
-        ? []
-        : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
+    fallbackModels: failoverRoutes.map((route) => route.modelKey),
+    fallbackRoutes: failoverRoutes,
+    servingHarnessId: routeDecision.harnessId,
     ...(freeLanePlan ? { freeLane: freeLanePlan, routeLane: ROUTE_LANES.free } : {}),
     // Carried, not re-read: the OpenRouter route-retry inside managed failover
     // is outside the plan above and must answer to this same snapshot.
