@@ -330,7 +330,7 @@
       "sourceType": "github",
       "audience": "developer",
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
-      "computedHash": "sha256-tree-v1:5220ab2b641e45202f37be239973a62668763ffc9765f0a38ab7637c5c518fe1"
+      "computedHash": "sha256-tree-v1:bc32e00674a1d4541b331ba6a40b3badf0d93af15e824f9bc16141bfa76e5dd4"
     },
     "influencer-marketing": {
       "path": ".agents/skills/influencer-marketing",
