@@ -29,7 +29,8 @@
  *   - `decideTaskFamilyContinuity(...)` / `applyTaskFamilyContinuity(...)`.
  *     session stickiness with escalation-only switching.
  *   - `taskFamilyRoutingStageEnabled()` / `TASK_FAMILY_STAGE_ENV`, the
- *     operator flag for the stage. OFF by default.
+ *     operator kill switch for the stage. ON unless the env names `0`,
+ *     `false` or `off`.
  *
  * @packageDocumentation
  */
@@ -225,7 +226,11 @@ export type {
   TaskFamilySignals,
 } from './task-family';
 export {
+  effectiveQualityFloor,
+  expectedMicroUsdFromCents,
+  MICRO_USD_PER_CENT,
   orderPreferredSlotsForTaskFamily,
+  recordTaskFamilySelection,
   resolveTaskFamilyOrdering,
   slotQualityBand,
   TASK_FAMILY_STAGE_ENV,
@@ -233,11 +238,14 @@ export {
   taskFamilyRoutingStageEnabled,
 } from './task-family-routing';
 export type {
+  TaskFamilyCandidate,
   TaskFamilyFloorRejection,
   TaskFamilyOrdering,
   TaskFamilyOrderingInput,
   TaskFamilyPolicyEntry,
   TaskFamilyQualityFloor,
+  TaskFamilySelectionRecord,
+  TaskFamilySlotCost,
   TaskFamilyStageDecision,
   TaskFamilyStageReason,
 } from './task-family-routing';

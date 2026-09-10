@@ -19,9 +19,12 @@ import {
 } from './runtime-state';
 import type { TaskFamily } from './task-family';
 import {
+  expectedMicroUsdFromCents,
+  recordTaskFamilySelection,
   resolveTaskFamilyOrdering,
   taskFamilyRoutingStageEnabled,
   type TaskFamilyPolicyEntry,
+  type TaskFamilySlotCost,
   type TaskFamilyStageDecision,
 } from './task-family-routing';
 import type { RoutingTaskType } from './types';
@@ -627,6 +630,26 @@ const WARM_ROUTE_CACHE_HIT_FRACTION = 0.9;
  */
 const PREFERRED_ROUTE_COST_CEILING_MULTIPLE = 1.25;
 
+/**
+ * How much the cost of a slot is inflated when the route it would dispatch on
+ * carries an observed failure, latency or capability penalty.
+ *
+ * Ranking only, and deliberately small: the health gate still decides what may
+ * serve, and this only stops a degraded route's price winning a comparison it
+ * would lose once the retries are counted.
+ */
+const DEGRADED_ROUTE_COST_PENALTY_FRACTION = 0.1;
+
+/**
+ * How much dearer the conversation's current model may be than the cheapest
+ * floor-meeting candidate before Auto stops preserving it.
+ *
+ * Continuity buys a warm cache and a stable voice, which is worth a premium
+ * but not an unbounded one. At this multiple the saving from switching pays
+ * for the lost cache, so the cost-ordered leader takes the turn.
+ */
+const CONTINUITY_COST_RATIO_LIMIT = 2;
+
 const MAX_FALLBACK_ROUTES = 4;
 /**
  * How many other hosts of the SAME model the substitution plan keeps ahead of a
@@ -1036,6 +1059,7 @@ function resolveRoutingLane(
     profileOrder: policy.profileOrder,
     slots: policy.slots,
     estimateCents: (modelKey) => estimatedRequestCents(modelKey, request),
+    estimateRoute: (modelKey) => slotRouteCost(modelKey, task, request),
   });
   const orderedSlots = applySlotPreference(
     taskFamilyDecision.ordering?.slots ?? preferredSlots,
@@ -1055,6 +1079,82 @@ function resolveRoutingLane(
     orderedSlots,
     paretoHead,
   };
+}
+
+interface AdmissibleModelRoutes {
+  admissible: RankedRoute[];
+  routeReasons: string[];
+  hasTrustModeRoute: boolean;
+}
+
+/**
+ * Every route of one model this request may dispatch on, before ranking.
+ *
+ * Shared by eligibility and by the task-family cost stage so a slot is never
+ * priced on a route the request could not have used.
+ */
+function admissibleModelRoutes(
+  modelKey: string,
+  vendor: string,
+  task: AutoTaskPolicy,
+  request: AutoRoutingRequest,
+): AdmissibleModelRoutes {
+  const trustModeRoutes = (routesByModelKey.get(modelKey) ?? []).filter(([, route]) =>
+    route.trustModes.includes(request.trustMode),
+  );
+  const routeReasons: string[] = [];
+  const admissible: RankedRoute[] = [];
+  for (const [routeId, route] of trustModeRoutes) {
+    const rejections = routeAdmissionRejections(routeId, route, task, request, vendor);
+    if (rejections.length > 0) {
+      routeReasons.push(...rejections);
+      continue;
+    }
+    admissible.push({
+      routeId,
+      route,
+      expectedCents: routeExpectedCents(routeId, route, request),
+      healthy:
+        routeIsHealthy(routeId, route, request) && !routeCredentialIsUnfunded(routeId, request),
+      hasCredential: routeHasCredential(route, request),
+      observedPenalty: observedRoutePenalty(
+        request.observedRouteHealth?.[routeId],
+        request.enableObservedHealthRanking ?? observedHealthRankingEnabled(),
+        request.capabilitiesInUse ?? NO_CAPABILITIES_IN_USE,
+      ),
+    });
+  }
+  return { admissible, routeReasons, hasTrustModeRoute: trustModeRoutes.length > 0 };
+}
+
+/**
+ * What this request would actually pay to run one model, and on which route.
+ *
+ * The price comes from the route the ranker would choose, so cache affinity,
+ * observed health and the provider's own sheet are all already in it. `null`
+ * means nothing can serve the model here, a model whose only routes lack a
+ * production credential above all, and the caller sinks the slot rather than
+ * leading with a price nothing can charge.
+ */
+function slotRouteCost(
+  modelKey: string,
+  task: AutoTaskPolicy,
+  request: AutoRoutingRequest,
+): TaskFamilySlotCost | null {
+  const model = registry.models[modelKey];
+  if (!model) return null;
+  const { admissible } = admissibleModelRoutes(modelKey, model.identity.provider, task, request);
+  const credentialed = admissible.filter((entry) => entry.hasCredential);
+  if (request.availableProviderIds && credentialed.length === 0) return null;
+  const routable = credentialed.length > 0 ? credentialed : admissible;
+  const healthy = routable.filter((entry) => entry.healthy);
+  const chosen = rankRoutes(healthy.length > 0 ? healthy : routable, request)[0];
+  if (!chosen) return null;
+  const cents =
+    chosen.observedPenalty > NO_OBSERVED_PENALTY
+      ? chosen.expectedCents * (1 + DEGRADED_ROUTE_COST_PENALTY_FRACTION)
+      : chosen.expectedCents;
+  return { routeId: chosen.routeId, cents };
 }
 
 function evaluateEligibility(
@@ -1085,41 +1185,15 @@ function evaluateEligibility(
     reasons.push(`provider ${model.identity.provider} is not available to automatic routing`);
   }
 
-  const trustModeRoutes = (routesByModelKey.get(modelKey) ?? []).filter(([, route]) =>
-    route.trustModes.includes(request.trustMode),
+  const { admissible, routeReasons, hasTrustModeRoute } = admissibleModelRoutes(
+    modelKey,
+    model.identity.provider,
+    task,
+    request,
   );
-  if (trustModeRoutes.length === 0) {
+  if (!hasTrustModeRoute) {
     reasons.push(`model ${modelKey} has no ${request.trustMode} route`);
     return { rankedRoutes: [], reasons };
-  }
-
-  const routeReasons: string[] = [];
-  const admissible: RankedRoute[] = [];
-  for (const [routeId, route] of trustModeRoutes) {
-    const rejections = routeAdmissionRejections(
-      routeId,
-      route,
-      task,
-      request,
-      model.identity.provider,
-    );
-    if (rejections.length > 0) {
-      routeReasons.push(...rejections);
-      continue;
-    }
-    admissible.push({
-      routeId,
-      route,
-      expectedCents: routeExpectedCents(routeId, route, request),
-      healthy:
-        routeIsHealthy(routeId, route, request) && !routeCredentialIsUnfunded(routeId, request),
-      hasCredential: routeHasCredential(route, request),
-      observedPenalty: observedRoutePenalty(
-        request.observedRouteHealth?.[routeId],
-        request.enableObservedHealthRanking ?? observedHealthRankingEnabled(),
-        request.capabilitiesInUse ?? NO_CAPABILITIES_IN_USE,
-      ),
-    });
   }
 
   const credentialedRoutes = admissible.filter((entry) => entry.hasCredential);
@@ -1170,11 +1244,25 @@ function selectedDecision(
   fallbacks: AutoFallbackRoute[] = [],
   taskFamilyDecision?: TaskFamilyStageDecision,
   shadow?: ShadowMirror,
+  slotId?: string,
 ): SelectedAutoRoute {
   const route = eligibility.route;
   if (!route || !eligibility.routeId) {
     throw new Error('selectedDecision requires an eligible route');
   }
+  const selectedRouteId = eligibility.routeId;
+  const selectedCents = eligibility.rankedRoutes.find(
+    (candidate) => candidate.routeId === selectedRouteId,
+  )?.expectedCents;
+  const recorded = taskFamilyDecision
+    ? recordTaskFamilySelection(taskFamilyDecision, {
+        slotId: slotId ?? null,
+        modelKey,
+        routeId: selectedRouteId,
+        expectedMicroUsd:
+          selectedCents === undefined ? null : expectedMicroUsdFromCents(selectedCents),
+      })
+    : undefined;
   return {
     status: 'selected',
     requestedSelection,
@@ -1184,11 +1272,11 @@ function selectedDecision(
     modelKey,
     provider: route.provider,
     providerModelId: route.providerModelId,
-    routeId: eligibility.routeId,
+    routeId: selectedRouteId,
     harnessId: route.harnessId,
     fallbacks,
     reason,
-    ...(taskFamilyDecision ? { taskFamilyDecision } : {}),
+    ...(recorded ? { taskFamilyDecision: recorded } : {}),
     ...(shadow ? { shadow } : {}),
   };
 }
@@ -1435,9 +1523,28 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     paretoHead,
   } = resolveRoutingLane(request, task, alias);
 
+  const familyCandidates = taskFamilyDecision.ordering?.candidates ?? [];
+  const familyLeaderMicroUsd = familyCandidates.find(
+    (candidate) => candidate.aboveFloor && candidate.expectedMicroUsd !== null,
+  )?.expectedMicroUsd;
+  /**
+   * Continuity survives the cost stage only while the current model still
+   * meets the family's floor and is not more than
+   * `CONTINUITY_COST_RATIO_LIMIT` times the cheapest floor-meeting candidate.
+   * A model the stage never classified is left exactly as it was.
+   */
+  const familyKeepsCurrentModel = (modelKey: string): boolean => {
+    const current = familyCandidates.find((candidate) => candidate.modelKey === modelKey);
+    if (!current) return true;
+    if (!current.aboveFloor) return false;
+    if (familyLeaderMicroUsd == null || current.expectedMicroUsd === null) return true;
+    return current.expectedMicroUsd <= familyLeaderMicroUsd * CONTINUITY_COST_RATIO_LIMIT;
+  };
+
   if (
     request.currentModelKey &&
     policy.continuity.preferCurrentModelWhenEligible &&
+    familyKeepsCurrentModel(request.currentModelKey) &&
     (!policy.continuity.reevaluateOnTaskChange ||
       request.previousTaskType === request.taskType ||
       (policy.continuity.preferCurrentRouteForCache &&
@@ -1517,6 +1624,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       slotId !== undefined && slot !== undefined
         ? shadowMirror(slotId, slot, task, request, canaryEnabled)
         : undefined,
+      slotId,
     );
   };
 
