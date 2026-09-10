@@ -2,6 +2,7 @@ import { api } from './api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   parseManagedUsageSummaryResponse,
+  type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 
@@ -19,6 +20,7 @@ export interface UsageSnapshot {
   weeklyResetAt: string | null;
   flagshipWeeklyUsagePercentage: number;
   flagshipWeeklyResetAt: string | null;
+  credits: ManagedUsageCredits | null;
 }
 
 function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
@@ -36,6 +38,7 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
     weeklyResetAt: summary.weekly_reset_at,
     flagshipWeeklyUsagePercentage: summary.flagship_weekly_usage_percentage,
     flagshipWeeklyResetAt: summary.flagship_weekly_reset_at,
+    credits: summary.credits ?? null,
   };
 }
 

@@ -99,8 +99,10 @@ import {
 } from '../../services/managedCloudBoundary';
 import {
   canUseBillingPlanCapability,
+  formatCreditWindowUsage,
   getBillingPlanProductLimits,
   type BillingPlanLimit,
+  type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
 import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
@@ -365,10 +367,12 @@ function UsageMeter({
   label,
   value,
   resetAt,
+  credits,
 }: {
   label: string;
   value: number;
   resetAt: string | null;
+  credits?: ManagedUsageCreditWindow | null;
 }) {
   const normalizedValue = Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
 
@@ -377,7 +381,9 @@ function UsageMeter({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-foreground">{label}</p>
         <p className="text-sm tabular-nums text-muted-foreground">
-          {Math.round(normalizedValue)}% used
+          {credits
+            ? formatCreditWindowUsage(credits.used, credits.allowance)
+            : `${Math.round(normalizedValue)}% used`}
         </p>
       </div>
       <div
@@ -469,21 +475,25 @@ function DesktopUsageSection() {
             } plan`}
             value={usage.usage_percentage}
             resetAt={usage.usage_reset_at}
+            credits={usage.credits?.monthly}
           />
           <UsageMeter
             label="Current 5-hour window"
             value={usage.session_usage_percentage}
             resetAt={usage.session_reset_at}
+            credits={usage.credits?.five_hour}
           />
           <UsageMeter
             label="Weekly usage"
             value={usage.weekly_usage_percentage}
             resetAt={usage.weekly_reset_at}
+            credits={usage.credits?.weekly}
           />
           <UsageMeter
             label="Flagship model weekly usage"
             value={usage.flagship_weekly_usage_percentage}
             resetAt={usage.flagship_weekly_reset_at}
+            credits={usage.credits?.flagship_weekly}
           />
         </div>
       ) : null}
