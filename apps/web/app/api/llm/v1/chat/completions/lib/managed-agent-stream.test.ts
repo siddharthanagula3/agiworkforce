@@ -52,6 +52,9 @@ vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   markManagedUsageClientDelivered: (input: unknown) => delivered(input),
   MANAGED_CHAT_CONTRACT_VERSION: 'fixture-contract-version',
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
