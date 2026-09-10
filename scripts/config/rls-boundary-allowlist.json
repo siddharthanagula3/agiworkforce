@@ -126,6 +126,10 @@
       "reason": "reading a share by its unguessable token is the feature, same as the api/share/[token] route it renders"
     },
     {
+      "path": "apps/web/features/admin/services/economics-summary.ts",
+      "reason": "reached only from the platform-admin economics route gated by requirePlatformAdmin, the subscription and credit_transactions reads are deliberately cross-tenant aggregates that return counts and summed cents per plan, never a row or a user id"
+    },
+    {
       "path": "apps/web/features/admin/services/operator-metrics.ts",
       "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
     },
@@ -168,6 +172,10 @@
     {
       "path": "apps/web/lib/services/api-key-service.ts",
       "reason": "verifyKey resolves the presented credential by its key_prefix before any session exists, so the key is the subject and there is no caller to bind; every other method takes the caller connection"
+    },
+    {
+      "path": "apps/web/lib/services/effective-subscription-service.ts",
+      "reason": "a seat member's entitlement resolves from the OWNER subscription row, which a member scoped connection cannot see, the same precedent as org-entitlements.ts below; both statements bind explicit user ids and read no row the caller's own membership does not already reach"
     },
     {
       "path": "apps/web/lib/services/free-trial-service.ts",
