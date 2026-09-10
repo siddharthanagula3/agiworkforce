@@ -17,7 +17,7 @@ import {
   harnessProxyConfigFile,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
-  templateVcpuCount,
+  templateComputeShape,
 } from '../templates';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -206,7 +206,7 @@ describe('E2B template catalogue', () => {
   });
 });
 
-describe('templateVcpuCount', () => {
+describe('templateComputeShape', () => {
   beforeEach(() => {
     clearCloudCodeRuntimeCache();
     process.env['E2B_API_KEY'] = 'e2b_test_key';
@@ -219,27 +219,32 @@ describe('templateVcpuCount', () => {
     clearCloudCodeRuntimeCache();
   });
 
-  it('is null for no template id', async () => {
-    expect(await templateVcpuCount(null)).toBeNull();
-    expect(await templateVcpuCount(undefined)).toBeNull();
+  it('is unknown for no template id', async () => {
+    expect(await templateComputeShape(null)).toEqual({ vcpuCount: null, memoryGib: null });
+    expect(await templateComputeShape(undefined)).toEqual({ vcpuCount: null, memoryGib: null });
   });
 
-  it('is null for a declared harness with an unknown vCPU count', async () => {
+  it('is unknown for a declared harness with no declared size', async () => {
     vi.stubGlobal('fetch', respondWith([]));
-    expect(await templateVcpuCount('claude')).toBeNull();
+    expect(await templateComputeShape('claude')).toEqual({ vcpuCount: null, memoryGib: null });
   });
 
-  it('reads the vCPU count from a matching team template', async () => {
+  it('reads vCPU count and memory from a matching team template', async () => {
     vi.stubGlobal(
       'fetch',
-      respondWith([template({ templateID: 'claude', names: ['claude'], cpuCount: 6 })]),
+      respondWith([
+        template({ templateID: 'claude', names: ['claude'], cpuCount: 6, memoryMB: 8192 }),
+      ]),
     );
-    expect(await templateVcpuCount('claude')).toBe(6);
+    expect(await templateComputeShape('claude')).toEqual({ vcpuCount: 6, memoryGib: 8 });
   });
 
-  it('is null for a template id not in the catalogue', async () => {
+  it('is unknown for a template id not in the catalogue', async () => {
     vi.stubGlobal('fetch', respondWith([]));
-    expect(await templateVcpuCount('not-a-template')).toBeNull();
+    expect(await templateComputeShape('not-a-template')).toEqual({
+      vcpuCount: null,
+      memoryGib: null,
+    });
   });
 });
 
