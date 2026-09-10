@@ -1,3 +1,5 @@
+import { findCitationIndexForUrl } from '@agiworkforce/unified-chat';
+
 const SOURCES_HEADING =
   /^(?:#{1,6}\s*)?(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:?\s*(?:\*\*|__)?\s*$/i;
 
@@ -14,18 +16,82 @@ const SOURCES_HEADING =
 const SOURCES_LABEL_WITH_ENTRIES =
   /^(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:\s*(?:\*\*|__)?\s*(\S.*)$/i;
 
-export function stripTrailingSourceList(markdown: string): string {
-  const lines = markdown.split('\n');
+interface TrailingSourceBlock {
+  bodyEnd: number;
+  entries: string[];
+}
 
+function findTrailingSourceBlock(lines: readonly string[]): TrailingSourceBlock | null {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index]!.trim();
     const inline = SOURCES_LABEL_WITH_ENTRIES.exec(line);
     if (!SOURCES_HEADING.test(line) && !(inline && isCitationOnlyLine(inline[1]!))) continue;
-    if (!isSourceListOnly(lines.slice(index + 1))) return markdown;
-    return lines.slice(0, index).join('\n').trimEnd();
+    const rest = lines.slice(index + 1);
+    if (!isSourceListOnly(rest)) return null;
+    return { bodyEnd: index, entries: inline ? [inline[1]!, ...rest] : rest };
   }
 
-  return markdown;
+  return null;
+}
+
+export function stripTrailingSourceList(markdown: string): string {
+  const lines = markdown.split('\n');
+  const block = findTrailingSourceBlock(lines);
+  return block ? lines.slice(0, block.bodyEnd).join('\n').trimEnd() : markdown;
+}
+
+const NUMBERED_SOURCE_ENTRY =
+  /(?:\[(\d{1,3})\]|(?:^|\s)(\d{1,3})[.)])[^\S\n]*<?(https?:\/\/[^\s<>)\]]+)/g;
+const BODY_MARKER = /(?<!\])\[(\d{1,3})\](?![([:])/g;
+const FENCE_LINE = /^\s{0,3}(`{3,}|~{3,})/;
+
+/**
+ * A model that writes its own bibliography numbers it by the order it wrote the
+ * claims, which is not the order the sources were delivered in, so `[2]` opens
+ * whatever happens to sit second in the list rather than the page the sentence
+ * came from. The bibliography itself says which URL the model meant, so the
+ * markers are remapped onto delivered positions before the tail is stripped.
+ *
+ * All-or-nothing: one entry that names a page the turn never delivered leaves
+ * every marker alone, because a partial remap would silently move the markers
+ * it did understand away from the ones it did not.
+ */
+export function renumberCitationMarkersFromTrailingList(
+  markdown: string,
+  citations: readonly { url: string }[],
+): string {
+  if (citations.length === 0) return markdown;
+  const lines = markdown.split('\n');
+  const block = findTrailingSourceBlock(lines);
+  if (!block) return markdown;
+
+  const mapping = new Map<number, number>();
+  for (const entry of block.entries) {
+    for (const match of entry.matchAll(NUMBERED_SOURCE_ENTRY)) {
+      const declared = Number(match[1] ?? match[2]);
+      const resolved = findCitationIndexForUrl(match[3]!, citations);
+      if (!Number.isInteger(declared) || resolved === undefined) return markdown;
+      if ((mapping.get(declared) ?? resolved) !== resolved) return markdown;
+      mapping.set(declared, resolved);
+    }
+  }
+  if (mapping.size === 0) return markdown;
+  if ([...mapping].every(([declared, resolved]) => declared === resolved)) return markdown;
+
+  let insideFence = false;
+  const body = lines.slice(0, block.bodyEnd).map((line) => {
+    if (FENCE_LINE.test(line)) {
+      insideFence = !insideFence;
+      return line;
+    }
+    if (insideFence) return line;
+    return line.replace(BODY_MARKER, (whole, declared: string) => {
+      const mapped = mapping.get(Number(declared));
+      return mapped === undefined ? whole : `[${mapped}]`;
+    });
+  });
+
+  return [...body, ...lines.slice(block.bodyEnd)].join('\n');
 }
 
 function isSourceListOnly(rest: string[]): boolean {

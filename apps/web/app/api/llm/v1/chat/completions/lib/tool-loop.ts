@@ -1439,6 +1439,7 @@ async function runMcpTool(
     model: string;
     turnRef?: string;
     webSearchMaxResults?: number;
+    citationNumberFor?: (url: string) => number;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -1596,7 +1597,7 @@ async function runMcpTool(
       ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
       : outcome;
     return {
-      content: formatWebSearchResultForModel(enrichedAfterCap),
+      content: formatWebSearchResultForModel(enrichedAfterCap, executionContext?.citationNumberFor),
       isError: !enrichedAfterCap.ok,
       sources: webSearchResultsToFetchedSources(enrichedAfterCap),
     };
@@ -2409,6 +2410,15 @@ export async function* runToolLoop(
 
   const fetchedSources: FetchedSource[] = [];
   const searchedSources: FetchedSource[] = [];
+  const searchCitationNumbers = new Map<string, number>();
+  const citationNumberFor = (url: string): number => {
+    const key = normalizedSourceUrlKey(url);
+    const known = searchCitationNumbers.get(key);
+    if (known !== undefined) return known;
+    const next = searchCitationNumbers.size + 1;
+    searchCitationNumbers.set(key, next);
+    return next;
+  };
   const agiWorkTurn = processed.chatRequest?.work_mode === 'agiwork';
   let webSearchCallsUsed = 0;
   const webSearchCallBudget = agiWorkTurn
@@ -2806,6 +2816,7 @@ export async function* runToolLoop(
           model: responseModel,
           turnRef: turnId,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+          citationNumberFor,
           loadSkillInstallOverrides,
           ...(processed.chatRequest?.client_timezone
             ? { clientTimeZone: processed.chatRequest.client_timezone }

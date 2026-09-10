@@ -299,6 +299,34 @@ describe('formatWebSearchResultForModel', () => {
     expect(text).toContain('1. https://example.com/untitled');
   });
 
+  it('numbers results by the position they hold in the turn, not by their place in the call', () => {
+    const outcome: WebSearchOutcome = {
+      ok: true,
+      query: 'second search',
+      results: [
+        { url: 'https://example.com/c', title: 'C', snippet: '' },
+        { url: 'https://example.com/a', title: 'A', snippet: '' },
+      ],
+    };
+    const turnPositions = new Map([
+      ['https://example.com/a', 1],
+      ['https://example.com/b', 2],
+      ['https://example.com/c', 3],
+    ]);
+    const text = formatWebSearchResultForModel(outcome, (url) => turnPositions.get(url));
+    expect(text).toContain('3. C');
+    expect(text).toContain('1. A');
+  });
+
+  it('falls back to the position within the call when the turn has no number for a url', () => {
+    const outcome: WebSearchOutcome = {
+      ok: true,
+      query: 'q',
+      results: [{ url: 'https://example.com/z', title: 'Z', snippet: '' }],
+    };
+    expect(formatWebSearchResultForModel(outcome, () => undefined)).toContain('1. Z');
+  });
+
   it('formats a no-results outcome honestly', () => {
     const outcome: WebSearchOutcome = { ok: true, query: 'nothing here', results: [] };
     expect(formatWebSearchResultForModel(outcome)).toBe('No results found for "nothing here".');

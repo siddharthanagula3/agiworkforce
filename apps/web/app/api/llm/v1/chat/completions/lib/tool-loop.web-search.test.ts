@@ -578,6 +578,60 @@ describe('tool-loop web_search integration', () => {
     }
   });
 
+  it('continues the citation numbering across searches so [n] names one page for the whole turn', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(toolCallStream('web_search', { query: 'first' }, 'call_number_1'))
+      .mockResolvedValueOnce(toolCallStream('web_search', { query: 'second' }, 'call_number_2'))
+      .mockResolvedValueOnce(finalAnswerStream('Done. [1][2]'));
+
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      const results =
+        call === 1
+          ? [{ title: 'First Page', url: 'https://news.example/first', snippet: 'one' }]
+          : [
+              { title: 'First Page', url: 'https://news.example/first', snippet: 'one' },
+              { title: 'Second Page', url: 'https://news.example/second', snippet: 'two' },
+            ];
+      return new Response(JSON.stringify({ results }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const output = await collect(
+        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+      );
+
+      const toolResults = output
+        .split('\n')
+        .filter((line) => line.startsWith('data: {'))
+        .map(
+          (line) =>
+            JSON.parse(line.slice('data: '.length)) as {
+              choices?: Array<{ delta?: { x_tool_result?: { name?: string; content?: string } } }>;
+            },
+        )
+        .flatMap((payload) => {
+          const result = payload.choices?.[0]?.delta?.x_tool_result;
+          return result?.name === 'web_search' && typeof result.content === 'string'
+            ? [result.content]
+            : [];
+        });
+
+      expect(toolResults).toHaveLength(2);
+      expect(toolResults[1]).toContain('1. First Page');
+      expect(toolResults[1]).toContain('2. Second Page');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('searchResultsEvent emits the research-loop-compatible shape: no tool field, snippet as encrypted_content', () => {
     const line = searchResultsEvent(
       [

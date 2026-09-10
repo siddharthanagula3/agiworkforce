@@ -25,6 +25,8 @@ import {
   persistAssistantTurn,
 } from './assistant-turn-persistence';
 import { extractAssistantInteractiveCardDeltas } from './interactive-card-stream';
+import { createPublicTextDeltaProjector } from './agent-event-stream';
+import { AssistantTurnSourceCollector } from './assistant-turn-sources';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -105,6 +107,8 @@ export function buildManagedAgentStream(
   let lastTaskState: AgentTaskState | undefined;
   let terminalReported = false;
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
+  const publicText = createPublicTextDeltaProjector();
+  const sourceCollector = new AssistantTurnSourceCollector();
   let assistantText = '';
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
@@ -120,17 +124,19 @@ export function buildManagedAgentStream(
     if (!persistable || turnPersisted || !input.userId) return;
     turnPersisted = true;
     const serving = input.getServingRequest?.() ?? input.processed;
+    const sources = sourceCollector.snapshot();
     await persistAssistantTurn({
       processed: input.processed,
       userId: input.userId,
       snapshot: {
-        content: assistantText,
+        content: assistantText + publicText.flush(),
         model: serving.chatRequest.model,
         provider: serving.provider,
         inputTokens: input.usage.inputTokens,
         outputTokens: input.usage.outputTokens,
         truncated,
         interactiveCards: [...interactiveCards.values()],
+        ...(sources ? { sources } : {}),
       },
     });
   };
@@ -276,7 +282,8 @@ export function buildManagedAgentStream(
           if (isManagedAgentTerminalEvent(next.value)) continue;
           if (containsManagedAgentReportedFailure(next.value)) reportedFailure = true;
           if (persistable) {
-            assistantText += extractAssistantTextDelta(next.value);
+            assistantText += publicText.push(extractAssistantTextDelta(next.value));
+            sourceCollector.ingestWireBytes(next.value);
             for (const card of extractAssistantInteractiveCardDeltas(next.value)) {
               if (
                 interactiveCards.has(card.cardId) ||
