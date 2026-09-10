@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 const flowProps = vi.hoisted(() => vi.fn());
 const mocks = vi.hoisted(() => ({
-  identity: vi.fn(async () => ({ subject: null })),
+  identity: vi.fn(async (): Promise<{ subject: string | null }> => ({ subject: null })),
   redirect: vi.fn(),
 }));
 
