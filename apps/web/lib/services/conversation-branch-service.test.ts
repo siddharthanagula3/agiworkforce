@@ -147,10 +147,12 @@ describe('conversation branch service', () => {
     )!;
     expect(mapSql).toContain('insert into public.conversation_branch_messages');
     expect(mapSql).toContain('unnest($2::uuid[], $3::uuid[])');
+    expect(mapSql).toContain('branch.user_id = $4');
     expect(mapParams).toEqual([
       targetConversation.id,
       ['0190a000-0000-7000-8000-0000000000aa', '0190a000-0000-7000-8000-0000000000bb'],
       ['0190a000-0000-7000-8000-0000000000e1', '0190a000-0000-7000-8000-0000000000e2'],
+      'user-1',
     ]);
   });
 
