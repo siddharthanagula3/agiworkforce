@@ -27,6 +27,7 @@ import {
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
+  formatModelPriceInCredits,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
   type ModelReasoning,
@@ -140,16 +141,8 @@ export function getModelContextWindow(modelId: string): number {
   return publishedContextWindow ?? 128_000;
 }
 
-export function formatCost(inputCost?: number, outputCost?: number): string {
-  if (inputCost === undefined && outputCost === undefined) {
-    return 'N/A';
-  }
-  if (inputCost === 0 && outputCost === 0) {
-    return 'Included';
-  }
-  const input = inputCost !== undefined ? `$${inputCost.toFixed(2)}` : 'N/A';
-  const output = outputCost !== undefined ? `$${outputCost.toFixed(2)}` : 'N/A';
-  return `${input}/${output} per 1M tokens`;
+export function formatCost(inputCost?: number, outputCost?: number, cachedCost?: number): string {
+  return formatModelPriceInCredits(inputCost, outputCost, cachedCost);
 }
 
 export function isModelAllowedForTier(modelId: string, tier: string): boolean {
