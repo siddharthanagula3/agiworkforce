@@ -9,7 +9,7 @@ export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS = 100_000_000;
 
 const INTERNAL_USAGE_UNITS_PER_LEDGER_CENT = 2;
 const MICROUSD_PER_INTERNAL_USAGE_UNIT = 5_000;
-const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
+export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
 
 export function toPublicUsagePercentage(used: number, limit: number): number {
   if (limit <= 0) return 0;
