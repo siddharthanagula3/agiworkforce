@@ -14127,9 +14127,10 @@
       "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
-        "unit": "per_million_tokens",
+        "unit": "per_session_minute",
         "inputPerMillion": 0,
-        "outputPerMillion": 0
+        "outputPerMillion": 0,
+        "sessionPerMinute": 0.05
       }
     },
     "openai/gpt-4o-mini-transcribe": {
@@ -32366,7 +32367,11 @@
       "cacheTokenBillingClass": "included_in_input",
       "cacheTokenBillingSource": "https://ai.google.dev/api/generate-content",
       "cacheTokenBillingVerifiedOn": "2026-09-05",
-      "cacheTokenBillingNote": "UsageMetadata.promptTokenCount is documented as: \"When cachedContent is set, this is still the total effective prompt size meaning this includes the number of tokens in the cached content.\" cachedContentTokenCount is a subset of promptTokenCount, not additional to it."
+      "cacheTokenBillingNote": "UsageMetadata.promptTokenCount is documented as: \"When cachedContent is set, this is still the total effective prompt size meaning this includes the number of tokens in the cached content.\" cachedContentTokenCount is a subset of promptTokenCount, not additional to it.",
+      "reasoningTokenBillingClass": "additional_to_output",
+      "reasoningTokenBillingSource": "https://ai.google.dev/api/generate-content",
+      "reasoningTokenBillingVerifiedOn": "2026-09-10",
+      "reasoningTokenBillingNote": "UsageMetadata documents totalTokenCount as \"Total token count for the generation request (prompt + thoughts + response candidates)\", and candidatesTokenCount as the tokens across the generated candidates only, so thoughtsTokenCount is additional to the reported output count rather than a subset of it. The published Gemini API pricing table charges thinking tokens at the output rate (https://ai.google.dev/gemini-api/docs/pricing)."
     },
     "open_router": {
       "dataRetentionClass": "conditional",
@@ -32653,9 +32658,10 @@
     "e2b": {
       "unit": "usd_per_vcpu_second",
       "ratePerUnit": 0.000014,
+      "ramRatePerGibSecond": 0.0000045,
       "source": "https://e2b.dev/pricing",
-      "verifiedOn": "2026-09-04",
-      "note": "Uniform across the Hobby and Pro tiers, linear across vCPU counts."
+      "verifiedOn": "2026-09-10",
+      "note": "Two rates, both billed per second of sandbox life: ratePerUnit is $0.000014 per vCPU-second and ramRatePerGibSecond is $0.0000045 per GiB-second. Uniform across the Hobby, Pro and Enterprise tiers, linear in vCPU count and memory."
     }
   },
   "endpointHosts": {
@@ -33164,9 +33170,10 @@
     },
     "gpt-live-1": {
       "currency": "USD",
-      "unit": "per_million_tokens",
+      "unit": "per_session_minute",
       "inputPerMillion": 0,
-      "outputPerMillion": 0
+      "outputPerMillion": 0,
+      "sessionPerMinute": 0.05
     },
     "gpt-4o-mini-transcribe": {
       "currency": "USD",
