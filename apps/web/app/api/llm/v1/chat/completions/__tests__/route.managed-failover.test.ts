@@ -234,6 +234,16 @@ function makeRequest(model: string, stream: boolean): NextRequest {
   });
 }
 
+/**
+ * One rule for which provider serves a test model, so the plan the resolver
+ * hands back and the dispatch layer's answer cannot disagree: the plan said
+ * every fallback was on openai while `resolveProviderFromModel` put the
+ * sibling route on anthropic, and only the second was ever read.
+ */
+function providerOfTestModel(modelKey: string): string {
+  return modelKey === FALLBACK ? 'openai' : 'anthropic';
+}
+
 function selectedRoute(modelKey: string, fallbacks: string[]) {
   return {
     status: 'selected' as const,
@@ -246,7 +256,7 @@ function selectedRoute(modelKey: string, fallbacks: string[]) {
     reason: 'test',
     fallbacks: fallbacks.map((fallbackKey) => ({
       modelKey: fallbackKey,
-      provider: 'openai',
+      provider: providerOfTestModel(fallbackKey),
       providerModelId: fallbackKey,
       routeId: `route-${fallbackKey}`,
       harnessId: 'web/chat',
@@ -289,9 +299,7 @@ beforeEach(() => {
     leaseToken: 'lease-test',
     estimatedCostCents: input.estimatedCostCents,
   }));
-  mockGetProviderFromModel.mockImplementation((model: string) =>
-    model === FALLBACK ? 'openai' : 'anthropic',
-  );
+  mockGetProviderFromModel.mockImplementation(providerOfTestModel);
   routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
     input.selection === 'auto'
       ? selectedRoute(PRIMARY, [FALLBACK])

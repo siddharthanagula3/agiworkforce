@@ -43,8 +43,15 @@ function candidateRouteIds(processed: ProcessedRequest): readonly string[] {
   const routeIds = new Set<string>([
     buildServingRouteId(processed.provider, processed.chatRequest.model),
   ]);
-  for (const modelKey of processed.fallbackModels ?? []) {
-    routeIds.add(buildServingRouteId(providerOfCandidate(modelKey, processed.provider), modelKey));
+  for (const route of processed.fallbackRoutes ?? []) {
+    routeIds.add(buildServingRouteId(route.provider, route.modelKey));
+  }
+  if (!processed.fallbackRoutes) {
+    for (const modelKey of processed.fallbackModels ?? []) {
+      routeIds.add(
+        buildServingRouteId(providerOfCandidate(modelKey, processed.provider), modelKey),
+      );
+    }
   }
   for (const routeId of processed.freeLane?.routesByRouteId.keys() ?? []) {
     routeIds.add(routeId);

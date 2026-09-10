@@ -17,9 +17,10 @@ import 'server-only';
  *   - before the first byte reaches the client, route.ts's rotation point
  *     is `startProviderStream`'s first-chunk peek, so a rotated attempt has
  *     by construction produced NO content (failed-attempt text cannot leak);
- *   - for Auto-profile requests, explicit selections are structurally
- *     rotation-free because the resolver emits an empty fallback plan for
- *     them (`processed.fallbackModels` is `[]`);
+ *   - across MODELS only for Auto: the resolver's plan for an explicit
+ *     selection holds that model's other admissible routes and nothing else,
+ *     so a pinned model may cross providers but is never answered by a
+ *     different model;
  *   - after re-checking candidate admission at attempt time (tier ladder,
  *     provider resolution, adapter availability), a stale plan entry is
  *     skipped, never served.
@@ -71,6 +72,7 @@ import { logger } from '@/lib/logger';
 import { nextFreeLaneRoute } from '@/lib/services/free-lane/plan';
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
+import { isGatewayBackedHarness, type FailoverRoute } from './failover-plan';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
@@ -154,12 +156,12 @@ export function isNeverRotateCategory(category: string): boolean {
 }
 
 /**
- * An explicit selection is rotation-free here as well as structurally.
+ * An unfunded account may not spend on a provider the user did not choose.
  *
- * The resolver already emits an empty fallback plan for a pinned model, so this
- * predicate is the second of two independent reasons a pinned model cannot
- * cross to another provider on an unfunded account. Two are deliberate: the
- * plan is data that a future caller could populate, this is the rule.
+ * The resolver's plan for a pinned model reaches other PROVIDERS of that same
+ * model, so the plan alone no longer stops one, and this predicate is the rule
+ * that does: an explicit selection never crosses to another provider's bill
+ * because the first one ran out of money.
  */
 function isBillingRotationAllowed(
   processed: ProcessedRequest,
@@ -175,15 +177,27 @@ export interface FailoverStepContext {
   step: number;
 }
 
+/**
+ * A first-step 400 the caller can still be answered from another route.
+ *
+ * Auto rotates because the user never named the route. An explicit selection
+ * rotates only when the refusal came from a reseller GATEWAY: the gateway
+ * re-serialises the request, so its 400 is evidence about that transport and
+ * not about the model the user picked, and the plan it rotates onto serves
+ * that same model. A vendor's own 400 still ends the turn, because the next
+ * route would put the same request to the same vendor and get the same answer.
+ */
 function isRotatableRequestRejection(
   processed: ProcessedRequest,
   classified: ReturnType<typeof classifyError>,
   context: FailoverStepContext | undefined,
+  servingHarnessId: string | undefined,
 ): boolean {
   if (!context || context.step !== FIRST_PROVIDER_STEP) return false;
   if (classified.category !== REQUEST_REJECTION_CATEGORY) return false;
   if (classified.status !== REQUEST_REJECTION_STATUS) return false;
-  return isAutoModeModelId(processed.requestedModel);
+  if (isAutoModeModelId(processed.requestedModel)) return true;
+  return isGatewayBackedHarness(servingHarnessId);
 }
 
 export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): boolean {
@@ -202,6 +216,30 @@ export interface FailoverAttempt {
   model: string;
   provider: string;
   processed: ProcessedRequest;
+}
+
+/**
+ * One entry of the plan, with whatever the caller knew about it.
+ *
+ * `fallbackRoutes` names the provider and harness the resolver admitted, so a
+ * plan of same-model routes reaches a second route. A caller carrying only
+ * model keys (the cloud-agent workflow) still gets today's behaviour: the
+ * dispatch layer resolves the provider from the model.
+ */
+type PlannedCandidate = Partial<FailoverRoute> & { modelKey: string };
+
+function plannedCandidates(processed: ProcessedRequest): PlannedCandidate[] {
+  if (processed.fallbackRoutes) return [...processed.fallbackRoutes];
+  return (processed.fallbackModels ?? []).map((modelKey) => ({ modelKey }));
+}
+
+/**
+ * Two plan entries of one canonical model differ only by provider, so the pair
+ * is what identifies a route here. Rotating onto the pair that has already
+ * failed is a retry of the same upstream, not a failover.
+ */
+function candidateIdentity(provider: string, model: string): string {
+  return `${provider.toLowerCase()}\u0000${model.toLowerCase()}`;
 }
 
 function requestCarriesFunctionTools(processed: ProcessedRequest): boolean {
@@ -341,7 +379,10 @@ export function createFailoverPlan(
     isCredentialCooling?: (candidate: { modelKey: string; provider: string }) => boolean;
   },
 ): { next: (error: unknown, context?: FailoverStepContext) => FailoverAttempt | null } {
-  const remaining = [...(processed.fallbackModels ?? [])];
+  const remaining = plannedCandidates(processed);
+  const attemptedRoutes = new Set<string>([
+    candidateIdentity(processed.provider, processed.chatRequest.model),
+  ]);
   const tier = processed.subscriptionTier;
   let mustStayOnProvider = true;
   const isGroundedRequest = (processed.llmRequest.tools ?? []).some(
@@ -358,18 +399,32 @@ export function createFailoverPlan(
   const freeLaneAttempted: string[] = freeLane ? [freeLane.dispatchedRouteId] : [];
   let latestView: ProcessedRequest = processed;
   let latestRouteId: string | null = freeLane ? freeLane.dispatchedRouteId : null;
+  let latestHarnessId = processed.servingHarnessId;
   let billingRotationUsed = false;
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
-      const candidate = remaining.shift() as string;
+      const planned = remaining.shift() as PlannedCandidate;
+      const candidate = planned.modelKey;
       let provider: string;
-      try {
-        provider = resolveProviderFromModel(candidate);
-      } catch {
+      if (planned.provider) {
+        provider = planned.provider;
+      } else {
+        try {
+          provider = resolveProviderFromModel(candidate);
+        } catch {
+          logger.warn(
+            { requestId: processed.requestId, model: candidate },
+            'Managed failover candidate skipped: provider resolution failed',
+          );
+          continue;
+        }
+      }
+      const identity = candidateIdentity(provider, candidate);
+      if (attemptedRoutes.has(identity)) {
         logger.warn(
-          { requestId: processed.requestId, model: candidate },
-          'Managed failover candidate skipped: provider resolution failed',
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: this route has already been attempted',
         );
         continue;
       }
@@ -428,6 +483,8 @@ export function createFailoverPlan(
       }
       const attemptView = buildFailoverAttemptView(latestView, candidate, provider);
       latestView = attemptView;
+      latestHarnessId = planned.harnessId;
+      attemptedRoutes.add(identity);
       if (provider === processed.provider) sameProviderAttempts += 1;
       return {
         model: candidate,
@@ -513,6 +570,7 @@ export function createFailoverPlan(
       };
       latestView = attemptView;
       latestRouteId = route.routeId;
+      latestHarnessId = route.harnessId;
       return { model: route.modelKey, provider: route.provider, processed: attemptView };
     }
   };
@@ -565,6 +623,10 @@ export function createFailoverPlan(
       fallbackReason: 'openrouter_route_failover',
     };
     latestView = attemptView;
+    // The retry leaves the resolver's plan, so nothing here names the harness it
+    // lands on. Unknown reads as "not a gateway", which is the answer that keeps
+    // the next rejection from spending a rotation this path did not earn.
+    latestHarnessId = undefined;
     return {
       model: processed.llmRequest.model,
       provider: 'openrouter',
@@ -636,7 +698,7 @@ export function createFailoverPlan(
         !credentialRotation &&
         !billingRotation &&
         !isFailoverEligibleError(error, options.signal) &&
-        !isRotatableRequestRejection(processed, classified, context)
+        !isRotatableRequestRejection(processed, classified, context, latestHarnessId)
       ) {
         return null;
       }
