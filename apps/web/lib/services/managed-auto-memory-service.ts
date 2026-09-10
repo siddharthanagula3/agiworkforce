@@ -20,6 +20,12 @@ export async function recordManagedAutoMemoryTurn(params: {
 }): Promise<void> {
   const candidates = params.processed.autoMemoryFacts ?? [];
   if (params.outcome !== 'completed' || candidates.length === 0) return;
+  if (
+    params.processed.autoMemoryFactsRequireToolFreeTurn &&
+    params.processed.toolExecutionObserved
+  ) {
+    return;
+  }
 
   try {
     let db = params.db ?? params.processed.managedUsage?.db;
@@ -51,6 +57,7 @@ export async function recordManagedAutoMemoryTurn(params: {
       userId: params.userId,
       candidates,
       projectId: conversationRow?.project_id ?? null,
+      organizationId: params.processed.organizationId ?? null,
     });
     logger.info(
       {
