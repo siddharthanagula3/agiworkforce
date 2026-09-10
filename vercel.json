@@ -99,6 +99,10 @@
       "schedule": "10 5 * * *"
     },
     {
+      "path": "/api/cron/reconcile-provider-costs",
+      "schedule": "15 1 * * *"
+    },
+    {
       "path": "/api/cron/enforce-billing-collection",
       "schedule": "20 5 * * *"
     }
