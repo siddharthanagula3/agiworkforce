@@ -117,4 +117,45 @@ describe('GET /api/billing/credit-history', () => {
     expect(body.error.message).toBe('Your workspace requires two-factor authentication.');
     expect(mockQuery).not.toHaveBeenCalled();
   });
+
+  it('states every row in credits and names what it was spent on', async () => {
+    const model = listCanonicalModels()[0];
+    if (!model) throw new Error('The registry must list a canonical model');
+    mockQuery.mockResolvedValue([
+      {
+        id: 'tx-2',
+        transaction_type: 'deduction',
+        amount_cents: -3,
+        description: `Managed usage reservation: openai/${model.id}`,
+        metadata: {
+          quotaFeature: 'chat',
+          reservedModel: model.id,
+          servedProvider: 'a-gateway',
+          servedModel: 'a-route-model',
+        },
+        created_at: '2026-06-02T00:00:00.000Z',
+      },
+      {
+        id: 'tx-3',
+        transaction_type: 'purchase',
+        amount_cents: 1000,
+        description: null,
+        metadata: null,
+        created_at: '2026-06-01T00:00:00.000Z',
+      },
+    ]);
+
+    const response = await GET(req());
+    const body = (await response.json()) as {
+      transactions: { credits: number; feature: string | null; model: string | null }[];
+    };
+
+    expect(body.transactions[0]?.credits).toBe(-1.5);
+    expect(body.transactions[0]?.feature).toBe('chat');
+    expect(body.transactions[0]?.model).toBe(model.name);
+    expect(body.transactions[1]?.credits).toBe(500);
+    expect(body.transactions[1]?.feature).toBeNull();
+    expect(JSON.stringify(body)).not.toContain('a-gateway');
+    expect(JSON.stringify(body)).not.toContain('a-route-model');
+  });
 });
