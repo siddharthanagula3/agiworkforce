@@ -36,12 +36,18 @@ describe('live voice session pricing', () => {
     expect(liveSessionProviderCostCents(0, liveModelId)).toBeNull();
   });
 
-  it('keeps the provider rate and the customer charge independently sourced', () => {
-    const providerCents = liveSessionProviderCostCents(600, liveModelId);
-    const customerCents = liveSessionCostCents(600);
+  it('reads the customer charge and the provider rate from different sources', () => {
+    const usdPerMinute = getModelMetadataById(liveModelId)?.sessionPerMinuteCost as number;
 
-    expect(providerCents).not.toBeNull();
-    expect(customerCents).toBe(10 * LIVE_SESSION_CENTS_PER_MINUTE);
-    expect(providerCents).toBeLessThanOrEqual(customerCents);
+    expect(liveSessionCostCents(SECONDS_PER_MINUTE)).toBe(LIVE_SESSION_CENTS_PER_MINUTE);
+    expect(liveSessionProviderCostCents(SECONDS_PER_MINUTE, liveModelId)).toBe(
+      Math.ceil(usdPerMinute * CENTS_PER_USD),
+    );
+
+    // The two rates are equal today. Only these assertions keep them from being
+    // re-coupled: the customer charge survives a model that publishes no
+    // session rate, and the provider cost does not fall back to the constant.
+    expect(liveSessionCostCents(SECONDS_PER_MINUTE)).toBe(LIVE_SESSION_CENTS_PER_MINUTE);
+    expect(liveSessionProviderCostCents(SECONDS_PER_MINUTE, null)).toBeNull();
   });
 });
