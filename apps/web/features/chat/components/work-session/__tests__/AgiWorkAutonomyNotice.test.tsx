@@ -8,7 +8,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({ fetchPreferenceNamesp
 import { AgiWorkAutonomyNotice } from '../AgiWorkAutonomyNotice';
 import { useUIStore } from '@shared/stores/layout-store';
 
-const NOTICE = /Automatic approval is on/;
+const NOTICE = /Read-only actions run without asking/;
 
 function autoApproves() {
   fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'auto_approve_read_only' });
@@ -28,9 +28,7 @@ describe('AGI Work autonomy disclosure', () => {
     render(<AgiWorkAutonomyNotice active onReviewApprovals={vi.fn()} />);
 
     expect(await screen.findByText(NOTICE)).toBeInTheDocument();
-    expect(screen.getByText(NOTICE).textContent).toContain(
-      'including when it uses your connectors',
-    );
+    expect(screen.getByText(NOTICE).textContent).toContain('including your connectors');
   });
 
   it('stays silent in Chat mode', async () => {

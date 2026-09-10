@@ -1519,6 +1519,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (producedNoVisibleOutput) return null;
     if (hasStreamError({ metadata: message.metadata })) return null;
     if (message.metadata?.webSearchAskedInText !== true) return null;
+    if (message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval')) return null;
     if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
     return searchSources.length > 0 ? null : 'no-results';
   }, [
