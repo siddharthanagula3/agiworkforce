@@ -10,6 +10,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   savePreferenceNamespace: (...args: unknown[]) =>
     savePreferenceNamespace(...(args as [string, unknown])),
   readPreferencesVersion: async () => null,
+  readOrganizationMemoryAllowed: async () => true,
   PreferenceVersionConflictError: class PreferenceVersionConflictError extends Error {},
 }));
 
