@@ -277,6 +277,7 @@ describe('managed usage accounting', () => {
         promptTokens: 300,
         completionTokens: 50,
         totalTokens: 350,
+        reasoningTokens: 0,
         cacheReadInputTokens: 0,
         cacheCreationInputTokens: 0,
         cacheCreation1hInputTokens: 0,
@@ -288,6 +289,7 @@ describe('managed usage accounting', () => {
       ...reservation,
       outcome: 'completed',
       actualCostCents: 9,
+      providerCostCents: 9,
       usage: expect.objectContaining({
         accounting: 'observed_provider_usage',
         reason: 'tool_loop_completed',
