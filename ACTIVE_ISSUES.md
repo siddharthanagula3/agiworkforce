@@ -500,6 +500,33 @@ Sources count as the live session and no thinking prose.
 **Validation:** stream-transform and research-loop wire tests, MessageBubble
 citation cases, a live headline search and a reloaded research run.
 
+### `AGI-32` A live voice session's backend responses model and web search are never metered
+
+**Severity:** P2
+**Status:** Open.
+**Area:** Voice, COGS
+**What is wrong:** a live voice session delegates to a backend responses model
+with web search (`apps/web/app/api/voice/live/sessions/route.ts`), which the
+provider bills separately from the per-minute session rate, and no usage
+report reaches the close route, so those tokens are never metered.
+**Evidence:** `apps/web/app/api/voice/live/sessions/route.ts` (the session
+create path, the `responses` tool config with `tools: [{ type: 'web_search' }]`);
+`apps/web/app/api/voice/live/sessions/[sessionId]/close/route.ts` (the
+settlement path, which records only the per-minute session usage report).
+**User impact:** none directly; this is a company-cost visibility gap in the
+COGS ledger, not a user-facing defect.
+**Dependencies:** None. Not the same as the two OpenAI/Anthropic admin
+credentials under "[Billing] Provider cost reconciliation credentials" in
+`docs/work/founder-assistance.md`, which stay there because minting them is a
+founder action.
+**Acceptance criteria:** the close route accepts and records the backend
+responses model's token usage, and any `web_search` calls it made, as their
+own `provider_cost_events` row for the session, so `cogs_summary()` no longer
+omits this spend.
+**Validation:** a live voice session that triggers a backend web search closes
+with a second `provider_cost_events` row for the backend model, covered by a
+test on the close route.
+
 ## 5. P3, lower priority
 
 ### `AGI-11` Published artifacts never expire
