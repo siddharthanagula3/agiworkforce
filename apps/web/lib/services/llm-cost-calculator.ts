@@ -164,6 +164,8 @@ function resolveUnpricedFallback(provider: string, model: string): ModelPricing 
   }
   throw new UnpricedModelError(provider, model);
 }
+const DEFAULT_ESTIMATED_COMPLETION_TOKENS = 1000;
+
 const runtimePricingOverrides: Record<string, ModelPricing> = {};
 const PROVIDER_ALIASES: Record<string, string> = {
   grok: 'xai',
@@ -202,8 +204,12 @@ export class LLMCostCalculator {
   }
 
   /**
-   * Calculate paid managed usage in whole ledger cents. Non-empty provider
-   * work consumes at least one cent so sub-cent calls cannot bypass paid caps.
+   * Whole ledger cents, with a one-cent floor on any non-empty provider work.
+   * The floor is arbitrage in both directions: it overcharges a sub-cent turn
+   * elevenfold and makes a hundred of them cost more than one call of the same
+   * total. The managed-usage ledger settles in microUSD since 0185, so billing
+   * paths call the microUSD calculators below; this remains for the surfaces
+   * that report a whole-cent figure and for callers not yet migrated.
    * @throws Never - returns 0 on error for safety
    */
   static calculateCost(
@@ -254,6 +260,78 @@ export class LLMCostCalculator {
       estimatedCompletionTokens,
       now,
     );
+  }
+
+  /**
+   * The unit the ledger settles in. A turn that produced no tokens costs
+   * nothing; a turn that produced any token costs at least one microUSD, so
+   * splitting work cannot make it free and cannot make it cost more.
+   */
+  static calculateListCostMicrousd(
+    model: string,
+    usage: TokenUsage,
+    now: Date = new Date(),
+  ): number | null {
+    const list = this.listPriceRoute(model);
+    if (!list) return null;
+    return this.calculateCostMicrousd(list.provider, model, usage, now, list.routeId);
+  }
+
+  static estimateListCostMicrousd(
+    model: string,
+    estimatedPromptTokens: number,
+    estimatedCompletionTokens?: number,
+    now: Date = new Date(),
+  ): number | null {
+    const list = this.listPriceRoute(model);
+    if (!list) return null;
+    return this.estimateCostMicrousd(
+      list.provider,
+      model,
+      estimatedPromptTokens,
+      estimatedCompletionTokens,
+      now,
+    );
+  }
+
+  static estimateCostMicrousd(
+    provider: string,
+    model: string,
+    estimatedPromptTokens: number,
+    estimatedCompletionTokens: number = DEFAULT_ESTIMATED_COMPLETION_TOKENS,
+    now: Date = new Date(),
+  ): number {
+    try {
+      if (typeof estimatedPromptTokens !== 'number' || estimatedPromptTokens < 0) {
+        logger.warn(
+          { estimatedPromptTokens },
+          'LLM cost calculator: Invalid prompt tokens estimate',
+        );
+        return 0;
+      }
+      const completionTokens =
+        typeof estimatedCompletionTokens === 'number' && estimatedCompletionTokens >= 0
+          ? estimatedCompletionTokens
+          : DEFAULT_ESTIMATED_COMPLETION_TOKENS;
+
+      return this.calculateCostMicrousd(
+        provider,
+        model,
+        {
+          promptTokens: estimatedPromptTokens,
+          completionTokens,
+          totalTokens: estimatedPromptTokens + completionTokens,
+        },
+        now,
+      );
+    } catch (error) {
+      if (error instanceof UnpricedModelError) throw error;
+      logger.error(
+        { error, provider, model },
+        'LLM cost calculator: Error in estimateCostMicrousd',
+      );
+      return 0;
+    }
   }
 
   static calculateCostMicrousd(
@@ -526,7 +604,7 @@ export class LLMCostCalculator {
     provider: string,
     model: string,
     estimatedPromptTokens: number,
-    estimatedCompletionTokens: number = 1000,
+    estimatedCompletionTokens: number = DEFAULT_ESTIMATED_COMPLETION_TOKENS,
     now: Date = new Date(),
   ): number {
     try {
@@ -539,7 +617,7 @@ export class LLMCostCalculator {
       }
 
       if (typeof estimatedCompletionTokens !== 'number' || estimatedCompletionTokens < 0) {
-        estimatedCompletionTokens = 1000;
+        estimatedCompletionTokens = DEFAULT_ESTIMATED_COMPLETION_TOKENS;
       }
 
       return this.calculateCost(
