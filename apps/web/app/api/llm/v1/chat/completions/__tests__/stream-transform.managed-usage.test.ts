@@ -42,6 +42,9 @@ const lifecycle = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
+
   finalizeManagedUsageRequest: lifecycle.finalize,
   markManagedUsageClientDelivered: lifecycle.delivered,
   markManagedUsageProviderStarted: vi.fn(),
