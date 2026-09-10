@@ -12,7 +12,7 @@
 .agi-mx-typed-line[data-active='true']::after {
   content: '▌';
   margin-left: 0.1ch;
-  color: var(--agi-amber);
+  color: var(--agi-accent-text);
   animation: agi-mx-blink 1s steps(2, jump-none) infinite;
 }
 

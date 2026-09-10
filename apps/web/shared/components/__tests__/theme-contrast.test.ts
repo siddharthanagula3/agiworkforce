@@ -476,73 +476,6 @@ describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () =
   });
 });
 
-describe('the marketing stage amber clears AA through its own tint', () => {
-  const STAGES = ['warm', 'pearl'] as const;
-
-  const stageCascade = (stage: string): string => {
-    const selector = `[data-design='agi'] .agi-stage--${stage}`;
-    const blocks: string[] = [];
-    for (
-      let at = globalsCss.indexOf(selector);
-      at !== -1;
-      at = globalsCss.indexOf(selector, at + 1)
-    ) {
-      const open = globalsCss.indexOf('{', at + selector.length);
-      if (open === -1 || /[;{}]/.test(globalsCss.slice(at + selector.length, open))) continue;
-      let depth = 0;
-      for (let i = open; i < globalsCss.length; i++) {
-        if (globalsCss[i] === '{') depth++;
-        else if (globalsCss[i] === '}' && --depth === 0) {
-          blocks.push(globalsCss.slice(open + 1, i));
-          break;
-        }
-      }
-    }
-    if (blocks.length === 0) throw new Error(`globals.css declares no .agi-stage--${stage}`);
-    return blocks.join('\n');
-  };
-
-  const channels = (hex: string): number[] => hexToSRGB(hex).map((c) => Math.round(c * 255));
-
-  const rgba = (value: string): { rgb: number[]; alpha: number } => {
-    const inner = value.match(/^rgba\(([^)]+)\)$/);
-    if (!inner?.[1]) throw new Error(`Expected an rgba tint, got ${value}`);
-    const parts = inner[1].split(',').map((part) => Number.parseFloat(part));
-    if (parts.length !== 4 || parts.some(Number.isNaN)) throw new Error(`Malformed ${value}`);
-    return { rgb: parts.slice(0, 3), alpha: parts[3]! };
-  };
-
-  const compositeOver = (tint: { rgb: number[]; alpha: number }, ground: string): string => {
-    const base = channels(ground);
-    return `#${tint.rgb
-      .map((c, i) => Math.round(base[i]! * (1 - tint.alpha) + c * tint.alpha))
-      .map((c) => c.toString(16).padStart(2, '0'))
-      .join('')}`;
-  };
-
-  for (const stage of STAGES) {
-    const block = stageCascade(stage);
-    const amber = colorToken(block, '--agi-amber');
-    const soft = rgba(token(block, '--agi-amber-soft'));
-    const ground = colorToken(block, '--agi-bg-3');
-
-    it(`${stage}: --agi-amber on the soft tint over --agi-bg-3 >= 4.5:1`, () => {
-      expect(contrastRatio(amber, compositeOver(soft, ground))).toBeGreaterThanOrEqual(
-        WCAG_AA_NORMAL,
-      );
-    });
-
-    it(`${stage}: --agi-amber on --agi-bg-3 >= 4.5:1`, () => {
-      expect(contrastRatio(amber, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-    });
-
-    it(`${stage}: --agi-amber-soft is --agi-amber at a lower alpha`, () => {
-      expect(soft.rgb).toEqual(channels(amber));
-      expect(soft.alpha).toBeLessThan(1);
-    });
-  }
-});
-
 describe('the marketing design-system palette clears AA in both themes', () => {
   const designBlock = (selector: string, mustDeclare: string): string => {
     for (
@@ -565,57 +498,63 @@ describe('the marketing design-system palette clears AA in both themes', () => {
     throw new Error(`globals.css has no ${selector} block declaring ${mustDeclare}`);
   };
 
+  const BASE = designBlock("[data-design='agi']", '--agi-ground');
+
   const THEMES = {
-    dark: designBlock("[data-design='agi']", '--agi-ground'),
+    dark: BASE,
     light: designBlock("[data-theme='light'][data-design='agi']", '--agi-ground'),
   };
 
+  const GROUNDS = ['--agi-ground', '--agi-ground-2', '--agi-ground-3'] as const;
+  const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
   const LANES = ['local', 'byok', 'cloud'] as const;
 
   for (const [theme, block] of Object.entries(THEMES)) {
     const ground = colorToken(block, '--agi-ground');
-    const ground2 = colorToken(block, '--agi-ground-2');
     const ink = colorToken(block, '--agi-ink');
-    const ink2 = colorToken(block, '--agi-ink-2');
 
-    it(`${theme}: --agi-ink on --agi-ground >= 4.5:1`, () => {
-      expect(contrastRatio(ink, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-    });
+    for (const name of GROUNDS) {
+      const surface = colorToken(block, name);
 
-    it(`${theme}: --agi-ink on --agi-ground-2 >= 4.5:1`, () => {
-      expect(contrastRatio(ink, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-    });
+      for (const text of TEXTS) {
+        it(`${theme}: ${text} on ${name} >= 4.5:1`, () => {
+          expect(contrastRatio(colorToken(block, text), surface)).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        });
+      }
 
-    it(`${theme}: --agi-ink-2 on --agi-ground >= 4.5:1`, () => {
-      expect(contrastRatio(ink2, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-    });
-
-    it(`${theme}: --agi-ink-2 on --agi-ground-2 >= 4.5:1`, () => {
-      expect(contrastRatio(ink2, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-    });
+      for (const lane of LANES) {
+        it(`${theme}: --agi-lane-${lane}-text on ${name} >= 4.5:1`, () => {
+          expect(
+            contrastRatio(colorToken(block, `--agi-lane-${lane}-text`), surface),
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        });
+      }
+    }
 
     it(`${theme}: the primary CTA draws --agi-ground on --agi-ink at >= 4.5:1`, () => {
       expect(contrastRatio(ground, ink)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
     });
 
+    for (const fill of ['--agi-accent', '--agi-accent-hover'] as const) {
+      it(`${theme}: --agi-accent-ink on ${fill} >= 4.5:1`, () => {
+        expect(
+          contrastRatio(colorToken(block, '--agi-accent-ink'), colorToken(block, fill)),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
     for (const lane of LANES) {
       const fill = colorToken(block, `--agi-lane-${lane}`);
-      const text = colorToken(block, `--agi-lane-${lane}-text`);
-      const onFill = colorToken(block, `--agi-lane-${lane}-on-primary`);
-
-      it(`${theme}: --agi-lane-${lane}-text on --agi-ground >= 4.5:1`, () => {
-        expect(contrastRatio(text, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-      });
-
-      it(`${theme}: --agi-lane-${lane}-text on --agi-ground-2 >= 4.5:1`, () => {
-        expect(contrastRatio(text, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-      });
 
       it(`${theme}: --agi-lane-${lane}-on-primary on --agi-lane-${lane} >= 4.5:1`, () => {
-        expect(contrastRatio(onFill, fill)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        expect(
+          contrastRatio(colorToken(block, `--agi-lane-${lane}-on-primary`), fill),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
       });
 
-      it(`${theme}: the --agi-lane-${lane} dot stays visible on --agi-ground (>= 3:1)`, () => {
+      it(`${theme}: the --agi-lane-${lane} mark stays visible on --agi-ground (>= 3:1)`, () => {
         expect(contrastRatio(fill, ground)).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
       });
     }
@@ -626,6 +565,13 @@ describe('the marketing design-system palette clears AA in both themes', () => {
       expect(token(block, '--agi-bg-3')).toBe('var(--agi-ground-3)');
     });
   }
+
+  it('paints the primary button with the ink pair, in one place, for both themes', () => {
+    expect(token(BASE, '--agi-button-bg')).toBe('var(--agi-ink)');
+    expect(token(BASE, '--agi-button-bg-hover')).toBe('var(--agi-ink-2)');
+    expect(token(BASE, '--agi-button-ink')).toBe('var(--agi-ground)');
+    expect(THEMES.light).not.toMatch(/--agi-button-(bg|ink)/);
+  });
 });
 
 describe('contrastRatio utility', () => {
@@ -977,75 +923,4 @@ describe('foundation layer', () => {
       expect(token(foundationDark, role), `${role} missing in dark`).not.toBe('');
     }
   });
-});
-
-describe('the landing page palette clears AA in both themes', () => {
-  const homeBlock = (selector: string): string => {
-    const at = globalsCss.indexOf(`${selector} {`);
-    if (at === -1) throw new Error(`globals.css declares no ${selector} block`);
-    const open = globalsCss.indexOf('{', at);
-    const close = globalsCss.indexOf('}', open);
-    return globalsCss.slice(open + 1, close);
-  };
-
-  const THEMES = {
-    dark: homeBlock("[data-design='agi'].agi-home"),
-    light: homeBlock(
-      "[data-theme='light'] [data-design='agi'].agi-home,\n[data-theme='light'][data-design='agi'].agi-home",
-    ),
-  };
-
-  const GROUNDS = ['--agi-ground', '--agi-ground-2', '--agi-ground-3'] as const;
-  const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
-  const LANES = ['local', 'byok', 'cloud'] as const;
-
-  for (const [theme, block] of Object.entries(THEMES)) {
-    for (const ground of GROUNDS) {
-      const surface = colorToken(block, ground);
-      for (const text of TEXTS) {
-        it(`${theme}: ${text} on ${ground} >= 4.5:1`, () => {
-          expect(contrastRatio(colorToken(block, text), surface)).toBeGreaterThanOrEqual(
-            WCAG_AA_NORMAL,
-          );
-        });
-      }
-      for (const lane of LANES) {
-        it(`${theme}: --agi-lane-${lane}-text on ${ground} >= 4.5:1`, () => {
-          expect(
-            contrastRatio(colorToken(block, `--agi-lane-${lane}-text`), surface),
-          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-        });
-      }
-    }
-
-    for (const fill of ['--agi-accent', '--agi-accent-hover'] as const) {
-      it(`${theme}: --agi-accent-ink on ${fill} >= 4.5:1`, () => {
-        expect(
-          contrastRatio(colorToken(block, '--agi-accent-ink'), colorToken(block, fill)),
-        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-      });
-    }
-
-    for (const lane of LANES) {
-      it(`${theme}: --agi-lane-${lane}-on-primary on --agi-lane-${lane} >= 4.5:1`, () => {
-        expect(
-          contrastRatio(
-            colorToken(block, `--agi-lane-${lane}-on-primary`),
-            colorToken(block, `--agi-lane-${lane}`),
-          ),
-        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
-      });
-
-      it(`${theme}: the --agi-lane-${lane} mark stays visible on --agi-ground (>= 3:1)`, () => {
-        expect(
-          contrastRatio(colorToken(block, `--agi-lane-${lane}`), colorToken(block, '--agi-ground')),
-        ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
-      });
-    }
-
-    it(`${theme}: the button tokens point at the accent`, () => {
-      expect(token(block, '--agi-button-bg')).toBe('var(--agi-accent)');
-      expect(token(block, '--agi-button-ink')).toBe('var(--agi-accent-ink)');
-    });
-  }
 });

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
-import { Geist, Geist_Mono, IBM_Plex_Sans, JetBrains_Mono, Newsreader } from 'next/font/google';
+import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
 import './globals.css';
@@ -34,14 +34,6 @@ const newsreader = Newsreader({
   style: ['normal', 'italic'],
   variable: '--font-newsreader',
   display: 'swap',
-});
-
-const ibmPlexSans = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-ibm-plex-sans',
-  display: 'swap',
-  adjustFontFallback: true,
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -161,7 +153,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       data-telemetry-consent={String(telemetryConsent)}
-      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${ibmPlexSans.variable} ${jetbrainsMono.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable}`}
     >
       <body className="antialiased">
         {/*

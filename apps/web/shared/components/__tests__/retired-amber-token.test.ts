@@ -10,50 +10,28 @@ const SOURCE_FILE = /\.(?:tsx?|css)$/;
 const RETIRED_TOKEN = /--agi-amber\b/;
 
 /**
- * `--agi-amber` is redefined three times in `apps/web/app/globals.css`: amber by
- * default, `#0a66b3` in the light scope the product pages render in, and a brown
- * in the warm and pearl stages. A product surface reading it therefore paints a
- * saturated blue primary action on a warm surface, which is what it did on the
- * project sources panel.
+ * `--agi-amber` no longer exists. The public design system is one blue accent
+ * held by `--agi-accent`, `--agi-accent-text` and `--agi-accent-soft`, so the
+ * token has no definition in any stylesheet and every marketing call site was
+ * moved onto the accent roles.
  *
- * The token's own comment has asked since it was retired that no new call site
- * reference it, and prose did not hold. This is that rule as a guard: the list
- * below may only shrink. Product UI uses `--color-primary` and
- * `--color-primary-foreground`, the pair the projects list already used for its
- * New button and the project page for its tab underline.
+ * What is left below reads the name with a literal fallback, which is why those
+ * surfaces survive the definitions being deleted. The list may only shrink, and
+ * nothing may define the token again: a redefinition would silently repaint
+ * whichever surface still reads it.
  */
 const ALLOWED: ReadonlyArray<{ file: string; why: string }> = [
   {
-    file: 'apps/web/features/marketing/components/legacy-landing.css',
-    why: 'marketing, the surface the token was retired into and where the amber accent is the design',
-  },
-  {
-    file: 'apps/web/features/marketing/components/system/system.css',
-    why: 'marketing',
-  },
-  {
-    file: 'apps/web/features/marketing/components/motion/motion.css',
-    why: 'marketing',
-  },
-  {
     file: 'apps/web/features/support/components/SupportWidget.module.css',
-    why: 'reads it with a literal fallback, so it survives the definitions being deleted',
+    why: 'reads it with a literal fallback, so it survived the definitions being deleted',
   },
   {
     file: 'packages/ui/ui/src/AgiMark.tsx',
     why: 'reads it with a currentColor fallback for the mark on marketing grounds',
   },
   {
-    file: 'apps/web/shared/components/__tests__/theme-contrast.test.ts',
-    why: 'measures the token for the marketing stages',
-  },
-  {
     file: 'apps/web/shared/components/__tests__/retired-amber-token.test.ts',
     why: 'this guard',
-  },
-  {
-    file: 'apps/web/app/globals.css',
-    why: 'defines the token; the definitions stay while the marketing surfaces read them',
   },
 ];
 
@@ -102,8 +80,14 @@ describe('the retired --agi-amber token', () => {
     }
   });
 
-  it('keeps its definitions, because the marketing surfaces still read them', () => {
-    const globals = readFileSync(join(REPO_ROOT, 'apps/web/app/globals.css'), 'utf8');
-    expect(globals).toMatch(/--agi-amber:/);
+  it('is defined by no stylesheet in the repository', () => {
+    const defining = SEARCH_ROOTS.flatMap((root) => sourceFiles(join(REPO_ROOT, root)))
+      .filter((file) => /--agi-amber(?:-soft)?\s*:/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file).split('\\').join('/'));
+
+    expect(
+      defining,
+      'the accent roles are --agi-accent, --agi-accent-text, --agi-accent-soft',
+    ).toEqual([]);
   });
 });

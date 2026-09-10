@@ -158,7 +158,7 @@ export default function AboutPage() {
                 },
                 { label: 'Trust modes', value: 'Local · BYOK · Managed cloud' },
                 { label: 'Data policy', value: POSITIONING.trustBoundary },
-                { label: 'Set in', value: 'IBM Plex Sans & JetBrains Mono' },
+                { label: 'Set in', value: 'Geist & JetBrains Mono' },
                 {
                   label: 'Compliance',
                   value: (
