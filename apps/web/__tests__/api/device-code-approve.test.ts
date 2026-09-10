@@ -3,10 +3,10 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-const mockClerkAuth = vi.fn();
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockClerkAuth(),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 vi.mock('@/lib/csrf', () => ({
@@ -46,16 +46,10 @@ const mockExecute = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (sql: string, params: unknown[]) => {
-      if (typeof sql === 'string' && sql.includes('account_status')) {
-        return Promise.resolve([]);
-      }
-      if (typeof sql === 'string' && sql.includes('user_settings')) {
-        return Promise.resolve([]);
-      }
-      return mockQuery(sql, params);
-    },
+    query: (sql: string, params: unknown[]) => mockQuery(sql, params),
     execute: (...args: unknown[]) => mockExecute(...args),
+    transaction: vi.fn(),
+    dispose: vi.fn(),
   })),
 }));
 
@@ -64,7 +58,7 @@ import { POST } from '@/app/api/auth/device/approve/route';
 describe('Device code approve compatibility API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockClerkAuth.mockResolvedValue({ userId: 'user_clerk_123' });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_clerk_123' });
     mockExecute.mockResolvedValue(1);
   });
 

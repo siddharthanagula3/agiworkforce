@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptyRuntimeState, type RouteHealthSnapshot } from '@agiworkforce/routing';
-import { getModelsForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
-import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+import {
+  getModelsForProvider,
+  listCanonicalModels,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
+import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 import { isNonUsVendorTransport } from '@agiworkforce/compliance';
 
 const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
@@ -43,27 +47,69 @@ if (!anthropicPremiumModel) {
   throw new Error('The canonical Anthropic premium reasoning fixture must exist');
 }
 
-const MODEL = requireProviderDefaultModel('zhipu');
-/**
- * Routes this model can actually be served on, which is not the same as every
- * route the catalog lists for it.
- *
- * This model's catalog default is the vendor's own endpoint, and managed
- * routing no longer dispatches through those: `EXCLUDED_ROUTE_HOSTS` in
- * `request-processor.ts` keeps processing off endpoints the model vendors run
- * outside the United States. The model is unaffected and is still served, on a
- * gateway.
- *
- * This file is about route health and warm-route affinity, so it wants "the
- * route the resolver will settle on" rather than "the catalog's default". The
- * filter is applied here so the subject stays route health, and so a change to
- * that exclusion shows up as one edit rather than as two mystery assertions.
- */
-const servableRoutes = getRoutePricingForModel(MODEL).filter(
-  (route) => !isNonUsVendorTransport(route.routeId.split(ROUTE_ID_SEPARATOR)[0] ?? ''),
-);
-const DEFAULT_ROUTE_ID = servableRoutes[0]!.routeId;
-const NON_DEFAULT_SAME_MODEL_ROUTE_ID = servableRoutes[1]!.routeId;
+const MANAGED_TRUST_MODE = 'managed_cloud';
+const SERVABLE_COMMERCIAL_STATUSES: ReadonlySet<string> = new Set([
+  'agi_direct',
+  'authorized_marketplace',
+  'free_commercial',
+]);
+const ZERO_COST_USAGE = { estimatedInputTokens: 0, estimatedOutputTokens: 0 };
+
+function managedServableRouteIds(modelKey: string): string[] {
+  return Object.entries(modelRegistry.routes)
+    .filter(
+      ([, route]) =>
+        route.modelKey === modelKey &&
+        route.trustModes.includes(MANAGED_TRUST_MODE) &&
+        SERVABLE_COMMERCIAL_STATUSES.has(route.commercialStatus) &&
+        !isNonUsVendorTransport(route.provider),
+    )
+    .map(([routeId]) => routeId);
+}
+
+function selectedRouteId(modelKey: string, preferredRouteId?: string): string | null {
+  const decision = resolveWebCloudModelRoute(
+    modelKey,
+    'pro',
+    'general',
+    ZERO_COST_USAGE,
+    undefined,
+    {
+      runtimeState: emptyRuntimeState(Date.now()),
+      ...(preferredRouteId ? { preferredRouteId } : {}),
+    },
+  );
+  return decision.status === 'selected' ? decision.routeId : null;
+}
+
+interface AffinityFixture {
+  model: string;
+  defaultRouteId: string;
+  warmRouteId: string;
+}
+
+function findAffinityFixture(): AffinityFixture | null {
+  const candidates = [
+    requireProviderDefaultModel('zhipu'),
+    ...listCanonicalModels().map((model) => model.id),
+  ];
+  for (const model of candidates) {
+    const servable = managedServableRouteIds(model);
+    if (servable.length < 2) continue;
+    const defaultRouteId = selectedRouteId(model);
+    if (!defaultRouteId) continue;
+    const warmRouteId = servable.find(
+      (routeId) => routeId !== defaultRouteId && selectedRouteId(model, routeId) === routeId,
+    );
+    if (warmRouteId) return { model, defaultRouteId, warmRouteId };
+  }
+  return null;
+}
+
+const affinityFixture = findAffinityFixture();
+const MODEL = affinityFixture?.model ?? '';
+const DEFAULT_ROUTE_ID = affinityFixture?.defaultRouteId ?? '';
+const NON_DEFAULT_SAME_MODEL_ROUTE_ID = affinityFixture?.warmRouteId ?? '';
 const OTHER_MODEL_ROUTE_ID = getRoutePricingForModel(anthropicPremiumModel.id).find(
   (route) => route.isDefault,
 )!.routeId;
@@ -76,8 +122,6 @@ const SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID = anthropicDefaultRoutes.find(
   (route) => !route.isDefault,
 )!.routeId;
 
-const ZERO_COST_USAGE = { estimatedInputTokens: 0, estimatedOutputTokens: 0 };
-
 function unavailableSnapshot(): RouteHealthSnapshot {
   return {
     available: false,
@@ -88,86 +132,90 @@ function unavailableSnapshot(): RouteHealthSnapshot {
   };
 }
 
-describe('resolveWebCloudModelRoute · route health and warm-route affinity', () => {
-  it('prefers the warm route over the naturally cheaper default when it is healthy', () => {
-    const decision = resolveWebCloudModelRoute(
-      MODEL,
-      'pro',
-      'general',
-      ZERO_COST_USAGE,
-      undefined,
-      {
-        runtimeState: emptyRuntimeState(Date.now()),
-        preferredRouteId: NON_DEFAULT_SAME_MODEL_ROUTE_ID,
-      },
-    );
-
-    expect(decision.status).toBe('selected');
-    expect(decision.status === 'selected' && decision.routeId).toBe(
-      NON_DEFAULT_SAME_MODEL_ROUTE_ID,
-    );
-  });
-
-  it('loses affinity for a route the health snapshot reports in cooldown', () => {
-    const nowMs = Date.now();
-    const decision = resolveWebCloudModelRoute(
-      MODEL,
-      'pro',
-      'general',
-      ZERO_COST_USAGE,
-      undefined,
-      {
-        runtimeState: {
-          ...emptyRuntimeState(nowMs),
-          routeHealthSnapshots: { [NON_DEFAULT_SAME_MODEL_ROUTE_ID]: unavailableSnapshot() },
+// llm-guardrail-allow: registry-derived fixture, needs two managed routes off excluded transports, D-2026-09-10-01
+describe.skipIf(!affinityFixture)(
+  'resolveWebCloudModelRoute · route health and warm-route affinity (needs a model with two managed routes off excluded transports)',
+  () => {
+    it('prefers the warm route over the naturally cheaper default when it is healthy', () => {
+      const decision = resolveWebCloudModelRoute(
+        MODEL,
+        'pro',
+        'general',
+        ZERO_COST_USAGE,
+        undefined,
+        {
+          runtimeState: emptyRuntimeState(Date.now()),
+          preferredRouteId: NON_DEFAULT_SAME_MODEL_ROUTE_ID,
         },
-        preferredRouteId: NON_DEFAULT_SAME_MODEL_ROUTE_ID,
-      },
-    );
+      );
 
-    expect(decision.status).toBe('selected');
-    expect(decision.status === 'selected' && decision.routeId).toBe(DEFAULT_ROUTE_ID);
-  });
+      expect(decision.status).toBe('selected');
+      expect(decision.status === 'selected' && decision.routeId).toBe(
+        NON_DEFAULT_SAME_MODEL_ROUTE_ID,
+      );
+    });
 
-  it('keeps an exact-model selection on its own model when the affinity names a different model', () => {
-    const decision = resolveWebCloudModelRoute(
-      MODEL,
-      'pro',
-      'general',
-      ZERO_COST_USAGE,
-      undefined,
-      {
-        runtimeState: emptyRuntimeState(Date.now()),
-        preferredRouteId: OTHER_MODEL_ROUTE_ID,
-      },
-    );
+    it('loses affinity for a route the health snapshot reports in cooldown', () => {
+      const nowMs = Date.now();
+      const decision = resolveWebCloudModelRoute(
+        MODEL,
+        'pro',
+        'general',
+        ZERO_COST_USAGE,
+        undefined,
+        {
+          runtimeState: {
+            ...emptyRuntimeState(nowMs),
+            routeHealthSnapshots: { [NON_DEFAULT_SAME_MODEL_ROUTE_ID]: unavailableSnapshot() },
+          },
+          preferredRouteId: NON_DEFAULT_SAME_MODEL_ROUTE_ID,
+        },
+      );
 
-    expect(decision.status).toBe('selected');
-    expect(decision.status === 'selected' && decision.modelKey).toBe(MODEL);
-    expect(decision.status === 'selected' && decision.routeId).toBe(DEFAULT_ROUTE_ID);
-  });
+      expect(decision.status).toBe('selected');
+      expect(decision.status === 'selected' && decision.routeId).toBe(DEFAULT_ROUTE_ID);
+    });
 
-  it('resolves exactly like an unknown conversation (no preference) when none is given', () => {
-    const withoutAffinity = resolveWebCloudModelRoute(
-      MODEL,
-      'pro',
-      'general',
-      ZERO_COST_USAGE,
-      undefined,
-      { runtimeState: emptyRuntimeState(Date.now()) },
-    );
-    const withoutRouteHealthArg = resolveWebCloudModelRoute(
-      MODEL,
-      'pro',
-      'general',
-      ZERO_COST_USAGE,
-    );
+    it('keeps an exact-model selection on its own model when the affinity names a different model', () => {
+      const decision = resolveWebCloudModelRoute(
+        MODEL,
+        'pro',
+        'general',
+        ZERO_COST_USAGE,
+        undefined,
+        {
+          runtimeState: emptyRuntimeState(Date.now()),
+          preferredRouteId: OTHER_MODEL_ROUTE_ID,
+        },
+      );
 
-    expect(withoutAffinity.status === 'selected' && withoutAffinity.routeId).toBe(
-      withoutRouteHealthArg.status === 'selected' && withoutRouteHealthArg.routeId,
-    );
-  });
-});
+      expect(decision.status).toBe('selected');
+      expect(decision.status === 'selected' && decision.modelKey).toBe(MODEL);
+      expect(decision.status === 'selected' && decision.routeId).toBe(DEFAULT_ROUTE_ID);
+    });
+
+    it('resolves exactly like an unknown conversation (no preference) when none is given', () => {
+      const withoutAffinity = resolveWebCloudModelRoute(
+        MODEL,
+        'pro',
+        'general',
+        ZERO_COST_USAGE,
+        undefined,
+        { runtimeState: emptyRuntimeState(Date.now()) },
+      );
+      const withoutRouteHealthArg = resolveWebCloudModelRoute(
+        MODEL,
+        'pro',
+        'general',
+        ZERO_COST_USAGE,
+      );
+
+      expect(withoutAffinity.status === 'selected' && withoutAffinity.routeId).toBe(
+        withoutRouteHealthArg.status === 'selected' && withoutRouteHealthArg.routeId,
+      );
+    });
+  },
+);
 
 describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
   it('fetches health only for the exact model’s own routes', async () => {

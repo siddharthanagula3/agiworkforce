@@ -51,6 +51,7 @@ import {
   isFreeTierBlockedAddOn,
   resolveManagedUsageLeaseSeconds,
   processRequest,
+  resolveWebCloudModelRoute,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
 import * as requestProcessorModule from './request-processor';
@@ -59,7 +60,29 @@ import {
   providerInjectsWebSearchTool,
 } from '@/lib/web-search-support';
 
-const GENERIC_SEARCH_FALLBACK_MODEL = requireProviderDefaultModel('deepseek');
+const ZERO_COST_USAGE = { estimatedInputTokens: 0, estimatedOutputTokens: 0 };
+
+function servesManagedResearch(modelId: string): boolean {
+  return (
+    resolveWebCloudModelRoute(modelId, 'pro', 'research', ZERO_COST_USAGE).status === 'selected'
+  );
+}
+
+const GENERIC_SEARCH_FALLBACK_MODEL = (() => {
+  const candidates = [
+    requireProviderDefaultModel('deepseek'),
+    ...listCanonicalModels()
+      .filter((model) => model.capabilities.tools)
+      .map((model) => model.id),
+  ];
+  const model = candidates.find(
+    (id) =>
+      !providerInjectsWebSearchTool(getModelMetadataById(id)?.provider) &&
+      servesManagedResearch(id),
+  );
+  if (!model) throw new Error('No managed-servable generic-fallback search fixture exists');
+  return model;
+})();
 const ANTHROPIC_PLATFORM_FETCH_MODEL = (() => {
   const model = listCanonicalModels().find(
     (candidate) =>
