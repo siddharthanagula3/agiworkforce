@@ -871,6 +871,32 @@ export async function summarizeCogsAccountAttribution(
   };
 }
 
+interface FeatureUnitsRow {
+  units: number | string | null;
+}
+
+/**
+ * How many units of `features` this user has consumed since `since`, read from
+ * the ledger's own typed `feature` column rather than from a jsonb scan. Units,
+ * not rows: a single row can carry several calls.
+ */
+export async function countUserFeatureUnitsSince(
+  userId: string,
+  features: readonly RateCardFeature[],
+  since: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<number> {
+  const [row] = await db.query<FeatureUnitsRow>(
+    `select coalesce(sum(event.units), 0)::numeric as units
+       from public.provider_cost_events event
+      where event.user_id = $1
+        and event.feature = any($2::text[])
+        and event.occurred_at >= $3::timestamptz`,
+    [userId, features as unknown as string[], since.toISOString()],
+  );
+  return numberFrom(row?.units);
+}
+
 interface OrganizationSpendRow {
   spend_cents: number | string | null;
 }
