@@ -49,6 +49,10 @@ export interface GoogleGroundingCostInput {
   turnRef: string;
   billableCalls: number;
   delivered: boolean;
+  /** The client surface the turn came from, so interactive and automated search can be told apart. */
+  surface?: string | null;
+  /** What the customer was charged for these calls, when the surface is not one that includes search. */
+  customerChargeCents?: number | null;
 }
 
 /**
@@ -71,6 +75,9 @@ export async function recordGoogleGroundingCost(input: GoogleGroundingCostInput)
       sourceRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}`,
       taskOutcome: input.delivered ? 'delivered' : 'undelivered',
       taskRef: input.turnRef,
+      feature: GOOGLE_GROUNDING_FEATURE,
+      surface: input.surface ?? null,
+      customerCanonicalCents: input.customerChargeCents ?? null,
       usage: {
         operation: 'tool',
         tool: GOOGLE_GROUNDING_TOOL_NAME,
