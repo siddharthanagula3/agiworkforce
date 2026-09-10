@@ -34,6 +34,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 vi.mock('@/lib/services/gateway-routing', () => ({
   buildGatewayRouteAdapter: (providerId: string) => buildGatewayRouteAdapter(providerId),
   gatewayRoutesEnabled: () => flagState.enabled,
+  hasGatewayRouteCredentials: () => false,
   admittedHarnessIds: () => undefined,
   listCredentialedGatewayProviderIds: () => [],
 }));
