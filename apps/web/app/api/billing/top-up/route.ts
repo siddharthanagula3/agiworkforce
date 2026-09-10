@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
+  formatCredits,
   topUpLedgerCentsForUsd,
   topUpUnitsForUsd,
   isFreeBillingPlanTier,
@@ -162,8 +163,8 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
             currency: 'usd',
             unit_amount: amountCents,
             product_data: {
-              name: `AGI top-up, ${topUpUnits.toLocaleString('en-US')} units`,
-              description: `${topUpUnits.toLocaleString('en-US')} managed-usage top-up units`,
+              name: `AGI top-up, ${formatCredits(topUpUnits)}`,
+              description: `${formatCredits(topUpUnits)} managed-usage top-up`,
             },
           },
         },
