@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const modelCatalogMocks = vi.hoisted(() => ({
   runwayApiModelId: undefined as string | undefined,
   runwayAvailability: 'live' as 'live' | 'unavailable',
+  unpricedResolution: null as '480p' | '720p' | '1080p' | '4k' | null,
 }));
 const videoReleasePolicyMocks = vi.hoisted(() => ({ runwayEnabled: true }));
 
@@ -20,13 +21,19 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
     ...actual,
     getModelMetadataById: (id: string) => {
       const model = actual.getModelMetadataById(id);
-      return model?.provider === 'runway'
-        ? {
-            ...model,
-            apiModelId: modelCatalogMocks.runwayApiModelId ?? model.apiModelId,
-            availability: modelCatalogMocks.runwayAvailability,
-          }
-        : model;
+      if (model?.provider === 'runway') {
+        return {
+          ...model,
+          apiModelId: modelCatalogMocks.runwayApiModelId ?? model.apiModelId,
+          availability: modelCatalogMocks.runwayAvailability,
+        };
+      }
+      const dropped = modelCatalogMocks.unpricedResolution;
+      if (model && dropped && model.videoPerSecondCostByResolution) {
+        const { [dropped]: _unpriced, ...priced } = model.videoPerSecondCostByResolution;
+        return { ...model, videoPerSecondCostByResolution: priced };
+      }
+      return model;
     },
   };
 });
@@ -447,6 +454,7 @@ describe('POST /api/media/video/generate', () => {
     durableJobMocks.failClaimed.mockResolvedValue({ status: 'failed' });
     durableJobMocks.markUnknown.mockResolvedValue({ status: 'outcome_unknown' });
 
+    modelCatalogMocks.unpricedResolution = null;
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
@@ -1539,6 +1547,27 @@ describe('POST /api/media/video/generate', () => {
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
         parameters: { durationSeconds: 8, resolution: '4k' },
       });
+    });
+
+    it('refuses a resolution the model publishes no price for instead of billing the cheapest', async () => {
+      modelCatalogMocks.unpricedResolution = '4k';
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic mountain',
+          provider: 'google',
+          duration_secs: 8,
+          resolution: '4k',
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'video_resolution_unpriced' },
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('rejects a non-native Google duration before reservation or provider egress', async () => {
