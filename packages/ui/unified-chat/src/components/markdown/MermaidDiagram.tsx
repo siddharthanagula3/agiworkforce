@@ -41,7 +41,20 @@ function bakeTextAnchor(svg: string): string {
     });
   }
 
+  fitToNaturalSize(doc.documentElement);
   return new XMLSerializer().serializeToString(doc.documentElement);
+}
+
+function fitToNaturalSize(root: Element): void {
+  const viewBox = (root.getAttribute('viewBox') ?? '')
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  const [, , width, height] = viewBox;
+  if (viewBox.length !== 4 || !(width > 0) || !(height > 0)) return;
+  if (!/%$/.test(root.getAttribute('width') ?? '%')) return;
+  root.setAttribute('width', String(Math.ceil(width)));
+  root.setAttribute('height', String(Math.ceil(height)));
 }
 
 const SVG_CACHE_LIMIT = 32;
