@@ -118,7 +118,12 @@ export function createVercelGatewayAdapter(
         provider: VERCEL_GATEWAY_PROVIDER_ID,
       });
 
-      applyVercelGatewayProviderOptions(params, config.providerOptions, req.metadata);
+      applyVercelGatewayProviderOptions(
+        params,
+        config.providerOptions,
+        req.metadata,
+        req.zeroDataRetentionOnly,
+      );
 
       params.stream_options = { include_usage: true };
 

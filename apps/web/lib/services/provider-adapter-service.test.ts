@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getProviderDefaultModel, requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProtocolRoute } from '@agiworkforce/types';
 
+import { modelRegistry } from '@agiworkforce/model-registry';
+
+const MANAGED_ONLY_EXPERIMENTAL_PROVIDER = 'cheaperinference_anthropic';
+
 vi.mock('server-only', () => ({}));
 
 const OPENAI_CHAT_FIXTURE_BASE_URL = 'https://openrouter.ai/api/v1';
@@ -176,44 +180,46 @@ describe('resolveProviderFromModel', () => {
     );
   });
 
-  it('falls back to default resolution when an experimental route lacks an admitting key', () => {
-    const model = requireProviderDefaultModel('anthropic');
+  it('falls back to default resolution when an experimental route is asked to serve managed traffic', () => {
+    const [routeId, route] = Object.entries(modelRegistry.routes).find(
+      ([, candidate]) =>
+        candidate.commercialStatus === 'experimental_only' &&
+        candidate.trustModes.includes('managed_cloud'),
+    )!;
 
     expect(
-      resolveProviderFromModel(model, `vercel_gateway/${model}`, {
-        trustMode: 'byok',
-        hasUserProviderKey: false,
-      }),
-    ).toBe('anthropic');
+      resolveProviderFromModel(route.modelKey, routeId, { trustMode: 'managed_cloud' }),
+    ).not.toBe(route.provider);
     expect(loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        routeId: `vercel_gateway/${model}`,
-        reason: 'commercial_status_not_admitted',
-      }),
+      expect.objectContaining({ routeId, reason: 'commercial_status_not_admitted' }),
       expect.any(String),
     );
   });
 
-  it('defaults an omitted trust mode to managed, rejecting a byok-only route', () => {
+  it('falls back to default resolution when a managed-only route is asked to serve byok traffic', () => {
     const model = requireProviderDefaultModel('anthropic');
 
-    expect(resolveProviderFromModel(model, `vercel_gateway/${model}`)).toBe('anthropic');
+    expect(
+      resolveProviderFromModel(model, `${MANAGED_ONLY_EXPERIMENTAL_PROVIDER}/${model}`, {
+        trustMode: 'byok',
+        hasUserProviderKey: true,
+      }),
+    ).toBe('anthropic');
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
-        routeId: `vercel_gateway/${model}`,
+        routeId: `${MANAGED_ONLY_EXPERIMENTAL_PROVIDER}/${model}`,
         reason: 'trust_mode_not_permitted',
       }),
       expect.any(String),
     );
   });
 
-  it('dispatches an experimental route once the byok trust mode and a user key admit it', () => {
+  it('dispatches an authorized marketplace route for managed traffic', () => {
     const model = requireProviderDefaultModel('anthropic');
 
     expect(
       resolveProviderFromModel(model, `vercel_gateway/${model}`, {
-        trustMode: 'byok',
-        hasUserProviderKey: true,
+        trustMode: 'managed_cloud',
       }),
     ).toBe('vercel_gateway');
     expect(loggerWarn).not.toHaveBeenCalled();
@@ -380,6 +386,7 @@ describe('free-lane gateway credentials', () => {
 
     expect(createProviderAdapter).toHaveBeenCalledWith('vercel_gateway', {
       apiKey: 'static-gateway-key',
+      providerOptions: { sort: 'cost' },
     });
   });
 
@@ -392,6 +399,7 @@ describe('free-lane gateway credentials', () => {
 
     expect(createProviderAdapter).toHaveBeenCalledWith('vercel_gateway', {
       apiKey: 'oidc-token',
+      providerOptions: { sort: 'cost' },
     });
   });
 });

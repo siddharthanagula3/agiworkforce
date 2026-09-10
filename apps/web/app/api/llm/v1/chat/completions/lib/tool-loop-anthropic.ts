@@ -31,9 +31,11 @@ function applyWarmRouteProviderPinning(
 ): void {
   if (provider !== OPENROUTER_DISPATCH_PROVIDER_ID) return;
   if (!affinity || !affinity.upstreamProvider || affinity.routeId !== routeId) return;
+  const existing = chatRequest.metadata?.[OPENROUTER_METADATA_ROUTING_KEY];
   chatRequest.metadata = {
     ...chatRequest.metadata,
     [OPENROUTER_METADATA_ROUTING_KEY]: {
+      ...(existing && typeof existing === 'object' ? existing : {}),
       order: [affinity.upstreamProvider],
       allowFallbacks: true,
     },

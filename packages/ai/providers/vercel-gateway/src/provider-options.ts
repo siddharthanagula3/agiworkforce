@@ -9,6 +9,7 @@ export interface VercelGatewayProviderOptions {
   only?: readonly string[];
   sort?: VercelGatewaySortMetric;
   caching?: VercelGatewayCachingMode;
+  zeroDataRetention?: boolean;
 }
 
 interface VercelGatewayGatewayField {
@@ -16,6 +17,7 @@ interface VercelGatewayGatewayField {
   only?: string[];
   sort?: VercelGatewaySortMetric;
   caching?: VercelGatewayCachingMode;
+  zeroDataRetention?: boolean;
 }
 
 const VERCEL_GATEWAY_REQUEST_METADATA_KEY = 'vercelGatewayProviderOptions';
@@ -39,7 +41,7 @@ function readMetadataProviderOptions(
 ): VercelGatewayProviderOptions | undefined {
   const raw = metadata?.[VERCEL_GATEWAY_REQUEST_METADATA_KEY];
   if (!raw || typeof raw !== 'object') return undefined;
-  const { order, only, sort, caching } = raw as Record<string, unknown>;
+  const { order, only, sort, caching, zeroDataRetention } = raw as Record<string, unknown>;
   const orderList = readStringArray(order);
   const onlyList = readStringArray(only);
   return {
@@ -47,6 +49,7 @@ function readMetadataProviderOptions(
     ...(onlyList !== undefined ? { only: onlyList } : {}),
     ...(isSortMetric(sort) ? { sort } : {}),
     ...(isCachingMode(caching) ? { caching } : {}),
+    ...(zeroDataRetention === true ? { zeroDataRetention } : {}),
   };
 }
 
@@ -54,14 +57,20 @@ export function applyVercelGatewayProviderOptions(
   params: OpenAIChatCompletionCreateParams,
   configDefault: VercelGatewayProviderOptions | undefined,
   requestMetadata: ChatRequest['metadata'],
+  zeroDataRetentionOnly?: boolean,
 ): void {
   const requestOverride = readMetadataProviderOptions(requestMetadata);
-  const merged: VercelGatewayProviderOptions = { ...configDefault, ...requestOverride };
+  const merged: VercelGatewayProviderOptions = {
+    ...configDefault,
+    ...requestOverride,
+    ...(zeroDataRetentionOnly ? { zeroDataRetention: true } : {}),
+  };
   if (
     merged.order === undefined &&
     merged.only === undefined &&
     merged.sort === undefined &&
-    merged.caching === undefined
+    merged.caching === undefined &&
+    merged.zeroDataRetention === undefined
   ) {
     return;
   }
@@ -70,6 +79,9 @@ export function applyVercelGatewayProviderOptions(
     ...(merged.only !== undefined ? { only: [...merged.only] } : {}),
     ...(merged.sort !== undefined ? { sort: merged.sort } : {}),
     ...(merged.caching !== undefined ? { caching: merged.caching } : {}),
+    ...(merged.zeroDataRetention !== undefined
+      ? { zeroDataRetention: merged.zeroDataRetention }
+      : {}),
   };
   (
     params as unknown as { providerOptions?: { gateway: VercelGatewayGatewayField } }

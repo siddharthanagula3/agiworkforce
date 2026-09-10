@@ -17,6 +17,8 @@ import {
   normalizeModelId,
 } from '@agiworkforce/types';
 import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
+import { getRoutePricing } from '@agiworkforce/model-registry';
+import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
 
@@ -58,8 +60,12 @@ function splitTools(tools: unknown[] | undefined): {
 
 function gatewayUpstreamModelId(modelId: string, provider: string | undefined): string | undefined {
   if (!provider) return undefined;
-  const route = getRegistryRoute(`${provider}/${modelId}`);
-  if (!route || !getGatewayHarness(route.harnessId)) return undefined;
+  const modelKey = normalizeModelId(modelId) ?? modelId;
+  const route =
+    getRegistryRoute(`${provider}/${modelKey}`) ??
+    getRegistryRoute(`${normalizeProviderId(provider) ?? provider}/${modelKey}`);
+  if (!route) return undefined;
+  if (!getGatewayHarness(route.harnessId) && route.isDefault) return undefined;
   return route.providerModelId;
 }
 
@@ -69,6 +75,30 @@ function wireModelId(modelId: string, provider: string | undefined): string {
   const apiModelId = toProviderApiModelId(modelId);
   if (provider !== 'openrouter' && provider !== 'open_router') return apiModelId;
   return openRouterSlugFor(apiModelId) ?? openRouterFailoverSlugFor(apiModelId) ?? apiModelId;
+}
+
+const OPENROUTER_DISPATCH_PROVIDERS: ReadonlySet<string> = new Set(['openrouter', 'open_router']);
+const OPENROUTER_ROUTE_PROVIDER = 'open_router';
+const OPENROUTER_METADATA_ROUTING_KEY = 'openRouterProviderRouting';
+
+/**
+ * The registry prices the OpenRouter route of a model at the cheapest host
+ * serving it. Sending that sheet as OpenRouter's max_price turns the price the
+ * ledger will record into a ceiling the marketplace enforces: a dearer host is
+ * refused rather than billed, and failover moves to the next route. A route
+ * with no positive price (a free tier, an auto router) sends no ceiling.
+ */
+function openRouterPriceCeiling(modelId: string): Record<string, unknown> | undefined {
+  const modelKey = normalizeModelId(modelId) ?? modelId;
+  const sheet = getRoutePricing(`${OPENROUTER_ROUTE_PROVIDER}/${modelKey}`);
+  if (!sheet || sheet.unit !== 'per_million_tokens') return undefined;
+  if (!(sheet.inputPerMillion && sheet.inputPerMillion > 0)) return undefined;
+  if (!(sheet.outputPerMillion && sheet.outputPerMillion > 0)) return undefined;
+  return {
+    [OPENROUTER_METADATA_ROUTING_KEY]: {
+      maxPrice: { prompt: sheet.inputPerMillion, completion: sheet.outputPerMillion },
+    },
+  };
 }
 
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
@@ -90,6 +120,10 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
   if (processed.zeroDataRetentionOnly) chatRequest.zeroDataRetentionOnly = true;
+  if (processed.provider && OPENROUTER_DISPATCH_PROVIDERS.has(processed.provider)) {
+    const ceiling = openRouterPriceCeiling(llmRequest.model);
+    if (ceiling) chatRequest.metadata = { ...chatRequest.metadata, ...ceiling };
+  }
   return chatRequest;
 }
 
