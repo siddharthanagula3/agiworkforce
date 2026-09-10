@@ -78,18 +78,19 @@ export async function buildNonStreamResponse(
     cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
     cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
   };
-  const actualCostCents = freeTrial
+  const providerCostMicrousd = freeTrial
     ? 0
-    : LLMCostCalculator.calculateCost(
+    : LLMCostCalculator.calculateCostMicrousd(
         provider,
         llmResponse.model,
         tokenUsage,
         undefined,
         buildServingRouteId(provider, llmResponse.model),
       );
-  const billedCostCents = freeTrial
+  const billedCostMicrousd = freeTrial
     ? 0
-    : (LLMCostCalculator.calculateListCost(llmResponse.model, tokenUsage) ?? actualCostCents);
+    : (LLMCostCalculator.calculateListCostMicrousd(llmResponse.model, tokenUsage) ??
+      providerCostMicrousd);
 
   const cpstUsage = buildCpstUsageFields(processed, { billingOutcome: 'completed' });
 
@@ -108,8 +109,8 @@ export async function buildNonStreamResponse(
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: 'completed',
-      actualCostCents: billedCostCents,
-      providerCostCents: actualCostCents,
+      actualCostMicrousd: billedCostMicrousd,
+      providerCostMicrousd,
       usage: {
         inputTokens: llmResponse.promptTokens,
         outputTokens: llmResponse.completionTokens,

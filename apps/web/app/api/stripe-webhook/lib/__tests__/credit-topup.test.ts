@@ -87,10 +87,10 @@ describe('credit top-up settlement', () => {
       expect.stringContaining('and period_start = $3 and period_end = $4'),
       ['user_123', 'sub_db_123', '2026-08-01', '2026-09-01'],
     );
-    expect(db.execute).toHaveBeenCalledWith('select add_credits($1, $2, $3, $4, $5)', [
+    expect(db.execute).toHaveBeenCalledWith('select add_credits_microusd($1, $2, $3, $4, $5)', [
       'user_123',
       'credits_123',
-      1_000,
+      10_000_000,
       'Credit top-up purchase cs_topup_123',
       'purchase',
     ]);

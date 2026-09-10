@@ -76,9 +76,13 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     estimateCost: vi.fn(() => 2),
+    estimateCostMicrousd: vi.fn(() => 20_000),
     calculateCost: vi.fn(() => 3),
+    calculateCostMicrousd: vi.fn(() => 30_000),
     calculateCostDollars: vi.fn(() => 0.02),
   },
 }));
@@ -228,7 +232,7 @@ describe('scheduled agent tool access', () => {
       idempotencyKey: 'schedule-run:run-1',
       requestHash: 'request-hash',
       leaseToken: 'lease-1',
-      estimatedCostCents: 2,
+      estimatedCostMicrousd: 20_000,
     } as never);
     vi.mocked(markManagedUsageProviderStarted).mockResolvedValue();
     vi.mocked(finalizeManagedUsageRequest).mockResolvedValue({
@@ -236,6 +240,7 @@ describe('scheduled agent tool access', () => {
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
       actualCostCents: 3,
+      actualCostMicrousd: 30_000,
     });
     mockBuildToolLoopStream.mockReset();
   });

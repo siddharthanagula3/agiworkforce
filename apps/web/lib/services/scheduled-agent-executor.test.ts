@@ -35,9 +35,13 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     estimateCost: vi.fn(() => 2),
+    estimateCostMicrousd: vi.fn(() => 20_000),
     calculateCost: vi.fn(() => 3),
+    calculateCostMicrousd: vi.fn(() => 30_000),
   },
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
@@ -135,7 +139,7 @@ describe('scheduled managed agent executor', () => {
       idempotencyKey: 'schedule-run:run-1',
       requestHash: 'request-hash',
       leaseToken: 'lease-1',
-      estimatedCostCents: 2,
+      estimatedCostMicrousd: 20_000,
     } as never);
     vi.mocked(markManagedUsageProviderStarted).mockResolvedValue();
     vi.mocked(finalizeManagedUsageRequest).mockResolvedValue({
@@ -143,6 +147,7 @@ describe('scheduled managed agent executor', () => {
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
       actualCostCents: 3,
+      actualCostMicrousd: 30_000,
     });
     vi.mocked(buildServerProviderAdapter).mockReturnValue({
       stream: vi.fn(() => ({}) as never),
@@ -257,14 +262,14 @@ describe('scheduled managed agent executor', () => {
         db: scopedDb,
         userId: 'user-1',
         idempotencyKey: 'schedule-run:run-1',
-        estimatedCostCents: 2,
+        estimatedCostMicrousd: 20_000,
         planTier: 'pro',
         isFlagship: false,
       }),
     );
     expect(markManagedUsageProviderStarted).toHaveBeenCalledOnce();
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'completed', actualCostCents: 3 }),
+      expect.objectContaining({ outcome: 'completed', actualCostMicrousd: 30_000 }),
     );
     expect(result).toMatchObject({
       text: 'Completed result',
@@ -284,13 +289,13 @@ describe('scheduled managed agent executor', () => {
     );
   });
 
-  it('does not invent a one-cent minimum when catalog pricing rounds usage to zero', async () => {
-    vi.mocked(LLMCostCalculator.calculateCost).mockReturnValueOnce(0);
+  it('settles zero when the catalog prices the usage at nothing', async () => {
+    vi.mocked(LLMCostCalculator.calculateCostMicrousd).mockReturnValueOnce(0);
 
     await executeScheduledAgent(task, new AbortController().signal, 'run-zero', executionScope);
 
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ actualCostCents: 0, outcome: 'completed' }),
+      expect.objectContaining({ actualCostMicrousd: 0, outcome: 'completed' }),
     );
   });
 
@@ -301,7 +306,7 @@ describe('scheduled managed agent executor', () => {
       executeScheduledAgent(task, new AbortController().signal, 'run-failed', executionScope),
     ).rejects.toThrow(/provider unavailable/i);
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
   });
 });

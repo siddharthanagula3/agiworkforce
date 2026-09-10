@@ -26,6 +26,7 @@ import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
+  estimateMicrousdOf,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
@@ -83,14 +84,19 @@ export function resolveBilledOutcome(input: {
   return input.outcome ?? 'completed';
 }
 
-function reportedCostCentsFromUsd(reportedCostUsd: number): number {
-  const costCents = reportedCostUsd * 100;
-  return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
+/**
+ * A provider-reported figure enters the ledger in its own unit. The one-cent
+ * floor this replaced turned a reported $0.0009 into $0.01 and made a hundred
+ * such turns cost more than one call of the same total.
+ */
+function reportedCostMicrousdFromUsd(reportedCostUsd: number): number {
+  const costMicrousd = reportedCostUsd * MICROUSD_PER_USD;
+  return costMicrousd > 0 ? Math.max(1, Math.ceil(costMicrousd)) : 0;
 }
 
 const REPORTED_COST_SANITY_BAND_MIN_MULTIPLE = 0.1;
 const REPORTED_COST_SANITY_BAND_MAX_MULTIPLE = 10;
-const CENTS_PER_USD = 100;
+const MICROUSD_PER_USD = 1_000_000;
 
 function isReportedCostWithinSanityBand(reportedCostUsd: number, estimateUsd: number): boolean {
   if (estimateUsd <= 0) return true;
@@ -151,13 +157,13 @@ async function settleStreamBilling(input: {
   const hasReportedCost =
     Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd > 0;
 
-  let actualCostCents: number;
-  let billedCostCents: number;
+  let providerCostMicrousd: number;
+  let billedCostMicrousd: number;
   let costSource: 'provider_reported' | 'estimated';
 
   if (billedOutcome === 'failed') {
-    actualCostCents = 0;
-    billedCostCents = 0;
+    providerCostMicrousd = 0;
+    billedCostMicrousd = 0;
     costSource = 'estimated';
   } else if (totalTokens > 0) {
     const tokenUsage = {
@@ -169,14 +175,14 @@ async function settleStreamBilling(input: {
       cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
     };
-    const estimateCostCents = LLMCostCalculator.calculateCost(
+    const estimateCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
       provider,
       model,
       tokenUsage,
       undefined,
       buildServingRouteId(provider, model),
     );
-    const estimateUsd = estimateCostCents / CENTS_PER_USD;
+    const estimateUsd = estimateCostMicrousd / MICROUSD_PER_USD;
     const reportedAdmitted =
       hasReportedCost && isReportedCostWithinSanityBand(reportedCostUsd as number, estimateUsd);
     if (hasReportedCost && !reportedAdmitted) {
@@ -185,14 +191,15 @@ async function settleStreamBilling(input: {
         'Ignored provider-reported cost outside the catalog sanity band',
       );
     }
-    actualCostCents = reportedAdmitted
-      ? reportedCostCentsFromUsd(reportedCostUsd as number)
-      : estimateCostCents;
-    billedCostCents = LLMCostCalculator.calculateListCost(model, tokenUsage) ?? actualCostCents;
+    providerCostMicrousd = reportedAdmitted
+      ? reportedCostMicrousdFromUsd(reportedCostUsd as number)
+      : estimateCostMicrousd;
+    billedCostMicrousd =
+      LLMCostCalculator.calculateListCostMicrousd(model, tokenUsage) ?? providerCostMicrousd;
     costSource = reportedAdmitted ? 'provider_reported' : 'estimated';
   } else {
-    actualCostCents = processed.estimatedCostCents;
-    billedCostCents = actualCostCents;
+    providerCostMicrousd = estimateMicrousdOf(processed);
+    billedCostMicrousd = providerCostMicrousd;
     costSource = 'estimated';
   }
 
@@ -200,8 +207,8 @@ async function settleStreamBilling(input: {
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: billedOutcome,
-      actualCostCents: billedCostCents,
-      providerCostCents: actualCostCents,
+      actualCostMicrousd: billedCostMicrousd,
+      providerCostMicrousd,
       usage: {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -283,7 +290,6 @@ export async function buildStreamResponse(
     chatRequest,
     requestedModel,
     provider,
-    estimatedCostCents,
     quotaWarningHeader,
     usedFallback,
   } = processed;
@@ -716,7 +722,7 @@ export async function buildStreamResponse(
             modelUsed,
             inputTokens,
             outputTokens,
-            estimatedCostCents,
+            estimatedCostMicrousd: estimateMicrousdOf(processed),
           },
           'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
         );
@@ -793,7 +799,6 @@ export async function buildAdapterStreamResponse(
     chatRequest,
     requestedModel,
     provider,
-    estimatedCostCents,
     quotaWarningHeader,
     usedFallback,
   } = processed;
@@ -1038,7 +1043,7 @@ export async function buildAdapterStreamResponse(
             modelUsed,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
-            estimatedCostCents,
+            estimatedCostMicrousd: estimateMicrousdOf(processed),
           },
           'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
         );

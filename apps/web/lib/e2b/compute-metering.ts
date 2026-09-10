@@ -11,6 +11,7 @@ const E2B_COMPUTE_PROVIDER_ID = 'e2b';
 
 const MICROUSD_PER_CENT = 10_000;
 const USD_TO_MICROUSD = 1_000_000;
+const MILLISECONDS_PER_SECOND = 1000;
 
 const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -86,11 +87,22 @@ function isBillableInterval(elapsedMs: number): boolean {
   return Number.isFinite(elapsedMs) && elapsedMs > 0 && elapsedMs <= MAX_BILLABLE_INTERVAL_MS;
 }
 
-export function sandboxComputeCostCents(elapsedMs: number, microusdPerSecond: number): number {
+/**
+ * Sandbox seconds are priced in microUSD per second, so this is the exact
+ * charge. Rounding it to cents before 0185 discarded every interval under
+ * half a cent: those seconds billed nothing and moved no usage cap.
+ */
+export function sandboxComputeCostMicrousd(
+  elapsedMs: number,
+  microusdPerSecond: number,
+): number {
   if (!isBillableInterval(elapsedMs)) return 0;
   if (microusdPerSecond <= 0) return 0;
-  const seconds = elapsedMs / 1000;
-  return Math.round((seconds * microusdPerSecond) / MICROUSD_PER_CENT);
+  return Math.ceil((elapsedMs / MILLISECONDS_PER_SECOND) * microusdPerSecond);
+}
+
+export function sandboxComputeCostCents(elapsedMs: number, microusdPerSecond: number): number {
+  return Math.round(sandboxComputeCostMicrousd(elapsedMs, microusdPerSecond) / MICROUSD_PER_CENT);
 }
 
 export interface SandboxComputeInterval {
@@ -123,8 +135,8 @@ export async function meterSandboxComputeInterval(
       ? { ok: true, microusdPerSecond: snapshot }
       : resolveRate({ vcpuCount: interval.vcpuCount, memoryGib: interval.memoryGib });
   const rate = resolved.ok ? resolved.microusdPerSecond : 0;
-  const costCents = sandboxComputeCostCents(elapsedMs, rate);
-  if (costCents <= 0) {
+  const costMicrousd = sandboxComputeCostMicrousd(elapsedMs, rate);
+  if (costMicrousd <= 0) {
     unbilledMs += elapsedMs;
     const base = {
       env: E2B_COMPUTE_RATE_ENV,
@@ -141,7 +153,7 @@ export async function meterSandboxComputeInterval(
     } else {
       logger.warn(
         { ...base, microusdPerSecond: rate },
-        '[e2b] sandbox interval rounded to 0 cents: these seconds bill nothing and move no usage cap',
+        '[e2b] sandbox interval priced at 0: these seconds bill nothing and move no usage cap',
       );
     }
     return 0;
@@ -158,7 +170,7 @@ export async function meterSandboxComputeInterval(
     await CreditService.settleCreditsDurably(
       {
         userId: interval.userId,
-        amountCents: costCents,
+        amountMicrousd: costMicrousd,
         description: 'Managed sandbox compute',
         idempotencyKey: `e2b-compute:${interval.sandboxId}:${interval.startedAtMs}`,
         metadata: {
@@ -178,15 +190,15 @@ export async function meterSandboxComputeInterval(
         userId: interval.userId,
         sandboxId: interval.sandboxId,
         elapsedMs,
-        costCents,
+        costMicrousd,
         reason: interval.reason,
       },
       '[e2b] sandbox compute metered to the usage ledger',
     );
-    return costCents;
+    return costMicrousd;
   } catch (err) {
     logger.error(
-      { err, userId: interval.userId, sandboxId: interval.sandboxId, elapsedMs, costCents },
+      { err, userId: interval.userId, sandboxId: interval.sandboxId, elapsedMs, costMicrousd },
       '[e2b] sandbox compute could not be metered; seconds are unattributed',
     );
     return 0;

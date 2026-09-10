@@ -17,8 +17,11 @@ vi.mock('@/lib/services/credit-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 2),
+    calculateCostMicrousd: vi.fn(() => 20000),
   },
   normalizeProviderId: (provider: string | null | undefined) => provider?.toLowerCase() ?? null,
   isCacheTokensDisjointFromInput: vi.fn(() => false),
@@ -154,7 +157,7 @@ describe('buildStreamResponse managed-usage terminal ordering', () => {
               requestStatus: 'completed',
               operationResult: 'finalized',
               settlementStatus: 'succeeded',
-              actualCostCents: 2,
+              actualCostMicrousd: 20000,
             });
         }),
     );
@@ -209,7 +212,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     const processed = managedProcessed();
@@ -246,7 +249,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     await drain(
@@ -272,7 +275,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     const processed = managedProcessed();
@@ -304,7 +307,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     await drain(
@@ -327,7 +330,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     const processed = managedProcessed();
@@ -358,7 +361,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       requestStatus: 'completed',
       operationResult: 'finalized',
       settlementStatus: 'succeeded',
-      actualCostCents: 2,
+      actualCostMicrousd: 20000,
     });
 
     await drain(
@@ -373,7 +376,7 @@ describe('buildStreamResponse CPST usage telemetry', () => {
       ),
     );
 
-    expect(LLMCostCalculator.calculateCost).toHaveBeenCalledWith(
+    expect(LLMCostCalculator.calculateCostMicrousd).toHaveBeenCalledWith(
       'anthropic',
       'fixture-model',
       expect.objectContaining({ promptTokens: 4, completionTokens: 2 }),

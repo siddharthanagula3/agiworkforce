@@ -19,8 +19,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 123),
+    calculateCostMicrousd: vi.fn(() => 1230000),
     getInputCostPerMtok: vi.fn(() => 300),
     getCacheWriteCostPerMtok: vi.fn(() => 300),
   },
@@ -143,8 +146,8 @@ describe('buildNonStreamResponse golden fixture', () => {
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...makeProcessed().managedUsage,
       outcome: 'completed',
-      actualCostCents: 123,
-      providerCostCents: 123,
+      actualCostMicrousd: 1230000,
+      providerCostMicrousd: 1230000,
       usage: {
         inputTokens: 100,
         outputTokens: 20,

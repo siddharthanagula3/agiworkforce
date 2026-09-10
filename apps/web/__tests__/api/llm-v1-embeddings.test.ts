@@ -132,7 +132,7 @@ describe('POST /api/llm/v1/embeddings, provider failure', () => {
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
     });
   });
 });

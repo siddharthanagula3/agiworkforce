@@ -320,7 +320,7 @@ describe('Article 50(2), generated image provenance', () => {
     expect(assetMocks.insertMany).not.toHaveBeenCalled();
     expect(storageMocks.del).toHaveBeenCalledWith('users/u/first.png');
     expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
   });
 
@@ -340,7 +340,7 @@ describe('Article 50(2), generated image provenance', () => {
     expect(storageMocks.del).toHaveBeenCalledWith('users/u/first.png');
     expect(storageMocks.del).toHaveBeenCalledWith('users/u/second.png');
     expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
   });
 
