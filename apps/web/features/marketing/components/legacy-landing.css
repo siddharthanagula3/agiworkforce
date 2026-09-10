@@ -408,7 +408,7 @@
 [data-design='agi'] .agi-web-chips .agi-web-chip--on {
   border-color: var(--agi-accent);
   background: var(--agi-accent);
-  color: var(--agi-button-ink);
+  color: var(--agi-accent-ink);
   animation: none;
 }
 [data-design='agi'] .agi-web-composer {
@@ -573,7 +573,7 @@
   padding: calc(var(--u) * 4) calc(var(--u) * 10);
   border-radius: calc(var(--u) * 6);
   background: var(--agi-accent);
-  color: var(--agi-button-ink);
+  color: var(--agi-accent-ink);
   font-family: var(--agi-font-mono);
   font-size: calc(var(--u) * 10);
   font-weight: 700;
@@ -1324,7 +1324,7 @@
 [data-design='agi'] .agi-mk-btn--primary {
   border-color: var(--agi-accent);
   background: var(--agi-accent);
-  color: var(--agi-button-ink);
+  color: var(--agi-accent-ink);
 }
 [data-design='agi'] .agi-mk-receipt {
   display: flex;
