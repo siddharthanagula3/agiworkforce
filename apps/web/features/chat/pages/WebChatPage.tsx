@@ -4900,12 +4900,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               )}
               {!voiceModeActive && temporaryChatActive && hasMessages && (
                 <span
-                  className="flex shrink-0 items-center"
+                  className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
                   role="status"
-                  aria-label={`${t('chat:header.temporaryChat')}: ${t('chat:header.temporaryChatRetentionNote')}`}
-                  title={`${t('chat:header.temporaryChat')} · ${t('chat:header.temporaryChatRetentionNote')}`}
+                  title={t('chat:header.temporaryChatRetentionNote')}
                 >
                   <EyeOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
                 </span>
               )}
               {!voiceModeActive &&
