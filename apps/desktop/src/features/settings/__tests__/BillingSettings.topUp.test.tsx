@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MIN_TOP_UP_AMOUNT_USD, TOP_UP_UNITS_PER_USD } from '@agiworkforce/types';
+import { MIN_TOP_UP_AMOUNT_USD, TOP_UP_UNITS_PER_USD, formatCredits } from '@agiworkforce/types';
 
 const authState = vi.hoisted(() => ({
   subscriptionStatus: 'active',
@@ -42,7 +42,7 @@ describe('BillingSettings usage top-up', () => {
     render(<BillingSettings />);
 
     const buy = screen.getByRole('button', {
-      name: `Buy ${(MIN_TOP_UP_AMOUNT_USD * TOP_UP_UNITS_PER_USD).toLocaleString('en-US')} units · $${MIN_TOP_UP_AMOUNT_USD}`,
+      name: `Buy ${formatCredits(MIN_TOP_UP_AMOUNT_USD * TOP_UP_UNITS_PER_USD)} · $${MIN_TOP_UP_AMOUNT_USD}`,
     });
     await user.click(buy);
 
