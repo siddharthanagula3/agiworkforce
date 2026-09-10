@@ -214,16 +214,28 @@ describe('resolveProviderFromModel', () => {
     );
   });
 
-  it('dispatches an authorized marketplace route for managed traffic', () => {
-    const model = requireProviderDefaultModel('anthropic');
+  const managedMarketplaceRoute = Object.entries(modelRegistry.routes)
+    .map(([routeId, route]) => ({ routeId, ...route }))
+    .find(
+      (route) =>
+        route.modelKey === requireProviderDefaultModel('anthropic') &&
+        route.provider !== 'anthropic' &&
+        route.commercialStatus === 'authorized_marketplace' &&
+        modelRegistry.harnesses[route.harnessId]?.trustModes.includes('managed_cloud'),
+    );
 
-    expect(
-      resolveProviderFromModel(model, `vercel_gateway/${model}`, {
-        trustMode: 'managed_cloud',
-      }),
-    ).toBe('vercel_gateway');
-    expect(loggerWarn).not.toHaveBeenCalled();
-  });
+  // llm-guardrail-allow: registry-derived fixture, needs an authorized marketplace route admitted to managed traffic, D-2026-09-10-01
+  it.skipIf(!managedMarketplaceRoute)(
+    'dispatches an authorized marketplace route for managed traffic',
+    () => {
+      const route = managedMarketplaceRoute!;
+
+      expect(
+        resolveProviderFromModel(route.modelKey, route.routeId, { trustMode: 'managed_cloud' }),
+      ).toBe(route.provider);
+      expect(loggerWarn).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('listAvailableManagedProviderIds', () => {

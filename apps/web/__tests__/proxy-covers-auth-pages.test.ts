@@ -27,6 +27,10 @@ const APP = join(process.cwd(), 'app');
  * this test about a page that should not be.
  */
 const PUBLIC_BY_DESIGN: Record<string, string> = {
+  '/login':
+    'The sign-in page itself. It reads the identity only to send an already-verified session on to its completion URL and treats a missing session as signed out; isIdentitySessionRoute matches it so the proxy never gates it.',
+  '/signup':
+    'The sign-up page itself. It reads the identity only to send an already-verified session on to its completion URL and treats a missing session as signed out; isIdentitySessionRoute matches it so the proxy never gates it.',
   '/login/complete':
     'The sign-in landing itself. It is matched by isIdentitySessionRoute rather than isProtectedAppRoute, since gating it would make signing in impossible.',
 };
