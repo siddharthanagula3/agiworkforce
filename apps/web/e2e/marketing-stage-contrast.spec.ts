@@ -1,10 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { routeIsServed } from './route-availability';
 
-const STAGES = [
-  { route: '/', anchor: '.agi-fl-hero' },
-  { route: '/dev/landing-preview', anchor: '.agi-home-receipt' },
-] as const;
+const STAGES = [{ route: '/', anchor: '.agi-home-receipt' }] as const;
 
 type Failure = {
   text: string;
@@ -24,12 +20,7 @@ test.describe('marketing landing contrast', () => {
         test(`${stage.route} clears WCAG AA at ${width}px in ${theme} mode`, async ({ page }) => {
           await page.setViewportSize({ width, height: 900 });
           await page.emulateMedia({ colorScheme: theme });
-          const response = await page.goto(stage.route, { waitUntil: 'networkidle' });
-          // llm-guardrail-allow: the dev preview route answers 404 on a production build, so this is not a skipped check
-          test.skip(
-            !(await routeIsServed(page, response)),
-            `${stage.route} is not served by this build`,
-          );
+          await page.goto(stage.route, { waitUntil: 'networkidle' });
           await page.evaluate((t) => {
             document.documentElement.classList.toggle('dark', t === 'dark');
           }, theme);

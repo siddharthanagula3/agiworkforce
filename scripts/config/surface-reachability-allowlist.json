@@ -238,7 +238,7 @@
       "intentional": [
         {
           "pathPrefix": "apps/web/shared/components/agi/AgiChatDemo.tsx",
-          "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical HeroAppWindow preview instead."
+          "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical ProductFrame preview instead."
         }
       ],
       "unreachableDebt": {
