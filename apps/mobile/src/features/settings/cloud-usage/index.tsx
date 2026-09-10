@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { managedUsageBucketLabel } from '@agiworkforce/types';
+import {
+  formatCreditWindowUsage,
+  formatPlanCreditAllowanceLine,
+  managedUsageBucketLabel,
+  type ManagedUsageCreditWindow,
+} from '@agiworkforce/types';
 import { View, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
@@ -60,10 +65,12 @@ function UsagePercentBar({
   label,
   percentage,
   resetLabel,
+  credits,
 }: {
   label: string;
   percentage: number;
   resetLabel: string | null;
+  credits?: ManagedUsageCreditWindow | null;
 }) {
   const colors = useThemeColors();
   const clamped = Math.min(100, Math.max(0, percentage));
@@ -91,7 +98,9 @@ function UsagePercentBar({
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-          {Math.round(clamped)}% used
+          {credits
+            ? formatCreditWindowUsage(credits.used, credits.allowance)
+            : `${Math.round(clamped)}% used`}
         </Text>
         {resetLabel && (
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>Resets {resetLabel}</Text>
@@ -198,6 +207,13 @@ export default function CloudUsageScreen() {
 
   const planLabel = snapshot ? getBillingPlanPricing(snapshot.planTier).label : '';
   const periodResetLabel = snapshot ? formatResetDate(snapshot.usageResetAt) : null;
+  const planAllowanceLine = snapshot?.credits
+    ? formatPlanCreditAllowanceLine(planLabel, {
+        monthly: snapshot.credits.monthly.allowance,
+        weekly: snapshot.credits.weekly.allowance,
+        fiveHour: snapshot.credits.five_hour.allowance,
+      })
+    : null;
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
@@ -289,6 +305,7 @@ export default function CloudUsageScreen() {
                         ? null
                         : `in ${formatResetsInDuration(snapshot.sessionResetAt)}`
                     }
+                    credits={snapshot.credits?.five_hour}
                   />
                 </View>
               )}
@@ -322,6 +339,7 @@ export default function CloudUsageScreen() {
                         label={managedUsageBucketLabel('weekly')}
                         percentage={snapshot.weeklyUsagePercentage}
                         resetLabel={formatResetWeekday(snapshot.weeklyResetAt)}
+                        credits={snapshot.credits?.weekly}
                       />
                     </View>
                     {snapshot.flagshipWeeklyResetAt !== null && (
@@ -336,6 +354,7 @@ export default function CloudUsageScreen() {
                           label={managedUsageBucketLabel('weeklyFlagship')}
                           percentage={snapshot.flagshipWeeklyUsagePercentage}
                           resetLabel={formatResetWeekday(snapshot.flagshipWeeklyResetAt)}
+                          credits={snapshot.credits?.flagship_weekly}
                         />
                       </View>
                     )}
@@ -382,11 +401,25 @@ export default function CloudUsageScreen() {
                   )}
                 </View>
 
+                {planAllowanceLine && (
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      paddingHorizontal: 14,
+                      paddingTop: 10,
+                    }}
+                  >
+                    {planAllowanceLine}
+                  </Text>
+                )}
+
                 <View style={{ padding: 16, gap: 20 }}>
                   <UsagePercentBar
                     label={managedUsageBucketLabel('period')}
                     percentage={snapshot.usagePercentage}
                     resetLabel={periodResetLabel}
+                    credits={snapshot.credits?.monthly}
                   />
                 </View>
 
