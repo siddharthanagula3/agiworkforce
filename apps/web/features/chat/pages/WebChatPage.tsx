@@ -150,6 +150,11 @@ import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { CODE_ROUTES } from '@/features/code/code-surface';
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
+import {
+  keepVoiceSessionAcrossNavigation,
+  releaseVoiceSessionOnPageExit,
+  type VoiceTranscriptTurn,
+} from '@features/chat/hooks/use-voice-session';
 import { VoiceHeaderLabel } from '../components/Voice/VoiceHeaderLabel';
 import { VoiceActivityPanel } from '../components/Voice/VoiceActivityPanel';
 import {
@@ -4492,14 +4497,74 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
 
   const voiceModeActive = useVoiceModeActive();
+  useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
   const voiceFocusMode = useVoiceSessionStore((state) => state.focusMode);
   const voiceActivityMessageId = useVoiceSessionStore((state) => state.activityMessageId);
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
 
-  const voiceReply = useMemo(() => {
-    const last = [...displayedMessages].reverse().find((m) => m.role === 'assistant');
-    return last ? { id: last.id, content: last.content ?? '' } : null;
-  }, [displayedMessages]);
+  const voiceTranscriptIdsRef = useRef(new Set<string>());
+
+  const handleVoiceEnsureConversation = useCallback(async () => {
+    if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
+      return displayedConversationId;
+    }
+    const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId);
+    if (!created) return null;
+    adoptPendingComposerToggles(created.id);
+    if (!urlConversationId) setBareChatSessionId(created.id);
+    keepVoiceSessionAcrossNavigation();
+    router.replace(`/chat/${created.id}`);
+    return created.id;
+  }, [
+    displayedConversationId,
+    conversations,
+    createConversation,
+    activeModelId,
+    activeProjectId,
+    adoptPendingComposerToggles,
+    urlConversationId,
+    router,
+  ]);
+
+  const handleVoiceTranscript = useCallback(
+    (conversationId: string, turn: VoiceTranscriptTurn) => {
+      if (voiceTranscriptIdsRef.current.has(turn.turnId)) {
+        updateMessage(
+          turn.turnId,
+          { content: turn.text, isStreaming: !turn.final },
+          conversationId,
+        );
+      } else {
+        voiceTranscriptIdsRef.current.add(turn.turnId);
+        addMessage(
+          {
+            id: turn.turnId,
+            role: turn.role,
+            content: turn.text,
+            createdAt: new Date().toISOString(),
+            isStreaming: !turn.final,
+          },
+          conversationId,
+        );
+      }
+      if (!turn.final) return;
+      void addCsrfHeaders({ 'Content-Type': 'application/json' })
+        .then((headers) =>
+          fetch(`/api/chat/conversations/${conversationId}/messages`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              id: turn.turnId,
+              role: turn.role,
+              content: turn.text,
+              skipLlm: true,
+            }),
+          }),
+        )
+        .catch(() => undefined);
+    },
+    [addMessage, updateMessage],
+  );
 
   const voiceActivity = useMemo(() => {
     if (!voiceActivityMessageId) return null;
@@ -4536,8 +4601,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const voiceSurfaceProps = {
     turnActive: isLoading || isStreaming,
-    reply: voiceReply,
+    conversationId: displayedConversationId ?? null,
     onSend: handleVoiceSend,
+    onEnsureConversation: handleVoiceEnsureConversation,
+    onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,
     onOpenLibrary: handleVoiceOpenLibrary,
     onOpenConnectors: handleVoiceOpenConnectors,

@@ -1,14 +1,17 @@
 'use client';
 
 import {
+  ORB_STATE,
+  ORB_STATE_LABEL,
   orbStateForStatus,
-  orbStateLabel,
   VoiceOrb as SharedVoiceOrb,
+  VOICE_SESSION_STATUS,
   type VoiceSessionStatus,
 } from '@agiworkforce/unified-chat';
 
 export interface VoiceOrbProps {
   status: VoiceSessionStatus;
+  backendBusy?: boolean;
   focus: boolean;
   growIn: boolean;
   reducedMotion: boolean;
@@ -18,16 +21,21 @@ export interface VoiceOrbProps {
 
 export function VoiceOrb({
   status,
+  backendBusy = false,
   focus,
   growIn,
   reducedMotion,
   onClick,
   className,
 }: VoiceOrbProps) {
+  const orbState =
+    backendBusy && status === VOICE_SESSION_STATUS.listening
+      ? ORB_STATE.thinking
+      : orbStateForStatus(status);
   return (
     <SharedVoiceOrb
-      orbState={orbStateForStatus(status)}
-      label={orbStateLabel(status)}
+      orbState={orbState}
+      label={ORB_STATE_LABEL[orbState]}
       focus={focus}
       growIn={growIn}
       reducedMotion={reducedMotion}
