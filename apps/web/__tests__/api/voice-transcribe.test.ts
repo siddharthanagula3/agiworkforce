@@ -185,12 +185,17 @@ describe('POST /api/voice/transcribe', () => {
     mockGetNeonDb.mockReturnValue({ query: vi.fn() });
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockReserveManagedUsage.mockImplementation(
-      async (input: { estimatedCostCents: number; idempotencyKey: string }) => ({
+      async (input: {
+        estimatedCostMicrousd: number;
+        estimatedCostCents: number;
+        idempotencyKey: string;
+      }) => ({
         db: { query: vi.fn() },
         userId: 'user-123',
         idempotencyKey: input.idempotencyKey,
         requestHash: 'hash-1',
         leaseToken: 'lease-1',
+        estimatedCostMicrousd: input.estimatedCostMicrousd,
         estimatedCostCents: input.estimatedCostCents,
       }),
     );

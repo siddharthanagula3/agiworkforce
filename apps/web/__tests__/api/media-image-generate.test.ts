@@ -196,6 +196,10 @@ const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn();
 
 vi.mock('@/lib/services/credit-service', () => ({
+  MICROUSD_PER_LEDGER_CENT: 10_000,
+  microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
+  ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
+
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     checkAvailableMicrousd: (...args: unknown[]) => mockCheckAvailable(...args),
@@ -315,6 +319,7 @@ describe('POST /api/media/image/generate', () => {
       idempotencyKey: input.idempotencyKey,
       requestHash: input.requestHash,
       leaseToken: 'lease-image',
+      estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }));
 
