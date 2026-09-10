@@ -324,6 +324,14 @@
       "declaredVersion": "2.0.1",
       "computedHash": "sha256-tree-v1:b00e52c6eb03d0667e45286fc41bffbee3095834e1c63b77178ef4fe476b1362"
     },
+    "image-to-code": {
+      "path": ".agents/skills/image-to-code",
+      "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/image-to-code)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
+      "computedHash": "sha256-tree-v1:5220ab2b641e45202f37be239973a62668763ffc9765f0a38ab7637c5c518fe1"
+    },
     "influencer-marketing": {
       "path": ".agents/skills/influencer-marketing",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/influencer-marketing)",
