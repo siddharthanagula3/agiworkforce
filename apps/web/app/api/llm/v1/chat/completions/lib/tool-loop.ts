@@ -107,6 +107,15 @@ import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
 import { recordGoogleGroundingCost } from '@/lib/web-search/grounding-cost';
 import {
+  includedMonthlySearchCalls,
+  resolveSearchBudget,
+  resolveSearchCallerKind,
+  SEARCH_BOUND_WINDOW_DAYS,
+  searchChargeCents,
+  settleSearchCharge,
+  type SearchBudgetDecision,
+} from '@/lib/web-search/search-budget';
+import {
   createToolTurnGovernor,
   emptyToolCapabilityEvidence,
   repeatedQueryMessage,
@@ -156,6 +165,8 @@ import {
   enrichWebSearchResultTitles,
   formatWebSearchResultForModel,
   nativeSearchBudgetExhaustedMessage,
+  searchPlanBoundExhaustedMessage,
+  searchUnaffordableMessage,
   webSearchBudgetExhaustedMessage,
   WEB_SEARCH_FREE_MAX_RESULTS,
   WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN,
@@ -1439,6 +1450,8 @@ async function runMcpTool(
     model: string;
     turnRef?: string;
     webSearchMaxResults?: number;
+    surface?: string | null;
+    searchChargeCents?: number | null;
     citationNumberFor?: (url: string) => number;
     clientTimeZone?: string;
     signal?: AbortSignal;
@@ -1592,6 +1605,8 @@ async function runMcpTool(
       ...(executionContext?.userId ? { userId: executionContext.userId } : {}),
       organizationId: executionContext?.organizationId ?? null,
       ...(executionContext?.turnRef ? { turnRef: executionContext.turnRef } : {}),
+      surface: executionContext?.surface ?? null,
+      customerChargeCents: executionContext?.searchChargeCents ?? null,
     });
     const enrichedAfterCap = outcome.ok
       ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
@@ -2424,6 +2439,10 @@ export async function* runToolLoop(
   const webSearchCallBudget = agiWorkTurn
     ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
     : WEB_SEARCH_MAX_CALLS_PER_TURN;
+  const includedSearchCallsForTurn = includedMonthlySearchCalls(processed.subscriptionTier ?? null);
+  // What each search call in this turn was charged, so the COGS row records the
+  // customer figure alongside the provider one instead of leaving it null.
+  const searchChargeCentsByOrdinal = new Map<number, number>();
   let urlFetchCallsUsed = 0;
   const urlFetchCallBudget = agiWorkTurn
     ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
@@ -2594,6 +2613,66 @@ export async function* runToolLoop(
     return lines;
   }
 
+  const searchCallerKind = resolveSearchCallerKind({
+    surface: processed.chatSurface,
+    agiWork: agiWorkTurn,
+    research: processed.researchMode === true,
+    scheduled: options.unattended === true,
+  });
+
+  /**
+   * Search is bought per call. This decides, BEFORE the call runs, whether the
+   * account's plan includes it, whether it is charged, or whether it is refused,
+   * and settles the charge when there is one. A refusal is returned to the model
+   * as an ordinary unavailable-tool result so the turn still answers.
+   */
+  async function enforceSearchEconomics(callOrdinal: number): Promise<ToolLoopToolResult | null> {
+    const userId = options.userId;
+    if (!userId) return null;
+
+    let decision: SearchBudgetDecision;
+    let settled: boolean;
+    try {
+      decision = await resolveSearchBudget({
+        userId,
+        planTier: processed.subscriptionTier ?? null,
+        feature: 'web_search_perplexity',
+        callerKind: searchCallerKind,
+      });
+      if (decision.outcome === 'included') return null;
+      if (decision.outcome === 'blocked') {
+        return {
+          content:
+            decision.reason === 'plan_bound'
+              ? searchPlanBoundExhaustedMessage(
+                  includedSearchCallsForTurn,
+                  SEARCH_BOUND_WINDOW_DAYS,
+                )
+              : searchUnaffordableMessage(),
+          isError: false,
+        };
+      }
+      settled = await settleSearchCharge({
+        userId,
+        requestId: processed.requestId,
+        callOrdinal,
+        feature: decision.feature,
+        chargeCents: decision.chargeCents,
+        surface: processed.chatSurface,
+        db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
+      });
+    } catch (error) {
+      logger.warn({ error }, '[tool-loop] search budget not resolved; treating call as included');
+      return null;
+    }
+
+    if (settled) {
+      searchChargeCentsByOrdinal.set(callOrdinal, decision.chargeCents);
+      return null;
+    }
+    return { content: searchUnaffordableMessage(), isError: false };
+  }
+
   /**
    * Google prices grounded responses beyond a monthly free pool, so the count
    * this turn observed is reserved against that pool and only the portion
@@ -2608,6 +2687,30 @@ export async function* runToolLoop(
         GOOGLE_GROUNDING_PROVIDER,
         nativeSearchUses,
       );
+      // The model runs native grounding itself, so it can only be priced after
+      // the fact. The same policy still decides whether the customer pays.
+      const groundingDecision = await resolveSearchBudget({
+        userId: options.userId,
+        planTier: processed.subscriptionTier ?? null,
+        feature: 'web_search_grounding',
+        callerKind: searchCallerKind,
+      });
+      const groundingChargeCents =
+        groundingDecision.outcome === 'charge'
+          ? searchChargeCents('web_search_grounding') * nativeSearchUses
+          : 0;
+      if (groundingChargeCents > 0) {
+        await settleSearchCharge({
+          userId: options.userId,
+          requestId: processed.requestId,
+          callOrdinal: 0,
+          feature: 'web_search_grounding',
+          chargeCents: groundingChargeCents,
+          scope: 'grounding',
+          surface: processed.chatSurface,
+          db: callerScopedDb({ organizationId: processed.organizationId ?? null }, options.userId),
+        });
+      }
       await recordGoogleGroundingCost({
         userId: options.userId,
         organizationId: processed.organizationId ?? null,
@@ -2616,6 +2719,8 @@ export async function* runToolLoop(
         turnRef: turnId,
         billableCalls: reservation.billableCalls,
         delivered,
+        surface: processed.chatSurface,
+        customerChargeCents: groundingChargeCents > 0 ? groundingChargeCents : null,
       });
     } catch (error) {
       logger.warn({ error, uses: nativeSearchUses }, '[tool-loop] grounding spend not recorded');
@@ -2809,13 +2914,23 @@ export async function* runToolLoop(
           });
         }
       }
-      const execute = () =>
-        runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
+      const searchCallOrdinal = webSearchCallsUsed;
+      const execute = async () => {
+        if (isWebSearchTool(tc.qualifiedName)) {
+          const refusal = await enforceSearchEconomics(searchCallOrdinal);
+          if (refusal) {
+            toolGovernor.withdraw(tc.qualifiedName, 'budget');
+            return refusal;
+          }
+        }
+        return runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
           userId: options.userId,
           organizationId: processed.organizationId ?? null,
           model: responseModel,
           turnRef: turnId,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+          surface: processed.chatSurface,
+          searchChargeCents: searchChargeCentsByOrdinal.get(searchCallOrdinal) ?? null,
           citationNumberFor,
           loadSkillInstallOverrides,
           ...(processed.chatRequest?.client_timezone
@@ -2826,6 +2941,7 @@ export async function* runToolLoop(
           ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
           ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
         });
+      };
       // Each MRTR round is a distinct durable operation: re-running the same
       // paused call must not return the cached input_required receipt, so the
       // resume round scopes both keys below.
