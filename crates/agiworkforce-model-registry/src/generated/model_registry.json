@@ -1133,6 +1133,32 @@
       },
       "evidenceRefs": []
     },
+    "gpt-live-1": {
+      "identity": {
+        "key": "gpt-live-1",
+        "displayName": "GPT Live 1",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-live-1",
+        "kind": "audio",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": [],
+        "family": "live"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-10",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_live"
+      },
+      "evidenceRefs": []
+    },
     "gpt-4o-mini-transcribe": {
       "identity": {
         "key": "gpt-4o-mini-transcribe",
@@ -11156,6 +11182,7 @@
       "gpt-image-2",
       "gpt-4o-mini-tts",
       "gpt-4o-transcribe",
+      "gpt-live-1",
       "gpt-4o-mini-transcribe"
     ],
     "anthropic": ["claude-fable-5-1", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
@@ -14084,6 +14111,25 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 2.5,
         "outputPerMillion": 10
+      }
+    },
+    "openai/gpt-live-1": {
+      "modelKey": "gpt-live-1",
+      "provider": "openai",
+      "providerModelId": "gpt-live-1",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
       }
     },
     "openai/gpt-4o-mini-transcribe": {
@@ -23567,6 +23613,30 @@
       "streaming": true,
       "structuredOutput": false,
       "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
+    "gpt-live-1": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": true,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": true,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": true,
       "reasoning": false,
       "imageEditing": null,
       "realtime": null,
@@ -33092,6 +33162,12 @@
       "inputPerMillion": 2.5,
       "outputPerMillion": 10
     },
+    "gpt-live-1": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
     "gpt-4o-mini-transcribe": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36084,6 +36160,7 @@
       }
     },
     "gpt-4o-transcribe": { "contextTokens": 16000 },
+    "gpt-live-1": { "contextTokens": 128000, "knowledgeCutoff": "2025-07-31" },
     "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
     "minimax-m3": { "contextTokens": 1000000, "maxOutputTokens": 524288 },
     "minimax-m2.7": { "contextTokens": 204800, "maxOutputTokens": 204800 },
@@ -36721,6 +36798,7 @@
     "veo-3.1": {},
     "veo-3.1-fast": {},
     "gpt-4o-transcribe": {},
+    "gpt-live-1": {},
     "gpt-4o-mini-transcribe": {},
     "minimax-m3": {},
     "minimax-m2.7": {},
@@ -37519,6 +37597,19 @@
       "promotedAt": "2026-08-18",
       "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
     },
+    "openai/live": {
+      "provider": "openai",
+      "canonicalFamily": "live",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-live-1",
+      "activeGeneration": "1",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-09-10",
+      "promotionReason": "registered from the GPT-Live 1 model page on 2026-09-10"
+    },
     "anthropic/claude-fable": {
       "provider": "anthropic",
       "canonicalFamily": "claude-fable",
@@ -38268,6 +38359,16 @@
           "modelKey": "gpt-4o-transcribe",
           "label": "Voice Transcription",
           "description": "Shared voice transcription route. Model and provider are selected by the canonical registry."
+        },
+        "voice_live": {
+          "modelKey": "gpt-live-1",
+          "label": "Voice Live",
+          "description": "Shared voice live route. Model and provider are selected by the canonical registry."
+        },
+        "voice_live_backend": {
+          "modelKey": "gpt-5.6-terra",
+          "label": "Voice Live Backend",
+          "description": "Shared voice live backend route. Model and provider are selected by the canonical registry."
         },
         "voice_rewrite": {
           "modelKey": "gemini-3.5-flash-lite",

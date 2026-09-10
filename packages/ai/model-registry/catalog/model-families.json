@@ -392,6 +392,58 @@
       "fallbackChain": [],
       "history": []
     },
+    "openai/live": {
+      "provider": "openai",
+      "canonicalFamily": "live",
+      "tier": "balanced",
+      "modelType": "audio",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-live-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "audioInput",
+        "audioOutput",
+        "functionCalling",
+        "streaming",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 128000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gpt-live-1",
+        "generation": "1",
+        "lifecycle": "stable",
+        "promotedAt": "2026-09-10",
+        "promotionReason": "registered from the GPT-Live 1 model page on 2026-09-10",
+        "evaluation": { "gates": {}, "seeded": true },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0,
+          "outputPerMillion": 0
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": true,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": true,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": false,
+          "functionCalling": true,
+          "reasoning": false
+        },
+        "limitSnapshot": { "contextTokens": 128000 },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
     "anthropic/claude-fable": {
       "provider": "anthropic",
       "canonicalFamily": "claude-fable",

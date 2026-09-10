@@ -472,6 +472,12 @@
       "voice_transcription": {
         "modelKey": "family:openai/transcribe-balanced"
       },
+      "voice_live": {
+        "modelKey": "family:openai/live"
+      },
+      "voice_live_backend": {
+        "modelKey": "family:openai/gpt-balanced"
+      },
       "voice_rewrite": {
         "modelKey": "family:google/gemini-flash-lite"
       },
