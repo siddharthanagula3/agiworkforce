@@ -287,26 +287,31 @@ describe('managed usage request service', () => {
 
   it('carries the reserved quota feature into the settled usage row so unit caps can count it', async () => {
     const db = fakeDb([]);
-    vi.mocked(db.query)
-      .mockResolvedValueOnce([{ headroom_cents: 0 }])
-      .mockResolvedValueOnce([
-        {
-          reservation_decision: 'acquired',
-          request_status: 'reserved',
-          lease_token: 'lease-9',
-          estimated_cost_cents: 7,
-          settlement_status: 'succeeded',
-          error_code: null,
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          request_status: 'completed',
-          operation_result: 'finalized',
-          settlement_status: 'succeeded',
-          actual_cost_cents: 5,
-        },
-      ]);
+    vi.mocked(db.query).mockImplementation(async (sql: string) => {
+      if (sql.includes('reserve_managed_usage_request_with_limits')) {
+        return [
+          {
+            reservation_decision: 'acquired',
+            request_status: 'reserved',
+            lease_token: 'lease-9',
+            estimated_cost_cents: 7,
+            settlement_status: 'succeeded',
+            error_code: null,
+          },
+        ];
+      }
+      if (sql.includes('finalize_managed_usage_request')) {
+        return [
+          {
+            request_status: 'completed',
+            operation_result: 'finalized',
+            settlement_status: 'succeeded',
+            actual_cost_cents: 5,
+          },
+        ];
+      }
+      return [];
+    });
 
     const reservation = await reserveManagedUsageRequest({
       db,
@@ -330,7 +335,9 @@ describe('managed usage request service', () => {
       usage: { inputTokens: 10, outputTokens: 5 },
     });
 
-    const settledUsage = vi.mocked(db.query).mock.calls[2]?.[1]?.[6];
+    const settledUsage = vi
+      .mocked(db.query)
+      .mock.calls.find(([sql]) => sql.includes('finalize_managed_usage_request'))?.[1]?.[6];
     expect(JSON.parse(String(settledUsage))).toMatchObject({
       inputTokens: 10,
       outputTokens: 5,
