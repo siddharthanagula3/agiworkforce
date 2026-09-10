@@ -15,7 +15,11 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
-  LLMCostCalculator: { calculateCost: vi.fn(() => 2) },
+  LLMCostCalculator: {
+    calculateListCost: vi.fn(() => null),
+    estimateListCost: vi.fn(() => null),
+    calculateCost: vi.fn(() => 2),
+  },
   normalizeProviderId: (provider: string | null | undefined) => provider?.toLowerCase() ?? null,
   isCacheTokensDisjointFromInput: vi.fn(() => false),
   resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),

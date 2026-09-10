@@ -33,28 +33,25 @@ vi.mock('@/lib/logger', () => ({
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
+const ROUTING_PREFERENCES_COLUMN = 'routing_preferences';
+const SCOPE_ROLE_STATEMENT = 'set local role app_rls';
+
+function routeQuery(sql: string, params: unknown[]) {
+  if (typeof sql === 'string' && sql.includes(ROUTING_PREFERENCES_COLUMN)) {
+    return mockQuery(sql, params);
+  }
+  return Promise.resolve([]);
+}
+
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (sql: string, params: unknown[]) => {
-      if (typeof sql === 'string' && sql.includes('account_status')) {
-        return Promise.resolve([]);
-      }
-      if (typeof sql === 'string' && sql.includes('user_settings')) {
-        return Promise.resolve([]);
-      }
-      return mockQuery(sql, params);
-    },
+    query: routeQuery,
     execute: mockExecute,
     transaction: vi.fn(async (fn: (db: unknown) => unknown) =>
       fn({
-        query: (sql: string, params: unknown[]) => {
-          if (typeof sql === 'string' && sql.includes('set_config')) {
-            return Promise.resolve([]);
-          }
-          return mockQuery(sql, params);
-        },
+        query: routeQuery,
         execute: (sql: string, params: unknown[]) => {
-          if (sql === 'set local role app_rls') {
+          if (sql === SCOPE_ROLE_STATEMENT) {
             return Promise.resolve(0);
           }
           return mockExecute(sql, params);

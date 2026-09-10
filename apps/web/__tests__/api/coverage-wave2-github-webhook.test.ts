@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
@@ -38,6 +37,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 const SECRET = 'test-webhook-secret-abc123';
+const REPO_MEMBER_ASSOCIATION = 'OWNER';
+const OUTSIDE_ASSOCIATION = 'NONE';
 
 const mockVerifySignature = vi.fn();
 const mockGetInstallationAccessToken = vi.fn();
@@ -71,7 +72,7 @@ function signPayload(body: string, secret: string): string {
 
 interface WebhookPayload {
   action?: string;
-  comment?: { body: string };
+  comment?: { body: string; author_association?: string };
   sender?: { type?: string; login?: string };
   issue?: { pull_request?: object; number?: number };
   installation?: { id: number };
@@ -95,7 +96,10 @@ function makeRequest(payload: WebhookPayload, options?: { signature?: string }):
 function makeBotMentionPayload(overrides?: Partial<WebhookPayload>): WebhookPayload {
   return {
     action: 'created',
-    comment: { body: 'Hey @agi-workforce please review this PR' },
+    comment: {
+      body: 'Hey @agi-workforce please review this PR',
+      author_association: REPO_MEMBER_ASSOCIATION,
+    },
     sender: { type: 'User', login: 'some-human' },
     issue: { pull_request: {}, number: 42 },
     installation: { id: 999 },
@@ -268,9 +272,7 @@ describe('POST /api/github/webhook', () => {
 
   it('skips LLM call and returns 200 when installation is over monthly quota', async () => {
     mockDbQuery
-      .mockResolvedValueOnce([
-        { user_id: 'u1', pr_review_enabled: true, review_model: null },
-      ])
+      .mockResolvedValueOnce([{ user_id: 'u1', pr_review_enabled: true, review_model: null }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ cnt: '100' }]);
 
@@ -338,6 +340,36 @@ describe('POST /api/github/webhook', () => {
         expect(mockGetPrDiff).not.toHaveBeenCalled();
       },
       { timeout: 2000 },
+    );
+  });
+
+  it('ignores a review mention from outside the repository', async () => {
+    const payload = makeBotMentionPayload({
+      comment: {
+        body: 'Hey @agi-workforce please review this PR',
+        author_association: OUTSIDE_ASSOCIATION,
+      },
+    });
+    const body = JSON.stringify(payload);
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'issue_comment',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    await vi.waitFor(
+      () => {
+        expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+        expect(mockGetPrDiff).not.toHaveBeenCalled();
+      },
+      { timeout: 500 },
     );
   });
 

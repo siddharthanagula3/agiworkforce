@@ -15,6 +15,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
+    calculateListCost: vi.fn(() => null),
+    estimateListCost: vi.fn(() => null),
     calculateCost: vi.fn(() => 4),
   },
   normalizeProviderId: (provider: string | null | undefined) =>
@@ -257,6 +259,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       ...makeProcessed().managedUsage,
       outcome: 'completed',
       actualCostCents: 4,
+      providerCostCents: 4,
       usage: {
         inputTokens: 120,
         outputTokens: 80,
