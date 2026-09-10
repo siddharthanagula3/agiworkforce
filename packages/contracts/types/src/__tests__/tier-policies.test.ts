@@ -19,6 +19,8 @@ describe('TIER_POLICIES, Free chat tier', () => {
     expect(policy.allowedSlots).toEqual([
       'workhorse_general',
       'voice_transcription',
+      'voice_live',
+      'voice_live_backend',
       'voice_rewrite',
     ]);
   });
@@ -215,7 +217,13 @@ describe('getTierPolicy, public getter', () => {
       tier: 'free',
       tokenCapPerMonth: null,
       messagesPerDayCap: null,
-      allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
+      allowedSlots: [
+        'workhorse_general',
+        'voice_transcription',
+        'voice_live',
+        'voice_live_backend',
+        'voice_rewrite',
+      ],
       allowMediaGeneration: false,
       allowImageGeneration: false,
       allowVideoGeneration: false,
@@ -235,7 +243,13 @@ describe('getTierPolicy, public getter', () => {
     expect(getTierPolicy('plus')).toMatchObject<Partial<TierPolicy>>({
       tier: 'free',
       tokenCapPerMonth: null,
-      allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
+      allowedSlots: [
+        'workhorse_general',
+        'voice_transcription',
+        'voice_live',
+        'voice_live_backend',
+        'voice_rewrite',
+      ],
       allowMediaGeneration: false,
       allowManualSelection: false,
       manualModelSelection: false,
