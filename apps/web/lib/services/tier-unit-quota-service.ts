@@ -40,6 +40,10 @@ export function getTierUnitAllowance(
 
 const NUMERIC_JSON_TEXT = String.raw`^[0-9]+(\.[0-9]+)?$`;
 
+const SECONDS_PER_MINUTE = 60;
+const TRANSCRIPTION_OPERATION = 'transcription';
+const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
+
 const CONSUMPTION_QUERIES: Readonly<
   Record<TierMeteredUnit, { sql: string; toUnits: (raw: number) => number }>
 > = Object.freeze({
@@ -53,16 +57,21 @@ const CONSUMPTION_QUERIES: Readonly<
   },
   voice_minutes: {
     sql: `select coalesce(sum(
-              case when usage->>'estimatedAudioSeconds' ~ '${NUMERIC_JSON_TEXT}'
-                   then (usage->>'estimatedAudioSeconds')::double precision
-                   else 0 end
+              case
+                when usage->>'operation' = '${TRANSCRIPTION_OPERATION}'
+                     and usage->>'estimatedAudioSeconds' ~ '${NUMERIC_JSON_TEXT}'
+                then (usage->>'estimatedAudioSeconds')::double precision
+                when usage->>'operation' = '${LIVE_VOICE_SESSION_OPERATION}'
+                     and usage->>'billedSeconds' ~ '${NUMERIC_JSON_TEXT}'
+                then (usage->>'billedSeconds')::double precision
+                else 0 end
             ), 0) as consumed
             from public.managed_usage_requests
            where user_id = $1
              and status in ('reserved', 'provider_started', 'completed')
-             and usage->>'operation' = 'transcription'
+             and usage->>'operation' in ('${TRANSCRIPTION_OPERATION}', '${LIVE_VOICE_SESSION_OPERATION}')
              and created_at >= date_trunc('month', now())`,
-    toUnits: (raw: number) => Math.ceil(raw / 60),
+    toUnits: (raw: number) => Math.ceil(raw / SECONDS_PER_MINUTE),
   },
   computer_use_requests: {
     sql: `select count(*)::double precision as consumed
