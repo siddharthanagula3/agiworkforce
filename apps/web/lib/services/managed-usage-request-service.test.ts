@@ -115,7 +115,7 @@ describe('managed usage request service', () => {
         reservation_decision: 'acquired',
         request_status: 'reserved',
         lease_token: 'lease-1',
-        estimated_cost_cents: 7,
+        estimated_cost_microusd: 70000,
         settlement_status: 'succeeded',
         error_code: null,
       },
@@ -143,19 +143,19 @@ describe('managed usage request service', () => {
       routeId: 'anthropic/fixture-model',
     });
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('reserve_managed_usage_request_with_limits'),
+      expect.stringContaining('reserve_managed_usage_request_with_limits_microusd'),
       [
         'user_1',
         'agi.chat.web.send.turn_12345',
         'a'.repeat(64),
         'anthropic',
         'fixture-model',
-        7,
+        70_000,
         'lease-1',
         900,
-        50,
-        250,
-        75,
+        500_000,
+        2_500_000,
+        750_000,
         true,
         0,
       ],
@@ -173,7 +173,7 @@ describe('managed usage request service', () => {
         reservation_decision: decision,
         request_status: decision,
         lease_token: null,
-        estimated_cost_cents: 7,
+        estimated_cost_microusd: 70000,
       },
     ]);
 
@@ -204,7 +204,7 @@ describe('managed usage request service', () => {
         reservation_decision: decision,
         request_status: 'declined',
         lease_token: null,
-        estimated_cost_cents: 7,
+        estimated_cost_microusd: 70000,
       },
     ]);
 
@@ -264,7 +264,7 @@ describe('managed usage request service', () => {
           request_status: 'completed',
           operation_result: 'finalized',
           settlement_status: 'succeeded',
-          actual_cost_cents: 5,
+          actual_cost_microusd: 50000,
         },
       ]);
     const reservation = {
@@ -287,14 +287,14 @@ describe('managed usage request service', () => {
     expect(final).toMatchObject({ requestStatus: 'completed', actualCostCents: 5 });
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('finalize_managed_usage_request'),
+      expect.stringContaining('finalize_managed_usage_request_microusd'),
       [
         'user_1',
         'external-client:turn_123',
         'c'.repeat(64),
         'lease-3',
         'completed',
-        5,
+        50_000,
         JSON.stringify({ inputTokens: 10, outputTokens: 5 }),
       ],
     );
@@ -303,25 +303,25 @@ describe('managed usage request service', () => {
   it('carries the reserved quota feature into the settled usage row so unit caps can count it', async () => {
     const db = fakeDb([]);
     vi.mocked(db.query).mockImplementation(async (sql: string) => {
-      if (sql.includes('reserve_managed_usage_request_with_limits')) {
+      if (sql.includes('reserve_managed_usage_request_with_limits_microusd')) {
         return [
           {
             reservation_decision: 'acquired',
             request_status: 'reserved',
             lease_token: 'lease-9',
-            estimated_cost_cents: 7,
+            estimated_cost_microusd: 70000,
             settlement_status: 'succeeded',
             error_code: null,
           },
         ];
       }
-      if (sql.includes('finalize_managed_usage_request')) {
+      if (sql.includes('finalize_managed_usage_request_microusd')) {
         return [
           {
             request_status: 'completed',
             operation_result: 'finalized',
             settlement_status: 'succeeded',
-            actual_cost_cents: 5,
+            actual_cost_microusd: 50000,
           },
         ];
       }
@@ -352,7 +352,7 @@ describe('managed usage request service', () => {
 
     const settledUsage = vi
       .mocked(db.query)
-      .mock.calls.find(([sql]) => sql.includes('finalize_managed_usage_request'))?.[1]?.[6];
+      .mock.calls.find(([sql]) => sql.includes('finalize_managed_usage_request_microusd'))?.[1]?.[6];
     expect(JSON.parse(String(settledUsage))).toMatchObject({
       inputTokens: 10,
       outputTokens: 5,
@@ -365,7 +365,7 @@ describe('managed usage request service', () => {
       {
         extension_decision: 'extended',
         request_status: 'provider_started',
-        estimated_cost_cents: 12,
+        estimated_cost_microusd: 120000,
         settlement_status: 'succeeded',
         error_code: null,
       },
@@ -376,6 +376,7 @@ describe('managed usage request service', () => {
       idempotencyKey: 'external-client:turn_123',
       requestHash: 'e'.repeat(64),
       leaseToken: 'lease-5',
+      estimatedCostMicrousd: 70_000,
       estimatedCostCents: 7,
     };
 
@@ -387,20 +388,25 @@ describe('managed usage request service', () => {
         planTier: 'pro',
         isFlagship: true,
       }),
-    ).resolves.toEqual({ operationResult: 'extended', estimatedCostCents: 12 });
+    ).resolves.toEqual({
+      operationResult: 'extended',
+      estimatedCostMicrousd: 120_000,
+      estimatedCostCents: 12,
+    });
+    expect(reservation.estimatedCostMicrousd).toBe(120_000);
     expect(reservation.estimatedCostCents).toBe(12);
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('extend_managed_usage_request_provider_step'),
+      expect.stringContaining('extend_managed_usage_request_provider_step_microusd'),
       [
         'user_1',
         'external-client:turn_123',
         'e'.repeat(64),
         'lease-5',
         'provider:2',
-        5,
-        50,
-        250,
-        75,
+        50_000,
+        500_000,
+        2_500_000,
+        750_000,
         true,
       ],
     );
@@ -411,7 +417,7 @@ describe('managed usage request service', () => {
       {
         extension_decision: 'weekly_limit',
         request_status: 'provider_started',
-        estimated_cost_cents: 7,
+        estimated_cost_microusd: 70000,
         settlement_status: null,
         error_code: 'ROLLING_WEEKLY_LIMIT_REACHED',
       },
@@ -442,7 +448,7 @@ describe('managed usage request service', () => {
         request_status: 'completed',
         operation_result: 'finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 5,
+        actual_cost_microusd: 50000,
       },
     ]);
 
@@ -471,7 +477,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'completed',
         operation_result: 'finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 14,
+        actual_cost_microusd: 140000,
       },
     ]);
 
@@ -496,6 +502,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       model: 'fixture-image-model',
       routeId: 'openai/fixture-image-model',
       actualCostCents: 14,
+      customerCanonicalMicrousd: 140_000,
       sourceRef: `managed_usage:user_1:agi.image.web.turn_1:${'b'.repeat(64)}`,
       taskOutcome: 'delivered',
       taskRef: 'b'.repeat(64),
@@ -510,7 +517,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'outcome_unknown',
         operation_result: 'already_finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 0,
+        actual_cost_microusd: 0,
       },
     ]);
 
@@ -531,7 +538,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       {
         userId: 'user_1',
-        amountCents: 31,
+        amountMicrousd: 310_000,
         description: 'Managed usage late settlement after recovery',
         metadata: {
           idempotency_key: 'agi.chat.web.turn_late',
@@ -552,7 +559,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'outcome_unknown',
         operation_result: 'already_finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 0,
+        actual_cost_microusd: 0,
       },
     ]);
 
@@ -590,7 +597,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'outcome_unknown',
         operation_result: 'already_finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 0,
+        actual_cost_microusd: 0,
       },
     ]);
 
@@ -617,7 +624,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'outcome_unknown',
         operation_result: 'already_finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 0,
+        actual_cost_microusd: 0,
       },
     ]);
 
@@ -650,7 +657,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'completed',
         operation_result: 'finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 11,
+        actual_cost_microusd: 110000,
       },
     ]);
 
@@ -703,7 +710,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'completed',
         operation_result: 'finalized',
         settlement_status: 'succeeded',
-        actual_cost_cents: 7,
+        actual_cost_microusd: 70000,
       },
     ]);
 
@@ -750,7 +757,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'outcome_unknown',
         operation_result: 'finalized',
         settlement_status: 'terminal',
-        actual_cost_cents: 9,
+        actual_cost_microusd: 90000,
       },
     ]);
 
@@ -780,7 +787,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         request_status: 'released',
         operation_result: 'finalized',
         settlement_status: null,
-        actual_cost_cents: 0,
+        actual_cost_microusd: 0,
       },
     ]);
 

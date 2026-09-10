@@ -129,6 +129,7 @@ describe('cloud agent workflow input', () => {
       idempotencyKey: 'agi.chat.web.request-1',
       requestHash: 'request-hash-1',
       leaseToken: '0190a000-0000-7000-8000-000000000002',
+      estimatedCostMicrousd: 120_000,
       estimatedCostCents: 12,
       provider: 'openai',
       model: 'fixture-model',

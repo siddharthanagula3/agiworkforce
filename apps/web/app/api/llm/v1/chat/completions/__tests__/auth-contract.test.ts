@@ -50,6 +50,7 @@ const mockCheckAvailable = vi.fn();
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
+    checkAvailableMicrousd: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: vi.fn(),
     getBalance: vi.fn(),
     generateIdempotencyKey: vi.fn(() => 'mock-idempotency-key'),

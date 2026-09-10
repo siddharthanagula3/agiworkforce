@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
+import { microusdFromLedgerCents } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -82,6 +83,7 @@ async function handleCloseLiveSession(
     idempotencyKey: body.settlement.idempotencyKey,
     leaseToken: body.settlement.leaseToken,
     requestHash: body.settlement.requestHash,
+    estimatedCostMicrousd: microusdFromLedgerCents(body.settlement.estimatedCostCents),
     estimatedCostCents: body.settlement.estimatedCostCents,
     quotaFeature: LIVE_VOICE_FEATURE,
     provider: liveModel ? String(liveModel.provider) : undefined,
@@ -97,8 +99,13 @@ async function handleCloseLiveSession(
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
-    actualCostCents,
-    ...(providerCostCents === null ? {} : { providerCostCents }),
+    // The live-voice rate is published per minute in whole cents, so the exact
+    // charge is a whole number of cents; the microUSD field carries it without
+    // a second rounding.
+    actualCostMicrousd: microusdFromLedgerCents(actualCostCents),
+    ...(providerCostCents === null
+      ? {}
+      : { providerCostMicrousd: microusdFromLedgerCents(providerCostCents) }),
     usage: {
       operation: 'voice_live_session',
       provider: reservation.provider,

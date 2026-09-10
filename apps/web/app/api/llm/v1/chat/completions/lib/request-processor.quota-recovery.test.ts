@@ -146,11 +146,13 @@ beforeEach(() => {
     credits_used_cents: 10_000,
   } as Awaited<ReturnType<typeof CreditService.getBalance>>);
   vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+  vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
 describe('quota refusals carry a recovery destination', () => {
   it('points a Stripe-billed paid plan at the top-up purchase surface on a 402', async () => {
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(false);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
 
     const { status, error } = await refusalBody('quota-recovery-1', stripeProSubscription);
 
@@ -160,6 +162,7 @@ describe('quota refusals carry a recovery destination', () => {
 
   it('offers an upgrade instead of a top-up when the account cannot buy credits', async () => {
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(false);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
 
     const { status, error } = await refusalBody('quota-recovery-2', appleProSubscription);
 

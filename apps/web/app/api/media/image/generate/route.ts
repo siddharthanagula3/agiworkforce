@@ -38,7 +38,6 @@ import {
 } from '@/lib/moderation';
 import {
   canUseBillingPlanCapability,
-  centsFromMicrousdCeil,
   customerChargeMicrousd,
   getModelMetadataById,
   getModelsForProvider,
@@ -110,18 +109,25 @@ interface ImageGenerationResponse {
   provenance?: AiGeneratedProvenance[];
 }
 
-function rateCardCents(feature: RateCardFeature): number {
-  return centsFromMicrousdCeil(customerChargeMicrousd(feature));
+/**
+ * The rate card publishes microUSD, which is the unit the ledger settles in
+ * since 0185. centsFromMicrousdCeil is kept only for the surfaces that report
+ * a whole-cent figure.
+ */
+function rateCardMicrousd(feature: RateCardFeature): number {
+  return customerChargeMicrousd(feature);
 }
 
-const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
-  medium: rateCardCents('image_generation_openai_medium'),
-  high: rateCardCents('image_generation_openai_high'),
+const MICROUSD_PER_USD = 1_000_000;
+
+const OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY = {
+  medium: rateCardMicrousd('image_generation_openai_medium'),
+  high: rateCardMicrousd('image_generation_openai_high'),
 } as const;
 
-const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> = {
-  openai: OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY.high,
-  google: rateCardCents('image_generation_google'),
+const FALLBACK_IMAGE_ESTIMATE_MICROUSD_BY_PROVIDER: Record<ImageProvider, number> = {
+  openai: OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY.high,
+  google: rateCardMicrousd('image_generation_google'),
   stability: 0,
 };
 
@@ -345,7 +351,8 @@ function managedUsageErrorResponse(
   );
 }
 
-function estimateImageCostCents(
+/** The published per-image price, charged exactly rather than rounded up. */
+function estimateImageCostMicrousd(
   provider: ImageProvider,
   imageCount: number,
   quality: string | undefined,
@@ -353,17 +360,17 @@ function estimateImageCostCents(
 ): number {
   if (provider === 'openai') {
     const qualityKey = quality === 'hd' ? 'high' : 'medium';
-    return OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY[qualityKey] * imageCount;
+    return OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY[qualityKey] * imageCount;
   }
 
   if (provider === 'google') {
     const perImageUsd = resolveGoogleImageModel(requestedModelId)?.imagePerImageCost;
     if (typeof perImageUsd === 'number' && perImageUsd > 0) {
-      return Math.ceil(perImageUsd * 100) * imageCount;
+      return Math.ceil(perImageUsd * MICROUSD_PER_USD) * imageCount;
     }
   }
 
-  return FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER[provider] * imageCount;
+  return FALLBACK_IMAGE_ESTIMATE_MICROUSD_BY_PROVIDER[provider] * imageCount;
 }
 
 const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
@@ -1370,7 +1377,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     };
   }
 
-  const estimatedCostCents = estimateImageCostCents(provider, n, quality, catalogModel.id);
+  const estimatedCostMicrousd = estimateImageCostMicrousd(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: 'web' | 'mobile' | 'desktop';
   let organizationId: string | null;
@@ -1415,7 +1422,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       requestHash: fingerprintManagedUsageRequest(validationResult.data),
       provider,
       model: catalogModel.id,
-      estimatedCostCents,
+      estimatedCostMicrousd,
       planTier: subscription.plan_tier,
       isFlagship: false,
     });
@@ -1496,7 +1503,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'failed',
-        actualCostCents: 0,
+        actualCostMicrousd: 0,
         usage: {
           operation: 'image',
           sourceSurface,
@@ -1733,7 +1740,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     await finalizeManagedUsageRequest({
       ...reservation,
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: {
         operation: 'image',
         sourceSurface,
@@ -1765,7 +1772,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const costEstimate = estimateImageCostCents(
+  const costEstimateMicrousd = estimateImageCostMicrousd(
     provider,
     result.images.length,
     quality,
@@ -1774,7 +1781,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
-    actualCostCents: costEstimate,
+    actualCostMicrousd: costEstimateMicrousd,
     usage: {
       operation: 'image',
       sourceSurface,
@@ -1785,7 +1792,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   });
 
   logger.info(
-    { userId: userId, provider, model: result.model, costEstimate, estimatedCostCents },
+    { userId: userId, provider, model: result.model, costEstimateMicrousd, estimatedCostMicrousd },
     'Image generation credits deducted',
   );
 

@@ -10,12 +10,13 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 
 const OverageRequestSchema = z.object({ enabled: z.boolean() }).strict();
 
 interface OverageRow {
   overage_enabled: boolean;
-  available_cents: number | string | null;
+  available_microusd: number | string | null;
 }
 
 const SELECT_OVERAGE = `
@@ -23,24 +24,27 @@ const SELECT_OVERAGE = `
     subscription.overage_enabled,
     coalesce((
       select greatest(least(
-               credits.credits_allocated_cents - credits.credits_used_cents,
-               credits.top_up_allocated_cents
-             ), 0)::integer
+               credits.credits_allocated_microusd - credits.credits_used_microusd,
+               credits.top_up_allocated_microusd
+             ), 0)
         from public.token_credits credits
        where credits.user_id = subscription.user_id
          and credits.period_end > now()
        order by credits.period_end desc
        limit 1
-    ), 0) as available_cents
+    ), 0) as available_microusd
   from public.subscriptions subscription
   where subscription.user_id = $1
   limit 1`;
 
+/** available_cents stays in the body for readers that predate 0185. */
 function toResponse(row: OverageRow | undefined) {
-  const available = Number(row?.available_cents ?? 0);
+  const available = Number(row?.available_microusd ?? 0);
+  const availableMicrousd = Number.isFinite(available) && available > 0 ? Math.floor(available) : 0;
   return NextResponse.json({
     enabled: row?.overage_enabled === true,
-    available_cents: Number.isFinite(available) && available > 0 ? Math.floor(available) : 0,
+    available_microusd: availableMicrousd,
+    available_cents: ledgerCentsFromMicrousd(availableMicrousd),
   });
 }
 
@@ -70,7 +74,7 @@ async function handlePutOverage(request: NextRequest) {
     `update public.subscriptions
         set overage_enabled = $2, updated_at = now()
       where user_id = $1
-      returning overage_enabled, 0 as available_cents`,
+      returning overage_enabled, 0 as available_microusd`,
     [userId, parsed.data.enabled],
   );
   if (updated.length === 0) {

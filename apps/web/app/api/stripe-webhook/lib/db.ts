@@ -16,7 +16,10 @@ import {
 } from '@/lib/price-tier-mapping';
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
-import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
+import {
+  getPlanUsageBudgetCents,
+  MICROUSD_PER_LEDGER_CENT,
+} from '@/lib/server/managed-usage-policy';
 import { toIsoTimestamp } from '@/lib/server/capability-limit-resets';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import {
@@ -222,42 +225,40 @@ export async function handleCreditTopUp(
       throw new Error('No credit account found for user');
     }
 
-    const balanceBefore = await db
-      .query<{
-        credits_remaining_cents: number;
-      }>('select credits_remaining_cents from token_credits where id = $1 limit 1', [
-        creditAccount.id,
-      ])
-      .then((rows) => rows[0]);
+    // credits_remaining_cents is a get_credit_balance output column, not a
+    // column on token_credits; selecting it here threw and the verification
+    // below never ran. The remaining balance is the difference of the two
+    // columns that do exist, read in the unit the ledger settles in.
+    const readRemainingMicrousd = async (): Promise<number> => {
+      const [row] = await db.query<{ remaining_microusd: number | string | null }>(
+        `select credits_allocated_microusd - credits_used_microusd as remaining_microusd
+           from public.token_credits where id = $1 limit 1`,
+        [creditAccount.id],
+      );
+      const value = Number(row?.remaining_microusd ?? 0);
+      return Number.isFinite(value) ? value : 0;
+    };
 
-    const previousBalance = balanceBefore?.credits_remaining_cents ?? 0;
+    const previousBalance = await readRemainingMicrousd();
 
-    await db.execute('select add_credits($1, $2, $3, $4, $5)', [
+    await db.execute('select add_credits_microusd($1, $2, $3, $4, $5)', [
       userId,
       creditAccount.id,
-      creditAmountCents,
+      creditAmountCents * MICROUSD_PER_LEDGER_CENT,
       transactionDescription,
       'purchase',
     ]);
 
-    const balanceAfter = await db
-      .query<{
-        credits_remaining_cents: number;
-      }>('select credits_remaining_cents from token_credits where id = $1 limit 1', [
-        creditAccount.id,
-      ])
-      .then((rows) => rows[0]);
-
-    const newBalance = balanceAfter?.credits_remaining_cents ?? 0;
+    const newBalance = await readRemainingMicrousd();
     const actualDifference = newBalance - previousBalance;
 
-    if (actualDifference !== creditAmountCents) {
+    if (actualDifference !== creditAmountCents * MICROUSD_PER_LEDGER_CENT) {
       logger.error(
         {
           userId,
           creditAccountId: creditAccount.id,
-          expected: creditAmountCents,
-          actual: actualDifference,
+          expectedMicrousd: creditAmountCents * MICROUSD_PER_LEDGER_CENT,
+          actualMicrousd: actualDifference,
           previousBalance,
           newBalance,
         },
