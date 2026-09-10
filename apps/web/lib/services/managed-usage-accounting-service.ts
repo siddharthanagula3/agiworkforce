@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
+  estimateMicrousdOf,
   finalizeManagedUsageRequest,
   type ManagedUsageFinalization,
   type ManagedUsageRequestReservation,
@@ -273,22 +274,49 @@ export function calculateObservedListCostDollars(
   return calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
 }
 
-function toLedgerCents(dollars: number): number {
-  return dollars > 0 ? Math.max(1, Math.ceil(dollars * 100)) : 0;
+const MICROUSD_PER_USD = 1_000_000;
+const MICROUSD_PER_LEDGER_CENT = 10_000;
+
+/**
+ * The ledger's unit since 0185. Work that produced nothing costs nothing, and
+ * work that produced anything costs at least one microUSD. The one-cent floor
+ * this replaced overcharged a sub-cent turn elevenfold and made a hundred
+ * sub-cent turns cost more than a single call of the same total.
+ */
+function toLedgerMicrousd(dollars: number): number {
+  return dollars > 0 ? Math.max(1, Math.ceil(dollars * MICROUSD_PER_USD)) : 0;
+}
+
+function toLedgerCents(microusd: number): number {
+  return Math.floor((microusd + MICROUSD_PER_LEDGER_CENT / 2) / MICROUSD_PER_LEDGER_CENT);
+}
+
+export function observedListLedgerMicrousd(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  return toLedgerMicrousd(calculateObservedListCostDollars(usage, fallbackPricing));
+}
+
+export function observedProviderUsageLedgerMicrousd(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  return toLedgerMicrousd(calculateObservedProviderUsageCostDollars(usage, fallbackPricing));
 }
 
 export function observedListLedgerCents(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
-  return toLedgerCents(calculateObservedListCostDollars(usage, fallbackPricing));
+  return toLedgerCents(observedListLedgerMicrousd(usage, fallbackPricing));
 }
 
 export function observedProviderUsageLedgerCents(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
-  return toLedgerCents(calculateObservedProviderUsageCostDollars(usage, fallbackPricing));
+  return toLedgerCents(observedProviderUsageLedgerMicrousd(usage, fallbackPricing));
 }
 
 export function hasObservedProviderUsage(usage: ObservedProviderUsage): boolean {
@@ -314,7 +342,7 @@ export function finalizeObservedManagedUsage(
     return finalizeManagedUsageRequest({
       ...input.reservation,
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: {
         accounting: 'released_no_observed_provider_usage',
         reason: input.reason,
@@ -328,7 +356,7 @@ export function finalizeObservedManagedUsage(
     return finalizeManagedUsageRequest({
       ...input.reservation,
       outcome: 'completed',
-      actualCostCents: input.reservation.estimatedCostCents,
+      actualCostMicrousd: estimateMicrousdOf(input.reservation),
       usage: {
         accounting: 'reservation_estimate_no_provider_usage',
         reason: input.reason,
@@ -343,14 +371,14 @@ export function finalizeObservedManagedUsage(
     provider: input.provider,
     model: input.model,
   };
-  const actualCostCents = observedListLedgerCents(input.usage, pricing);
-  const providerCostCents = observedProviderUsageLedgerCents(input.usage, pricing);
+  const actualCostMicrousd = observedListLedgerMicrousd(input.usage, pricing);
+  const providerCostMicrousd = observedProviderUsageLedgerMicrousd(input.usage, pricing);
 
   return finalizeManagedUsageRequest({
     ...input.reservation,
     outcome: 'completed',
-    actualCostCents,
-    providerCostCents,
+    actualCostMicrousd,
+    providerCostMicrousd,
     usage: {
       accounting: 'observed_provider_usage',
       reason: input.reason,
