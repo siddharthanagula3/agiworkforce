@@ -23,6 +23,7 @@ export const VOICE_SESSION_EVENT = {
   replyComplete: 'replyComplete',
   playbackComplete: 'playbackComplete',
   bargeIn: 'bargeIn',
+  assistantSpeech: 'assistantSpeech',
   mute: 'mute',
   unmute: 'unmute',
   fail: 'fail',
@@ -41,6 +42,7 @@ export type VoiceSessionEvent =
   | { type: typeof VOICE_SESSION_EVENT.replyComplete; spoken: boolean }
   | { type: typeof VOICE_SESSION_EVENT.playbackComplete }
   | { type: typeof VOICE_SESSION_EVENT.bargeIn }
+  | { type: typeof VOICE_SESSION_EVENT.assistantSpeech; active: boolean }
   | { type: typeof VOICE_SESSION_EVENT.mute }
   | { type: typeof VOICE_SESSION_EVENT.unmute }
   | { type: typeof VOICE_SESSION_EVENT.fail; message: string }
@@ -160,6 +162,15 @@ export function voiceSessionReducer(
             error: null,
           }
         : state;
+
+    case VOICE_SESSION_EVENT.assistantSpeech:
+      if (event.active) {
+        return state.status === VOICE_SESSION_STATUS.listening ||
+          state.status === VOICE_SESSION_STATUS.muted
+          ? { ...state, status: VOICE_SESSION_STATUS.speaking, pendingUtterance: null }
+          : state;
+      }
+      return state.status === VOICE_SESSION_STATUS.speaking ? resume(state) : state;
 
     case VOICE_SESSION_EVENT.mute:
       if (!isVoiceSessionActive(state.status) || state.muted) return state;

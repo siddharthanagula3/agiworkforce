@@ -141,10 +141,16 @@ function Picker({
   );
 }
 
+export interface VoicePickerOption {
+  voiceURI: string;
+  name: string;
+  lang: string;
+}
+
 export interface VoiceSettingsModalProps {
   open: boolean;
   reducedMotion: boolean;
-  voices: readonly SpeechSynthesisVoice[];
+  voices: readonly VoicePickerOption[];
   voiceUri: string | null;
   intelligence: VoiceIntelligence;
   language: string;

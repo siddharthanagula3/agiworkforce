@@ -332,6 +332,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 20 transcription requests per minute (audio processing is resource-intensive)
     failClosed: true, // Security-sensitive: transcription involves external API billing
   },
+  'voice-live-session': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
   'admin-security': {
     limit: 10,
     window: '1 m', // 10 admin security actions per minute
@@ -696,6 +701,7 @@ const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
   'image-generation',
   'video-generation',
   'audio-transcription',
+  'voice-live-session',
 ]);
 
 const MAX_TIER_CONCURRENCY = Math.max(

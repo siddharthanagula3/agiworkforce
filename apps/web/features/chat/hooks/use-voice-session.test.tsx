@@ -1,264 +1,220 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
-const speak = vi.fn();
-const unlock = vi.fn();
-const stopSpeaking = vi.fn();
-
-vi.mock('@/lib/hooks/useTTS', () => ({
-  useTTS: () => ({
-    isSpeaking: false,
-    isSupported: true,
-    speak,
-    stop: stopSpeaking,
-    unlock,
-    voices: [],
-    voiceUri: null,
-    setVoiceUri: vi.fn(),
-  }),
+const live = vi.hoisted(() => ({
+  start: vi.fn(),
+  setMuted: vi.fn(),
+  close: vi.fn(),
 }));
 
+vi.mock('@features/chat/lib/live-voice-session', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, LiveVoiceSession: { start: live.start } };
+});
 vi.mock('@features/support/hooks/usePrefersReducedMotion', () => ({
   usePrefersReducedMotion: () => false,
 }));
+vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
 
-import { useVoiceSession } from './use-voice-session';
-import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { endLiveVoiceSession, useVoiceSession } from './use-voice-session';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import {
-  INITIAL_VOICE_SESSION_STATE,
-  UTTERANCE_CANCEL_WINDOW_MS,
-  VOICE_SESSION_EVENT,
-  VOICE_SESSION_STATUS,
-} from '@agiworkforce/unified-chat';
+  LIVE_SESSION_MESSAGE,
+  LiveVoiceSessionError,
+  type LiveVoiceSessionCallbacks,
+  type LiveVoiceSessionOptions,
+} from '@features/chat/lib/live-voice-session';
+import { INITIAL_VOICE_SESSION_STATE, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 
-const UTTERANCE = 'book the flight for tuesday';
+const SETTLEMENT = {
+  idempotencyKey: 'key',
+  leaseToken: 'lease',
+  requestHash: 'hash',
+  estimatedCostCents: 50,
+  ceilingSeconds: 600,
+};
 
-class StubMediaRecorder {
-  ondataavailable: ((event: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
-  start = vi.fn();
-  stop = vi.fn(() => this.onstop?.());
-  static isTypeSupported(): boolean {
-    return true;
-  }
+function fakeSession() {
+  return {
+    sessionId: 'live_1',
+    settlement: SETTLEMENT,
+    microphoneLabel: 'Built-in Microphone',
+    lastUsageSeconds: 12,
+    setMuted: live.setMuted,
+    close: live.close,
+    dispose: vi.fn(),
+  };
 }
 
-function stubMediaRecorder() {
-  function RecorderCtor(this: StubMediaRecorder) {
-    return new StubMediaRecorder();
-  }
-  (RecorderCtor as unknown as { isTypeSupported: () => boolean }).isTypeSupported =
-    StubMediaRecorder.isTypeSupported;
-  Object.defineProperty(window, 'MediaRecorder', {
-    value: RecorderCtor,
-    writable: true,
-    configurable: true,
-  });
+function lastCallbacks(): LiveVoiceSessionCallbacks {
+  const options = live.start.mock.calls.at(-1)?.[0] as LiveVoiceSessionOptions | undefined;
+  if (!options) throw new Error('start was not called');
+  return options.callbacks;
 }
 
-function mount(reply: { id: string; content: string } | null = null) {
+function mount() {
   const onSend = vi.fn().mockReturnValue(true);
-  const view = renderHook(() => useVoiceSession({ turnActive: false, reply, onSend }));
-  return { ...view, onSend };
+  const onEnsureConversation = vi.fn(async () => 'conv-1');
+  const onTranscript = vi.fn();
+  const view = renderHook(() =>
+    useVoiceSession({
+      turnActive: false,
+      conversationId: null,
+      onSend,
+      onEnsureConversation,
+      onTranscript,
+    }),
+  );
+  return { ...view, onSend, onEnsureConversation, onTranscript };
 }
 
-function grantMicrophone(state: PermissionState) {
-  Object.defineProperty(navigator, 'permissions', {
-    value: { query: vi.fn().mockResolvedValue({ state }) },
-    writable: true,
-    configurable: true,
-  });
-  Object.defineProperty(navigator, 'mediaDevices', {
-    value: {
-      getUserMedia: vi
-        .fn()
-        .mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream),
-      enumerateDevices: vi
-        .fn()
-        .mockResolvedValue([{ kind: 'audioinput', label: 'Built-in Microphone' }]),
-    },
-    writable: true,
-    configurable: true,
-  });
-}
-
-async function enterAndTranscribe(result: { current: { enter: () => void } }) {
+async function enterAndStart(result: { current: { enter: () => void } }) {
   await act(async () => {
     result.current.enter();
   });
+  await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
   await act(async () => {
-    useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.speechEnd });
-    useVoiceSessionStore
-      .getState()
-      .dispatch({ type: VOICE_SESSION_EVENT.transcribed, text: UTTERANCE });
+    lastCallbacks().onStarted();
   });
 }
 
 describe('useVoiceSession', () => {
+  const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+
   beforeEach(() => {
     useVoiceSessionStore.setState({
       session: INITIAL_VOICE_SESSION_STATE,
-      focusMode: false,
-      dockOpen: false,
-      settingsOpen: false,
-      activityMessageId: null,
+      backendBusy: false,
+      voice: 'marin',
     });
-    useVoiceInputStore.setState({
-      mode: 'idle',
-      transcript: '',
-      error: null,
-      language: '',
-      captureStream: null,
-    });
-    grantMicrophone('granted');
-    stubMediaRecorder();
+    live.start.mockReset();
+    live.setMuted.mockReset();
+    live.close.mockReset();
+    live.start.mockResolvedValue(fakeSession());
+    live.close.mockResolvedValue({ reason: 'close_requested', seconds: 30 });
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockClear();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
+  afterEach(async () => {
+    cleanup();
+    endLiveVoiceSession('test');
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    vi.unstubAllGlobals();
   });
 
-  it('listens live when the microphone permission is already granted', async () => {
+  it('opens a live session on enter and listens only once the session has started', async () => {
     const { result } = mount();
-
     await act(async () => {
       result.current.enter();
     });
-
-    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening));
-    expect(result.current.state.muted).toBe(false);
-  });
-
-  it('starts muted when the permission has not been granted yet', async () => {
-    grantMicrophone('prompt');
-    const { result } = mount();
+    await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
+    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.entering);
+    expect(live.start.mock.calls[0]?.[0]).toMatchObject({ voice: 'marin', conversationId: null });
 
     await act(async () => {
-      result.current.enter();
+      lastCallbacks().onStarted();
     });
-
-    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.muted));
-    expect(result.current.mutedHint).toContain('tap the mic');
-  });
-
-  it('holds a transcribed utterance for the cancel window before sending it', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const { result, onSend } = mount();
-    await enterAndTranscribe(result);
-
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.sending);
-    expect(result.current.state.pendingUtterance).toBe(UTTERANCE);
-
-    await act(async () => {
-      vi.advanceTimersByTime(UTTERANCE_CANCEL_WINDOW_MS - 1);
-    });
-    expect(onSend).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(onSend).toHaveBeenCalledWith(UTTERANCE);
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.streaming);
-  });
-
-  it('never sends an utterance cancelled inside the window', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const { result, onSend } = mount();
-    await enterAndTranscribe(result);
-
-    await act(async () => {
-      result.current.cancelPending();
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(UTTERANCE_CANCEL_WINDOW_MS * 2);
-    });
-
-    expect(onSend).not.toHaveBeenCalled();
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    await waitFor(() => expect(result.current.deviceName).toBe('Built-in Microphone'));
   });
 
-  it('reports a refused send as an error instead of waiting on a reply', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const onSend = vi.fn().mockReturnValue(false);
-    const { result } = renderHook(() =>
-      useVoiceSession({ turnActive: false, reply: null, onSend }),
-    );
-    await enterAndTranscribe(result);
+  it('mirrors incoming assistant audio and backend work without leaving the session', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
 
     await act(async () => {
-      vi.advanceTimersByTime(UTTERANCE_CANCEL_WINDOW_MS);
+      lastCallbacks().onSpeaking(true);
     });
-
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
-  });
-
-  it('sends typed text straight through without a cancel window', async () => {
-    const { result, onSend } = mount();
-    await act(async () => {
-      result.current.enter();
-    });
-
-    await act(async () => {
-      result.current.submitTyped('  what is on my calendar  ');
-    });
-
-    expect(onSend).toHaveBeenCalledWith('what is on my calendar');
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.streaming);
-  });
-
-  it('speaks a finished reply and stops playback on exit', async () => {
-    const onSend = vi.fn().mockReturnValue(true);
-    const { result, rerender } = renderHook(
-      ({ reply }: { reply: { id: string; content: string } | null }) =>
-        useVoiceSession({ turnActive: false, reply, onSend }),
-      { initialProps: { reply: null as { id: string; content: string } | null } },
-    );
-    await act(async () => {
-      result.current.enter();
-    });
-    await act(async () => {
-      result.current.submitTyped('when');
-    });
-    await act(async () => {
-      rerender({ reply: { id: 'assistant-1', content: 'Tuesday at nine.' } });
-    });
-
-    await waitFor(() => expect(speak).toHaveBeenCalledWith('Tuesday at nine.'));
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.speaking);
+    await act(async () => {
+      lastCallbacks().onBackendBusy(true);
+      lastCallbacks().onSpeaking(false);
+    });
+    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    expect(result.current.backendBusy).toBe(true);
+    await act(async () => {
+      lastCallbacks().onBackendBusy(false);
+    });
+    expect(result.current.backendBusy).toBe(false);
+  });
 
+  it('mutes through the session and keeps the session alive', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
+    await act(async () => {
+      result.current.toggleMute();
+    });
+    expect(live.setMuted).toHaveBeenLastCalledWith(true);
+    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.muted);
+    await act(async () => {
+      result.current.toggleMute();
+    });
+    expect(live.setMuted).toHaveBeenLastCalledWith(false);
+    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    expect(live.close).not.toHaveBeenCalled();
+  });
+
+  it('delivers transcripts into the conversation it ensured once', async () => {
+    const { result, onEnsureConversation, onTranscript } = mount();
+    await enterAndStart(result);
+    await act(async () => {
+      lastCallbacks().onTranscript({ turnId: 't1', role: 'user', text: 'hi', final: false });
+      lastCallbacks().onTranscript({ turnId: 't1', role: 'user', text: 'hi there', final: true });
+    });
+    await waitFor(() => expect(onTranscript).toHaveBeenCalledTimes(2));
+    expect(onEnsureConversation).toHaveBeenCalledTimes(1);
+    expect(onTranscript).toHaveBeenLastCalledWith('conv-1', {
+      turnId: 't1',
+      role: 'user',
+      text: 'hi there',
+      final: true,
+    });
+  });
+
+  it('closes the session gracefully on exit and settles its usage', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
     await act(async () => {
       result.current.exit();
     });
-    expect(stopSpeaking).toHaveBeenCalled();
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.exited);
+    await waitFor(() => expect(live.close).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/voice/live/sessions/live_1/close');
+    expect(JSON.parse(String(init.body))).toEqual({
+      seconds: 30,
+      reason: 'close_requested',
+      settlement: SETTLEMENT,
+    });
   });
 
-  it('mutes and unmutes without leaving the session', async () => {
+  it('shows the permission failure and reconnects on retry', async () => {
+    live.start.mockRejectedValueOnce(
+      new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.microphoneDenied, 'microphone_denied'),
+    );
     const { result } = mount();
     await act(async () => {
       result.current.enter();
     });
-    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening));
+    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error));
+    expect(result.current.state.error).toBe(LIVE_SESSION_MESSAGE.microphoneDenied);
 
     await act(async () => {
-      result.current.toggleMute();
+      result.current.retry();
     });
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.muted);
-
-    await act(async () => {
-      result.current.toggleMute();
-    });
-    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
   });
 
-  it('unlocks speech playback inside the entry tap', async () => {
-    grantMicrophone('granted');
+  it('reports a session the provider ended as an error the user can retry', async () => {
     const { result } = mount();
+    await enterAndStart(result);
     await act(async () => {
-      result.current.enter();
+      lastCallbacks().onClosed({ reason: 'expired', seconds: 600 });
     });
-    expect(unlock).toHaveBeenCalled();
+    expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
+    expect(result.current.state.error).toBe(LIVE_SESSION_MESSAGE.sessionEnded);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 });

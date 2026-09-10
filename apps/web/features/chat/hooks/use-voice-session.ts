@@ -1,48 +1,42 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { useTTS } from '@/lib/hooks/useTTS';
+import { getCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
-  advanceBargeIn,
-  advanceSpeechWindow,
-  INITIAL_SPEECH_WINDOW,
   isVoiceSessionActive,
-  PLAYBACK_START_TIMEOUT_MS,
-  UTTERANCE_CANCEL_WINDOW_MS,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
 import {
-  ANALYSER_FFT_SIZE,
-  readAnalyserLevel,
-  WAVEFORM_SAMPLE_INTERVAL_MS,
-} from '@features/chat/lib/dictation-machine';
+  LIVE_SESSION_ENDPOINT,
+  LIVE_SESSION_MESSAGE,
+  LiveVoiceSession,
+  LiveVoiceSessionError,
+  type LiveSessionClosed,
+  type LiveTranscriptTurn,
+} from '@features/chat/lib/live-voice-session';
 
 const MESSAGE = {
-  captureFailed: 'The microphone could not be started. Try again.',
-  transcribeFailed: 'That could not be transcribed. Try again.',
   sendFailed: 'That turn could not be sent. Try again.',
   mutedHint: 'Muted, tap the mic to talk',
 } as const;
 
-const REPLY_STALL_TIMEOUT_MS = 15_000;
-const MICROPHONE_PERMISSION = 'microphone';
-const GRANTED = 'granted';
+const CSRF_HEADER = 'x-csrf-token';
+const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
 
-export interface VoiceReplyTurn {
-  id: string;
-  content: string;
-}
+export type { LiveTranscriptTurn as VoiceTranscriptTurn };
 
 export interface UseVoiceSessionOptions {
   turnActive: boolean;
-  reply: VoiceReplyTurn | null;
+  conversationId: string | null;
   onSend: (text: string) => boolean;
+  onEnsureConversation: () => Promise<string | null>;
+  onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
 }
 
 export interface VoiceSessionController {
@@ -50,7 +44,7 @@ export interface VoiceSessionController {
   active: boolean;
   reducedMotion: boolean;
   deviceName: string;
-  playbackUnavailable: boolean;
+  backendBusy: boolean;
   mutedHint: string;
   enter: () => void;
   exit: () => void;
@@ -60,275 +54,210 @@ export interface VoiceSessionController {
   retry: () => void;
 }
 
-type AudioContextConstructor = new () => AudioContext;
-
-function resolveAudioContext(): AudioContextConstructor | null {
-  if (typeof window === 'undefined') return null;
-  const vendor = window as unknown as Record<string, AudioContextConstructor | undefined>;
-  return vendor['AudioContext'] ?? vendor['webkitAudioContext'] ?? null;
+interface TranscriptSink {
+  conversationId: string | null;
+  onEnsureConversation: () => Promise<string | null>;
+  onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
 }
 
-function primeAudioContext(ref: RefObject<AudioContext | null>): AudioContext | null {
-  const AudioContextCtor = resolveAudioContext();
-  if (!AudioContextCtor) return null;
-  ref.current ??= new AudioContextCtor();
-  if (ref.current.state === 'suspended') void ref.current.resume();
-  return ref.current;
+const NAVIGATION_HANDOFF_MS = 5_000;
+
+const controller = {
+  session: null as LiveVoiceSession | null,
+  starting: null as Promise<LiveVoiceSession> | null,
+  conversation: null as Promise<string | null> | null,
+  sink: null as TranscriptSink | null,
+  handoff: null as number | null,
+};
+
+function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Promise<void> {
+  return getCsrfToken()
+    .then((token) =>
+      fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/close`, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
+        body: JSON.stringify({
+          seconds: closed.seconds ?? session.lastUsageSeconds ?? 0,
+          reason: closed.reason,
+          settlement: session.settlement,
+        }),
+      }),
+    )
+    .then(() => undefined)
+    .catch(() => undefined);
 }
 
-function releaseAudioContext(ref: RefObject<AudioContext | null>): void {
-  void ref.current?.close();
-  ref.current = null;
+function ensureConversation(): Promise<string | null> {
+  controller.conversation ??= (controller.sink?.onEnsureConversation() ?? Promise.resolve(null))
+    .catch(() => null)
+    .then((id) => id ?? controller.sink?.conversationId ?? null);
+  return controller.conversation;
 }
 
-async function microphoneAlreadyGranted(): Promise<boolean> {
-  if (typeof navigator === 'undefined') return false;
-  const query = navigator.permissions?.query;
-  if (typeof query !== 'function') return false;
-  try {
-    const status = await navigator.permissions.query({
-      name: MICROPHONE_PERMISSION as PermissionName,
-    });
-    return status.state === GRANTED;
-  } catch {
-    return false;
+function deliverTranscript(turn: LiveTranscriptTurn): void {
+  void ensureConversation().then((id) => {
+    if (id) controller.sink?.onTranscript(id, turn);
+  });
+}
+
+export function endLiveVoiceSession(reason: string): void {
+  const { session, starting } = controller;
+  controller.session = null;
+  controller.starting = null;
+  controller.conversation = null;
+  useVoiceSessionStore.getState().setBackendBusy(false);
+  if (starting) {
+    void starting.then(
+      (started) => started.close().then((closed) => settleSession(started, { ...closed, reason })),
+      () => undefined,
+    );
+  }
+  if (session) {
+    void session.close().then((closed) => settleSession(session, { ...closed, reason }));
   }
 }
 
-async function resolveInputDeviceName(): Promise<string> {
-  if (typeof navigator === 'undefined') return '';
-  const enumerate = navigator.mediaDevices?.enumerateDevices;
-  if (typeof enumerate !== 'function') return '';
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.find((device) => device.kind === 'audioinput' && device.label)?.label ?? '';
-  } catch {
-    return '';
-  }
+export function exitVoiceSession(): void {
+  endLiveVoiceSession('close_requested');
+  useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
+}
+
+export function keepVoiceSessionAcrossNavigation(): void {
+  if (controller.handoff !== null) window.clearTimeout(controller.handoff);
+  controller.handoff = window.setTimeout(() => {
+    controller.handoff = null;
+    exitVoiceSession();
+  }, NAVIGATION_HANDOFF_MS);
+}
+
+export function releaseVoiceSessionOnPageExit(): void {
+  if (controller.handoff !== null) return;
+  exitVoiceSession();
+}
+
+function resumeVoiceSessionAfterNavigation(): void {
+  if (controller.handoff === null) return;
+  window.clearTimeout(controller.handoff);
+  controller.handoff = null;
+}
+
+function startLiveVoiceSession(voice: string): Promise<LiveVoiceSession> {
+  const store = useVoiceSessionStore.getState();
+  controller.starting ??= LiveVoiceSession.start({
+    voice,
+    conversationId: controller.sink?.conversationId ?? null,
+    callbacks: {
+      onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
+      onSpeaking: (speaking) =>
+        store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
+      onBackendBusy: store.setBackendBusy,
+      onTranscript: deliverTranscript,
+      onUsage: () => undefined,
+      onClosed: (closed) => {
+        const session = controller.session;
+        controller.session = null;
+        store.setBackendBusy(false);
+        if (session) void settleSession(session, closed);
+        if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
+          store.dispatch({
+            type: VOICE_SESSION_EVENT.fail,
+            message: LIVE_SESSION_MESSAGE.sessionEnded,
+          });
+        } else {
+          store.dispatch({ type: VOICE_SESSION_EVENT.exit });
+        }
+      },
+      onError: (message) => {
+        controller.session = null;
+        store.setBackendBusy(false);
+        store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
+      },
+    },
+  }).then(
+    (session) => {
+      controller.starting = null;
+      controller.session = session;
+      void ensureConversation();
+      return session;
+    },
+    (error: unknown) => {
+      controller.starting = null;
+      store.dispatch({
+        type: VOICE_SESSION_EVENT.fail,
+        message:
+          error instanceof LiveVoiceSessionError
+            ? error.message
+            : LIVE_SESSION_MESSAGE.connectionFailed,
+      });
+      throw error;
+    },
+  );
+  return controller.starting;
 }
 
 export function useVoiceSession({
   turnActive,
-  reply,
+  conversationId,
   onSend,
+  onEnsureConversation,
+  onTranscript,
 }: UseVoiceSessionOptions): VoiceSessionController {
   const state = useVoiceSessionStore((store) => store.session);
-  const language = useVoiceSessionStore((store) => store.language);
+  const voice = useVoiceSessionStore((store) => store.voice);
+  const backendBusy = useVoiceSessionStore((store) => store.backendBusy);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
-  const captureStream = useVoiceInputStore((store) => store.captureStream);
   const reducedMotion = usePrefersReducedMotion();
-  const tts = useTTS();
-  const [deviceName, setDeviceName] = useState('');
+  const [deviceName, setDeviceName] = useState(() => controller.session?.microphoneLabel ?? '');
 
-  const { status, muted, pendingUtterance } = state;
+  const { status, muted } = state;
   const active = isVoiceSessionActive(status);
-  const listening = status === VOICE_SESSION_STATUS.listening && !muted;
-  const speaking = status === VOICE_SESSION_STATUS.speaking;
-  const shouldCapture = listening || (speaking && !muted);
 
-  const spokenReplyIdRef = useRef<string | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const playbackStartedRef = useRef(false);
-  const replyRef = useRef(reply);
-  replyRef.current = reply;
-  const ttsRef = useRef(tts);
-  ttsRef.current = tts;
-  const onSendRef = useRef(onSend);
-  onSendRef.current = onSend;
+  controller.sink = { conversationId, onEnsureConversation, onTranscript };
 
   useEffect(() => {
-    useVoiceInputStore.getState().setLanguage(language);
-  }, [language]);
+    resumeVoiceSessionAfterNavigation();
+  }, []);
 
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.entering) return undefined;
     let cancelled = false;
-    void microphoneAlreadyGranted().then((granted) => {
-      if (cancelled) return;
-      dispatch({ type: VOICE_SESSION_EVENT.ready, listening: granted });
-    });
+    startLiveVoiceSession(voice).then(
+      (session) => {
+        if (!cancelled) setDeviceName(session.microphoneLabel);
+      },
+      () => undefined,
+    );
     return () => {
       cancelled = true;
     };
-  }, [status, dispatch]);
-
-  useEffect(() => {
-    if (!active) return undefined;
-    let cancelled = false;
-    void resolveInputDeviceName().then((label) => {
-      if (!cancelled) setDeviceName(label);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
-
-  useEffect(() => {
-    if (!shouldCapture) return undefined;
-    let cancelled = false;
-    const store = useVoiceInputStore.getState();
-    store.clearError();
-    void store.startListening().then(() => {
-      if (cancelled) return;
-      const settled = useVoiceInputStore.getState();
-      if (settled.mode === 'error') {
-        dispatch({
-          type: VOICE_SESSION_EVENT.fail,
-          message: settled.error ?? MESSAGE.captureFailed,
-        });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldCapture, dispatch]);
-
-  useEffect(() => {
-    if (shouldCapture) return;
-    if (status === VOICE_SESSION_STATUS.transcribing) return;
-    if (useVoiceInputStore.getState().mode !== 'listening') return;
-    useVoiceInputStore.getState().cancelListening();
-  }, [shouldCapture, status]);
-
-  const finishUtterance = useCallback(() => {
-    dispatch({ type: VOICE_SESSION_EVENT.speechEnd });
-    void useVoiceInputStore
-      .getState()
-      .stopListening()
-      .then(() => {
-        const store = useVoiceInputStore.getState();
-        const { transcript, error, mode } = store;
-        store.clearTranscript();
-        if (mode === 'error') {
-          dispatch({
-            type: VOICE_SESSION_EVENT.fail,
-            message: error ?? MESSAGE.transcribeFailed,
-          });
-          return;
-        }
-        dispatch({ type: VOICE_SESSION_EVENT.transcribed, text: transcript });
-      });
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (!shouldCapture || !captureStream) return undefined;
-    const context = primeAudioContext(audioContextRef);
-    if (!context) return undefined;
-
-    const source = context.createMediaStreamSource(captureStream);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = ANALYSER_FFT_SIZE;
-    source.connect(analyser);
-
-    const samples = new Uint8Array(analyser.fftSize);
-    let speechWindow = INITIAL_SPEECH_WINDOW;
-    let bargeInSamples = 0;
-    let lastSampleAt = 0;
-    let frame = 0;
-
-    const tick = (now: number) => {
-      frame = window.requestAnimationFrame(tick);
-      if (now - lastSampleAt < WAVEFORM_SAMPLE_INTERVAL_MS) return;
-      lastSampleAt = now;
-      analyser.getByteTimeDomainData(samples);
-      const level = readAnalyserLevel(samples);
-
-      if (speaking) {
-        const barge = advanceBargeIn(bargeInSamples, level);
-        bargeInSamples = barge.consecutive;
-        if (barge.triggered) {
-          ttsRef.current.stop();
-          dispatch({ type: VOICE_SESSION_EVENT.bargeIn });
-        }
-        return;
-      }
-
-      const advanced = advanceSpeechWindow(speechWindow, level, now);
-      speechWindow = advanced.state;
-      if (advanced.ended) finishUtterance();
-    };
-    frame = window.requestAnimationFrame(tick);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      source.disconnect();
-      analyser.disconnect();
-    };
-  }, [shouldCapture, captureStream, speaking, dispatch, finishUtterance]);
-
-  useEffect(() => {
-    if (status !== VOICE_SESSION_STATUS.sending || !pendingUtterance) return undefined;
-    const id = window.setTimeout(() => {
-      spokenReplyIdRef.current = replyRef.current?.id ?? null;
-      dispatch({ type: VOICE_SESSION_EVENT.commitUtterance });
-      if (!onSendRef.current(pendingUtterance)) {
-        dispatch({ type: VOICE_SESSION_EVENT.fail, message: MESSAGE.sendFailed });
-      }
-    }, UTTERANCE_CANCEL_WINDOW_MS);
-    return () => window.clearTimeout(id);
-  }, [status, pendingUtterance, dispatch]);
+  }, [status, voice]);
 
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.streaming || turnActive) return undefined;
-    const replyId = reply?.id ?? null;
-    if (replyId && replyId !== spokenReplyIdRef.current) {
-      spokenReplyIdRef.current = replyId;
-      const text = reply?.content.trim() ?? '';
-      if (text && tts.isSupported) {
-        playbackStartedRef.current = false;
-        tts.speak(text);
-        dispatch({ type: VOICE_SESSION_EVENT.replyComplete, spoken: true });
-      } else {
-        dispatch({ type: VOICE_SESSION_EVENT.replyComplete, spoken: false });
-      }
-      return undefined;
-    }
-    const stall = window.setTimeout(() => {
-      dispatch({ type: VOICE_SESSION_EVENT.replyComplete, spoken: false });
-    }, REPLY_STALL_TIMEOUT_MS);
-    return () => window.clearTimeout(stall);
-  }, [status, turnActive, reply, tts, dispatch]);
+    dispatch({ type: VOICE_SESSION_EVENT.replyComplete, spoken: false });
+    return undefined;
+  }, [status, turnActive, dispatch]);
 
   useEffect(() => {
-    if (status !== VOICE_SESSION_STATUS.speaking) return undefined;
-    if (tts.isSpeaking) {
-      playbackStartedRef.current = true;
-      return undefined;
-    }
-    if (playbackStartedRef.current) {
-      playbackStartedRef.current = false;
-      dispatch({ type: VOICE_SESSION_EVENT.playbackComplete });
-      return undefined;
-    }
-    const id = window.setTimeout(() => {
-      dispatch({ type: VOICE_SESSION_EVENT.playbackComplete });
-    }, PLAYBACK_START_TIMEOUT_MS);
-    return () => window.clearTimeout(id);
-  }, [status, tts.isSpeaking, dispatch]);
+    if (!active) return undefined;
+    const onPageHide = () => endLiveVoiceSession('page_hidden');
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [active]);
 
   const enter = useCallback(() => {
-    primeAudioContext(audioContextRef);
-    ttsRef.current.unlock();
     useVoiceInputStore.getState().cancelListening();
     dispatch({ type: VOICE_SESSION_EVENT.enter });
   }, [dispatch]);
 
-  const exit = useCallback(() => {
-    ttsRef.current.stop();
-    useVoiceInputStore.getState().cancelListening();
-    useVoiceInputStore.getState().clearTranscript();
-    releaseAudioContext(audioContextRef);
-    dispatch({ type: VOICE_SESSION_EVENT.exit });
-  }, [dispatch]);
+  const exit = useCallback(() => exitVoiceSession(), []);
 
   const toggleMute = useCallback(() => {
-    if (status === VOICE_SESSION_STATUS.speaking) {
-      ttsRef.current.stop();
-      dispatch({ type: VOICE_SESSION_EVENT.bargeIn });
-      return;
-    }
-    dispatch({ type: muted ? VOICE_SESSION_EVENT.unmute : VOICE_SESSION_EVENT.mute });
-  }, [status, muted, dispatch]);
+    const next = !muted;
+    controller.session?.setMuted(next);
+    dispatch({ type: next ? VOICE_SESSION_EVENT.mute : VOICE_SESSION_EVENT.unmute });
+  }, [muted, dispatch]);
 
   const cancelPending = useCallback(() => {
     dispatch({ type: VOICE_SESSION_EVENT.cancelUtterance });
@@ -338,35 +267,25 @@ export function useVoiceSession({
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      ttsRef.current.stop();
-      spokenReplyIdRef.current = replyRef.current?.id ?? null;
       dispatch({ type: VOICE_SESSION_EVENT.typedSubmit });
-      if (!onSendRef.current(trimmed)) {
+      if (!onSend(trimmed)) {
         dispatch({ type: VOICE_SESSION_EVENT.fail, message: MESSAGE.sendFailed });
       }
     },
-    [dispatch],
+    [dispatch, onSend],
   );
 
   const retry = useCallback(() => {
-    primeAudioContext(audioContextRef);
+    endLiveVoiceSession('retry');
     dispatch({ type: VOICE_SESSION_EVENT.retry });
   }, [dispatch]);
-
-  useEffect(
-    () => () => {
-      useVoiceInputStore.getState().cancelListening();
-      releaseAudioContext(audioContextRef);
-    },
-    [],
-  );
 
   return {
     state,
     active,
     reducedMotion,
     deviceName,
-    playbackUnavailable: !tts.isSupported,
+    backendBusy,
     mutedHint: MESSAGE.mutedHint,
     enter,
     exit,

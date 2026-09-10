@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
 import {
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
@@ -32,10 +33,14 @@ interface VoiceSessionStoreState {
   activityMessageId: string | null;
   intelligence: VoiceIntelligence;
   language: string;
+  voice: string;
+  backendBusy: boolean;
 }
 
 interface VoiceSessionStoreActions {
   dispatch: (event: VoiceSessionEvent) => void;
+  setVoice: (voice: string) => void;
+  setBackendBusy: (backendBusy: boolean) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -58,12 +63,20 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       ...PANELS_CLOSED,
       intelligence: VOICE_INTELLIGENCE.balanced,
       language: VOICE_LANGUAGE_AUTO,
+      voice: LIVE_DEFAULT_VOICE,
+      backendBusy: false,
 
       dispatch: (event) => {
         const session = voiceSessionReducer(get().session, event);
         if (session === get().session) return;
-        set(isVoiceSessionActive(session.status) ? { session } : { session, ...PANELS_CLOSED });
+        set(
+          isVoiceSessionActive(session.status)
+            ? { session }
+            : { session, backendBusy: false, ...PANELS_CLOSED },
+        );
       },
+      setVoice: (voice) => set({ voice: isLiveVoice(voice) ? voice : LIVE_DEFAULT_VOICE }),
+      setBackendBusy: (backendBusy) => set({ backendBusy }),
 
       toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
       setDockOpen: (dockOpen) =>
@@ -80,6 +93,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       partialize: (state) => ({
         intelligence: state.intelligence,
         language: state.language,
+        voice: state.voice,
       }),
     },
   ),
