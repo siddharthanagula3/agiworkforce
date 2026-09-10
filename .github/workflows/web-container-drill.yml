@@ -50,13 +50,13 @@ jobs:
       # request with no cookies is simply signed out.
       DRILL_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9.15.3
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
