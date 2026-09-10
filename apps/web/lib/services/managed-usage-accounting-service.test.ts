@@ -10,7 +10,9 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCostDollars: vi.fn(() => 0.09),
   },
 }));
@@ -20,7 +22,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
     requestStatus: 'completed',
     operationResult: 'finalized',
     settlementStatus: 'succeeded',
-    actualCostCents: input.actualCostCents,
+    actualCostMicrousd: input.actualCostMicrousd,
   })),
 }));
 
@@ -288,8 +290,8 @@ describe('managed usage accounting', () => {
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...reservation,
       outcome: 'completed',
-      actualCostCents: 9,
-      providerCostCents: 9,
+      actualCostMicrousd: 90000,
+      providerCostMicrousd: 90000,
       usage: expect.objectContaining({
         accounting: 'observed_provider_usage',
         reason: 'tool_loop_completed',
@@ -300,7 +302,7 @@ describe('managed usage accounting', () => {
     });
   });
 
-  it('prices provider calls independently, then rounds their exact sum once', async () => {
+  it('prices provider calls independently and sums them exactly, with no cent rounding', async () => {
     const fixtureThreshold = 100;
     vi.mocked(LLMCostCalculator.calculateCostDollars).mockImplementation(
       (_provider, _model, usage) =>
@@ -325,7 +327,7 @@ describe('managed usage accounting', () => {
       usage: twoSubthresholdCalls,
       reason: 'fixture_two_calls',
     });
-    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents).toBe(1);
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(7_500);
 
     const oneLongCall = createObservedProviderUsage();
     accumulateObservedProviderUsage(oneLongCall, { inputTokens: 150, outputTokens: 0 }, pricing);
@@ -335,7 +337,7 @@ describe('managed usage accounting', () => {
       usage: oneLongCall,
       reason: 'fixture_one_call',
     });
-    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents).toBe(2);
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(15_000);
     expect(
       vi
         .mocked(LLMCostCalculator.calculateCostDollars)
@@ -360,8 +362,8 @@ describe('managed usage accounting', () => {
     });
 
     const finalized = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
-    expect(finalized?.actualCostCents).toBe(80);
-    expect(finalized?.providerCostCents).toBe(20);
+    expect(finalized?.actualCostMicrousd).toBe(800_000);
+    expect(finalized?.providerCostMicrousd).toBe(200000);
     vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(null);
   });
 
@@ -381,8 +383,8 @@ describe('managed usage accounting', () => {
     });
 
     const finalized = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
-    expect(finalized?.actualCostCents).toBe(10);
-    expect(finalized?.providerCostCents).toBe(10);
+    expect(finalized?.actualCostMicrousd).toBe(100_000);
+    expect(finalized?.providerCostMicrousd).toBe(100000);
   });
 
   it('does not apply a catalog input tier across two request boundaries', async () => {
@@ -416,7 +418,7 @@ describe('managed usage accounting', () => {
     });
     const twoCallCost = vi
       .mocked(finalizeManagedUsageRequest)
-      .mock.calls.at(-1)?.[0].actualCostCents;
+      .mock.calls.at(-1)?.[0].actualCostMicrousd;
 
     const oneLongCall = createObservedProviderUsage();
     accumulateObservedProviderUsage(
@@ -431,7 +433,7 @@ describe('managed usage accounting', () => {
       reason: 'catalog_one_call',
     });
     expect(
-      vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents,
+      vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd,
     ).toBeGreaterThan(twoCallCost ?? Number.POSITIVE_INFINITY);
   });
 
@@ -449,7 +451,7 @@ describe('managed usage accounting', () => {
     expect(finalizeManagedUsageRequest).toHaveBeenLastCalledWith({
       ...reservation,
       outcome: 'completed',
-      actualCostCents: 4,
+      actualCostMicrousd: 40000,
       usage: {
         accounting: 'reservation_estimate_no_provider_usage',
         reason: 'research_completed',
@@ -473,7 +475,7 @@ describe('managed usage accounting', () => {
     expect(finalizeManagedUsageRequest).toHaveBeenLastCalledWith({
       ...reservation,
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: {
         accounting: 'released_no_observed_provider_usage',
         reason: 'client_cancelled_tool_loop',
@@ -537,7 +539,7 @@ describe('managed usage accounting', () => {
     expect(finalizeManagedUsageRequest).toHaveBeenLastCalledWith({
       ...reservation,
       outcome: 'failed',
-      actualCostCents: 0,
+      actualCostMicrousd: 0,
       usage: {
         accounting: 'released_no_observed_provider_usage',
         reason: 'client_cancelled_tool_loop',

@@ -6,6 +6,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ALLOWED_MANAGED_PROVIDER_HOSTS, validateBaseUrl } from '@agiworkforce/provider-runtime';
 import { getSlotForModel, normalizeModelId } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
@@ -216,26 +217,26 @@ async function settleProviderProxyUsage(
       await finalizeManagedUsageRequest({
         ...metering.reservation,
         outcome: 'failed',
-        actualCostCents: 0,
+        actualCostMicrousd: 0,
       });
       return;
     }
 
     const tokens = usageToLedgerTokens(usage);
-    const providerCostCents = LLMCostCalculator.calculateCost(
+    const providerCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
       metering.providerId,
       servedModel,
       tokens,
       undefined,
       routeId,
     );
-    const actualCostCents = LLMCostCalculator.calculateListCost(servedModel, tokens);
+    const listCostMicrousd = LLMCostCalculator.calculateListCostMicrousd(servedModel, tokens);
 
     await finalizeManagedUsageRequest({
       ...metering.reservation,
       outcome: 'completed',
-      actualCostCents: actualCostCents ?? providerCostCents,
-      providerCostCents,
+      actualCostMicrousd: listCostMicrousd ?? providerCostMicrousd,
+      providerCostMicrousd,
       usage: {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -400,15 +401,15 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
     throw err;
   }
 
-  let estimatedCostCents: number;
+  let estimatedCostMicrousd: number;
   try {
-    estimatedCostCents =
-      LLMCostCalculator.estimateListCost(
+    estimatedCostMicrousd =
+      LLMCostCalculator.estimateListCostMicrousd(
         parsed.model,
         parsed.estimatedPromptTokens,
         parsed.estimatedCompletionTokens,
       ) ??
-      LLMCostCalculator.estimateCost(
+      LLMCostCalculator.estimateCostMicrousd(
         input.providerId,
         parsed.model,
         parsed.estimatedPromptTokens,
@@ -437,7 +438,7 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
     db: input.db,
     userId: input.userId,
     planTier: input.planTier,
-    estimatedCostCents,
+    estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
   });
   if (!ceiling.allowed) {
     logger.warn(
@@ -470,7 +471,7 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
         requestHash: fingerprintManagedUsageRequest(parsed.body),
         provider: input.providerId,
         model: parsed.model,
-        estimatedCostCents,
+        estimatedCostMicrousd,
         leaseSeconds: PROXY_LEASE_SECONDS,
         planTier: input.planTier,
         isFlagship: FLAGSHIP_SLOTS.has(getSlotForModel(parsed.model) ?? ''),

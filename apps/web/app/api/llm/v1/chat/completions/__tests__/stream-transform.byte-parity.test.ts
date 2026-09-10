@@ -12,8 +12,11 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 0),
+    calculateCostMicrousd: vi.fn(() => 0),
   },
   isCacheTokensDisjointFromInput: vi.fn(() => false),
   normalizeProviderId: (provider: string | null | undefined) =>

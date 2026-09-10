@@ -7,6 +7,7 @@ import {
   type MobileIapVerifyResponse,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from './subscription-service';
 import type { VerifiedMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
@@ -163,16 +164,16 @@ export async function recordVerifiedMobileIapPurchase(input: {
 
     if (input.verified.product.kind === 'top_up') {
       const [balance] = await tx.query<{ account_id: string }>(
-        `select account_id from public.get_credit_balance($1) limit 1`,
+        `select account_id from public.get_credit_balance_microusd($1) limit 1`,
         [input.userId],
       );
       if (!balance?.account_id) {
         throw createError.conflict('No active credit account is available for this top-up.');
       }
-      await tx.execute('select public.add_credits($1, $2, $3, $4, $5)', [
+      await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
         input.userId,
         balance.account_id,
-        intendedAmountCents,
+        intendedAmountCents * MICROUSD_PER_LEDGER_CENT,
         `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
         'purchase',
       ]);

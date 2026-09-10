@@ -73,7 +73,7 @@ describe('GET /api/usage', () => {
       resetAt: null,
       hasUsageRemaining: true,
     });
-    mockDbQuery.mockResolvedValue([{ overage_enabled: false, available_cents: 0 }]);
+    mockDbQuery.mockResolvedValue([{ overage_enabled: false, available_microusd: 0 }]);
   });
 
   it('publishes the spendable credit balance and whether it will actually be spent', async () => {
@@ -84,7 +84,7 @@ describe('GET /api/usage', () => {
       credits_remaining_cents: 1900,
     });
     mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
-    mockDbQuery.mockResolvedValue([{ overage_enabled: true, available_cents: '1234' }]);
+    mockDbQuery.mockResolvedValue([{ overage_enabled: true, available_microusd: '12340000' }]);
 
     const json = await (await GET(makeRequest())).json();
 

@@ -5,6 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { microusdFromLedgerCents } from '@/lib/services/credit-service';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getVideoTask } from '@/lib/video-task-store';
@@ -324,6 +325,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
           idempotencyKey: job.idempotencyKey,
           requestHash: job.requestHash,
           leaseToken: job.billingLeaseToken,
+          estimatedCostMicrousd: microusdFromLedgerCents(job.estimatedCostCents),
           estimatedCostCents: job.estimatedCostCents,
         });
       } catch (error) {

@@ -47,23 +47,43 @@ function withoutComments(sql: string): string {
     .join('\n');
 }
 
-const reserve = latestDefinitionOf('reserve_managed_usage_request_with_limits');
-const extend = latestDefinitionOf('extend_managed_usage_request_provider_step');
+/**
+ * Since 0185 the cap semantics live in the microUSD bodies, and the cents
+ * signatures survive as wrappers that scale by 10,000 and delegate. The
+ * contract is unchanged; only the unit its parameters are named for moved, so
+ * this guard follows the body that decides, not the name that used to hold it.
+ */
+const reserve = latestDefinitionOf('reserve_managed_usage_request_with_limits_microusd');
+const extend = latestDefinitionOf('extend_managed_usage_request_provider_step_microusd');
+const reserveCentsWrapper = latestDefinitionOf('reserve_managed_usage_request_with_limits');
+const extendCentsWrapper = latestDefinitionOf('extend_managed_usage_request_provider_step');
 
 const CAP_PARAMETERS = [
-  'p_session_cap_cents',
-  'p_weekly_cap_cents',
-  'p_flagship_weekly_cap_cents',
+  'p_session_cap_microusd',
+  'p_weekly_cap_microusd',
+  'p_flagship_weekly_cap_microusd',
 ] as const;
 
 describe('managed usage cap semantics', () => {
   it('resolves the live definition of both cap-enforcing functions', () => {
     expect(reserve.body).toMatch(
-      /create or replace function public\.reserve_managed_usage_request_with_limits\(/i,
+      /create or replace function public\.reserve_managed_usage_request_with_limits_microusd\(/i,
     );
     expect(extend.body).toMatch(
-      /create or replace function public\.extend_managed_usage_request_provider_step\(/i,
+      /create or replace function public\.extend_managed_usage_request_provider_step_microusd\(/i,
     );
+  });
+
+  it('keeps every cents caller on the same ceilings by scaling, not by re-deciding', () => {
+    for (const wrapper of [reserveCentsWrapper, extendCentsWrapper]) {
+      const body = withoutComments(wrapper.body);
+      expect(body).toMatch(/_microusd\(/i);
+      expect(body).toMatch(/p_session_cap_cents::bigint \* 10000/i);
+      expect(body).toMatch(/p_weekly_cap_cents::bigint \* 10000/i);
+      expect(body).toMatch(/p_flagship_weekly_cap_cents::bigint \* 10000/i);
+      // A wrapper that re-decides is a second contract that can drift.
+      expect(body).not.toMatch(/ROLLING_FIVE_HOUR_LIMIT_REACHED/i);
+    }
   });
 
   it.each(CAP_PARAMETERS)('never treats a zero %s as unlimited', (parameter) => {
@@ -99,9 +119,10 @@ describe('managed usage cap semantics', () => {
 
   it('keeps the 0066 serialization, idempotency, and settlement behaviour', () => {
     expect(reserve.body).toMatch(/pg_advisory_xact_lock/i);
-    expect(reserve.body).toMatch(/public\.reserve_managed_usage_request\(/i);
+    expect(reserve.body).toMatch(/public\.reserve_managed_usage_request_microusd\(/i);
     expect(extend.body).toMatch(/managed_usage_request_extensions/i);
     expect(reserve.body).toMatch(/transaction_type\s*=\s*'deduction'/i);
+    expect(reserve.body).toMatch(/sum\(transaction_row\.amount_microusd\)/i);
     expect(reserve.body).toMatch(/interval\s+'5 hours'/i);
     expect(reserve.body).toMatch(/interval\s+'7 days'/i);
   });

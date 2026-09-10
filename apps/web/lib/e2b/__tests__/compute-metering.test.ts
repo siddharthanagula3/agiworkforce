@@ -130,27 +130,27 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountCents: 17,
+        amountMicrousd: 165600,
         metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
     expect(logger.error).toHaveBeenCalled();
   });
 
-  it('counts an interval that rounds to 0 cents at the table rate as unbilled', async () => {
+  it('bills a minute that used to round away to nothing', async () => {
     const mod = await loadModule();
 
-    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
-    expect(settleCreditsDurably).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn.mock.calls[0]?.[0]).toMatchObject({
-      elapsedMs: 60_000,
-      unbilledMs: 60_000,
-      microusdPerSecond: DEFAULT_SHAPE_RATE,
-    });
+    // A minute at the table rate is 2,760 microUSD, under a third of a cent.
+    // Rounding it to cents billed zero and moved no usage cap, so a sandbox
+    // paused every minute ran indefinitely for free.
+    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(2_760);
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({ amountMicrousd: 2_760 }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('stays silent for an interval that was never billable', async () => {
@@ -169,11 +169,11 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(10);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(100800);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        amountCents: 10,
+        amountMicrousd: 100800,
         idempotencyKey: 'e2b-compute:sbx-1:1000000',
       }),
     );
@@ -184,11 +184,11 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        amountCents: 17,
+        amountMicrousd: 165600,
         metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
@@ -202,10 +202,10 @@ describe('meterSandboxComputeInterval', () => {
       memoryGib: 8,
     });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(33);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(331200);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountCents: 33,
+        amountMicrousd: 331200,
         metadata: expect.objectContaining({ microusd_per_second: 92 }),
       }),
     );
@@ -221,10 +221,10 @@ describe('meterSandboxComputeInterval', () => {
       snapshotMicrousdPerSecond: 46,
     });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(17);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
     expect(settleCreditsDurably).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountCents: 17,
+        amountMicrousd: 165600,
         metadata: expect.objectContaining({ microusd_per_second: 46 }),
       }),
     );
