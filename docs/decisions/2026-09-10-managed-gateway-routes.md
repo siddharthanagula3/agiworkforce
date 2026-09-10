@@ -1,13 +1,44 @@
-# Managed routes for vendors whose own endpoints are excluded
+# Decisions pending the founder, 2026-09-10
 
 Status: Pending founder decision
 Owner: Fable (architect) with the founder
 Last updated: 2026-09-10
 
-One decision in the living decision model's shape
-(`2026-09-05-living-decision-model.md`), kept in its own file because the
-model itself carried uncommitted edits when this was written. Fold it in
+Decisions in the living decision model's shape
+(`2026-09-05-living-decision-model.md`), kept in their own file because the
+model itself carried uncommitted edits when this was written. Fold them in
 when the founder decides.
+
+## D-2026-09-10-02 Tool-approval defaults versus the leaders
+
+- Question: whether sandboxed code execution and web search may run without
+  an approval prompt when the account's default is "run read-only actions
+  without asking".
+- Evidence: observed 2026-09-10 on the dev server with the QA account. A CSV
+  analysis on GPT-5.6 Luna needed two manual approvals, one per code step,
+  before the totals, chart and workbook appeared; a project knowledge question
+  asked from the project composer paused for approval of a code action.
+  Settings → Capabilities states that even the permissive mode asks before
+  anything that "writes, deletes, runs code, or can move data outside AGI,
+  including web search and page fetches"; that gate was deliberately extended
+  to web search on 2026-09-08 (`ACTIVE_ISSUES.md`, closed browser item). The
+  AGI Work banner under a paused approval reads "Automatic approval is on",
+  which contradicts the policy and is fixed as copy regardless of this decision.
+- Current implementation: `apps/web/shared/types/toolApprovalPolicy.ts` and
+  the Capabilities section; execute_code and search are classed with writes.
+- Options: (a) keep the gate as it stands and make the copy say so; (b) class
+  sandboxed code execution and web search as read-only in the permissive mode,
+  keeping connector writes and anything that leaves AGI on ask; (c) make the
+  permissive mode the default for new accounts as well as (b).
+- Decision: pending the founder; the founder set the current gate.
+- Why: the gate is a security posture against prompt-injected exfiltration
+  through the sandbox network and search queries; the leaders accept that risk
+  for a frictionless analysis flow.
+- Tradeoff: until decided, the default-model analysis flow costs two approval
+  clicks that neither leader asks for.
+- Reversibility: high; a policy table and copy.
+- Revisit trigger: the founder's answer, or user feedback naming the approval
+  friction.
 
 ## D-2026-09-10-01 DeepSeek and Moonshot have no managed route on main
 
