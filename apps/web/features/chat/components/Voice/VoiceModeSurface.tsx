@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
 
-import { useTTS } from '@/lib/hooks/useTTS';
 import { cn } from '@shared/lib/utils';
-import { useVoiceSession, type VoiceReplyTurn } from '@features/chat/hooks/use-voice-session';
+import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
+import { LIVE_VOICES } from '@features/chat/lib/live-voices';
 import {
   useVoiceSessionStore,
   type VoiceIntelligence,
@@ -20,7 +20,6 @@ const LABEL = {
   sending: 'Sending',
   cancelSending: 'Do not send that',
   retry: 'Try again',
-  playbackUnavailable: 'Spoken replies are unavailable in this browser.',
 } as const;
 
 const ESCAPE = 'Escape';
@@ -36,8 +35,10 @@ export type VoiceSurfaceVariant =
 export interface VoiceModeSurfaceProps {
   variant: VoiceSurfaceVariant;
   turnActive: boolean;
-  reply: VoiceReplyTurn | null;
+  conversationId: string | null;
   onSend: (text: string) => boolean;
+  onEnsureConversation: () => Promise<string | null>;
+  onTranscript: (conversationId: string, turn: VoiceTranscriptTurn) => void;
   onNewChat: () => void;
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
@@ -47,14 +48,22 @@ export interface VoiceModeSurfaceProps {
 export function VoiceModeSurface({
   variant,
   turnActive,
-  reply,
+  conversationId,
   onSend,
+  onEnsureConversation,
+  onTranscript,
   onNewChat,
   onOpenLibrary,
   onOpenConnectors,
   onIntelligenceChange,
 }: VoiceModeSurfaceProps) {
-  const session = useVoiceSession({ turnActive, reply, onSend });
+  const session = useVoiceSession({
+    turnActive,
+    conversationId,
+    onSend,
+    onEnsureConversation,
+    onTranscript,
+  });
   const focusMode = useVoiceSessionStore((store) => store.focusMode);
   const toggleFocusMode = useVoiceSessionStore((store) => store.toggleFocusMode);
   const dockOpen = useVoiceSessionStore((store) => store.dockOpen);
@@ -65,7 +74,8 @@ export function VoiceModeSurface({
   const setIntelligence = useVoiceSessionStore((store) => store.setIntelligence);
   const language = useVoiceSessionStore((store) => store.language);
   const setLanguage = useVoiceSessionStore((store) => store.setLanguage);
-  const tts = useTTS();
+  const voice = useVoiceSessionStore((store) => store.voice);
+  const setVoice = useVoiceSessionStore((store) => store.setVoice);
 
   const [typed, setTyped] = useState('');
 
@@ -100,6 +110,7 @@ export function VoiceModeSurface({
   const orb = (
     <VoiceOrb
       status={status}
+      backendBusy={session.backendBusy}
       focus={focusMode}
       growIn
       reducedMotion={session.reducedMotion}
@@ -128,10 +139,6 @@ export function VoiceModeSurface({
     ) : muted && status === VOICE_SESSION_STATUS.muted ? (
       <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
         {session.mutedHint}
-      </p>
-    ) : session.playbackUnavailable ? (
-      <p data-testid="voice-playback-notice" className="text-sm text-[var(--chat-text-muted)]">
-        {LABEL.playbackUnavailable}
       </p>
     ) : null;
 
@@ -202,12 +209,12 @@ export function VoiceModeSurface({
       <VoiceSettingsModal
         open={settingsOpen}
         reducedMotion={session.reducedMotion}
-        voices={tts.voices}
-        voiceUri={tts.voiceUri}
+        voices={LIVE_VOICES}
+        voiceUri={voice}
         intelligence={intelligence}
         language={language}
         onOpenChange={setSettingsOpen}
-        onVoiceChange={tts.setVoiceUri}
+        onVoiceChange={setVoice}
         onIntelligenceChange={handleIntelligenceChange}
         onLanguageChange={setLanguage}
       />

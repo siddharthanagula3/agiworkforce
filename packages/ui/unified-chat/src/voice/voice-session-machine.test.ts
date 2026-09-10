@@ -28,6 +28,32 @@ function run(events: VoiceSessionEvent[], from = INITIAL_VOICE_SESSION_STATE): V
 }
 
 const ENTER: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.enter };
+const READY_LISTENING: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.ready, listening: true };
+const SPEECH_ON: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.assistantSpeech, active: true };
+const SPEECH_OFF: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.assistantSpeech, active: false };
+
+describe('assistant speech on a full-duplex transport', () => {
+  it('moves listening to speaking when audio arrives and back when it stops', () => {
+    const speaking = run([ENTER, READY_LISTENING, SPEECH_ON]);
+    expect(speaking.status).toBe(VOICE_SESSION_STATUS.speaking);
+    expect(run([SPEECH_OFF], speaking).status).toBe(VOICE_SESSION_STATUS.listening);
+  });
+
+  it('keeps a muted microphone muted while the assistant speaks and after', () => {
+    const muted = run([ENTER, READY_LISTENING, { type: VOICE_SESSION_EVENT.mute }]);
+    const speaking = run([SPEECH_ON], muted);
+    expect(speaking.status).toBe(VOICE_SESSION_STATUS.speaking);
+    expect(speaking.muted).toBe(true);
+    expect(run([SPEECH_OFF], speaking).status).toBe(VOICE_SESSION_STATUS.muted);
+  });
+
+  it('ignores audio that arrives while entering, in error, or exited', () => {
+    expect(run([SPEECH_ON]).status).toBe(VOICE_SESSION_STATUS.exited);
+    expect(run([ENTER, SPEECH_ON]).status).toBe(VOICE_SESSION_STATUS.entering);
+    const failed = run([ENTER, READY_LISTENING, { type: VOICE_SESSION_EVENT.fail, message: 'x' }]);
+    expect(run([SPEECH_ON], failed).status).toBe(VOICE_SESSION_STATUS.error);
+  });
+});
 const READY_LIVE: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.ready, listening: true };
 const READY_MUTED: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.ready, listening: false };
 const SPEECH_END: VoiceSessionEvent = { type: VOICE_SESSION_EVENT.speechEnd };
