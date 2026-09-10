@@ -37,8 +37,11 @@ vi.mock('@/lib/services/credit-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 7),
+    calculateCostMicrousd: vi.fn(() => 70000),
     calculateCostDollars: vi.fn(() => 0.07),
   },
   normalizeProviderId: (provider: string | null | undefined) =>

@@ -16,8 +16,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
+    calculateListCostMicrousd: vi.fn(() => null),
     estimateListCost: vi.fn(() => null),
+    estimateListCostMicrousd: vi.fn(() => null),
     calculateCost: vi.fn(() => 4),
+    calculateCostMicrousd: vi.fn(() => 40000),
   },
   normalizeProviderId: (provider: string | null | undefined) =>
     typeof provider === 'string' ? provider.toLowerCase() : null,
@@ -48,6 +51,9 @@ import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-reques
 
 const mockFinalizeManagedUsageRequest = finalizeManagedUsageRequest as ReturnType<typeof vi.fn>;
 const mockCalculateCost = LLMCostCalculator.calculateCost as ReturnType<typeof vi.fn>;
+const mockCalculateCostMicrousd = LLMCostCalculator.calculateCostMicrousd as ReturnType<
+  typeof vi.fn
+>;
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
 const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
@@ -109,6 +115,7 @@ async function readAllText(response: Response): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   mockCalculateCost.mockReturnValue(4);
+  mockCalculateCostMicrousd.mockReturnValue(40_000);
 });
 
 describe('buildAdapterStreamResponse · secret redaction header', () => {
@@ -240,7 +247,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).toHaveBeenCalledWith(
+    expect(mockCalculateCostMicrousd).toHaveBeenCalledWith(
       'anthropic',
       'fixture-model',
       {
@@ -258,8 +265,8 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...makeProcessed().managedUsage,
       outcome: 'completed',
-      actualCostCents: 4,
-      providerCostCents: 4,
+      actualCostMicrousd: 40000,
+      providerCostMicrousd: 40000,
       usage: {
         inputTokens: 120,
         outputTokens: 80,
@@ -292,10 +299,10 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).toHaveBeenCalled();
+    expect(mockCalculateCostMicrousd).toHaveBeenCalled();
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostCents: 2,
+        actualCostMicrousd: 20000,
         usage: expect.objectContaining({ costSource: 'provider_reported' }),
       }),
     );
@@ -320,7 +327,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostCents: 4,
+        actualCostMicrousd: 40000,
         usage: expect.objectContaining({ costSource: 'estimated' }),
       }),
     );
@@ -345,7 +352,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostCents: 4,
+        actualCostMicrousd: 40000,
         usage: expect.objectContaining({ costSource: 'estimated' }),
       }),
     );
@@ -370,14 +377,14 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostCents: 4,
+        actualCostMicrousd: 40000,
         usage: expect.objectContaining({ costSource: 'estimated' }),
       }),
     );
   });
 
   it('finalizes even when actual cost matches the estimate exactly', async () => {
-    mockCalculateCost.mockReturnValue(5);
+    mockCalculateCostMicrousd.mockReturnValue(50_000);
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hi' },
       { type: 'usage', inputTokens: 100, outputTokens: 50 },
@@ -395,7 +402,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     await readAllText(response as any);
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'completed', actualCostCents: 5 }),
+      expect.objectContaining({ outcome: 'completed', actualCostMicrousd: 50000 }),
     );
   });
 

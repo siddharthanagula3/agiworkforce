@@ -28,6 +28,7 @@ export const SEARCH_RATE_CARD_FEATURES = [
 ] as const satisfies readonly RateCardFeature[];
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const MICROUSD_PER_LEDGER_CENT = 10_000;
 const SEARCH_QUOTA_FEATURE = 'search';
 
 /**
@@ -52,8 +53,13 @@ export function resolveSearchCallerKind(input: {
   return AUTOMATED_SURFACES.has((input.surface ?? '').toLowerCase()) ? 'automated' : 'interactive';
 }
 
+/** The rate card's exact figure. The ledger settles in this unit since 0185. */
+export function searchChargeMicrousd(feature: RateCardFeature): number {
+  return customerChargeMicrousd(feature, { included: false });
+}
+
 export function searchChargeCents(feature: RateCardFeature): number {
-  return centsFromMicrousdCeil(customerChargeMicrousd(feature, { included: false }));
+  return centsFromMicrousdCeil(searchChargeMicrousd(feature));
 }
 
 export function includedMonthlySearchCalls(planTier: string | null | undefined): number {
@@ -64,7 +70,12 @@ export function includedMonthlySearchCalls(planTier: string | null | undefined):
 
 export type SearchBudgetDecision =
   | { outcome: 'included' }
-  | { outcome: 'charge'; feature: RateCardFeature; chargeCents: number }
+  | {
+      outcome: 'charge';
+      feature: RateCardFeature;
+      chargeMicrousd: number;
+      chargeCents: number;
+    }
   | { outcome: 'blocked'; reason: 'plan_bound' | 'insufficient_credits' };
 
 export interface SearchBudgetInput {
@@ -82,10 +93,11 @@ export interface SearchBudgetInput {
  * not silently start charging, nor block every search-enabled turn.
  */
 export async function resolveSearchBudget(input: SearchBudgetInput): Promise<SearchBudgetDecision> {
-  const chargeCents = searchChargeCents(input.feature);
+  const chargeMicrousd = searchChargeMicrousd(input.feature);
+  const chargeCents = centsFromMicrousdCeil(chargeMicrousd);
 
   if (input.callerKind === 'automated') {
-    return { outcome: 'charge', feature: input.feature, chargeCents };
+    return { outcome: 'charge', feature: input.feature, chargeMicrousd, chargeCents };
   }
 
   const since = new Date(
@@ -110,7 +122,7 @@ export async function resolveSearchBudget(input: SearchBudgetInput): Promise<Sea
 
   if (used < includedMonthlySearchCalls(input.planTier)) return { outcome: 'included' };
   if (isFreePlanTier(input.planTier)) return { outcome: 'blocked', reason: 'plan_bound' };
-  return { outcome: 'charge', feature: input.feature, chargeCents };
+  return { outcome: 'charge', feature: input.feature, chargeMicrousd, chargeCents };
 }
 
 export interface SearchChargeInput {
@@ -118,7 +130,9 @@ export interface SearchChargeInput {
   requestId: string;
   callOrdinal: number;
   feature: RateCardFeature;
-  chargeCents: number;
+  /** The rate card's exact charge. `chargeCents` is the deprecated alias. */
+  chargeMicrousd?: number;
+  chargeCents?: number;
   surface?: string | null;
   scope?: SearchChargeScope;
   db: DatabaseAdapter;
@@ -148,13 +162,17 @@ export function searchChargeIdempotencyKey(
  * and the COGS row is still written either way.
  */
 export async function settleSearchCharge(input: SearchChargeInput): Promise<boolean> {
-  if (input.chargeCents <= 0) return true;
+  const amountMicrousd =
+    input.chargeMicrousd !== undefined
+      ? Math.round(input.chargeMicrousd)
+      : (input.chargeCents ?? 0) * MICROUSD_PER_LEDGER_CENT;
+  if (amountMicrousd <= 0) return true;
 
   try {
     const result = await CreditService.settleCreditsDurably(
       {
         userId: input.userId,
-        amountCents: input.chargeCents,
+        amountMicrousd,
         description: 'Web search',
         idempotencyKey: searchChargeIdempotencyKey(
           input.requestId,

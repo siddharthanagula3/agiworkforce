@@ -44,6 +44,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: vi.fn().mockResolvedValue(true),
+    checkAvailableMicrousd: vi.fn().mockResolvedValue(true),
   },
 }));
 

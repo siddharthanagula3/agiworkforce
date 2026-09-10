@@ -236,6 +236,7 @@ describe('processRequest preflight concurrency', () => {
       credits_used_cents: 10_000,
     } as Awaited<ReturnType<typeof CreditService.getBalance>>);
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
     mocks.reserveManagedUsage.mockImplementation(
       async ({ estimatedCostCents }: { estimatedCostCents: number }) => ({
         db: {},
@@ -269,6 +270,7 @@ describe('processRequest preflight concurrency', () => {
         credits_used_cents: 10_000,
       } as Awaited<ReturnType<typeof CreditService.getBalance>>);
     vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
     mocks.reserveManagedUsage.mockImplementation(
       async ({ estimatedCostCents }: { estimatedCostCents: number }) => ({
         db: {},
