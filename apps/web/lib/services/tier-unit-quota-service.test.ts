@@ -109,3 +109,61 @@ describe('tier metered-unit allowances', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 });
+
+describe('voice minutes consumption', () => {
+  async function captureVoiceQuery(consumedSeconds: number) {
+    const db = dbReturning(consumedSeconds);
+    const decision = await assertTierUnitAllowance({
+      db,
+      userId: 'user-free',
+      planTier: 'free',
+      unit: 'voice_minutes',
+      requestedUnits: 1,
+    });
+    const sql = (db.query as unknown as { mock: { calls: [string, string[]][] } }).mock
+      .calls[0]![0];
+    return { decision, sql };
+  }
+
+  it('counts live sessions as well as transcription', async () => {
+    const { sql } = await captureVoiceQuery(0);
+
+    expect(sql).toContain("usage->>'operation' in ('transcription', 'voice_live_session')");
+    expect(sql).toContain("usage->>'billedSeconds'");
+    expect(sql).toContain("usage->>'estimatedAudioSeconds'");
+  });
+
+  it('reads billed seconds from live rows and estimated audio seconds from transcription rows', async () => {
+    const { sql } = await captureVoiceQuery(0);
+    const liveBranch = sql.slice(sql.indexOf("= 'voice_live_session'"));
+    const transcriptionBranch = sql.slice(
+      sql.indexOf("= 'transcription'"),
+      sql.indexOf("= 'voice_live_session'"),
+    );
+
+    expect(liveBranch).toContain("usage->>'billedSeconds'");
+    expect(liveBranch).not.toContain("usage->>'estimatedAudioSeconds'");
+    expect(transcriptionBranch).toContain("usage->>'estimatedAudioSeconds'");
+    expect(transcriptionBranch).not.toContain("usage->>'billedSeconds'");
+  });
+
+  it('turns consumed seconds into whole minutes against the allowance', async () => {
+    const { decision } = await captureVoiceQuery(605);
+
+    expect(decision.consumed).toBe(11);
+  });
+
+  it('refuses a live block once the month of voice seconds fills the allowance', async () => {
+    const db = dbReturning(FREE_POLICY.voiceMinutesPerMonth! * 60);
+
+    const error = await assertTierUnitAllowance({
+      db,
+      userId: 'user-free',
+      planTier: 'free',
+      unit: 'voice_minutes',
+      requestedUnits: 1,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ status: 429, code: 'voice_minutes_monthly_limit_reached' });
+  });
+});

@@ -1,12 +1,34 @@
 import 'server-only';
 
+import { getModelMetadataById } from '@agiworkforce/types';
+
 export const LIVE_VOICE_FEATURE = 'voice_live';
 export const LIVE_SESSION_BLOCK_MINUTES = 10;
 export const LIVE_SESSION_CENTS_PER_MINUTE = 5;
+export const LIVE_SESSION_PROVIDER_COST_SOURCE = 'provider_published_rate';
+
+const SECONDS_PER_MINUTE = 60;
+const CENTS_PER_USD = 100;
 
 export function liveSessionCostCents(seconds: number): number {
   if (seconds <= 0) return 0;
-  return Math.max(1, Math.ceil((seconds / 60) * LIVE_SESSION_CENTS_PER_MINUTE));
+  return Math.max(1, Math.ceil((seconds / SECONDS_PER_MINUTE) * LIVE_SESSION_CENTS_PER_MINUTE));
+}
+
+/**
+ * What the provider charges for the session itself, at its published
+ * per-minute session rate. Separate from what the user is charged: the two
+ * rates are equal today and must not be allowed to track each other silently.
+ * Null when the model declares no session rate, which leaves the caller to
+ * record no provider cost rather than a number it cannot source.
+ */
+export function liveSessionProviderCostCents(
+  seconds: number,
+  modelId: string | null | undefined,
+): number | null {
+  const usdPerMinute = getModelMetadataById(modelId)?.sessionPerMinuteCost;
+  if (seconds <= 0 || usdPerMinute === undefined || usdPerMinute <= 0) return null;
+  return Math.max(1, Math.ceil((seconds / SECONDS_PER_MINUTE) * usdPerMinute * CENTS_PER_USD));
 }
 
 export interface LiveSessionFailure {
