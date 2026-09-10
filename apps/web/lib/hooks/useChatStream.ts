@@ -103,7 +103,7 @@ import type {
   AgentTaskState,
   ResearchStep,
 } from '@agiworkforce/types';
-import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
+import { parseResearchPlanEvent, rendersResearchPlan } from '@/features/chat/utils/research-plan';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -944,6 +944,7 @@ function isEmptyAssistantTurn(
   }
   if ((meta.tools?.length ?? 0) > 0) return false;
   if (hasCanonicalToolActivity(meta.agentActivity)) return false;
+  if (rendersResearchPlan(meta.research)) return false;
   return !(
     meta.imageUrl ||
     meta.videoUrl ||
