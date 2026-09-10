@@ -3,7 +3,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { e2bExecutionEnabled } from './gate';
 import { meterSandboxComputeInterval } from './compute-metering';
-import { templateVcpuCount } from './templates';
+import { templateComputeShape } from './templates';
 import {
   MANAGED_CLOUD_E2B_TENANT_ID,
   getE2BSession,
@@ -122,12 +122,17 @@ export async function reclaimAbandonedE2BSandboxes(
       }
 
       if (scope && isCurrentMapping && session && typeof session.activeSinceMs === 'number') {
+        const shape = await templateComputeShape(session.templateId);
         report.meteredCents += await meterSandboxComputeInterval({
           userId: scope.userId,
           sandboxId: info.sandboxId,
           ...(scope.conversationId ? { conversationId: scope.conversationId } : {}),
           ...(scope.resource?.kind === 'code_session' ? { codeSessionId: scope.resource.id } : {}),
-          vcpuCount: (await templateVcpuCount(session.templateId)) ?? undefined,
+          ...(shape.vcpuCount === null ? {} : { vcpuCount: shape.vcpuCount }),
+          ...(shape.memoryGib === null ? {} : { memoryGib: shape.memoryGib }),
+          ...(session.computeMicrousdPerSecond === undefined
+            ? {}
+            : { snapshotMicrousdPerSecond: session.computeMicrousdPerSecond }),
           startedAtMs: session.activeSinceMs,
           endedAtMs: nowMs,
           reason: 'reclaim',

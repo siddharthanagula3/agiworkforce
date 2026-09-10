@@ -17,6 +17,8 @@ export interface E2BSession {
   networkAccess?: CloudCodeNetworkAccess;
   extraHosts?: readonly string[];
   templateId?: string;
+  /** Rate this sandbox was admitted at, in microUSD per second, settled from at teardown. */
+  computeMicrousdPerSecond?: number;
 }
 
 export interface E2BSessionScope {

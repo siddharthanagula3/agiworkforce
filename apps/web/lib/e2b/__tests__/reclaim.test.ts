@@ -11,9 +11,16 @@ vi.mock('../compute-metering', () => ({
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
 }));
 
-const templateVcpuCount = vi.fn(async (_templateId: unknown): Promise<number | null> => null);
+const templateComputeShape = vi.fn(
+  async (
+    _templateId: unknown,
+  ): Promise<{ vcpuCount: number | null; memoryGib: number | null }> => ({
+    vcpuCount: null,
+    memoryGib: null,
+  }),
+);
 vi.mock('../templates', () => ({
-  templateVcpuCount: (templateId: unknown) => templateVcpuCount(templateId),
+  templateComputeShape: (templateId: unknown) => templateComputeShape(templateId),
 }));
 
 interface FakeSession {
@@ -63,7 +70,7 @@ beforeEach(() => {
   sessions.clear();
   listedSandboxes = [];
   meterSandboxComputeInterval.mockResolvedValue(5);
-  templateVcpuCount.mockResolvedValue(null);
+  templateComputeShape.mockResolvedValue({ vcpuCount: null, memoryGib: null });
   getE2BSession.mockImplementation(
     async (scope: { userId: string; resource?: { id: string } }) =>
       sessions.get(scope.resource?.id ?? scope.userId) ?? null,
@@ -71,9 +78,9 @@ beforeEach(() => {
 });
 
 describe('reclaimAbandonedE2BSandboxes', () => {
-  it('kills an aged code-session sandbox and meters its open interval using the template vCPU count', async () => {
+  it('kills an aged code-session sandbox and meters its open interval using the template size', async () => {
     sessions.set('code-1', { sandboxId: 'sbx-1', activeSinceMs: 0, templateId: 'claude' });
-    templateVcpuCount.mockResolvedValue(4);
+    templateComputeShape.mockResolvedValue({ vcpuCount: 4, memoryGib: 8 });
     listedSandboxes = [
       {
         sandboxId: 'sbx-1',
@@ -89,9 +96,14 @@ describe('reclaimAbandonedE2BSandboxes', () => {
 
     expect(report.reclaimed).toBe(1);
     expect(kill).toHaveBeenCalledWith('sbx-1');
-    expect(templateVcpuCount).toHaveBeenCalledWith('claude');
+    expect(templateComputeShape).toHaveBeenCalledWith('claude');
     expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
-      expect.objectContaining({ vcpuCount: 4, sandboxId: 'sbx-1', codeSessionId: 'code-1' }),
+      expect.objectContaining({
+        vcpuCount: 4,
+        memoryGib: 8,
+        sandboxId: 'sbx-1',
+        codeSessionId: 'code-1',
+      }),
     );
     expect(deleteE2BSession).toHaveBeenCalledTimes(1);
   });
