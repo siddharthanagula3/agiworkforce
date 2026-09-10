@@ -145,7 +145,9 @@ const isPublicApiRoute = identityMiddleware.createRouteMatcher([
 
 const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   '/__clerk/(.*)',
+  '/login',
   '/login/complete',
+  '/signup',
   '/chat(.*)',
   '/code(.*)',
   '/library(.*)',
