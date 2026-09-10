@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
-import type { ManagedUsageBucketReading } from '@agiworkforce/types';
+import type { ManagedUsageBucketReading, ManagedUsageCreditWindow } from '@agiworkforce/types';
 import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 export interface ManagedUsageSummaryState {
@@ -79,26 +79,33 @@ export function readManagedUsageBuckets(
   usage: ManagedUsageSummaryResponse | null,
 ): ManagedUsageBucketReading[] {
   if (!usage) return [];
+  const credits = usage.credits;
+  const inCredits = (window: ManagedUsageCreditWindow | null | undefined) =>
+    window ? { allowanceCredits: window.allowance, usedCredits: window.used } : {};
   return [
     {
       bucket: 'session',
       percentRemaining: 100 - normalizeUsagePercentage(usage.session_usage_percentage),
       resetAt: usage.session_reset_at ?? null,
+      ...inCredits(credits?.five_hour),
     },
     {
       bucket: 'weekly',
       percentRemaining: 100 - normalizeUsagePercentage(usage.weekly_usage_percentage),
       resetAt: usage.weekly_reset_at ?? null,
+      ...inCredits(credits?.weekly),
     },
     {
       bucket: 'weeklyFlagship',
       percentRemaining: 100 - normalizeUsagePercentage(usage.flagship_weekly_usage_percentage),
       resetAt: usage.flagship_weekly_reset_at ?? null,
+      ...inCredits(credits?.flagship_weekly),
     },
     {
       bucket: 'period',
       percentRemaining: 100 - normalizeUsagePercentage(usage.usage_percentage),
       resetAt: usage.usage_reset_at ?? null,
+      ...inCredits(credits?.monthly),
     },
   ];
 }
