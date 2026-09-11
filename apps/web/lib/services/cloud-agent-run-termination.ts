@@ -3,7 +3,9 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentTaskState } from '@agiworkforce/types';
 import { getRun } from 'workflow/api';
+import { withTimeout } from '@agiworkforce/utils';
 import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
+import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { appendCloudAgentEvents } from './cloud-agent-run-service';
 
@@ -66,7 +68,7 @@ export async function explainCloudAgentRunEnding(
 // burns a whole invocation limit each time.
 export async function cancelCloudAgentWorkflowRun(workflowRunId: string): Promise<boolean> {
   try {
-    await getRun(workflowRunId).cancel();
+    await withTimeout(() => getRun(workflowRunId).cancel(), WORKFLOW_WORLD_CALL_DEADLINE_MS);
     return true;
   } catch (error) {
     logger.warn(
