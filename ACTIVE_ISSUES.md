@@ -40,7 +40,7 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 17 unresolved issues: 0 P0, 0 P1, 10 P2, 7 P3, plus 5 items needing
+- 18 unresolved issues: 0 P0, 0 P1, 11 P2, 7 P3, plus 5 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
   and `AGI-23`, are partly fixed and say which part.
 - Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
@@ -62,7 +62,7 @@ issue turned out to be is in the commit that closed it.
   the routing conformance fixture that had drifted since 972328011
   (1a3f2b568), and the approval flow that collapsed after the first inline
   decision while labelling the wait as running (cd01fe255). What each was
-  is in its commit. New root causes opened below: `AGI-27` to `AGI-31`.
+  is in its commit. New root causes opened below: `AGI-27` to `AGI-32`.
 - Production runtime pass 2026-09-10, from Vercel's own data. The billed
   876.6 GB-hours of provisioned memory against a few minutes of active CPU
   were idle functions: the runtime-error clusters show 1,785 "Task timed out
@@ -84,7 +84,9 @@ issue turned out to be is in the commit that closed it.
   the Google adapter bounds only its wait for headers. Exercised on `:3100`:
   "hi" on the free router route answers in 2.1 s over the durable transport
   with one request, Stop settles in under 300 ms, two rapid sends produce one
-  request each. Deployed verification is `LIVE-8`. The same pass found no
+  request each. Deployed verification is `LIVE-8`, where the first signed-in
+  turn on the deployed build stalled the way the six runs had and the cause
+  found is recorded. The same pass found no
   other function alive past its budget: crons are batch- and time-bounded,
   only the current deployment receives invocations, and the remaining
   daily 500 is the credit reconciliation cron meeting Stripe subscription ids
@@ -500,6 +502,30 @@ Sources count as the live session and no thinking prose.
 **Validation:** stream-transform and research-loop wire tests, MessageBubble
 citation cases, a live headline search and a reloaded research run.
 
+### `AGI-32` A stalled durable run row pins the conversation on Generating response
+
+**Severity:** P2
+**Status:** Open.
+**Area:** Web chat client, runs API
+**What happens:** the chat page resumes a conversation from its run row. When
+the world never progresses and the function behind the row dies, the row stays
+running with no event, and every visit shows Generating response with a Stop
+button until the reaper ends the row, which is at best the next quarter hour
+and, while the reaper itself hung, never. Seen on 2026-09-10 on two
+conversations of the QA account after the turns behind
+wrun_01M26TYEAKNQA7GWWAS8W9Q86D and wrun_01M26VT1VK8TM4JB52HN1HEBMT stalled.
+**Root cause:** the client trusts the row's state and has no liveness bound of
+its own; the row's updated_at and last_event_sequence never move, but nothing
+reads their age.
+**Fix direction:** treat a running row whose last event is older than the
+durable silence deadline as stalled on the client, say so, and offer a retry
+that cancels the row; have the runs API carry the last event age so the client
+does not compute it from clocks it does not share.
+**Evidence:** `apps/web/lib/services/cloud-agent-run-reaper.ts`, the only
+writer that ends such a row; `apps/web/app/api/llm/v1/chat/completions/runs/route.ts`, which reports the row without its age.
+**User impact:** a stalled turn looks like a working one for up to fifteen
+minutes and survives reloads.
+
 ## 5. P3, lower priority
 
 ### `AGI-11` Published artifacts never expire
@@ -647,7 +673,7 @@ None of these is a confirmed defect.
 | `LIVE-4` | Does web to desktop continuity complete a round trip?                | Needs two signed-in devices at once. Runtimes are distinct and boundary tests pass, but the round trip was not exercised.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `LIVE-7` | Does the durable transport rotate routes after 2f042794f?            | The generated durable step route under the web app's .well-known/workflow directory is written when the dev server starts, so the running server on `:3100` still executes the old step code. Tests cover the rotation; a live pinned-model turn on a gateway route must be re-run after the next restart.                                                                                                                                                                                                                                                                                                                                                        |
 | `LIVE-6` | Do scheduled tasks actually fire?                                    | Settings shows `Runs: 0` and a past-due next run for an active weekly schedule. Local development has no cron runner attached, so this is the expected local reading. Re-check on a deployed environment before treating it as a defect.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `LIVE-8` | Do functions stop outliving their budget once a1c1b6a1e is deployed? | Production still runs 8b2923fa7 while the deploy pipeline drains. After the deploy: the runtime-error clusters must show no 800 s timeout on the chat or flow routes, a durable turn must end within the function limit, and the timeout share on the Vercel functions overview must stay at zero. Until then the six cancelled runs are the only reason the curve is flat. Separately, `/login`, `/`, `/pricing` and `/contact-sales` are rendered by a function on every hit and receive bursts of a dozen requests every ten minutes from an unidentified external monitor or crawler; cheap today, and the public-pages pass should make those routes static. |
+| `LIVE-8` | Do functions stop outliving their budget once a1c1b6a1e is deployed? | Deployed at 23:34 UTC as 107ded474. The 800 s cluster has not recurred, but the first signed-in turn on the new build stalled exactly as the six runs had: the workflow run recorded run_created and run_started and never a step, the chat function never reached its first-byte fallback and died at the 300 s limit, the reaper cron died at 300 s inside a cancel, and the flow function logged a 240 s replay timeout. The workflow REST API lists no completed or failed run at all, so no durable turn has ever finished in production. Cause: the Vercel world client hands its own undici 7 dispatcher to the Node 24 fetch, the mismatch the container runbook already names for the local world, and every world call after start() hangs. `WORKFLOW_NODE_HTTP=1` is set on the production and preview environments since 23:50 UTC, every call into the world is bounded by `WORKFLOW_WORLD_CALL_DEADLINE_MS` in `apps/web/lib/deadline-policy.ts` so a broken transport degrades to the inline turn, and the next deployment carries both. To close: a signed-in turn on that deployment must create steps and complete, the run must list as completed, the reaper cron must finish under its limit, and the 300 s cluster must not recur. The two stalled runs were cancelled through the REST API at 23:50 and 23:55 UTC. Separately, `/login`, `/`, `/pricing` and `/contact-sales` are rendered by a function on every hit and receive bursts of a dozen requests every ten minutes from an unidentified external monitor or crawler; cheap today, and the public-pages pass should make those routes static. |
 
 ## 7. Execution order
 
