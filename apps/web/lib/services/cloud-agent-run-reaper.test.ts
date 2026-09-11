@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { listCanonicalModels } from '@agiworkforce/types';
+import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('./cloud-agent-run-service', () => ({ appendCloudAgentEvents: appendEvents }));
 const cancelWorldRun = vi.hoisted(() => vi.fn(async (_workflowRunId: string) => undefined));
@@ -215,6 +216,24 @@ describe('cancelling the world run behind a reaped row', () => {
 
     const [sql] = vi.mocked(db.query).mock.calls[0] as [string];
     expect(sql).toMatch(/returning[\s\S]*workflow_run_id/);
+  });
+
+  it('moves on from a world cancel that never answers, and counts it as uncancelled', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(db.query).mockResolvedValueOnce([REAPED]);
+      cancelWorldRun.mockImplementationOnce(() => new Promise(() => undefined));
+
+      const pending = reapOrphanedCloudAgentRuns(db);
+      await vi.advanceTimersByTimeAsync(WORKFLOW_WORLD_CALL_DEADLINE_MS);
+      const report = await pending;
+
+      expect(report.reaped).toBe(1);
+      expect(report.worldRunsCancelled).toBe(0);
+      expect(report.worldRunsUncancelled).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('skips a row that never reached the workflow platform', async () => {
