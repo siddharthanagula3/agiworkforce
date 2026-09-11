@@ -36,6 +36,7 @@ vi.mock('@/lib/services/credit-service', () => ({
     generateIdempotencyKey: vi.fn(() => 'idem-key'),
     deductCredits: vi.fn(async () => ({ success: true })),
   },
+  CreditSettlementUnavailableError: class extends Error {},
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
