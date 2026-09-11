@@ -5,13 +5,15 @@ import {
   DesktopWindow,
   DEVICE_GEOMETRY,
   EditorWindow,
-  ImageWindow,
   PhoneDevice,
   SidePanelCard,
   TerminalWindow,
   WebWindow,
   type DeviceType,
 } from './DeviceMockups';
+import { ProductFrame, type ProductFrameVariant } from './ProductFrame';
+import { HeroAppWindow } from './HeroAppWindow';
+import { ChromeMockup, MobileMockup, VSCodeMockup } from './SurfaceMockups';
 
 function deviceRoot(container: HTMLElement): HTMLElement {
   const root = container.querySelector<HTMLElement>('.agi-dev');
@@ -68,10 +70,25 @@ describe('DeviceMockups geometry contract', () => {
   );
 });
 
-describe('device windows carry their frame contract', () => {
-  it('renders a real screenshot inside the shared chrome when an image is provided', () => {
+describe('ProductFrame façade', () => {
+  const variants: Array<[ProductFrameVariant, DeviceType]> = [
+    ['desktop', 'desktop'],
+    ['web', 'web'],
+    ['terminal', 'terminal'],
+    ['phone', 'phone'],
+    ['browser', 'panel'],
+    ['editor', 'editor'],
+  ];
+
+  it.each(variants)('variant %s renders canonical device %s', (variant, type) => {
+    const { container } = render(<ProductFrame variant={variant} title="T" badge="B" />);
+    expectGeometry(deviceRoot(container), type);
+  });
+
+  it('renders a real screenshot inside the shared chrome when image is provided', () => {
     const { container } = render(
-      <ImageWindow
+      <ProductFrame
+        variant="terminal"
         title="agi · zsh"
         image={{ src: '/logo-512.png', width: 2940, height: 1414, alt: 'CLI' }}
       />,
@@ -83,24 +100,46 @@ describe('device windows carry their frame contract', () => {
   });
 
   it('keeps trust-route copy consistent with BYOK frame badges', () => {
-    const desktop = render(<DesktopWindow title="AGI Desktop" badge="BYOK" routeMode="byok" />);
+    const desktop = render(
+      <ProductFrame variant="desktop" title="AGI Desktop" badge="BYOK" routeMode="byok" />,
+    );
     expect(desktop.container.textContent).toContain('Served by BYOK · your provider');
     expect(desktop.container.textContent).toContain('billed to your key');
     expect(desktop.container.textContent).not.toContain('Served by Local');
 
-    const terminal = render(<TerminalWindow title="agi · zsh" badge="BYOK" routeMode="byok" />);
+    const terminal = render(
+      <ProductFrame variant="terminal" title="agi · zsh" badge="BYOK" routeMode="byok" />,
+    );
     expect(terminal.container.textContent).toContain('BYOK · direct to your provider');
     expect(terminal.container.textContent).toContain('provider billed');
     expect(terminal.container.textContent).not.toContain('local · on-device');
   });
+});
 
-  it('the phone renders its full composer and memory copy', () => {
-    const { container } = render(<PhoneDevice label="AGI Mobile interface" />);
-    const html = container.innerHTML;
-    expect(html).toContain('From your memory');
-    expect(html).toContain('Message AGI…');
-    expect(html).toContain('AGI Standard');
-    expect(container.querySelector('[data-geometry="270x585"]')).not.toBeNull();
+describe('one canonical look per surface, everywhere', () => {
+  it('HeroAppWindow and ProductFrame web render identical markup', () => {
+    const hero = render(<HeroAppWindow />).container.innerHTML;
+    const frame = render(<ProductFrame variant="web" title="agiworkforce.com/chat" badge="Web" />)
+      .container.innerHTML;
+    expect(hero).toBe(frame);
+  });
+
+  it('MobileMockup and ProductFrame phone render the same full phone', () => {
+    const mockup = render(<MobileMockup />);
+    const frame = render(<ProductFrame variant="phone" title="AGI Mobile" badge="Local" />);
+    for (const target of [mockup, frame]) {
+      const html = target.container.innerHTML;
+      expect(html).toContain('From your memory');
+      expect(html).toContain('Message AGI…');
+      expect(html).toContain('AGI Standard');
+      expect(target.container.querySelector('[data-geometry="270x585"]')).not.toBeNull();
+    }
+  });
+
+  it('landing SurfaceMockups map to canonical devices', () => {
+    expectGeometry(deviceRoot(render(<ChromeMockup />).container), 'chrome');
+    expectGeometry(deviceRoot(render(<VSCodeMockup />).container), 'editor');
+    expectGeometry(deviceRoot(render(<MobileMockup />).container), 'phone');
   });
 });
 
