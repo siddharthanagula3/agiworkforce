@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHAIN_CMD="${AGI_PREPUSH_CHAIN_CMD:-pnpm check:llm-operability}"
 WORKTREE_PARENT="${AGI_PREPUSH_WORKTREE_PARENT:-${TMPDIR:-/tmp}/agi-prepush-worktree}"
