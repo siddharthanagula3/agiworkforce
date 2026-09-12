@@ -6,81 +6,101 @@
       "routeId": "anthropic/claude-fable-5-1",
       "probedOn": "2026-09-12",
       "outcome": "failed",
-      "ttfbMs": 343,
+      "ttfbMs": 333,
       "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyDtmLvjb19vt3BKfUBE\"}"
+      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyHnKn5moJvbE6sBPhJX\"}",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "claude-haiku-4-5": {
       "routeId": "anthropic/claude-haiku-4-5",
       "probedOn": "2026-09-12",
       "outcome": "failed",
-      "ttfbMs": 161,
+      "ttfbMs": 102,
       "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyDtnNC3UUXdakceAGRe\"}"
+      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyHnLmciNSH2m1cpUrMh\"}",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "claude-opus-5": {
       "routeId": "anthropic/claude-opus-5",
       "probedOn": "2026-09-12",
       "outcome": "failed",
-      "ttfbMs": 105,
+      "ttfbMs": 146,
       "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyDtnzeGQJz2bVShPx2X\"}"
+      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyHnMFPjfhg7QfwTs48y\"}",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "claude-sonnet-5": {
       "routeId": "anthropic/claude-sonnet-5",
       "probedOn": "2026-09-12",
       "outcome": "failed",
-      "ttfbMs": 151,
+      "ttfbMs": 147,
       "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyDtoXPnt94mN89VvGkt\"}"
+      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyHnMtqKUvNXV2rn7fuK\"}",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "deepseek-v4-flash": {
       "routeId": "deepseek/deepseek-v4-flash",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 415,
+      "ttfbMs": 505,
       "echoedModelId": "deepseek-flash",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "deepseek-v4-flash-vision-exp": {
       "routeId": "deepseek/deepseek-v4-flash-vision-exp",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 356,
+      "ttfbMs": 429,
       "echoedModelId": "deepseek-flash",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "deepseek-v4-pro": {
       "routeId": "deepseek/deepseek-v4-pro",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 434,
+      "ttfbMs": 367,
       "echoedModelId": "deepseek-v4-pro",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "gemini-3.1-pro-preview": {
       "routeId": "google/gemini-3.1-pro-preview",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1386,
+      "ttfbMs": 1574,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "gemini-3.5-flash-lite": {
       "routeId": "google/gemini-3.5-flash-lite",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 360,
+      "ttfbMs": 356,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "gemini-3.8-flash": {
       "routeId": "google/gemini-3.8-flash",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 607,
+      "ttfbMs": 635,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "glm-5.3": {
       "routeId": "zhipu/glm-5.3",
@@ -88,7 +108,9 @@
       "outcome": "no_credential",
       "ttfbMs": null,
       "echoedModelId": null,
-      "detail": "no value for ZHIPU_API_KEY"
+      "detail": "no value for ZHIPU_API_KEY",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "glm-5.3-flash": {
       "routeId": "zhipu/glm-5.3-flash",
@@ -96,63 +118,79 @@
       "outcome": "no_credential",
       "ttfbMs": null,
       "echoedModelId": null,
-      "detail": "no value for ZHIPU_API_KEY"
+      "detail": "no value for ZHIPU_API_KEY",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "gpt-5.6-luna": {
       "routeId": "openai/gpt-5.6-luna",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1033,
+      "ttfbMs": 870,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "gpt-5.6-sol": {
       "routeId": "openai/gpt-5.6-sol",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 910,
+      "ttfbMs": 907,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "gpt-5.6-terra": {
       "routeId": "openai/gpt-5.6-terra",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 918,
+      "ttfbMs": 626,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "gpt-6-astra": {
       "routeId": "openai/gpt-6-astra",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1174,
+      "ttfbMs": 920,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "grok-4.6": {
       "routeId": "xai/grok-4.6",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 577,
+      "ttfbMs": 553,
       "echoedModelId": "grok-4.6",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "kimi-k2.7-code": {
       "routeId": "moonshot/kimi-k2.7-code",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1089,
+      "ttfbMs": 1179,
       "echoedModelId": "kimi-k2.7-code",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "kimi-k3": {
       "routeId": "moonshot/kimi-k3",
       "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 2213,
-      "echoedModelId": "kimi-k3",
-      "detail": null
+      "outcome": "failed",
+      "ttfbMs": 2740,
+      "echoedModelId": null,
+      "detail": "429 Your account [redacted]<[redacted]> request reached organization max RPM: 3, please try again after 1 seconds",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "minimax-m3": {
       "routeId": "minimax/minimax-m3",
@@ -160,71 +198,89 @@
       "outcome": "no_credential",
       "ttfbMs": null,
       "echoedModelId": null,
-      "detail": "no value for MINIMAX_API_KEY"
+      "detail": "no value for MINIMAX_API_KEY",
+      "toolOutcome": "skipped",
+      "toolDetail": null
     },
     "openrouter-auto": {
       "routeId": "open_router/openrouter-auto",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 493,
+      "ttfbMs": 512,
       "echoedModelId": "deepseek/deepseek-v4-flash-0731",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "openrouter-free": {
       "routeId": "open_router/openrouter-free",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 632,
-      "echoedModelId": "inclusionai/ling-3.0-flash-fin:free",
-      "detail": null
+      "ttfbMs": 624,
+      "echoedModelId": "inclusionai/ling-3.0-flash-vl:free",
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "qwen-3.7-plus": {
       "routeId": "qwen/qwen-3.7-plus",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1249,
+      "ttfbMs": 1633,
       "echoedModelId": "qwen3.7-plus",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "qwen-3.8-flash": {
       "routeId": "qwen/qwen-3.8-flash",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 1217,
+      "ttfbMs": 836,
       "echoedModelId": "qwen3.8-flash",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     },
     "sonar": {
       "routeId": "perplexity/sonar",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 750,
+      "ttfbMs": 864,
       "echoedModelId": "sonar",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "failed",
+      "toolDetail": "400 Tool calling is not supported for this model"
     },
     "sonar-deep-research": {
       "routeId": "perplexity/sonar-deep-research",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 30012,
+      "ttfbMs": 30009,
       "echoedModelId": null,
-      "detail": null
+      "detail": null,
+      "toolOutcome": "failed",
+      "toolDetail": "The inference server returned an error or timed out."
     },
     "sonar-pro": {
       "routeId": "perplexity/sonar-pro",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 750,
+      "ttfbMs": 798,
       "echoedModelId": "sonar-pro",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     },
     "sonar-reasoning-pro": {
       "routeId": "perplexity/sonar-reasoning-pro",
       "probedOn": "2026-09-12",
       "outcome": "answered",
-      "ttfbMs": 2359,
+      "ttfbMs": 1333,
       "echoedModelId": "sonar-reasoning-pro",
-      "detail": null
+      "detail": null,
+      "toolOutcome": "not_honoured",
+      "toolDetail": null
     }
   }
 }
