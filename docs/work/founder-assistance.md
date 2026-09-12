@@ -471,3 +471,31 @@ Clearing `AGI_EVENT_ENABLED` ends the promotion and restores permanent Free
 behaviour; nothing is stored, so there is nothing to migrate back.
 **Impact** BLOCKS THE EVENT
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Providers] MiniMax and Groq hold no credential
+
+**Why founder assistance is required**
+Creating a provider account and funding it is a payment and terms decision.
+**Exact action**
+
+1. Decide whether MiniMax is kept. Its own terms have never been read
+   (the open question recorded under the gateway entry above), and it is
+   currently served only through a marketplace route.
+2. If it is kept, create a MiniMax account and set `MINIMAX_API_KEY` in
+   Production.
+3. Decide whether Groq is wanted at all. Three registry models are served only
+   by Groq, so today no plan can run them.
+4. If it is wanted, set `GROQ_API_KEY` in Production.
+
+**Where** Each provider's console, then Vercel Production.
+**Needed input** Two keep-or-drop decisions and, for each keep, one account.
+**How to verify completion** A live sweep on 2026-09-12 called every selectable
+managed chat route: 25 of 29 models answered. MiniMax answered through its
+marketplace route; the Groq-only models could not be called by anyone. After
+the keys are set, both answer on their direct routes.
+**What remains after founder action** Nothing blocking. The catalogue already
+withholds a model with no credentialed route, so neither provider is offered to
+a customer today and no user sees a broken model. If Groq is dropped instead,
+its three models should leave the registry rather than sit there unservable.
+**Impact** FEATURE-BLOCKING (those models only)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
