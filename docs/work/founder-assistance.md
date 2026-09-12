@@ -378,3 +378,30 @@ admin economics page stops reporting the table as absent.
 records nothing and the economics page reports provider reports as unavailable.
 **Impact** NON-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [QA] A dedicated paid QA account for billing verification
+
+**Why founder assistance is required**
+Creating an account and setting its plan is an account action, and the billing
+gate cannot be proven without one. The harness must not run on the founder's
+own Max 15x account: verification spends real allowance, and the erroneous
+$1.00 settlement already landed there.
+**Exact action**
+
+1. Create a normal account, for example `qa-billing@agiworkforce.com`, through
+   the standard sign-up.
+2. Put it on a paid plan that exercises the paid ledger.
+3. Put its email and password in a gitignored local `.env.qa`, never in the
+   repository and never in a log.
+
+**Where** Production sign-up, then a local file.
+**Needed input** One account, one plan assignment, one credential handoff.
+**How to verify completion** The harness signs in through the normal login
+form, sends one Luna turn, and the resulting `managed_usage_requests` row
+settles at the token-derived cost rather than a dollar-scale amount.
+**What remains after founder action** Nothing; the emergency branch is pushed
+and the regression tests are green. Until the account exists, Preview and
+Production settlement cannot be verified with one controlled request, which is
+the gate the emergency deployment is held behind.
+**Impact** RELEASE-BLOCKING
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
