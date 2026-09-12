@@ -329,13 +329,13 @@ render their empty states.
 **Why founder assistance is required**
 Running a production migration and changing what a paying customer is charged
 are both calls the founder reserves.
-**Exact action** Approve and apply `0183_provider_cost_events_customer_and_cogs_split.sql`, and confirm the search bounds shipping with it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
+**Exact action** DO NOT APPLY `0183`. This migration is already in production as `0180_provider_cost_events_customer_and_cogs_split.sql`, applied between 09-07 and 09-11; the two files carry the same name and differ only in the number inside their own comments. `0183` is this branch's duplicate of it and is withdrawn by the reconciliation in ACTIVE_ISSUES. The only thing still open here is confirming the search bounds shipping alongside it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
 **Where** Neon production (migration), no dashboard or env change; the two existing rate overrides `AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL` and `AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL` are unchanged and stay unset.
-**Needed input** One approval to apply, one confirmation of the bounds.
-**How to verify completion** `provider_cost_events` carries `customer_canonical_microusd` and `feature`; a search on a paid account writes a row with `feature = 'web_search_perplexity'`; the per-user count the bounds read is non-zero.
-**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration and are tested. Until 0183 is applied, `feature` does not exist, the per-user count fails open and every search stays included.
-**Impact** FEATURE-BLOCKING (the search bounds stay inert)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+**Needed input** One confirmation of the bounds. No migration approval.
+**How to verify completion** `provider_cost_events` carries `customer_canonical_microusd` and `feature`, which it already should; a search on a paid account writes a row with `feature = 'web_search_perplexity'`; the per-user count the bounds read is non-zero.
+**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration that is already applied.
+**Impact** NON-BLOCKING (the schema is in production; only the bounds confirmation is open)
+**Status** CORRECTED 2026-09-12, NO MIGRATION TO APPLY
 
 ## [Billing] Provider cost reconciliation credentials
 
@@ -366,18 +366,21 @@ that provider is skipped and its ledger cost stays an unverified estimate.
 ## [Billing] Reconciliation storage (migration 0184)
 
 **Why founder assistance is required**
-Applying a production migration is a call the founder reserves.
-**Exact action** Approve and apply
-`0184_provider_cost_reconciliation_days.sql` after a branch rehearsal.
-**Where** Neon production. No dashboard or environment change.
-**Needed input** One approval to apply.
-**How to verify completion** `provider_cost_reconciliation_days` exists; after
-the next nightly run it holds one row per provider that answered, and the
-admin economics page stops reporting the table as absent.
-**What remains after founder action** Nothing. Until it is applied the cron
-records nothing and the economics page reports provider reports as unavailable.
+It no longer is. This entry asked for a production migration that had already
+been applied under a different number.
+**Exact action** DO NOT APPLY `0184`. It is already in production as
+`0181_provider_cost_reconciliation_days.sql`, applied between 09-07 and 09-11.
+The two files carry the same name and differ only in the number inside their
+own comments. `0184` is this branch's duplicate and is withdrawn by the
+reconciliation in ACTIVE_ISSUES.
+**Where** Nowhere. No Neon, dashboard or environment change.
+**Needed input** None.
+**How to verify completion** `provider_cost_reconciliation_days` already
+exists; after a nightly run it holds one row per provider that answered. If it
+is absent, that is a reconciliation question, not a reason to apply `0184`.
+**What remains after founder action** Nothing.
 **Impact** NON-BLOCKING
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+**Status** CORRECTED 2026-09-12, NO MIGRATION TO APPLY
 
 ## [QA] A dedicated paid QA account for billing verification
 
