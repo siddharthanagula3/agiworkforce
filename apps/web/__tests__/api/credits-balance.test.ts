@@ -203,7 +203,7 @@ describe('Credits Balance API', () => {
         expect(data.subscription.current_period_end).toBeDefined();
       });
 
-      it('should expose only percentage, reset, and availability fields', async () => {
+      it('states a paid plan in percentages, resets and credits, never in money', async () => {
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer valid-token' },
         });
@@ -217,17 +217,66 @@ describe('Credits Balance API', () => {
         expect(data.credits.seconds_until_reset).toBeGreaterThanOrEqual(0);
         expect(data.credits.usage_visible).toBe(true);
         expect(Object.keys(data.credits).sort()).toEqual([
+          'allowance_credits',
           'has_usage_remaining',
+          'remaining_credits',
           'reset_at',
           'seconds_until_reset',
           'usage_allocation',
           'usage_percentage',
           'usage_visible',
+          'used_credits',
         ]);
         expect(data.credits.usage_allocation).toBe('provisioned');
+        // Credits are the published unit; cents and dollars are the internal
+        // ones and must never cross.
         expect(JSON.stringify(data)).not.toMatch(
           /_cents|monthly_allocated|monthly_remaining|formatted|\$/i,
         );
+      });
+
+      /**
+       * A Free account's allowance is a company COGS ceiling that was never
+       * disclosed. Stating it, or the spend against it, publishes it: the
+       * ceiling divides straight back out of the pair. Free is told a
+       * percentage, a reset and whether anything is left, which is the meter it
+       * is promised, and no credit figure at all.
+       *
+       * This shipped: the endpoint served a Free caller `allowance_credits` and
+       * `used_credits` derived from the private per-user subsidy budget.
+       */
+      it('never states a credit figure to a free account', async () => {
+        vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
+          ...mockSubscription,
+          plan_tier: 'free',
+        });
+        mockGetFreeTrialPublicUsage.mockResolvedValue({
+          usagePercentage: 50,
+          resetAt: '2026-02-01T00:00:00.000Z',
+          sessionUsagePercentage: 60,
+          sessionResetAt: '2026-01-02T00:00:00.000Z',
+          weeklyUsagePercentage: 40,
+          weeklyResetAt: '2026-01-08T00:00:00.000Z',
+          hasUsageRemaining: true,
+        });
+
+        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+          headers: { Authorization: 'Bearer valid-token' },
+        });
+
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(data.credits.has_usage_remaining).toBe(true);
+        expect(data.credits.reset_at).toBe('2026-02-01T00:00:00.000Z');
+        expect(Object.keys(data.credits).sort()).toEqual([
+          'has_usage_remaining',
+          'reset_at',
+          'seconds_until_reset',
+          'usage_percentage',
+          'usage_visible',
+        ]);
+        expect(JSON.stringify(data)).not.toMatch(/credits_|_credits|_cents|\$/i);
       });
     });
 

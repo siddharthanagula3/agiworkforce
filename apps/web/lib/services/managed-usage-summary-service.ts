@@ -86,28 +86,24 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  const planAllowance = resolvePlanCreditAllowance(planTier);
+  // Free states its usage as a meter and a reset time, never as a credit
+  // figure. The allowance is a company COGS ceiling that was never disclosed,
+  // and a credit number publishes it twice over: the ceiling directly, and the
+  // spend against it, from which the ceiling divides straight back out. Free
+  // keeps the percentages and resets below, which is what a Free account is
+  // told it has.
+  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(planTier);
   const credits: ManagedUsageCredits | null = planAllowance
     ? {
-        monthly: creditWindow(
-          planAllowance.monthly,
-          freeUsage
-            ? creditsFromMicrousd(freeUsage.monthlyUsedMicrousd)
-            : creditsFromCents(creditsUsed),
-          usageResetAt,
-        ),
+        monthly: creditWindow(planAllowance.monthly, creditsFromCents(creditsUsed), usageResetAt),
         weekly: creditWindow(
           planAllowance.weekly,
-          freeUsage
-            ? creditsFromMicrousd(freeUsage.weeklyUsedMicrousd)
-            : creditsFromMicrousd(weekly.usedMicrousd),
+          creditsFromMicrousd(weekly.usedMicrousd),
           weeklyResetAt,
         ),
         five_hour: creditWindow(
           planAllowance.fiveHour,
-          freeUsage
-            ? creditsFromMicrousd(freeUsage.fiveHourUsedMicrousd)
-            : creditsFromMicrousd(session.usedMicrousd),
+          creditsFromMicrousd(session.usedMicrousd),
           sessionResetAt,
         ),
         flagship_weekly:

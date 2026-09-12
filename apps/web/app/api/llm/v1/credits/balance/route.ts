@@ -11,7 +11,6 @@ import { logger } from '@/lib/logger';
 import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
 import {
   creditsFromCents,
-  creditsFromMicrousd,
   isFreeBillingPlanTier,
   type ManagedUsageBalanceResponse,
 } from '@agiworkforce/types';
@@ -89,13 +88,12 @@ async function handleGetBalance(request: NextRequest) {
       ? Math.max(0, Math.floor((resetDate.getTime() - now.getTime()) / 1000))
       : 0;
 
-  const planAllowance = resolvePlanCreditAllowance(subscription.plan_tier);
+  // Never for Free: the allowance is an undisclosed company COGS ceiling, and
+  // stating it together with the spend against it publishes the ceiling twice.
+  // A Free caller gets the percentage, the reset and whether anything is left.
+  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(subscription.plan_tier);
   const monthlyCredits = planAllowance
-    ? creditWindow(
-        planAllowance.monthly,
-        freeUsage ? creditsFromMicrousd(freeUsage.monthlyUsedMicrousd) : creditsFromCents(used),
-        resetAt,
-      )
+    ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
     : null;
 
   const responseBody: ManagedUsageBalanceResponse = {
