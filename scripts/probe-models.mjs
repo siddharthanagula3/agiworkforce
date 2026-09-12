@@ -85,7 +85,17 @@ export const PROBE_TOOL_PROMPT = 'Acknowledge this probe.';
 export const PROBE_TOOL_CHOICE = 'required';
 /** The retry when a provider refuses a forced choice while the model is thinking. */
 export const PROBE_TOOL_CHOICE_OPEN = 'auto';
-export const PROBE_TOOL_MAX_OUTPUT_TOKENS = 32;
+/**
+ * Enough for a function call with its argument object, not merely enough to
+ * start one.
+ *
+ * Thirty-two truncated the call mid-emission on a thinking model: measured on
+ * 2026-09-12, Gemini 3.8 Flash answered a forced tool choice at 32 tokens with
+ * `MALFORMED_FUNCTION_CALL` and no call, and answered the identical request at
+ * 256 with a clean one. So the probe reported two Google models as not honouring
+ * tools when both honour them, which is the opposite of what this signal is for.
+ */
+export const PROBE_TOOL_MAX_OUTPUT_TOKENS = 256;
 
 export const TOOL_PROBE_OUTCOME = {
   honoured: 'honoured',
