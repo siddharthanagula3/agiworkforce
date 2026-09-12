@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { StreamChunk } from '@agiworkforce/types';
+import type { StreamChunk, StreamChunkErrorClassification } from '@agiworkforce/types';
 
 /**
  * An upstream failure reconstructed from a provider `StreamChunk`.
@@ -19,6 +19,22 @@ import type { StreamChunk } from '@agiworkforce/types';
 export interface UpstreamError extends Error {
   status?: number;
   retryAfterSeconds?: number;
+  /**
+   * The adapter's own classification, carried rather than re-derived.
+   *
+   * `message` below is built by concatenating the provider's text, and part of
+   * that text can be chosen by whoever sent the request: the refusal raised for
+   * an attachment a route cannot read names the file. Every routing decision
+   * downstream, retry, failover, and the copy the reader sees, comes out of
+   * `classifyError`, and with nothing structured to read it had to re-parse
+   * that string, so a file named `timeout.pdf` or `insufficient_quota.pdf`
+   * picked the failure class for the turn.
+   *
+   * `classifyError` reads this field first and only falls back to matching the
+   * text when it is absent, which is what an adapter with nothing structured to
+   * report still produces.
+   */
+  classification?: StreamChunkErrorClassification;
 }
 
 function providerUpstreamError(
@@ -50,6 +66,7 @@ function providerUpstreamError(
   if (typeof chunk.retryAfterSeconds === 'number' && Number.isFinite(chunk.retryAfterSeconds)) {
     error.retryAfterSeconds = chunk.retryAfterSeconds;
   }
+  if (chunk.classification) error.classification = chunk.classification;
   return error;
 }
 

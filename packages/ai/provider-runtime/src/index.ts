@@ -25,6 +25,8 @@ export {
   FallbackTriggeredError,
   EmptyProviderResponseError,
   classifyError,
+  isErrorCategory,
+  toStreamErrorClassification,
   parseContextOverflow,
   DATA_POLICY_NO_ENDPOINT_CODE,
   SPENDING_CAP_PROVIDER_HINT,

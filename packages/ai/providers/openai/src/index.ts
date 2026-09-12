@@ -50,6 +50,7 @@ import {
 
 import {
   classifyError,
+  toStreamErrorClassification,
   withStreamIdleWatchdog,
   parseRetryAfterFromError,
 } from '@agiworkforce/provider-runtime';
@@ -305,6 +306,7 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
             ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
             retryable: classified.retryable,
             ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+            classification: toStreamErrorClassification(classified),
           };
           yield { type: 'stop', reason: 'error' };
           return;
@@ -358,6 +360,7 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
           retryable: classified.retryable,
           ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
       }
