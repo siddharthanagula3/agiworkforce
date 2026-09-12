@@ -40,6 +40,14 @@ function everyManagedProvider(): string[] {
   return [...providers];
 }
 
+function providersServing(modelKey: string): string[] {
+  const providers = new Set<string>();
+  for (const route of Object.values(modelRegistry.routes)) {
+    if (route.modelKey === modelKey) providers.add(route.provider);
+  }
+  return [...providers];
+}
+
 function parkedProviders(providers: readonly string[]): RoutingRuntimeState {
   return {
     routeHealth: {},
@@ -99,6 +107,16 @@ describe('health-aware slot walk', () => {
     expect(rerouted.fallbacks.slice(0, -1).map((entry) => entry.provider)).not.toContain(
       healthy.provider,
     );
+  });
+
+  it('walks to another slot when no provider serving the preferred model is live', () => {
+    const healthy = selected(managedAuto());
+    const serving = providersServing(healthy.modelKey);
+    expect(serving).toContain(healthy.provider);
+    const moved = selected(managedAuto({ runtimeState: parkedProviders(serving) }));
+    expect(moved.modelKey).not.toBe(healthy.modelKey);
+    expect(serving).not.toContain(moved.provider);
+    expect(moved.reason).toBe('health_fallback');
   });
 
   it('still selects when every provider is parked instead of stranding the request', () => {
