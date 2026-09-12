@@ -90,10 +90,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'no caller, but it cancels the deletion POST /api/settings/organization schedules; deleting the cancel and leaving the request is a regression',
   },
   {
-    url: '/api/llm/v1/route/preview',
-    why: 'no caller; routing is out of scope this wave under decision D-34',
-  },
-  {
     url: '/api/me/routing-preferences',
     why: 'no caller; the preference it persists IS now read on the chat path and enforced by the resolver (AGI-8), so what is missing is a control that writes it, not the reading of it',
   },
