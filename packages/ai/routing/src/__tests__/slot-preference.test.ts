@@ -16,6 +16,9 @@ const FREE_ONLY_SLOTS = Object.entries(policy.tierAllowedSlots)
     [...(policy.tierAllowedSlots.free as string[])],
   );
 
+const registryRoutes: Record<string, { modelKey: string }> = modelRegistry.routes;
+const registryCapabilities: Record<string, Record<string, boolean>> = modelRegistry.capabilities;
+
 function ask(overrides: Partial<AutoRoutingRequest> = {}): AutoRoutingRequest {
   return {
     selection: 'auto-economy',
@@ -96,20 +99,31 @@ describe('preference can never widen admission', () => {
     expect(decide(ask({ subscriptionTier: 'free', preferSlots: ['no_such_slot'] }))).toBe(base);
   });
 
-  it('still refuses a preferred slot whose model lacks an intrinsic capability', () => {
-    // Multimodal needs vision, which the free workhorse slots lack. Preferring
-    // them changes nothing: preference orders the candidates, admission still
-    // decides which may serve, so the request lands where it always did.
+  it('never admits a preferred slot whose model lacks an intrinsic capability', () => {
+    // Stated as the invariant rather than as one worked example. Multimodal
+    // used to be that example, because the free workhorse slots held a
+    // text-only model; they now hold a router that declares vision, so the
+    // example is gone while the rule it guarded is not. Preference orders the
+    // candidates, admission still decides which may serve, so whatever
+    // preference surfaces must itself satisfy the task.
     //
     // Deliberately an INTRINSIC capability. A harness-feature requirement is
     // not a counterexample: with a `runtimeProfileId` set, `evaluateEligibility`
     // reads the feature off the runtime profile rather than the harness, so the
     // web surface's own server-side search satisfies `research` for any model.
-    expect(
-      decide(
-        ask({ subscriptionTier: 'free', taskType: 'multimodal', preferSlots: FREE_ONLY_SLOTS }),
-      ),
-    ).toBe(decide(ask({ subscriptionTier: 'free', taskType: 'multimodal' })));
+    for (const taskType of TASKS) {
+      const decision = resolveAutoRoute(
+        ask({ subscriptionTier: 'free', taskType, preferSlots: FREE_ONLY_SLOTS }),
+      );
+      if (decision.status !== 'selected') continue;
+      const modelKey = registryRoutes[decision.routeId].modelKey;
+      const capabilities = registryCapabilities[modelKey];
+      for (const capability of policy.tasks[taskType].requiredCapabilities) {
+        expect(capabilities[capability], `${taskType} on ${modelKey} needs ${capability}`).toBe(
+          true,
+        );
+      }
+    }
   });
 });
 

@@ -44,10 +44,10 @@
       },
       "host": "api.cheaperinference.com",
       "governance": {
-        "dataRetentionClass": "zero_retention",
+        "dataRetentionClass": "conditional",
         "trainsOnInputs": "never",
         "source": "https://platform.cheaperinference.com/legal/privacy",
-        "verifiedOn": "2026-09-05",
+        "verifiedOn": "2026-09-06",
         "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids. Discount policy: every request carries min_discount_percent, which the gateway documents as a JSON body field capping billing at list price times (1 minus the percentage) and answering 503 min_discount_unavailable when no qualifying supply exists; the registry prices these routes at that ceiling, never at an observed discount. Verified against https://www.cheaperinference.com/docs and https://www.cheaperinference.com/api-reference on 2026-09-06; the field is absent from the machine-readable openapi.json, so the first live request through this policy confirms it."
       },
       "discount": {
@@ -72,10 +72,10 @@
       },
       "host": "api.cheaperinference.com",
       "governance": {
-        "dataRetentionClass": "zero_retention",
+        "dataRetentionClass": "conditional",
         "trainsOnInputs": "never",
         "source": "https://platform.cheaperinference.com/legal/privacy",
-        "verifiedOn": "2026-09-05",
+        "verifiedOn": "2026-09-06",
         "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids."
       }
     },
@@ -149,6 +149,76 @@
         "source": "https://novita.ai/legal/terms-of-service",
         "verifiedOn": "2026-09-06",
         "note": "Low-cost open-model cloud. Novita's terms (section 10.2) state it will not use content to train its own models or improve the Services by default and will not retain content longer than needed to provide the Services. No resale clause was found and processing regions are not published. Routes stay experimental_only until the founder confirms the terms. Base URL https://api.novita.ai/openai/v1; verified 2026-09-06 against novita.ai/legal/terms-of-service and docs.novita.ai/guides/llm-api."
+      }
+    },
+    "experientiallabs": {
+      "id": "experientiallabs",
+      "displayName": "Experiential Labs",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_EXPERIENTIALLABS_BASE_URL",
+      "apiKeyEnv": "AGI_EXPERIENTIALLABS_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "remote",
+        "path": "/v1/models",
+        "requiresKey": true
+      },
+      "pricingSource": {
+        "kind": "remote",
+        "path": "/api/models"
+      },
+      "host": "api.experientiallabs.ai",
+      "governance": {
+        "dataRetentionClass": "conditional",
+        "trainsOnInputs": "unknown",
+        "source": "https://platform.experientiallabs.ai/llms.txt",
+        "verifiedOn": "2026-09-06",
+        "note": "Gateway's own layer only, operated by Resolute Labs AI, Inc. (Delaware), trading as Experiential Labs. A slug resolves through a per-model provider waterfall (Anthropic, OpenAI, Google, OpenRouter, Azure, Fireworks, Tencent, Z.ai, Alibaba, Cerebras, Wafer, and its own Experiential Cloud), so retention is decided by the rung that serves: the public catalog stamps each model with a retention verdict (zdr_all_rungs, zdr_enforceable, not_zdr) and each rung with a zero_data_retention flag, and the organisation-wide require-ZDR data control makes the gateway route only through zero-retention lanes. On the Responses API a completed response is retained for 24 hours so previous_response_id can continue it unless the request carries store:false; nothing is stored with the upstream provider either way. No public statement covers training on customer inputs: the website privacy policy (https://www.experientiallabs.ai/privacy, last updated 2026-09-04) explicitly excludes the platform and its own policy sits behind sign-in, so trainsOnInputs stays unknown. The gateway adds no markup on either lane; platform-funded calls bill the serving rung's catalog price, so every route here is priced at the ceiling across the rungs of the model's default waterfall. The fuller sourced record lives in packages/ai/model-registry/catalog/provider-governance.json under the same provider ids. Verified against https://platform.experientiallabs.ai/llms.txt on 2026-09-06."
+      }
+    },
+    "experientiallabs_anthropic": {
+      "id": "experientiallabs_anthropic",
+      "displayName": "Experiential Labs (Anthropic Messages dialect)",
+      "protocol": "anthropic_messages",
+      "baseUrlEnv": "AGI_EXPERIENTIALLABS_ANTHROPIC_BASE_URL",
+      "apiKeyEnv": "AGI_EXPERIENTIALLABS_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "static"
+      },
+      "pricingSource": {
+        "kind": "remote",
+        "path": "/api/models"
+      },
+      "host": "api.experientiallabs.ai",
+      "governance": {
+        "dataRetentionClass": "conditional",
+        "trainsOnInputs": "unknown",
+        "source": "https://platform.experientiallabs.ai/llms.txt",
+        "verifiedOn": "2026-09-06",
+        "note": "Same Experiential Labs governance as the experientiallabs chat-completions definition, exposed through the Anthropic Messages dialect served at the API host root (POST /v1/messages). Extended thinking, cache_control markers and Anthropic server tools pass through verbatim on all-Anthropic rungs. See the experientiallabs record for the sourced quotes."
+      }
+    },
+    "workers_ai": {
+      "id": "workers_ai",
+      "displayName": "Cloudflare Workers AI",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "WORKERS_AI_BASE_URL",
+      "apiKeyEnv": "WORKERS_AI_API_KEY",
+      "extraHeaderEnvs": {},
+      "modelsSource": {
+        "kind": "static"
+      },
+      "pricingSource": {
+        "kind": "static"
+      },
+      "host": "api.cloudflare.com",
+      "governance": {
+        "dataRetentionClass": "zero_retention",
+        "trainsOnInputs": "never",
+        "source": "https://developers.cloudflare.com/workers-ai/platform/data-usage/",
+        "verifiedOn": "2026-09-06",
+        "note": "Cloudflare's own inference of open-weight models, reached on the account-scoped OpenAI-compatible endpoint https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1 with model ids of the form @cf/<author>/<model>. Cloudflare states that Customer Content for Workers AI is stored only if the customer specifically uses a storage service with it, and that it does not use Customer Content to train any model on Workers AI or to improve any Cloudflare or third-party service without explicit consent. This definition dispatches to Workers AI directly, not through the AI Gateway proxy, so no gateway request log is in the path. Prices are the per-token rates on https://developers.cloudflare.com/workers-ai/platform/pricing/ (10,000 free neurons a day, then $0.011 per 1,000); no prompt-cache rate is published. Verified 2026-09-06."
       }
     }
   }

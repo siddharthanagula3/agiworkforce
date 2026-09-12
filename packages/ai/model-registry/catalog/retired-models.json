@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "retiredModelIds": [
+    "gpt-oss-120b",
+    "gpt-oss-20b",
     "claude-opus-4.6",
     "claude-opus-4-6",
     "claude-opus-4.7",

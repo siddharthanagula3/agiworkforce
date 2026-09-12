@@ -306,7 +306,7 @@ test('a marketplace route never bills above its list price and always names its 
 
 test('a marketplace or third-party host stays experimental until its commercial terms are confirmed', () => {
   for (const [routeId, route] of Object.entries(registry.routes)) {
-    if (!['deepinfra', 'together', 'novita', 'cheaperinference'].includes(route.provider)) continue;
+    if (!['deepinfra', 'together', 'novita'].includes(route.provider)) continue;
     assert.equal(route.commercialStatus, 'experimental_only', routeId);
     assert.ok(!route.trustModes.includes('byok'), routeId);
   }

@@ -21,7 +21,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "anthropic/claude-sonnet-5",
           "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 10,
@@ -34,7 +34,7 @@
           "harnessId": "cheaperinference-anthropic/messages",
           "upstreamModelId": "claude-sonnet-5",
           "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 10,
@@ -42,6 +42,20 @@
             "cacheWritePerMillion": 2.5
           },
           "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
+        },
+        {
+          "provider": "experientiallabs_anthropic",
+          "harnessId": "experientiallabs-anthropic/messages",
+          "upstreamModelId": "claude-sonnet-5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2.0,
+            "outputPerMillion": 10.0,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-sonnet-5 (anthropic at $2/$10, openrouter at $2/$10); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-sonnet-5 on 2026-09-06."
         }
       ]
     },
@@ -65,7 +79,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "openai/gpt-5.6-sol",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 10,
@@ -78,9 +92,22 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "gpt-5.6-sol",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gpt-5.6-sol",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 4.0,
+            "outputPerMillion": 20.0,
+            "cacheReadPerMillion": 0.4
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gpt-5.6-sol (openai at $4/$20, openrouter at $2/$10); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gpt-5.6-sol on 2026-09-06."
         }
       ]
     },
@@ -104,7 +131,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "openai/gpt-5.6-terra",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 12,
@@ -117,9 +144,22 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "gpt-5.6-terra",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gpt-5.6-terra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2.0,
+            "outputPerMillion": 12.0,
+            "cacheReadPerMillion": 0.2
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gpt-5.6-terra (openai at $2/$12, openrouter at $2/$12); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gpt-5.6-terra on 2026-09-06."
         }
       ]
     },
@@ -143,7 +183,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "openai/gpt-5.6-luna",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.2,
             "outputPerMillion": 1.2,
@@ -156,9 +196,22 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "gpt-5.6-luna",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gpt-5.6-luna",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.02
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gpt-5.6-luna (openai at $0.2/$1.2, openrouter at $0.2/$1.2); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gpt-5.6-luna on 2026-09-06."
         }
       ]
     },
@@ -182,7 +235,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "anthropic/claude-opus-5",
           "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 5,
             "outputPerMillion": 25,
@@ -195,7 +248,7 @@
           "harnessId": "cheaperinference-anthropic/messages",
           "upstreamModelId": "claude-opus-5",
           "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 5,
             "outputPerMillion": 25,
@@ -203,6 +256,20 @@
             "cacheWritePerMillion": 6.25
           },
           "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
+        },
+        {
+          "provider": "experientiallabs_anthropic",
+          "harnessId": "experientiallabs-anthropic/messages",
+          "upstreamModelId": "claude-opus-5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 5.0,
+            "outputPerMillion": 25.0,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 6.25
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-opus-5 (anthropic at $5/$25, openrouter at $5/$25); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-opus-5 on 2026-09-06."
         }
       ]
     },
@@ -226,7 +293,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "google/gemini-3.1-pro-preview",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 12,
@@ -239,9 +306,22 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "gemini-3.1-pro-preview",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gemini-3.1-pro-preview",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2.0,
+            "outputPerMillion": 12.0,
+            "cacheReadPerMillion": 2.0
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.1-pro-preview (gemini at $2/$12, openrouter at $2/$12); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.1-pro-preview on 2026-09-06."
         }
       ]
     },
@@ -265,7 +345,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "google/gemini-3.5-flash-lite",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.3,
             "outputPerMillion": 2.5,
@@ -278,9 +358,22 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "google/gemini-3.5-flash-lite",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gemini-3.5-flash-lite",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 2.5,
+            "cacheReadPerMillion": 0.03
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.5-flash-lite (gemini at $0.3/$2.5, openrouter at $0.3/$2.5); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.5-flash-lite on 2026-09-06."
         }
       ]
     },
@@ -304,13 +397,26 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "google/gemini-3.8-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.75,
             "outputPerMillion": 3.75,
             "cacheReadPerMillion": 0.075,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gemini-3.8-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.75,
+            "outputPerMillion": 3.75,
+            "cacheReadPerMillion": 0.075
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.8-flash (gemini at $0.75/$3.75, openrouter at $0.75/$3.75); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.8-flash on 2026-09-06."
         }
       ]
     },
@@ -334,7 +440,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "deepseek/deepseek-v4-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.13,
             "outputPerMillion": 0.26,
@@ -347,7 +453,7 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "deepseek-v4-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
@@ -414,6 +520,31 @@
             "cacheReadPerMillion": 0.028
           },
           "pricingNote": "Serverless list price per 1M tokens for deepseek/deepseek-v4-flash, verified against https://novita.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "deepseek-v4-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.19,
+            "outputPerMillion": 0.51,
+            "cacheReadPerMillion": 0.028
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug deepseek-v4-flash (openrouter at $0.06006/$0.12012, experiential_cloud at $0.042448/$0.084896, azure_openai at $0.19/$0.51, tencent at $0.088606/$0.177212); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/deepseek-v4-flash on 2026-09-06."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/deepseek-ai/deepseek-v4-flash-0731",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.44,
+            "outputPerMillion": 1.32
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/deepseek-ai/deepseek-v4-flash-0731, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
         }
       ]
     },
@@ -437,7 +568,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "deepseek/deepseek-v4-pro",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.66,
             "outputPerMillion": 1.98,
@@ -450,7 +581,7 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "deepseek-v4-pro",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
@@ -517,6 +648,31 @@
             "cacheReadPerMillion": 0.132
           },
           "pricingNote": "Serverless list price per 1M tokens for deepseek/deepseek-v4-pro-0813, verified against https://novita.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "deepseek-v4-pro",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1.74,
+            "outputPerMillion": 3.48,
+            "cacheReadPerMillion": 0.145
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug deepseek-v4-pro (azure_openai at $1.74/$3.48, openrouter at $0.413772/$0.827544, qwen at $1.44/$2.88, tencent at $1.44/$2.88); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/deepseek-v4-pro on 2026-09-06."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 1.32,
+            "outputPerMillion": 3.96
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/deepseek-ai/deepseek-v4-pro-0813, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
         }
       ]
     },
@@ -540,7 +696,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "alibaba/qwen3.5-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.1,
             "outputPerMillion": 0.4,
@@ -570,7 +726,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "alibaba/qwen3.7-plus",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.4,
             "outputPerMillion": 1.6,
@@ -600,7 +756,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "zai/glm-5.3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.7,
             "outputPerMillion": 2.2,
@@ -613,7 +769,7 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "glm-5.3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
@@ -668,6 +824,31 @@
             "cacheReadPerMillion": 0.26
           },
           "pricingNote": "Serverless list price per 1M tokens for zai-org/glm-5.3, verified against https://novita.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "glm-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4,
+            "cacheReadPerMillion": 0.26
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug glm-5.3 (fireworks at $1.4/$4.4, zai at $1.4/$4.4, openrouter at $1.4/$4.4, tencent at $1.4/$4.4, wafer at $1.19/$4.4); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/glm-5.3 on 2026-09-06."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/zai-org/glm-5.3",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/zai-org/glm-5.3, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
         }
       ]
     },
@@ -691,7 +872,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "zai/glm-5.3-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.15,
             "outputPerMillion": 0.5,
@@ -704,7 +885,7 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "glm-5.3-flash",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
@@ -758,6 +939,31 @@
             "cacheReadPerMillion": 0.015
           },
           "pricingNote": "Serverless list price per 1M tokens for zai-org/glm-5.3-flash, verified against https://novita.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "glm-5.3-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.5,
+            "cacheReadPerMillion": 0.03
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug glm-5.3-flash (fireworks at $0.15/$0.5, zai at $0.15/$0.5, openrouter at $0.075/$0.25, wafer at $0.1/$0.35); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/glm-5.3-flash on 2026-09-06."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/zai-org/glm-5.3-flash",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.5
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/zai-org/glm-5.3-flash, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
         }
       ]
     },
@@ -781,7 +987,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "moonshotai/kimi-k3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 3,
             "outputPerMillion": 15,
@@ -794,7 +1000,7 @@
           "harnessId": "cheaperinference/chat-completions",
           "upstreamModelId": "kimi-k3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "discount": "gateway",
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         },
@@ -861,6 +1067,19 @@
             "cacheReadPerMillion": 0.3
           },
           "pricingNote": "Serverless list price per 1M tokens for moonshotai/kimi-k3, verified against https://novita.ai/pricing on 2026-09-06."
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "kimi-k3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 3.3,
+            "outputPerMillion": 16.5,
+            "cacheReadPerMillion": 0.33
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug kimi-k3 (azure_openai at $3.3/$16.5, fireworks at $3/$15, openrouter at $3/$15, tencent at $3/$15, wafer at $3/$12.75); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/kimi-k3 on 2026-09-06."
         }
       ]
     },
@@ -884,7 +1103,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "minimax/minimax-m3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 0.3,
             "outputPerMillion": 1.2,
@@ -933,147 +1152,6 @@
         }
       ]
     },
-    "gpt-oss-120b": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-120b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 0.037,
-            "outputPerMillion": 0.17,
-            "cacheReadPerMillion": 0,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-120b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.1,
-            "outputPerMillion": 0.5,
-            "cacheReadPerMillion": 0,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "cheaperinference",
-          "harnessId": "cheaperinference/chat-completions",
-          "upstreamModelId": "gpt-oss-120b",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
-          "discount": "gateway",
-          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
-        },
-        {
-          "provider": "deepinfra",
-          "harnessId": "deepinfra/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-120b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.037,
-            "outputPerMillion": 0.17
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://deepinfra.com/models on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
-        },
-        {
-          "provider": "together",
-          "harnessId": "together/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-120b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.15,
-            "outputPerMillion": 0.6
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
-        },
-        {
-          "provider": "novita",
-          "harnessId": "novita/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-120b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.05,
-            "outputPerMillion": 0.25
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-120b, verified against https://novita.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
-        }
-      ]
-    },
-    "gpt-oss-20b": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-20b",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 0.03,
-            "outputPerMillion": 0.13,
-            "cacheReadPerMillion": 0.03,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-20b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.05,
-            "outputPerMillion": 0.2,
-            "cacheReadPerMillion": 0,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "deepinfra",
-          "harnessId": "deepinfra/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-20b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.03,
-            "outputPerMillion": 0.14
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://deepinfra.com/models on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
-        },
-        {
-          "provider": "together",
-          "harnessId": "together/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-20b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.05,
-            "outputPerMillion": 0.2
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://www.together.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed."
-        },
-        {
-          "provider": "novita",
-          "harnessId": "novita/chat-completions",
-          "upstreamModelId": "openai/gpt-oss-20b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "experimental_only",
-          "pricing": {
-            "inputPerMillion": 0.04,
-            "outputPerMillion": 0.15
-          },
-          "pricingNote": "Serverless list price per 1M tokens for openai/gpt-oss-20b, verified against https://novita.ai/pricing on 2026-09-06. The provider publishes no cached-input rate for this model, so no cache price is claimed. Novita's live model list tags this id with structured-outputs and reasoning but not function-calling, so a tool-carrying request must not be assumed to work here until probed."
-        }
-      ]
-    },
     "claude-fable-5-1": {
       "additionalRoutes": [
         {
@@ -1095,7 +1173,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "anthropic/claude-fable-5.1",
           "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 10,
             "outputPerMillion": 50,
@@ -1108,7 +1186,7 @@
           "harnessId": "cheaperinference-anthropic/messages",
           "upstreamModelId": "claude-fable-5.1",
           "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 10,
             "outputPerMillion": 50,
@@ -1116,6 +1194,20 @@
             "cacheWritePerMillion": 12.5
           },
           "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
+        },
+        {
+          "provider": "experientiallabs_anthropic",
+          "harnessId": "experientiallabs-anthropic/messages",
+          "upstreamModelId": "claude-fable-5.1",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 10.0,
+            "outputPerMillion": 50.0,
+            "cacheReadPerMillion": 0.25,
+            "cacheWritePerMillion": 12.5
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-fable-5.1 (anthropic at $10/$50, openrouter at $10/$50); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-fable-5.1 on 2026-09-06."
         }
       ]
     },
@@ -1139,13 +1231,26 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "spacexai/grok-4.6",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "experimental_only",
+          "commercialStatus": "authorized_marketplace",
           "pricing": {
             "inputPerMillion": 2,
             "outputPerMillion": 6,
             "cacheReadPerMillion": 0.5,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "grok-4.6",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2.0,
+            "outputPerMillion": 6.0,
+            "cacheReadPerMillion": 0.5
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug grok-4.6 (xai at $2/$6, openrouter at $2/$6); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/grok-4.6 on 2026-09-06."
         }
       ]
     },
@@ -1196,6 +1301,144 @@
         "harnessId": "open-router/chat-completions-managed",
         "commercialStatus": "authorized_marketplace"
       }
+    },
+    "claude-haiku-4-5": {
+      "additionalRoutes": [
+        {
+          "provider": "experientiallabs_anthropic",
+          "harnessId": "experientiallabs-anthropic/messages",
+          "upstreamModelId": "claude-haiku-4.5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1.0,
+            "outputPerMillion": 5.0,
+            "cacheReadPerMillion": 0.1,
+            "cacheWritePerMillion": 1.25
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-haiku-4.5 (anthropic at $1/$5, openrouter at $1/$5); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-haiku-4.5 on 2026-09-06."
+        },
+        {
+          "provider": "cheaperinference_anthropic",
+          "harnessId": "cheaperinference-anthropic/messages",
+          "upstreamModelId": "claude-haiku-4.5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1,
+            "outputPerMillion": 5,
+            "cacheReadPerMillion": 0.1,
+            "cacheWritePerMillion": 1.25
+          },
+          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
+        }
+      ]
+    },
+    "gpt-6-astra": {
+      "additionalRoutes": [
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "gpt-6-astra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 10.0,
+            "outputPerMillion": 50.0,
+            "cacheReadPerMillion": 1.0
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gpt-6-astra (openai at $10/$50); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gpt-6-astra on 2026-09-06."
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gpt-6-astra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        }
+      ]
+    },
+    "kimi-k2.7-code": {
+      "additionalRoutes": [
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "kimi-k2.7-code",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.95,
+            "outputPerMillion": 4.0,
+            "cacheReadPerMillion": 0.19
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug kimi-k2.7-code (azure_openai at $0.95/$4, fireworks at $0.95/$4, openrouter at $0.67/$3.4, tencent at $0.71/$3.5); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/kimi-k2.7-code on 2026-09-06."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/moonshotai/kimi-k2.7-code",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.95,
+            "outputPerMillion": 4.0
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/moonshotai/kimi-k2.7-code, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
+        }
+      ]
+    },
+    "qwen-3.8-27b": {
+      "additionalRoutes": [
+        {
+          "provider": "experientiallabs",
+          "harnessId": "experientiallabs/chat-completions",
+          "upstreamModelId": "qwen3.8-27b",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.99,
+            "outputPerMillion": 3.2,
+            "cacheReadPerMillion": 0.99
+          },
+          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug qwen3.8-27b (experiential_cloud at $0.32/$2.4, openrouter at $0.45/$3.2, cerebras at $0.99/$1.49); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/qwen3.8-27b on 2026-09-06."
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "qwen-3-8-27b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "authorized_marketplace",
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        },
+        {
+          "provider": "workers_ai",
+          "harnessId": "workers-ai/chat-completions",
+          "upstreamModelId": "@cf/qwen/qwen3.8-27b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.45,
+            "outputPerMillion": 3.2
+          },
+          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/qwen/qwen3.8-27b, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
+        }
+      ]
+    },
+    "qwen-3.6-27b": {
+      "additionalRoutes": [
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "qwen3.6-27b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "authorized_marketplace",
+          "discount": "gateway",
+          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
+        }
+      ]
     }
   }
 }

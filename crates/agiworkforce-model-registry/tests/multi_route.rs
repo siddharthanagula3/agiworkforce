@@ -110,22 +110,42 @@ fn an_explicit_selection_fails_over_within_its_own_model() {
 }
 
 #[test]
-fn a_trust_mode_the_additional_harness_cannot_serve_sees_one_route_only() {
-    let model = multi_route_model();
+fn a_trust_mode_an_additional_harness_cannot_serve_never_sees_that_route() {
+    let registry = generated_registry();
+    let routes = registry["routes"]
+        .as_object()
+        .expect("generated registry should expose routes");
+    let serves_byok = |route: &serde_json::Value| {
+        route["trustModes"]
+            .as_array()
+            .expect("every route lists trust modes")
+            .iter()
+            .any(|mode| mode.as_str() == Some("byok"))
+    };
+    let (closed_route_id, closed_route) = routes
+        .iter()
+        .find(|(_, route)| route["isDefault"].as_bool() == Some(false) && !serves_byok(route))
+        .expect("the generated registry should carry an additional route closed to byok");
+    let model_key = closed_route["modelKey"]
+        .as_str()
+        .expect("every route names a model");
+
     let decision = resolve_auto_route(&AutoRoutingRequest {
-        selection: Some(&model.model_key),
+        selection: Some(model_key),
         task_type: RoutingTaskType::Coding,
         subscription_tier: Some("max"),
-        trust_mode: TrustMode::ManagedCloud,
+        trust_mode: TrustMode::Byok,
         ..AutoRoutingRequest::default()
     })
     .expect("generated registry should load");
 
-    let AutoRouteDecision::Selected(selected) = decision else {
-        panic!("expected selected route");
-    };
-    assert_eq!(selected.route_id, model.default_route_id);
-    assert!(selected.fallbacks.is_empty());
+    if let AutoRouteDecision::Selected(selected) = decision {
+        assert_ne!(selected.route_id, *closed_route_id);
+        for fallback in &selected.fallbacks {
+            assert_ne!(fallback.route_id, *closed_route_id);
+            assert!(serves_byok(&routes[&fallback.route_id]));
+        }
+    }
 }
 
 #[test]
