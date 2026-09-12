@@ -526,3 +526,38 @@ of them says so in its own entry rather than claiming a confirmation that was
 never made.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Security] A Moonshot account string reached a pushed commit
+
+**Why founder assistance is required**
+Rotating a provider credential is an account action, and deciding whether the
+history needs rewriting is the repository owner's call.
+**Exact action**
+
+1. Decide whether to rotate `MOONSHOT_API_KEY`.
+2. Decide whether commit `a7bb63eb0` on
+   `fix/provider-outage-health-2026-09-12` should be rewritten, or whether
+   correcting it forward is enough.
+
+**Where** The Moonshot console, and this repository's history.
+**Needed input** One rotation decision and one history decision.
+**How to verify completion** `git grep` for the fragment finds nothing on any
+branch that is kept.
+
+**What happened, precisely.** A live Moonshot rate-limit error on 2026-09-12
+answered by quoting the caller back at itself: an account id and an access-key
+identifier in angle brackets. Two separate mistakes followed. The probe wrote
+provider error text into a file that is committed, which is fixed: that text is
+now redacted before it is written, and `check:secrets` is blind to both shapes,
+which is how it would have passed. Then the test proving the redaction was
+written using the real observed string rather than a synthetic one, so the
+fragment landed in `a7bb63eb0` and was pushed. The fixture is synthetic as of
+the following commit.
+
+**What it is and is not.** The string is an account identifier and a key
+identifier, the part a provider quotes in errors, not an `sk-` secret, and no
+secret value was written anywhere. Rotation is offered as a precaution rather
+than as a response to a known key disclosure. History was not rewritten, because
+force-updating a pushed branch is not a call to make unasked.
+**Impact** PRECAUTIONARY
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
