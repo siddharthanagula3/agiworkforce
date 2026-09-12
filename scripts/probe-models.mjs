@@ -90,10 +90,10 @@ export const PROBE_TOOL_CHOICE_OPEN = 'auto';
  * start one.
  *
  * Thirty-two truncated the call mid-emission on a thinking model: measured on
- * 2026-09-12, Gemini 3.8 Flash answered a forced tool choice at 32 tokens with
- * `MALFORMED_FUNCTION_CALL` and no call, and answered the identical request at
- * 256 with a clean one. So the probe reported two Google models as not honouring
- * tools when both honour them, which is the opposite of what this signal is for.
+ * 2026-09-12, a Google flash model answered a forced tool choice at 32 tokens
+ * with `MALFORMED_FUNCTION_CALL` and no call, and answered the identical request
+ * at 256 with a clean one. So the probe reported both Google chat models as not
+ * honouring tools when both honour them, the opposite of what this signal says.
  */
 export const PROBE_TOOL_MAX_OUTPUT_TOKENS = 256;
 
