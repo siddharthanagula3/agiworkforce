@@ -22,11 +22,16 @@ import type { ProcessedRequest } from './request-processor';
 import {
   canPersistAssistantTurn,
   extractAssistantTextDelta,
+  patchAssistantTurnSourceUrls,
   persistAssistantTurn,
 } from './assistant-turn-persistence';
 import { extractAssistantInteractiveCardDeltas } from './interactive-card-stream';
 import { createPublicTextDeltaProjector } from './agent-event-stream';
-import { AssistantTurnSourceCollector } from './assistant-turn-sources';
+import {
+  AssistantTurnSourceCollector,
+  type PersistedTurnCitation,
+  type PersistedTurnSource,
+} from './assistant-turn-sources';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -112,6 +117,10 @@ export function buildManagedAgentStream(
   let assistantText = '';
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
+  let citedSourceUrls: {
+    sources: readonly PersistedTurnSource[] | undefined;
+    citations: readonly PersistedTurnCitation[] | undefined;
+  } | null = null;
   const journal = input.runJournal ? createCloudAgentEventJournal(input.runJournal) : null;
 
   const flushJournal = async (): Promise<void> => {
@@ -126,6 +135,7 @@ export function buildManagedAgentStream(
     const serving = input.getServingRequest?.() ?? input.processed;
     const sources = sourceCollector.snapshot();
     const citations = sourceCollector.citationSnapshot();
+    citedSourceUrls = { sources, citations };
     const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
     await persistAssistantTurn({
@@ -144,6 +154,24 @@ export function buildManagedAgentStream(
         ...(codeExecutionResult ? { codeExecutionResult } : {}),
         ...(generatedFiles ? { generatedFiles } : {}),
       },
+    });
+  };
+
+  /**
+   * A grounded turn served through this path carries the routing provider's
+   * redirect as every citation href, and those expire. Resolving them is a
+   * network call, so it runs once the reader already holds the terminal event
+   * and can only upgrade the row that was written, never delay what was sent.
+   */
+  const patchTurnSourceUrls = async (): Promise<void> => {
+    const cited = citedSourceUrls;
+    if (!cited || !input.userId) return;
+    citedSourceUrls = null;
+    await patchAssistantTurnSourceUrls({
+      processed: input.processed,
+      userId: input.userId,
+      sources: cited.sources,
+      citations: cited.citations,
     });
   };
 
@@ -283,6 +311,7 @@ export function buildManagedAgentStream(
             await reportTerminal(reportedFailure ? 'failed' : 'completed');
             controller.enqueue(encoder.encode(TERMINAL_EVENT));
             controller.close();
+            await patchTurnSourceUrls();
             return;
           }
           if (isManagedAgentTerminalEvent(next.value)) continue;
@@ -343,6 +372,7 @@ export function buildManagedAgentStream(
           );
         });
         controller.error(error);
+        await patchTurnSourceUrls();
       }
     },
     async cancel() {
@@ -360,6 +390,7 @@ export function buildManagedAgentStream(
             await persistTurn(true);
           }
           await reportTerminal('cancelled');
+          await patchTurnSourceUrls();
         }
       }
     },
