@@ -37,6 +37,11 @@ import {
   type ProviderAvailabilitySignal,
 } from '@/lib/services/provider-availability-service';
 import { freePoolDecisions, type FreePoolDecision } from '@/lib/server/free-pools';
+import {
+  eventAllowsModel,
+  readEventPromotion,
+  type EventPromotion,
+} from '@/lib/server/event-access';
 
 export const runtime = 'nodejs';
 
@@ -58,6 +63,7 @@ interface RouteContext {
   configuredProviders: ReadonlySet<string>;
   availabilityByProvider: Readonly<Record<string, ProviderAvailabilitySignal>>;
   poolsByRouteId: ReadonlyMap<string, FreePoolDecision>;
+  eventPromotion: EventPromotion;
 }
 
 function freeInventoryOf(
@@ -102,6 +108,7 @@ async function buildRouteContext(models: readonly ModelMetadata[]): Promise<Rout
     poolsByRouteId: new Map(
       freePoolDecisions(nowMs).map((decision) => [decision.entry.routeId, decision]),
     ),
+    eventPromotion: readEventPromotion(nowMs),
   };
 }
 
@@ -129,6 +136,8 @@ export interface ModelCatalogueEntry {
   priceBand: ModelPickerPriceBand | null;
   capabilities: ModelCatalogueCapabilities;
   admitted: boolean;
+  /** Selectable only because an event promotion is active, not by plan. */
+  eventAccess: boolean;
   minimumPlanLabel: string | null;
   availability: ModelAvailability;
   requiresEnvironment: ModelEnvironment | null;
@@ -167,7 +176,12 @@ function toCatalogueEntry(
   // customer surface simply stops offering something it cannot serve.
   const routes = toCatalogueRoutes(model.id, context);
   if (routes.length === 0) return null;
-  const admitted = canAccessModelForSubscriptionTier(model.id, planTier) && routes.length > 0;
+  // Permanent entitlement OR an active event promotion, AND executable. The
+  // promotion widens who may ask; it never manufactures supply, so the route
+  // requirement above still decides whether anyone can be offered the model.
+  const eventAllowed = eventAllowsModel(model.id, planTier, context.eventPromotion);
+  const permanentlyAllowed = canAccessModelForSubscriptionTier(model.id, planTier);
+  const admitted = (permanentlyAllowed || eventAllowed) && routes.length > 0;
   const minimumTier = getMinimumRequiredTier(model.id);
   if (!admitted && !minimumTier) return null;
   return {
@@ -190,6 +204,9 @@ function toCatalogueEntry(
     priceBand: getModelPriceBand(model.id),
     capabilities: projectCapabilities(facts.capabilities),
     admitted,
+    // Temporary access reads differently from a plan the user bought, so the
+    // picker can say "Free during event" instead of implying it is included.
+    eventAccess: eventAllowed && !permanentlyAllowed,
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
     availability: getModelAvailability(model),
     requiresEnvironment: model.requiresEnvironment ?? null,
