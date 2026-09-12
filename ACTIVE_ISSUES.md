@@ -279,7 +279,16 @@ required check on a pull request.
 ### `AGI-7` Desktop global voice does not meet its own release gates
 
 **Severity:** P2
-**Status:** Open
+**Status:** Open on the gates; the second acceptance branch is already met.
+Checked 2026-09-12: the acceptance line reads "every gate is met, OR the entry
+point is removed from shipped builds", and the surface is already off in a way
+that is honest rather than hidden. The capability probe is a compile-time false,
+the settings control reads that probe and says "Not available in this build"
+while pointing at the in-window hotkey that does work, the button is disabled,
+and the Rust coordinator refuses a global-source session independently, so the
+one caller and the authority both fail closed. What is left is the first branch:
+six OS-level gates and a signed build, which is neither a decision nor a
+checkout-sized change.
 **Area:** Voice, desktop
 **Root cause:** Tracked in the feature's own spec. The OS-level input hook is
 real, but the coordinator refuses every global-source session, so the hook only
