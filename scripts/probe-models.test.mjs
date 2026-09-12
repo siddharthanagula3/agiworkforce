@@ -331,11 +331,11 @@ test('a provider error reaching a committed file cannot carry a credential', () 
   // without --out that lands in the committed catalog, and check:secrets
   // recognises neither shape, so nothing downstream would have stopped it.
   const moonshot =
-    '429 Your account org-ffa26a52227a4118be9b03717d68d6a3<ak-fbn4of3isiji1kqv> exceeded quota';
+    '429 Your account org-0000example0000example0000abcd<ak-exampleexamplekey> exceeded quota';
   const redacted = redactProbeDetail(moonshot);
 
-  assert.ok(!redacted.includes('ak-fbn4of3isiji1kqv'), 'key prefix survived');
-  assert.ok(!redacted.includes('org-ffa26a52227a4118be9b03717d68d6a3'), 'account id survived');
+  assert.ok(!redacted.includes('ak-exampleexamplekey'), 'key prefix survived');
+  assert.ok(!redacted.includes('org-0000example0000example0000abcd'), 'account id survived');
   assert.ok(redacted.includes('429'), 'the status is why the detail exists');
 });
 
@@ -343,7 +343,7 @@ test('every vendor key shape is replaced rather than trimmed', () => {
   // A truncated key is still a leaked key prefix, so these are replaced.
   for (const secret of [
     'sk-proj-AAAABBBBCCCCDDDD',
-    'ak-fbn4of3isiji1kqv',
+    'ak-exampleexamplekey',
     'sk-ant-api03-ZZZZYYYYXXXX',
     'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
     'org-0123456789abcdef',
