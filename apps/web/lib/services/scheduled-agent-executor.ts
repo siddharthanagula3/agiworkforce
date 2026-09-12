@@ -218,6 +218,7 @@ function buildScheduledProcessedRequest(input: {
   taskType: ReturnType<typeof classifyTaskLocally>['type'];
   organizationId?: string | null;
   reservation: ManagedUsageRequestReservation;
+  sensitiveContextPresent: boolean;
 }): ProcessedRequest {
   const messages = [
     { role: 'system' as const, content: input.systemPrompt },
@@ -235,6 +236,7 @@ function buildScheduledProcessedRequest(input: {
   return {
     requestId: `schedule-run-${input.runId}`,
     chatSurface: 'web',
+    sensitiveContextPresent: input.sensitiveContextPresent,
     organizationId: input.organizationId,
     managedUsage: input.reservation,
     chatRequest,
@@ -493,6 +495,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             taskType,
             organizationId: scope.organizationId,
             reservation,
+            sensitiveContextPresent: projectContext !== null,
           }),
           plan,
           userId: scope.userId,
