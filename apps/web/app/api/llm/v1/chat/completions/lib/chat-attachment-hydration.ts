@@ -9,6 +9,7 @@ import {
   normalizeChatDocumentMimeType,
 } from '@/lib/chat-attachment-policy';
 import { withSpan } from '@/lib/observability/span';
+import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { mapWithConcurrency } from './tool-loop';
 
 const MAX_REQUEST_ATTACHMENT_COUNT = 20;
@@ -272,12 +273,22 @@ async function fetchAttachmentPayload(
   return { kind: 'ready', filename, asset, object };
 }
 
+/**
+ * Resolves every attachment reference into provider wire content, and returns
+ * the bytes of the ones attached to the turn being sent.
+ *
+ * The returned manifest is what lets the execution sandbox hold the same files
+ * the model can see. Only the current turn's attachments are listed: a
+ * conversation-scoped sandbox already holds what earlier turns staged, and
+ * re-staging history would grow with the conversation.
+ */
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
-): Promise<void> {
+): Promise<TurnAttachment[]> {
+  const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
-  if (slots.length === 0) return;
+  if (slots.length === 0) return turnAttachments;
 
   let attachmentCount = 0;
   let totalBytes = 0;
@@ -386,14 +397,27 @@ export async function hydrateChatAttachments(
     totalBytes += object.data.byteLength;
 
     const header = attachmentContextHeader(filename, asset.mimeType);
+    // The sandbox gets the file as uploaded, not the shape the provider wire
+    // wants: a notebook reaches the model as extracted text, and code that
+    // opens a .ipynb needs the real JSON.
+    const rawBase64 = object.data.toString('base64');
+    const stagedEntry: TurnAttachment = {
+      filename,
+      mimeType: asset.mimeType,
+      base64: rawBase64,
+    };
+    const stageForSandbox = (): void => {
+      if (live) turnAttachments.push(stagedEntry);
+    };
 
     if (isChatImageMimeType(asset.mimeType)) {
+      stageForSandbox();
       slot.resolved = [
         header,
         {
           type: 'image_url',
           image_url: {
-            url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
+            url: `data:${asset.mimeType};base64,${rawBase64}`,
           },
         },
       ];
@@ -413,6 +437,7 @@ export async function hydrateChatAttachments(
         degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
         continue;
       }
+      stageForSandbox();
       if (!notebookText) {
         slot.resolved = [
           header,
@@ -434,6 +459,7 @@ export async function hydrateChatAttachments(
       continue;
     }
 
+    stageForSandbox();
     const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
     slot.resolved = [
       header,
@@ -442,7 +468,7 @@ export async function hydrateChatAttachments(
         file: {
           filename,
           mime_type: mimeType,
-          file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+          file_data: `data:${mimeType};base64,${rawBase64}`,
         },
       },
     ];
@@ -458,4 +484,6 @@ export async function hydrateChatAttachments(
       (part, partIndex) => bySlot.get(`${messageIndex}:${partIndex}`)?.resolved ?? [part],
     );
   }
+
+  return turnAttachments;
 }
