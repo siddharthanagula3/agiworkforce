@@ -11,13 +11,17 @@ const FIELD_UNTIL_MS = 'untilMs';
 
 export type ProviderDegradedCategory = Extract<
   ErrorCategory,
-  'quota_exhausted' | 'server_overload' | 'capacity_off_switch'
+  'quota_exhausted' | 'server_overload' | 'capacity_off_switch' | 'billing_exhausted'
 >;
 
 const DEGRADED_REASON_TEXT: Readonly<Record<ProviderDegradedCategory, string>> = {
   quota_exhausted: 'This provider has hit its usage limit and is recovering.',
   server_overload: 'This provider is overloaded and recovering.',
   capacity_off_switch: 'This provider has no capacity available right now.',
+  // An unfunded upstream account is an outage of exactly the same shape: every
+  // request to it fails until someone acts. It reads to the customer as
+  // "temporarily unavailable" rather than anything about our balance.
+  billing_exhausted: 'This provider is temporarily unavailable.',
 };
 
 export interface ProviderAvailabilitySignal {
