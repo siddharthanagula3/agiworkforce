@@ -79,7 +79,7 @@ const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what
   {
     key: 'database',
     label: 'Postgres',
-    what: 'A query is executed against the primary database and returns.',
+    what: 'A query is executed against the primary database and returns. A pass is then reused for up to an hour before another query runs, so this row can be that far behind the database itself.',
   },
   {
     key: 'stripe',
