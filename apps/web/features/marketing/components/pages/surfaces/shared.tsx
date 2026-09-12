@@ -11,6 +11,7 @@ export function PageHero({
   id,
   eyebrow,
   title,
+  em,
   lede,
   ctas,
   visual,
@@ -18,6 +19,7 @@ export function PageHero({
   id: string;
   eyebrow: string;
   title: string;
+  em?: string;
   lede: ReactNode;
   ctas: readonly PageCta[];
   visual?: ReactNode;
@@ -27,7 +29,15 @@ export function PageHero({
       <div>
         <Eyebrow>{eyebrow}</Eyebrow>
         <h1 className="agi-ds-h1" id={id}>
-          {title}
+          {em && title.includes(em) ? (
+            <>
+              {title.slice(0, title.indexOf(em))}
+              <em className="agi-ds-accent">{em}</em>
+              {title.slice(title.indexOf(em) + em.length)}
+            </>
+          ) : (
+            title
+          )}
         </h1>
       </div>
       <Prose size="lg">{lede}</Prose>
