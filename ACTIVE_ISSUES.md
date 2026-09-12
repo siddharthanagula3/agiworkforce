@@ -832,11 +832,17 @@ which is the price-derived floor admitting models nobody named free.
 **Every supplier name is served to the customer.** Eight of them appear in the
 route labels the picker reads, including the two resellers.
 
-Both are fixed on `fix/provider-outage-health-2026-09-12` and neither fix is
-deployed, so the gap between this measurement and the branch is a deployment,
-not engineering. Re-run the same two requests after it ships: the admitted count
-should fall to the named free roster, no admitted entry should carry an empty
-route list, and no supplier label should appear in the response at all.
+**The public models endpoint tells a free caller that everything needs Basic.**
+It returns three models and reports the minimum plan as `basic` for all three,
+including the ones that account can run right now. That is the published floor
+disagreeing with the gate that actually admits the turn.
+
+All three are fixed on `fix/provider-outage-health-2026-09-12` and none of the
+fixes is deployed, so the gap between this measurement and the branch is a
+deployment, not engineering. Re-run the same three requests after it ships: the admitted count should fall to
+the named free roster, no admitted entry should carry an empty route list, no
+supplier label should appear anywhere in the response, and the models endpoint
+should report `free` for the models a free account can run.
 
 ### Model usability sweep, 2026-09-12
 
