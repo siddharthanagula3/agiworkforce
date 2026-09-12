@@ -193,7 +193,15 @@ shipped contract, or a founder call.
 ### `AGI-3` Tool timeline and reasoning are still client-owned
 
 **Severity:** P2
-**Status:** Narrowed. The silent half is fixed; the rest is still client-only.
+**Status:** Narrowed again 2026-09-12. Code-execution results and the generated
+file list are now collected server side beside sources and citations, so a
+client save that exhausts its retries no longer loses them. The tool timeline
+and reasoning blocks are deliberately still client-owned: both are built by
+merging frames, back-filling earlier entries and tracking per-tool status, and
+reasoning also splits thinking spans out of the content stream with its own
+timestamps. Collecting those on the server is a second implementation of a
+rendering derivation, which is the trap this entry names. Unverified: the reload
+assertion the validation line asks for needs a running server.
 **Area:** Web chat persistence
 **What was fixed:** The server now collects the pages a turn cited from the
 `x_search_results` frames it already emits and writes them into the same
@@ -596,7 +604,16 @@ expiry rather than not-found.
 ### `AGI-12` Desktop stores were never migrated to the shared runtime state
 
 **Severity:** P3
-**Status:** Open
+**Status:** Reframed 2026-09-12, and the real part is done. The count of 41 was
+misleading: the shared runtime models six domains, and 38 of the 41 markers name
+domains it does not model at all, so migrating them means inventing 38 new
+shared domains. That is a product decision about what the shared runtime owns,
+not a cleanup, and it should be asked as one question rather than filed as 38
+migrations. What was genuinely duplication is fixed: a stale unreferenced copy of
+the live chat-preferences store is deleted, and two shared settings fields that
+nothing on desktop ever wrote now have a publisher, so a reader of the canonical
+state is no longer told agent mode is off and no prompt override exists whatever
+the user chose.
 **Area:** Desktop, shared packages
 **Root cause:** An unfinished consolidation. 41 files carry the identical
 marker `TODO(task-1.3): migrate to packages/client/client-runtime/state`.
@@ -643,6 +660,14 @@ line.
 
 ### `AGI-20` Retry can move the viewport to an unrelated message
 
+**Status:** Fixed 2026-09-12, not observed in a browser. The transcript caches
+row heights by index, and the guard asked whether ANY index on the visible path
+now held a different message. A retry makes that true by construction, so one
+changed index threw every row in the thread back to the default estimate and the
+layout moved under the reader with no scroll call at all. Short threads fit in
+the viewport, which is why it was only ever seen in long ones. Only the rewritten
+suffix is forgotten now. The fix is about real layout and jsdom has none, so the
+tests assert which rows are invalidated, not the resulting pixel position.
 **Severity:** P3
 **Status:** Open
 **Area:** Chat transcript
