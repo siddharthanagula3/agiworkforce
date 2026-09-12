@@ -429,5 +429,45 @@ Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5 and Claude Fable 5.1 are all
 on this one account, so a paying Pro or Max subscriber who selects any of them
 gets a provider error. Sonnet 5 is also held out of the event allowlist for the
 same reason.
+
+The outage is now handled rather than merely classified: an unfunded provider
+is marked degraded for five minutes, the catalogue reports those models
+`temporarilyUnavailable`, and the picker shows them unselectable instead of
+letting a customer send a turn that cannot succeed. Nothing is deleted, so the
+models return on their own within five minutes of the credit landing, with no
+deploy and no configuration change.
 **Impact** RELEASE-BLOCKING
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Event] Production environment for the public event
+
+**Why founder assistance is required**
+Setting production environment variables is a deployment action on the Vercel
+project, and the spend ceiling is a money decision.
+**Exact action**
+
+1. Set `AGI_EVENT_MODELS` to the comma-separated canonical model ids the event
+   offers. An id the registry does not know, or a deprecated one, is dropped
+   rather than widening the promotion.
+2. Set `AGI_EVENT_GLOBAL_BUDGET_USD` to the total the event may spend. Leaving
+   it unset means no global ceiling at all, which is the wrong setting for a
+   public event.
+3. Set `AGI_EVENT_STARTS_AT` and `AGI_EVENT_ENDS_AT` to ISO instants, so the
+   promotion expires on its own if the flag is forgotten.
+4. Set `AGI_EVENT_ENABLED=1` last, and redeploy.
+
+**Where** Vercel Production for the web project.
+**Needed input** The model list, the budget number, and the two instants.
+**How to verify completion** An anonymous request to `/api/models/catalogue`
+returns the promoted models with `eventAccess: true`, and the picker shows
+them badged "Free during event".
+**What remains after founder action** Nothing. Four independent controls bound
+the spend and each is reversible without a deploy: `AGI_EVENT_GLOBAL_BUDGET_USD`
+for the event as a whole, the existing free rolling windows per user,
+`AGI_EVENT_DISABLED_MODELS` to drop one model, and
+`AGI_EVENT_DISABLED_PROVIDERS` to drop one supplier. The per-provider switch is
+event-scoped, so paid customers who bought access to that provider keep it.
+Clearing `AGI_EVENT_ENABLED` ends the promotion and restores permanent Free
+behaviour; nothing is stored, so there is nothing to migrate back.
+**Impact** BLOCKS THE EVENT
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
