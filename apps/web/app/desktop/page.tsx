@@ -15,7 +15,7 @@ import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Runs on Your Machine',
-  description: `The native AGI app, built in Rust. Check verified Linux x64 installer availability; macOS and Windows installers are not yet published. Run local models with ${DESKTOP_LOCAL_RUNTIMES.label}.`,
+  description: `The native AGI app, built in Rust. Check verified macOS universal and Linux x64 installer availability; Windows installers are not published. Run local models with ${DESKTOP_LOCAL_RUNTIMES.label}.`,
   path: '/desktop',
 });
 
@@ -167,21 +167,24 @@ export default function DesktopPage() {
             { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
             { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
             { k: 'Skills', v: 'Markdown + frontmatter' },
-            { k: 'Published package assets', v: 'Linux x64 · installer signature pending' },
-            { k: 'macOS & Windows', v: 'Installers not published · no release date announced' },
+            {
+              k: 'Published package assets',
+              v: 'macOS universal notarized .dmg · Linux x64 .AppImage and .deb',
+            },
+            { k: 'Windows', v: 'Installer not published · no release date announced' },
           ]}
         />
 
         <FinalCta
-          eyebrow="Linux x64"
-          title="Check AGI Desktop for Linux."
-          body="The download control appears only when the stable release API verifies a complete Linux x64 AppImage and signature pair. macOS and Windows installers are not published."
+          eyebrow="macOS · Linux x64"
+          title="Check AGI Desktop availability."
+          body="A download control appears only once the stable release API verifies a signed build for that platform: a notarized universal build on macOS, a complete AppImage and signature pair on Linux x64. Windows installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: '/byok', label: 'Set Up BYOK' },
             { label: 'Enterprise early access', waitlist: true },
           ]}
-          stamp="Linux x64 · verification required before download"
+          stamp="macOS universal · Linux x64 · verification required before download"
         />
 
         <MarketingFooter />

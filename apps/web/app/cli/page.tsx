@@ -186,7 +186,7 @@ export default function CliPage() {
               body: 'Cloud execution is public alpha, open by default, and still fails closed without an explicit route.',
               points: [
                 'Public alpha: sign in and start, no waitlist',
-                'agi cloud reports beta status and the model catalog only',
+                'No agi cloud command: managed runs use the normal model path',
                 'Clear labels before anything routes to cloud',
                 'Usage metered and transparent',
               ],
