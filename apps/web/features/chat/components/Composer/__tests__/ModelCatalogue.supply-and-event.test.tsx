@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -65,7 +64,9 @@ function renderCatalogue(entries: ModelCatalogueEntry[], onSelect = vi.fn()) {
   render(
     <ModelCatalogue
       entries={entries}
-      developers={[{ key: 'openai', label: 'OpenAI', count: entries.length, admitted: 1 }]}
+      developers={[
+        { key: 'openai', label: 'OpenAI', admittedCount: 1, totalCount: entries.length },
+      ]}
       favouriteModelIds={[]}
       selectedModelId="other-model"
       query=""

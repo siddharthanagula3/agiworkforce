@@ -1634,6 +1634,48 @@ export function resolveWebCloudModelRoute(
   );
 }
 
+/**
+ * The route that summarises a conversation when it outgrows the window.
+ *
+ * This is a second provider call carrying the transcript itself, so it is
+ * exactly the call a zero-retention workspace cannot afford to leak, and it
+ * previously resolved with none of the admission the main turn gets: no
+ * retention requirement, no workspace model policy, not even the set of
+ * providers this deployment holds a credential for. A workspace that requires
+ * zero data retention could have its whole conversation summarised by a
+ * provider that retains it.
+ *
+ * Named rather than inlined so the admission it passes is visible and testable.
+ * Resolving nothing is safe here: the caller falls back to a mechanical trim,
+ * which makes no provider call at all, so failing closed costs summary quality
+ * and never leaks the transcript.
+ */
+export interface CompactionAdmission {
+  availableProviderIds?: ReadonlySet<string>;
+  zeroDataRetentionOnly?: boolean;
+  zeroDataRetentionProviders?: ReadonlySet<string>;
+  organizationPolicy?: ModelAccessPolicy | null;
+}
+
+export function buildCompactionRoutingRequest(admission: CompactionAdmission) {
+  return buildWebCloudAutoRoutingRequest(
+    'auto',
+    'free',
+    'simple_chat',
+    undefined,
+    undefined,
+    undefined,
+    admission.availableProviderIds,
+    admission.zeroDataRetentionOnly,
+    admission.zeroDataRetentionProviders,
+    admission.organizationPolicy,
+  );
+}
+
+export function resolveCompactionRoute(admission: CompactionAdmission) {
+  return resolveAutoRoute(buildCompactionRoutingRequest(admission));
+}
+
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
   const allowed = canAccessModel(model, subscriptionTier);
   if (!allowed && !isFreeBillingPlanTier(subscriptionTier.toLowerCase())) {
@@ -3751,7 +3793,13 @@ export async function processRequest(
       conversationId: chatRequest.conversation_id ?? null,
       isTemporary: conversationIsTemporary,
       planTier: subscription.plan_tier,
-      resolveEconomyRoute: () => resolveWebCloudModelRoute('auto', 'free', 'simple_chat'),
+      resolveEconomyRoute: () =>
+        resolveCompactionRoute({
+          availableProviderIds,
+          zeroDataRetentionOnly,
+          zeroDataRetentionProviders,
+          organizationPolicy: workspaceModelPolicy,
+        }),
     }),
   );
 
