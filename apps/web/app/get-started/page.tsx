@@ -42,16 +42,8 @@ export default function GetStartedPage() {
           id="agi-get-started-title"
           eyebrow="Get started"
           title="Get started."
-          lede={
-            <>
-              Five minutes from zero to a working chat across multiple providers.{' '}
-              <strong>
-                Website users can use AGI managed cloud, with a small free cap (called Auto Economy)
-                and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop
-                and developer surfaces. Managed cloud is open by default, not invite-only.
-              </strong>
-            </>
-          }
+          em="started."
+          lede="Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, and Local and BYOK run on Desktop, the CLI and VS Code."
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },

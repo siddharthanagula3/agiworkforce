@@ -47,6 +47,7 @@ export default function ChangelogPage() {
           id="agi-changelog-title"
           eyebrow="Changelog"
           title="Every shipped feature is dated."
+          em="is dated."
           lede="Every 'in progress' item is named openly. We do not backdate, we do not pre-announce, and we do not list things we are not actively maintaining."
           ctas={[]}
         />

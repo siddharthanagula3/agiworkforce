@@ -169,6 +169,7 @@ export default function CustomersPage() {
           id="agi-customers-title"
           eyebrow="Customers"
           title="Only written permission puts a name on this page."
+          em="puts a name on this page."
           lede='Nobody has given us that permission yet, so there are no logos here, no testimonials, and no anonymised "a leading bank". What stands in their place is three situations built entirely out of behaviour that has shipped, with the part AGI declines to do written next to the part it does.'
           ctas={[
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
