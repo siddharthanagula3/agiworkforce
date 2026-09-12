@@ -370,7 +370,16 @@ and fails over. No provider literal remains at the call site.
 ### `AGI-16` A citation's href is still the routing provider's redirect
 
 **Severity:** P2
-**Status:** Half fixed. The citation no longer looks like Google's; the link
+**Status:** Fixed 2026-09-12 on both paths, not observed live. The research path
+resolves the router's redirect to the publisher during ingestion, and a plain
+grounded turn resolves after its stream has closed and patches the stored row,
+because a network call inside the streaming translation path is ruled out. The
+patch substitutes leaf URLs inside whatever shape is stored rather than
+overwriting the key, so the client's richer copy survives and no numbered marker
+moves. Residual, and not introduced by the fix: the client's own save merges
+into the same row and normally lands first, but a slow or retried save could
+land last and reintroduce the redirects, which would need the same resolution on
+the message write path.
 still is.
 **Area:** Research, citations, provider neutrality
 **What was fixed:** A grounded result does not arrive with the publisher's URL.
