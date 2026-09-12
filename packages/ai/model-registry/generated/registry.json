@@ -1449,63 +1449,9 @@
         "deprecated": false,
         "releasedOn": "2026-02-01",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      },
-      "evidenceRefs": []
-    },
-    "gpt-oss-120b": {
-      "identity": {
-        "key": "gpt-oss-120b",
-        "displayName": "GPT-OSS 120B",
-        "provider": "groq",
-        "developer": "openai",
-        "providerModelId": "openai/gpt-oss-120b",
-        "kind": "reasoning",
-        "openWeight": true,
-        "license": "Apache-2.0",
-        "aliases": ["openai/gpt-oss-120b"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "August 2025",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
+        "stagedOn": "2026-09-11",
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse"
-      },
-      "evidenceRefs": []
-    },
-    "gpt-oss-20b": {
-      "identity": {
-        "key": "gpt-oss-20b",
-        "displayName": "GPT-OSS 20B",
-        "provider": "groq",
-        "developer": "openai",
-        "providerModelId": "openai/gpt-oss-20b",
-        "kind": "reasoning",
-        "openWeight": true,
-        "license": "Apache-2.0",
-        "aliases": ["openai/gpt-oss-20b"],
-        "family": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "August 2025",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse_fast"
       },
       "evidenceRefs": []
     },
@@ -1518,7 +1464,6 @@
         "providerModelId": "openai/gpt-oss-safeguard-20b",
         "openRouterSlug": "openai/gpt-oss-safeguard-20b",
         "kind": "reasoning",
-        "familyPartner": "gpt-oss-20b",
         "openWeight": true,
         "license": "Apache-2.0",
         "aliases": ["openai/gpt-oss-safeguard-20b"],
@@ -7385,6 +7330,33 @@
       },
       "evidenceRefs": []
     },
+    "or-openai-gpt-oss-120b": {
+      "identity": {
+        "key": "or-openai-gpt-oss-120b",
+        "displayName": "OpenAI: gpt-oss-120b",
+        "provider": "open_router",
+        "developer": "openai",
+        "providerModelId": "openai/gpt-oss-120b",
+        "openRouterSlug": "openai/gpt-oss-120b",
+        "kind": "chat",
+        "openWeight": true,
+        "aliases": ["openai/gpt-oss-120b"],
+        "family": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025-08-05",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2025-08-05",
+        "deprecatedOn": null,
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
+      },
+      "evidenceRefs": []
+    },
     "or-openai-gpt-oss-120b-batch": {
       "identity": {
         "key": "or-openai-gpt-oss-120b-batch",
@@ -7396,6 +7368,33 @@
         "kind": "chat",
         "openWeight": true,
         "aliases": ["openai/gpt-oss-120b", "openai/gpt-oss-120b:batch"],
+        "family": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025-08-05",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2025-08-05",
+        "deprecatedOn": null,
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05"
+      },
+      "evidenceRefs": []
+    },
+    "or-openai-gpt-oss-20b": {
+      "identity": {
+        "key": "or-openai-gpt-oss-20b",
+        "displayName": "OpenAI: gpt-oss-20b",
+        "provider": "open_router",
+        "developer": "openai",
+        "providerModelId": "openai/gpt-oss-20b",
+        "openRouterSlug": "openai/gpt-oss-20b",
+        "kind": "chat",
+        "openWeight": true,
+        "aliases": ["openai/gpt-oss-20b"],
         "family": null
       },
       "lifecycle": {
@@ -11421,7 +11420,9 @@
       "or-openai-gpt-chat-latest",
       "or-openai-gpt-latest",
       "or-openai-gpt-mini-latest",
+      "or-openai-gpt-oss-120b",
       "or-openai-gpt-oss-120b-batch",
+      "or-openai-gpt-oss-20b",
       "or-openai-gpt-oss-20b-batch",
       "or-openai-o1",
       "or-openai-o1-pro",
@@ -11562,7 +11563,7 @@
     "moonshot": ["kimi-k3", "kimi-k2.7-code", "kimi-k2.6"],
     "xai": ["grok-4.6"],
     "minimax": ["minimax-m3", "minimax-m2.7"],
-    "groq": ["gpt-oss-120b", "gpt-oss-20b", "gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
+    "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
   },
   "routes": {
     "openai/gpt-6-astra": {
@@ -11593,6 +11594,62 @@
             "cacheWritePerMillion": 25
           }
         ]
+      }
+    },
+    "experientiallabs/gpt-6-astra": {
+      "modelKey": "gpt-6-astra",
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-6-astra",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheWritePerMillion": 10
+      }
+    },
+    "cheaperinference/gpt-6-astra": {
+      "modelKey": "gpt-6-astra",
+      "provider": "cheaperinference",
+      "providerModelId": "gpt-6-astra",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 7,
+        "outputPerMillion": 35,
+        "cacheReadPerMillion": 0.7,
+        "cacheWritePerMillion": 8.75
+      },
+      "discount": {
+        "minPercent": 30,
+        "requestField": "min_discount_percent",
+        "listPricing": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 10,
+          "outputPerMillion": 50,
+          "cacheReadPerMillion": 1,
+          "cacheWritePerMillion": 12.5
+        },
+        "source": "https://www.cheaperinference.com/docs",
+        "verifiedOn": "2026-09-06"
       }
     },
     "openai/gpt-5.6-sol": {
@@ -11651,13 +11708,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "openai/gpt-5.6-sol",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11677,8 +11734,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11700,6 +11757,27 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "experientiallabs/gpt-5.6-sol": {
+      "modelKey": "gpt-5.6-sol",
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-5.6-sol",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 4,
+        "outputPerMillion": 20,
+        "cacheReadPerMillion": 0.4,
+        "cacheWritePerMillion": 4
       }
     },
     "openai/gpt-5.6-terra": {
@@ -11758,13 +11836,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "openai/gpt-5.6-terra",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11784,8 +11862,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11807,6 +11885,27 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "experientiallabs/gpt-5.6-terra": {
+      "modelKey": "gpt-5.6-terra",
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-5.6-terra",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2
       }
     },
     "openai/gpt-5.6-luna": {
@@ -11865,13 +11964,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "openai/gpt-5.6-luna",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11891,8 +11990,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11914,6 +12013,27 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "experientiallabs/gpt-5.6-luna": {
+      "modelKey": "gpt-5.6-luna",
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-5.6-luna",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.02,
+        "cacheWritePerMillion": 0.2
       }
     },
     "anthropic/claude-fable-5-1": {
@@ -11965,13 +12085,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "anthropic/claude-fable-5.1",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -11991,8 +12111,29 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 0.25,
+        "cacheWritePerMillion": 12.5
+      }
+    },
+    "experientiallabs_anthropic/claude-fable-5-1": {
+      "modelKey": "claude-fable-5-1",
+      "provider": "experientiallabs_anthropic",
+      "providerModelId": "claude-fable-5.1",
+      "harnessId": "experientiallabs-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12050,13 +12191,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "anthropic/claude-opus-5",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12076,8 +12217,29 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25
+      }
+    },
+    "experientiallabs_anthropic/claude-opus-5": {
+      "modelKey": "claude-opus-5",
+      "provider": "experientiallabs_anthropic",
+      "providerModelId": "claude-opus-5",
+      "harnessId": "experientiallabs-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12135,13 +12297,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "anthropic/claude-sonnet-5",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12161,8 +12323,29 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
+      }
+    },
+    "experientiallabs_anthropic/claude-sonnet-5": {
+      "modelKey": "claude-sonnet-5",
+      "provider": "experientiallabs_anthropic",
+      "providerModelId": "claude-sonnet-5",
+      "harnessId": "experientiallabs-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12192,6 +12375,48 @@
         "cacheReadPerMillion": 0.1,
         "cacheWritePerMillion": 1.25,
         "cacheWrite1hPerMillion": 2
+      }
+    },
+    "experientiallabs_anthropic/claude-haiku-4-5": {
+      "modelKey": "claude-haiku-4-5",
+      "provider": "experientiallabs_anthropic",
+      "providerModelId": "claude-haiku-4.5",
+      "harnessId": "experientiallabs-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1,
+        "outputPerMillion": 5,
+        "cacheReadPerMillion": 0.1,
+        "cacheWritePerMillion": 1.25
+      }
+    },
+    "cheaperinference_anthropic/claude-haiku-4-5": {
+      "modelKey": "claude-haiku-4-5",
+      "provider": "cheaperinference_anthropic",
+      "providerModelId": "claude-haiku-4.5",
+      "harnessId": "cheaperinference-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1,
+        "outputPerMillion": 5,
+        "cacheReadPerMillion": 0.1,
+        "cacheWritePerMillion": 1.25
       }
     },
     "google/gemini-embedding-2": {
@@ -12267,13 +12492,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "google/gemini-3.1-pro-preview",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12293,8 +12518,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12316,6 +12541,27 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "experientiallabs/gemini-3.1-pro-preview": {
+      "modelKey": "gemini-3.1-pro-preview",
+      "provider": "experientiallabs",
+      "providerModelId": "gemini-3.1-pro-preview",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 2,
+        "cacheWritePerMillion": 2
       }
     },
     "google/gemini-3.5-flash-lite": {
@@ -12364,13 +12610,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "google/gemini-3.5-flash-lite",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12390,8 +12636,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12413,6 +12659,27 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "experientiallabs/gemini-3.5-flash-lite": {
+      "modelKey": "gemini-3.5-flash-lite",
+      "provider": "experientiallabs",
+      "providerModelId": "gemini-3.5-flash-lite",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2.5,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0.3
       }
     },
     "google/gemini-3.1-flash-lite": {
@@ -12541,13 +12808,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "deepseek/deepseek-v4-flash",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12567,8 +12834,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12695,6 +12962,46 @@
         "cacheWritePerMillion": 0.14
       }
     },
+    "experientiallabs/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "experientiallabs",
+      "providerModelId": "deepseek-v4-flash",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.19,
+        "outputPerMillion": 0.51,
+        "cacheReadPerMillion": 0.028,
+        "cacheWritePerMillion": 0.19
+      }
+    },
+    "workers_ai/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/deepseek-ai/deepseek-v4-flash-0731",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.44,
+        "outputPerMillion": 1.32
+      }
+    },
     "deepseek/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
       "provider": "deepseek",
@@ -12741,13 +13048,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "deepseek/deepseek-v4-pro",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12767,8 +13074,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -12895,6 +13202,46 @@
         "cacheWritePerMillion": 1.32
       }
     },
+    "experientiallabs/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "experientiallabs",
+      "providerModelId": "deepseek-v4-pro",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.74,
+        "outputPerMillion": 3.48,
+        "cacheReadPerMillion": 0.145,
+        "cacheWritePerMillion": 1.74
+      }
+    },
+    "workers_ai/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.32,
+        "outputPerMillion": 3.96
+      }
+    },
     "deepseek/deepseek-v4-flash-vision-exp": {
       "modelKey": "deepseek-v4-flash-vision-exp",
       "provider": "deepseek",
@@ -12962,13 +13309,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "alibaba/qwen3.5-flash",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": false,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13269,13 +13616,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "google/gemini-3.8-flash",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13283,6 +13630,27 @@
         "outputPerMillion": 3.75,
         "cacheReadPerMillion": 0.075,
         "cacheWritePerMillion": 0
+      }
+    },
+    "experientiallabs/gemini-3.8-flash": {
+      "modelKey": "gemini-3.8-flash",
+      "provider": "experientiallabs",
+      "providerModelId": "gemini-3.8-flash",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.75,
+        "outputPerMillion": 3.75,
+        "cacheReadPerMillion": 0.075,
+        "cacheWritePerMillion": 0.75
       }
     },
     "google/gemini-3.6-flash": {
@@ -13353,13 +13721,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "zai/glm-5.3",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13379,8 +13747,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13488,6 +13856,46 @@
         "cacheWritePerMillion": 1.4
       }
     },
+    "experientiallabs/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "experientiallabs",
+      "providerModelId": "glm-5.3",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadPerMillion": 0.26,
+        "cacheWritePerMillion": 1.4
+      }
+    },
+    "workers_ai/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/zai-org/glm-5.3",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4
+      }
+    },
     "zhipu/glm-5.3-flash": {
       "modelKey": "glm-5.3-flash",
       "provider": "zhipu",
@@ -13536,13 +13944,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "zai/glm-5.3-flash",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13562,8 +13970,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13669,6 +14077,46 @@
         "cacheWritePerMillion": 0.075
       }
     },
+    "experientiallabs/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "experientiallabs",
+      "providerModelId": "glm-5.3-flash",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0.15
+      }
+    },
+    "workers_ai/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/zai-org/glm-5.3-flash",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.5
+      }
+    },
     "qwen/qwen-3.7-plus": {
       "modelKey": "qwen-3.7-plus",
       "provider": "qwen",
@@ -13725,13 +14173,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "alibaba/qwen3.7-plus",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13787,13 +14235,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "moonshotai/kimi-k3",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13813,8 +14261,8 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -13941,6 +14389,27 @@
         "cacheWritePerMillion": 3
       }
     },
+    "experientiallabs/kimi-k3": {
+      "modelKey": "kimi-k3",
+      "provider": "experientiallabs",
+      "providerModelId": "kimi-k3",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3.3,
+        "outputPerMillion": 16.5,
+        "cacheReadPerMillion": 0.33,
+        "cacheWritePerMillion": 3.3
+      }
+    },
     "moonshot/kimi-k2.7-code": {
       "modelKey": "kimi-k2.7-code",
       "provider": "moonshot",
@@ -13959,6 +14428,46 @@
         "inputPerMillion": 0.95,
         "outputPerMillion": 4,
         "cacheReadPerMillion": 0.19
+      }
+    },
+    "experientiallabs/kimi-k2.7-code": {
+      "modelKey": "kimi-k2.7-code",
+      "provider": "experientiallabs",
+      "providerModelId": "kimi-k2.7-code",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4,
+        "cacheReadPerMillion": 0.19,
+        "cacheWritePerMillion": 0.95
+      }
+    },
+    "workers_ai/kimi-k2.7-code": {
+      "modelKey": "kimi-k2.7-code",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/moonshotai/kimi-k2.7-code",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4
       }
     },
     "moonshot/kimi-k2.6": {
@@ -14036,13 +14545,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "spacexai/grok-4.6",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -14050,6 +14559,27 @@
         "outputPerMillion": 6,
         "cacheReadPerMillion": 0.5,
         "cacheWritePerMillion": 0
+      }
+    },
+    "experientiallabs/grok-4.6": {
+      "modelKey": "grok-4.6",
+      "provider": "experientiallabs",
+      "providerModelId": "grok-4.6",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 2
       }
     },
     "google/veo-3.1": {
@@ -14207,13 +14737,13 @@
       "provider": "vercel_gateway",
       "providerModelId": "minimax/minimax-m3",
       "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -14461,279 +14991,6 @@
         "outputPerMillion": 0
       }
     },
-    "groq/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "groq",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.15,
-        "outputPerMillion": 0.6,
-        "cacheReadPerMillion": 0.075
-      }
-    },
-    "open_router/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.037,
-        "outputPerMillion": 0.17,
-        "cacheReadPerMillion": 0,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "vercel_gateway/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.1,
-        "outputPerMillion": 0.5,
-        "cacheReadPerMillion": 0,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "cheaperinference/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-oss-120b",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.105,
-        "outputPerMillion": 0.42,
-        "cacheReadPerMillion": 0.0525,
-        "cacheWritePerMillion": 0.105
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.15,
-          "outputPerMillion": 0.6,
-          "cacheReadPerMillion": 0.075,
-          "cacheWritePerMillion": 0.15
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "deepinfra/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "deepinfra",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "deepinfra/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.037,
-        "outputPerMillion": 0.17
-      }
-    },
-    "together/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "together",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "together/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.15,
-        "outputPerMillion": 0.6
-      }
-    },
-    "novita/gpt-oss-120b": {
-      "modelKey": "gpt-oss-120b",
-      "provider": "novita",
-      "providerModelId": "openai/gpt-oss-120b",
-      "harnessId": "novita/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.05,
-        "outputPerMillion": 0.25
-      }
-    },
-    "groq/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "groq",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.075,
-        "outputPerMillion": 0.3,
-        "cacheReadPerMillion": 0.0375
-      }
-    },
-    "open_router/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.03,
-        "outputPerMillion": 0.13,
-        "cacheReadPerMillion": 0.03,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "vercel_gateway/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.05,
-        "outputPerMillion": 0.2,
-        "cacheReadPerMillion": 0,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "deepinfra/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "deepinfra",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "deepinfra/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.03,
-        "outputPerMillion": 0.14
-      }
-    },
-    "together/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "together",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "together/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.05,
-        "outputPerMillion": 0.2
-      }
-    },
-    "novita/gpt-oss-20b": {
-      "modelKey": "gpt-oss-20b",
-      "provider": "novita",
-      "providerModelId": "openai/gpt-oss-20b",
-      "harnessId": "novita/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.04,
-        "outputPerMillion": 0.15
-      }
-    },
     "groq/gpt-oss-safeguard-20b": {
       "modelKey": "gpt-oss-safeguard-20b",
       "provider": "groq",
@@ -14773,6 +15030,37 @@
         "outputPerMillion": 3
       }
     },
+    "cheaperinference/qwen-3.6-27b": {
+      "modelKey": "qwen-3.6-27b",
+      "provider": "cheaperinference",
+      "providerModelId": "qwen3.6-27b",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "preview",
+      "selectable": false,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.42,
+        "outputPerMillion": 2.1
+      },
+      "discount": {
+        "minPercent": 30,
+        "requestField": "min_discount_percent",
+        "listPricing": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.6,
+          "outputPerMillion": 3
+        },
+        "source": "https://www.cheaperinference.com/docs",
+        "verifiedOn": "2026-09-06"
+      }
+    },
     "groq/qwen-3.8-27b": {
       "modelKey": "qwen-3.8-27b",
       "provider": "groq",
@@ -14790,6 +15078,77 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.8,
         "outputPerMillion": 4
+      }
+    },
+    "experientiallabs/qwen-3.8-27b": {
+      "modelKey": "qwen-3.8-27b",
+      "provider": "experientiallabs",
+      "providerModelId": "qwen3.8-27b",
+      "harnessId": "experientiallabs/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "preview",
+      "selectable": false,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.99,
+        "outputPerMillion": 3.2,
+        "cacheReadPerMillion": 0.99,
+        "cacheWritePerMillion": 0.99
+      }
+    },
+    "cheaperinference/qwen-3.8-27b": {
+      "modelKey": "qwen-3.8-27b",
+      "provider": "cheaperinference",
+      "providerModelId": "qwen-3-8-27b",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "preview",
+      "selectable": false,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.56,
+        "outputPerMillion": 2.8
+      },
+      "discount": {
+        "minPercent": 30,
+        "requestField": "min_discount_percent",
+        "listPricing": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.8,
+          "outputPerMillion": 4
+        },
+        "source": "https://www.cheaperinference.com/docs",
+        "verifiedOn": "2026-09-06"
+      }
+    },
+    "workers_ai/qwen-3.8-27b": {
+      "modelKey": "qwen-3.8-27b",
+      "provider": "workers_ai",
+      "providerModelId": "@cf/qwen/qwen3.8-27b",
+      "harnessId": "workers-ai/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "preview",
+      "selectable": false,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.45,
+        "outputPerMillion": 3.2
       }
     },
     "open_router/or-aion-labs-aion-2-0": {
@@ -19069,6 +19428,25 @@
         "cacheReadPerMillion": 0.075
       }
     },
+    "open_router/or-openai-gpt-oss-120b": {
+      "modelKey": "or-openai-gpt-oss-120b",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-oss-120b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "customer_byok",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.037,
+        "outputPerMillion": 0.17
+      }
+    },
     "open_router/or-openai-gpt-oss-120b-batch": {
       "modelKey": "or-openai-gpt-oss-120b-batch",
       "provider": "open_router",
@@ -19086,6 +19464,26 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.15,
         "outputPerMillion": 0.6
+      }
+    },
+    "open_router/or-openai-gpt-oss-20b": {
+      "modelKey": "or-openai-gpt-oss-20b",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-oss-20b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "customer_byok",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.03,
+        "outputPerMillion": 0.13,
+        "cacheReadPerMillion": 0.03
       }
     },
     "open_router/or-openai-gpt-oss-20b-batch": {
@@ -22169,8 +22567,13 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
-      "trustModes": ["byok"],
-      "features": {},
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      },
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
@@ -22274,6 +22677,36 @@
       "protocol": "openai_chat",
       "hostPolicy": "registry_declared",
       "gatewayId": "novita"
+    },
+    "experientiallabs/chat-completions": {
+      "provider": "experientiallabs",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "experientiallabs"
+    },
+    "experientiallabs-anthropic/messages": {
+      "provider": "experientiallabs_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "experientiallabs_anthropic"
+    },
+    "workers-ai/chat-completions": {
+      "provider": "workers_ai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-workers-ai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "workers_ai"
     }
   },
   "gateways": {
@@ -22291,7 +22724,7 @@
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
       },
-      "governanceReviewedOn": "2026-09-05"
+      "governanceReviewedOn": "2026-09-06"
     },
     "cheaperinference_anthropic": {
       "id": "cheaperinference_anthropic",
@@ -22301,7 +22734,7 @@
       "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
       "extraHeaderEnvs": {},
       "host": "api.cheaperinference.com",
-      "governanceReviewedOn": "2026-09-05"
+      "governanceReviewedOn": "2026-09-06"
     },
     "deepinfra": {
       "id": "deepinfra",
@@ -22311,6 +22744,26 @@
       "apiKeyEnv": "AGI_DEEPINFRA_API_KEY",
       "extraHeaderEnvs": {},
       "host": "api.deepinfra.com",
+      "governanceReviewedOn": "2026-09-06"
+    },
+    "experientiallabs": {
+      "id": "experientiallabs",
+      "displayName": "Experiential Labs",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "AGI_EXPERIENTIALLABS_BASE_URL",
+      "apiKeyEnv": "AGI_EXPERIENTIALLABS_API_KEY",
+      "extraHeaderEnvs": {},
+      "host": "api.experientiallabs.ai",
+      "governanceReviewedOn": "2026-09-06"
+    },
+    "experientiallabs_anthropic": {
+      "id": "experientiallabs_anthropic",
+      "displayName": "Experiential Labs (Anthropic Messages dialect)",
+      "protocol": "anthropic_messages",
+      "baseUrlEnv": "AGI_EXPERIENTIALLABS_ANTHROPIC_BASE_URL",
+      "apiKeyEnv": "AGI_EXPERIENTIALLABS_API_KEY",
+      "extraHeaderEnvs": {},
+      "host": "api.experientiallabs.ai",
       "governanceReviewedOn": "2026-09-06"
     },
     "novita": {
@@ -22331,6 +22784,16 @@
       "apiKeyEnv": "AGI_TOGETHER_API_KEY",
       "extraHeaderEnvs": {},
       "host": "api.together.ai",
+      "governanceReviewedOn": "2026-09-06"
+    },
+    "workers_ai": {
+      "id": "workers_ai",
+      "displayName": "Cloudflare Workers AI",
+      "protocol": "openai_chat_completions",
+      "baseUrlEnv": "WORKERS_AI_BASE_URL",
+      "apiKeyEnv": "WORKERS_AI_API_KEY",
+      "extraHeaderEnvs": {},
+      "host": "api.cloudflare.com",
       "governanceReviewedOn": "2026-09-06"
     }
   },
@@ -22368,6 +22831,10 @@
         "deepinfra/chat-completions",
         "together/chat-completions",
         "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -22408,6 +22875,10 @@
         "deepinfra/chat-completions",
         "together/chat-completions",
         "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -22438,7 +22909,8 @@
         "open-router/chat-completions",
         "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "vercel_gateway/chat-completions"
       ]
     },
     "desktop/local-chat": {
@@ -22482,6 +22954,10 @@
         "deepinfra/chat-completions",
         "together/chat-completions",
         "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -22521,7 +22997,8 @@
         "open-router/chat-completions",
         "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "vercel_gateway/chat-completions"
       ]
     },
     "cli/managed-chat": {
@@ -22550,7 +23027,11 @@
         "cheaperinference-anthropic/messages",
         "deepinfra/chat-completions",
         "together/chat-completions",
-        "novita/chat-completions"
+        "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions"
       ]
     },
     "cli/local-chat": {
@@ -22585,7 +23066,8 @@
         "open-router/chat-completions",
         "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "vercel_gateway/chat-completions"
       ]
     },
     "vscode/managed-chat": {
@@ -22614,7 +23096,11 @@
         "cheaperinference-anthropic/messages",
         "deepinfra/chat-completions",
         "together/chat-completions",
-        "novita/chat-completions"
+        "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions"
       ]
     },
     "vscode/local-chat": {
@@ -22652,7 +23138,11 @@
         "cheaperinference-anthropic/messages",
         "deepinfra/chat-completions",
         "together/chat-completions",
-        "novita/chat-completions"
+        "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions"
       ]
     },
     "chrome/browser-task": {
@@ -23913,54 +24403,6 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
-    },
-    "gpt-oss-120b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "gpt-oss-20b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
     },
     "gpt-oss-safeguard-20b": {
       "textInput": true,
@@ -29026,6 +29468,30 @@
       "codeExecution": false,
       "promptCaching": true
     },
+    "or-openai-gpt-oss-120b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
     "or-openai-gpt-oss-120b-batch": {
       "textInput": true,
       "imageInput": false,
@@ -29049,6 +29515,30 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
+    },
+    "or-openai-gpt-oss-20b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "or-openai-gpt-oss-20b-batch": {
       "textInput": true,
@@ -32384,33 +32874,33 @@
       "cacheTokenBillingClass": "unknown"
     },
     "vercel_gateway": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://vercel.com/docs/ai-gateway/security-and-compliance/zdr",
-      "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only. Vercel states AI Gateway has a ZDR policy and does not retain prompts, outputs, or sensitive data, and that user data is immediately and permanently deleted after requests are completed; separately, AI Gateway does not use prompts or responses for training purposes (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). The paid team-wide or per-request zeroDataRetention toggle instead restricts routing to upstream model providers that have their own negotiated ZDR agreement with Vercel; that upstream policy varies by provider and applies per model, and is not covered by this record. No residency or region commitment is published for AI Gateway's own infrastructure.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer is zero retention: Vercel states AI Gateway does not retain prompts, outputs or sensitive data and deletes user data immediately after a request completes, and does not use prompts or responses for training (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). Upstream retention follows the provider that serves, so the class is conditional: the per-request providerOptions.gateway.zeroDataRetention flag, free on Pro and Enterprise, restricts routing to providers Vercel holds zero-retention agreements with (Anthropic, Azure, Bedrock, Google Vertex, Groq, Fireworks, DeepInfra, Together, Cerebras, Mistral, Moonshot and others on the published list) and fails the request with no_providers_available when none serves the model. The condition on this class is that the adapter sends that flag for a zero-retention workspace, which the vercel_gateway harness declares as zeroDataRetentionOnRequest. Anthropic's claude-fable-5 is excluded from zero retention on every provider (30-day retention, not used for training). Provider prompt caching is at the provider's layer and its retention follows the provider. No residency commitment is published. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates, no fixed residency list is published.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference_anthropic": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-05",
-      "note": "Same Cheaper Inference (Keak) governance as the cheaperinference chat-completions route, exposed here through the Anthropic Messages-compatible dialect at api.cheaperinference.com. See the cheaperinference record for the sourced quotes; upstream model provider policy applies per model and is not covered here.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
       "cacheTokenBillingClass": "additional_to_input",
       "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
       "cacheTokenBillingVerifiedOn": "2026-09-05",
@@ -32540,13 +33030,13 @@
       "cacheTokenBillingClass": "unknown"
     },
     "workers_ai": {
-      "dataRetentionClass": "conditional",
-      "zeroDataRetentionAvailability": "per_request_setting",
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://developers.cloudflare.com/workers-ai/platform/data-usage/",
-      "verifiedOn": "2026-09-05",
-      "note": "Workers AI runs open-weight models directly on Cloudflare's own infrastructure behind the AI Gateway compat endpoint; there is no separate third-party upstream provider layer for this route the way there is for vercel_gateway or bedrock. Cloudflare does not use customer content to train any AI models made available on Workers AI or to improve any Cloudflare or third-party services, and would not do so without explicit consent. AI Gateway request and response logs persist by default for an account-configured duration and can be turned off account-wide in dashboard settings, or per request via the cf-aig-collect-log:false header (drop all logging) or cf-aig-collect-log-payload:false (drop stored bodies, keep metadata) (https://developers.cloudflare.com/ai-gateway/observability/logging/). No residency or region commitment is published for this route.",
+      "verifiedOn": "2026-09-06",
+      "note": "Workers AI runs open-weight models on Cloudflare's own infrastructure; this route reaches it on the direct account-scoped OpenAI-compatible endpoint, so no AI Gateway log is in the path. Cloudflare states Customer Content for Workers AI may be stored only if the customer specifically uses a storage service (R2, KV, Durable Objects, Vectorize) with it, and that it does not use Customer Content to train any AI model made available on Workers AI or to improve any Cloudflare or third-party service, and would not do so without explicit consent. No processing region list is published for Workers AI. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "runway": {
@@ -32626,6 +33116,29 @@
       "verifiedOn": "2026-09-06",
       "note": "Section 10.2 of the terms: content is not used to train Novita's own models or improve the Services by default, and is not retained longer than necessary to provide the Services; automated safety screening is carved out. Processing regions are not published. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
+    },
+    "experientiallabs": {
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null,
+      "source": "https://platform.experientiallabs.ai/llms.txt",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Resolute Labs AI, Inc. (Delaware) as Experiential Labs. Retention follows the rung that serves a request: the keyless catalog (GET /api/models) carries a per-model retention verdict computed over the lanes the gateway actually routes (zdr_all_rungs, zdr_enforceable, not_zdr) and each provider row a zero_data_retention flag, and the organisation policy require-ZDR (settings/data-controls) restricts routing to zero-retention lanes; the condition on this class is that the founder turns that control on for the company organisation. Responses API continuations are retained 24 hours unless store:false; nothing is stored with the upstream provider either way. Training on inputs is unverified: the public website privacy policy (https://www.experientiallabs.ai/privacy, 2026-09-04) covers only the marketing site and states the platform is a separate service outside it, and the platform's own policy requires sign-in. The website policy names United States processing for its own data; no residency commitment is published for the gateway, so no region is claimed. Upstream model providers retain inputs under their own practices per rung; that policy applies per model and is not covered here.",
+      "cacheTokenBillingClass": "unknown"
+    },
+    "experientiallabs_anthropic": {
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null,
+      "source": "https://platform.experientiallabs.ai/llms.txt",
+      "verifiedOn": "2026-09-06",
+      "note": "Same Experiential Labs governance as the experientiallabs chat-completions route, exposed here through the Anthropic Messages dialect at api.experientiallabs.ai/v1/messages. See the experientiallabs record for the sourced quotes; upstream model provider policy applies per rung and is not covered here.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.experientiallabs.ai/llms.txt",
+      "cacheTokenBillingVerifiedOn": "2026-09-06",
+      "cacheTokenBillingNote": "The reference states that on /v1/messages prompt caching usage reports cache_creation_input_tokens and cache_read_input_tokens with input_tokens excluding both, exactly like Anthropic's own API, so cached tokens are additional to, not a subset of, input_tokens."
     }
   },
   "providerDefaults": {
@@ -33254,20 +33767,6 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 0,
       "outputPerMillion": 0
-    },
-    "gpt-oss-120b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.15,
-      "outputPerMillion": 0.6,
-      "cacheReadPerMillion": 0.075
-    },
-    "gpt-oss-20b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.075,
-      "outputPerMillion": 0.3,
-      "cacheReadPerMillion": 0.0375
     },
     "gpt-oss-safeguard-20b": {
       "currency": "USD",
@@ -34861,11 +35360,24 @@
       "outputPerMillion": 4.5,
       "cacheReadPerMillion": 0.075
     },
+    "or-openai-gpt-oss-120b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.037,
+      "outputPerMillion": 0.17
+    },
     "or-openai-gpt-oss-120b-batch": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.15,
       "outputPerMillion": 0.6
+    },
+    "or-openai-gpt-oss-20b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.03,
+      "outputPerMillion": 0.13,
+      "cacheReadPerMillion": 0.03
     },
     "or-openai-gpt-oss-20b-batch": {
       "currency": "USD",
@@ -36204,8 +36716,6 @@
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
     "openrouter-free": { "contextTokens": 200000 },
-    "gpt-oss-120b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "gpt-oss-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "qwen-3.6-27b": { "contextTokens": 131072, "maxOutputTokens": 16384 },
     "qwen-3.8-27b": { "contextTokens": 131042, "maxOutputTokens": 16384 },
@@ -36474,7 +36984,9 @@
     "or-openai-gpt-chat-latest": { "contextTokens": 400000, "maxOutputTokens": 128000 },
     "or-openai-gpt-latest": { "contextTokens": 1050000, "maxOutputTokens": 128000 },
     "or-openai-gpt-mini-latest": { "contextTokens": 400000, "maxOutputTokens": 128000 },
+    "or-openai-gpt-oss-120b": { "contextTokens": 131072, "maxOutputTokens": 117964 },
     "or-openai-gpt-oss-120b-batch": { "contextTokens": 131072, "maxOutputTokens": 117964 },
+    "or-openai-gpt-oss-20b": { "contextTokens": 131072, "maxOutputTokens": 117964 },
     "or-openai-gpt-oss-20b-batch": { "contextTokens": 131072, "maxOutputTokens": 117964 },
     "or-openai-o1": { "contextTokens": 200000, "maxOutputTokens": 100000 },
     "or-openai-o1-pro": { "contextTokens": 200000, "maxOutputTokens": 100000 },
@@ -36817,8 +37329,6 @@
     "openrouter-auto": {},
     "openrouter-auto-beta": {},
     "openrouter-free": {},
-    "gpt-oss-120b": {},
-    "gpt-oss-20b": {},
     "gpt-oss-safeguard-20b": {},
     "qwen-3.6-27b": {},
     "qwen-3.8-27b": {},
@@ -37030,7 +37540,9 @@
     "or-openai-gpt-chat-latest": {},
     "or-openai-gpt-latest": {},
     "or-openai-gpt-mini-latest": {},
+    "or-openai-gpt-oss-120b": {},
     "or-openai-gpt-oss-120b-batch": {},
+    "or-openai-gpt-oss-20b": {},
     "or-openai-gpt-oss-20b-batch": {},
     "or-openai-o1": {},
     "or-openai-o1-pro": {},
@@ -38203,12 +38715,12 @@
       },
       "slots": {
         "free_workhorse": {
-          "modelKey": "gpt-oss-120b",
+          "modelKey": "openrouter-free",
           "label": "Free Workhorse",
           "description": "Shared free workhorse route. Model and provider are selected by the canonical registry."
         },
         "free_workhorse_fast": {
-          "modelKey": "gpt-oss-20b",
+          "modelKey": "openrouter-free",
           "label": "Free Workhorse Fast",
           "description": "Shared free workhorse fast route. Model and provider are selected by the canonical registry."
         },

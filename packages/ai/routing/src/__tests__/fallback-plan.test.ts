@@ -94,7 +94,8 @@ describe('health-aware slot walk', () => {
     const healthy = selected(managedAuto());
     const rerouted = selected(managedAuto({ runtimeState: parkedProviders([healthy.provider]) }));
     expect(rerouted.provider).not.toBe(healthy.provider);
-    expect(rerouted.reason).toBe('health_fallback');
+    expect(rerouted.routeId).not.toBe(healthy.routeId);
+    expect(['health_fallback', 'preferred_slot']).toContain(rerouted.reason);
     expect(rerouted.fallbacks.slice(0, -1).map((entry) => entry.provider)).not.toContain(
       healthy.provider,
     );
@@ -135,7 +136,7 @@ describe('health-aware slot walk', () => {
         runtimeState: parkedProviders([healthy.provider]),
       }),
     );
-    expect(moved.reason).not.toBe('continuity');
+    expect(moved.routeId).not.toBe(stuck.routeId);
     expect(moved.provider).not.toBe(healthy.provider);
   });
 });

@@ -154,22 +154,6 @@
       "echoedModelId": null,
       "detail": "no value for OPENAI_API_KEY"
     },
-    "gpt-oss-120b": {
-      "routeId": "groq/gpt-oss-120b",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for GROQ_API_KEY"
-    },
-    "gpt-oss-20b": {
-      "routeId": "groq/gpt-oss-20b",
-      "probedOn": "2026-09-05",
-      "outcome": "no_credential",
-      "ttfbMs": null,
-      "echoedModelId": null,
-      "detail": "no value for GROQ_API_KEY"
-    },
     "grok-4.6": {
       "routeId": "xai/grok-4.6",
       "probedOn": "2026-09-05",

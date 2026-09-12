@@ -66,33 +66,33 @@
       "cacheTokenBillingClass": "unknown"
     },
     "vercel_gateway": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://vercel.com/docs/ai-gateway/security-and-compliance/zdr",
-      "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only. Vercel states AI Gateway has a ZDR policy and does not retain prompts, outputs, or sensitive data, and that user data is immediately and permanently deleted after requests are completed; separately, AI Gateway does not use prompts or responses for training purposes (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). The paid team-wide or per-request zeroDataRetention toggle instead restricts routing to upstream model providers that have their own negotiated ZDR agreement with Vercel; that upstream policy varies by provider and applies per model, and is not covered by this record. No residency or region commitment is published for AI Gateway's own infrastructure.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer is zero retention: Vercel states AI Gateway does not retain prompts, outputs or sensitive data and deletes user data immediately after a request completes, and does not use prompts or responses for training (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). Upstream retention follows the provider that serves, so the class is conditional: the per-request providerOptions.gateway.zeroDataRetention flag, free on Pro and Enterprise, restricts routing to providers Vercel holds zero-retention agreements with (Anthropic, Azure, Bedrock, Google Vertex, Groq, Fireworks, DeepInfra, Together, Cerebras, Mistral, Moonshot and others on the published list) and fails the request with no_providers_available when none serves the model. The condition on this class is that the adapter sends that flag for a zero-retention workspace, which the vercel_gateway harness declares as zeroDataRetentionOnRequest. Anthropic's claude-fable-5 is excluded from zero retention on every provider (30-day retention, not used for training). Provider prompt caching is at the provider's layer and its retention follows the provider. No residency commitment is published. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates, no fixed residency list is published.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference_anthropic": {
-      "dataRetentionClass": "zero_retention",
-      "zeroDataRetentionAvailability": "default",
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-05",
-      "note": "Same Cheaper Inference (Keak) governance as the cheaperinference chat-completions route, exposed here through the Anthropic Messages-compatible dialect at api.cheaperinference.com. See the cheaperinference record for the sourced quotes; upstream model provider policy applies per model and is not covered here.",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
       "cacheTokenBillingClass": "additional_to_input",
       "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
       "cacheTokenBillingVerifiedOn": "2026-09-05",
@@ -222,13 +222,13 @@
       "cacheTokenBillingClass": "unknown"
     },
     "workers_ai": {
-      "dataRetentionClass": "conditional",
-      "zeroDataRetentionAvailability": "per_request_setting",
+      "dataRetentionClass": "zero_retention",
+      "zeroDataRetentionAvailability": "default",
       "trainsOnInputs": "never",
       "residencyRegions": null,
       "source": "https://developers.cloudflare.com/workers-ai/platform/data-usage/",
-      "verifiedOn": "2026-09-05",
-      "note": "Workers AI runs open-weight models directly on Cloudflare's own infrastructure behind the AI Gateway compat endpoint; there is no separate third-party upstream provider layer for this route the way there is for vercel_gateway or bedrock. Cloudflare does not use customer content to train any AI models made available on Workers AI or to improve any Cloudflare or third-party services, and would not do so without explicit consent. AI Gateway request and response logs persist by default for an account-configured duration and can be turned off account-wide in dashboard settings, or per request via the cf-aig-collect-log:false header (drop all logging) or cf-aig-collect-log-payload:false (drop stored bodies, keep metadata) (https://developers.cloudflare.com/ai-gateway/observability/logging/). No residency or region commitment is published for this route.",
+      "verifiedOn": "2026-09-06",
+      "note": "Workers AI runs open-weight models on Cloudflare's own infrastructure; this route reaches it on the direct account-scoped OpenAI-compatible endpoint, so no AI Gateway log is in the path. Cloudflare states Customer Content for Workers AI may be stored only if the customer specifically uses a storage service (R2, KV, Durable Objects, Vectorize) with it, and that it does not use Customer Content to train any AI model made available on Workers AI or to improve any Cloudflare or third-party service, and would not do so without explicit consent. No processing region list is published for Workers AI. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
     },
     "runway": {
@@ -308,6 +308,29 @@
       "verifiedOn": "2026-09-06",
       "note": "Section 10.2 of the terms: content is not used to train Novita's own models or improve the Services by default, and is not retained longer than necessary to provide the Services; automated safety screening is carved out. Processing regions are not published. Retrieved 2026-09-06.",
       "cacheTokenBillingClass": "unknown"
+    },
+    "experientiallabs": {
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null,
+      "source": "https://platform.experientiallabs.ai/llms.txt",
+      "verifiedOn": "2026-09-06",
+      "note": "Gateway's own layer only, operated by Resolute Labs AI, Inc. (Delaware) as Experiential Labs. Retention follows the rung that serves a request: the keyless catalog (GET /api/models) carries a per-model retention verdict computed over the lanes the gateway actually routes (zdr_all_rungs, zdr_enforceable, not_zdr) and each provider row a zero_data_retention flag, and the organisation policy require-ZDR (settings/data-controls) restricts routing to zero-retention lanes; the condition on this class is that the founder turns that control on for the company organisation. Responses API continuations are retained 24 hours unless store:false; nothing is stored with the upstream provider either way. Training on inputs is unverified: the public website privacy policy (https://www.experientiallabs.ai/privacy, 2026-09-04) covers only the marketing site and states the platform is a separate service outside it, and the platform's own policy requires sign-in. The website policy names United States processing for its own data; no residency commitment is published for the gateway, so no region is claimed. Upstream model providers retain inputs under their own practices per rung; that policy applies per model and is not covered here.",
+      "cacheTokenBillingClass": "unknown"
+    },
+    "experientiallabs_anthropic": {
+      "dataRetentionClass": "conditional",
+      "zeroDataRetentionAvailability": "per_request_setting",
+      "trainsOnInputs": "unknown",
+      "residencyRegions": null,
+      "source": "https://platform.experientiallabs.ai/llms.txt",
+      "verifiedOn": "2026-09-06",
+      "note": "Same Experiential Labs governance as the experientiallabs chat-completions route, exposed here through the Anthropic Messages dialect at api.experientiallabs.ai/v1/messages. See the experientiallabs record for the sourced quotes; upstream model provider policy applies per rung and is not covered here.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.experientiallabs.ai/llms.txt",
+      "cacheTokenBillingVerifiedOn": "2026-09-06",
+      "cacheTokenBillingNote": "The reference states that on /v1/messages prompt caching usage reports cache_creation_input_tokens and cache_read_input_tokens with input_tokens excluding both, exactly like Anthropic's own API, so cached tokens are additional to, not a subset of, input_tokens."
     }
   }
 }
