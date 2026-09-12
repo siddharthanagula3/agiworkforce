@@ -478,3 +478,165 @@ export async function enrichWebSearchResultTitles<T extends { url: string; title
   );
   return enriched;
 }
+
+/**
+ * Hosts that stand in front of a publisher rather than being one.
+ *
+ * The display-side twin of this set is `ROUTING_REDIRECT_HOSTS` in
+ * `packages/ui/unified-chat/src/components/markdown/citationPublisher.ts`,
+ * which answers which domain to NAME. This one answers where the link should
+ * GO, and the two must list the same hosts. Exact hostnames, not a suffix
+ * match: a publisher whose own domain contains a vendor's name keeps its
+ * identity.
+ */
+const ROUTING_REDIRECT_HOSTS: ReadonlySet<string> = new Set([
+  'vertexaisearch.cloud.google.com',
+  'grounding-api-redirect.googleapis.com',
+]);
+
+export const REDIRECT_RESOLUTION_TIMEOUT_MS = 2_000;
+export const REDIRECT_RESOLUTION_MAX_HOPS = 3;
+
+interface RedirectCacheEntry {
+  url: string | null;
+  expiresAt: number;
+}
+
+const redirectCache = new Map<string, RedirectCacheEntry>();
+
+function cachedResolvedUrl(url: string): string | null | undefined {
+  const entry = redirectCache.get(url);
+  if (!entry || entry.expiresAt <= Date.now()) return undefined;
+  return entry.url;
+}
+
+function setCachedResolvedUrl(url: string, resolved: string | null): void {
+  if (redirectCache.size > 5_000) {
+    const now = Date.now();
+    for (const [key, entry] of redirectCache) {
+      if (entry.expiresAt <= now) redirectCache.delete(key);
+    }
+  }
+  redirectCache.set(url, { url: resolved, expiresAt: Date.now() + TITLE_ENRICHMENT_CACHE_TTL_MS });
+}
+
+export function isRoutingRedirectUrl(url: string): boolean {
+  try {
+    return ROUTING_REDIRECT_HOSTS.has(new URL(url).hostname.toLowerCase().replace(/^www\./, ''));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Follow one routing redirect to the page it stands in front of.
+ *
+ * Manual redirects, one hop at a time, so nothing is downloaded: the Location
+ * header is the whole answer, and the egress guard gets to vet every hop rather
+ * than only the first. A hop that lands on another router is followed again up
+ * to {@link REDIRECT_RESOLUTION_MAX_HOPS}; anything else, an error, a timeout,
+ * a relative or non-http Location, resolves to null and the caller keeps the
+ * redirect it already had.
+ */
+async function resolveRedirectTarget(
+  url: string,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+): Promise<string | null> {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let current = url;
+    for (let hop = 0; hop < REDIRECT_RESOLUTION_MAX_HOPS; hop += 1) {
+      try {
+        await assertResolvedPublicHostname(current);
+      } catch (guardErr) {
+        if (guardErr instanceof EgressPolicyError) return null;
+        throw guardErr;
+      }
+
+      let response: Response;
+      try {
+        response = await fetchImpl(current, {
+          method: 'GET',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: { 'User-Agent': 'AGIWorkforce-CitationResolution/1.0' },
+        });
+      } catch {
+        return null;
+      }
+      await response.body?.cancel().catch(() => undefined);
+
+      const location = response.headers.get('location');
+      if (!location) return null;
+      let next: string;
+      try {
+        next = new URL(location, current).toString();
+      } catch {
+        return null;
+      }
+      if (!isHttpUrl(next)) return null;
+      if (!isRoutingRedirectUrl(next)) return next;
+      current = next;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+export interface RedirectResolutionOverrides {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  maxConcurrency?: number;
+}
+
+/**
+ * Replace every routing-provider redirect in a source list with the publisher
+ * URL it points at.
+ *
+ * A grounded result arrives carrying the router's link, not the publisher's,
+ * and those links expire. Persisting one means a saved conversation
+ * accumulates citations that are dead by the time anyone follows them. This is
+ * the ingestion hop where that can be repaired: it is a network call, so it
+ * cannot live in the streaming translation path, and it runs beside the title
+ * enrichment that already reaches the open web under the same egress policy.
+ *
+ * Never throws and never drops a source: a redirect that cannot be resolved
+ * keeps the URL it arrived with.
+ */
+export async function resolveRoutingRedirectUrls<T extends { url: string }>(
+  results: T[],
+  overrides: RedirectResolutionOverrides = {},
+): Promise<T[]> {
+  const candidates = results
+    .map((result, index) => ({ result, index }))
+    .filter(({ result }) => isHttpUrl(result.url) && isRoutingRedirectUrl(result.url));
+  if (candidates.length === 0) return results;
+
+  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
+  const timeoutMs = overrides.timeoutMs ?? REDIRECT_RESOLUTION_TIMEOUT_MS;
+  const maxConcurrency = Math.max(1, overrides.maxConcurrency ?? TITLE_ENRICHMENT_MAX_CONCURRENCY);
+
+  const resolved = [...results];
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < candidates.length) {
+      const { result, index } = candidates[cursor++]!;
+      let target = cachedResolvedUrl(result.url);
+      if (target === undefined) {
+        target = await resolveRedirectTarget(result.url, fetchImpl, timeoutMs);
+        setCachedResolvedUrl(result.url, target);
+      }
+      if (target) resolved[index] = { ...result, url: target };
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(maxConcurrency, candidates.length) }, () => worker()),
+  );
+  return resolved;
+}

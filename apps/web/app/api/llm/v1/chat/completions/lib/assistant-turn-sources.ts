@@ -26,10 +26,22 @@ export interface PersistedTurnSource {
   snippet: string;
 }
 
+/**
+ * One page the model cited, in the order it cited them, which is the order the
+ * `[n]` markers in the answer count in.
+ */
+export interface PersistedTurnCitation {
+  type: typeof URL_CITATION_TYPE;
+  url: string;
+  title: string;
+}
+
 /** Enough to cite an answer, bounded so one turn cannot bloat a row. */
 export const MAX_PERSISTED_TURN_SOURCES = 20;
 const MAX_SNIPPET_CHARS = 500;
 const WEB_SEARCH_RESULT_TYPE = 'web_search_result';
+const URL_CITATION_TYPE = 'url_citation';
+const CITATION_DELTA_KEY = 'x_citation';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -74,9 +86,9 @@ function readSearchResultContent(event: unknown): Record<string, unknown>[] {
  */
 export class AssistantTurnSourceCollector {
   private readonly byUrl = new Map<string, PersistedTurnSource>();
+  private readonly citationsByUrl = new Map<string, PersistedTurnCitation>();
 
   ingestWireBytes(value: Uint8Array): void {
-    if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
     for (const rawLine of new TextDecoder().decode(value).split('\n')) {
       const line = rawLine.trim();
       if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
@@ -89,6 +101,7 @@ export class AssistantTurnSourceCollector {
   }
 
   ingestWireEvent(event: unknown): void {
+    this.ingestCitation(event);
     if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
     for (const result of readSearchResultContent(event)) {
       if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
@@ -103,8 +116,36 @@ export class AssistantTurnSourceCollector {
     }
   }
 
+  /**
+   * The pages the model actually cited are a different list from the pages the
+   * provider searched, and on a native-search turn they only partly overlap.
+   * Collecting only the searched list left a reloaded answer whose `[n]`
+   * markers pointed at outlets the row never recorded.
+   */
+  private ingestCitation(event: unknown): void {
+    if (this.citationsByUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+    const envelope = asRecord(event);
+    const choices = envelope?.['choices'];
+    if (!Array.isArray(choices)) return;
+    for (const choice of choices) {
+      const citation = asRecord(asRecord(choice)?.['delta'])?.[CITATION_DELTA_KEY];
+      const record = asRecord(citation);
+      if (!record) continue;
+      const url = readString(record, 'url');
+      const title = readString(record, 'title');
+      if (!url || !title || this.citationsByUrl.has(url)) continue;
+      this.citationsByUrl.set(url, { type: URL_CITATION_TYPE, url, title });
+      if (this.citationsByUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+    }
+  }
+
   /** The collected sources, or undefined when the turn cited none. */
   snapshot(): readonly PersistedTurnSource[] | undefined {
     return this.byUrl.size > 0 ? [...this.byUrl.values()] : undefined;
+  }
+
+  /** The cited pages in marker order, or undefined when the turn cited none. */
+  citationSnapshot(): readonly PersistedTurnCitation[] | undefined {
+    return this.citationsByUrl.size > 0 ? [...this.citationsByUrl.values()] : undefined;
   }
 }

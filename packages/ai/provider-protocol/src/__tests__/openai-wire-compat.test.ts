@@ -396,6 +396,87 @@ describe('OpenAIWireAssembler streaming', () => {
     });
   });
 
+  /**
+   * The two providers that carry native web search, Anthropic and Google, both
+   * ride legacy-web, and legacy-web used to emit a citation ONLY as Anthropic's
+   * raw `citations_delta` content_block_delta, which no web client reads. So a
+   * native-search turn reached the transcript with no citation at all: the
+   * model's outlet names stayed italic prose, no [n] marker was ever inserted,
+   * and the Sources control had nothing but the flat search-result list to
+   * count, missing every outlet that was cited but not listed.
+   */
+  it('legacy-web: emits x_citation beside the raw citations_delta for a google url_citation', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+
+    const events = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 3,
+      payload: { type: 'url_citation', url: 'https://blog.google/pixel/', title: 'blog.google' },
+    });
+
+    expect(events[0]).toEqual({
+      type: 'content_block_delta',
+      index: 3,
+      delta: {
+        type: 'citations_delta',
+        citation: { type: 'url_citation', url: 'https://blog.google/pixel/', title: 'blog.google' },
+      },
+    });
+    expect((events[1] as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_citation: { url: 'https://blog.google/pixel/', title: 'blog.google' },
+    });
+  });
+
+  /**
+   * Anthropic speaks its own citation kind and routinely omits the title. Both
+   * used to fall through the `url_citation`-only guard, so the provider that
+   * cites most often was the one whose citations never survived the wire. The
+   * hostname stands in for a missing title because every consumer requires one
+   * to record the citation at all.
+   */
+  it('legacy-web: accepts anthropic web_search_result_location and falls back to the host as title', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+
+    const events = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 0,
+      payload: {
+        type: 'web_search_result_location',
+        cited_text: 'cats are mammals',
+        url: 'https://www.reuters.com/world/story',
+      },
+    });
+
+    expect((events.at(-1) as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_citation: { url: 'https://www.reuters.com/world/story', title: 'reuters.com' },
+    });
+  });
+
+  it('legacy-web: emits only the raw passthrough when the citation carries no usable url', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+
+    const events = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 0,
+      payload: { type: 'web_search_result_location', cited_text: 'no link' },
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'content_block_delta' });
+  });
+
   it('drops citation-delta in the plain (default) wire mode, same as before', () => {
     const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     const events = assembler.sseChunks({
