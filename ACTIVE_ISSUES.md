@@ -817,41 +817,77 @@ preservation.
 
 None of these is a confirmed defect.
 
-### Suite health, branch against origin/main, 2026-09-12
+### Retracted: the origin/main comparison, 2026-09-12
 
-Both measured the same way, whole suite, clean worktree, node_modules symlinked.
+**Every number previously recorded here as an `origin/main` measurement was
+void, and the conclusions drawn from them were wrong.** They are retracted
+rather than edited, because the instrument, not the arithmetic, was broken.
 
-|                               | origin/main | branch |
-| ----------------------------- | ----------- | ------ |
-| web tests passing             | 16,789      | 17,059 |
-| web tests failing             | 6           | 4      |
-| `packages/ai/routing` passing | 776         | 785    |
-| `packages/ai/routing` failing | 13          | 13     |
+A scratch worktree checks out the branch's own sources but resolves
+`@agiworkforce/*` back into the shared checkout, so it measures foreign package
+state. Three separate defects produced that, each hidden behind the previous
+one:
 
-The branch adds 270 web tests and 9 routing tests, fixes three of the six
-pre-existing web failures, and introduces none: the one regression it did
-introduce was found by this measurement and fixed before the count was taken.
-The thirteen routing failures are identical on both sides, so nothing in this
-pass touched them.
+1. Symlinking the `@agiworkforce` scope directory wholesale. The entries inside
+   it are relative to the shared checkout's `node_modules`, so every one of them
+   still resolved there.
+2. Repointing only the root `node_modules`. pnpm links workspace dependencies
+   into **each package's** `node_modules`; 185 links per worktree were never
+   touched, including `apps/web`'s, which is what the web suite resolves through.
+3. `packages/ai/routing/node_modules/@agiworkforce/model-registry` is a
+   _relative_ symlink. It resolves through its own real path into the shared
+   tree even when the scope directory above it is correct.
 
-### Six failing tests on origin/main, 2026-09-12
+What the bad instrument actually measured was origin/main's **tests** against
+the branch's **catalogue**, a pairing that exists nowhere. The thirteen routing
+failures were entirely an artifact of it: a version matrix run in an isolated
+harness gives 789/0 for origin/main against its own registry, 798/0 for the
+branch against its own, and reproduces the reported 776/13 only in the mixed
+pairing. Both self-consistent pairings are green.
+
+Verified in the restored shared checkout, which is the real environment:
+
+| package                    | result                 |
+| -------------------------- | ---------------------- |
+| `packages/ai/routing`      | 799 passed, 0 failed   |
+| `packages/ui/unified-chat` | 1,866 passed, 0 failed |
+
+**A clean origin/main comparison is not available, and is not worth buying.**
+Only a worktree with its own real install would give one. The question it was
+meant to answer, whether this pass introduced failures, is better answered per
+failure from the code and the history than by a whole-suite delta.
+
+**The rule this leaves:** a suite count from a scratch worktree is not evidence
+unless the instrument was verified first, by asserting a fact that differs
+between the two trees. The relink script that repairs a worktree must also never
+write _through_ a `node_modules` directory that is itself a symlink; doing so
+repointed 185 links in the shared checkout at the scratch tree, which was caught
+and restored the same session.
+
+### Failing `apps/web` tests found by running the whole suite, 2026-09-12
 
 The whole `apps/web` suite had not been run this pass, only the files each change
-touched. Run in full on a clean worktree it is 17,059 passing and 11 failing.
-Five of those failures reproduce identically on a pristine `origin/main`, so they
-predate this work, and none of them is registered anywhere. CI runs
-`pnpm test:affected`, which can skip the package entirely, which is how they have
-stayed invisible.
+touched. Running it in full is what surfaced these, and CI would not have: it
+runs `pnpm test:affected`, which can skip the package entirely.
+
+**The "reproduces on origin/main" claim attached to these has been withdrawn**
+for the instrument reason above; treat each as a failure on this branch whose
+origin is established from the code, not from a comparison run. Where that was
+done the answer is recorded per item below.
 
 They are not cosmetic, and two matter for what ships next:
 
 - Three in the free-lane plan. The lane decides which models a FREE account is
   served, so a substitution there is a product-behaviour question, and free
-  traffic is exactly what the event multiplies.
-- One in workspace model policy: a workspace whose policy permits only the
-  primary model still ends up with a non-empty failover plan, which means a
-  governed workspace can rotate onto a model its own policy forbids. That is the
-  same class as the recent governance findings.
+  traffic is exactly what the event multiplies. Now fixed: they were stale
+  assertions, and the product fact behind them is recorded below.
+- One in workspace model policy. **The reading first recorded here, that a
+  governed workspace can rotate onto a model its own policy forbids, was wrong
+  and is withdrawn.** Instrumenting `processRequest` shows the surviving entry
+  is the primary model itself reached on a second transport, not a second model,
+  and policy is enforced per route at admission. The test asserted an empty
+  failover plan where the correct assertion is that every entry carries the
+  admitted model's own canonical key. No governance leak exists.
 - One in model continuity, and one each in capability-health preview and
   aggregator routing, both failing with a type error, which usually means a
   shape changed underneath a caller.
@@ -868,16 +904,59 @@ into conditional runs whose conditions are false today, which left the security
 assertion "never admits an experimental-only route to managed traffic" running
 as skipped.
 
-**`packages/ai/routing` fails 13 more on origin/main**, found the same way and
-also unregistered: four files, covering route parking, continuity yielding to a
-parked model, the premium coding slot, provider-exclusion overlays, GA harness
-admission, the Desktop runtime cutover, a preferred slot whose model lacks a
-capability, and the cross-language conformance fixture in four places. One of
-them is the explicit-model contract itself: "preserves an explicit eligible
-model instead of silently switching providers". The branch adds nine passing
-tests to that package and fails exactly the same thirteen, so none of it is new
-work, but the explicit-model one is a product promise rather than a fixture
-detail and should be read first.
+The three free-lane failures were stale assertions too, and what made them stale
+is a product fact worth keeping: the lane's slot preference is derived from
+`apps/web/config/free-pools.json`, and since the founder retired the two Groq
+`gpt-oss` models on 2026-09-11 no pool record claims either free slot. The
+OpenRouter free router that took their place in both slots may not enter the
+company lane, because the terms workbook excludes it on
+`promptsExcludedFromTraining` and `check-free-pools.mjs` calls its absence from
+the pool file the deliberate state. So a free-plan request carrying the
+preference is now headed by an unverified Model Studio promo slot rather than by
+a free workhorse. No traffic moves either way, since not one pool entry is
+verified and the lane mode defaults to off, but the company free lane holds no
+free-workhorse capacity at all until a terms review admits a route for one. That
+is a founder decision, not a code change.
+
+The model-continuity failure does not reproduce on this tree: the file passes
+alone, with the whole `chat/completions/lib` directory, and inside single-worker
+runs of all 148 `app/api/llm` files and of 1,150 files across the other
+directories. It cannot be reached from the committed code either, because the
+route list the test marks unhealthy and the resolver's own route table are built
+from the same registry records, and route health is honoured whatever the
+routing flags say. The run that recorded it was reading uncommitted package
+state in the shared checkout. The test now asserts that its unhealthy set really
+covers the routes the resolver picked, so the next occurrence names the fixture
+instead of reading as a refusal to move up the ladder.
+
+**Retracted: the thirteen `packages/ai/routing` failures never existed.** They
+were the mixed-tree artifact described above, and the package is 799/799 in the
+shared checkout. What each cluster turned out to be, once measured against a
+self-consistent tree:
+
+- The conformance fixture is generated. Regenerating it with the documented
+  `AGI_UPDATE_ROUTING_CONFORMANCE=1` generator reproduces the committed file
+  byte for byte, and the Rust mirror passes, so nothing had drifted.
+- The `auto.test.ts` and `slot-preference.test.ts` assertions were stale worked
+  examples on the old catalogue, already replaced with registry-derived ones.
+- The two `fallback-plan.test.ts` assertions were stale for a reason worth
+  keeping: the workhorse model now has five provider routes, so parking one
+  provider is absorbed _within_ the slot. The decision stays `preferred_slot`
+  and continuity stays `continuity` while moving to a live route of the same
+  model, which is better behaviour than the old tests demanded.
+
+**The explicit-model contract was never broken**, on either side. It was swept
+directly rather than inferred from the one test: 401 registry models by 4 tiers
+by 4 tasks, zero primary swaps and zero fallback swaps on both trees. The
+current encoding is the stronger one, asserting that every fallback carries the
+same canonical `modelKey`, which is the actual promise that only another route
+of the same model may substitute.
+
+**One real gap fell out of it.** Loosening the reason assertion to
+`['health_fallback', 'preferred_slot']` left `health_fallback` with no coverage
+anywhere. The arm is still reachable, by parking every provider serving the
+preferred model rather than only the primary's, and now has a registry-derived
+test.
 
 ### Production catalogue measurement, 2026-09-12 10:25 UTC
 
