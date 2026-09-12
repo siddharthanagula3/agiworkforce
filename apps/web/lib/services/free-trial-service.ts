@@ -10,6 +10,11 @@ export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
 import {
+  reserveEventSpend,
+  settleEventSpend,
+  type EventBudgetReservation,
+} from '@/lib/server/event-budget';
+import {
   getInternalUsageUnitMicrousd,
   getPlanFiveHourUsageBudgetMicrousd,
   getPlanMonthlyUsageBudgetMicrousd,
@@ -32,6 +37,12 @@ export type FreeTrialReservation = {
   userId: string;
   requestId: string;
   reservedMicrousd: number;
+  /**
+   * Present only for a turn served by an event-promoted model, which spends the
+   * global event ceiling as well as this user's window. Permanently free models
+   * carry none: their cost predates the event and is not charged to it.
+   */
+  eventBudget?: EventBudgetReservation;
 };
 
 type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
@@ -262,6 +273,22 @@ export function isFreeTrialRequest(params: {
   return eventAllowsModel(requestedModel, params.planTier);
 }
 
+/**
+ * Reachable ONLY because the promotion is running, as opposed to free on its
+ * own merits. This is what the global event ceiling is charged for: a
+ * permanently free model costs what it has always cost, and billing that to the
+ * event would exhaust the event budget on traffic the event did not create.
+ */
+export function isEventPromotedRequest(params: {
+  requestedModel: string;
+  planTier: string | null | undefined;
+}): boolean {
+  if (!isFreePlanTier(params.planTier)) return false;
+  const requestedModel = params.requestedModel.trim().toLowerCase();
+  if (FREE_TRIAL_MODELS.includes(requestedModel)) return false;
+  return eventAllowsModel(requestedModel, params.planTier);
+}
+
 export async function getFreeTrialPublicUsage(
   db: DatabaseAdapter,
   userId: string,
@@ -318,6 +345,8 @@ export async function getFreeTrialPublicUsage(
 export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
+  /** The requested model is selectable only because the event promotes it. */
+  eventPromoted?: boolean;
 }): Promise<ReserveResult> {
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: params.userId,
@@ -331,7 +360,7 @@ export async function beginFreeTrialRequest(params: {
     monthlyBudgetMicrousd,
   } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
 
-  return db.transaction(async (tx) => {
+  const userReservation = await db.transaction(async (tx): Promise<ReserveResult> => {
     await tx.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
       params.userId,
     ]);
@@ -399,6 +428,21 @@ export async function beginFreeTrialRequest(params: {
       },
     };
   });
+
+  if (!userReservation.ok || params.eventPromoted !== true) return userReservation;
+
+  // The global ceiling is the last gate, and it is taken outside the
+  // transaction deliberately: it is a key-value counter, and holding the hot
+  // per-user row lock across a network call to it would serialise the event.
+  // A refusal here releases the per-user reservation, so a turn that the global
+  // budget stops never consumes any of that user's window.
+  const eventBudget = await reserveEventSpend(userReservation.reservation.reservedMicrousd);
+  if (!eventBudget) {
+    await settleFreeTrialRequest({ reservation: userReservation.reservation, outcome: 'failed' });
+    return { ok: false, code: 'budget_reached' };
+  }
+
+  return { ok: true, reservation: { ...userReservation.reservation, eventBudget } };
 }
 
 export async function settleFreeTrialRequest(params: {
@@ -425,6 +469,10 @@ export async function settleFreeTrialRequest(params: {
     userId: params.reservation.userId,
     organizationId: null,
   });
+
+  // Null unless THIS call is the one that settled the row. A turn settled by an
+  // earlier caller must not refund the global ceiling a second time.
+  let settledCostMicrousd: number | null = null;
 
   try {
     await db.transaction(async (tx) => {
@@ -479,6 +527,7 @@ export async function settleFreeTrialRequest(params: {
           metadata,
         ],
       );
+      settledCostMicrousd = costMicrousd;
     });
   } catch (error) {
     logger.warn(
@@ -489,6 +538,15 @@ export async function settleFreeTrialRequest(params: {
       },
       'Free-tier usage settlement failed',
     );
+  }
+
+  // Hand the unspent remainder back to the global event ceiling. Reservations
+  // are sized from the user's whole remaining window, so nearly all of each one
+  // is returned; without this the event would stop at a fraction of its budget.
+  // A settlement that threw leaves the reservation standing, which overstates
+  // spend and ends the event early: the safe direction to be wrong.
+  if (params.reservation.eventBudget && settledCostMicrousd !== null) {
+    await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
 }
 
