@@ -106,6 +106,7 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: mockRecordSettledProviderCost,
+  getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   UnpricedModelError: MockUnpricedModelError,
