@@ -817,6 +817,53 @@ preservation.
 
 None of these is a confirmed defect.
 
+### Public pages claimed things the code does not do, 2026-09-12
+
+The flagship rewrite `d42d3cb15` moved about 38 public pages onto a new system.
+Rewriting copy detached it from the behaviour it describes, and **14 false
+claims were found across the 18 pages audited**, so the defect is systemic
+rather than a one-off.
+
+The one that matters most was a privacy claim. `/chrome-extension` said chat
+crossed a localhost native-messaging bridge and that "models and tools run on
+Desktop". Every extension turn posts to
+`https://agiworkforce.com/api/llm/v1/chat/completions` with
+`trustMode: 'managed_cloud'`; the bridge only ever carried selections, page
+captures and queued messages. The same page said chats "don't sync anywhere by
+default" while cloud mirroring reads `stored !== false` against a `true`
+default. Both were wrong in the direction that understates where user data
+goes, which is the direction that matters.
+
+The rest, by kind:
+
+- **Availability understated or overstated.** `/desktop` said macOS installers
+  were not published while the release workflow builds, signs and notarizes a
+  universal dmg, and the download component on that same page already checked
+  for it. `/cli` described an `agi cloud` command that does not exist and that a
+  CLI test actively fails the build for exposing.
+- **Numbers that drifted.** `/enterprise` promised audit batches "every ten
+  minutes" against a thirty-minute cron. `/status` said a Postgres query runs on
+  every check, when a success inside the hour is reused without querying.
+- **Entitlement understated.** `/business` called identity, audit and retention
+  controls contract-scoped, when all four ship self-serve and `/enterprise`
+  already said so.
+- **Capability overstated.** The landing page credited Chrome with executing
+  work on Desktop and Desktop with AGI Work, which is web-composer only. AGI
+  Work's page described steps moving through in progress individually, when
+  `advanceAgiWorkPlan` marks only the first and settles the rest at the end.
+  Several keyboard and slash-command claims named bindings that do not exist,
+  including a `/memory` command whose registration nothing calls.
+
+Each correction is pinned by a regression test that was verified to fire
+against the pre-fix copy, in `surface-page-claims.test.ts`,
+`feature-page-claims.test.ts` and the extended `chrome-boundary-claims.test.ts`.
+
+**About twenty of the rewritten pages have not been audited**, including
+`/about`, `/api-docs`, `/docs`, `/faq`, `/help`, `/security`, `/pricing`,
+`/download`, `/get-started` and the remaining feature pages. Given a 14-claim
+yield from the first 18, the rest should be read the same way before launch:
+extract each checkable claim, find the code that decides it, and cite it.
+
 ### The migration reconciliation is not a renumber, 2026-09-12
 
 `pnpm check:neon-migrations` fails on this branch, so **CI cannot pass as it
