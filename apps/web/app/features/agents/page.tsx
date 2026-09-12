@@ -61,8 +61,8 @@ export default function FeaturesAgentsPage() {
               <p className="agi-lp-lede">
                 An agent is a session you hand work to: it reads files, runs commands, calls
                 connectors, and reports back with what it changed. Every risky step opens an
-                approval you have to answer, and commands run inside an OS sandbox the CLI refuses
-                to start without.
+                approval you have to answer, and commands run inside an OS sandbox that the run
+                fails without unless you ask for that with --no-sandbox.
               </p>
               <ButtonRow>
                 <Button href="/cli">See the agi CLI</Button>
@@ -125,7 +125,7 @@ export default function FeaturesAgentsPage() {
                 {
                   label: 'Sandbox',
                   value:
-                    'Command execution asks the OS for a sandbox: Seatbelt on macOS, bubblewrap on Linux. Missing either, the run fails rather than continuing without one.',
+                    'Command execution asks the OS for a sandbox: Seatbelt on macOS, bubblewrap on Linux. Missing either, the run fails and names the install command, and --no-sandbox is the only way past it.',
                 },
                 {
                   label: 'Network',
@@ -147,14 +147,15 @@ export default function FeaturesAgentsPage() {
             <div>
               <Eyebrow>Containment</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.containment}>
-                The session will tell you what its sandbox allows.
+                The session will tell you what it is allowed to touch.
               </h2>
             </div>
             <Prose>
-              Typing /sandbox prints the mode the session is running under, the tools it allows, the
-              ones it blocks, and the backend enforcing it. The modes are read-only, contained, and
-              unrestricted. Which route a session&rsquo;s tokens travel on is a separate boundary,
-              covered on the Local page.
+              Typing /sandbox prints the permission mode the session is running under, whether
+              permissions are being skipped, and every extra workspace root registered for it. The
+              permission modes are default, plan, accept edits, bypass permissions, and dont ask.
+              Which route a session&rsquo;s tokens travel on is a separate boundary, covered on the
+              Local page.
             </Prose>
             <ButtonRow>
               <Button href="/local" variant="secondary">

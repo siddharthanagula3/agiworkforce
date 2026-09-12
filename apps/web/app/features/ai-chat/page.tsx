@@ -46,7 +46,7 @@ const AROUND_THE_CHAT = [
   {
     meta: 'Memory',
     title: 'Memory',
-    body: 'Type /memory to open what the assistant has kept about you and edit it directly.',
+    body: 'Settings holds what the assistant has kept about you, as a list of sentences you edit directly.',
     href: '/features/memory',
   },
   {
