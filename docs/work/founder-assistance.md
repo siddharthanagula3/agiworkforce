@@ -499,3 +499,30 @@ a customer today and no user sees a broken model. If Groq is dropped instead,
 its three models should leave the registry rather than sit there unservable.
 **Impact** FEATURE-BLOCKING (those models only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [QA] Somewhere to exercise this work before it ships
+
+**Why founder assistance is required**
+Starting a server is a standing founder decision in this repository, and
+deploying is gated on CI and on the founder's own approval.
+**Exact action**
+
+1. Either start the dev server and say so, or approve a preview deployment of
+   `fix/provider-outage-health-2026-09-12`.
+2. Say which of the two, so the confirmations below are run in the right place.
+
+**Where** Localhost, or a Vercel preview of that branch.
+**Needed input** One decision and, for the preview, one approval.
+**How to verify completion** The branch's own confirmations become runnable.
+Each was written down with the fix that needs it, and none can be made from a
+checkout: a durable run for `LIVE-8`; a real sandbox for the attachment staging;
+a live voice session for the delegated backend cost row; a reload for the turn
+metadata and the citations; a long thread for the retry anchor; a fresh stack
+for the listener warning; and a deployment for the route that our own data
+policy excludes.
+**What remains after founder action** Nothing in code for the items above. They
+are implemented and unit tested; what is missing is observation, and every one
+of them says so in its own entry rather than claiming a confirmation that was
+never made.
+**Impact** BLOCKS VERIFICATION, NOT THE FIXES
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
