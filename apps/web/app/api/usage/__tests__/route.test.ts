@@ -87,7 +87,7 @@ describe('GET /api/usage', () => {
       credits_used_cents: 100,
       credits_remaining_cents: 1900,
     });
-    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
     mockDbQuery.mockResolvedValue([{ overage_enabled: true, available_microusd: '12340000' }]);
 
     const json = await (await GET(makeRequest())).json();
@@ -103,7 +103,7 @@ describe('GET /api/usage', () => {
       credits_used_cents: 100,
       credits_remaining_cents: 1900,
     });
-    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
     mockDbQuery.mockRejectedValue(new Error('connection lost'));
 
     const json = await (await GET(makeRequest())).json();
@@ -127,9 +127,21 @@ describe('GET /api/usage', () => {
       period_end: '2026-08-01T00:00:00.000Z',
     });
     mockGetRollingUsage
-      .mockResolvedValueOnce({ usedCents: 20, oldestAt: '2026-07-05T03:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 50, oldestAt: '2026-07-01T12:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 10, oldestAt: '2026-07-02T00:00:00.000Z' });
+      .mockResolvedValueOnce({
+        usedMicrousd: 200000,
+        usedCents: 20,
+        oldestAt: '2026-07-05T03:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        usedMicrousd: 500000,
+        usedCents: 50,
+        oldestAt: '2026-07-01T12:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        usedMicrousd: 100000,
+        usedCents: 10,
+        oldestAt: '2026-07-02T00:00:00.000Z',
+      });
 
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
@@ -187,7 +199,7 @@ describe('GET /api/usage', () => {
       period_start: null,
       period_end: null,
     });
-    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
 
     const res = await GET(makeRequest());
     const json = await res.json();
@@ -207,9 +219,17 @@ describe('GET /api/usage', () => {
       period_end: '2026-08-01T00:00:00.000Z',
     });
     mockGetRollingUsage
-      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-18T16:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-15T00:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 0, oldestAt: null });
+      .mockResolvedValueOnce({
+        usedMicrousd: 1000000,
+        usedCents: 100,
+        oldestAt: '2026-07-18T16:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        usedMicrousd: 1000000,
+        usedCents: 100,
+        oldestAt: '2026-07-15T00:00:00.000Z',
+      })
+      .mockResolvedValueOnce({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
 
     const res = await GET(makeRequest());
     const json = await res.json();
@@ -226,9 +246,21 @@ describe('GET /api/usage', () => {
       credits_remaining_cents: 1900,
     });
     mockGetRollingUsage
-      .mockResolvedValueOnce({ usedCents: 10, oldestAt: '2026-07-18T16:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-15T00:00:00.000Z' })
-      .mockResolvedValueOnce({ usedCents: 150, oldestAt: '2026-07-15T00:00:00.000Z' });
+      .mockResolvedValueOnce({
+        usedMicrousd: 100000,
+        usedCents: 10,
+        oldestAt: '2026-07-18T16:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        usedMicrousd: 1000000,
+        usedCents: 100,
+        oldestAt: '2026-07-15T00:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        usedMicrousd: 1500000,
+        usedCents: 150,
+        oldestAt: '2026-07-15T00:00:00.000Z',
+      });
 
     const res = await GET(makeRequest());
     const json = await res.json();
