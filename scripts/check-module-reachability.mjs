@@ -381,7 +381,6 @@ const tsTargets = [
       'apps/desktop/src/stores/bridge/stateBridge.ts',
       'apps/desktop/src/stores/cacheStore.ts',
       'apps/desktop/src/stores/calendarStore.ts',
-      'apps/desktop/src/stores/chatPreferencesStore.ts',
       'apps/desktop/src/stores/editingStore.ts',
       'apps/desktop/src/stores/filesystemStore.ts',
       'apps/desktop/src/stores/mcp/index.ts',
@@ -424,7 +423,7 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 234,
+    maxKnownUnreachable: 233,
   },
 ];
 

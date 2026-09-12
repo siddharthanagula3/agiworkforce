@@ -202,21 +202,35 @@ interface MessageGroup {
 // Pure helpers (exported for tests)
 
 /**
- * Whether an index in the transcript now holds a different message than it did.
+ * The first group index whose row now renders something else, or -1 when every
+ * surviving row still holds what it held.
  *
- * react-window v2 caches measured row heights BY INDEX and offers no partial
- * invalidation, so the only lever is the key that throws the whole cache away.
- * and it has to be pulled exactly when an index changes meaning. Paging to
- * another variant does that; appending the next turn does not, and keying on the
- * active leaf alone would re-measure the entire transcript on every send once a
- * conversation had branched even once.
+ * react-window v2 caches measured row heights BY INDEX, so a row that changes
+ * meaning keeps a height that describes the message it used to show. Retry and
+ * variant paging only ever rewrite a SUFFIX of the transcript, and this returns
+ * where that suffix starts so the rows above keep their measurements. Throwing
+ * the whole cache away instead (AGI-20) put every row back on the default
+ * estimate, and `scrollToRow` then resolved the bottom of a long thread
+ * hundreds of rows too high, landing the reader on an unrelated message.
+ *
+ * A group that only grew, which is what a streamed turn does, is not a change:
+ * its stale height is a far better estimate than the default, and the resize
+ * observer corrects it as soon as it is on screen.
  */
-export function isPathReRooted(previous: ChatMessage[], next: ChatMessage[]): boolean {
-  if (previous.length > next.length) return true;
-  for (let index = 0; index < previous.length; index += 1) {
-    if (previous[index]?.id !== next[index]?.id) return true;
+export function firstChangedGroupIndex(previous: MessageGroup[], next: MessageGroup[]): number {
+  const shared = Math.min(previous.length, next.length);
+  for (let index = 0; index < shared; index += 1) {
+    const before = previous[index]!;
+    const after = next[index]!;
+    if (before.role !== after.role) return index;
+    if (before.messages.length > after.messages.length) return index;
+    for (let position = 0; position < before.messages.length; position += 1) {
+      if (before.messages[position]?.id !== after.messages[position]?.id) return index;
+    }
   }
-  return false;
+  // A transcript that lost groups leaves the rows past its new end holding
+  // heights measured for messages that are no longer on the visible path.
+  return previous.length > next.length ? shared : -1;
 }
 
 export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
@@ -1013,13 +1027,10 @@ const ChatMessageListComponent = ({
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
 
-  const renderedPathRef = useRef<ChatMessage[]>(messages);
-  const pathEpochRef = useRef(0);
-  if (renderedPathRef.current !== messages) {
-    if (isPathReRooted(renderedPathRef.current, messages)) pathEpochRef.current += 1;
-    renderedPathRef.current = messages;
-  }
-  const virtualizationKey = `${conversationId ?? groups[0]?.firstId ?? 'empty-transcript'}:${pathEpochRef.current}`;
+  // Only a different transcript invalidates every measurement. A re-order
+  // inside one transcript invalidates the rows it rewrote, and those alone: see
+  // firstChangedGroupIndex and the effect that seeds them below.
+  const virtualizationKey = conversationId ?? groups[0]?.firstId ?? 'empty-transcript';
   const dynamicRowHeight = useDynamicRowHeight({
     defaultRowHeight: DEFAULT_TRANSCRIPT_ROW_HEIGHT,
     key: virtualizationKey,
@@ -1027,6 +1038,34 @@ const ChatMessageListComponent = ({
   const virtualRowCount = groups.length + 2;
   const virtualRowCountRef = useRef(virtualRowCount);
   virtualRowCountRef.current = virtualRowCount;
+
+  const renderedGroupsRef = useRef<MessageGroup[]>(groups);
+  const renderedRowCountRef = useRef(virtualRowCount);
+  const pendingRowInvalidationRef = useRef<{ from: number; through: number } | null>(null);
+  if (renderedGroupsRef.current !== groups) {
+    const changedIndex = firstChangedGroupIndex(renderedGroupsRef.current, groups);
+    const previousRowCount = renderedRowCountRef.current;
+    renderedGroupsRef.current = groups;
+    renderedRowCountRef.current = virtualRowCount;
+    if (changedIndex >= 0) {
+      // Row 0 is the top spacer, so group n renders at row n + 1.
+      const from = changedIndex + 1;
+      const through = Math.max(previousRowCount, virtualRowCount);
+      const pending = pendingRowInvalidationRef.current;
+      // Several renders can land between two effects, so the widest range wins.
+      pendingRowInvalidationRef.current = pending
+        ? { from: Math.min(pending.from, from), through: Math.max(pending.through, through) }
+        : { from, through };
+    }
+  }
+  useLayoutEffect(() => {
+    const pending = pendingRowInvalidationRef.current;
+    if (!pending) return;
+    pendingRowInvalidationRef.current = null;
+    for (let index = pending.from; index < pending.through; index += 1) {
+      dynamicRowHeight.setRowHeight(index, DEFAULT_TRANSCRIPT_ROW_HEIGHT);
+    }
+  }, [dynamicRowHeight, groups, virtualRowCount]);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT);
   const estimatedContentHeight = useMemo(() => {
     let height = 0;
