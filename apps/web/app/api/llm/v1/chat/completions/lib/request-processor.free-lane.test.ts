@@ -21,14 +21,25 @@ const FREE_SLOTS = [
  * Every slot a pool record claims, verified or not. The Model Studio
  * allocations claim the reasoning slots and stay unverified until the founder
  * records the review, so the lane looks at those slots and refuses their
- * routes as `not_verified_free`; only the FREE_SLOTS models may be served.
+ * routes as `not_verified_free`.
+ *
+ * FREE_SLOTS are deliberately absent. They were claimed by the two Groq
+ * `gpt-oss` pools until the founder retired those models on 2026-09-11
+ * (carried in 22fe3e3e8) and put the OpenRouter free router in both free
+ * slots. That router may not enter the company lane: the terms workbook
+ * excludes it on `promptsExcludedFromTraining`, and `check-free-pools.mjs`
+ * calls its absence from the pool file the deliberate state. So no pool record
+ * claims a free slot today, and the lane cannot look at one. A terms review
+ * that admits a free-slot route is what puts them back here.
  */
 const POOL_CLAIMED_SLOTS = [
-  ...FREE_SLOTS,
   'reasoning_balanced',
   'reasoning_economy',
   'reasoning_premium',
 ] as const satisfies readonly RoutingSlot[];
+
+/** The models behind the claimed slots: what the preference can reach. */
+const pooledSlotModels = new Set(POOL_CLAIMED_SLOTS.map((slot) => getRoutingSlotModel(slot)));
 
 /**
  * Every plan tier `resolveAutoRoute` folds into the `free` ceiling.
@@ -145,13 +156,13 @@ describe('without the preference the plan is unchanged for every tier', () => {
 /**
  * Requirement: the regression pair. A paying Basic request never reaches a free
  * slot, the :382 route test proves that end to end, while a free-plan request
- * carrying the preference heads its plan with the free workhorse. Together they
- * are the mechanism's proof.
+ * carrying the preference heads its plan with a model a pool record claims.
+ * Together they are the mechanism's proof.
  */
 describe('with the preference, only the free plan moves', () => {
-  it('heads a free-plan chat plan with the free workhorse', () => {
+  it('heads a free-plan chat plan with a model the pool records claim', () => {
     const withPreference = plan('free', 'simple_chat', freeLanePreferredSlots());
-    expect(withPreference.head).toBe(getRoutingSlotModel('free_workhorse'));
+    expect(pooledSlotModels.has(withPreference.head), withPreference.head).toBe(true);
   });
 
   it('keeps the previously-served model reachable behind it', () => {
@@ -170,7 +181,8 @@ describe('with the preference, only the free plan moves', () => {
    */
   it('moves a folded tier if the gate is bypassed, which is why the gate exists', () => {
     const bypassed = plan('basic', 'simple_chat', freeLanePreferredSlots());
-    expect(bypassed.head).toBe(getRoutingSlotModel('free_workhorse'));
+    expect(bypassed.head).not.toBe(plan('basic', 'simple_chat').head);
+    expect(bypassed.head).toBe(plan('free', 'simple_chat', freeLanePreferredSlots()).head);
     expect(
       activateFreeLane({ configuredMode: FREE_LANE_MODES.strict, isFreePlan: false }).preferSlots,
     ).toEqual([]);

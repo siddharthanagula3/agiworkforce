@@ -101,6 +101,13 @@ describe('resolveWebCloudModelRoute · Auto model continuity across turns', () =
     expect(turnTwo.routeId).not.toBe(turnOne.routeId);
 
     const everyRoute = getRoutePricingForModel(turnOne.modelKey).map((route) => route.routeId);
+    // Verify the instrument before trusting the measurement. The rung below is
+    // only evidence if this really is every host of the pinned model: a route
+    // list that missed the one the resolver ranks first would leave a healthy
+    // route standing and report continuity, which reads as the ladder refusing
+    // to move rather than as the fixture being wrong.
+    expect(everyRoute).toContain(turnOne.routeId);
+    expect(everyRoute).toContain(turnTwo.routeId);
     const turnThree = selected(
       resolveWebCloudModelRoute(AUTO_ALIAS, PAID_TIER, CODING_TASK, ZERO_COST_USAGE, undefined, {
         runtimeState: unhealthyRuntimeState(everyRoute),
