@@ -183,6 +183,16 @@ export type RouteOutcomeClass =
    * about as a billing state rather than a configuration mistake.
    */
   | 'credential_unfunded'
+  /**
+   * The route has no supply on terms this account accepts: the provider
+   * answered that no endpoint matches our own data policy or guardrail
+   * settings. Recorded against the ROUTE, because it is a fact about that
+   * endpoint and not about the credential, and kept separate from the ordinary
+   * failure classes because it is deterministic. Waiting does not change it and
+   * nor does retrying; only an account setting does, so one observation is
+   * enough to stop offering the route.
+   */
+  | 'policy_excluded'
   | 'model_rejected';
 
 export interface RouteOutcome {
@@ -207,6 +217,13 @@ export interface RouteHealthSnapshot {
    * even while its cooldown has elapsed.
    */
   unfunded?: boolean;
+  /**
+   * The newest observation says this route is excluded by our own account
+   * policy. Like `unfunded` and unlike `available`, this is not a cooldown: the
+   * answer will be identical on the next attempt, so a caller skips the route
+   * instead of spending a user's turn rediscovering it.
+   */
+  policyExcluded?: boolean;
   successRate?: number;
   rateLimitRate?: number;
   serverErrorRate?: number;

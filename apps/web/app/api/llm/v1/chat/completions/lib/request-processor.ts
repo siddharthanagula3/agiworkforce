@@ -10,6 +10,7 @@ import { AgiWorkGoalSchema } from './agiwork-plan';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
+import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
@@ -114,6 +115,7 @@ import {
   emptyRuntimeState,
   estimateTokens,
   isCredentialUnfunded,
+  isRoutePolicyExcluded,
   observedRouteHealthFromSnapshots,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
@@ -798,6 +800,12 @@ export type ProcessedRequest = {
   executionRequirement?: CodeExecutionRequirement;
   executionEnforcement?: RequiredExecutionEnforcement;
   /**
+   * The files attached to the turn being sent, with their bytes. Carried so the
+   * tool loop can put them in the execution sandbox the moment it acquires one,
+   * instead of leaving the model to copy an attachment back in with write_file.
+   */
+  turnAttachments?: readonly TurnAttachment[];
+  /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
    * places step so the model still writes the answer.
@@ -1463,6 +1471,8 @@ export interface RouteHealthResolution {
    * provider answers to the same key.
    */
   unfundedRouteIds: ReadonlySet<string>;
+  /** Routes the provider has already refused under our own data policy. */
+  policyExcludedRouteIds: ReadonlySet<string>;
 }
 
 export async function resolveRouteHealthRuntimeState(
@@ -1480,6 +1490,11 @@ export async function resolveRouteHealthRuntimeState(
       routeIds.filter((routeId) =>
         isCredentialUnfunded(credentialSnapshots[providerOfRouteId(routeId)]),
       ),
+    ),
+    // Read off the ROUTE snapshot, not the credential one: the refusal names an
+    // endpoint, and the same credential serves other routes normally.
+    policyExcludedRouteIds: new Set(
+      routeIds.filter((routeId) => isRoutePolicyExcluded(routeHealthSnapshots[routeId])),
     ),
   };
 }
@@ -1540,6 +1555,7 @@ export function buildWebCloudAutoRoutingRequest(
   routeHealth?: {
     runtimeState?: RoutingRuntimeState | null;
     unfundedRouteIds?: ReadonlySet<string>;
+    policyExcludedRouteIds?: ReadonlySet<string>;
     preferredRouteId?: string | null;
     currentModelKey?: string | null;
     previousTaskType?: RoutingTaskType | null;
@@ -1589,6 +1605,7 @@ export function buildWebCloudAutoRoutingRequest(
           observedRouteHealth: observedRouteHealthFromSnapshots(
             routeHealth.runtimeState.routeHealthSnapshots,
             routeHealth.unfundedRouteIds,
+            routeHealth.policyExcludedRouteIds,
           ),
         }
       : {}),
@@ -2263,20 +2280,22 @@ export async function processRequest(
         return DISABLED_MANAGED_MEMORY_POLICY;
       });
 
-  const [hydrationFailure, managedMemoryPolicy] = await timePhase(
+  const [hydration, managedMemoryPolicy] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
       Promise.all([
         hydrateChatAttachments(chatRequest.messages, userId).then(
-          () => null,
-          (error: unknown) => ({ error }),
+          (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
+          (error: unknown) => ({ ok: false as const, error }),
         ),
         memoryPolicyLeg,
       ]),
   );
 
-  if (hydrationFailure) {
-    const { error } = hydrationFailure;
+  const turnAttachments = hydration.ok ? hydration.attachments : [];
+
+  if (!hydration.ok) {
+    const { error } = hydration;
     if (error instanceof ChatAttachmentHydrationError) {
       return {
         ok: false,
@@ -3701,6 +3720,7 @@ export async function processRequest(
       researchUnavailable,
       timeZone: chatRequest.client_timezone,
       codeExecutionUnavailable,
+      attachmentSandboxPaths: stagedAttachmentPaths(turnAttachments),
     });
 
     const customInstructionsPreamble = await timePhase(
@@ -3891,6 +3911,7 @@ export async function processRequest(
     searchEnforcement,
     executionRequirement,
     executionEnforcement,
+    turnAttachments,
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,
