@@ -174,8 +174,9 @@ export default async function PluginsPage() {
               <Prose size="lg">
                 Hosted installation is live. A pack marked Available on Web installs into your
                 account from the plugins section of Settings, and its skills join the assistant on
-                your next message. The rest are installed from the desktop app or the CLI with the
-                command shown on the pack.
+                your next message. A pack that has published an integrity-pinned artifact prints its
+                desktop and CLI install command on its own page. A pack still marked declared prints
+                none, because there is nothing published to install yet.
               </Prose>
               <PluginsCta />
             </div>

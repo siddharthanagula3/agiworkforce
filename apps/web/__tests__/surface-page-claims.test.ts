@@ -297,3 +297,195 @@ describe('/about, the colophon names every face the page is set in', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * Second pass over the product surfaces, for the same reason as the block
+ * above: the flagship rewrite carried claims across that no code backs. Two
+ * rules the cases below encode, both learned the expensive way.
+ *
+ * A pipeline is not a shelf. `release-desktop.yml` builds macOS, and no macOS
+ * asset has ever been published; `apps/extension-vscode` is a complete
+ * extension, and no VSIX has ever been published either. `gh release view
+ * <tag> --json assets` is the only thing that settles an availability claim.
+ *
+ * A value that exists is not a value a reader sees. `answeredByLabel` is
+ * computed on every assistant turn, and it renders inside the More-actions
+ * dropdown, not under the reply, so "a receipt under every reply" was false
+ * while the receipt code was right there.
+ */
+
+function fileText(relativePath: string): string {
+  return readFileSync(join(WEB_ROOT, relativePath), 'utf8');
+}
+
+function repoText(...segments: string[]): string {
+  return readFileSync(join(REPO_ROOT, ...segments), 'utf8');
+}
+
+describe('/byok, VS Code is named with the release state it actually has', () => {
+  it('reads VS Code as coming soon out of the shared surface table', () => {
+    const constants = fileText('lib/marketing-constants.ts');
+    expect(constants).toMatch(/vscode: COMING_SOON_LABEL/u);
+    expect(constants).toMatch(/COMING_SOON_LABEL = 'Coming soon'/u);
+  });
+
+  it('states the released surfaces the way /help already does', () => {
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toMatch(
+      /Desktop and the CLI have published releases; the VS Code extension is coming soon/u,
+    );
+    expect(page).toMatch(/Released', value: 'Desktop and the CLI\. VS Code is coming soon\./u);
+    expect(page).toMatch(/Coming soon\. The extension hands the key/u);
+    expect(collapsed('app/help/page.tsx')).toMatch(
+      /Desktop and the CLI have published releases; the VS Code extension is/u,
+    );
+  });
+
+  it('never titles the page as if VS Code took keys today', () => {
+    const page = collapsed('app/byok/page.tsx');
+    expect(
+      /bring your own keys to Desktop, CLI, and VS Code/u.test(page),
+      'page titles VS Code as a surface that accepts keys today, and no VSIX is published',
+    ).toBe(false);
+  });
+});
+
+describe('/byok, custody names the store each runtime really writes to', () => {
+  it('reads three different stores out of the three runtimes', () => {
+    expect(
+      repoText('apps', 'desktop', 'src-tauri', 'src', 'sys', 'commands', 'mcp_oauth.rs'),
+    ).toMatch(/let encrypted = encrypt_credential\(Some\(encryption\.inner\(\)\), &key\)\?;/u);
+    expect(repoText('apps', 'cli', 'src', 'auth.rs')).toMatch(
+      /const AUTH_KEYRING_SERVICE: &str = "com\.agiworkforce\.cli\.auth";/u,
+    );
+    expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toMatch(
+      /secrets\.store\(SECRET_KEY, apiKey\)/u,
+    );
+  });
+
+  it('says Desktop encrypts into its own database rather than a platform keychain', () => {
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toMatch(/Desktop encrypts the key into its local settings database/u);
+    expect(page).toMatch(/the CLI uses the OS keyring/u);
+  });
+
+  it('never puts all three keys in a platform credential store', () => {
+    const page = collapsed('app/byok/page.tsx');
+    for (const [label, pattern] of [
+      ['every runtime uses a platform credential store', /its own platform credential store/u],
+      ['custody is the platform-provided store', /the credential store its own platform provides/u],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/web, the browser surface has one route and it is managed cloud', () => {
+  it('reads the single trust mode the web chat route stamps on every turn', () => {
+    const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
+    expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
+    expect(fileText('lib/marketing-constants.ts')).toMatch(
+      /'Web, Mobile, Chrome, and the managed-only Electron shell do not accept provider keys\.'/u,
+    );
+  });
+
+  it('counts one route in the numbers band', () => {
+    const page = collapsed('app/web/page.tsx');
+    expect(page).toMatch(/value: '1', label: 'route: AGI managed cloud'/u);
+  });
+
+  it('never offers Local or BYOK as a route of the browser surface', () => {
+    const page = collapsed('app/web/page.tsx');
+    for (const [label, pattern] of [
+      ['the browser has three routes', /routes: Local, BYOK, Cloud/u],
+      ['the browser runs on your provider key', /providers on your key/u],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/web, the served-by label is stated where the code renders it', () => {
+  it('renders the answering model inside the message actions menu', () => {
+    const bubble = collapsed('features/chat/components/messages/MessageBubble.tsx');
+    expect(bubble).toMatch(/const answeredByModelId = !isUser \?/u);
+    expect(bubble).toMatch(
+      /<DropdownMenuLabel[\s\S]{0,900}\{answeredByLabel && \( <span className="block truncate">\{answeredByLabel\}<\/span> \)\}/u,
+    );
+  });
+
+  it('gates the inline receipt line on Auto having moved off the pin', () => {
+    const bubble = collapsed('features/chat/components/messages/MessageBubble.tsx');
+    expect(bubble).toMatch(
+      /\{!isUser && !message\.isStreaming && modelEscalation && \( <p data-testid="model-escalation-receipt"/u,
+    );
+  });
+
+  it('names the actions menu and the condition the inline receipt has', () => {
+    const page = collapsed('app/web/page.tsx');
+    expect(page).toMatch(/names the model that answered it in its actions menu/u);
+    expect(page).toMatch(/whenever Auto left the model you pinned/u);
+  });
+
+  it('never promises a receipt under every reply', () => {
+    const page = collapsed('app/web/page.tsx');
+    for (const [label, pattern] of [
+      ['a served-by receipt under every reply', /served-by receipt under every reply/u],
+      ['a receipt on every reply', /Receipt · on every reply/u],
+      ['the reply itself names its route', /the reply names the route that served it/u],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/plugins, a declared pack is never given an install command', () => {
+  it('builds an install command only from a published distribution', () => {
+    const detail = collapsed('app/plugins/[id]/page.tsx');
+    expect(detail).toMatch(/const installCommand = installable && entry\.distribution/u);
+  });
+
+  it('says a declared pack prints no command', () => {
+    const page = collapsed('app/plugins/page.tsx');
+    expect(page).toMatch(/prints none, because there is nothing published to install yet/u);
+  });
+
+  it('never sends a reader to a command a declared pack does not carry', () => {
+    const page = collapsed('app/plugins/page.tsx');
+    expect(
+      /The rest are installed from the desktop app or the CLI with the command shown on the pack/u.test(
+        page,
+      ),
+      'page still claims every non-web pack shows an install command',
+    ).toBe(false);
+  });
+});
+
+describe('/vscode-extension and /solutions keep VS Code unpublished', () => {
+  it('has a complete extension in the tree, which is not the same as a published VSIX', () => {
+    expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toMatch(
+      /vscode\.SecretStorage/u,
+    );
+    expect(fileText('lib/marketing-constants.ts')).toMatch(/vscode: COMING_SOON_LABEL/u);
+  });
+
+  it('says plainly that no VSIX has been published', () => {
+    expect(collapsed('app/vscode-extension/page.tsx')).toMatch(/No VSIX has been published yet/u);
+  });
+
+  it('never presents the preview build as the shipped thing', () => {
+    expect(
+      /Here's what works today/u.test(collapsed('app/vscode-extension/page.tsx')),
+      'page still presents an unpublished preview as what works today',
+    ).toBe(false);
+  });
+
+  it('keeps the solutions index honest about which half of AGI Code is released', () => {
+    const page = collapsed('app/solutions/page.tsx');
+    expect(page).toMatch(/The released agi binary, and the VS Code extension/u);
+    expect(
+      /The agi binary and the VS Code extension that spawns it over stdio/u.test(page),
+      'solutions index still lists the unpublished extension as a route you can take today',
+    ).toBe(false);
+  });
+});
