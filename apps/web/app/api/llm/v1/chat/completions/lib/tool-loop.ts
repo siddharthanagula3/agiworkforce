@@ -2014,12 +2014,25 @@ export function hasPrivateContext(
     processed.sensitiveContextPresent === true ||
     (processed.autoMemoryFacts?.length ?? 0) > 0 ||
     messages.filter((message) => message.role === 'user').length > 1 ||
-    messages.some(
-      (message) =>
-        Array.isArray(message.content) &&
-        message.content.some((part) => (part as { type?: string }).type !== 'text'),
-    )
+    messages.some((message) => hasNonTextPart(message))
   );
+}
+
+/**
+ * An attachment reaches the loop in `multimodal_content`, never in `content`.
+ *
+ * The original check looked only at `content`, which `buildLlmRequest` has
+ * already normalised: array content is MOVED into `multimodal_content` and
+ * `content` is left a string. So the leg that was supposed to notice
+ * attachments could not fire, and an uploaded document, image or file did not
+ * count as private context for the trifecta gate. Both shapes are read here,
+ * because the wire type still permits either.
+ */
+function hasNonTextPart(message: ProcessedRequest['llmRequest']['messages'][number]): boolean {
+  const parts: unknown[] = Array.isArray(message.content)
+    ? (message.content as unknown[])
+    : (message.multimodal_content ?? []);
+  return parts.some((part) => (part as { type?: string })?.type !== 'text');
 }
 
 function toolResultSecretBlockedMessage(toolName: string): string {
