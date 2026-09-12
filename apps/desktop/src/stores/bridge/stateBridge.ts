@@ -114,11 +114,13 @@ export function bridgeSettingsStore(): void {
             wp?.language ??
             'en';
           const chatFont = wp?.chatFont ?? 'default';
+          const alwaysUseAgentMode = state.chatPreferences?.alwaysUseAgentMode ?? false;
 
           if (
             prev.settings.theme === theme &&
             prev.settings.language === language &&
-            prev.settings.chatFont === chatFont
+            prev.settings.chatFont === chatFont &&
+            prev.settings.alwaysUseAgentMode === alwaysUseAgentMode
           ) {
             return prev;
           }
@@ -130,6 +132,7 @@ export function bridgeSettingsStore(): void {
               theme,
               language,
               chatFont,
+              alwaysUseAgentMode,
             },
           };
         });
@@ -138,6 +141,40 @@ export function bridgeSettingsStore(): void {
     })
     .catch((err: unknown) => {
       console.warn('[stateBridge] Failed to bridge settings store:', err);
+    });
+}
+
+/**
+ * The global custom instructions are the desktop's system-prompt override, and
+ * `settings.systemPromptOverride` is the shared runtime's field for it. Without
+ * this, that field sat at its initial null for the life of the process while the
+ * real value lived only in a desktop store, so anything reading the canonical
+ * state was told there was no override when there was one.
+ *
+ * A disabled override is null, not the empty string: the shared field answers
+ * "what override is in force", and the text the user is keeping for later is not
+ * one.
+ */
+export function bridgeCustomInstructionsStore(): void {
+  import('../customInstructionsStore')
+    .then(({ useCustomInstructionsStore }) => {
+      const unsubscribe = useCustomInstructionsStore.subscribe((state) => {
+        const trimmed = state.globalInstructions.trim();
+        const systemPromptOverride =
+          state.globalInstructionsEnabled && trimmed.length > 0 ? trimmed : null;
+
+        appStateStore.setState((prev: AppState) => {
+          if (prev.settings.systemPromptOverride === systemPromptOverride) return prev;
+          return {
+            ...prev,
+            settings: { ...prev.settings, systemPromptOverride },
+          };
+        });
+      });
+      addCleanup(unsubscribe);
+    })
+    .catch((err: unknown) => {
+      console.warn('[stateBridge] Failed to bridge customInstructions store:', err);
     });
 }
 
@@ -397,6 +434,7 @@ export function initStateBridges(): () => void {
   bridgeAppModeStore();
   bridgeThinkingStore();
   bridgeSettingsStore();
+  bridgeCustomInstructionsStore();
   bridgeModelStore();
   bridgeMcpStore();
   bridgeMcpServerStore();
