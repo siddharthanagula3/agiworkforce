@@ -49,6 +49,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import {
   classifyError,
+  DATA_POLICY_NO_ENDPOINT_CODE,
   EmptyProviderResponseError,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
@@ -98,6 +99,7 @@ import {
   toOpenAiToolDef,
   type WebMcpToolDef,
 } from '@/lib/mcp-tool-executor';
+import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { isCloudCodeExecutionEnabled } from '@/lib/server/code-execution-policy';
@@ -1916,6 +1918,15 @@ export function routeOutcomeClassForError(
   classified: ClassifiedError,
 ): RouteOutcomeClass | undefined {
   if (err instanceof Error && err.name === STREAM_CORRUPTION_ERROR_NAME) return 'stream_corruption';
+  // A provider that reports no endpoint matching our own data policy will
+  // report it again on the next attempt and every attempt after, because the
+  // setting is ours and nothing about the provider changed. Recorded as its own
+  // class so one observation withdraws the route, instead of each turn paying a
+  // round trip to rediscover a permanent answer. The neighbouring
+  // `min_discount_unavailable` is deliberately NOT treated this way: discount
+  // availability genuinely fluctuates, so parking a route for it would throw
+  // away capacity that is about to come back.
+  if (classified.code === DATA_POLICY_NO_ENDPOINT_CODE) return 'policy_excluded';
   return ROUTE_OUTCOME_CLASS_BY_ERROR_CATEGORY[classified.category];
 }
 
@@ -2537,6 +2548,24 @@ export async function* runToolLoop(
   // race past it and each attempt its own sandbox. One attempt per turn, and
   // every caller after the first sees the answer the first one got.
   let e2bResolution: Promise<E2BExecutorResolution> | null = null;
+  async function stageTurnAttachmentsForSandbox(executor: E2BExecutor): Promise<void> {
+    const attachments = processed.turnAttachments ?? [];
+    if (attachments.length === 0) return;
+    try {
+      const outcome = await stageTurnAttachments(executor, attachments);
+      if (outcome.failed.length > 0) {
+        logger.warn(
+          { failed: outcome.failed, staged: outcome.staged.length, conversationId },
+          '[tool-loop] some turn attachments could not be staged into the sandbox',
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        { err, conversationId },
+        '[tool-loop] turn attachment staging failed; the model must copy the file in itself',
+      );
+    }
+  }
   async function resolveE2BExecutor(): Promise<E2BExecutorResolution> {
     executionToolRan = true;
     if (!e2bResolution) {
@@ -2544,7 +2573,13 @@ export async function* runToolLoop(
         e2bExecutor = await getE2BExecutor(e2bSessionScope, (cause) => {
           e2bUnavailableCause ??= cause;
         });
-        if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
+        if (e2bExecutor) {
+          await stageTurnAttachmentsForSandbox(e2bExecutor);
+          // After staging, never before: the baseline is what tells a generated
+          // file from one that was already there, so a baseline taken first
+          // would hand the user their own upload back as a new download.
+          e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
+        }
         return { executor: e2bExecutor, cause: e2bUnavailableCause };
       })();
     }

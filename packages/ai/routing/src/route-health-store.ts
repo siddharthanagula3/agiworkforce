@@ -156,6 +156,7 @@ const OUTCOME_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'unsupported_capability',
   'credential_rejected',
   'credential_unfunded',
+  'policy_excluded',
   'model_rejected',
 ]);
 
@@ -171,10 +172,12 @@ const FAILURE_CLASSES: ReadonlySet<RouteOutcomeClass> = new Set<RouteOutcomeClas
   'stream_corruption',
   'credential_rejected',
   'credential_unfunded',
+  'policy_excluded',
   'model_rejected',
 ]);
 
 const UNFUNDED_CLASS: RouteOutcomeClass = 'credential_unfunded';
+const POLICY_EXCLUDED_CLASS: RouteOutcomeClass = 'policy_excluded';
 
 export interface RouteHealthConfig {
   observationWindowMs: number;
@@ -483,6 +486,7 @@ function countByClass(events: readonly RouteOutcomeEvent[]): Record<RouteOutcome
     unsupported_capability: 0,
     credential_rejected: 0,
     credential_unfunded: 0,
+    policy_excluded: 0,
     model_rejected: 0,
   };
   for (const event of events) counts[event.class] += 1;
@@ -541,6 +545,17 @@ export function isCredentialUnfunded(snapshot: RouteHealthSnapshot | undefined):
   return snapshot?.unfunded === true;
 }
 
+/**
+ * Deliberately independent of `routeBreakerState`, for the same reason
+ * `isCredentialUnfunded` is. A route the provider excludes under our own data
+ * policy answers identically every time until someone changes an account
+ * setting, so probing it in `half_open` spends a real user's turn to rediscover
+ * a permanent answer. One observation is enough.
+ */
+export function isRoutePolicyExcluded(snapshot: RouteHealthSnapshot | undefined): boolean {
+  return snapshot?.policyExcluded === true;
+}
+
 export function routeBreakerStateWithDegradeBand(
   snapshot: RouteHealthSnapshot | undefined,
   degradeAtFailures: number,
@@ -593,6 +608,7 @@ export function buildRouteHealthSnapshot(
     halfOpen,
     ...(cooldownUntilMs !== undefined ? { cooldownUntilMs } : {}),
     ...(lastEvent.class === UNFUNDED_CLASS ? { unfunded: true } : {}),
+    ...(lastEvent.class === POLICY_EXCLUDED_CLASS ? { policyExcluded: true } : {}),
     consecutiveFailures,
     sampleCount,
     successRate: counts.success / sampleCount,
