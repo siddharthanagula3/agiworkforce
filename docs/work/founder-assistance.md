@@ -405,3 +405,29 @@ Production settlement cannot be verified with one controlled request, which is
 the gate the emergency deployment is held behind.
 **Impact** RELEASE-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Providers] The Anthropic account has no API credit
+
+**Why founder assistance is required**
+Adding credit to a provider account is a payment action on Anthropic's console.
+**Exact action**
+
+1. Open the Anthropic console, Plans and Billing.
+2. Add credit or enable auto-reload for the key that production uses.
+3. Confirm the same key is the one in the production `ANTHROPIC_API_KEY`.
+
+**Where** console.anthropic.com, then Vercel Production if the key changes.
+**Needed input** One payment decision.
+**How to verify completion** A minimal `/v1/messages` call to
+`claude-sonnet-5` answers instead of returning 400 "Your credit balance is too
+low to access the Anthropic API". A smoke probe on 2026-09-12 04:00 UTC got
+that 400 for Sonnet while OpenAI, Google, DeepSeek, Qwen, Moonshot and xAI all
+answered normally.
+**What remains after founder action** Nothing in code. Until it is done every
+Anthropic model is unservable for everyone, not only for event visitors:
+Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5 and Claude Fable 5.1 are all
+on this one account, so a paying Pro or Max subscriber who selects any of them
+gets a provider error. Sonnet 5 is also held out of the event allowlist for the
+same reason.
+**Impact** RELEASE-BLOCKING
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
