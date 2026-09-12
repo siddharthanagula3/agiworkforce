@@ -910,9 +910,12 @@ itself:
   while Mobile, Chrome and VS Code all carry the coming-soon label, yet Windows
   installers are unpublished. The platform sentence is true; the card reads as
   more available than Desktop is.
-- `SURFACE_STATUS.desktop` in `apps/web/lib/marketing-constants.ts` still reads
-  as Linux assets only, which now understates the shipped macOS build. It is a
-  shared constant that pages outside the audited set render.
+  This list previously carried a third item, that `SURFACE_STATUS.desktop` in
+  `apps/web/lib/marketing-constants.ts` understates the shipped macOS build by
+  reading "Linux assets". **That was wrong and is withdrawn.** The constant is
+  accurate: the published desktop release carries an AppImage, a deb and an rpm
+  and nothing else. The flag came from the same mistake as the desktop page copy,
+  reading the release workflow instead of the release.
 
 **What the audit found on `/customers`, `/partners` and `/press` is worth
 recording as a positive**, because it is the risk that was looked for and it is
