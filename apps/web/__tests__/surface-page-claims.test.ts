@@ -117,8 +117,16 @@ describe('/business, enterprise admin controls are not underclaimed', () => {
   });
 });
 
-describe('/desktop, platform availability matches what the release workflow publishes', () => {
-  it('publishes a notarized universal macOS build', () => {
+/**
+ * What a workflow builds and what a user can download are different facts, and
+ * this page is about the second one. An earlier pass read `release-desktop.yml`,
+ * saw macOS signed and notarized, and rewrote the page to list a notarized dmg
+ * under "Published package assets". No macOS asset has ever been published: the
+ * latest desktop release carries three Linux files and nothing else. Reasoning
+ * from the pipeline to the shelf is the mistake these cases exist to stop.
+ */
+describe('/desktop separates what is built from what is published', () => {
+  it('builds and notarizes macOS in the release workflow', () => {
     const workflow = readFileSync(
       join(REPO_ROOT, '.github', 'workflows', 'release-desktop.yml'),
       'utf8',
@@ -127,15 +135,19 @@ describe('/desktop, platform availability matches what the release workflow publ
     expect(workflow).toMatch(/build-macos:/u);
   });
 
-  it('does not tell a reader that macOS installers are unpublished', () => {
+  it('never lists a macOS asset as published', () => {
     const page = collapsed('app/desktop/page.tsx');
     for (const [label, pattern] of [
-      ['macOS installers not published', /macOS (?:and Windows )?installers? (?:are |is )?not/iu],
-      ['macOS has no release date', /macOS[^.]*no release date/iu],
-      ['only Linux is checked', /Check AGI Desktop for Linux\./u],
+      ['a notarized dmg among the published assets', /Published package assets[^}]*macOS/iu],
+      ['macOS carried by the published package list', /Published package assets[^}]*\.dmg/iu],
     ] as ReadonlyArray<readonly [string, RegExp]>) {
-      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+      expect(pattern.test(page), `page claims: ${label}`).toBe(false);
     }
+  });
+
+  it('says plainly that macOS is built but not yet published', () => {
+    const page = collapsed('app/desktop/page.tsx');
+    expect(page).toMatch(/not yet published/iu);
   });
 
   it('keeps Windows stated as unpublished, which is still true', () => {
@@ -215,9 +227,12 @@ describe('/get-started, desktop availability matches the release pipeline', () =
     expect(workflow).toMatch(/Notarized/u);
   });
 
-  it('states the signature gate and keeps Windows as unpublished', () => {
+  it('states the signature gate and keeps both unpublished platforms unpublished', () => {
     const page = collapsed('app/get-started/page.tsx');
-    expect(page).toMatch(/macOS builds are signed and notarized/iu);
+    expect(page).toMatch(/signed and notarized by the release job/iu);
+    // The distinction the page has to keep: notarized in the pipeline is not
+    // the same as downloadable, and no macOS asset has been published.
+    expect(page).toMatch(/has not been published yet/iu);
     expect(page).toMatch(/release API verifies that platform's signature/iu);
     expect(page).toMatch(/Windows installers have not been published/iu);
   });
