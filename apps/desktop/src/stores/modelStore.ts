@@ -41,7 +41,7 @@ export interface ManagedCloudModel {
   displayName: string;
   provider: Provider;
   providerDisplayName: string;
-  tier: 'basic' | 'pro' | 'max';
+  tier: 'free' | 'basic' | 'pro' | 'max';
   category: 'instant' | 'latest' | 'thinking';
   contextWindow: number;
   maxOutput: number;
