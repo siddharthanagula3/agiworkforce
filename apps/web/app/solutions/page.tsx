@@ -34,7 +34,7 @@ const ROUTES = [
   {
     meta: 'You write code',
     title: 'AGI Code',
-    body: 'The agi binary and the VS Code extension that spawns it over stdio: ranked review findings, a session diff landed as a git patch, and commands run under the OS sandbox.',
+    body: 'The released agi binary, and the VS Code extension that spawns it over stdio once that extension ships: ranked review findings, a session diff landed as a git patch, and commands run under the OS sandbox.',
     href: '/agi-code',
   },
   {

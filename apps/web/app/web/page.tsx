@@ -19,7 +19,6 @@ import {
   ProjectWindow,
   ResearchWindow,
 } from '@/features/marketing/components/FeatureScenes';
-import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { approximateCount, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 
@@ -56,8 +55,8 @@ export default function WebSurfacePage() {
               </h1>
               <p className="agi-fl-lede">
                 Chat in the browser with every admitted model behind one selector. Projects,
-                artifacts, memory, deep research and agents open from the same composer, and the
-                reply names the route that served it.
+                artifacts, memory, deep research and agents open from the same composer, and each
+                reply names the model that answered it in its actions menu.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
@@ -70,7 +69,7 @@ export default function WebSurfacePage() {
               <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
                 <li>Cloud · public alpha</li>
                 <li>Auto · route per message</li>
-                <li>Receipt · on every reply</li>
+                <li>Receipt · when Auto leaves your pin</li>
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
@@ -90,9 +89,12 @@ export default function WebSurfacePage() {
                 value: approximateCount(MARKETING.models.count),
                 label: 'models behind one selector',
               },
-              { value: approximateCount(BYOK_PROVIDER_IDS.length), label: 'providers on your key' },
-              { value: '3', label: 'routes: Local, BYOK, Cloud' },
-              { value: '1', label: 'account across six surfaces' },
+              {
+                value: approximateCount(MARKETING.providers.count),
+                label: 'providers in the catalog',
+              },
+              { value: '1', label: 'route: AGI managed cloud' },
+              { value: '3', label: 'surfaces released: Web, Desktop, CLI' },
             ]}
           />
         </Section>
@@ -166,7 +168,7 @@ export default function WebSurfacePage() {
         <FinalCta
           eyebrow="Start"
           title="Open it in a tab, or take it with you."
-          body="Free to try in the browser, with a served-by receipt under every reply. Desktop adds local models, encrypted keys, connectors and scheduled work on the same account."
+          body="Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds local models, encrypted keys, connectors and scheduled work on the same account."
           ctas={[
             { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },
