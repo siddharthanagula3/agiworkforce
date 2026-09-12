@@ -76,3 +76,58 @@ describe('shared subscription model gate', () => {
     expect(canAccessModel('nonexistent-model-xyz', 'max')).toBe(false);
   });
 });
+
+/**
+ * The plan strings above are not all of them. `team` and `max_15x` are real
+ * plans a customer can buy and are what the billing tables actually store, and
+ * neither had ever been asserted here: the suite covered `max_plus` but not
+ * `max_15x`, and never named `team` at all.
+ *
+ * That matters because the gate reaches them by folding, `team` onto Pro and
+ * `max_15x` onto Max, and a fold is exactly the kind of thing that is correct
+ * until someone edits the normalizer. These assert the plans as the strings
+ * they are stored as, so a change to the fold has to be deliberate.
+ */
+describe('every plan a customer can actually buy', () => {
+  const PAID_ROSTER: Readonly<Record<string, readonly string[]>> = {
+    basic: ECONOMY_MODELS,
+    pro: [...ECONOMY_MODELS, ...PRO_MODELS],
+    team: [...ECONOMY_MODELS, ...PRO_MODELS],
+    max: [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS],
+    max_15x: [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS],
+    enterprise: [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS],
+  };
+  const EVERY_MODEL = [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS];
+
+  it.each(Object.keys(PAID_ROSTER))('gives %s exactly its roster', (plan) => {
+    const allowed = new Set(PAID_ROSTER[plan]!);
+    for (const model of EVERY_MODEL) {
+      expect({ plan, model, allowed: canAccessModel(model, plan) }).toEqual({
+        plan,
+        model,
+        allowed: allowed.has(model),
+      });
+    }
+  });
+
+  it('gives Team what Pro has, and no flagship model', () => {
+    expect(PRO_MODELS.length).toBeGreaterThan(0);
+    expect(MAX_MODELS.length).toBeGreaterThan(0);
+    for (const model of PRO_MODELS) expect(canAccessModel(model, 'team')).toBe(true);
+    for (const model of MAX_MODELS) expect(canAccessModel(model, 'team')).toBe(false);
+  });
+
+  it('gives Max 15x everything Max has, under the name billing stores', () => {
+    for (const model of EVERY_MODEL) {
+      expect(canAccessModel(model, 'max_15x')).toBe(canAccessModel(model, 'max'));
+    }
+  });
+
+  it('never grants a paid plan a model Free cannot reach without naming it', () => {
+    // Absence from the tables must not be broader than presence in them, the
+    // inversion that once made unnamed models selectable on Free.
+    for (const model of FREE_TRIAL_MODELS) {
+      expect(canAccessModel(model, 'basic')).toBe(true);
+    }
+  });
+});
