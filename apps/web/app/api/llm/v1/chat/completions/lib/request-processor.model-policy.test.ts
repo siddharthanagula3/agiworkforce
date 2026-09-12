@@ -205,21 +205,33 @@ describe('workspace model policy is re-checked on every model this request can r
     expect((governed.fallbackModels ?? []).slice(0, survivors.length)).toEqual(survivors);
   });
 
-  it('empties the failover plan when the workspace allows only the primary model', async () => {
+  it('strips every substitute model from the failover plan when the workspace allows only the primary', async () => {
     const baseline = await run('policy-baseline-only', 'auto');
     expect(baseline.ok).toBe(true);
     if (!baseline.ok) return;
-    expect((baseline.fallbackModels ?? []).length).toBeGreaterThan(0);
+    const substitutes = (baseline.fallbackModels ?? []).filter(
+      (model) => model !== baseline.chatRequest.model,
+    );
+    expect(
+      substitutes.length,
+      'auto routing must offer a substitute model for the allowlist to strip',
+    ).toBeGreaterThan(0);
 
     serveModelPolicy({ allowedModels: [baseline.chatRequest.model] });
 
-    const governed = await run('policy-plan-empty', 'auto');
+    const governed = await run('policy-plan-allowlisted', 'auto');
     expect(governed.ok).toBe(true);
     if (!governed.ok) return;
-    // Rotation stays on the primary model: another host serving the same model
-    // is admitted, a different model is not.
+    // The plan is a ROUTE list, not a model list: the resolver leads with the
+    // primary model's other transports, and reaching the same model through a
+    // second host is not a model substitution. An allowlist of one model
+    // therefore leaves those entries standing and every substitute gone, so
+    // nothing the plan can rotate onto is outside what the workspace allows.
     for (const model of governed.fallbackModels ?? []) {
       expect(model).toBe(baseline.chatRequest.model);
+    }
+    for (const substitute of substitutes) {
+      expect(governed.fallbackModels ?? []).not.toContain(substitute);
     }
   });
 
