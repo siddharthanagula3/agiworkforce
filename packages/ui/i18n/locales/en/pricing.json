@@ -168,7 +168,7 @@
   "compareTeamUsage": "Same usage as Pro",
   "compareTeamBestFor": "Teams needing shared, governed access with admin controls",
   "annualContract": "Annual contract",
-  "compareEnterpriseUsage": "Dedicated capacity, scoped to your org",
+  "compareEnterpriseUsage": "Uncapped managed usage, scoped to your contract",
   "compareEnterpriseBestFor": "Organizations needing SSO, audit, and custom retention",
   "redirectingToCheckout": "Redirecting to checkout...",
   "checkoutFailed": "Failed to start checkout. Please try again.",
