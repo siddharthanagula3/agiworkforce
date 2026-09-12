@@ -868,6 +868,25 @@ The eleventh failure was introduced by this pass and is fixed: making the usage
 summary one shared reading rather than one per component meant it outlived a
 test case, so the settings pane rendered the previous case's numbers.
 
+Three of the five were repaired on 2026-09-12 and were stale assertions rather
+than broken code, with one exception worth reading: the aggregator file died at
+import on origin/main, so all 27 of its tests were dead and reported as one
+failure, and the in-progress repair sitting in the tree had turned two of them
+into conditional runs whose conditions are false today, which left the security
+assertion "never admits an experimental-only route to managed traffic" running
+as skipped.
+
+**`packages/ai/routing` fails 13 more on origin/main**, found the same way and
+also unregistered: four files, covering route parking, continuity yielding to a
+parked model, the premium coding slot, provider-exclusion overlays, GA harness
+admission, the Desktop runtime cutover, a preferred slot whose model lacks a
+capability, and the cross-language conformance fixture in four places. One of
+them is the explicit-model contract itself: "preserves an explicit eligible
+model instead of silently switching providers". The branch adds nine passing
+tests to that package and fails exactly the same thirteen, so none of it is new
+work, but the explicit-model one is a product promise rather than a fixture
+detail and should be read first.
+
 ### Production catalogue measurement, 2026-09-12 10:25 UTC
 
 Read-only, anonymous, against the live site. `/api/health` reports database,
