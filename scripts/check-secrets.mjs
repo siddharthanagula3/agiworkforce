@@ -37,6 +37,19 @@ const PATTERNS = [
   { name: 'Google API key', re: /AIza([A-Za-z0-9_-]{35,})/g, floor: 35 },
   { name: 'AWS access key id', re: /A(?:KIA|SIA)([A-Za-z0-9]{16,})/g, floor: 16 },
   { name: 'Supabase personal access token', re: /sbp_([A-Za-z0-9]{40,})/g, floor: 40 },
+  // Providers this product actually holds keys for and the table did not name.
+  // Measured on 2026-09-12: a live provider error quoting an account back at the
+  // caller passed this scan untouched, because none of the shapes below were
+  // here. The alphabets deliberately exclude `-` and `_` so a marker written
+  // between the prefix and the key ends the match, the way `xai-` already does.
+  { name: 'OpenRouter API key', re: /sk-or-v1-([A-Za-z0-9]{32,})/g, floor: 32 },
+  { name: 'Perplexity API key', re: /pplx-([A-Za-z0-9]{32,})/g, floor: 32 },
+  // DeepSeek, Moonshot and Alibaba all issue a bare `sk-` key. Anthropic and
+  // OpenAI project keys carry a second dashed segment, so they match their own
+  // rows above and never this one.
+  { name: 'Vendor API key (sk-)', re: /\bsk-([A-Za-z0-9]{32,})/g, floor: 32 },
+  // The identifier half of a Moonshot credential, which their errors quote.
+  { name: 'Vendor access key id (ak-)', re: /\bak-([A-Za-z0-9]{16,})/g, floor: 16 },
   {
     name: 'Postgres/Redis URL with password',
     connection: true,
