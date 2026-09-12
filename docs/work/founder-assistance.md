@@ -523,6 +523,14 @@ policy excludes.
 are implemented and unit tested; what is missing is observation, and every one
 of them says so in its own entry rather than claiming a confirmation that was
 never made.
+
+Narrowed 2026-09-12 by what could be observed without either: the whole web
+suite now runs against the branch in a clean worktree, 17,059 passing, and the
+live site answers read-only requests, which measured three customer-visible
+defects the branch fixes and which the same three requests will confirm after a
+deploy. What is still unobservable from a checkout is everything behind a
+session: a durable run, a real sandbox, a live voice session, a reload, and a
+long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
