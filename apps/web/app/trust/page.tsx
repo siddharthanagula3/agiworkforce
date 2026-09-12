@@ -156,7 +156,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Six protected route groups are checked before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. As of 2026-08-05.',
+      'Implemented. Twelve protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-12.',
   },
   {
     label: 'Rate limiting',
@@ -171,7 +171,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Security event logging',
     value:
-      'Implemented: seven event types. Failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature, written by a single module. There is no hosted per-tool activity journal; the desktop keeps one locally. As of 2026-08-05.',
+      'Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. There is no hosted per-tool activity journal; the desktop keeps one locally. As of 2026-09-12.',
   },
   {
     label: 'Account erasure',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-12',
+                        value:
+                          'Pre-release claim audit of the legal surface. Two rows here were counting things that had grown since they were written. Protected route groups read six against a matcher of twelve, and /security had already been corrected to twelve while this page had not. Security event logging read seven event types against nine, omitting the content notice and the retention purge that records its own run. Both are corrected above and both counts are now derived from the deciding source by a test rather than remembered. The privacy policy was corrected in the same pass: it denied that any per-organisation conversation retention window was enforced, while a nightly job deletes workspace conversations past a window an owner sets, and it undercounted the erasure table list at 70 against 73.',
+                      },
                       {
                         label: '2026-09-12',
                         value:

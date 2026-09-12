@@ -124,12 +124,83 @@ const STORAGE: StorageRow[] = [
     source: 'lib/sentry-shared.ts',
   },
   {
+    key: 'agi-user-profile-store',
+    store: 'Local storage',
+    holds:
+      'A cached copy of your account profile so the app can render before the server answers: your name, email, avatar, and your plan and its renewal dates. It is a copy of what we already hold, not a separate collection.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/user-profile-store.ts',
+  },
+  {
     key: 'agi-artifacts-store',
     store: 'Local storage',
     holds:
       'Artifacts you have open, cached so they survive a reload. This can contain content you generated.',
     clearedBy: 'Clearing site data.',
     source: 'features/chat/stores/artifacts-store.ts',
+  },
+  {
+    key: 'agiworkforce-web-settings',
+    store: 'Local storage',
+    holds:
+      'Your app settings, including any custom commands you wrote. Those are your own text, held on your device.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/web-settings-store.ts',
+  },
+  {
+    key: 'agiworkforce-web-media',
+    store: 'Local storage',
+    holds:
+      'Your twenty most recent completed image and video generations, so the media panel is not empty on a reload. This can contain content you generated.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/media-store.ts',
+  },
+  {
+    key: 'agi-notification-store',
+    store: 'Local storage',
+    holds:
+      'In-app notifications you have received, their read state, and your notification settings.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/notification-store.ts',
+  },
+  {
+    key: 'agi-company-hub-store',
+    store: 'Local storage',
+    holds: 'Your AGI Work sessions and which one is active.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/company-hub-store.ts',
+  },
+  {
+    key: 'agent-metrics-storage',
+    store: 'Local storage',
+    holds:
+      'Counters the app keeps for you about your own runs: sessions, completed and failed tasks, tokens and messages, and recent activity. Device-local, never sent to us, and not the metering we bill from.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/agent-metrics-store.ts',
+  },
+  {
+    key: 'agi-tool-permissions',
+    store: 'Local storage',
+    holds: 'The allow, ask and block verdicts you saved for individual tools.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'features/connectors/stores/tool-permissions-store.ts',
+  },
+  {
+    key: 'agiworkforce-web-chat',
+    store: 'Local storage',
+    holds:
+      'Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is a Chat or an AGI Work thread. No message text.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/web-chat-store.ts',
+  },
+  {
+    key: 'agi-model-store, agi-response-style, agi-thinking-store, agi-ui-store, tool-storage',
+    store: 'Local storage',
+    holds:
+      'Interface preferences with no personal data in them: the model and provider you last picked, your response style, your thinking-effort setting, panel and layout state, and your tool filters and trusted workflows.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source:
+      'shared/stores/model-store.ts, features/chat/stores/style-store.ts, shared/stores/thinking-store.ts, shared/stores/layout-store.ts, shared/stores/tool-store.ts',
   },
   {
     key: 'agi_last_activity',
@@ -175,6 +246,22 @@ const STORAGE: StorageRow[] = [
       'An invitation token carried across the sign-in redirect so the invite still applies when you land back.',
     clearedBy: 'Closing the tab, or accepting the invitation.',
     source: 'features/teams/components/TeamInvitationAcceptance.tsx',
+  },
+  {
+    key: 'agi.composer-pending-draft',
+    store: 'Session storage',
+    holds:
+      'A message you typed into a new chat and navigated away from, held so pressing back gives it to you rather than losing it. It is the text you wrote, so it is named here rather than counted as a preference.',
+    clearedBy: 'Closing the tab, sending the message, or clearing site data.',
+    source: 'features/chat/lib/pending-composer-draft.ts',
+  },
+  {
+    key: 'Everything else, under an agi or agiworkforce prefix',
+    store: 'Local storage',
+    holds:
+      'Interface state with no personal data in it: which model favourites you starred, which notices and banners you dismissed, which conversations are unread, and which interface variants you are on. Every remaining key the app writes carries one of those two prefixes, which is how the sign-out sweep finds them all. Nothing outside that prefix and outside this table is written by us.',
+    clearedBy: 'Signing out, or clearing site data.',
+    source: 'shared/stores/authentication-store.ts (APP_STORAGE_KEY_PATTERNS)',
   },
 ];
 
@@ -287,8 +374,13 @@ export default function CookiesPage() {
                       Most of what this product stores on your device is in local or session
                       storage, not cookies, including your session credentials. None of it is a
                       tracking technology and none of it is shared, but you should be able to see
-                      it, so here it is in full. The ones that carry an identifier or a credential
-                      are listed first.
+                      it, so here is the whole of it: every key that carries an identifier, a
+                      credential, or something you wrote is named below with the file that writes
+                      it, and the last row accounts for the remainder by the prefix they all share.
+                      Fourteen of the named keys were missing from this table until 12 September
+                      2026, including a cached copy of your profile and plan, the custom commands
+                      you wrote, and an unsent message you typed. A test now derives the list from
+                      the code, so the table cannot fall behind it again.
                     </Prose>
                   </div>
                   <Ledger caption="Device storage" rows={storageRows(STORAGE)} />

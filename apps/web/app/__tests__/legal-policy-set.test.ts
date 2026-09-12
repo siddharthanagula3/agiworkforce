@@ -115,8 +115,8 @@ describe('legal policy set, prohibited claims', () => {
       files: ['privacy/page.tsx', 'cookies/page.tsx'],
     },
     {
-      pattern: /Org-level retention windows on Enterprise/i,
-      why: 'No per-organisation conversation retention window is enforced on the conversation path.',
+      pattern: /no per-organisation retention window is enforced/i,
+      why: 'RETIRED 2026-09-12 as a removal and reinstated as a denial. A per-organisation conversation retention window IS enforced: lib/services/retention-service.ts deletes workspace conversations past it and /api/cron/enforce-workspace-retention runs nightly. The disclosure is required by app/__tests__/legal-surface-claims.test.ts.',
       files: ['privacy/page.tsx'],
     },
     {

@@ -121,6 +121,12 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     region: 'United States',
   },
   {
+    name: 'Google (Places API)',
+    purpose:
+      'Place search for the maps tool. When the assistant looks a place up for you, the search text you asked about and any location you named are sent to Google Places (lib/places/google-places-provider.ts), and a photo you open for a result is fetched from Google through our own route. This happens on the model’s initiative during a conversation, and only where an operator has configured a Places key; without one the tool is not offered at all. It is a separate recipient from the Play verification row above.',
+    region: 'United States',
+  },
+  {
     name: 'OpenStreetMap Foundation (Nominatim)',
     purpose:
       'Geocoding for the maps tool. A place name or location you ask about is sent to Nominatim to resolve it to coordinates (lib/services/map-geocoding-service.ts). Nominatim’s usage policy requires an identifying User-Agent, so the request is attributable to AGI rather than to you.',
@@ -148,6 +154,10 @@ function subRows(): LedgerRow[] {
 }
 
 const CORRECTIONS = [
+  {
+    title: 'A seventh recipient was missing, found on 12 September 2026',
+    body: "Google's Places API was receiving the place text you ask the assistant about, and the map photos you open, while this page named Google only for Android purchase verification and named OpenStreetMap for the maps tool. Listing one half of a tool's egress is the same failure as listing none of it. The row is above.",
+  },
   {
     title: 'Six recipients were missing',
     body: "Resend, Runway, Perplexity's web-search role, Google's Play verification API, OpenStreetMap's Nominatim and GitHub were all receiving data while absent from this page. They are listed above with what each one receives.",
@@ -233,10 +243,11 @@ export default function SubprocessorsPage() {
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-subprocessors-corrections-title">
-                Corrections made on {POLICY_LAST_UPDATED.subprocessors}.
+                Corrections, most recent first.
               </h2>
               <Prose>
-                A review of what actually leaves this product found this page had been wrong in both
+                Two reviews of what actually leaves this product, on 14 August and{' '}
+                {POLICY_LAST_UPDATED.subprocessors}, found this page had been wrong in both
                 directions, and we would rather publish the correction than quietly reissue the
                 list.
               </Prose>
