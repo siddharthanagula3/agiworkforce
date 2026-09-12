@@ -23,6 +23,7 @@ import {
   liveSessionCostCents,
   liveSessionProviderCostCents,
 } from '@/lib/voice/live-voice-billing';
+import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -30,6 +31,22 @@ const CloseLiveSessionSchema = z.object({
     .min(0)
     .max(24 * 60 * 60),
   reason: z.string().max(64).optional(),
+  /**
+   * What the delegated backend responses model spent during the session. The
+   * provider bills it separately from the per-minute session rate, and nothing
+   * reported it, so that spend never reached the COGS ledger. Optional, because
+   * a session that never delegated has none, and a client that does not send it
+   * still settles the session itself correctly.
+   */
+  backend: z
+    .object({
+      model: z.string().min(1).max(128).optional(),
+      inputTokens: z.number().int().min(0).optional(),
+      outputTokens: z.number().int().min(0).optional(),
+      cachedTokens: z.number().int().min(0).optional(),
+      webSearchCalls: z.number().int().min(0).optional(),
+    })
+    .optional(),
   settlement: z.object({
     idempotencyKey: z.string().min(1).max(256),
     leaseToken: z.string().min(1).max(256),
@@ -120,6 +137,16 @@ async function handleCloseLiveSession(
         : { providerCostCents, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
     },
   });
+  if (body.backend) {
+    await recordLiveVoiceBackendCost({
+      userId,
+      provider: reservation.provider ?? 'unknown',
+      sessionId,
+      surface: 'web',
+      backendModel: getRoutingSlotModel('voice_live_backend'),
+      reported: body.backend,
+    });
+  }
   try {
     await markManagedUsageClientDelivered(reservation);
   } catch (error) {
