@@ -46,14 +46,14 @@ function isSignedDesktopManifest(
 
 function Alternatives() {
   return (
-    <div className="mt-4 flex flex-wrap gap-3">
-      <Link href={WEB_CHAT_ENTRY_HREF} className="agi-ds-btn" data-variant="secondary">
+    <p className="agi-ds-availability-links">
+      <Link href={WEB_CHAT_ENTRY_HREF} className="agi-ds-link">
         Use AGI Web
       </Link>
-      <Link href="/cli" className="agi-ds-btn" data-variant="secondary">
+      <Link href="/cli" className="agi-ds-link">
         See CLI availability
       </Link>
-    </div>
+    </p>
   );
 }
 
@@ -209,87 +209,77 @@ export function DesktopDownloadAvailability() {
         published, and no release dates are available for them.
       </Prose>
 
-      <ul className="mt-8 grid list-none gap-4 p-0 md:grid-cols-3" aria-label="Desktop platforms">
-        <li className="agi-ds-card p-5">
-          <p className="text-sm font-semibold">macOS</p>
-
-          <div className="mt-3">
-            <p className="text-sm font-semibold">AGI Desktop</p>
-
+      <ul className="agi-ds-ledger agi-ds-availability" aria-label="Desktop platforms">
+        <li className="agi-ds-ledger-row">
+          <span className="agi-ds-ledger-label">macOS · AGI Desktop</span>
+          <span className="agi-ds-ledger-value">
             {macDesktopAvailability.state === 'loading' && (
-              <div
+              <span
                 role="status"
                 aria-label="Checking AGI Desktop macOS downloads"
                 aria-live="polite"
                 aria-busy="true"
-                className="agi-ds-card mt-3 p-4 text-sm"
               >
                 Checking the release channel…
-              </div>
+              </span>
             )}
-
             {macDesktopAvailability.state === 'available' && (
-              <div className="mt-3">
-                <p className="mb-4 text-sm agi-ds-muted">
+              <span className="agi-ds-availability-ready">
+                <span className="agi-ds-muted">
                   Universal build · signed and notarized · version {macDesktopAvailability.version}
-                </p>
+                </span>
                 <a href="/api/download?platform=mac" className="agi-ds-btn" data-variant="primary">
                   Download AGI Desktop for macOS
                 </a>
-              </div>
+              </span>
             )}
-
             {macDesktopAvailability.state === 'empty' && (
-              <div
+              <span
                 role="status"
                 aria-label="AGI Desktop macOS downloads unavailable"
                 aria-live="polite"
-                className="agi-ds-card mt-3 p-4"
+                className="agi-ds-availability-state"
               >
-                <p className="text-sm">
-                  No signed AGI Desktop macOS installer is available right now.
-                </p>
+                No signed AGI Desktop macOS installer is available right now.
                 <Alternatives />
-              </div>
+              </span>
             )}
-
             {macDesktopAvailability.state === 'error' && (
-              <div role="alert" className="agi-ds-card mt-3 p-4" data-tone="danger">
-                <p className="text-sm">We could not verify the AGI Desktop macOS installer.</p>
+              <span role="alert" className="agi-ds-availability-state">
+                We could not verify the AGI Desktop macOS installer.
                 <button
                   type="button"
-                  className="agi-ds-btn mt-4"
+                  className="agi-ds-btn"
                   data-variant="primary"
                   onClick={() => void checkMacDesktopRelease()}
                 >
                   Retry release check
                 </button>
                 <Alternatives />
-              </div>
+              </span>
             )}
-          </div>
+          </span>
+        </li>
 
-          <div className="mt-4">
-            <p className="text-sm font-semibold">AGI Cloud</p>
-
+        <li className="agi-ds-ledger-row">
+          <span className="agi-ds-ledger-label">macOS · AGI Cloud</span>
+          <span className="agi-ds-ledger-value">
             {cloudAvailability.state === 'loading' && (
-              <div
+              <span
                 role="status"
                 aria-label="Checking AGI Cloud macOS downloads"
                 aria-live="polite"
                 aria-busy="true"
-                className="agi-ds-card mt-3 p-4 text-sm"
               >
                 Checking the release channel…
-              </div>
+              </span>
             )}
-
             {cloudAvailability.state === 'available' && (
-              <div className="mt-3">
-                <p className="mb-4 text-sm agi-ds-muted">
+              <span className="agi-ds-availability-ready">
+                <span className="agi-ds-muted">
                   Cloud accounts only · signed and notarized · version {cloudAvailability.version}
-                </p>
-                <div className="flex flex-wrap gap-3">
+                </span>
+                <span className="agi-ds-btn-row">
                   {cloudAvailability.architectures.arm64 && (
                     <a
                       href="/api/download?platform=mac&app=cloud&arch=arm64"
@@ -308,103 +298,105 @@ export function DesktopDownloadAvailability() {
                       Download for Intel Mac
                     </a>
                   )}
-                </div>
-              </div>
+                </span>
+              </span>
             )}
-
             {cloudAvailability.state === 'empty' && (
-              <div
+              <span
                 role="status"
                 aria-label="AGI Cloud macOS downloads unavailable"
                 aria-live="polite"
-                className="agi-ds-card mt-3 p-4"
+                className="agi-ds-availability-state"
               >
-                <p className="text-sm">No signed AGI Cloud installer is available right now.</p>
+                No signed AGI Cloud installer is available right now.
                 <Alternatives />
-              </div>
+              </span>
             )}
-
             {cloudAvailability.state === 'error' && (
-              <div role="alert" className="agi-ds-card mt-3 p-4" data-tone="danger">
-                <p className="text-sm">We could not verify the AGI Cloud installer.</p>
+              <span role="alert" className="agi-ds-availability-state">
+                We could not verify the AGI Cloud installer.
                 <button
                   type="button"
-                  className="agi-ds-btn mt-4"
+                  className="agi-ds-btn"
                   data-variant="primary"
                   onClick={() => void checkCloudRelease()}
                 >
                   Retry release check
                 </button>
                 <Alternatives />
-              </div>
+              </span>
             )}
-          </div>
+          </span>
         </li>
-        <li className="agi-ds-card p-5">
-          <p className="text-sm font-semibold">Windows</p>
 
-          <div
-            role="status"
-            aria-label="Windows downloads unavailable"
-            aria-live="polite"
-            className="agi-ds-card mt-3 p-4"
-          >
-            <p className="text-sm">Windows installer not published.</p>
-            <Alternatives />
-          </div>
-        </li>
-        <li className="agi-ds-card p-5">
-          <p className="text-sm font-semibold">Linux x64</p>
-
-          {availability.state === 'loading' && (
-            <div
+        <li className="agi-ds-ledger-row">
+          <span className="agi-ds-ledger-label">Windows</span>
+          <span className="agi-ds-ledger-value">
+            <span
               role="status"
-              aria-label="Checking Desktop downloads"
+              aria-label="Windows downloads unavailable"
               aria-live="polite"
-              aria-busy="true"
-              className="agi-ds-card mt-3 p-4 text-sm"
+              className="agi-ds-availability-state"
             >
-              Checking the signed release channel…
-            </div>
-          )}
-
-          {availability.state === 'available' && (
-            <div className="mt-3">
-              <p className="mb-4 text-sm agi-ds-muted">
-                Signed AppImage · version {availability.version}
-              </p>
-              <a href="/api/download?platform=linux" className="agi-ds-btn" data-variant="primary">
-                Download Linux x64 AppImage
-              </a>
-            </div>
-          )}
-
-          {availability.state === 'empty' && (
-            <div
-              role="status"
-              aria-label="Desktop downloads unavailable"
-              aria-live="polite"
-              className="agi-ds-card mt-3 p-4"
-            >
-              <p className="text-sm">No signed Linux installer is available right now.</p>
+              Windows installer not published.
               <Alternatives />
-            </div>
-          )}
+            </span>
+          </span>
+        </li>
 
-          {availability.state === 'error' && (
-            <div role="alert" className="agi-ds-card mt-3 p-4" data-tone="danger">
-              <p className="text-sm">We could not verify the Linux installer.</p>
-              <button
-                type="button"
-                className="agi-ds-btn mt-4"
-                data-variant="primary"
-                onClick={() => void checkRelease()}
+        <li className="agi-ds-ledger-row">
+          <span className="agi-ds-ledger-label">Linux x64</span>
+          <span className="agi-ds-ledger-value">
+            {availability.state === 'loading' && (
+              <span
+                role="status"
+                aria-label="Checking Desktop downloads"
+                aria-live="polite"
+                aria-busy="true"
               >
-                Retry release check
-              </button>
-              <Alternatives />
-            </div>
-          )}
+                Checking the signed release channel…
+              </span>
+            )}
+            {availability.state === 'available' && (
+              <span className="agi-ds-availability-ready">
+                <span className="agi-ds-muted">
+                  Signed AppImage · version {availability.version}
+                </span>
+                <a
+                  href="/api/download?platform=linux"
+                  className="agi-ds-btn"
+                  data-variant="primary"
+                >
+                  Download Linux x64 AppImage
+                </a>
+              </span>
+            )}
+            {availability.state === 'empty' && (
+              <span
+                role="status"
+                aria-label="Desktop downloads unavailable"
+                aria-live="polite"
+                className="agi-ds-availability-state"
+              >
+                No signed Linux installer is available right now.
+                <Alternatives />
+              </span>
+            )}
+            {availability.state === 'error' && (
+              <span role="alert" className="agi-ds-availability-state">
+                We could not verify the Linux installer.
+                <button
+                  type="button"
+                  className="agi-ds-btn"
+                  data-variant="primary"
+                  onClick={() => void checkRelease()}
+                >
+                  Retry release check
+                </button>
+                <Alternatives />
+              </span>
+            )}
+          </span>
         </li>
       </ul>
     </Section>

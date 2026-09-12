@@ -23,6 +23,7 @@ export default function CommunityPage() {
           id="agi-community-title"
           eyebrow="Community"
           title="Where to find us."
+          em="find us."
           lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and email ${CONTACT_EMAIL} for everything else. A real human reads it.`}
           ctas={[
             { href: '/changelog', label: 'Follow the changelog' },

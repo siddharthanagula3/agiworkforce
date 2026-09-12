@@ -118,7 +118,7 @@ export default async function StatusPage() {
           id="agi-status-title"
           eyebrow="Status"
           title="One signal, honestly checked."
-          lede="No wall of evergreen badges. This page runs a real health check against AGI's hosted services at most once a minute, shows you when that check ran, and tells you exactly what it does not cover. Most of AGI does not depend on our servers at all: Local and BYOK work runs on your device."
+          lede="A real health check against the hosted services at most once a minute, with the time it ran and what it does not cover. Local and BYOK work runs on your device and never depends on our servers."
           ctas={[]}
         />
 

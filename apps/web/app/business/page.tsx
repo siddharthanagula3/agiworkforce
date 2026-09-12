@@ -1,217 +1,150 @@
-import Link from 'next/link';
-import { BILLING_PLAN_PRICING, MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { LedgerSection, RouteMap } from '@/features/marketing/components/LandingSections';
 import {
-  Button,
-  ButtonRow,
-  Eyebrow,
-  Ledger,
-  Prose,
-  Section,
-  Stack,
-} from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { BYOK_SURFACES, SURFACE_STATUS } from '@/lib/marketing-constants';
-import '@/features/marketing/components/pages/business/data-table.css';
+  CapabilityGrid,
+  FinalCta,
+  FlagshipHero,
+} from '@/features/marketing/components/SurfaceSections';
+import { CATALOG_AS_OF, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI for Business: who pays for what, and where the ceiling sits',
+  title: 'AGI for Business: Local, BYOK, and managed-cloud workspaces',
   description:
-    'The cost side of an AGI rollout: Local and BYOK carry no charge from us, managed cloud is the only route we bill, and a run can be capped in dollars before it starts.',
+    'A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. Local, BYOK, and public-alpha managed cloud modes.',
   path: '/business',
 });
 
-const FREE_ROUTE_CHARGE = `$${BILLING_PLAN_PRICING['local-only'].monthlyPriceUsd}`;
-const TEAM_PLAN = BILLING_PLAN_PRICING.team;
-
 export default function BusinessPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
-      <Header />
-      <main id="main-content">
-        <PageHero
-          id="agi-business-title"
+    <div data-design="agi">
+      <main className="agi-shell agi-surface">
+        <Header />
+
+        <FlagshipHero
           eyebrow="AGI for business"
-          title="AGI bills you nothing until you buy managed capacity."
-          lede="Local runs on hardware you already own, and BYOK sends every request to a provider you already hold a contract with, so a pilot produces no invoice from us at all. Hosted compute is a separate purchase with a stated capacity, and spending past that capacity stays switched off until someone switches it on."
+          titleLines={['AI work your team can govern.']}
+          lede="Projects, files, artifacts, cited research and coding agents, with routing policy on top. Local work stays on the device, BYOK goes to the provider you choose, and managed cloud is in public alpha."
           ctas={[
-            { href: '/contact-sales', label: 'Talk to sales' },
-            {
-              href: '/pricing#pricing-team-title',
-              label: 'See seat pricing',
-              variant: 'secondary',
-            },
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/pricing', label: 'See Plans' },
           ]}
-          visual={<ConsoleWindow view="usage" />}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
-        <Section id="cost-ownership" labelledBy="agi-business-cost-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Cost ownership</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-business-cost-title">
-                Each route sends the bill somewhere different.
-              </h2>
-            </div>
-            <div
-              aria-label="Each route sends the bill somewhere different"
-              role="region"
-              tabIndex={0}
-              className="agi-ds-compare-table-wrap"
-            >
-              <table className="agi-ds-compare-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Route</th>
-                    <th scope="col">Who invoices you</th>
-                    <th scope="col">What AGI charges</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Local</td>
-                    <td>
-                      No one. The model runs on hardware you already own, at whatever that hardware
-                      costs you to keep running.
-                    </td>
-                    <td>{FREE_ROUTE_CHARGE}</td>
-                  </tr>
-                  <tr>
-                    <td>BYOK</td>
-                    <td>
-                      Your provider, on the rate card and contract you already hold. Keys stay in
-                      the {BYOK_SURFACES.label} runtimes, so we never sit in the payment path.
-                    </td>
-                    <td>{FREE_ROUTE_CHARGE}</td>
-                  </tr>
-                  <tr>
-                    <td>AGI managed cloud</td>
-                    <td>
-                      AGI, on the plan the account carries. This is the only route where the compute
-                      lands on our invoice.
-                    </td>
-                    <td>
-                      ${TEAM_PLAN.monthlyPriceUsd} per seat each month on {TEAM_PLAN.label}, sold
-                      from {MIN_PURCHASABLE_SEATS} seats. Individual plans and contract pricing are
-                      on the <Link href="/pricing">pricing page</Link>.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </Stack>
-        </Section>
+        <CapabilityGrid
+          eyebrow="Workspace"
+          title="Everything a working team expects."
+          items={[
+            {
+              meta: 'Projects',
+              title: 'Projects, files, and memory',
+              body: 'Keep long-running work inside named projects with shared files, standing instructions, and memory controls users can inspect.',
+              href: '/features/projects',
+            },
+            {
+              meta: 'Creation',
+              title: 'Artifacts',
+              body: 'Build documents, code, dashboards, and prototypes in a side-by-side artifact surface instead of burying work in chat.',
+              href: '/features/artifacts',
+            },
+            {
+              meta: 'Research',
+              title: 'Cited research',
+              body: 'Source-backed research flows for market maps, vendor diligence, policy briefs, and strategy work.',
+              href: '/features/deep-research',
+            },
+            {
+              meta: 'Engineering',
+              title: 'AGI Code',
+              body: 'Agentic coding across CLI, Desktop, and VS Code: diffs, tests, sandboxed execution, and provider choice.',
+              href: '/agi-code',
+            },
+            {
+              meta: 'Apps',
+              title: 'Tools without lost governance',
+              body: 'Apps, MCP connectors, and local desktop extensions behind explicit permission boundaries.',
+              href: '/apps',
+            },
+            {
+              meta: 'Admin',
+              title: 'Spend, data, and access controls',
+              body: 'Separate Local, BYOK, and Cloud policy so adoption can start before managed compute spend exists at all.',
+              href: '/enterprise',
+            },
+          ]}
+        />
 
-        <Section id="spend-controls" labelledBy="agi-business-controls-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Spend controls</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-business-controls-title">
-                A ceiling you set is a ceiling the agent stops at.
-              </h2>
-              <Prose>
-                The dollar cap described below is a flag on the <Link href="/cli">AGI CLI</Link>,
-                whose release status reads {SURFACE_STATUS.cli.toLowerCase()}. The plan limits and
-                the overage switch below are live on the web account today.
-              </Prose>
-            </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Run cap',
-                  title: 'A dollar cap on the run',
-                  body: 'Pass --max-budget-usd and the agent loop halts before it issues the next provider request, printing the cumulative spend against the cap. With --json-events it also emits a budget_exhausted record for a pipeline to fail the job on.',
-                },
-                {
-                  meta: 'Overage',
-                  title: 'Overage stays switched off',
-                  body: 'Continuing past a managed usage limit spends prepaid credits, and only once the account turns that on. Leave the switch alone and the limit simply holds: there is no balance to drain and no charge beyond the plan.',
-                },
-                {
-                  meta: 'Capacity',
-                  title: 'Capacity is written into the plan',
-                  body: 'Every managed plan carries a fixed monthly, weekly and five-hour allowance, and the account shows how much of each window is used. Local and BYOK carry none of it, because neither route draws on managed compute.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+        <LedgerSection
+          eyebrow="Positioning"
+          title="What AGI changes for a business rollout."
+          rows={[
+            {
+              k: 'Model choice',
+              v: `One product routes across a dated, inspectable catalog: ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop, CLI, and VS Code, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
+            },
+            {
+              k: 'Cost shape',
+              v: 'Adoption starts with free Local and BYOK modes. AGI managed cloud is public alpha, open by default; ledgering, abuse, and refund controls keep pace with usage.',
+            },
+            {
+              k: 'Data boundary',
+              v: 'Local work never silently leaves the device. BYOK traffic goes to the provider you choose. Cloud work is labeled and open in public alpha.',
+            },
+            {
+              k: 'Surfaces',
+              v: 'The same product spans web, mobile, desktop, terminal, browser, and IDE instead of forcing one workflow into one app.',
+            },
+            {
+              k: 'Admin',
+              v: 'Workspace accounts today. Identity, audit, and retention controls are contract-scoped commitments rather than self-serve settings; the enterprise page states which are built and which are not.',
+            },
+          ]}
+        />
 
-        <Section id="buying-it" labelledBy="agi-business-buying-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Buying it</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-business-buying-title">
-                This is what buying it actually involves.
-              </h2>
-            </div>
-            <Ledger
-              caption="How buying AGI works"
-              rows={[
-                {
-                  label: 'Seats',
-                  value: (
-                    <>
-                      {TEAM_PLAN.label} is billed per seat from a {MIN_PURCHASABLE_SEATS}-seat
-                      minimum. What those seats unlock (shared projects, membership, connector
-                      approvals) is written up on the <Link href="/teams">teams page</Link>.
-                    </>
-                  ),
-                },
-                {
-                  label: 'Invoices',
-                  value:
-                    'Paid plans bill through Stripe. Billing settings list each invoice by date, amount and status, and link out to the hosted copy Stripe holds.',
-                },
-                {
-                  label: 'Credits',
-                  value:
-                    'Credit top-ups are prepaid, and the account ledger lists every purchase, deduction, refund and adjustment against them.',
-                },
-                {
-                  label: 'Free routes',
-                  value:
-                    'Local and BYOK need no plan and no seat count, so headcount on those routes changes nothing about what you owe us.',
-                },
-                {
-                  label: 'Enterprise',
-                  value: (
-                    <>
-                      Priced on a contract. Single sign-on, directory provisioning, audit export and
-                      retention are set out control by control, built and unbuilt alike, on the{' '}
-                      <Link href="/enterprise">enterprise page</Link>.
-                    </>
-                  ),
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+        <RouteMap
+          eyebrow="Where to go next"
+          title="Pick the page that matches your question."
+          routes={[
+            {
+              meta: 'Teams',
+              title: 'Team workspaces',
+              body: 'Shared projects, connector policy, and separated Local, BYOK, and Cloud spend.',
+              href: '/teams',
+            },
+            {
+              meta: 'Developers',
+              title: 'AGI Code',
+              body: 'Agentic coding with sessions, diffs, reviews, and model choice.',
+              href: '/agi-code',
+            },
+            {
+              meta: 'Local + BYOK',
+              title: 'BYOK mode',
+              body: 'Bring provider keys on Desktop, CLI, and VS Code and pay providers directly.',
+              href: '/byok',
+            },
+            {
+              meta: 'Governance',
+              title: 'Enterprise',
+              body: 'Security review, per-seat BYOK, and contract-scoped controls.',
+              href: '/enterprise',
+            },
+          ]}
+        />
 
-        <Section id="business-close" labelledBy="agi-business-close-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Where to start</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-business-close-title">
-                Point it at a key you already pay for.
-              </h2>
-              <Prose>
-                Install the CLI, add a provider key, and the evaluation runs as long as it needs to
-                on a bill that already exists. Nothing here requires a plan, a seat count, or a
-                conversation with us first.
-              </Prose>
-            </div>
-            <ButtonRow>
-              <Button href="/download">Get the CLI</Button>
-              <Button href="/byok" variant="secondary">
-                Read the BYOK billing posture
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <FinalCta
+          eyebrow="Start now"
+          title="Start the rollout where the risk is lowest."
+          body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and buy Team seats when you need shared workspaces. Enterprise controls are sales-assisted."
+          ctas={[
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/pricing', label: 'See Plans' },
+          ]}
+        />
 
         <MarketingFooter />
       </main>

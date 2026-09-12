@@ -1,279 +1,229 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
-import { ChromeWindow } from '@/features/marketing/components/DeviceMockups';
-import {
-  Button,
-  ButtonRow,
-  Eyebrow,
-  Ledger,
-  MarketingFooter,
-  Prose,
-  Section,
-  Stack,
-  SurfaceStatus,
-} from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { FinalCta } from '@/features/marketing/components/SurfaceSections';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { Reveal } from '@/features/marketing/components/Reveal';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI in Chrome: a side panel that answers about the tab you are reading',
+  title: 'AGI in Chrome | Browser Context, Desktop Bridge',
   description:
-    'A Chrome Manifest V3 side panel that answers about the tab you are reading. Chat runs on AGI Managed Cloud, page text is sent only from origins you approved, and AGI Desktop is an optional local bridge. Not on the Chrome Web Store yet.',
+    'A Chrome Manifest V3 side panel that captures page context on request and hands chat to AGI Desktop over a paired, HMAC-signed native-messaging bridge. Computer use is the exception: it calls the Managed Cloud gateway directly from the extension, sending the conversation and its screenshots.',
   path: '/chrome-extension',
 });
 
+const ARCHITECTURE_STEPS = [
+  {
+    n: '01',
+    title: 'Browser captures intent',
+    body: 'The side panel and content scripts read the active tab and your prompt only when you ask. No model runs in the browser process and no provider key is ever stored there.',
+  },
+  {
+    n: '02',
+    title: 'One paired bridge',
+    body: "Chat crosses Chrome's native-messaging bridge to AGI Desktop on localhost port 8787. You pair the two once, explicitly, and every message is HMAC-signed.",
+  },
+  {
+    n: '03',
+    title: 'Desktop executes chat, Managed Cloud executes computer use',
+    body: 'Chat models and tools run on Desktop in the route you chose there. Computer use does not use the bridge at all: the extension posts the whole conversation, including every screenshot it captures, to the Managed Cloud gateway under your account token.',
+  },
+];
+
+const CAPABILITIES = [
+  {
+    meta: 'Panel',
+    title: 'Side panel on any page',
+    body: 'A persistent Manifest V3 side panel opens beside the tab you are reading. No window juggling, no copy-paste.',
+  },
+  {
+    meta: 'Context',
+    title: 'Page context on request',
+    body: 'Content scripts capture page content when you ask. Capture is an explicit action you take, never something running in the background.',
+  },
+  {
+    meta: 'Bridge',
+    title: 'Paired Desktop bridge',
+    body: 'Native messaging carries chat to AGI Desktop on localhost port 8787 with explicit pairing and HMAC-signed messages. Provider keys never enter the browser.',
+  },
+  {
+    meta: 'Computer use',
+    title: 'Cloud-executed browser control',
+    body: 'Driving a tab requires Managed Cloud sign-in. Each step sends the conversation and the screenshots taken of your tab to the Managed Cloud gateway, so a secret rendered on the page travels with the picture of it.',
+  },
+  {
+    meta: 'Permissions',
+    title: 'Scoped task permissions',
+    body: 'Page interaction runs on approved sites with permissions scoped to the task at hand. Not a blanket grant across your browsing.',
+  },
+  {
+    meta: 'Automation',
+    title: 'Workflow recording',
+    body: 'Record a browser flow as element selectors. Field values stay out of the recording by default. Replay it when the task comes back.',
+  },
+  {
+    meta: 'Automation',
+    title: 'Scheduled tasks',
+    body: "Put recurring browser work on a schedule. Tasks persist in the extension and fire through Chrome's built-in alarms.",
+  },
+];
+
+const BOUNDARY_LEDGER = [
+  { k: 'Manifest', v: 'Chrome MV3 with side panel' },
+  { k: 'Bridge', v: 'Native messaging to AGI Desktop · localhost port 8787' },
+  { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
+  {
+    k: 'Inference in Chrome',
+    v: 'Chat runs on Desktop. Computer use calls the Managed Cloud gateway directly from the extension, and the screenshots it takes go with it.',
+  },
+  {
+    k: 'Keys in Chrome',
+    v: 'None. Your Desktop keys stay on Desktop, encrypted at rest. Computer use runs on AGI’s server-side provider key, not one of yours.',
+  },
+  {
+    k: 'Computer-use egress',
+    v: 'The whole conversation and every screenshot POST to the Managed Cloud gateway under your account token. Screenshots are not redacted and cannot be.',
+  },
+  {
+    k: 'Chat-memory sync',
+    v: 'No default global sync. Chats stay in local extension storage.',
+  },
+  { k: 'Security story', v: 'Threat model maintained in the repo (docs/threat-model.md)' },
+  { k: 'Status', v: 'Chat scoped to the Desktop bridge · computer use scoped to Managed Cloud' },
+];
+
 export default function ChromeExtensionPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
-      <Header />
-      <main id="main-content">
-        <PageHero
-          id="agi-chrome-hero-title"
-          eyebrow="AGI in Chrome"
-          title="AGI opens beside the tab you are reading."
-          lede="The panel reads page text when you ask for it, and only on an origin you put on the allowlist. Every answer it gives comes back from AGI Managed Cloud. Computer use goes further than that: it attaches Chrome's own debugger to the tab and posts the conversation, screenshots included, under your account token."
+    <div data-design="agi">
+      <main className="agi-shell agi-surface">
+        <Header />
+
+        <section className="agi-fl-hero" aria-labelledby="agi-fl-chrome-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI in Chrome · coming soon</p>
+              <h1 id="agi-fl-chrome-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">Your browser,</span>{' '}
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">with context.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                AGI opens in a side panel beside any tab. It captures page context only when you ask
+                and hands chat to AGI Desktop over a paired bridge, where your models and keys stay.
+                Computer use alone calls the Managed Cloud gateway directly.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
+                  See AGI Desktop
+                </Link>
+                <Link href="/get-started" className="agi-fl-cta agi-fl-cta--secondary">
+                  Get Started
+                </Link>
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Bridge guarantees">
+                <li>Capture · on request</li>
+                <li>Chat · paired bridge to Desktop</li>
+                <li>Computer use · Managed Cloud</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame variant="browser" title="AGI · side panel" badge="Scoped" />
+            </div>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-arch-title">
+          <p className="agi-fl-eyebrow">The architecture</p>
+          <h2 id="agi-fl-chrome-arch-title" className="agi-fl-h2">
+            The browser asks. Desktop answers, except for computer use.
+          </h2>
+          <p className="agi-fl-section-lede">
+            AGI in Chrome never runs a model locally and never stores provider keys. For chat it
+            captures what you point at, crosses one paired bridge, and lets Desktop do the heavy
+            lifting. Computer use is the exception: it signs in to Managed Cloud and calls that
+            gateway directly from the extension, sending the conversation and the screenshots it
+            takes with it.
+          </p>
+          <ol className="agi-steps">
+            {ARCHITECTURE_STEPS.map((step, i) => (
+              <Reveal as="li" key={step.n} delay={i * 80} className="agi-step">
+                <span className="agi-step-n" aria-hidden="true">
+                  {step.n}
+                </span>
+                <h3 className="agi-step-h">{step.title}</h3>
+                <p className="agi-step-body">{step.body}</p>
+              </Reveal>
+            ))}
+          </ol>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-caps-title">
+          <p className="agi-fl-eyebrow">Capabilities</p>
+          <h2 id="agi-fl-chrome-caps-title" className="agi-fl-h2">
+            A working surface, not a wrapper.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Everything below is built into the extension, scoped to the pages and tasks you approve.
+          </p>
+          <div className="agi-signal-grid">
+            {CAPABILITIES.map((item, i) => (
+              <Reveal
+                as="article"
+                key={item.title}
+                delay={(i % 3) * 60}
+                className="agi-signal-card"
+              >
+                <p className="agi-signal-meta">{item.meta}</p>
+                <h3 className="agi-signal-title">{item.title}</h3>
+                <p className="agi-signal-body">{item.body}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-boundary-title">
+          <p className="agi-fl-eyebrow">Trust boundary</p>
+          <h2 id="agi-fl-chrome-boundary-title" className="agi-fl-h2">
+            What stays where.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Local, BYOK, and AGI Cloud are separate trust boundaries. Chat inherits the one you
+            chose on Desktop, and nothing about your browsing changes that silently. Computer use
+            does not inherit it: it requires Managed Cloud sign-in and transmits the conversation
+            and its screenshots to that gateway on every step, which is why starting a session is
+            always an explicit act. The session gates, the site allowlist, and the residual
+            screenshot risk are written out at{' '}
+            <Link href="/agent-permissions">/agent-permissions</Link>. Your chats and memory
+            don&apos;t sync anywhere by default.
+          </p>
+          <table className="agi-ledger">
+            <tbody>
+              {BOUNDARY_LEDGER.map((row) => (
+                <tr key={row.k}>
+                  <td>{row.k}</td>
+                  <td>{row.v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Put AGI beside the page."
+          body="Start with AGI Desktop. The extension hands chat to it across one paired, signed bridge, and runs computer use against Managed Cloud instead. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/agent-permissions', label: 'Read the permission list', variant: 'secondary' },
+            { href: '/desktop', label: 'See AGI Desktop' },
+            { href: '/get-started', label: 'Get Started' },
           ]}
-          visual={<ChromeWindow />}
         />
 
-        <section className="agi-lp-section" aria-labelledby="agi-chrome-status-title">
-          <div className="agi-ds-container">
-            <h2 className="agi-ds-h2" id="agi-chrome-status-title">
-              Where the build stands.
-            </h2>
-            <div style={{ marginTop: '2rem' }}>
-              <SurfaceStatus
-                state="absent"
-                name="AGI in Chrome"
-                detail="No listing on the Chrome Web Store. The manifest, side panel, and bridge described below are already built into the extension."
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="agi-lp-section" aria-labelledby="agi-chrome-build-title">
-          <div className="agi-ds-container">
-            <h2 className="agi-ds-h2" id="agi-chrome-build-title">
-              What the build is.
-            </h2>
-            <Ledger
-              caption="Chrome extension build facts"
-              rows={[
-                {
-                  label: 'Manifest',
-                  value:
-                    'MV3, chrome manifest version. Service worker, side panel, content script. Scripts load only from the extension itself.',
-                },
-                { label: 'Minimum Chrome', value: '132, declared in the manifest' },
-                { label: 'Desktop bridge port', value: '8787 by default; loopback hosts only' },
-                {
-                  label: 'Bridge integrity',
-                  value:
-                    'Every native message is HMAC-SHA-256 signed over its id, timestamp and body with a per-session secret',
-                },
-              ]}
-            />
-          </div>
-        </section>
-
-        <Section id="chrome-destinations" labelledBy="agi-chrome-destinations-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Destinations</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-chrome-destinations-title">
-                Here is every place the extension can send something.
-              </h2>
-              <Prose>
-                The panel talks to AGI Managed Cloud. The bridge, when you pair it, talks to your
-                own machine and nowhere else. Computer use opens a third road, and it is by far the
-                loudest of the three.
-              </Prose>
-            </div>
-            <Stack gap="base">
-              <Eyebrow>api.agiworkforce.com</Eyebrow>
-              <h3 className="agi-ds-h3">Chat and the page text you attach</h3>
-              <Prose size="sm">
-                Press send and your message, the conversation so far, and any page text you attached
-                go to AGI Managed Cloud. The extension holds no provider key and offers no second
-                chat route, so this is the only road for an answer. An origin you have not approved
-                contributes no page text to it.
-              </Prose>
-            </Stack>
-            <Stack gap="base">
-              <Eyebrow>localhost:8787</Eyebrow>
-              <h3 className="agi-ds-h3">The optional Desktop bridge</h3>
-              <Prose size="sm">
-                Pair AGI Desktop once, by reading a code off its window and typing it into the
-                panel, and the status pill turns from Desktop optional into Desktop tools. The
-                capture shortcut has this destination and no other, so on an unpaired browser it
-                captures nothing at all.
-              </Prose>
-            </Stack>
-            <Stack gap="base">
-              <Eyebrow>api.agiworkforce.com, plus images</Eyebrow>
-              <h3 className="agi-ds-h3">A computer-use run</h3>
-              <Prose size="sm">
-                Browser control needs Managed Cloud sign-in and a separate per-origin approval that
-                grants full DevTools-Protocol control of your signed-in session there. Every step of
-                the run posts the conversation and the screenshots it has taken to the Managed Cloud
-                gateway under your account token.
-              </Prose>
-            </Stack>
-          </Stack>
-        </Section>
-
-        <section className="agi-lp-section" aria-labelledby="agi-chrome-screenshots-title">
-          <div className="agi-ds-container">
-            <h2 className="agi-ds-h2" id="agi-chrome-screenshots-title">
-              Screenshots travel with the conversation.
-            </h2>
-            <Prose size="lg">
-              A computer-use step calls the Managed Cloud gateway directly from the extension, and
-              it carries the conversation together with every screenshot the run has taken of your
-              tab. Those images are not redacted and cannot be. Whatever your signed-in page was
-              showing is inside the picture. Approve an origin for browser control only if you would
-              hand us that session. The gates, the allowlist, and what remains after both are
-              written out on the{' '}
-              <a href="/agent-permissions" className="agi-ds-link">
-                agent permissions
-              </a>{' '}
-              page.
-            </Prose>
-          </div>
-        </section>
-
-        <Section id="chrome-capabilities" labelledBy="agi-chrome-capabilities-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Capabilities</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-chrome-capabilities-title">
-                Each of these runs in your browser, and each one names a destination.
-              </h2>
-            </div>
-            <div className="agi-ds-grid-2">
-              {[
-                {
-                  meta: 'Panel',
-                  title: 'A side panel beside the tab',
-                  body: 'A Manifest V3 side panel opens from the toolbar icon or Command+Shift+A and sits next to the page rather than over it.',
-                },
-                {
-                  meta: 'Context',
-                  title: 'Page text on request, on origins you approved',
-                  body: 'A content script loads on every http and https page so the panel can read the one you point it at. It sends nothing from an origin missing from your allowlist.',
-                },
-                {
-                  meta: 'Bridge',
-                  title: 'An optional bridge to AGI Desktop',
-                  body: 'Pairing is a two-step handshake: Desktop parks a code and shows it on screen, you type it into the panel, and Desktop hands back a token.',
-                },
-                {
-                  meta: 'Computer use',
-                  title: 'Browser control with the banner showing',
-                  body: 'A run attaches the Chrome DevTools Protocol debugger to one approved origin for one bounded action and detaches afterwards, with Chrome’s debugging banner up the whole time.',
-                },
-                {
-                  meta: 'Permissions',
-                  title: 'A grant you can withdraw from Chrome',
-                  body: 'Browser control asks Chrome for that single origin. Take the site off the list, or revoke the host permission at chrome://extensions, and the control goes with it.',
-                },
-                {
-                  meta: 'Injection',
-                  title: 'Page text arrives as untrusted input',
-                  body: 'Text read during a run is scanned for the phrases that try to turn an agent around, such as ignore previous instructions or your API key, and a match reaches the model wrapped in a security warning.',
-                },
-                {
-                  meta: 'Automation',
-                  title: 'Recordings keep the selectors',
-                  body: 'Recording writes down the elements you touched; typed values stay out until you switch value capture on. Password fields are dropped even then, and a recording refuses to replay on any other origin.',
-                },
-                {
-                  meta: 'Schedule',
-                  title: 'Recurring work on Chrome alarms',
-                  body: 'Up to fifty saved tasks fire through Chrome’s own alarms and live in extension storage. A task carrying a prompt belongs to the Managed Cloud account that made it.',
-                },
-              ].map((item) => (
-                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
-                  <Eyebrow>{item.meta}</Eyebrow>
-                  <h3 className="agi-ds-h3">{item.title}</h3>
-                  <Prose size="sm">{item.body}</Prose>
-                </div>
-              ))}
-            </div>
-          </Stack>
-        </Section>
-
-        <Section id="chrome-boundary" labelledBy="agi-chrome-boundary-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>The ledger</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-chrome-boundary-title">
-                Every destination the extension can reach is in this table.
-              </h2>
-            </div>
-            <Ledger
-              caption="Chrome extension boundary"
-              rows={[
-                {
-                  label: 'Chat',
-                  value:
-                    'AGI Managed Cloud, every message. The extension ships no local chat runtime.',
-                },
-                {
-                  label: 'Page text',
-                  value:
-                    'Leaves only from origins on your allowlist. An unapproved origin contributes nothing.',
-                },
-                {
-                  label: 'Keys in Chrome',
-                  value:
-                    'None, and none accepted. Computer use runs on AGI’s server-side provider key rather than one of yours.',
-                },
-                {
-                  label: 'Computer-use egress',
-                  value:
-                    'The whole conversation and every screenshot post to the Managed Cloud gateway under your account token.',
-                },
-                {
-                  label: 'Chat sync',
-                  value:
-                    'Managed Cloud chats are copied to your AGI account by default so they appear on web and mobile. One switch in options keeps them in this browser.',
-                },
-                {
-                  label: 'Cookies',
-                  value:
-                    'A run can set a cookie on a site you are working in and never reads one. Banking, health, cloud-console, identity and mail domains are refused outright.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
-
-        <section className="agi-lp-close" aria-labelledby="agi-chrome-close-title">
-          <div className="agi-ds-container">
-            <div className="agi-lp-close-inner">
-              <h2 className="agi-ds-h2" id="agi-chrome-close-title">
-                AGI Desktop is the half of this{' '}
-                <em className="agi-ds-accent">that runs on your machine.</em>
-              </h2>
-              <Prose size="lg">
-                The extension is a browser client. Local models, encrypted provider keys, and the
-                tools the panel borrows over the bridge all live in the desktop app, so that is
-                where to start.
-              </Prose>
-              <ButtonRow>
-                <Button href="/download">Get notified</Button>
-                <Button href="/desktop" variant="secondary">
-                  See AGI Desktop
-                </Button>
-              </ButtonRow>
-            </div>
-          </div>
-        </section>
+        <MarketingFooter />
       </main>
-      <MarketingFooter />
     </div>
   );
 }

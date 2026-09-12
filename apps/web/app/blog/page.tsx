@@ -37,6 +37,7 @@ export default function BlogPage() {
           id="agi-blog-title"
           eyebrow="Writing"
           title="We post when we have something to say."
+          em="something to say."
           lede="Engineering deep-dives, security postures, and design notes, not content marketing. Posts will appear here when they exist."
           ctas={[]}
         />

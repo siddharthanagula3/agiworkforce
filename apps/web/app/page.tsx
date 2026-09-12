@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { LandingPage } from '@/features/marketing/components/landing/LandingPage';
+import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 
 const TITLE = 'AGI | One AI Workspace. Six Surfaces. Your Rules.';
 const DESCRIPTION =
@@ -42,5 +42,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <LandingPage />;
+  return <MarketingLanding />;
 }

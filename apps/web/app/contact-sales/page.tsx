@@ -36,6 +36,7 @@ export default function ContactSalesPage() {
           id="agi-contact-sales-title"
           eyebrow="Contact sales"
           title="Talk to sales."
+          em="sales."
           lede={
             <>
               One human, one inbox. Email <strong>{CONTACT_EMAIL}</strong> with what you&rsquo;re
