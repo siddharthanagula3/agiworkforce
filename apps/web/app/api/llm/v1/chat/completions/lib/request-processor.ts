@@ -722,6 +722,18 @@ export type ProcessedRequest = {
   assistantMessageId?: string | undefined;
   autoMemoryFacts?: string[];
   autoMemoryFactsRequireToolFreeTurn?: boolean;
+  /**
+   * Private data reached this turn by a path the message shape does not show.
+   *
+   * The lethal-trifecta gate infers a sensitive source from the conversation
+   * itself: memory facts, more than one user turn, a non-text part. A scheduled
+   * run has none of those, because it is built as exactly one system message
+   * and one user message, and yet `loadProjectContext` may have folded the
+   * project's private context into that system prompt. The gate therefore saw
+   * no sensitive source on precisely the runs where it matters most: an
+   * unattended run has nobody to ask, so the gate's choice is allow or deny.
+   */
+  sensitiveContextPresent?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
