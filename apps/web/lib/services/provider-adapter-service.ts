@@ -27,6 +27,7 @@ import type {
   ProtocolHarness,
   ProviderAdapter,
   StreamChunk,
+  StreamChunkErrorClassification,
 } from '@agiworkforce/types';
 
 const SERVER_PROVIDER_CONFIG: Readonly<
@@ -189,7 +190,14 @@ export function toGenericUpstreamError(
 ): Error {
   const status = chunk.code ? Number(chunk.code) : undefined;
   const label = status !== undefined && Number.isFinite(status) ? `(${status})` : '(unknown)';
-  return new Error(`${providerId} API error ${label}: ${chunk.message}`);
+  const error = new Error(`${providerId} API error ${label}: ${chunk.message}`) as Error & {
+    classification?: StreamChunkErrorClassification;
+  };
+  // The message above is free text and an attachment filename can reach it, so
+  // the classifier must not have to re-derive the taxonomy from it. See the
+  // field's contract on `StreamChunkErrorClassification`.
+  if (chunk.classification) error.classification = chunk.classification;
+  return error;
 }
 
 function resolveProtocolRouteBaseUrl(harness: ProtocolHarness): string {

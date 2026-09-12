@@ -23,7 +23,10 @@
  * pass the error to a user-facing renderer.
  */
 
-import { UNSUPPORTED_FILE_INPUT_ERROR_NAME } from '@agiworkforce/types';
+import {
+  UNSUPPORTED_FILE_INPUT_ERROR_NAME,
+  type StreamChunkErrorClassification,
+} from '@agiworkforce/types';
 
 import { parseRetryAfter } from './retry-after-internal';
 
@@ -110,6 +113,121 @@ export interface ClassifiedError {
   status?: number;
   message: string;
   providerHint?: string;
+}
+
+/**
+ * Typed as `Record<ErrorCategory, true>` so adding a category to the union
+ * without adding it here fails the build rather than silently producing a
+ * classification the boundary below refuses to carry.
+ */
+const ERROR_CATEGORY_MEMBERS: Readonly<Record<ErrorCategory, true>> = {
+  aborted: true,
+  api_timeout: true,
+  rate_limit: true,
+  server_overload: true,
+  capacity_off_switch: true,
+  context_overflow: true,
+  max_output: true,
+  tool_validation: true,
+  invalid_model: true,
+  invalid_input: true,
+  unsupported_input: true,
+  media_too_large: true,
+  auth: true,
+  billing_exhausted: true,
+  quota_exhausted: true,
+  safety: true,
+  content_blocked: true,
+  empty_response: true,
+  connection: true,
+  pause_turn: true,
+  server_error: true,
+  client_error: true,
+  unknown: true,
+};
+
+export function isErrorCategory(value: unknown): value is ErrorCategory {
+  return (
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(ERROR_CATEGORY_MEMBERS, value)
+  );
+}
+
+/**
+ * Project a classification onto the shape an error `StreamChunk` carries.
+ *
+ * `message` is deliberately left behind: the chunk already carries it, and the
+ * point of this payload is that no consumer has to read it to learn what the
+ * failure was.
+ */
+export function toStreamErrorClassification(
+  classified: ClassifiedError,
+): StreamChunkErrorClassification {
+  return {
+    category: classified.category,
+    code: classified.code,
+    retryable: classified.retryable,
+    fallbackable: classified.fallbackable,
+    ...(classified.status !== undefined ? { status: classified.status } : {}),
+    ...(classified.retryAfterSeconds !== undefined
+      ? { retryAfterSeconds: classified.retryAfterSeconds }
+      : {}),
+    ...(classified.providerHint !== undefined ? { providerHint: classified.providerHint } : {}),
+  };
+}
+
+/**
+ * Read a classification an upstream layer already computed, if it attached one.
+ *
+ * An adapter classifies a failure while it still holds the thrown value, with
+ * the error's own `name` and the provider's own codes in hand. That answer used
+ * to be flattened into an error chunk's prose and re-derived here from the
+ * prose alone, which handed the taxonomy to anyone who could get text into the
+ * message: an attachment filename is concatenated into `UnsupportedFileInputError`,
+ * so a file named `timeout.pdf` turned a permanent, failover-eligible refusal
+ * into a retryable one, and `certificate.pdf` or `insufficient_quota.pdf` moved
+ * it somewhere else again.
+ *
+ * Every field is validated before it is trusted: the category must be one this
+ * module defines, and the flags must be real booleans. A payload that fails any
+ * check is ignored entirely and the caller falls through to the text matcher,
+ * which is also what happens for an adapter that attaches nothing.
+ */
+function readCarriedClassification(err: unknown): ClassifiedError | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const raw = (err as { classification?: unknown }).classification;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const carried = raw as Record<string, unknown>;
+  const category = carried['category'];
+  const code = carried['code'];
+  const retryable = carried['retryable'];
+  const fallbackable = carried['fallbackable'];
+  if (!isErrorCategory(category)) return undefined;
+  if (typeof code !== 'string' || code.length === 0) return undefined;
+  if (typeof retryable !== 'boolean' || typeof fallbackable !== 'boolean') return undefined;
+
+  const e = asSDKError(err);
+  const status = typeof carried['status'] === 'number' ? carried['status'] : extractStatus(e);
+  const retryAfterSeconds =
+    typeof carried['retryAfterSeconds'] === 'number' &&
+    Number.isFinite(carried['retryAfterSeconds']) &&
+    carried['retryAfterSeconds'] >= 0
+      ? carried['retryAfterSeconds']
+      : extractRetryAfterSeconds(e);
+  const providerHint = carried['providerHint'];
+
+  return {
+    category,
+    code,
+    retryable,
+    fallbackable,
+    ...(status !== undefined ? { status } : {}),
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    // The message stays whatever the error now says, so logging and the
+    // context-overflow token parser see the same text they always did. Nothing
+    // routing-relevant is read from it once a classification is carried.
+    message: extractMessage(e),
+    ...(typeof providerHint === 'string' && providerHint.length > 0 ? { providerHint } : {}),
+  };
 }
 
 export class CannotRetryError extends Error {
@@ -488,6 +606,13 @@ function matchesConnection(name: string | undefined, message: string): boolean {
  * @returns ClassifiedError with retry/fallback hints.
  */
 export function classifyError(err: unknown): ClassifiedError {
+  // First, and before any text is looked at. A classification that survived the
+  // stream-chunk boundary was computed from structure the adapter could see and
+  // this layer cannot; re-deriving it from the message would only discard a
+  // better answer in favour of one an attachment filename can steer.
+  const carried = readCarriedClassification(err);
+  if (carried) return carried;
+
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'APIUserAbortError')) {
     return {
       category: 'aborted',
