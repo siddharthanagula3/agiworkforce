@@ -16,53 +16,127 @@ export interface ManagedUsageSummaryState {
 
 const REVALIDATE_INTERVAL_MS = 300_000;
 
-export function useManagedUsageSummary(): ManagedUsageSummaryState {
-  const [usage, setUsage] = useState<ManagedUsageSummaryResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [stale, setStale] = useState(false);
+/**
+ * One reading of the usage summary, shared by every copy of the hook.
+ *
+ * Four components mount this at once on a chat route: the page, the shell, the
+ * composer and the settings section. Each copy previously held its own state,
+ * ran its own mount fetch, its own five minute timer and its own visibility
+ * listener, so a single turn asked `/api/usage` four times and the four answers
+ * could disagree with each other while they landed.
+ *
+ * The state lives at module scope because that is the level the data actually
+ * lives at: it is one account's usage, not one component's.
+ */
+interface SharedUsageState {
+  usage: ManagedUsageSummaryResponse | null;
+  loading: boolean;
+  error: string | null;
+  lastUpdatedAt: Date | null;
+  stale: boolean;
+}
 
-  const load = useCallback(async (background: boolean) => {
-    if (!background) {
-      setLoading(true);
-      setError(null);
-    }
+let shared: SharedUsageState = {
+  usage: null,
+  loading: false,
+  error: null,
+  lastUpdatedAt: null,
+  stale: false,
+};
+
+const subscribers = new Set<() => void>();
+let inFlight: Promise<void> | null = null;
+let revalidateTimer: ReturnType<typeof setInterval> | null = null;
+
+function publish(next: Partial<SharedUsageState>): void {
+  shared = { ...shared, ...next };
+  for (const notify of subscribers) notify();
+}
+
+/**
+ * Concurrent callers join the request already in flight rather than starting
+ * another. A background revalidation never clears a reading the user can see:
+ * it marks the data stale instead, so a flaky poll cannot blank the meter.
+ */
+function loadUsage(background: boolean): Promise<void> {
+  if (inFlight) return inFlight;
+  if (!background) publish({ loading: true, error: null });
+
+  inFlight = (async () => {
     try {
       const response = await fetch('/api/usage', { credentials: 'include' });
       if (!response.ok) throw new Error('Could not load usage');
-      setUsage((await response.json()) as ManagedUsageSummaryResponse);
-      setLastUpdatedAt(new Date());
-      setStale(false);
-      if (background) setError(null);
+      const usage = (await response.json()) as ManagedUsageSummaryResponse;
+      publish({ usage, lastUpdatedAt: new Date(), stale: false, error: null });
     } catch (err) {
-      if (!background) setError(toUserMessage(err, 'Could not load usage'));
-      setStale(true);
+      publish({
+        stale: true,
+        ...(background ? {} : { error: toUserMessage(err, 'Could not load usage') }),
+      });
     } finally {
-      if (!background) setLoading(false);
+      if (!background) publish({ loading: false });
+      inFlight = null;
     }
+  })();
+
+  return inFlight;
+}
+
+function revalidateWhenVisible(): void {
+  if (document.visibilityState === 'visible') void loadUsage(true);
+}
+
+/** One timer and one listener for all subscribers, not one set per copy. */
+function startRevalidating(): void {
+  if (revalidateTimer !== null || typeof document === 'undefined') return;
+  revalidateTimer = setInterval(revalidateWhenVisible, REVALIDATE_INTERVAL_MS);
+  document.addEventListener('visibilitychange', revalidateWhenVisible);
+}
+
+function stopRevalidating(): void {
+  if (revalidateTimer === null) return;
+  clearInterval(revalidateTimer);
+  revalidateTimer = null;
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', revalidateWhenVisible);
+  }
+}
+
+/** Test seam: module state outlives a test file without it. */
+export function __resetManagedUsageSummaryForTest(): void {
+  stopRevalidating();
+  subscribers.clear();
+  inFlight = null;
+  shared = { usage: null, loading: false, error: null, lastUpdatedAt: null, stale: false };
+}
+
+export function useManagedUsageSummary(): ManagedUsageSummaryState {
+  const [snapshot, setSnapshot] = useState<SharedUsageState>(shared);
+
+  useEffect(() => {
+    const notify = () => setSnapshot(shared);
+    subscribers.add(notify);
+    startRevalidating();
+    // A copy that mounts after the first one adopts what is already loaded and
+    // asks for a reading only when there is none and none is on its way.
+    if (shared.usage === null && inFlight === null) void loadUsage(false);
+    else notify();
+    return () => {
+      subscribers.delete(notify);
+      if (subscribers.size === 0) stopRevalidating();
+    };
   }, []);
 
-  const refresh = useCallback(() => load(false), [load]);
+  const refresh = useCallback(() => loadUsage(false), []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const revalidateWhenVisible = () => {
-      if (document.visibilityState === 'visible') void load(true);
-    };
-    const timer = setInterval(revalidateWhenVisible, REVALIDATE_INTERVAL_MS);
-    document.addEventListener('visibilitychange', revalidateWhenVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', revalidateWhenVisible);
-    };
-  }, [load]);
-
-  return { usage, loading, error, lastUpdatedAt, stale, refresh };
+  return {
+    usage: snapshot.usage,
+    loading: snapshot.loading,
+    error: snapshot.error,
+    lastUpdatedAt: snapshot.lastUpdatedAt,
+    stale: snapshot.stale,
+    refresh,
+  };
 }
 
 export function getWorstUsagePercent(usage: ManagedUsageSummaryResponse | null): number {
