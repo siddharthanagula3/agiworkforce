@@ -27,6 +27,7 @@ export default function CareersPage() {
           id="agi-careers-title"
           eyebrow="Careers"
           title="A small team, on purpose."
+          em="on purpose."
           lede="AGI Automation LLC is small and intentional. We do not have open roles right now. If that changes, we will list them here, no ghost listings."
           ctas={[
             { href: '/download', label: 'Get notified' },

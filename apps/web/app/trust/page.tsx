@@ -236,7 +236,7 @@ export default function TrustPage() {
           id="agi-trust-title"
           eyebrow="Trust"
           title="Claims with dates, and the ones we cannot make."
-          lede="A posture ledger, not a badge wall. Every row says what is true today, what artifact would prove it, and whether that artifact exists. Where it does not, the row says so. We hold no SOC 2 report, no ISO 27001 certificate, and no third-party penetration test, stated here rather than left out."
+          lede="A posture ledger, not a badge wall. Every row says what is true today and what artifact would prove it. We hold no SOC 2 report, ISO 27001 certificate or third-party penetration test, and say so here."
           ctas={[
             { href: '/security', label: 'Read the mechanisms' },
             { href: '#verify', label: 'Verify us yourself', variant: 'secondary' },

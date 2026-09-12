@@ -32,6 +32,7 @@ export default function HelpPage() {
           id="agi-help-title"
           eyebrow="Help"
           title="Get unstuck, fast."
+          em="fast."
           lede="The six things people ask about most, each one link away. For anything else, email contact@agiworkforce.com. A real human reads it."
           ctas={[]}
         />

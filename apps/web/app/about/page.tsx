@@ -67,6 +67,7 @@ export default function AboutPage() {
           id="agi-about-title"
           eyebrow="About AGI"
           title="Multi-provider, by design."
+          em="by design."
           lede={`AGI is built by ${LEGAL_ENTITY}, ${LEGAL_ENTITY_DESCRIPTOR}. It is founder-led, independent, and privately held. It exists because being locked to one model lab is a bad position to be in. The bet: you, not the vendor, own the keys, the data, and the choice of model.`}
           ctas={[]}
         />
