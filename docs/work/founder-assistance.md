@@ -418,17 +418,16 @@ Adding credit to a provider account is a payment action on Anthropic's console.
 
 **Where** console.anthropic.com, then Vercel Production if the key changes.
 **Needed input** One payment decision.
-**How to verify completion** A minimal `/v1/messages` call to
-`claude-sonnet-5` answers instead of returning 400 "Your credit balance is too
+**How to verify completion** A minimal `/v1/messages` call to any Anthropic
+model answers instead of returning 400 "Your credit balance is too
 low to access the Anthropic API". A smoke probe on 2026-09-12 04:00 UTC got
-that 400 for Sonnet while OpenAI, Google, DeepSeek, Qwen, Moonshot and xAI all
+that 400 for every Anthropic model while OpenAI, Google, DeepSeek, Qwen, Moonshot and xAI all
 answered normally.
 **What remains after founder action** Nothing in code. Until it is done every
 Anthropic model is unservable for everyone, not only for event visitors:
-Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5 and Claude Fable 5.1 are all
-on this one account, so a paying Pro or Max subscriber who selects any of them
-gets a provider error. Sonnet 5 is also held out of the event allowlist for the
-same reason.
+every Anthropic model in the catalogue sits on this one account, so a paying Pro
+or Max subscriber who selects any of them gets a provider error, and they are
+held out of the event allowlist for the same reason.
 
 The outage is now handled rather than merely classified: an unfunded provider
 is marked degraded for five minutes, the catalogue reports those models
