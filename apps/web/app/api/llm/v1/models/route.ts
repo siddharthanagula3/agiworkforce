@@ -28,7 +28,13 @@ type OpenAiCompatibleModel = {
   permission: [];
   root: string;
   parent: null;
-  tier: 'basic' | 'pro' | 'max';
+  /**
+   * The lowest plan that can actually run this model. `'free'` is reported for
+   * the models a free account may run; before, every economy model reported
+   * `'basic'`, so a caller on the free plan was told that a model it could run
+   * right now required an upgrade.
+   */
+  tier: 'free' | 'basic' | 'pro' | 'max';
   context_window: number;
   max_output: number;
 };

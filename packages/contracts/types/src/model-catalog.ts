@@ -1789,12 +1789,23 @@ function deriveMinimumRequiredTier(canonicalModelId: string): 'basic' | 'pro' | 
   return covering?.plan ?? namedPlanCeilings[namedPlanCeilings.length - 1]!.plan;
 }
 
-export function getMinimumRequiredTier(modelId: string): 'basic' | 'pro' | 'max' | null {
+export function getMinimumRequiredTier(modelId: string): 'free' | 'basic' | 'pro' | 'max' | null {
   const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return null;
   if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) return 'max';
   if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) return 'pro';
-  if (getAllowedModelsForTier('economy').includes(canonicalModelId)) return 'basic';
+  if (getAllowedModelsForTier('economy').includes(canonicalModelId)) {
+    // This is the published floor, so it has to be the floor that
+    // `canAccessModelForSubscriptionTier` actually enforces. That function
+    // admits an economy model to Free when it is named `minTier: 'free'`, while
+    // this one reported every economy model as Basic. So GPT-5.6 Luna, Gemini
+    // 3.5 Flash Lite and the free router all told a free user "Basic and above"
+    // about a model that user can run right now, in the picker lock label, in
+    // the 403 body and in `/api/llm/v1/models`.
+    return getModelMetadataById(canonicalModelId)?.tierPolicy?.minTier === 'free'
+      ? 'free'
+      : 'basic';
+  }
   return deriveMinimumRequiredTier(canonicalModelId);
 }
 
