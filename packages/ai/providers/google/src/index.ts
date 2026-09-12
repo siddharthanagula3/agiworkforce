@@ -27,7 +27,11 @@ import type {
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
-import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  toStreamErrorClassification,
+  withStreamIdleWatchdog,
+} from '@agiworkforce/provider-runtime';
 
 import { fetchGoogleCatalog, GOOGLE_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
@@ -152,6 +156,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
         return;
@@ -174,6 +179,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
         return;
