@@ -8,6 +8,7 @@ import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { getModelMetadataById } from '@agiworkforce/types';
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { eventAllowsModel } from '@/lib/server/event-access';
 import {
   getInternalUsageUnitMicrousd,
   getPlanFiveHourUsageBudgetMicrousd,
@@ -241,14 +242,24 @@ export function isFreePlanTier(planTier: string | null | undefined): boolean {
   return (planTier ?? '').toLowerCase() === 'free';
 }
 
+/**
+ * Whether this request is served on the free-tier budget.
+ *
+ * An active event promotion answers yes for the models it covers, which is
+ * deliberately the same path a permanently free model takes: the turn is
+ * reserved and settled against the free five-hour, weekly and monthly ceilings
+ * rather than becoming unmetered. The promotion widens which models a free
+ * account may name; it does not hand anyone an unbounded budget, and it stops
+ * the moment the promotion does.
+ */
 export function isFreeTrialRequest(params: {
   requestedModel: string;
   planTier: string | null | undefined;
 }): boolean {
-  return (
-    isFreePlanTier(params.planTier) &&
-    FREE_TRIAL_MODELS.includes(params.requestedModel.trim().toLowerCase())
-  );
+  if (!isFreePlanTier(params.planTier)) return false;
+  const requestedModel = params.requestedModel.trim().toLowerCase();
+  if (FREE_TRIAL_MODELS.includes(requestedModel)) return true;
+  return eventAllowsModel(requestedModel, params.planTier);
 }
 
 export async function getFreeTrialPublicUsage(
