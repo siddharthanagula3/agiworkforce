@@ -803,6 +803,15 @@ reachable through its marketplace route, and Groq, whose three models therefore
 cannot be served by anyone. The catalogue's executability rule already withholds
 a model with no credentialed route, so neither is offered.
 
+The tool half of the probe had never been run. Run now, 18 routes call a tool
+they are handed, two of Perplexity's research models answer without calling one,
+and its base Sonar refuses outright. One disagreement with the catalogue came out
+of it and is left alone deliberately: `sonar-pro` declares `functionCalling:
+false` and called the tool on two separate observations, so the flag is wrong,
+but Sonar is being retired from selection and correcting a capability on a model
+that is leaving is churn. Recorded so the next reader does not have to measure it
+again.
+
 | id       | Question                                                             | Why it is still open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LIVE-3` | Does a connector survive discover, authorize, expire, revoke?        | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
