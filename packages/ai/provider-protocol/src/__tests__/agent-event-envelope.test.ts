@@ -80,6 +80,61 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
     expect(agentEventToStreamChunk(streamChunkToAgentEvent(chunk)!)).toEqual(chunk);
   });
 
+  describe('failure classification does not cross this envelope yet', () => {
+    const CLASSIFIED_ERROR_CHUNK: StreamChunk = {
+      type: 'error',
+      message: 'This route cannot read the attached file timeout.pdf',
+      code: 'unsupported_input',
+      retryable: false,
+      classification: {
+        category: 'unsupported_input',
+        code: 'unsupported_input',
+        retryable: false,
+        fallbackable: true,
+      },
+    };
+
+    it('drops the chunk classification, because AgentEventError has no field to put it in', () => {
+      const event = streamChunkToAgentEvent(CLASSIFIED_ERROR_CHUNK);
+
+      expect(event).toEqual({
+        type: 'error',
+        message: 'This route cannot read the attached file timeout.pdf',
+        code: 'unsupported_input',
+        retryable: false,
+        retryAfterSeconds: undefined,
+      });
+      // Flip this to a preservation assertion when `AgentEventError` gains the
+      // field in crates/agiworkforce-protocol/src/agent_events.rs and the
+      // bindings are regenerated. Until then the loss is the honest answer:
+      // a TypeScript-only field is stripped by AgentEventEnvelopeSchema and
+      // dropped again by serde on the Rust side of the same wire.
+      expect(event).not.toHaveProperty('classification');
+    });
+
+    it('never rebuilds a classification from code and retryable, because a guessed category is worse than none', () => {
+      const chunk = agentEventToStreamChunk({
+        type: 'error',
+        message: 'This route cannot read the attached file timeout.pdf',
+        code: 'unsupported_input',
+        retryable: false,
+      });
+
+      // `classifyError` trusts a carried classification ahead of any text and
+      // only runs its matcher when the field is absent. Synthesising one here
+      // from the two fields that do cross would permanently silence that
+      // matcher for every error arriving through the envelope.
+      expect(chunk).not.toHaveProperty('classification');
+      expect(chunk).toEqual({
+        type: 'error',
+        message: 'This route cannot read the attached file timeout.pdf',
+        code: 'unsupported_input',
+        retryable: false,
+        retryAfterSeconds: undefined,
+      });
+    });
+  });
+
   it('deliberately does not model citation-delta, vendor-raw, or response-meta', () => {
     const citation: StreamChunk = { type: 'citation-delta', blockIndex: 0, payload: {} };
     const vendorRaw: StreamChunk = { type: 'vendor-raw', payload: {} };

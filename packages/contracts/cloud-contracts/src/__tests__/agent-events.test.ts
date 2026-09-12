@@ -125,6 +125,38 @@ describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
     ).toBeNull();
   });
 
+  it('strips a failure classification smuggled onto an error event instead of passing it downstream', () => {
+    const clean = {
+      ...BASE_ENVELOPE,
+      event: {
+        type: 'error',
+        message: 'This route cannot read the attached file timeout.pdf',
+        code: 'unsupported_input',
+        retryable: false,
+      },
+    };
+
+    // `classification` is the structured answer `classifyError` trusts ahead of
+    // any text. `AgentEventError` does not declare it, so the envelope gate must
+    // drop an injected one rather than let a sender pick the failure class, and
+    // with it whether the turn retries, rotates provider, or ends.
+    const parsed = parseAgentEventDelta({
+      ...clean,
+      event: {
+        ...clean.event,
+        classification: {
+          category: 'api_timeout',
+          code: 'api_timeout',
+          retryable: true,
+          fallbackable: false,
+        },
+      },
+    });
+
+    expect(parsed).toEqual(clean);
+    expect(parsed?.event).not.toHaveProperty('classification');
+  });
+
   it('never throws on untrusted stream payloads', () => {
     expect(parseAgentEventDelta(undefined)).toBeNull();
     expect(parseAgentEventDelta('not an event')).toBeNull();
