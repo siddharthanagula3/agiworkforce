@@ -12,6 +12,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
 }));
 
+import { __resetManagedUsageSummaryForTest } from '@/lib/hooks/useManagedUsageSummary';
 import { UsageSection } from '../UsageSection';
 
 const originalFetch = global.fetch;
@@ -19,6 +20,13 @@ const originalFetch = global.fetch;
 afterEach(() => {
   global.fetch = originalFetch;
   vi.restoreAllMocks();
+});
+
+// The usage reading is shared by every component that shows it, so it outlives a
+// test unless it is cleared: without this a later case renders the previous
+// case's numbers and the failure looks like a bug in the pane.
+beforeEach(() => {
+  __resetManagedUsageSummaryForTest();
 });
 
 // The pane reads GET /api/usage through useManagedUsageSummary. This used to
