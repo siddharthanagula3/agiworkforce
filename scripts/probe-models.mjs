@@ -83,6 +83,8 @@ export const PROBE_TOOL = Object.freeze({
 });
 export const PROBE_TOOL_PROMPT = 'Acknowledge this probe.';
 export const PROBE_TOOL_CHOICE = 'required';
+/** The retry when a provider refuses a forced choice while the model is thinking. */
+export const PROBE_TOOL_CHOICE_OPEN = 'auto';
 export const PROBE_TOOL_MAX_OUTPUT_TOKENS = 32;
 
 export const TOOL_PROBE_OUTCOME = {
@@ -288,23 +290,17 @@ async function probeOne(entry, options) {
  * route answered without one, which is the quiet failure the compiled
  * capability flag cannot see.
  */
-async function probeToolSupportOne(entry, options) {
-  const { env, adapters, timeoutMs } = options;
-  const resolved = resolveProbeAdapter(entry, env, adapters);
-  if (resolved.failure) {
-    return { toolOutcome: TOOL_PROBE_OUTCOME.skipped, toolDetail: resolved.failure.detail };
-  }
-
+async function askForToolCall(adapter, entry, toolChoice, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    for await (const chunk of resolved.adapter.stream(
+    for await (const chunk of adapter.stream(
       {
         model: entry.providerModelId,
         messages: [{ role: 'user', content: PROBE_TOOL_PROMPT }],
         maxOutputTokens: PROBE_TOOL_MAX_OUTPUT_TOKENS,
         tools: [PROBE_TOOL],
-        toolChoice: PROBE_TOOL_CHOICE,
+        toolChoice,
       },
       controller.signal,
     )) {
@@ -318,8 +314,49 @@ async function probeToolSupportOne(entry, options) {
   } finally {
     clearTimeout(timer);
   }
-
   return { toolOutcome: TOOL_PROBE_OUTCOME.notHonoured };
+}
+
+/**
+ * Refusing a FORCED tool choice is not the same as being unable to call a tool,
+ * and several providers refuse the first while doing the second perfectly well:
+ * a reasoning model in thinking mode answers `tool_choice: required` with
+ * "Thinking mode does not support this tool_choice" or the equivalent.
+ *
+ * Measured on 2026-09-12, that reported six tool-capable models as failing tool
+ * support: three DeepSeek, one Moonshot and two Qwen. So a refusal of the forced
+ * choice is retried once by asking the same question with the choice left open.
+ * Calling the tool then still means honoured, and answering without one still
+ * means not honoured, which is the distinction this probe exists to draw.
+ */
+function refusedTheForcedChoice(detail) {
+  const lower = String(detail ?? '').toLowerCase();
+  return (
+    lower.includes('tool_choice') &&
+    (lower.includes('thinking') ||
+      lower.includes('not support') ||
+      lower.includes('incompatible') ||
+      lower.includes('invalidparameter'))
+  );
+}
+
+async function probeToolSupportOne(entry, options) {
+  const { env, adapters, timeoutMs } = options;
+  const resolved = resolveProbeAdapter(entry, env, adapters);
+  if (resolved.failure) {
+    return { toolOutcome: TOOL_PROBE_OUTCOME.skipped, toolDetail: resolved.failure.detail };
+  }
+
+  const forced = await askForToolCall(resolved.adapter, entry, PROBE_TOOL_CHOICE, timeoutMs);
+  if (
+    forced.toolOutcome !== TOOL_PROBE_OUTCOME.failed ||
+    !refusedTheForcedChoice(forced.toolDetail)
+  ) {
+    return forced;
+  }
+
+  const open = await askForToolCall(resolved.adapter, entry, PROBE_TOOL_CHOICE_OPEN, timeoutMs);
+  return open.toolOutcome === TOOL_PROBE_OUTCOME.failed ? forced : open;
 }
 
 export async function runProbes(registry, options) {
