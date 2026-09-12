@@ -43,6 +43,14 @@ issue turned out to be is in the commit that closed it.
 - 17 unresolved issues: 0 P0, 0 P1, 10 P2, 7 P3, plus 5 items needing
   validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
   and `AGI-23`, are partly fixed and say which part.
+- Pass of 2026-09-12, code and tests only, no browser and no deployment. Fixed:
+  the two unblocked rows of the P1 security entry (F31, F39), `AGI-23`,
+  `AGI-27`, `AGI-28` in the main, `AGI-30`, `AGI-31`, `AGI-32`, and the
+  entitlement contradictions that told a plan it had what its gate would refuse.
+  Each says what remains and why. Every one of them still wants the live
+  confirmation its own section names, and none of those confirmations can be
+  made from a checkout: they need a deployment, a real sandbox, a live voice
+  session, or a running server. Nothing unblocked remains in the P1 entry.
 - Web parity pass 2026-09-10 (live QA against the dev server on `:3100`,
   every fix exercised in the browser before commit): closed and deleted from
   this file rather than archived: settings saves answering 412 on every
@@ -494,7 +502,16 @@ non-gateway model.
 ### `AGI-28` Citations are prose, and a research reload keeps thinking and loses sources
 
 **Severity:** P2
-**Status:** Open.
+**Status:** Mostly fixed 2026-09-12, not confirmed live. Native-search citations
+now reach the client and the stored turn: the provider-neutral envelope is
+emitted in legacy-web mode, which is what Anthropic and Google both use, the
+client unions cited outlets into the source pool instead of counting them only
+when the searched list is empty, and the server collects citations in marker
+order alongside sources. Two parts remain. The `<thinking>` prose on reload has
+no writer that either persistence path can produce, since both strip it before
+writing, so reproducing it needs the actual row or a live run and was not
+guessed at. And a message still has no link to its research report, so a reload
+cannot rehydrate the activity header; that is a migration.
 **Area:** Web search, research, persistence
 **What is wrong:** on a native-search turn the model writes outlet names as
 italic prose with no `[n]` markers, and the Sources control counts one source
@@ -661,6 +678,14 @@ extract with a model and keep facts the patterns never see.
 
 ### `AGI-30` The conversation list is fetched ten times during one turn
 
+**Status:** Fixed 2026-09-12. It was not a render storm: within one mount the
+effect fires once. It was mount count, because the first send routes /chat to
+/chat/[sessionId], a different route segment, so the page remounts mid-turn and
+asks again, and on shell routes a second copy of the hook races the page's in
+the same tick. Concurrent mounts now coalesce onto one request and a remount
+inside a short freshness window reuses what is loaded. The four /api/usage calls
+per turn are the same defect class in `useManagedUsageSummary` and are still
+open.
 **Severity:** P3
 **Status:** Open.
 **Area:** Chat performance
@@ -675,6 +700,14 @@ and four `GET /api/usage`; the list hook refetches on every message update.
 
 ### `AGI-31` A chat turn logs a MaxListenersExceededWarning
 
+**Status:** Fixed 2026-09-12, no live proof yet. The leak was in the database
+layer, not in a model adapter, which is why it was never found where the warning
+appeared: each per-request scoped adapter kept its own record of which pooled
+clients it had guarded, attached an error listener to a warm client, and never
+removed it. The same bookkeeping made one socket failure log once per leaked
+listener. The guard now belongs to the checkout and is removed on release.
+Remaining: a fresh stack from a running server to confirm the warning is gone
+across many turns.
 **Severity:** P3
 **Status:** Open.
 **Area:** Server hygiene
