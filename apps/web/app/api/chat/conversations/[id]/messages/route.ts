@@ -16,6 +16,7 @@ import { CreateMessageSchema } from '@/lib/validations/chat';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveSavedMessageSourceUrls } from './lib/resolve-source-urls';
 import { scheduleConversationTitleGeneration } from './lib/generate-title';
 import { scheduleArtifactIndexing } from './lib/index-artifacts';
 import {
@@ -95,13 +96,16 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const activeLeafMessageId = conversation.active_leaf_message_id ?? null;
   const threadScope = { conversationId, userId, organizationId };
+  const storedMetadata = await resolveSavedMessageSourceUrls(
+    normalizeMessageMetadata(metadata) ?? {},
+  );
   const insertParams = (parent: string | null): unknown[] => [
     clientMessageId ?? null,
     conversationId,
     role,
     content.trim(),
     role === 'assistant' ? (model ?? null) : null,
-    JSON.stringify(normalizeMessageMetadata(metadata) ?? {}),
+    JSON.stringify(storedMetadata),
     parent,
   ];
 
