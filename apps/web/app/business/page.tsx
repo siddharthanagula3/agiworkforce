@@ -99,7 +99,7 @@ export default function BusinessPage() {
             },
             {
               k: 'Admin',
-              v: 'Workspace accounts today. Identity, audit, and retention controls are contract-scoped commitments rather than self-serve settings; the enterprise page states which are built and which are not.',
+              v: 'Workspace accounts today. Single sign-on, SCIM directory provisioning, the audit trail with its JSONL export, and per-workspace retention windows are built and configured by your own workspace owner, gated on the Enterprise entitlement. The enterprise page states what is not built.',
             },
           ]}
         />

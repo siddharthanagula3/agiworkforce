@@ -166,7 +166,7 @@ export default function EnterprisePage() {
               points={[
                 'Append-only table, streamed as it is read',
                 'JSONL export, newest first',
-                'Signed batches drained to your endpoint every ten minutes',
+                'Signed batches drained to your endpoint every thirty minutes',
               ]}
               visual={<ConsoleWindow view="audit" />}
             />
