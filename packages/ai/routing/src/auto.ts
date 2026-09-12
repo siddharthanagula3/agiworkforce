@@ -319,6 +319,13 @@ export interface ObservedRouteHealth {
    * that owns the store fans it out to that provider's routes.
    */
   credentialUnfunded?: boolean;
+  /**
+   * The provider reports no endpoint for this route that satisfies our own data
+   * policy. A fact about the route rather than the credential, and permanent
+   * until an account setting changes, so it is kept separate from
+   * `credentialUnfunded` even though both make the route unselectable.
+   */
+  policyExcluded?: boolean;
 }
 
 export interface AutoFallbackRoute {
@@ -779,6 +786,7 @@ function observedBand(value: number | undefined, width: number, maximum: number)
 export function observedRouteHealthFromSnapshots(
   snapshots: Readonly<Record<string, RouteHealthSnapshot>> | undefined,
   unfundedRouteIds?: ReadonlySet<string>,
+  policyExcludedRouteIds?: ReadonlySet<string>,
 ): Readonly<Record<string, ObservedRouteHealth>> {
   const observed: Record<string, ObservedRouteHealth> = {};
   for (const [routeId, snapshot] of Object.entries(snapshots ?? {})) {
@@ -794,6 +802,12 @@ export function observedRouteHealthFromSnapshots(
   // credential is exactly as unable to serve as one with a long history.
   for (const routeId of unfundedRouteIds ?? []) {
     observed[routeId] = { ...observed[routeId], credentialUnfunded: true };
+  }
+  // Same treatment and the same reason: the provider has already told us this
+  // route cannot serve on terms we accept, so a route with no samples is as
+  // unselectable as one with a history of refusals.
+  for (const routeId of policyExcludedRouteIds ?? []) {
+    observed[routeId] = { ...observed[routeId], policyExcluded: true };
   }
   return observed;
 }
@@ -905,6 +919,16 @@ function routeIsHealthy(
  */
 function routeCredentialIsUnfunded(routeId: string, request: AutoRoutingRequest): boolean {
   return request.observedRouteHealth?.[routeId]?.credentialUnfunded === true;
+}
+
+/**
+ * The provider answered that no endpoint on this route matches our account's
+ * data policy. Deterministic: it will answer the same way next turn, so the
+ * route is withdrawn rather than retried, and every turn that would otherwise
+ * have picked it stops paying a round trip to learn the same thing.
+ */
+function routeIsPolicyExcluded(routeId: string, request: AutoRoutingRequest): boolean {
+  return request.observedRouteHealth?.[routeId]?.policyExcluded === true;
 }
 
 function routeHasCredential(route: RegistryRoute, request: AutoRoutingRequest): boolean {
@@ -1115,7 +1139,9 @@ function admissibleModelRoutes(
       route,
       expectedCents: routeExpectedCents(routeId, route, request),
       healthy:
-        routeIsHealthy(routeId, route, request) && !routeCredentialIsUnfunded(routeId, request),
+        routeIsHealthy(routeId, route, request) &&
+        !routeCredentialIsUnfunded(routeId, request) &&
+        !routeIsPolicyExcluded(routeId, request),
       hasCredential: routeHasCredential(route, request),
       observedPenalty: observedRoutePenalty(
         request.observedRouteHealth?.[routeId],
