@@ -208,7 +208,13 @@ export function mapClassifiedUpstreamError(
     // problem, not the caller's, a user who has paid for their plan must not be
     // shown a payment-required error for an operator-side shortfall, and must
     // not be quietly served from a different paid provider instead.
+    // Marked degraded for the same reason a spent quota is: every subsequent
+    // request to this provider fails identically until a human tops the account
+    // up, so the catalogue must stop presenting it as ready. Measured on
+    // 2026-09-12, when Anthropic answered every Claude route with a 400 "credit
+    // balance is too low" and the catalogue kept offering Claude as selectable.
     case 'billing_exhausted':
+      markProviderDegraded(provider, classified.category);
       return {
         status: 503,
         type: 'service_unavailable',

@@ -7,6 +7,7 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 
 import { upstreamFailureCopy } from './upstream-error-copy';
 import { logger } from '@/lib/logger';
+import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 
 const PROVIDER = 'anthropic';
 
@@ -59,6 +60,36 @@ describe('mapping a thrown provider failure to copy', () => {
     const copy = upstreamFailureCopy(Object.assign(new Error(''), { status: 402 }), PROVIDER);
 
     expect(copy.code).toBe('provider_billing_exhausted');
+  });
+
+  /**
+   * Classifying and describing the failure was never the gap. Recording it was:
+   * on 2026-09-12 every Claude route answered with this body and the catalogue
+   * went on offering Claude as selectable, so each turn rediscovered the same
+   * empty wallet. The mark is what the catalogue reads.
+   */
+  it('takes an unfunded provider out of service instead of rediscovering it each turn', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+
+    upstreamFailureCopy(new Error(RAW_PROVIDER_BODY), PROVIDER);
+
+    expect(markProviderDegraded).toHaveBeenCalledWith(PROVIDER, 'billing_exhausted');
+  });
+
+  it('reports the 402 form the same way', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+
+    upstreamFailureCopy(Object.assign(new Error(''), { status: 402 }), PROVIDER);
+
+    expect(markProviderDegraded).toHaveBeenCalledWith(PROVIDER, 'billing_exhausted');
+  });
+
+  it('leaves a provider that merely refused our request in service', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+
+    upstreamFailureCopy(new TypeError('cannot read properties of undefined'), PROVIDER);
+
+    expect(markProviderDegraded).not.toHaveBeenCalled();
   });
 });
 
