@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { listManagedRoutesForModel } from '@agiworkforce/types';
+
 import {
   EVENT_DISABLED_MODELS_ENV,
+  EVENT_DISABLED_PROVIDERS_ENV,
   EVENT_ENABLED_ENV,
   EVENT_ENDS_AT_ENV,
   EVENT_MODELS_ENV,
@@ -15,6 +18,7 @@ const ENV_KEYS = [
   EVENT_ENABLED_ENV,
   EVENT_MODELS_ENV,
   EVENT_DISABLED_MODELS_ENV,
+  EVENT_DISABLED_PROVIDERS_ENV,
   EVENT_STARTS_AT_ENV,
   EVENT_ENDS_AT_ENV,
 ];
@@ -133,6 +137,78 @@ describe('event access overlay', () => {
 
     expect([...eventModelIdsFor('free')].sort()).toEqual(['grok-4.6', 'qwen-3.8-flash']);
     expect(eventModelIdsFor('pro').size).toBe(0);
+  });
+
+  /**
+   * A supplier going down, throttling or over its own budget is a different
+   * failure from one model behaving badly, and during an event the operator has
+   * to drop the supplier without naming each of its models.
+   */
+  describe('per provider kill switch', () => {
+    const PROVIDER_OF = (id: string) => listManagedRoutesForModel(id).map((r) => r.provider);
+
+    it('guards the fixture: the two models are served by different providers', () => {
+      const grok = new Set(PROVIDER_OF('grok-4.6'));
+      const qwen = new Set(PROVIDER_OF('qwen-3.8-flash'));
+
+      expect(grok.size).toBeGreaterThan(0);
+      expect([...qwen].some((p) => !grok.has(p))).toBe(true);
+    });
+
+    it('withdraws every promoted model a disabled provider serves', () => {
+      const [provider] = PROVIDER_OF('grok-4.6');
+      setEvent({
+        [EVENT_ENABLED_ENV]: '1',
+        [EVENT_MODELS_ENV]: 'grok-4.6',
+        [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF('grok-4.6').join(','),
+      });
+
+      expect(provider).toBeTruthy();
+      expect(eventAllowsModel('grok-4.6', 'free')).toBe(false);
+    });
+
+    it('leaves models served by other providers promoted', () => {
+      setEvent({
+        [EVENT_ENABLED_ENV]: '1',
+        [EVENT_MODELS_ENV]: 'grok-4.6,qwen-3.8-flash',
+        [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF('grok-4.6').join(','),
+      });
+
+      expect(eventAllowsModel('qwen-3.8-flash', 'free')).toBe(true);
+    });
+
+    it('is inert when it names a provider nobody serves', () => {
+      setEvent({
+        [EVENT_ENABLED_ENV]: '1',
+        [EVENT_MODELS_ENV]: 'grok-4.6',
+        [EVENT_DISABLED_PROVIDERS_ENV]: 'not-a-provider',
+      });
+
+      expect(eventAllowsModel('grok-4.6', 'free')).toBe(true);
+    });
+
+    it('goes inactive when it withdraws the last promoted model', () => {
+      setEvent({
+        [EVENT_ENABLED_ENV]: '1',
+        [EVENT_MODELS_ENV]: 'grok-4.6',
+        [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF('grok-4.6').join(','),
+      });
+
+      expect(readEventPromotion().active).toBe(false);
+    });
+
+    it('reverses cleanly, restoring the promoted set', () => {
+      const disabled = PROVIDER_OF('grok-4.6').join(',');
+      setEvent({
+        [EVENT_ENABLED_ENV]: '1',
+        [EVENT_MODELS_ENV]: 'grok-4.6',
+        [EVENT_DISABLED_PROVIDERS_ENV]: disabled,
+      });
+      expect(eventAllowsModel('grok-4.6', 'free')).toBe(false);
+
+      setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: 'grok-4.6' });
+      expect(eventAllowsModel('grok-4.6', 'free')).toBe(true);
+    });
   });
 
   it('turns off cleanly, restoring permanent free behaviour', () => {
