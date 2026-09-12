@@ -80,6 +80,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
+  isEventPromotedRequest: () => false,
   settleFreeTrialRequest: (input: unknown) => settleFreeTrialRequest(input),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
   isFreePlanTier: () => false,

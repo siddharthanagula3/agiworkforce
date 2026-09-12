@@ -46,6 +46,7 @@ vi.mock('@/lib/cost-tracker', () => ({
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
+  isEventPromotedRequest: () => false,
   settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
   isFreePlanTier: () => false,
