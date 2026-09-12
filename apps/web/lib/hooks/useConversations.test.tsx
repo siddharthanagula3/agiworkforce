@@ -4,10 +4,15 @@ import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { managedCloudConversationPath } from '@agiworkforce/cloud-contracts';
 import { getModelsForTierAndSurface } from '@agiworkforce/types';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
-import { useConversations, useProjectConversations } from './useConversations';
+import {
+  __resetConversationListLoadForTests,
+  useConversations,
+  useProjectConversations,
+} from './useConversations';
 
 const authMocks = vi.hoisted(() => ({
   getToken: vi.fn(),
+  userId: 'user-1',
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -15,6 +20,7 @@ vi.mock('@clerk/nextjs', () => ({
     getToken: authMocks.getToken,
     isLoaded: true,
     isSignedIn: true,
+    userId: authMocks.userId,
   }),
 }));
 
@@ -101,6 +107,7 @@ function findPostBody(): Record<string, unknown> {
 
 describe('useConversations.createConversation', () => {
   beforeEach(() => {
+    __resetConversationListLoadForTests();
     useChatStore.getState().reset();
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
@@ -176,6 +183,7 @@ describe('useConversations.createConversation', () => {
 
 describe('useConversations.updateConversation', () => {
   beforeEach(() => {
+    __resetConversationListLoadForTests();
     useChatStore.getState().reset();
     useChatProjectStore.setState({
       projects: [
@@ -274,6 +282,7 @@ describe('useConversations.updateConversation', () => {
 
 describe('useConversations.loadConversation pagination races', () => {
   beforeEach(() => {
+    __resetConversationListLoadForTests();
     useChatStore.getState().reset();
     authMocks.getToken.mockResolvedValue('session-token');
   });
@@ -407,6 +416,7 @@ describe('WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01', () => {
   ];
 
   beforeEach(() => {
+    __resetConversationListLoadForTests();
     useChatStore.getState().reset();
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
@@ -460,6 +470,7 @@ describe('WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01', () => {
 
 describe('useProjectConversations', () => {
   beforeEach(() => {
+    __resetConversationListLoadForTests();
     useChatStore.getState().reset();
     authMocks.getToken.mockResolvedValue('session-token');
   });
@@ -569,6 +580,7 @@ describe('useConversations list rate limiting', () => {
 
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    __resetConversationListLoadForTests();
     useChatStore.setState({ conversations: [], activeConversationId: null, error: null });
     authMocks.getToken.mockResolvedValue('token');
   });
@@ -621,5 +633,133 @@ describe('useConversations list rate limiting', () => {
       vi.unstubAllGlobals();
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * AGI-30. One send produced about ten requests under `/api/chat/conversations`
+ * and the list was a share of them, because the mount effect is the only list
+ * caller but is not the only MOUNT. The first send routes `/chat` to
+ * `/chat/<id>`, a different route segment, so the chat page unmounts and mounts
+ * again in the middle of the turn and asked the server for a list it had just
+ * been given; on shell routes a second copy of the hook mounts alongside the
+ * page's and the two race in the same tick.
+ *
+ * These count requests, not renders: a debounce would have made the same
+ * assertions pass while the storm continued underneath.
+ */
+describe('useConversations list request coalescing', () => {
+  beforeEach(() => {
+    __resetConversationListLoadForTests();
+    useChatStore.getState().reset();
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
+    authMocks.getToken.mockResolvedValue('session-token');
+    authMocks.userId = 'user-1';
+  });
+
+  function stubList() {
+    const fetchMock = vi.fn(async () => conversationListResponse([WIRE_CONVERSATION]));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  function listRequestCount(fetchMock: { mock: { calls: unknown[][] } }): number {
+    return fetchMock.mock.calls.filter((call) =>
+      String(call[0]).startsWith('/api/chat/conversations?'),
+    ).length;
+  }
+
+  it('asks for the list once when one copy of the hook mounts', async () => {
+    const fetchMock = stubList();
+    const { result } = renderHook(() => useConversations());
+
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    expect(listRequestCount(fetchMock)).toBe(1);
+  });
+
+  it('asks once for two copies mounted in the same tick, and both see the list', async () => {
+    const fetchMock = stubList();
+    const first = renderHook(() => useConversations());
+    const second = renderHook(() => useConversations());
+
+    await waitFor(() => expect(first.result.current.conversations).toHaveLength(1));
+    await waitFor(() => expect(second.result.current.conversations).toHaveLength(1));
+
+    expect(listRequestCount(fetchMock)).toBe(1);
+  });
+
+  it('does not ask again when the route change inside a turn remounts the hook', async () => {
+    const fetchMock = stubList();
+    const first = renderHook(() => useConversations());
+    await waitFor(() => expect(first.result.current.conversations).toHaveLength(1));
+    first.unmount();
+
+    const second = renderHook(() => useConversations());
+    await waitFor(() => expect(second.result.current.conversations).toHaveLength(1));
+
+    expect(listRequestCount(fetchMock)).toBe(1);
+  });
+
+  it('hands a copy that skipped the request the paging state it would have got', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 1 }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const first = renderHook(() => useConversations());
+    await waitFor(() => expect(first.result.current.hasMoreConversations).toBe(true));
+    first.unmount();
+
+    const second = renderHook(() => useConversations());
+
+    await waitFor(() => expect(second.result.current.hasMoreConversations).toBe(true));
+    expect(listRequestCount(fetchMock)).toBe(1);
+  });
+
+  it('still goes to the server when the sidebar retry calls fetchConversations', async () => {
+    const fetchMock = stubList();
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.fetchConversations();
+    });
+
+    expect(listRequestCount(fetchMock)).toBe(2);
+  });
+
+  it('reloads for a different signed-in user rather than serving the last account list', async () => {
+    const fetchMock = stubList();
+    const first = renderHook(() => useConversations());
+    await waitFor(() => expect(first.result.current.conversations).toHaveLength(1));
+    first.unmount();
+
+    authMocks.userId = 'user-2';
+    const second = renderHook(() => useConversations());
+    await waitFor(() => expect(second.result.current.conversations).toHaveLength(1));
+
+    expect(listRequestCount(fetchMock)).toBe(2);
+  });
+
+  it('shows the failure in a copy that joined an in-flight request it did not start', async () => {
+    const list = deferredResponse();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => list.promise),
+    );
+    const first = renderHook(() => useConversations());
+    const second = renderHook(() => useConversations());
+
+    await act(async () => {
+      list.resolve(new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 500 }));
+      await list.promise;
+    });
+
+    await waitFor(() => expect(second.result.current.listError).toBe('nope'));
+    expect(first.result.current.listError).toBe('nope');
   });
 });
