@@ -13,9 +13,9 @@ import {
  * is what actually admits or refuses the turn.
  *
  * They did not agree. Every economy model reported `'basic'`, while the gate
- * admits an economy model to Free when it is named `minTier: 'free'`. So GPT-5.6
- * Luna, Gemini 3.5 Flash Lite and the free router each told a free user "Basic
- * and above" about a model that user could run right then.
+ * admits an economy model to Free when it is named `minTier: 'free'`. So each of
+ * the three models a free account can actually run told that user "Basic and
+ * above" about a model they could run right then.
  *
  * These assert the relationship rather than a list of model ids, so the guard
  * survives catalogue edits instead of being a second copy of the catalogue.
