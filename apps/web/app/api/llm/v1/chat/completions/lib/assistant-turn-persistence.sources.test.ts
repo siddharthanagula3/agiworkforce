@@ -185,3 +185,143 @@ describe('an assistant turn persists the citations behind its [n] markers', () =
     expect(persistedMetadata()).not.toHaveProperty('citations');
   });
 });
+
+const CODE_EXECUTION = { stdout: '42\n', stderr: '', returnCode: 0 };
+
+/**
+ * The result panel was written only by the client save. After a non-retryable
+ * failure a reload rendered an answer that said "the script prints 42" with no
+ * output panel anywhere: the one thing that made the claim checkable was gone.
+ */
+describe('an assistant turn persists what its code execution printed', () => {
+  it('writes it under the key the transcript already reads', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'The script prints 42.',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+        codeExecutionResult: CODE_EXECUTION,
+      },
+    });
+
+    expect(persistedMetadata()['codeExecutionResult']).toEqual(CODE_EXECUTION);
+  });
+
+  it('writes a turn whose only output was the run, which would otherwise be dropped', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: '   ',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 0,
+        outputTokens: 0,
+        truncated: false,
+        codeExecutionResult: { stdout: '', stderr: 'Traceback: boom', returnCode: 1 },
+      },
+    });
+
+    expect(persistedMetadata()['codeExecutionResult']).toEqual({
+      stdout: '',
+      stderr: 'Traceback: boom',
+      returnCode: 1,
+    });
+  });
+
+  it('leaves the key out entirely when the turn ran no code', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'No code was needed.',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+      },
+    });
+
+    expect(persistedMetadata()).not.toHaveProperty('codeExecutionResult');
+  });
+});
+
+const GENERATED_FILES = [
+  {
+    id: 'asset-1',
+    fileName: 'chart.png',
+    mimeType: 'image/png',
+    uri: '/api/files/asset-1',
+    byteCount: 2048,
+    kind: 'image',
+    surface: 'file' as const,
+    previewable: true,
+  },
+];
+
+/**
+ * The bytes behind a generated file are persisted server-side and stay
+ * downloadable. Only the row that points at them was client-written, so a
+ * failed save dropped every chart and download chip off an answer whose text
+ * still described them, and the files became unreachable from the transcript.
+ */
+describe('an assistant turn persists the files it attached', () => {
+  it('writes them under the key the transcript already reads', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'Here is the chart.',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+        generatedFiles: GENERATED_FILES,
+      },
+    });
+
+    expect(persistedMetadata()['generatedFiles']).toEqual(GENERATED_FILES);
+  });
+
+  it('writes a turn whose only output was files, which would otherwise be dropped', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: '   ',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 0,
+        outputTokens: 0,
+        truncated: false,
+        generatedFiles: GENERATED_FILES,
+      },
+    });
+
+    expect(persistedMetadata()['generatedFiles']).toEqual(GENERATED_FILES);
+  });
+
+  it('leaves the key out entirely when the turn attached nothing', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'Nothing to attach.',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+      },
+    });
+
+    expect(persistedMetadata()).not.toHaveProperty('generatedFiles');
+  });
+});

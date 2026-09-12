@@ -823,6 +823,12 @@ export async function buildAdapterStreamResponse(
         ...(sourceCollector.citationSnapshot()
           ? { citations: sourceCollector.citationSnapshot() }
           : {}),
+        ...(sourceCollector.codeExecutionSnapshot()
+          ? { codeExecutionResult: sourceCollector.codeExecutionSnapshot() }
+          : {}),
+        ...(sourceCollector.generatedFilesSnapshot()
+          ? { generatedFiles: sourceCollector.generatedFilesSnapshot() }
+          : {}),
       },
     });
   };
@@ -939,19 +945,21 @@ export async function buildAdapterStreamResponse(
             model: modelUsed,
           });
           if (files.length > 0) {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  choices: [
-                    {
-                      delta: { x_generated_files: { files: files.map((f) => f.wire) } },
-                      index: 0,
-                    },
-                  ],
-                  model: responseModelName,
-                })}\n\n`,
-              ),
-            );
+            // This frame is built here rather than by the assembler, so it is
+            // the one wire event the ingest loop above never sees. The snapshot
+            // is taken after this block, so collecting it here is what puts the
+            // attachments on the row.
+            const generatedFilesEvent = {
+              choices: [
+                {
+                  delta: { x_generated_files: { files: files.map((f) => f.wire) } },
+                  index: 0,
+                },
+              ],
+              model: responseModelName,
+            };
+            sourceCollector.ingestWireEvent(generatedFilesEvent);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(generatedFilesEvent)}\n\n`));
           }
           if (failedCount > 0) {
             const plural = failedCount === 1 ? 'file' : 'files';
