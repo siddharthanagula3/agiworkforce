@@ -37,7 +37,11 @@ function routeDirOf(specPath: string): string {
 }
 
 function specPathOf(routeDir: string): string {
-  return `/${path.relative(apiDir, routeDir).split(path.sep).join('/')}`;
+  return `/${path
+    .relative(apiDir, routeDir)
+    .split(path.sep)
+    .map((segment) => segment.replace(/^\[(.+)\]$/, '{$1}'))
+    .join('/')}`;
 }
 
 function nearestRouteDir(file: string): string | null {
