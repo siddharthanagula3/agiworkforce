@@ -592,8 +592,21 @@ carries a `.sig` beside each artifact and a notarized macOS build, and
 **What remains after founder action** Nothing. The download controls already
 resolve against the live release API, so they start offering the platforms the
 moment assets exist.
-**Impact** LAUNCH-BLOCKING (the published verification steps fail today, and a
-missing file is indistinguishable from a tampered one to the user checking)
+**The concrete consequence, measured 2026-09-12** Both documented CLI install
+routes fail for the public right now, so this is not only about verification:
+
+1. `scripts/install.sh` fetches `SHA256SUMS` and `SHA256SUMS.sigstore.json`
+   before it will unpack anything. The only published CLI release carries
+   neither, so the script exits 1 with "Release signature metadata is missing;
+   refusing to install unverified bytes." The guard is correct; there is simply
+   nothing signed to verify against.
+2. The Homebrew tap repository `siddharthanagula3/homebrew-tap` is private
+   (`gh api repos/siddharthanagula3/homebrew-tap --jq .private` returns `true`),
+   so `brew install` cannot resolve it for anyone outside the account.
+
+**Impact** LAUNCH-BLOCKING (both published install paths fail, and on the
+verification path a missing file is indistinguishable from a tampered one to
+the user who is checking precisely because they do not trust the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Legal] Privacy and cookie policy revision dates after a material correction
