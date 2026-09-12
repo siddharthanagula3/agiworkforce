@@ -1,5 +1,5 @@
 /**
- * @file The sources a turn cited, collected from the wire it already emitted.
+ * @file The evidence a turn emitted, collected from the wire it already sent.
  *
  * Citations were written to the database by the client alone, after the stream
  * ended, by `saveMessageToDb`. Its failure handler is `console.error`. A
@@ -18,7 +18,16 @@
  * list of cited pages, in the `SearchResult[]` shape the metadata field already
  * accepts, so a reload after a failed client save shows the sources rather than
  * nothing. The client's own write still lands on top when it succeeds.
+ *
+ * The same rule governs every class collected here. A code-execution result and
+ * a generated-file list are both flat evidence the wire already carries whole:
+ * they are copied into the shape their metadata key accepts and nothing else.
+ * The tool timeline and the reasoning blocks are not collected, because the
+ * client derives those by merging frames and tracking per-tool status, and a
+ * second copy of that derivation would drift from the one that renders.
  */
+
+import { parseGeneratedFilesDelta } from '@agiworkforce/cloud-contracts';
 
 export interface PersistedTurnSource {
   url: string;
@@ -36,12 +45,43 @@ export interface PersistedTurnCitation {
   title: string;
 }
 
+/** What a code-execution tool run printed, in the shape the panel renders. */
+export interface PersistedTurnCodeExecution {
+  stdout: string;
+  stderr: string;
+  returnCode: number;
+}
+
+/** One file a turn produced, in the camelCase shape the metadata key holds. */
+export interface PersistedTurnGeneratedFile {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  uri: string;
+  byteCount: number;
+  kind: string;
+  checksumSha256?: string;
+  surface: 'artifact' | 'file';
+  previewable: boolean;
+}
+
 /** Enough to cite an answer, bounded so one turn cannot bloat a row. */
 export const MAX_PERSISTED_TURN_SOURCES = 20;
+/** Well past what a single turn attaches, and still a bound on the row. */
+export const MAX_PERSISTED_TURN_GENERATED_FILES = 20;
+/**
+ * A sandbox can print megabytes. The client's own save carries the untruncated
+ * copy and overwrites this key when it lands, so the floor only has to be long
+ * enough to read.
+ */
+export const MAX_PERSISTED_CODE_OUTPUT_CHARS = 10_000;
 const MAX_SNIPPET_CHARS = 500;
 const WEB_SEARCH_RESULT_TYPE = 'web_search_result';
 const URL_CITATION_TYPE = 'url_citation';
 const CITATION_DELTA_KEY = 'x_citation';
+const CODE_RESULT_DELTA_KEY = 'x_code_result';
+const CODE_RESULT_ERROR_TYPE = 'code_execution_tool_result_error';
+const GENERATED_FILES_DELTA_KEY = 'x_generated_files';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -77,6 +117,19 @@ function readSearchResultContent(event: unknown): Record<string, unknown>[] {
   });
 }
 
+/** Every `delta[key]` object carried by one wire frame, across its choices. */
+function readDeltaBlocks(event: unknown, key: string): Record<string, unknown>[] {
+  const envelope = asRecord(event);
+  const choices = envelope?.['choices'];
+  if (!Array.isArray(choices)) return [];
+  const blocks: Record<string, unknown>[] = [];
+  for (const choice of choices) {
+    const block = asRecord(asRecord(asRecord(choice)?.['delta'])?.[key]);
+    if (block) blocks.push(block);
+  }
+  return blocks;
+}
+
 /**
  * Accumulates the pages one turn cited, in the order they were first seen.
  *
@@ -87,6 +140,8 @@ function readSearchResultContent(event: unknown): Record<string, unknown>[] {
 export class AssistantTurnSourceCollector {
   private readonly byUrl = new Map<string, PersistedTurnSource>();
   private readonly citationsByUrl = new Map<string, PersistedTurnCitation>();
+  private readonly filesByName = new Map<string, PersistedTurnGeneratedFile>();
+  private codeExecution: PersistedTurnCodeExecution | undefined;
 
   ingestWireBytes(value: Uint8Array): void {
     for (const rawLine of new TextDecoder().decode(value).split('\n')) {
@@ -102,6 +157,8 @@ export class AssistantTurnSourceCollector {
 
   ingestWireEvent(event: unknown): void {
     this.ingestCitation(event);
+    this.ingestCodeExecution(event);
+    this.ingestGeneratedFiles(event);
     if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
     for (const result of readSearchResultContent(event)) {
       if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
@@ -139,6 +196,61 @@ export class AssistantTurnSourceCollector {
     }
   }
 
+  /**
+   * What the sandbox printed. Last frame wins, which is the client's own rule:
+   * a turn that runs code twice shows the second run's output.
+   *
+   * A frame whose content is the error type, or an array of output file
+   * references rather than an output record, carries no stdout to render, and
+   * recording an empty result for it would persist a blank result panel over a
+   * turn that had none.
+   */
+  private ingestCodeExecution(event: unknown): void {
+    for (const block of readDeltaBlocks(event, CODE_RESULT_DELTA_KEY)) {
+      const content = asRecord(block['content']);
+      if (!content || content['type'] === CODE_RESULT_ERROR_TYPE) continue;
+      const stdout = readString(content, 'stdout');
+      const stderr = readString(content, 'stderr');
+      const returnCode = content['return_code'];
+      if (!stdout && !stderr && typeof returnCode !== 'number') continue;
+      this.codeExecution = {
+        stdout: stdout.slice(0, MAX_PERSISTED_CODE_OUTPUT_CHARS),
+        stderr: stderr.slice(0, MAX_PERSISTED_CODE_OUTPUT_CHARS),
+        returnCode: typeof returnCode === 'number' ? returnCode : 0,
+      };
+    }
+  }
+
+  /**
+   * The files this turn attached, keyed by name the way the client keys them so
+   * a re-emitted file replaces its earlier entry in place instead of appearing
+   * twice. The wire shape is parsed by the shared contract parser, so a file the
+   * client would have rejected is rejected here for the same reason.
+   */
+  private ingestGeneratedFiles(event: unknown): void {
+    for (const block of readDeltaBlocks(event, GENERATED_FILES_DELTA_KEY)) {
+      for (const file of parseGeneratedFilesDelta(block)) {
+        if (
+          !this.filesByName.has(file.file_name) &&
+          this.filesByName.size >= MAX_PERSISTED_TURN_GENERATED_FILES
+        ) {
+          continue;
+        }
+        this.filesByName.set(file.file_name, {
+          id: file.id,
+          fileName: file.file_name,
+          mimeType: file.mime_type,
+          uri: file.uri,
+          byteCount: file.byte_count,
+          kind: file.kind,
+          ...(file.checksum_sha256 ? { checksumSha256: file.checksum_sha256 } : {}),
+          surface: file.surface,
+          previewable: file.previewable,
+        });
+      }
+    }
+  }
+
   /** The collected sources, or undefined when the turn cited none. */
   snapshot(): readonly PersistedTurnSource[] | undefined {
     return this.byUrl.size > 0 ? [...this.byUrl.values()] : undefined;
@@ -147,5 +259,15 @@ export class AssistantTurnSourceCollector {
   /** The cited pages in marker order, or undefined when the turn cited none. */
   citationSnapshot(): readonly PersistedTurnCitation[] | undefined {
     return this.citationsByUrl.size > 0 ? [...this.citationsByUrl.values()] : undefined;
+  }
+
+  /** The last code-execution output, or undefined when the turn ran none. */
+  codeExecutionSnapshot(): PersistedTurnCodeExecution | undefined {
+    return this.codeExecution;
+  }
+
+  /** The files the turn attached, or undefined when it attached none. */
+  generatedFilesSnapshot(): readonly PersistedTurnGeneratedFile[] | undefined {
+    return this.filesByName.size > 0 ? [...this.filesByName.values()] : undefined;
   }
 }

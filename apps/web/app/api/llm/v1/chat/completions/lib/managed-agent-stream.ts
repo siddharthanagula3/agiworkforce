@@ -126,6 +126,8 @@ export function buildManagedAgentStream(
     const serving = input.getServingRequest?.() ?? input.processed;
     const sources = sourceCollector.snapshot();
     const citations = sourceCollector.citationSnapshot();
+    const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
+    const generatedFiles = sourceCollector.generatedFilesSnapshot();
     await persistAssistantTurn({
       processed: input.processed,
       userId: input.userId,
@@ -139,6 +141,8 @@ export function buildManagedAgentStream(
         interactiveCards: [...interactiveCards.values()],
         ...(sources ? { sources } : {}),
         ...(citations ? { citations } : {}),
+        ...(codeExecutionResult ? { codeExecutionResult } : {}),
+        ...(generatedFiles ? { generatedFiles } : {}),
       },
     });
   };

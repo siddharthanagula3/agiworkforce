@@ -12,7 +12,12 @@ import {
   resolveAnsweredParentId,
   setActiveLeaf,
 } from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
-import type { PersistedTurnCitation, PersistedTurnSource } from './assistant-turn-sources';
+import type {
+  PersistedTurnCitation,
+  PersistedTurnCodeExecution,
+  PersistedTurnGeneratedFile,
+  PersistedTurnSource,
+} from './assistant-turn-sources';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
@@ -58,6 +63,19 @@ export interface AssistantTurnSnapshot {
    * list.
    */
   citations?: readonly PersistedTurnCitation[];
+  /**
+   * What a code-execution run printed, under the same `codeExecutionResult` key
+   * the client uses. Without it a reloaded answer that said "the script prints
+   * 42" showed no result panel at all, so the claim had nothing behind it.
+   */
+  codeExecutionResult?: PersistedTurnCodeExecution;
+  /**
+   * The files the turn attached, under the same `generatedFiles` key the client
+   * uses. The bytes were already persisted and downloadable; only the row that
+   * points at them was lost, so a reload dropped every chart and download chip
+   * off an answer whose text still referred to them.
+   */
+  generatedFiles?: readonly PersistedTurnGeneratedFile[];
   interactiveCards?: readonly InteractiveCard[];
   runReference?: {
     runId: string;
@@ -110,6 +128,8 @@ export async function persistAssistantTurn(params: {
     !snapshot.runReference &&
     !snapshot.sources?.length &&
     !snapshot.citations?.length &&
+    !snapshot.codeExecutionResult &&
+    !snapshot.generatedFiles?.length &&
     interactiveCards.length === 0
   ) {
     return;
@@ -128,6 +148,8 @@ export async function persistAssistantTurn(params: {
     // not a competing writer.
     ...(snapshot.sources?.length ? { searchResults: snapshot.sources } : {}),
     ...(snapshot.citations?.length ? { citations: snapshot.citations } : {}),
+    ...(snapshot.codeExecutionResult ? { codeExecutionResult: snapshot.codeExecutionResult } : {}),
+    ...(snapshot.generatedFiles?.length ? { generatedFiles: snapshot.generatedFiles } : {}),
   };
   if (interactiveCards.length > 0) {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;
