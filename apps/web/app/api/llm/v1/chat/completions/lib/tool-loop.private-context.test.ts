@@ -50,19 +50,43 @@ describe('the sensitive-source leg of the trifecta gate', () => {
     expect(hasPrivateContext({}, [USER, USER])).toBe(true);
   });
 
-  it('sees a non-text part, which is how an attachment arrives', () => {
+  /**
+   * An attachment arrives in `multimodal_content`, never in `content`:
+   * `buildLlmRequest` moves array content across and leaves `content` a string.
+   * The original check read only `content`, so this leg could never fire and an
+   * uploaded document or image did not count as private context at all.
+   */
+  it('sees an attachment where attachments actually arrive', () => {
     const withImage = {
       role: 'user',
-      content: [{ type: 'image_url', image_url: { url: 'https://example.test/a.png' } }],
-    } as Message;
+      content: '',
+      multimodal_content: [{ type: 'image_url', image_url: { url: 'https://x.test/a.png' } }],
+    } as unknown as Message;
 
     expect(hasPrivateContext({}, [withImage])).toBe(true);
   });
 
-  it('does not count a text-only array part as an attachment', () => {
-    const textParts = { role: 'user', content: [{ type: 'text', text: 'hello' }] } as Message;
+  it('still sees one in the raw array shape the wire type permits', () => {
+    const withImage = {
+      role: 'user',
+      content: [{ type: 'image_url', image_url: { url: 'https://x.test/a.png' } }],
+    } as unknown as Message;
+
+    expect(hasPrivateContext({}, [withImage])).toBe(true);
+  });
+
+  it('does not count text-only parts as an attachment', () => {
+    const textParts = {
+      role: 'user',
+      content: '',
+      multimodal_content: [{ type: 'text', text: 'hello' }],
+    } as unknown as Message;
 
     expect(hasPrivateContext({}, [textParts])).toBe(false);
+  });
+
+  it('does not count a message with no parts at all', () => {
+    expect(hasPrivateContext({}, [{ role: 'user', content: 'hello' } as Message])).toBe(false);
   });
 
   it('only ever adds: the explicit flag never suppresses another signal', () => {
