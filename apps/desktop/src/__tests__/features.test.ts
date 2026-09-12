@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { enableMapSet } from 'immer';
+import { MODEL_TYPES } from '@agiworkforce/types';
 import { getAllModels, getAllowedModelsForTier, getModelMetadata } from '../constants/llm';
 import { useUnifiedAuthStore } from '../stores/auth';
 import { useModelStore } from '../stores/modelStore';
@@ -435,22 +436,9 @@ describe('LLM Constants', () => {
       const { getAllModels } = await import('../constants/llm');
 
       const allModels = getAllModels();
-      const validTypes = [
-        'chat',
-        'code',
-        'reasoning',
-        'multimodal',
-        'image',
-        'video',
-        'search',
-        'tts',
-        'stt',
-        'embedding',
-        'music',
-      ];
 
       allModels.forEach((model) => {
-        expect(validTypes).toContain(model.modelType);
+        expect(MODEL_TYPES).toContain(model.modelType);
       });
     });
   });

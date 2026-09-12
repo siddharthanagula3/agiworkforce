@@ -132,19 +132,28 @@ export interface VideoGenerationMetadata {
   pricing?: VideoTokenPricingFormula;
 }
 
-export type ModelType =
-  | 'chat'
-  | 'code'
-  | 'reasoning'
-  | 'multimodal'
-  | 'embedding'
-  | 'image'
-  | 'video'
-  | 'search'
-  | 'tts'
-  | 'stt'
-  | 'audio'
-  | 'music';
+/**
+ * The runtime list is the source and the union is derived from it, so a caller
+ * that needs to check a value at runtime has something to check against. Hand
+ * copies of this list drift: the desktop model-type assertion carried eleven of
+ * these and went red when the twelfth arrived.
+ */
+export const MODEL_TYPES = [
+  'chat',
+  'code',
+  'reasoning',
+  'multimodal',
+  'embedding',
+  'image',
+  'video',
+  'search',
+  'tts',
+  'stt',
+  'audio',
+  'music',
+] as const;
+
+export type ModelType = (typeof MODEL_TYPES)[number];
 
 export type ModelSpeed = 'very-fast' | 'fast' | 'medium' | 'slow';
 
