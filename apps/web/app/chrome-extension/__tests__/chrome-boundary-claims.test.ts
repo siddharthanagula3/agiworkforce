@@ -17,6 +17,16 @@ import { describe, expect, it } from 'vitest';
  *
  * Cross-page rules keep the wording consistent with /agent-permissions, which
  * is where the residual screenshot risk is written out in full.
+ *
+ * The page now composes the flagship sections, so its copy lives in the three
+ * module consts the sections map over plus the hero lede paragraph. The
+ * helpers read those regions; a rename of a const is a deliberate edit and
+ * should fail here rather than let a region go unchecked.
+ *
+ * Chat is banned from being sold as a Desktop job as well. The bridge carries
+ * selections, captures and queued messages; every answer comes from
+ * apps/extension/src/features/cloud-bridge/freeTrialClient.ts, which posts to
+ * the Managed Cloud chat endpoint under the signed-in account token.
  */
 
 const CHROME_PAGE = path.join(path.resolve(__dirname, '..'), 'page.tsx');
@@ -40,15 +50,15 @@ function collapsed(): string {
   return chromeSource().replace(/\s+/gu, ' ');
 }
 
-function sectionBlock(id: string): string {
-  const block = new RegExp(`<Section id="${id}"[\\s\\S]*?<\\/Section>`, 'u').exec(chromeSource());
-  expect(block, `section ${id} not found`).not.toBeNull();
+function copyBlock(name: string): string {
+  const block = new RegExp(`const ${name} = \\[[\\s\\S]*?\\n\\];`, 'u').exec(chromeSource());
+  expect(block, `copy block ${name} not found`).not.toBeNull();
   return block![0]!.replace(/\s+/gu, ' ');
 }
 
 function heroLede(): string {
-  const lede = /lede="([^"]*)"/u.exec(chromeSource());
-  expect(lede).not.toBeNull();
+  const lede = /className="agi-fl-lede">([\s\S]*?)<\/p>/u.exec(chromeSource());
+  expect(lede, 'hero lede not found').not.toBeNull();
   return lede![1]!.replace(/\s+/gu, ' ');
 }
 
@@ -63,6 +73,8 @@ const BANNED_ABSOLUTES: ReadonlyArray<readonly [string, RegExp]> = [
   ['unqualified desktop execution', /models and tools run on desktop\./iu],
   ['every job crosses the bridge', /hands (every job|the work|all work)/iu],
   ['keys never leave desktop', /keys never leave (your )?desktop/iu],
+  ['chat executes on desktop', /chat (models )?(and tools )?runs? on desktop/iu],
+  ['chat is handed to desktop', /hands chat to (agi )?desktop/iu],
 ];
 
 describe('/chrome-extension, transmission claims', () => {
@@ -91,30 +103,39 @@ describe('/chrome-extension, transmission claims', () => {
     expect(heroLede()).toMatch(/Managed Cloud/u);
   });
 
-  it('carries the exception in the destinations grid', () => {
-    const destinations = sectionBlock('chrome-destinations');
+  it('carries the exception where the page names its destinations', () => {
+    const destinations = copyBlock('ARCHITECTURE_STEPS');
     expect(destinations).toMatch(/Managed Cloud/u);
     expect(destinations).toMatch(/screenshot/iu);
   });
 
   it('carries the exception in the capabilities grid', () => {
-    const capabilities = sectionBlock('chrome-capabilities');
+    const capabilities = copyBlock('CAPABILITIES');
     expect(capabilities).toMatch(/computer use/iu);
     expect(capabilities).toMatch(/Managed Cloud/u);
   });
 
   it('carries an egress row in the boundary ledger', () => {
-    const ledger = sectionBlock('chrome-boundary');
+    const ledger = copyBlock('BOUNDARY_LEDGER');
     expect(ledger).toMatch(/Computer-use egress/u);
     expect(ledger).toMatch(/screenshot/iu);
     expect(ledger).toMatch(/Managed Cloud gateway/u);
   });
 
   it('scopes the Desktop key claim to Desktop', () => {
-    const ledger = sectionBlock('chrome-boundary');
-    const keys = /label: 'Keys in Chrome',\s*value:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
-    expect(keys).not.toBeNull();
+    const ledger = copyBlock('BOUNDARY_LEDGER');
+    const keys = /k: 'Keys in Chrome',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
+    expect(keys, 'Keys in Chrome row not found').not.toBeNull();
     expect(keys![1]!).toMatch(/computer use/iu);
+  });
+
+  it('names Managed Cloud as the chat destination, not the Desktop bridge', () => {
+    const destinations = copyBlock('ARCHITECTURE_STEPS');
+    expect(destinations).toMatch(/AGI Managed Cloud/u);
+    const ledger = copyBlock('BOUNDARY_LEDGER');
+    const inference = /k: 'Inference in Chrome',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
+    expect(inference, 'Inference in Chrome row not found').not.toBeNull();
+    expect(inference![1]!).toMatch(/Managed Cloud/u);
   });
 
   it('sends the reader to the page that details the residual screenshot risk', () => {

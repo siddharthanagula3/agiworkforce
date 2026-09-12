@@ -10,7 +10,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata = buildMetadata({
   title: 'AGI in Chrome | Browser Context, Desktop Bridge',
   description:
-    'A Chrome Manifest V3 side panel that captures page context on request and hands chat to AGI Desktop over a paired, HMAC-signed native-messaging bridge. Computer use is the exception: it calls the Managed Cloud gateway directly from the extension, sending the conversation and its screenshots.',
+    'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from AGI Managed Cloud, a paired HMAC-signed bridge passes selections and captures to AGI Desktop, and computer use posts the conversation with its screenshots to the Managed Cloud gateway directly from the extension.',
   path: '/chrome-extension',
 });
 
@@ -22,13 +22,13 @@ const ARCHITECTURE_STEPS = [
   },
   {
     n: '02',
-    title: 'One paired bridge',
-    body: "Chat crosses Chrome's native-messaging bridge to AGI Desktop on localhost port 8787. You pair the two once, explicitly, and every message is HMAC-signed.",
+    title: 'Managed Cloud answers',
+    body: 'Your message, the conversation so far, and any page text you attached go to AGI Managed Cloud under your signed-in account. The extension ships no local chat runtime, so this is the only road an answer can take.',
   },
   {
     n: '03',
-    title: 'Desktop executes chat, Managed Cloud executes computer use',
-    body: 'Chat models and tools run on Desktop in the route you chose there. Computer use does not use the bridge at all: the extension posts the whole conversation, including every screenshot it captures, to the Managed Cloud gateway under your account token.',
+    title: 'Computer use sends the pictures too',
+    body: 'Driving a tab keeps the same gateway and changes the payload: every step posts the whole conversation, including every screenshot the run has taken of your tab, to the Managed Cloud gateway under your account token.',
   },
 ];
 
@@ -44,9 +44,14 @@ const CAPABILITIES = [
     body: 'Content scripts capture page content when you ask. Capture is an explicit action you take, never something running in the background.',
   },
   {
+    meta: 'Chat',
+    title: 'Answers from Managed Cloud',
+    body: 'Press send and the conversation goes to AGI Managed Cloud under your account. The panel holds no provider key and offers no second chat route, so an unapproved origin contributes no page text to it.',
+  },
+  {
     meta: 'Bridge',
-    title: 'Paired Desktop bridge',
-    body: 'Native messaging carries chat to AGI Desktop on localhost port 8787 with explicit pairing and HMAC-signed messages. Provider keys never enter the browser.',
+    title: 'Paired Desktop handoff',
+    body: 'Native messaging carries a selection, a page capture or a queued message to AGI Desktop on localhost port 8787, with explicit pairing and HMAC-signed messages. It moves context into Desktop rather than answering in the panel.',
   },
   {
     meta: 'Computer use',
@@ -72,15 +77,18 @@ const CAPABILITIES = [
 
 const BOUNDARY_LEDGER = [
   { k: 'Manifest', v: 'Chrome MV3 with side panel' },
-  { k: 'Bridge', v: 'Native messaging to AGI Desktop · localhost port 8787' },
+  {
+    k: 'Bridge',
+    v: 'Optional native messaging to AGI Desktop · localhost port 8787 · selections, captures and queued messages',
+  },
   { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
   {
     k: 'Inference in Chrome',
-    v: 'Chat runs on Desktop. Computer use calls the Managed Cloud gateway directly from the extension, and the screenshots it takes go with it.',
+    v: 'None. Chat answers come from AGI Managed Cloud, and computer use calls the Managed Cloud gateway directly from the extension with the screenshots it takes.',
   },
   {
     k: 'Keys in Chrome',
-    v: 'None. Your Desktop keys stay on Desktop, encrypted at rest. Computer use runs on AGI’s server-side provider key, not one of yours.',
+    v: 'None. Chat and computer use run on AGI’s server-side provider keys, not on yours. Your Desktop keys stay on Desktop, encrypted at rest.',
   },
   {
     k: 'Computer-use egress',
@@ -88,10 +96,16 @@ const BOUNDARY_LEDGER = [
   },
   {
     k: 'Chat-memory sync',
-    v: 'No default global sync. Chats stay in local extension storage.',
+    v: 'Managed Cloud chats mirror to your account by default. Turn mirroring off under Data handling in the extension options and they stay in local extension storage.',
   },
-  { k: 'Security story', v: 'Threat model maintained in the repo (docs/threat-model.md)' },
-  { k: 'Status', v: 'Chat scoped to the Desktop bridge · computer use scoped to Managed Cloud' },
+  {
+    k: 'Security story',
+    v: 'Threat model maintained in the repo (apps/extension/docs/threat-model.md)',
+  },
+  {
+    k: 'Status',
+    v: 'Chat and computer use scoped to Managed Cloud · the Desktop bridge is an optional local handoff',
+  },
 ];
 
 export default function ChromeExtensionPage() {
@@ -112,9 +126,10 @@ export default function ChromeExtensionPage() {
                 </span>
               </h1>
               <p className="agi-fl-lede">
-                AGI opens in a side panel beside any tab. It captures page context only when you ask
-                and hands chat to AGI Desktop over a paired bridge, where your models and keys stay.
-                Computer use alone calls the Managed Cloud gateway directly.
+                AGI opens in a side panel beside any tab. It captures page context only when you
+                ask, and the answer comes back from AGI Managed Cloud under your account. Computer
+                use goes further: it posts the conversation and every screenshot it takes to the
+                Managed Cloud gateway directly from the extension.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
@@ -124,10 +139,10 @@ export default function ChromeExtensionPage() {
                   Get Started
                 </Link>
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Bridge guarantees">
+              <ul className="agi-fl-mode-ribbon" aria-label="Boundary summary">
                 <li>Capture · on request</li>
-                <li>Chat · paired bridge to Desktop</li>
-                <li>Computer use · Managed Cloud</li>
+                <li>Chat · Managed Cloud</li>
+                <li>Computer use · screenshots included</li>
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
@@ -139,14 +154,14 @@ export default function ChromeExtensionPage() {
         <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-arch-title">
           <p className="agi-fl-eyebrow">The architecture</p>
           <h2 id="agi-fl-chrome-arch-title" className="agi-fl-h2">
-            The browser asks. Desktop answers, except for computer use.
+            The browser asks. Managed Cloud answers.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI in Chrome never runs a model locally and never stores provider keys. For chat it
-            captures what you point at, crosses one paired bridge, and lets Desktop do the heavy
-            lifting. Computer use is the exception: it signs in to Managed Cloud and calls that
-            gateway directly from the extension, sending the conversation and the screenshots it
-            takes with it.
+            AGI in Chrome never runs a model locally and never stores provider keys. It captures
+            what you point at, sends it to Managed Cloud under your account, and brings the answer
+            back into the panel. Pairing AGI Desktop adds a local road for selections and captures,
+            not a second place an answer can come from. Computer use keeps the same gateway and adds
+            the screenshots it takes of your tab.
           </p>
           <ol className="agi-steps">
             {ARCHITECTURE_STEPS.map((step, i) => (
@@ -191,14 +206,13 @@ export default function ChromeExtensionPage() {
             What stays where.
           </h2>
           <p className="agi-fl-section-lede">
-            Local, BYOK, and AGI Cloud are separate trust boundaries. Chat inherits the one you
-            chose on Desktop, and nothing about your browsing changes that silently. Computer use
-            does not inherit it: it requires Managed Cloud sign-in and transmits the conversation
-            and its screenshots to that gateway on every step, which is why starting a session is
-            always an explicit act. The session gates, the site allowlist, and the residual
-            screenshot risk are written out at{' '}
-            <Link href="/agent-permissions">/agent-permissions</Link>. Your chats and memory
-            don&apos;t sync anywhere by default.
+            Local, BYOK, and AGI Cloud are separate trust boundaries, and the panel sits in the
+            cloud one: chat leaves for Managed Cloud under your account whatever route you run on
+            Desktop. Computer use goes further still, transmitting the conversation and its
+            screenshots to that gateway on every step, which is why starting a session is always an
+            explicit act. The session gates, the site allowlist, and the residual screenshot risk
+            are written out at <Link href="/agent-permissions">/agent-permissions</Link>. Those
+            chats mirror to your account until you turn mirroring off in the extension options.
           </p>
           <table className="agi-ledger">
             <tbody>
@@ -215,7 +229,7 @@ export default function ChromeExtensionPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Put AGI beside the page."
-          body="Start with AGI Desktop. The extension hands chat to it across one paired, signed bridge, and runs computer use against Managed Cloud instead. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
+          body="The panel answers from AGI Managed Cloud, and computer use posts the conversation and its screenshots to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
           ctas={[
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/get-started', label: 'Get Started' },
