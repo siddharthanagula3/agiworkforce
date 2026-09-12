@@ -20,6 +20,8 @@ interface MockState {
   lastPoolConfig: unknown;
   pools: EventEmitter[];
   clients: EventEmitter[];
+  /** Model a warm pool: every checkout hands back the SAME client object. */
+  reusePooledClient: boolean;
 }
 
 const state: MockState = {
@@ -33,6 +35,7 @@ const state: MockState = {
   lastPoolConfig: undefined,
   pools: [],
   clients: [],
+  reusePooledClient: false,
 };
 
 beforeEach(() => {
@@ -46,6 +49,7 @@ beforeEach(() => {
   state.lastPoolConfig = undefined;
   state.pools = [];
   state.clients = [];
+  state.reusePooledClient = false;
 });
 
 vi.mock('@neondatabase/serverless', async () => {
@@ -71,6 +75,8 @@ vi.mock('@neondatabase/serverless', async () => {
       return state.poolQueryHandler(sql, params);
     }
     async connect() {
+      const reused = state.reusePooledClient ? state.clients[0] : undefined;
+      if (reused) return reused;
       const client = new MockClient();
       state.clients.push(client);
       this.emit('connect', client);
@@ -609,10 +615,13 @@ describe('NeonDatabaseAdapter connection transport errors', () => {
   it('reports a failure on a checked-out client, which the pool leaves unguarded', async () => {
     const events: DatabaseConnectionErrorEvent[] = [];
     const adapter = await warmedAdapter(events);
-    await adapter.transaction(async () => null);
     const error = new Error('socket hang up');
 
-    expect(() => state.clients[0]?.emit('error', error)).not.toThrow();
+    await adapter.transaction(async () => {
+      expect(() => state.clients[0]?.emit('error', error)).not.toThrow();
+      return null;
+    });
+
     expect(events).toEqual([{ scope: 'client', applicationName: 'agi-web', error }]);
   });
 
@@ -628,13 +637,74 @@ describe('NeonDatabaseAdapter connection transport errors', () => {
   it('reports one idle failure once, not twice as it travels client then pool', async () => {
     const events: DatabaseConnectionErrorEvent[] = [];
     const adapter = await warmedAdapter(events);
-    await adapter.transaction(async () => null);
     const error = new Error('connection terminated unexpectedly');
 
-    state.clients[0]?.emit('error', error);
+    await adapter.transaction(async () => {
+      state.clients[0]?.emit('error', error);
+      return null;
+    });
     state.pools[0]?.emit('error', error);
 
     expect(events).toEqual([{ scope: 'client', applicationName: 'agi-web', error }]);
+  });
+
+  /**
+   * AGI-31. A chat turn logged "Possible EventEmitter memory leak detected. 11
+   * error listeners added" and no registration site could be found in the model
+   * adapters, because the registration is here.
+   *
+   * `getUserScopedDb` calls `withUser().withOrg()` on every request, and each of
+   * those builds a FRESH adapter over the SAME shared pool. The client guard was
+   * keyed on a per-adapter WeakSet and never removed, so every new request scope
+   * attached one more `error` listener to whichever warm client the pool handed
+   * back, and Node warned on the eleventh. Nothing ever took them off again, so
+   * the count only grew for as long as the pooled connection lived.
+   */
+  it('leaves no error listener on a pooled client once the checkout is released', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: CONNECTION_STRING,
+      unsafeAllowUnverifiedJwtSubject: true,
+      onConnectionError: (event) => events.push(event),
+    });
+    await adapter.query('select 1');
+    state.reusePooledClient = true;
+    await adapter.transaction(async () => null);
+    const pooledClient = state.clients[0];
+    expect(pooledClient).toBeDefined();
+
+    const afterRelease: number[] = [];
+    for (let scope = 0; scope < 12; scope++) {
+      const scoped = adapter.withUser(makeJwt({ sub: `user-${scope}` })).withOrg(`org-${scope}`);
+      await scoped.query('select 1');
+      afterRelease.push(pooledClient!.listenerCount('error'));
+    }
+
+    expect(Math.max(...afterRelease)).toBe(0);
+    expect(state.clients).toHaveLength(1);
+  });
+
+  it('guards each new request scope, not only the first one to touch the client', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: CONNECTION_STRING,
+      unsafeAllowUnverifiedJwtSubject: true,
+      onConnectionError: (event) => events.push(event),
+    });
+    await adapter.query('select 1');
+    state.reusePooledClient = true;
+    await adapter.transaction(async () => null);
+    const error = new Error('socket hang up');
+
+    await adapter
+      .withUser(makeJwt({ sub: 'user-7' }))
+      .withOrg('org-7')
+      .transaction(async () => {
+        expect(() => state.clients[0]?.emit('error', error)).not.toThrow();
+        return null;
+      });
+
+    expect(events).toEqual([{ scope: 'client', error }]);
   });
 
   it('falls back to console rather than dropping the failure when nothing is wired', async () => {
