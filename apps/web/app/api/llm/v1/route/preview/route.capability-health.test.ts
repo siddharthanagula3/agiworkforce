@@ -45,6 +45,7 @@ vi.mock('@/lib/services/free-lane/capability-health-service', () => ({
   getUnhonouredCapabilities: capabilityMocks.getUnhonouredCapabilities,
 }));
 
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import { POST } from './route';
 
 const TOOLS = 'functionCalling';
@@ -54,9 +55,25 @@ interface PreviewBody {
   selected: { status: string; routeId?: string };
   candidates: Array<{
     routeId: string;
+    modelKey: string;
     score: { capabilityPenalty: number };
     reasons: string[];
   }>;
+}
+
+/**
+ * Every route the catalogue lists for a model, so a capability loss can be
+ * declared for the model as a whole. The preview names one route per model, the
+ * best-ranked one, and the penalty reorders that ranking: report the loss on a
+ * single route and the model simply moves to a sibling transport, leaving no
+ * penalised candidate to inspect.
+ */
+function routeIdsForModel(modelKey: string): string[] {
+  return getRoutePricingForModel(modelKey).map((route) => route.routeId);
+}
+
+function unhonouredOnEveryRoute(modelKey: string): Record<string, [typeof TOOLS]> {
+  return Object.fromEntries(routeIdsForModel(modelKey).map((routeId) => [routeId, [TOOLS]]));
 }
 
 function authenticated(): void {
@@ -114,20 +131,42 @@ describe('POST /api/llm/v1/route/preview, observed capability loss', () => {
     expect(routeIds.sort()).toEqual(routeIdsOf(body).sort());
   });
 
-  it('reports the penalty and the reason on the route that stopped honouring the capability', async () => {
+  it('reports the penalty and the reason when the model has no route left that honours the capability', async () => {
     const baseline = await previewBody({ taskType: TASK_TYPE, capabilitiesInUse: [TOOLS] });
-    const suspectRouteId = routeIdsOf(baseline)[0]!;
-    capabilityMocks.getUnhonouredCapabilities.mockResolvedValue({ [suspectRouteId]: [TOOLS] });
+    const suspectModelKey = baseline.candidates[0]!.modelKey;
+    capabilityMocks.getUnhonouredCapabilities.mockResolvedValue(
+      unhonouredOnEveryRoute(suspectModelKey),
+    );
 
     const body = await previewBody({ taskType: TASK_TYPE, capabilitiesInUse: [TOOLS] });
-    const suspect = body.candidates.find((entry) => entry.routeId === suspectRouteId);
+    const suspect = body.candidates.find((entry) => entry.modelKey === suspectModelKey);
 
     expect(suspect?.score.capabilityPenalty).toBeGreaterThan(0);
     expect(suspect?.reasons.some((reason) => reason.includes(TOOLS))).toBe(true);
     for (const candidate of body.candidates) {
-      if (candidate.routeId === suspectRouteId) continue;
+      if (candidate.modelKey === suspectModelKey) continue;
       expect(candidate.score.capabilityPenalty).toBe(0);
     }
+  });
+
+  it('moves the model to a sibling route when only one of its routes stopped honouring the capability', async () => {
+    const baseline = await previewBody({ taskType: TASK_TYPE, capabilitiesInUse: [TOOLS] });
+    const suspect = baseline.candidates[0]!;
+    const siblings = routeIdsForModel(suspect.modelKey).filter(
+      (routeId) => routeId !== suspect.routeId,
+    );
+    expect(
+      siblings.length,
+      'the previewed model must carry a second route for the move to be testable',
+    ).toBeGreaterThan(0);
+
+    capabilityMocks.getUnhonouredCapabilities.mockResolvedValue({ [suspect.routeId]: [TOOLS] });
+
+    const body = await previewBody({ taskType: TASK_TYPE, capabilitiesInUse: [TOOLS] });
+    const moved = body.candidates.find((entry) => entry.modelKey === suspect.modelKey);
+
+    expect(moved?.routeId).not.toBe(suspect.routeId);
+    expect(moved?.score.capabilityPenalty).toBe(0);
   });
 
   it('still previews on the declared capabilities when the store read fails', async () => {
