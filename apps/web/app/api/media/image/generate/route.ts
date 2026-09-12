@@ -1548,6 +1548,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         classified.providerHint === SPENDING_CAP_PROVIDER_HINT
           ? `${providerLabel}'s spending cap for this project is exceeded, so image generation is unavailable right now. Choose a different image model.`
           : `${providerLabel} has exhausted its image generation quota for now. Choose a different image model, or try again later.`;
+    } else if (classified?.category === 'billing_exhausted') {
+      // Degraded like a spent quota, but `describeImageFailure` already has the
+      // right words for it, so the mark is the only thing added here.
+      markProviderDegraded(provider, classified.category);
     } else if (
       classified?.category === 'server_overload' ||
       classified?.category === 'capacity_off_switch'
