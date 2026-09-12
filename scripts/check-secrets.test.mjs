@@ -278,3 +278,44 @@ test('the CI gate runs this suite before it can report a pass', () => {
   const ci = fs.readFileSync(path.join(repo, '.github/workflows/ci.yml'), 'utf8');
   assert.match(ci, /^ +run: pnpm check:secrets$/m);
 });
+
+// This product holds keys for providers the table did not name, which is not a
+// theoretical gap: on 2026-09-12 a live provider error quoting an account back
+// at the caller was written into a committed file and this scan passed it.
+const OPENROUTER = shape(
+  'sk',
+  '-or-v1-',
+  '9f3b2c7d8e1a4056b7c9d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2',
+);
+const PERPLEXITY = shape('pplx', '-', '7a2b9c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7081');
+const VENDOR_SK = shape('sk', '-', '3f8a1b2c9d4e5f6071829a3b4c5d6e7f80');
+const VENDOR_AK = shape('ak', '-', '9f3b2c7d8e1a4056');
+
+test('the providers this product actually uses are recognised', async (t) => {
+  await t.test('OpenRouter', () => reported(`const k = '${OPENROUTER}';`, 'OpenRouter API key'));
+  await t.test('Perplexity', () => reported(`const k = '${PERPLEXITY}';`, 'Perplexity API key'));
+  // DeepSeek, Moonshot and Alibaba all issue a bare sk- key.
+  await t.test('bare vendor key', () => reported(`const k = '${VENDOR_SK}';`, 'Vendor API key'));
+  // The identifier half of a Moonshot credential, which its errors quote back.
+  await t.test('vendor access key id', () =>
+    reported(`const k = '${VENDOR_AK}';`, 'Vendor access key id'),
+  );
+});
+
+test('a bare vendor key does not swallow the keys that have their own row', async (t) => {
+  // sk-ant- and sk-proj- carry a second dashed segment, so the bare sk- pattern
+  // cannot match them and each is still reported under its own vendor name.
+  await t.test('Anthropic keeps its own name', () =>
+    reported(`const k = '${ANTHROPIC}';`, 'Anthropic API key'),
+  );
+  await t.test('OpenAI keeps its own name', () =>
+    reported(`const k = '${OPENAI}';`, 'OpenAI project key'),
+  );
+});
+
+test('an unmistakably fake key for the new formats is still allowed', async (t) => {
+  await t.test('marker filled', () => clean(`const k = '${shape('sk', '-', 'EXAMPLE')}';`));
+  await t.test('counting filler', () =>
+    clean(`const k = '${shape('ak', '-', '000000000000000000')}';`),
+  );
+});
