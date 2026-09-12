@@ -84,6 +84,7 @@ Cargo.lock
 
 # --- Testing ---
 .vitest/
+.playwright/
 .playwright-mcp/
 playwright-report/
 test-results/
