@@ -14,17 +14,38 @@ import type {
 } from '@agiworkforce/types';
 import { toolStatusPhrase } from './tool-status-phrases';
 
+/** Anthropic's own citation shape, carried on `citations_delta`. */
+const ANTHROPIC_CITATION_KIND = 'web_search_result_location';
+
+function hostnameTitle(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The provider-neutral `x_citation` payload for one citation, if the provider
+ * gave one.
+ *
+ * Both kinds that reach here are accepted. OpenAI's responses stream and
+ * Google's grounding metadata already speak `url_citation`; Anthropic's native
+ * web search speaks `web_search_result_location` and frequently omits the
+ * title, so the outlet's hostname stands in rather than dropping the citation:
+ * every consumer requires a title to record one at all, and the host is the
+ * truthful answer to which outlet the claim came from.
+ */
 function urlCitationDelta(payload: unknown): WebSearchCitationDeltaWire | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined;
   const candidate = payload as Record<string, unknown>;
-  if (
-    candidate['type'] !== WEB_SEARCH_CITATION_KIND ||
-    typeof candidate['url'] !== 'string' ||
-    typeof candidate['title'] !== 'string'
-  ) {
-    return undefined;
-  }
-  return { url: candidate['url'], title: candidate['title'] };
+  const kind = candidate['type'];
+  if (kind !== WEB_SEARCH_CITATION_KIND && kind !== ANTHROPIC_CITATION_KIND) return undefined;
+  const url = candidate['url'];
+  if (typeof url !== 'string' || !url) return undefined;
+  const title = typeof candidate['title'] === 'string' ? candidate['title'] : '';
+  const resolvedTitle = title || hostnameTitle(url);
+  return resolvedTitle ? { url, title: resolvedTitle } : undefined;
 }
 
 export interface OpenAIWireToolCall {
@@ -703,7 +724,15 @@ export class OpenAIWireAssembler {
             index: chunk.blockIndex,
             delta: { type: 'citations_delta', citation: chunk.payload },
           });
-        } else if (openaiPassthrough) {
+        }
+        // The raw `citations_delta` above is Anthropic's own shape and no web
+        // client reads it, so on the two providers that carry native search,
+        // Anthropic and Google, both of them legacy-web, a cited turn arrived
+        // with no citation at all: no [n] markers and an empty citation list
+        // behind the Sources control. Every other rich-search signal in this
+        // mode already travels as an x_-prefixed envelope; citations were the
+        // one exception.
+        if (richWebSearch) {
           const citation = urlCitationDelta(chunk.payload);
           if (citation) {
             out.push(this.chunkEnvelope({ [WEB_SEARCH_CITATION_DELTA_KEY]: citation }, null));
