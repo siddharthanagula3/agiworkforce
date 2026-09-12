@@ -858,6 +858,31 @@ Each correction is pinned by a regression test that was verified to fire
 against the pre-fix copy, in `surface-page-claims.test.ts`,
 `feature-page-claims.test.ts` and the extended `chrome-boundary-claims.test.ts`.
 
+**Three claims were left for the founder rather than decided by an agent.**
+Each is arguable rather than wrong, and each is about how the product presents
+itself:
+
+- `/about` says the desktop app is "native to its platform rather than a wrapped
+  web view". The shipped app is Tauri with a Rust core, which renders in the
+  operating system's webview, and a separate managed-only Electron shell also
+  ships. Defensible, and also the softest claim on those pages.
+- `/docs` gives the Desktop card a plain call to action and no status label
+  while Mobile, Chrome and VS Code all carry the coming-soon label, yet Windows
+  installers are unpublished. The platform sentence is true; the card reads as
+  more available than Desktop is.
+- `SURFACE_STATUS.desktop` in `apps/web/lib/marketing-constants.ts` still reads
+  as Linux assets only, which now understates the shipped macOS build. It is a
+  shared constant that pages outside the audited set render.
+
+**What the audit found on `/customers`, `/partners` and `/press` is worth
+recording as a positive**, because it is the risk that was looked for and it is
+absent. None of the three names a customer, logo, testimonial, metric or press
+mention that is not real. They state what does not exist instead: `/customers`
+labels its scenarios "None of these is a customer", `/partners` says there is no
+program yet and lists what it does not offer, and `/press` carries a section
+naming the certifications, customers and uptime record it cannot back up. Every
+mechanic in the scenarios traces to real CLI code. Nothing needed replacing.
+
 **About twenty of the rewritten pages have not been audited**, including
 `/about`, `/api-docs`, `/docs`, `/faq`, `/help`, `/security`, `/pricing`,
 `/download`, `/get-started` and the remaining feature pages. Given a 14-claim
