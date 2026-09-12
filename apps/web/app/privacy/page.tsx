@@ -56,8 +56,16 @@ export const metadata = buildMetadata({
  *    this repository sets, enforces, or tests any of those numbers, and no code
  *    touches a backup during erasure. Vendor-governed windows are now described
  *    as vendor-governed.
- *  - "Org-level retention windows on Enterprise". No control reads or enforces a
- *    per-organisation conversation retention window on the conversation path.
+ *  - "Org-level retention windows on Enterprise". CORRECTED 2026-09-12: this
+ *    removal is no longer right, and the retention row that repeated it was
+ *    denying a job that runs. `lib/services/retention-service.ts`
+ *    `sweepOrganizationRetention()` deletes `web_conversations` past an
+ *    organisation's `retention_days` once an owner sets `retention_enforced`
+ *    in Settings, and `/api/cron/enforce-workspace-retention` is scheduled
+ *    nightly in vercel.json. Section 05 now discloses it. Do not restore a
+ *    denial: app/__tests__/legal-surface-claims.test.ts requires the
+ *    disclosure and app/__tests__/legal-policy-set.test.ts bans the sentence
+ *    that denied it.
  *  - "Material changes are announced via email". CORRECTED 2026-08-14: the
  *    original reason given here, "there is no transactional email provider in
  *    this repository", was FALSE. lib/support/handoff/resend-client.ts calls
@@ -605,11 +613,19 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     label: 'Conversations (Managed Cloud)',
     value: (
       <>
-        <strong>Retention:</strong> kept until you delete them or delete your account.
+        <strong>Retention:</strong> kept until you delete them or delete your account, unless your
+        organisation has switched on a retention window, in which case that window also applies.
         <br />
-        <strong>Enforced by:</strong> there is no automatic expiry on ordinary conversations, and no
-        per-organisation retention window is enforced on them today. We will not describe one until
-        it runs.
+        <strong>Enforced by:</strong> nothing expires a personal conversation automatically. A
+        conversation that belongs to an organisation workspace is different:{' '}
+        <strong>
+          an owner can set a retention window on that workspace, and a nightly scheduled job then
+          permanently deletes workspace conversations with no activity for longer than it
+        </strong>
+        . That sweep is off unless the workspace switches it on, it never touches a personal
+        conversation, conversations under a legal hold are withheld from it, and every run is
+        recorded. This page previously said no such window was enforced; the job was running, and
+        the denial is corrected here rather than quietly dropped.
       </>
     ),
   },
@@ -643,9 +659,10 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         <strong>Retention:</strong> within 24 hours of creation, or sooner once its resume mapping
         is gone.
         <br />
-        <strong>Enforced by:</strong> a daily scheduled job enforces a 24-hour age cap on every
-        sandbox (matching the resume mapping&rsquo;s own 24-hour expiry) and reclaims it at that cap
-        or as soon as the mapping no longer points to it, whichever comes first.
+        <strong>Enforced by:</strong> a scheduled job that runs every hour enforces a 24-hour age
+        cap on every sandbox (matching the resume mapping&rsquo;s own 24-hour expiry) and reclaims
+        it at that cap or as soon as the mapping no longer points to it, whichever comes first. A
+        sandbox that is merely paused gives its slot up after two hours rather than twenty-four.
       </>
     ),
   },
@@ -1012,7 +1029,7 @@ export default function PrivacyPage() {
                         What deliberately survives deleting your account
                       </h3>
                       <Prose size="sm">
-                        &ldquo;Delete my account&rdquo; erases an enumerated list of 70 user-scoped
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of 73 user-scoped
                         tables and your stored files. A short list of things is kept on purpose, and
                         you should know what before you decide, not after.
                       </Prose>
