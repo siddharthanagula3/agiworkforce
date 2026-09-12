@@ -1798,10 +1798,10 @@ export function getMinimumRequiredTier(modelId: string): 'free' | 'basic' | 'pro
     // This is the published floor, so it has to be the floor that
     // `canAccessModelForSubscriptionTier` actually enforces. That function
     // admits an economy model to Free when it is named `minTier: 'free'`, while
-    // this one reported every economy model as Basic. So GPT-5.6 Luna, Gemini
-    // 3.5 Flash Lite and the free router all told a free user "Basic and above"
-    // about a model that user can run right now, in the picker lock label, in
-    // the 403 body and in `/api/llm/v1/models`.
+    // this one reported every economy model as Basic. So each of the three
+    // models a free account can actually run told that user "Basic and above"
+    // about a model they can run right now, in the picker lock label, in the
+    // 403 body and in `/api/llm/v1/models`.
     return getModelMetadataById(canonicalModelId)?.tierPolicy?.minTier === 'free'
       ? 'free'
       : 'basic';
@@ -1825,9 +1825,10 @@ export function canAccessModelForSubscriptionTier(
     // Free is never reached through the derived floor. A model NAMED in a tier
     // table must clear both economy membership and minTier 'free' to be free,
     // so letting an UNNAMED model through on price alone made absence from the
-    // tables broader than presence in them. That is how sonar, glm-5.3-flash,
-    // deepseek-v4-flash-vision-exp and both gpt-oss entries became selectable
-    // on Free in production. A model is free only by being named so.
+    // tables broader than presence in them. That is how five models nobody had
+    // named free, including two served only by a provider this deployment holds
+    // no credential for, became selectable on Free in production. A model is
+    // free only by being named so.
     if (derived === 'basic') return tier !== 'free';
     if (derived === 'pro') return tier === 'pro' || tier === 'max' || tier === 'enterprise';
     return tier === 'max' || tier === 'enterprise';

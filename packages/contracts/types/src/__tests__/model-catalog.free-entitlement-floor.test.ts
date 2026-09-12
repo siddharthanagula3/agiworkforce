@@ -9,16 +9,19 @@ import {
 
 /**
  * Production forensic, 2026-09-12. The live catalogue admitted eight models to
- * an anonymous visitor when only three are named free:
- *
- *   gpt-5.6-luna, gemini-3.5-flash-lite, openrouter-free   (named free)
- *   sonar, glm-5.3-flash, deepseek-v4-flash-vision-exp,
- *   gpt-oss-120b, gpt-oss-20b                              (never named)
+ * an anonymous visitor when only three were named free: the other five had never
+ * been named at any tier, and two of those are served only by a provider this
+ * deployment holds no credential for.
  *
  * A model named in a tier table must clear economy membership AND
  * minTier 'free'. An unnamed model fell through to a price-derived floor whose
  * 'basic' branch returned true for free, so being absent from the tables was
  * broader than being present in them.
+ *
+ * The cases below derive their subjects from the registry rather than listing
+ * ids. A list would be a second copy of the catalogue: it would go stale on the
+ * next curation edit, and it would say nothing about a model added after it was
+ * written, which is exactly the model most likely to fall down this path.
  */
 describe('free entitlement · absence never grants more than presence', () => {
   const FREE_BY_NAME = getAllowedModelsForTier('economy').filter(
@@ -33,17 +36,24 @@ describe('free entitlement · absence never grants more than presence', () => {
     expect([...admitted].sort()).toEqual([...FREE_BY_NAME].sort());
   });
 
-  it.each([
-    'sonar',
-    'glm-5.3-flash',
-    'deepseek-v4-flash-vision-exp',
-    'gpt-oss-120b',
-    'gpt-oss-20b',
-  ])('does not admit %s to free through the derived floor', (modelId) => {
-    // Guard the fixture: these are exactly the models that are NOT named in a
-    // tier table, which is what sent them down the derived path.
-    expect(FREE_BY_NAME).not.toContain(modelId);
-    expect(canAccessModelForSubscriptionTier(modelId, 'free')).toBe(false);
+  const NAMED_ANYWHERE = new Set([
+    ...getAllowedModelsForTier('economy'),
+    ...getAllowedModelsForTier('pro_additions'),
+    ...getAllowedModelsForTier('flagship_additions'),
+  ]);
+  const UNNAMED = listCanonicalModels()
+    .map((model) => model.id)
+    .filter((id) => !NAMED_ANYWHERE.has(id));
+
+  it('guards the fixture: unnamed models exist to be tested', () => {
+    expect(UNNAMED.length).toBeGreaterThan(0);
+    for (const id of UNNAMED) expect(FREE_BY_NAME).not.toContain(id);
+  });
+
+  it('admits no unnamed model to free through the derived floor', () => {
+    const leaked = UNNAMED.filter((id) => canAccessModelForSubscriptionTier(id, 'free'));
+
+    expect(leaked).toEqual([]);
   });
 
   it('still admits the named free models', () => {
@@ -55,9 +65,16 @@ describe('free entitlement · absence never grants more than presence', () => {
 
   it('keeps paid tiers reaching unnamed cheap models', () => {
     // The floor exists so a cheap unnamed model is not stranded above Basic.
-    // Removing free from it must not close it for everyone else.
+    // Removing free from it must not close it for everyone else. The subject is
+    // whichever unnamed model Basic can currently reach, not a named one, so
+    // this keeps testing the floor after a curation edit rather than a list.
+    const reachableOnBasic = UNNAMED.filter((id) => canAccessModelForSubscriptionTier(id, 'basic'));
+
+    expect(reachableOnBasic.length).toBeGreaterThan(0);
     for (const tier of ['basic', 'pro', 'max', 'max_15x']) {
-      expect(canAccessModelForSubscriptionTier('glm-5.3-flash', tier)).toBe(true);
+      for (const id of reachableOnBasic) {
+        expect(canAccessModelForSubscriptionTier(id, tier)).toBe(true);
+      }
     }
   });
 
