@@ -67,10 +67,53 @@ function parseRetryAfterMs(header: string | null): number | null {
   return Number.isFinite(dateMs) ? Math.max(0, dateMs - Date.now()) : null;
 }
 
+/**
+ * How long a list the browser already holds counts as current.
+ *
+ * AGI-30: one send produced about ten requests under `/api/chat/conversations`.
+ * The mount effect is the only list caller, but it is not the only MOUNT: the
+ * first send routes `/chat` to `/chat/<id>`, which is a different route segment,
+ * so the whole chat page unmounts and mounts again mid-turn and asked for the
+ * same list a second time. Shell routes mount a second copy of this hook
+ * alongside the page's, and those two race in the same tick.
+ *
+ * Seconds, not minutes: this only has to span a route change inside one turn.
+ * Anything that wants the server's answer regardless calls `fetchConversations`,
+ * which always goes out.
+ */
+const CONVERSATIONS_LIST_FRESH_MS = 30_000;
+
+interface ConversationListFetchOutcome {
+  error: string | null;
+  hasMore: boolean;
+  nextOffset: number;
+}
+
+/**
+ * Shared by every mounted copy of the hook, so concurrent mounts coalesce onto
+ * one request and a remount inside the freshness window reuses the list the
+ * store already holds. Keyed by user: a different account is never fresh.
+ */
+const conversationListLoad: {
+  userId: string | null;
+  loadedAtMs: number;
+  hasMore: boolean;
+  nextOffset: number;
+  inFlight: Promise<ConversationListFetchOutcome> | null;
+} = { userId: null, loadedAtMs: 0, hasMore: false, nextOffset: 0, inFlight: null };
+
+export function __resetConversationListLoadForTests(): void {
+  conversationListLoad.userId = null;
+  conversationListLoad.loadedAtMs = 0;
+  conversationListLoad.hasMore = false;
+  conversationListLoad.nextOffset = 0;
+  conversationListLoad.inFlight = null;
+}
+
 // getToken is not reference-stable across renders while Clerk settles; a ref
 // keeps getAuthHeaders (and everything derived from it) stable instead.
 function useConversationAuthHeaders() {
-  const { getToken, isLoaded, isSignedIn } = useSession();
+  const { getToken, isLoaded, isSignedIn, userId } = useSession();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const getAuthHeaders = useCallback(async () => {
@@ -90,7 +133,7 @@ function useConversationAuthHeaders() {
     };
   }, [isLoaded, isSignedIn]);
 
-  return { getAuthHeaders, isLoaded, isSignedIn };
+  return { getAuthHeaders, isLoaded, isSignedIn, userId };
 }
 
 /**
@@ -162,7 +205,7 @@ interface UseConversationsReturn {
 }
 
 export function useConversations(): UseConversationsReturn {
-  const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
+  const { getAuthHeaders, isLoaded, isSignedIn, userId } = useConversationAuthHeaders();
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const error = useChatStore((state) => state.error);
@@ -192,6 +235,7 @@ export function useConversations(): UseConversationsReturn {
   const currentLoadConversationIdRef = useRef<string | null>(null);
   const listRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRetryAttemptRef = useRef(0);
+  const retryListFetchRef = useRef<() => void>(() => {});
 
   const clearScheduledListRetry = useCallback(() => {
     if (listRetryTimeoutRef.current === null) return;
@@ -203,13 +247,16 @@ export function useConversations(): UseConversationsReturn {
 
   // A background list failure writes only listError, never the shared
   // chat-turn error, so it never paints the page-level turn banner.
-  const fetchConversations = useCallback(async () => {
+  const runListFetch = useCallback(async (): Promise<ConversationListFetchOutcome> => {
+    const unchanged: ConversationListFetchOutcome = {
+      error: null,
+      hasMore: conversationListLoad.hasMore,
+      nextOffset: conversationListLoad.nextOffset,
+    };
     clearScheduledListRetry();
-    setIsFetchingConversations(true);
-    setListError(null);
 
     try {
-      if (!isLoaded || !isSignedIn) return;
+      if (!isLoaded || !isSignedIn) return unchanged;
       const headers = await getAuthHeaders();
       const response = await fetch(
         `/api/chat/conversations?limit=${CONVERSATIONS_PAGE_SIZE}&offset=0`,
@@ -230,7 +277,7 @@ export function useConversations(): UseConversationsReturn {
               CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS * 2 ** attempt,
               CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS,
             );
-          listRetryTimeoutRef.current = setTimeout(() => void fetchConversations(), delay);
+          listRetryTimeoutRef.current = setTimeout(() => retryListFetchRef.current(), delay);
         }
         throw new Error(errorData.error?.message || 'Failed to fetch conversations');
       }
@@ -240,19 +287,71 @@ export function useConversations(): UseConversationsReturn {
 
       listRetryAttemptRef.current = 0;
       setConversations(conversationList);
-      nextOffsetRef.current = data.nextOffset;
-      setHasMoreConversations(data.hasMore);
+      conversationListLoad.userId = userId;
+      conversationListLoad.loadedAtMs = Date.now();
+      conversationListLoad.hasMore = data.hasMore;
+      conversationListLoad.nextOffset = data.nextOffset;
+      return { error: null, hasMore: data.hasMore, nextOffset: data.nextOffset };
     } catch (err) {
       // A scheduled retry is already handling this and the sidebar still holds
       // the list it last loaded, so announcing a failure would replace a usable
       // sidebar with a dead end over something that fixes itself. It becomes the
       // user's problem only once the retries are spent.
-      if (listRetryTimeoutRef.current !== null) return;
-      setListError(toUserMessage(err, 'Failed to fetch conversations'));
+      if (listRetryTimeoutRef.current !== null) return unchanged;
+      return { ...unchanged, error: toUserMessage(err, 'Failed to fetch conversations') };
+    }
+  }, [clearScheduledListRetry, getAuthHeaders, isLoaded, isSignedIn, setConversations, userId]);
+
+  // One request, however many copies of the hook are mounted. The outcome is
+  // returned to each of them rather than written only by whoever started it, so
+  // a copy that joined an in-flight request still renders the same failure,
+  // "load more" affordance and paging offset.
+  const startListFetch = useCallback((): Promise<ConversationListFetchOutcome> => {
+    const existing = conversationListLoad.inFlight;
+    if (existing) return existing;
+    const request = runListFetch();
+    conversationListLoad.inFlight = request;
+    void request.finally(() => {
+      if (conversationListLoad.inFlight === request) conversationListLoad.inFlight = null;
+    });
+    return request;
+  }, [runListFetch]);
+
+  const applyListFetch = useCallback(async (request: Promise<ConversationListFetchOutcome>) => {
+    setIsFetchingConversations(true);
+    setListError(null);
+    try {
+      const outcome = await request;
+      setListError(outcome.error);
+      setHasMoreConversations(outcome.hasMore);
+      nextOffsetRef.current = outcome.nextOffset;
     } finally {
       setIsFetchingConversations(false);
     }
-  }, [clearScheduledListRetry, getAuthHeaders, isLoaded, isSignedIn, setConversations]);
+  }, []);
+
+  const fetchConversations = useCallback(async () => {
+    conversationListLoad.loadedAtMs = 0;
+    await applyListFetch(startListFetch());
+  }, [applyListFetch, startListFetch]);
+  // The rate-limit backoff is armed inside runListFetch, which cannot name
+  // fetchConversations without a cycle; the ref is read only when the timer fires.
+  retryListFetchRef.current = () => void fetchConversations();
+
+  const loadConversationsIfStale = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) return;
+    const fresh =
+      conversationListLoad.inFlight === null &&
+      conversationListLoad.userId === userId &&
+      Date.now() - conversationListLoad.loadedAtMs < CONVERSATIONS_LIST_FRESH_MS &&
+      useChatStore.getState().conversations.length > 0;
+    if (fresh) {
+      setHasMoreConversations(conversationListLoad.hasMore);
+      nextOffsetRef.current = conversationListLoad.nextOffset;
+      return;
+    }
+    await applyListFetch(startListFetch());
+  }, [applyListFetch, isLoaded, isSignedIn, startListFetch, userId]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!isLoaded || !isSignedIn || isLoadingMoreConversations || !hasMoreConversations) {
@@ -563,8 +662,8 @@ export function useConversations(): UseConversationsReturn {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
-    fetchConversations();
-  }, [fetchConversations, isLoaded, isSignedIn]);
+    void loadConversationsIfStale();
+  }, [isLoaded, isSignedIn, loadConversationsIfStale]);
 
   // Without this the mount effect is the ONLY caller, so a list fetch that
   // failed once stayed failed until a full page reload, the sidebar renders
