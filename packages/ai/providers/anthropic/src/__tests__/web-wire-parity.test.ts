@@ -186,7 +186,7 @@ describe('web v1 wire parity · streaming', () => {
     ]);
   });
 
-  it('matches the golden fixture for citations_delta raw passthrough', async () => {
+  it('matches the golden fixture for citations_delta raw passthrough plus the x_citation envelope', async () => {
     const seq = [
       { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
       {
@@ -228,6 +228,12 @@ describe('web v1 wire parity · streaming', () => {
             url: 'https://example.com',
           },
         },
+      },
+      {
+        choices: [
+          { delta: { x_citation: { url: 'https://example.com', title: 'example.com' } }, index: 0 },
+        ],
+        model: ANTHROPIC_PREMIUM_MODEL_ID,
       },
       {
         choices: [{ delta: { content: ' are mammals' }, index: 0 }],

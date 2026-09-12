@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeResearchSources, orderSourcesByCitation } from './research-sources';
+import {
+  collectMessageResearchSources,
+  dedupeResearchSources,
+  orderSourcesByCitation,
+} from './research-sources';
 import type { ResearchSource } from '../stores/research-panel-store';
 
 describe('dedupeResearchSources', () => {
@@ -67,6 +71,89 @@ describe('dedupeResearchSources', () => {
 
   it('returns an empty array for an empty input', () => {
     expect(dedupeResearchSources([])).toEqual([]);
+  });
+});
+
+describe('collectMessageResearchSources', () => {
+  /**
+   * A native-search turn carries two partly overlapping lists: the pages the
+   * provider searched, and the pages the model cited. The citations used to be
+   * read only when the search list was empty, so an outlet the model cited but
+   * the provider never listed vanished: the Sources control counted one source
+   * for a turn that named two, and the [n] marker for the missing outlet opened
+   * nothing.
+   */
+  it('counts an outlet that only the citations name, alongside the searched pages', () => {
+    const { searchSources } = collectMessageResearchSources({
+      searchResults: [{ url: 'https://reuters.com/a', title: 'Reuters', snippet: '' }],
+      citations: [
+        { type: 'url_citation', url: 'https://reuters.com/a', title: 'Reuters' },
+        { type: 'url_citation', url: 'https://apnews.com/b', title: 'AP News' },
+      ],
+    });
+
+    expect(searchSources.map((source) => source.url)).toEqual([
+      'https://reuters.com/a',
+      'https://apnews.com/b',
+    ]);
+    expect(searchSources.map((source) => source.citationIndex)).toEqual([1, 2]);
+  });
+
+  /**
+   * The same page reached by both lists is still one source. Counting it twice
+   * would trade an undercount for an overcount and put a duplicate row in the
+   * Sources panel.
+   */
+  it('does not double count a page that both lists carry, www and slash variants included', () => {
+    const { searchSources } = collectMessageResearchSources({
+      searchResults: [{ url: 'https://www.reuters.com/a/', title: 'Reuters', snippet: '' }],
+      citations: [{ type: 'url_citation', url: 'https://reuters.com/a', title: 'Reuters' }],
+    });
+
+    expect(searchSources).toHaveLength(1);
+  });
+
+  /** The marker list stays annotation-ordered, so [1] is the model's first citation. */
+  it('numbers the markers by citation order even when the searched list ordered them differently', () => {
+    const { citationsByMarker } = collectMessageResearchSources({
+      searchResults: [
+        { url: 'https://apnews.com/b', title: 'AP News', snippet: '' },
+        { url: 'https://reuters.com/a', title: 'Reuters', snippet: '' },
+      ],
+      citations: [
+        { type: 'url_citation', url: 'https://reuters.com/a', title: 'Reuters' },
+        { type: 'url_citation', url: 'https://apnews.com/b', title: 'AP News' },
+      ],
+    });
+
+    expect(citationsByMarker.map((citation) => citation.url)).toEqual([
+      'https://reuters.com/a',
+      'https://apnews.com/b',
+    ]);
+  });
+
+  /**
+   * A deep-research report numbers its [n] markers off the cumulative source
+   * list the loop delivered, and that run emits no per-claim annotations, so
+   * the fallback numbering must stay exactly the delivered order.
+   */
+  it('keeps delivered order as the marker order when the turn carries no citations', () => {
+    const { citationsByMarker, searchSources } = collectMessageResearchSources({
+      searchResults: {
+        query: 'state of the art',
+        results: [
+          { url: 'https://one.com', title: 'One', snippet: '' },
+          { url: 'https://two.com', title: 'Two', snippet: '' },
+        ],
+        timestamp: new Date(0),
+      },
+    });
+
+    expect(citationsByMarker.map((citation) => citation.citationIndex)).toEqual([1, 2]);
+    expect(searchSources.map((source) => source.url)).toEqual([
+      'https://one.com',
+      'https://two.com',
+    ]);
   });
 });
 

@@ -321,6 +321,86 @@ describe('title enrichment on gathering rounds', () => {
   });
 });
 
+/**
+ * A grounded result never arrives with the publisher's URL: Google hands back a
+ * `vertexaisearch.cloud.google.com/grounding-api-redirect/...` link, and those
+ * expire. Persisting one means the saved report's citations are dead by the
+ * time anyone follows them, months after the run. The gathering round is the
+ * one ingestion hop allowed to make the network call that repairs it.
+ */
+describe('routing redirects resolved on gathering rounds', () => {
+  const GROUNDING_REDIRECT =
+    'https://vertexaisearch.cloud.google.com/grounding-api-redirect/LoopFixture';
+
+  it('hands the client and the stored report the publisher URL, not the router redirect', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent(`notes\n${READY_MARKER}`),
+          searchResultsEvent([{ url: GROUNDING_REDIRECT, title: 'nodejs.org' }]),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://nodejs.org/en/blog/release/v24.18.0' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const saved: ResearchRunReport[] = [];
+    try {
+      const run = await collectRun(
+        runResearchLoop(makeProcessed(), BILLING, {
+          persistReport: async (report) => {
+            saved.push(report);
+          },
+        }),
+      );
+
+      expect(lastSearchResults(run)?.[0]).toMatchObject({
+        url: 'https://nodejs.org/en/blog/release/v24.18.0',
+        title: 'nodejs.org',
+      });
+      expect(saved[0]?.citations[0]?.url).toBe('https://nodejs.org/en/blog/release/v24.18.0');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps the redirect the run already has when the router cannot be reached', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent(`notes\n${READY_MARKER}`),
+          searchResultsEvent([{ url: `${GROUNDING_REDIRECT}Unreachable`, title: 'nodejs.org' }]),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+
+    const fetchMock = vi.fn(async () => {
+      throw new Error('router unreachable');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+      expect(lastSearchResults(run)?.[0]).toMatchObject({
+        url: `${GROUNDING_REDIRECT}Unreachable`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 // ─── researchStatusEvent wire shape ───────────────────────────────────────────
 
 describe('researchStatusEvent', () => {

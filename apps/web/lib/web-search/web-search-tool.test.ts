@@ -15,6 +15,8 @@ vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
 import {
   executeWebSearch,
   enrichWebSearchResultTitles,
+  isRoutingRedirectUrl,
+  resolveRoutingRedirectUrls,
   webSearchToolDef,
   isWebSearchTool,
   webSearchBackendConfigured,
@@ -568,6 +570,100 @@ describe('enrichWebSearchResultTitles', () => {
     const second = await enrichWebSearchResultTitles([untitled(url)], { fetchImpl });
     expect(first[0]?.title).toBe('Cached Headline');
     expect(second[0]?.title).toBe('Cached Headline');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A grounded result does not arrive with the publisher's URL: Google hands back
+ * a `vertexaisearch.cloud.google.com/grounding-api-redirect/...` link. Every
+ * citation href was that redirect, so a saved conversation accumulated dead
+ * links as the redirects expired, and the answer advertised the routing vendor
+ * rather than the outlet. Resolving it at ingest is the only place a network
+ * call is allowed: the streaming translation path cannot make one.
+ */
+describe('resolveRoutingRedirectUrls', () => {
+  const GROUNDING_REDIRECT =
+    'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbCdEf123';
+
+  function redirectTo(location: string): Response {
+    return new Response(null, { status: 302, headers: { location } });
+  }
+
+  it('identifies a routing redirect and leaves a publisher URL alone', () => {
+    expect(isRoutingRedirectUrl(GROUNDING_REDIRECT)).toBe(true);
+    expect(isRoutingRedirectUrl('https://www.reuters.com/world/story')).toBe(false);
+    // A publisher whose own domain merely contains a vendor name keeps its
+    // identity: the host set is matched exactly, never as a suffix.
+    expect(isRoutingRedirectUrl('https://grounding.example.com/a')).toBe(false);
+    expect(isRoutingRedirectUrl('not a url')).toBe(false);
+  });
+
+  it('replaces the redirect with the publisher URL it points at', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(redirectTo('https://www.reuters.com/world/story'));
+    const resolved = await resolveRoutingRedirectUrls(
+      [{ url: `${GROUNDING_REDIRECT}-resolve`, title: 'reuters.com' }],
+      { fetchImpl },
+    );
+
+    expect(resolved[0]?.url).toBe('https://www.reuters.com/world/story');
+    expect(resolved[0]?.title).toBe('reuters.com');
+  });
+
+  it('never fetches a source that is already a publisher URL', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = vi.fn();
+    const results = [{ url: 'https://www.reuters.com/world/story', title: 'Reuters' }];
+    const resolved = await resolveRoutingRedirectUrls(results, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(resolved).toEqual(results);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('keeps the redirect when the router answers without a location', async () => {
+    resolvesToPublicAddress();
+    const url = `${GROUNDING_REDIRECT}-no-location`;
+    const fetchImpl = fetchReturning(new Response(null, { status: 200 }));
+    const resolved = await resolveRoutingRedirectUrls([{ url }], { fetchImpl });
+
+    expect(resolved[0]?.url).toBe(url);
+  });
+
+  it('keeps the redirect when the resolution request fails outright', async () => {
+    resolvesToPublicAddress();
+    const url = `${GROUNDING_REDIRECT}-network-down`;
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('network down');
+    }) as unknown as typeof fetch;
+    const resolved = await resolveRoutingRedirectUrls([{ url }], { fetchImpl });
+
+    expect(resolved[0]?.url).toBe(url);
+  });
+
+  it('refuses a redirect that resolves to an internal address', async () => {
+    dnsMocks.lookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    const url = `${GROUNDING_REDIRECT}-internal`;
+    const fetchImpl = vi.fn();
+    const resolved = await resolveRoutingRedirectUrls([{ url }], {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(resolved[0]?.url).toBe(url);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('caches a resolved publisher URL and does not refetch it', async () => {
+    resolvesToPublicAddress();
+    const url = `${GROUNDING_REDIRECT}-cache`;
+    const fetchImpl = vi.fn(async () => redirectTo('https://apnews.com/article/cached'));
+    const first = await resolveRoutingRedirectUrls([{ url }], { fetchImpl });
+    const second = await resolveRoutingRedirectUrls([{ url }], { fetchImpl });
+
+    expect(first[0]?.url).toBe('https://apnews.com/article/cached');
+    expect(second[0]?.url).toBe('https://apnews.com/article/cached');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
