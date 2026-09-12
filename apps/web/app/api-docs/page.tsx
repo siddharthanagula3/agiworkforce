@@ -91,6 +91,7 @@ export default function ApiDocsPage() {
           id="agi-api-docs-title"
           eyebrow="API docs"
           title="OpenAI-compatible endpoints."
+          em="endpoints."
           lede="Bring your own key, route to any of the wired providers, stream tokens back. The gateway is the same engine the apps use; the API just exposes it."
           ctas={[
             { href: '/openapi.json', label: 'OpenAPI bundle' },

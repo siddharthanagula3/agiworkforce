@@ -130,20 +130,22 @@ export function CliDownloadAvailability() {
       {availability.state === 'available' && (
         <div className="mt-6">
           <p className="mb-4 text-sm agi-ds-muted">agi CLI · version {availability.version}</p>
-          <ul className="grid list-none gap-3 p-0 md:grid-cols-3" aria-label="CLI archives">
+          <ul className="agi-ds-ledger agi-ds-availability" aria-label="CLI archives">
             {availability.downloads.map((download) => (
-              <li key={download.platform} className="agi-ds-card p-5">
-                <p className="text-sm font-semibold">
+              <li key={download.platform} className="agi-ds-ledger-row">
+                <span className="agi-ds-ledger-label">
                   {PLATFORM_LABELS[download.platform] ?? download.platform}
-                </p>
-                <a
-                  href={download.downloadUrl}
-                  className="agi-ds-btn mt-4"
-                  data-variant="primary"
-                  rel="noreferrer"
-                >
-                  Download {download.assetName}
-                </a>
+                </span>
+                <span className="agi-ds-ledger-value">
+                  <a
+                    href={download.downloadUrl}
+                    className="agi-ds-btn"
+                    data-variant="primary"
+                    rel="noreferrer"
+                  >
+                    Download {download.assetName}
+                  </a>
+                </span>
               </li>
             ))}
           </ul>

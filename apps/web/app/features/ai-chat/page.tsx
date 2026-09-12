@@ -161,10 +161,7 @@ export default function AiChatFeaturePage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {AROUND_THE_CHAT.map((item) => (
-                <div
-                  key={item.title}
-                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
-                >
+                <div key={item.title} className="agi-ds-card">
                   <Eyebrow>{item.meta}</Eyebrow>
                   <h3 className="agi-ds-h3">{item.title}</h3>
                   <Prose size="sm">{item.body}</Prose>

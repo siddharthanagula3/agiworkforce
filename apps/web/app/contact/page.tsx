@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { Prose, Section, Stack } from '@/features/marketing/components/system';
-import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { SUPPORT_ROWS } from '@/features/marketing/components/pages/company/support-content';
+import { CONTACT_EMAIL, CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
 
 export default function ContactPage() {
   const [draftOpened, setDraftOpened] = useState(false);
@@ -46,6 +47,7 @@ export default function ContactPage() {
           id="agi-contact-title"
           eyebrow="Contact"
           title="One inbox, one human."
+          em="one human."
           lede={
             <>
               Everything below is plain email. No hosted form, no ticket system. For sales
@@ -64,103 +66,126 @@ export default function ContactPage() {
         />
 
         <Section id="composer" labelledBy="agi-contact-composer-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-contact-composer-title">
-                Draft it here, send it from your mail app.
-              </h2>
-              <Prose>
-                This composer is a convenience, not a form: the button opens a pre-filled draft in
-                your own email app, addressed to {CONTACT_EMAIL}. Nothing you type here is sent or
-                stored by this site.
-              </Prose>
-            </div>
-
-            {draftOpened ? (
-              <div className="agi-ds-card p-6" role="status" aria-live="polite">
-                <Stack gap="tight">
-                  <h3 className="agi-ds-h3">Email draft opened.</h3>
-                  <Prose size="sm">
-                    The message sends from your mail app, not from this page. If no draft appeared,
-                    email {CONTACT_EMAIL} directly.
-                  </Prose>
-                </Stack>
+          <div className="agi-ds-split">
+            <Stack gap="loose">
+              <div>
+                <Eyebrow>Who answers</Eyebrow>
+                <h2 className="agi-ds-h2" id="agi-contact-composer-title">
+                  Draft it here, send it from your mail app.
+                </h2>
+                <Prose>
+                  This composer is a convenience, not a form: the button opens a pre-filled draft in
+                  your own email app, addressed to {CONTACT_EMAIL}. Nothing you type here is sent or
+                  stored by this site.
+                </Prose>
               </div>
-            ) : (
-              <form onSubmit={onSubmit} className="agi-ds-form agi-ds-full">
-                <div className="agi-ds-field">
-                  <label htmlFor="contact-name" className="agi-ds-field-label">
-                    Name
-                  </label>
-                  <input
-                    required
-                    id="contact-name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    className="agi-ds-input"
-                  />
+              <Ledger
+                caption="Response commitments by plan"
+                rows={[
+                  { label: 'Inbox', value: CONTACT_EMAIL },
+                  ...SUPPORT_ROWS.map((row) => ({ label: row.label, value: row.value })),
+                  {
+                    label: 'Subjects that route faster',
+                    value: (
+                      <span className="agi-ds-availability-links">
+                        {Object.values(CONTACT_SUBJECTS).map((subject) => (
+                          <a key={subject} href={contactMailto(subject)} className="agi-ds-link">
+                            {subject}
+                          </a>
+                        ))}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            </Stack>
+            <Stack gap="loose">
+              {draftOpened ? (
+                <div className="agi-ds-card p-6" role="status" aria-live="polite">
+                  <Stack gap="tight">
+                    <h3 className="agi-ds-h3">Email draft opened.</h3>
+                    <Prose size="sm">
+                      The message sends from your mail app, not from this page. If no draft
+                      appeared, email {CONTACT_EMAIL} directly.
+                    </Prose>
+                  </Stack>
                 </div>
-                <div className="agi-ds-field">
-                  <label htmlFor="contact-email" className="agi-ds-field-label">
-                    Email
-                  </label>
-                  <input
-                    required
-                    id="contact-email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    className="agi-ds-input"
-                  />
-                </div>
-                <div className="agi-ds-field">
-                  <label htmlFor="contact-subject" className="agi-ds-field-label">
-                    Subject
-                  </label>
-                  <input
-                    required
-                    id="contact-subject"
-                    name="subject"
-                    type="text"
-                    autoComplete="off"
-                    className="agi-ds-input"
-                  />
-                </div>
-                <div className="agi-ds-field">
-                  <label htmlFor="contact-message" className="agi-ds-field-label">
-                    Message
-                  </label>
-                  <textarea
-                    required
-                    id="contact-message"
-                    name="message"
-                    autoComplete="off"
-                    rows={6}
-                    className="agi-ds-input"
-                  />
-                </div>
-                {error && (
-                  <p role="alert" className="agi-ds-form-error">
-                    {error}
-                  </p>
-                )}
-                <div className="agi-ds-btn-row">
-                  <button
-                    type="submit"
-                    disabled={pending}
-                    className="agi-ds-btn"
-                    data-variant="primary"
-                  >
-                    {pending ? 'Opening…' : 'Open email draft'}
-                  </button>
-                  <a href={contactMailto()} className="agi-ds-btn" data-variant="secondary">
-                    Or just email us
-                  </a>
-                </div>
-              </form>
-            )}
-          </Stack>
+              ) : (
+                <form onSubmit={onSubmit} className="agi-ds-form agi-ds-full">
+                  <div className="agi-ds-field">
+                    <label htmlFor="contact-name" className="agi-ds-field-label">
+                      Name
+                    </label>
+                    <input
+                      required
+                      id="contact-name"
+                      name="name"
+                      type="text"
+                      autoComplete="name"
+                      className="agi-ds-input"
+                    />
+                  </div>
+                  <div className="agi-ds-field">
+                    <label htmlFor="contact-email" className="agi-ds-field-label">
+                      Email
+                    </label>
+                    <input
+                      required
+                      id="contact-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      className="agi-ds-input"
+                    />
+                  </div>
+                  <div className="agi-ds-field">
+                    <label htmlFor="contact-subject" className="agi-ds-field-label">
+                      Subject
+                    </label>
+                    <input
+                      required
+                      id="contact-subject"
+                      name="subject"
+                      type="text"
+                      autoComplete="off"
+                      className="agi-ds-input"
+                    />
+                  </div>
+                  <div className="agi-ds-field">
+                    <label htmlFor="contact-message" className="agi-ds-field-label">
+                      Message
+                    </label>
+                    <textarea
+                      required
+                      id="contact-message"
+                      name="message"
+                      autoComplete="off"
+                      rows={6}
+                      className="agi-ds-input"
+                    />
+                  </div>
+                  {error && (
+                    <p role="alert" className="agi-ds-form-error">
+                      {error}
+                    </p>
+                  )}
+                  <div className="agi-ds-btn-row">
+                    <button
+                      type="submit"
+                      disabled={pending}
+                      className="agi-ds-btn"
+                      data-variant="primary"
+                    >
+                      {pending ? 'Opening…' : 'Open email draft'}
+                    </button>
+                    <a href={contactMailto()} className="agi-ds-btn" data-variant="secondary">
+                      Or just email us
+                    </a>
+                  </div>
+                </form>
+              )}
+            </Stack>
+          </div>
         </Section>
       </main>
       <MarketingFooter />

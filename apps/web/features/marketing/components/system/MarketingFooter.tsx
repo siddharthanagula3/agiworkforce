@@ -24,13 +24,18 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
       <Container>
         {!condensed && (
           <div className="agi-ds-footer-brand">
-            <span className="agi-ds-footer-wordmark">
-              <AgiMark size={MARK_SIZE} />
+            <div className="agi-ds-footer-brand-copy">
+              <span className="agi-ds-footer-wordmark">
+                <AgiMark size={MARK_SIZE} />
+                AGI
+              </span>
+              <p className="agi-ds-footer-statement">
+                {BRAND_STATEMENT.lead} {BRAND_STATEMENT.accent} {BRAND_STATEMENT.tail}
+              </p>
+            </div>
+            <span className="agi-ds-footer-watermark" aria-hidden="true">
               AGI
             </span>
-            <p className="agi-ds-footer-statement">
-              {BRAND_STATEMENT.lead} {BRAND_STATEMENT.accent} {BRAND_STATEMENT.tail}
-            </p>
           </div>
         )}
         {!condensed && (

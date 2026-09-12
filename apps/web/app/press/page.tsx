@@ -109,6 +109,7 @@ export default function PressPage() {
           id="agi-press-title"
           eyebrow="Press"
           title="Facts you can publish without checking."
+          em="without checking."
           lede={`Everything on this page is verified against the product source, and anything that can change is dated. Where we have nothing to show (customers, certifications, usage numbers), this page says so plainly instead of leaving a gap. Product facts as of ${CATALOG_AS_OF}.`}
           ctas={[
             { href: contactMailto('Press enquiry'), label: 'Email the press contact' },

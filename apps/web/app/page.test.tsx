@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/marketing/components/landing/LandingPage', () => ({
-  LandingPage: () => <div data-testid="marketing-landing" />,
+vi.mock('@/features/marketing/components/MarketingLanding', () => ({
+  MarketingLanding: () => <div data-testid="marketing-landing" />,
 }));
 
 import Home from './page';

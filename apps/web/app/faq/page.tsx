@@ -98,6 +98,7 @@ export default function FaqPage() {
           id="agi-faq-title"
           eyebrow="FAQ"
           title="Direct answers, no spin."
+          em="no spin."
           lede={`The questions we get most often, answered the way we'd want them answered. If something below is wrong or out of date, email ${CONTACT_EMAIL} and we'll fix it.`}
           ctas={[]}
         />

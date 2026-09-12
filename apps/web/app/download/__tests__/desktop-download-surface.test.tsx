@@ -188,7 +188,7 @@ describe('public Desktop download surfaces', () => {
 
     const status = screen.getByRole('status', { name: 'Checking Desktop downloads' });
     expect(status).toHaveAttribute('aria-live', 'polite');
-    expect(status).toHaveClass('agi-ds-card');
+    expect(status.closest('.agi-ds-ledger')).not.toBeNull();
     expect(status).not.toHaveClass('bg-black', 'text-white');
   });
 

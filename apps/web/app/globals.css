@@ -1620,65 +1620,65 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  --agi-ground: #0e1013;
-  --agi-ground-2: #14171c;
-  --agi-ground-3: #1c2027;
+  --agi-ground: #0b0a08;
+  --agi-ground-2: #13110d;
+  --agi-ground-3: #1c1913;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #121519;
-  --agi-ink: #f3f4f6;
-  --agi-ink-2: #a3abb8;
-  --agi-ink-3: #848d9b;
-  --agi-ink-quiet: #848d9b;
-  --agi-ink-faint: #848d9b;
-  --agi-rule: rgba(255, 255, 255, 0.08);
-  --agi-rule-strong: rgba(255, 255, 255, 0.14);
-  --agi-frame: rgba(255, 255, 255, 0.14);
+  --agi-card: #131109;
+  --agi-ink: #f5f0e6;
+  --agi-ink-2: #c4bcac;
+  --agi-ink-3: #8a8174;
+  --agi-ink-quiet: #948b79;
+  --agi-ink-faint: #948b79;
+  --agi-rule: rgba(245, 240, 230, 0.09);
+  --agi-rule-strong: rgba(245, 240, 230, 0.17);
+  --agi-frame: rgba(241, 235, 225, 0.16);
 
-  --agi-accent: #2f6fe4;
-  --agi-accent-hover: #2a63d0;
-  --agi-accent-ink: #ffffff;
-  --agi-accent-text: #6ea3ff;
-  --agi-accent-soft: rgba(110, 163, 255, 0.12);
+  --agi-accent: #f0a84a;
+  --agi-accent-hover: #f4b866;
+  --agi-accent-ink: #1a1300;
+  --agi-accent-text: #f0a84a;
+  --agi-accent-soft: rgba(240, 168, 74, 0.16);
 
-  --agi-lane-local: #d9a441;
-  --agi-lane-local-text: #d9a441;
-  --agi-lane-local-on-primary: #1a1300;
-  --agi-lane-byok: #b39cff;
-  --agi-lane-byok-text: #b39cff;
-  --agi-lane-byok-on-primary: #160a33;
-  --agi-lane-cloud: #6ea3ff;
-  --agi-lane-cloud-text: #6ea3ff;
-  --agi-lane-cloud-on-primary: #04142e;
+  --agi-lane-local: #3fbd82;
+  --agi-lane-local-text: #3fbd82;
+  --agi-lane-local-on-primary: #04140c;
+  --agi-lane-byok: #a98bff;
+  --agi-lane-byok-text: #a98bff;
+  --agi-lane-byok-on-primary: #0d0620;
+  --agi-lane-cloud: #5fb0f0;
+  --agi-lane-cloud-text: #5fb0f0;
+  --agi-lane-cloud-on-primary: #04131f;
 
-  --agi-surface-wash: rgba(255, 255, 255, 0.03);
-  --agi-line-soft: rgba(255, 255, 255, 0.05);
-  --agi-glow-soft: rgba(255, 255, 255, 0.05);
-  --agi-console-tint: rgba(16, 17, 19, 0.62);
-  --agi-console-tint-strong: rgba(16, 17, 19, 0.84);
+  --agi-surface-wash: rgba(245, 240, 230, 0.035);
+  --agi-line-soft: rgba(245, 240, 230, 0.05);
+  --agi-glow-soft: rgba(240, 168, 74, 0.13);
+  --agi-console-tint: rgba(19, 17, 9, 0.62);
+  --agi-console-tint-strong: rgba(19, 17, 9, 0.82);
   --agi-button-bg: var(--agi-ink);
   --agi-button-bg-hover: var(--agi-ink-2);
   --agi-button-ink: var(--agi-ground);
   --agi-error: #eb6a55;
   --agi-success: #58bd7f;
-  --agi-shadow: rgba(0, 0, 0, 0.6);
+  --agi-shadow: rgba(0, 0, 0, 0.5);
   --agi-shadow-window: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
-  --agi-header-sheen: rgba(255, 255, 255, 0.02);
-  --agi-code-bg: rgba(255, 255, 255, 0.05);
-  --agi-selection-bg: rgba(110, 163, 255, 0.3);
+  --agi-header-sheen: rgba(245, 240, 230, 0.02);
+  --agi-code-bg: rgba(245, 240, 230, 0.06);
+  --agi-selection-bg: rgba(240, 168, 74, 0.32);
   --agi-selection-text: var(--agi-ink);
   --agi-code-function: #7bb0f5;
   --agi-code-type: #4ec9b0;
 
   --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-jetbrains), var(--font-geist-mono), ui-monospace, monospace;
-  --agi-font-display: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
-  --agi-terminal: #0a0c0f;
-  --agi-terminal-ink: #d7dbe2;
-  --agi-terminal-dim: #848d9b;
+  --agi-font-display: var(--font-newsreader), 'Iowan Old Style', Georgia, serif;
+  --agi-terminal: #060503;
+  --agi-terminal-ink: #d9d2c5;
+  --agi-terminal-dim: #8f877a;
   --agi-phone: #000;
-  --agi-shadow-lift: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
+  --agi-shadow-lift: 0 40px 100px -50px rgba(0, 0, 0, 0.9);
 
   --agi-text-xs: 0.75rem;
   --agi-text-sm: 0.875rem;
@@ -1701,16 +1701,16 @@ html[data-contrast='more'] *:focus-visible {
   --agi-space-7: 4rem;
   --agi-space-8: 5rem;
   --agi-gutter: 1.5rem;
-  --agi-container: 72rem;
-  --agi-display-1: clamp(2.25rem, 1.35rem + 3vw, 3.75rem);
-  --agi-display-2: clamp(1.75rem, 1.25rem + 1.6vw, 2.5rem);
-  --agi-display-3: 1.25rem;
+  --agi-container: 80rem;
+  --agi-display-1: clamp(2.75rem, 1rem + 4.2vw, 5.5rem);
+  --agi-display-2: clamp(2rem, 1.2rem + 2.4vw, 3.6rem);
+  --agi-display-3: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
   --agi-section-y-xs: 3.5rem;
   --agi-section-y-sm: 4.5rem;
   --agi-section-y-md: 7rem;
   --agi-section-y-lg: 8.75rem;
 
-  --agi-radius-control: 6px;
+  --agi-radius-control: 4px;
   --agi-radius-frame: 8px;
   --agi-radius-window: 10px;
   --agi-radius-pill: 999px;
@@ -1735,6 +1735,8 @@ html[data-contrast='more'] *:focus-visible {
   font-feature-settings:
     'cv11' on,
     'ss01' on;
+  --agi-amber: #f0a84a;
+  --agi-amber-soft: rgba(240, 168, 74, 0.16);
 } /* AUDIT-FIX: only the page root fills the viewport. Header/footer chrome
    bands also carry data-design="agi" so the rule above must not cascade
    min-height: 100vh to them, or every page gets a full-viewport blank band
@@ -1750,57 +1752,59 @@ html[data-contrast='more'] *:focus-visible {
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
   color-scheme: light;
-  --agi-ground: #ffffff;
-  --agi-ground-2: #f5f7fa;
-  --agi-ground-3: #e9edf3;
+  --agi-ground: #faf6ee;
+  --agi-ground-2: #f3ecdf;
+  --agi-ground-3: #ebe2d1;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #ffffff;
-  --agi-ink: #111827;
-  --agi-ink-2: #4b5563;
-  --agi-ink-3: #5f6b7a;
-  --agi-ink-quiet: #5f6b7a;
-  --agi-ink-faint: #5f6b7a;
-  --agi-rule: rgba(17, 24, 39, 0.09);
-  --agi-rule-strong: rgba(17, 24, 39, 0.16);
-  --agi-frame: rgba(17, 24, 39, 0.14);
+  --agi-card: #fffdf8;
+  --agi-ink: #1c150b;
+  --agi-ink-2: #524839;
+  --agi-ink-3: #665a47;
+  --agi-ink-quiet: #665a47;
+  --agi-ink-faint: #665a47;
+  --agi-rule: rgba(30, 22, 10, 0.1);
+  --agi-rule-strong: rgba(30, 22, 10, 0.17);
+  --agi-frame: rgba(15, 23, 42, 0.14);
 
-  --agi-accent: #1d5fd6;
-  --agi-accent-hover: #174fb5;
-  --agi-accent-ink: #ffffff;
-  --agi-accent-text: #1d5fd6;
-  --agi-accent-soft: rgba(29, 95, 214, 0.08);
+  --agi-accent: #854500;
+  --agi-accent-hover: #6b3700;
+  --agi-accent-ink: #faf6ee;
+  --agi-accent-text: #854500;
+  --agi-accent-soft: rgba(133, 69, 0, 0.12);
 
-  --agi-lane-local: #8a5d00;
-  --agi-lane-local-text: #8a5d00;
+  --agi-lane-local: #0e6f47;
+  --agi-lane-local-text: #0e6f47;
   --agi-lane-local-on-primary: #ffffff;
-  --agi-lane-byok: #6d3fd6;
-  --agi-lane-byok-text: #6d3fd6;
+  --agi-lane-byok: #6234c4;
+  --agi-lane-byok-text: #6234c4;
   --agi-lane-byok-on-primary: #ffffff;
-  --agi-lane-cloud: #1d5fd6;
-  --agi-lane-cloud-text: #1d5fd6;
+  --agi-lane-cloud: #12609e;
+  --agi-lane-cloud-text: #12609e;
   --agi-lane-cloud-on-primary: #ffffff;
 
-  --agi-surface-wash: rgba(17, 24, 39, 0.03);
-  --agi-line-soft: rgba(17, 24, 39, 0.06);
-  --agi-glow-soft: rgba(29, 95, 214, 0.06);
-  --agi-console-tint: rgba(245, 247, 250, 0.7);
-  --agi-console-tint-strong: rgba(245, 247, 250, 0.9);
-  --agi-error: #b91c1c;
-  --agi-success: #127538;
-  --agi-shadow: rgba(17, 24, 39, 0.1);
-  --agi-shadow-lift: 0 16px 40px -28px rgba(17, 24, 39, 0.25);
+  --agi-surface-wash: rgba(30, 22, 10, 0.025);
+  --agi-line-soft: rgba(30, 22, 10, 0.05);
+  --agi-glow-soft: rgba(156, 84, 7, 0.1);
+  --agi-console-tint: rgba(243, 236, 223, 0.85);
+  --agi-console-tint-strong: rgba(255, 253, 248, 0.92);
+  --agi-error: #c23a2c;
+  --agi-success: #1f6b43;
+  --agi-shadow: rgba(30, 22, 10, 0.14);
+  --agi-shadow-lift: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
   --agi-shadow-window: none;
-  --agi-header-sheen: rgba(255, 255, 255, 0.6);
-  --agi-code-bg: rgba(17, 24, 39, 0.05);
+  --agi-header-sheen: rgba(156, 84, 7, 0.05);
+  --agi-code-bg: rgba(30, 22, 10, 0.05);
   --agi-code-function: #245b96;
   --agi-code-type: #176555;
-  --agi-selection-bg: rgba(29, 95, 214, 0.2);
-  --agi-selection-text: #111827;
+  --agi-selection-bg: rgba(240, 168, 74, 0.28);
+  --agi-selection-text: var(--agi-ink);
   --agi-terminal: #0e1013;
   --agi-terminal-ink: #d7dbe2;
   --agi-terminal-dim: #9aa3b0;
+  --agi-amber: #854500;
+  --agi-amber-soft: rgba(133, 69, 0, 0.12);
 }
 
 [data-design='agi'] *,
