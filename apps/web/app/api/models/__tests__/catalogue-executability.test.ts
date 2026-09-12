@@ -27,20 +27,23 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
-const { GET } = await import('@/app/api/models/catalogue/route');
+const { GET, buildCatalogueEntries } = await import('@/app/api/models/catalogue/route');
 
+type CatalogueModel = Awaited<ReturnType<typeof buildCatalogueEntries>>[number];
 interface CatalogueBody {
-  models: {
-    id: string;
-    admitted: boolean;
-    temporarilyUnavailable: boolean;
-    eventAccess: boolean;
-    minimumPlanLabel: string | null;
-    routes: { provider: string; status: string }[];
-  }[];
+  models: CatalogueModel[];
 }
 
-async function fetchCatalogue(): Promise<CatalogueBody> {
+/**
+ * The admission decision with its route evidence, which is what these rules are
+ * about. The HTTP body deliberately drops the routes, so asserting on the body
+ * would only measure the redaction.
+ */
+async function fetchCatalogue(): Promise<{ models: CatalogueModel[] }> {
+  return { models: await buildCatalogueEntries('free') };
+}
+
+async function fetchWireBody(): Promise<CatalogueBody> {
   const res = await GET(new NextRequest('https://agiworkforce.com/api/models/catalogue'));
   return (await res.json()) as CatalogueBody;
 }
@@ -132,6 +135,62 @@ describe('model catalogue · executability gates selection', () => {
     expect(freeModel).toBeDefined();
     expect(freeModel?.admitted).toBe(true);
     expect(freeModel?.routes.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The picker stopped naming suppliers, but the endpoint behind it kept sending
+ * them: unauthenticated, for all 27 models, an anonymous visitor could read
+ * which reseller and which gateway carry each model, the internal route ids,
+ * and which routes we hold free inventory on. No client ever read the field.
+ *
+ * Route detail is how admission reasons, not something the customer needs.
+ */
+describe('model catalogue · the wire body names no supplier', () => {
+  const SUPPLIER_WORDS = [
+    'Cheaper Inference',
+    'Experiential Labs',
+    'Vercel AI Gateway',
+    'Model Studio',
+    'Bedrock',
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClerkUser.mockRejectedValue(new Error('anonymous'));
+    mockGetSubscription.mockResolvedValue(null);
+    mockAvailability.mockResolvedValue({});
+    mockConfiguredProviders.mockReturnValue(
+      new Set(['openai', 'google', 'anthropic', 'deepseek', 'qwen', 'zhipu', 'open_router']),
+    );
+  });
+
+  it('sends no route detail at all', async () => {
+    const body = await fetchWireBody();
+
+    expect(body.models.length).toBeGreaterThan(0);
+    for (const model of body.models) {
+      expect(model).not.toHaveProperty('routes');
+    }
+  });
+
+  it('still tells the client a model is backed, without naming what backs it', async () => {
+    const body = await fetchWireBody();
+
+    for (const model of body.models) expect(model.routeCount).toBeGreaterThan(0);
+  });
+
+  it('mentions no supplier anywhere in the payload', async () => {
+    const serialised = JSON.stringify(await fetchWireBody());
+
+    for (const word of SUPPLIER_WORDS) expect(serialised).not.toContain(word);
+  });
+
+  it('keeps the route evidence on the server, where admission uses it', async () => {
+    const entries = await buildCatalogueEntries('free');
+
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) expect(entry.routes.length).toBe(entry.routeCount);
   });
 });
 
