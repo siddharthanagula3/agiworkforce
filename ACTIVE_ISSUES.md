@@ -132,8 +132,13 @@ settlement is idempotent and concurrency-safe.
 ### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
 
 **Severity:** P1
-**Status:** 46 of 57 findings fixed across ten commits; 11 registered in
-`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`.
+**Status:** 48 of 57 findings fixed; 9 registered in
+`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F31 and F39
+were closed on 2026-09-12 and their rows deleted: compaction now routes under
+the turn's own admission, and a scheduled run declares the project context it
+carries. Closing F39 also found that the gate's attachment leg could never fire,
+because `buildLlmRequest` moves array content into `multimodal_content` and the
+check read `content`.
 **Area:** `apps/web/app/api` and the code it reaches
 
 **What the scan was.** A panel-verified read of the 744 files under
@@ -173,7 +178,9 @@ credential at issuance.
 
 **Next step.** F21 and F23 are the two that want a migration; they are the
 natural next pass. F8, F35 and F38 are contained refactors that need their own
-verification rather than riding a security batch.
+verification rather than riding a security batch. Nothing unblocked is left in
+this entry: every remaining row names a migration, a deployment secret, a
+shipped contract, or a founder call.
 
 ## 4. P2, important
 
@@ -425,7 +432,12 @@ finding; the row now names the jurisdiction angle and points here.
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
 **Severity:** P2
-**Status:** Half fixed. The refusal now rotates; the catalog still offers the route.
+**Status:** Fixed 2026-09-12, not yet confirmed live. The refusal is now its own
+route outcome class, so one observation withdraws the route for the window
+instead of it taking a failure streak to park. Serving again clears it.
+`min_discount_unavailable` is deliberately left on the old path because discount
+availability genuinely fluctuates. Remaining: confirm on a deployment that the
+model stops being selected first.
 **Area:** Routing, catalog
 **What was fixed:** An OpenRouter 404 saying `0 endpoints out of 1 requested are
 available matching your guardrail restrictions and data policy ... ZDR violation
@@ -457,6 +469,11 @@ health assertion.
 
 ### `AGI-27` Attachments are not in the sandbox the model runs code in
 
+**Status:** Fixed 2026-09-12, not yet confirmed live. The turn's attachments are
+staged into the sandbox workspace before the baseline snapshot and only when an
+execution tool was actually called, so no sandbox is provisioned for a turn that
+runs no code. Remaining: the acceptance criterion's live CSV total, which needs
+a real sandbox.
 **Severity:** P2
 **Status:** Open.
 **Area:** Code execution, files
@@ -528,7 +545,14 @@ minutes and survives reloads.
 ### `AGI-33` A live voice session's backend responses model and web search are never metered
 
 **Severity:** P2
-**Status:** Open.
+**Status:** Fixed 2026-09-12, not yet confirmed live. The close route accepts a
+backend usage report and writes it as its own cost event, keyed on the session
+so a retried close cannot double count, and carrying no customer charge because
+the per-minute rate is the whole charge. The web_search calls are counted but
+not priced: that tool is the provider's own and the rate card publishes a price
+only for the Perplexity fallback and for Google grounding. Remaining: a live
+session to confirm the second row appears, and a published rate for the
+provider's own search.
 **Area:** Voice, COGS
 **What is wrong:** a live voice session delegates to a backend responses model
 with web search (`apps/web/app/api/voice/live/sessions/route.ts`), which the
