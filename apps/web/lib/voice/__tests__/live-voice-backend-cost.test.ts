@@ -32,7 +32,7 @@ const BASE = {
   userId: 'user_1',
   provider: 'openai',
   sessionId: 'sess_1',
-  backendModel: 'gpt-5.6-terra',
+  backendModel: 'backend-model-under-test',
 };
 
 function rowFor(call = 0): Record<string, unknown> {
@@ -49,7 +49,7 @@ describe('live voice backend cost', () => {
     });
 
     expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    expect(rowFor()).toMatchObject({ provider: 'openai', model: 'gpt-5.6-terra' });
+    expect(rowFor()).toMatchObject({ provider: 'openai', model: 'backend-model-under-test' });
   });
 
   it('never bills the customer twice for a session they already pay per minute', async () => {
@@ -118,10 +118,10 @@ describe('live voice backend cost', () => {
   it('prefers the model the provider reported over the configured slot', async () => {
     await recordLiveVoiceBackendCost({
       ...BASE,
-      reported: { model: 'gpt-5.6-sol', inputTokens: 10, outputTokens: 10 },
+      reported: { model: 'reported-model-under-test', inputTokens: 10, outputTokens: 10 },
     });
 
-    expect(rowFor()['model']).toBe('gpt-5.6-sol');
+    expect(rowFor()['model']).toBe('reported-model-under-test');
   });
 
   it('marks the row as voice spend rather than an ordinary turn', async () => {
