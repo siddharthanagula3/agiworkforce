@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { canAccessModelForSubscriptionTier, listCanonicalModels } from '@agiworkforce/types';
+
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { EVENT_ENABLED_ENV, EVENT_MODELS_ENV } from '@/lib/server/event-access';
 import { isFreeTrialRequest } from '@/lib/services/free-trial-service';
@@ -10,7 +12,14 @@ import { isFreeTrialRequest } from '@/lib/services/free-trial-service';
  * event overlay through it means a promoted model is metered exactly like a
  * permanently free one, instead of arriving as unbudgeted traffic.
  */
-const EVENT_MODEL = 'grok-4.6';
+// Derived, not named: any model a free account cannot already reach proves the
+// same thing, and a literal here would be a second copy of the catalogue.
+const EVENT_MODEL = listCanonicalModels()
+  .map((model) => model.id)
+  .find((id) => !canAccessModelForSubscriptionTier(id, 'free'))!;
+const UNPROMOTED_MODEL = listCanonicalModels()
+  .map((model) => model.id)
+  .find((id) => id !== EVENT_MODEL && !canAccessModelForSubscriptionTier(id, 'free'))!;
 const PAID_TIERS = ['basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
 
 describe('free trial admission · event overlay', () => {
@@ -58,7 +67,7 @@ describe('free trial admission · event overlay', () => {
     process.env[EVENT_ENABLED_ENV] = '1';
     process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
 
-    expect(isFreeTrialRequest({ requestedModel: 'claude-opus-5', planTier: 'free' })).toBe(false);
+    expect(isFreeTrialRequest({ requestedModel: UNPROMOTED_MODEL, planTier: 'free' })).toBe(false);
   });
 
   it.each(PAID_TIERS)('does not put %s on the free budget', (tier) => {
