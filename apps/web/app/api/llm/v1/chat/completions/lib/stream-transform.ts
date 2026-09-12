@@ -20,7 +20,11 @@ import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
-import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
+import {
+  canPersistAssistantTurn,
+  patchAssistantTurnSourceUrls,
+  persistAssistantTurn,
+} from './assistant-turn-persistence';
 import { AssistantTurnSourceCollector } from './assistant-turn-sources';
 import {
   ManagedUsageRequestError,
@@ -1096,6 +1100,20 @@ export async function buildAdapterStreamResponse(
         );
       } catch (trackingError) {
         logger.warn({ error: trackingError, userId, requestId }, 'Stream cost tracking failed');
+      }
+
+      // Deliberately after close(): a grounded turn's hrefs are the routing
+      // provider's redirects, and turning them into publisher URLs is a network
+      // call. The reader already holds the whole answer, and the row already
+      // carries the redirects, so this can only upgrade what was stored and can
+      // never delay what was sent.
+      if (assistantTurnPersisted) {
+        await patchAssistantTurnSourceUrls({
+          processed,
+          userId,
+          sources: sourceCollector.snapshot(),
+          citations: sourceCollector.citationSnapshot(),
+        });
       }
     },
     async cancel() {
