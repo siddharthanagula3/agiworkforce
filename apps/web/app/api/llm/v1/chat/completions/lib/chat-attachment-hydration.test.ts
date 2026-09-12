@@ -94,7 +94,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     // Named, because a turn can carry several files and the reader has to know
     // which one to re-attach.
@@ -280,7 +280,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     const parts = partsOf(messages[0]);
     expect(parts[0]).toEqual({ type: 'text', text: 'Compare these' });
@@ -310,7 +310,7 @@ describe('hydrateChatAttachments', () => {
 
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: truncated.txt could not be loaded. Attach it again to include it.]',
@@ -353,7 +353,7 @@ describe('hydrateChatAttachments', () => {
     it('lets a later plain-text turn proceed instead of bricking the conversation', async () => {
       const messages = conversationWithRottedHistory();
 
-      await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+      await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
       expect(partsOf(messages[2])).toEqual([
         { type: 'text', text: 'What could cause this to happen again?' },
@@ -435,7 +435,7 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'text', text: 'Follow-up' }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: sheet.xls is not a file type this chat can read.]',
@@ -466,7 +466,7 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: attachedNowId } }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     expect(partsOf(messages[2])[1]?.file?.filename).toBe('new-notes.txt');
     expect(partsOf(messages[0])[0]?.text).toBe(
@@ -530,7 +530,7 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: 'attached-now' } }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
 
     expect(partsOf(messages[21])[1]?.file?.filename).toBe('file-attached-now.txt');
     // No filename here: the cap is reached before the asset row is read, and a
@@ -615,5 +615,131 @@ describe('hydrateChatAttachments', () => {
         },
       },
     ]);
+  });
+});
+
+/**
+ * AGI-27: hydration made the attachment readable to the MODEL, and nothing
+ * else, so a turn that then ran code found an empty sandbox and had to copy the
+ * file in with write_file before it could compute anything. The manifest below
+ * is what the tool loop stages into the sandbox, so these cases pin what it
+ * carries: the real bytes, from the turn being sent, and only that turn.
+ */
+describe('hydrateChatAttachments, sandbox staging manifest', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns the bytes of the file attached to the turn being sent', async () => {
+    const assetId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const csv = Buffer.from('region,total\nEMEA,12\n', 'utf8');
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/csv',
+      byteSize: csv.byteLength,
+      storagePathname: `chat-attachments/user-1/${assetId}.csv`,
+      metadata: { filename: 'sales.csv' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: csv });
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'What is the total?' },
+          { type: 'file', file: { asset_id: assetId } },
+        ],
+      },
+    ];
+
+    const staged = await hydrateChatAttachments(messages, 'user-1');
+
+    expect(staged).toEqual([
+      { filename: 'sales.csv', mimeType: 'text/csv', base64: csv.toString('base64') },
+    ]);
+  });
+
+  it('leaves an earlier turn out: a conversation sandbox already holds what it staged', async () => {
+    const oldId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const newId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const bytesById: Record<string, Buffer> = {
+      [oldId]: Buffer.from('old', 'utf8'),
+      [newId]: Buffer.from('new', 'utf8'),
+    };
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
+      id,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/csv',
+      byteSize: bytesById[id]!.byteLength,
+      storagePathname: `chat-attachments/user-1/${id}.csv`,
+      metadata: { filename: id === oldId ? 'first.csv' : 'second.csv' },
+      deletedAt: null,
+    }));
+    mocks.readStoredMedia.mockImplementation(async (pathname: string) => {
+      const id = pathname.split('/').pop()?.replace('.csv', '') ?? '';
+      return { data: bytesById[id]! };
+    });
+    const messages = [
+      { role: 'user', content: [{ type: 'file', file: { asset_id: oldId } }] },
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [{ type: 'file', file: { asset_id: newId } }] },
+    ];
+
+    const staged = await hydrateChatAttachments(messages, 'user-1');
+
+    expect(staged.map((entry) => entry.filename)).toEqual(['second.csv']);
+  });
+
+  /**
+   * The model reads a notebook as extracted text, but code that opens a
+   * .ipynb needs the real JSON, so the manifest carries the file as uploaded
+   * rather than the shape the provider wire wanted.
+   */
+  it('stages a notebook as its original JSON, not the extracted text', async () => {
+    const assetId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const notebook = Buffer.from(
+      JSON.stringify({ cells: [{ cell_type: 'markdown', source: '# Revenue' }] }),
+      'utf8',
+    );
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'application/x-ipynb+json',
+      byteSize: notebook.byteLength,
+      storagePathname: 'chat-attachments/user-1/key.ipynb',
+      metadata: { filename: 'revenue.ipynb' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: notebook });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    const staged = await hydrateChatAttachments(messages, 'user-1');
+
+    expect(staged).toHaveLength(1);
+    expect(Buffer.from(staged[0]!.base64, 'base64').toString('utf8')).toBe(
+      notebook.toString('utf8'),
+    );
+  });
+
+  it('stages nothing for an attachment it could not resolve', async () => {
+    const assetId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/csv',
+      byteSize: 3,
+      storagePathname: `chat-attachments/user-1/${assetId}.csv`,
+      metadata: { filename: 'gone.csv' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue(null);
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    const staged = await hydrateChatAttachments(messages, 'user-1');
+
+    expect(staged).toEqual([]);
   });
 });
