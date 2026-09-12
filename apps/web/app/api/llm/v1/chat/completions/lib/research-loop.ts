@@ -74,6 +74,7 @@ import {
   executeWebSearch,
   formatWebSearchResultForModel,
   isWebSearchTool,
+  resolveRoutingRedirectUrls,
   searchUnaffordableMessage,
   webSearchBudgetExhaustedMessage,
   webSearchResultsToFetchedSources,
@@ -548,7 +549,13 @@ export class SourceAggregator {
   async enrichTitles(): Promise<void> {
     const entries = [...this.byUrl.entries()];
     if (entries.length === 0) return;
-    const enriched = await enrichWebSearchResultTitles(entries.map(([, value]) => value));
+    // A grounded result arrives with the routing provider's redirect, which
+    // expires, so a saved report accumulates dead citations. Resolved here,
+    // the one ingestion hop that may make a network call, and written back
+    // under the ORIGINAL key: positions are already visible to the model, and
+    // re-keying could merge two entries and renumber markers already written.
+    const publisherUrls = await resolveRoutingRedirectUrls(entries.map(([, value]) => value));
+    const enriched = await enrichWebSearchResultTitles(publisherUrls);
     entries.forEach(([key], i) => {
       const value = enriched[i];
       if (value) this.byUrl.set(key, value);
