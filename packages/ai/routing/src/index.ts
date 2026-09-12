@@ -90,6 +90,7 @@ export {
   encodeRouteOutcomeEvent,
   healthyRouteHealthSnapshot,
   isCredentialUnfunded,
+  isRoutePolicyExcluded,
   isRouteBreakerOpen,
   isRouteHealthDegraded,
   parseRouteOutcomeEvents,
