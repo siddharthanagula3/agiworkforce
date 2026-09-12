@@ -725,6 +725,14 @@ export type ProcessedRequest = {
   autoMemoryFacts?: string[];
   autoMemoryFactsRequireToolFreeTurn?: boolean;
   /**
+   * The user text this turn's candidates were read from, carried so the
+   * post-turn recorder can re-read it with a model without re-deriving which
+   * message was the source. Absent whenever the turn is not allowed to learn,
+   * which is what keeps a temporary chat or an opted-out chat from reaching a
+   * second extractor.
+   */
+  autoMemorySourceText?: string;
+  /**
    * Private data reached this turn by a path the message shape does not show.
    *
    * The lethal-trifecta gate infers a sensitive source from the conversation
@@ -1108,6 +1116,29 @@ function lastUserMessageText(request: ChatCompletionRequest): string {
   return '';
 }
 
+/**
+ * Whether this turn may teach memory anything at all. Split out from
+ * `prepareManagedAutoMemoryFacts` so the post-turn recorder can tell "the
+ * patterns found nothing here" apart from "this turn was never allowed to
+ * learn", which is the difference between a turn a second extractor may re-read
+ * and one it must not touch.
+ */
+export function managedAutoMemoryLearningAllowed(params: {
+  isTemporary: boolean;
+  surface: CloudChatSurface;
+  policy: ManagedMemoryPolicy;
+  /** Per-chat Memory override; false skips learning new facts for this turn. */
+  memoryEnabled?: boolean;
+}): boolean {
+  return (
+    params.policy.enabled &&
+    params.policy.generateFromHistory &&
+    !params.isTemporary &&
+    params.memoryEnabled !== false &&
+    params.surface !== 'api'
+  );
+}
+
 export function prepareManagedAutoMemoryFacts(params: {
   message: string;
   isTemporary: boolean;
@@ -1116,15 +1147,7 @@ export function prepareManagedAutoMemoryFacts(params: {
   /** Per-chat Memory override; false skips learning new facts for this turn. */
   memoryEnabled?: boolean;
 }): string[] {
-  if (
-    !params.policy.enabled ||
-    !params.policy.generateFromHistory ||
-    params.isTemporary ||
-    params.memoryEnabled === false ||
-    params.surface === 'api'
-  ) {
-    return [];
-  }
+  if (!managedAutoMemoryLearningAllowed(params)) return [];
   return extractCandidateMemoryFacts(params.message).slice(0, 5);
 }
 
@@ -2542,13 +2565,19 @@ export async function processRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
-  let autoMemoryFacts = prepareManagedAutoMemoryFacts({
-    message: lastUserText,
+  const autoMemoryEligibility = {
     isTemporary: conversationIsTemporary,
     surface: chatSurface,
     policy: managedMemoryPolicy,
     memoryEnabled: chatRequest.memory_enabled,
+  };
+  let autoMemoryFacts = prepareManagedAutoMemoryFacts({
+    message: lastUserText,
+    ...autoMemoryEligibility,
   });
+  let autoMemorySourceText = managedAutoMemoryLearningAllowed(autoMemoryEligibility)
+    ? lastUserText
+    : '';
 
   const routingHistory = chatRequest.messages
     .slice(0, Math.max(lastUserIndex, 0))
@@ -3712,6 +3741,7 @@ export async function processRequest(
   const autoMemoryFactsRequireToolFreeTurn = !managedMemoryPolicy.allowToolAssistedGeneration;
   if (autoMemoryFactsRequireToolFreeTurn && isUnreportedToolAssistedTurn(chatRequest)) {
     autoMemoryFacts = [];
+    autoMemorySourceText = '';
   }
 
   if (chatSurface !== 'api') {
@@ -3886,6 +3916,7 @@ export async function processRequest(
     assistantMessageId: chatRequest.assistant_message_id,
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,
+    ...(autoMemorySourceText ? { autoMemorySourceText } : {}),
     requestedModel,
     provider,
     estimatedCostMicrousd,
