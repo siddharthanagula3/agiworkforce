@@ -216,4 +216,60 @@ describe('capability preamble', () => {
       expect(turnOne).not.toBe(turnTwo);
     });
   });
+
+  /**
+   * AGI-27: the sandbox now holds the turn's attachments, but a file the model
+   * does not know about is no better than one that is not there. It was writing
+   * the attachment back in with write_file, which costs the user an approval,
+   * so the prompt has to name the paths the bytes actually landed on.
+   */
+  describe('attachments staged in the sandbox', () => {
+    const executionTool = { type: 'function', function: { name: 'execute_code' } };
+
+    it('names the path of every attachment the sandbox holds', () => {
+      const preamble = buildCapabilityPreamble({
+        tools: [executionTool],
+        attachmentSandboxPaths: ['/home/user/sales.csv', '/home/user/notes.txt'],
+      });
+
+      expect(preamble).toContain('already in the sandbox');
+      expect(preamble).toContain('- /home/user/sales.csv');
+      expect(preamble).toContain('- /home/user/notes.txt');
+      expect(preamble).toContain('Do not re-create an attached file with write_file');
+    });
+
+    /**
+     * A provider's own hosted interpreter runs in its own container, which has
+     * never seen these files. Naming the paths there would send the model to
+     * read a file that is not on that disk.
+     */
+    it('stays silent when the turn routed to a provider-native interpreter', () => {
+      const preamble = buildCapabilityPreamble({
+        tools: [{ type: 'code_interpreter', container: { type: 'auto' } }],
+        attachmentSandboxPaths: ['/home/user/sales.csv'],
+      });
+
+      expect(preamble).toContain('code_interpreter');
+      expect(preamble).not.toContain('/home/user/sales.csv');
+    });
+
+    it('stays silent when the execution tool could not be attached at all', () => {
+      const preamble = buildCapabilityPreamble({
+        tools: [executionTool],
+        codeExecutionUnavailable: true,
+        attachmentSandboxPaths: ['/home/user/sales.csv'],
+      });
+
+      expect(preamble).not.toContain('/home/user/sales.csv');
+    });
+
+    it('says nothing about staging on a turn with no attachments', () => {
+      const preamble = buildCapabilityPreamble({
+        tools: [executionTool],
+        attachmentSandboxPaths: [],
+      });
+
+      expect(preamble).not.toContain('already in the sandbox');
+    });
+  });
 });
