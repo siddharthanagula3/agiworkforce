@@ -387,17 +387,17 @@ and fails over. No provider literal remains at the call site.
 ### `AGI-16` A citation's href is still the routing provider's redirect
 
 **Severity:** P2
-**Status:** Fixed 2026-09-12 on both paths, not observed live. The research path
-resolves the router's redirect to the publisher during ingestion, and a plain
-grounded turn resolves after its stream has closed and patches the stored row,
-because a network call inside the streaming translation path is ruled out. The
-patch substitutes leaf URLs inside whatever shape is stored rather than
-overwriting the key, so the client's richer copy survives and no numbered marker
-moves. Residual, and not introduced by the fix: the client's own save merges
-into the same row and normally lands first, but a slow or retried save could
-land last and reintroduce the redirects, which would need the same resolution on
-the message write path.
-still is.
+**Status:** Fixed 2026-09-12 on every writing path, not observed live. The
+research path resolves the router's redirect to the publisher during ingestion,
+and a plain grounded turn resolves after its stream has closed and patches the
+stored row, because a network call inside the streaming translation path is
+ruled out. The patch substitutes leaf URLs inside whatever shape is stored
+rather than overwriting the key, so the client's richer copy survives and no
+numbered marker moves. The managed agent path persists its own sources and now
+patches them the same way, after its terminal event. The client's save merges
+into the same row and normally lands first, but a slow or retried one can land
+last, so the message write path resolves before it inserts and whichever write
+lands last stores publisher URLs.
 **Area:** Research, citations, provider neutrality
 **What was fixed:** A grounded result does not arrive with the publisher's URL.
 Google hands back
@@ -411,17 +411,15 @@ the research panel and the sources control: the URL's host wherever it is a
 publisher, the title where the URL belongs to a router, and only when the title
 is shaped like a domain, because printing prose in a host slot is a different
 wrong answer.
-**What remains:** the `href` is still the redirect, so a saved conversation
-still accumulates dead citations as those redirects expire. Fixing that means
-resolving each redirect to its target when the grounded result is ingested,
-which is a network call and does not belong in a streaming translation path.
-The place for it is server-side ingestion, beside `assistant-turn-sources.ts`,
-where the egress policy and `pinnedPublicFetch` already are.
+**What remains:** nothing on the writing paths. Not covered, and pre-existing:
+the bulk import behind a share link copies whatever hrefs the shared rows hold,
+so a conversation saved before this fix still carries the redirects it was
+saved with.
 **Evidence:** live session 2026-09-08, sources panel and the `Sources` chip;
 `packages/ai/providers/google/src/stream.ts` `citationFromGroundingChunk`, which
 carries `web.uri` (the redirect) and `web.title` (the publisher).
-**User impact:** reduced. A citation no longer advertises the routing vendor,
-and favicons match publishers. Links still rot.
+**User impact:** a citation no longer advertises the routing vendor, favicons
+match publishers, and a stored href outlives the router's redirect.
 **Dependencies:** None.
 **Acceptance criteria:** a citation still resolves after the provider's redirect
 has expired.
