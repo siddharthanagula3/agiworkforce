@@ -93,6 +93,13 @@ export interface CapabilityPreambleInput {
    * difference between a degraded feature and a dishonest one.
    */
   researchUnavailable?: boolean;
+  /**
+   * Where this turn's attachments sit in the managed sandbox. Only the managed
+   * `execute_code` tool runs in that sandbox, so a provider's own hosted
+   * interpreter must never be told these paths: its container has never seen
+   * the files.
+   */
+  attachmentSandboxPaths?: readonly string[];
 }
 
 function roundDownToGranularity(instant: Date, granularityMs: number): Date {
@@ -137,6 +144,10 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   const hasCodeExecution =
     !input.codeExecutionUnavailable &&
     toolNames.some((name) => CODE_EXECUTION_TOOL_NAMES.includes(name));
+  const stagedAttachmentPaths =
+    !input.codeExecutionUnavailable && toolNames.includes('execute_code')
+      ? (input.attachmentSandboxPaths ?? [])
+      : [];
 
   const timeContext =
     `The current UTC date and time is ${currentUtcTimestamp}. ` +
@@ -197,6 +208,20 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
           'verify something, run it with that tool and report the output you actually got. ' +
           'Never tell the user you cannot execute code on this turn, and never present code ' +
           'you did not run as though you had run it.',
+      );
+    }
+
+    if (stagedAttachmentPaths.length > 0) {
+      const list = stagedAttachmentPaths.map((path) => `- ${path}`).join('\n');
+      sections.push(
+        [
+          'The files attached to this message are already in the sandbox, at these paths:',
+          list,
+          'Open them straight from those paths when you run code. Do not re-create an ' +
+            'attached file with write_file, do not paste its contents into code, and do not ' +
+            'ask the user to upload it again. The sandbox starts in the folder holding them, ' +
+            'so the bare file name works too.',
+        ].join('\n'),
       );
     }
 
