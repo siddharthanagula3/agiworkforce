@@ -668,6 +668,33 @@ fresh occurrence.
 
 None of these is a confirmed defect.
 
+### Model usability sweep, 2026-09-12
+
+Every selectable managed chat route was called for real, one minimal turn each,
+at a 300-token budget because a smaller budget is consumed by reasoning before
+any text is emitted and reads as a false empty.
+
+**25 of 29 canonical chat models answered.** OpenAI (Luna, Sol, Terra, Astra),
+Google (3.1 Pro, 3.8 Flash, 3.5 Flash Lite), DeepSeek (V4 Pro, V4 Flash, vision
+preview), xAI (Grok 4.6), Moonshot (K3, K2.7 Code), Qwen (3.7 Plus, 3.8 Flash),
+Perplexity (Sonar, Sonar Pro, Sonar Reasoning Pro), the free router, and GLM-5.3,
+GLM-5.3 Flash and MiniMax M3 through their marketplace routes.
+
+**The four Claude models are the only chat models that do not answer**, and the
+cause is not code: HTTP 400, "Your credit balance is too low to access the
+Anthropic API". See the founder-assistance entry.
+
+Three probe artifacts are recorded so the next sweep does not re-raise them: the
+OpenAI models refuse `max_tokens` and require `max_completion_tokens`; the
+transcription, speech, image, video and embedding models are not chat models and
+must not be called on a chat endpoint; and `sonar-deep-research` returns nothing
+within a single short turn by design.
+
+Two providers hold no credential anywhere: MiniMax, which is nonetheless
+reachable through its marketplace route, and Groq, whose three models therefore
+cannot be served by anyone. The catalogue's executability rule already withholds
+a model with no credentialed route, so neither is offered.
+
 | id       | Question                                                             | Why it is still open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LIVE-3` | Does a connector survive discover, authorize, expire, revoke?        | Completing it means granting a third party access to the founder's real accounts. That is the founder's decision to make, not an audit step, so it was deliberately not performed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
