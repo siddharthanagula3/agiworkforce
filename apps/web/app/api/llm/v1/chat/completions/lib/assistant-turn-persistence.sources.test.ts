@@ -116,3 +116,72 @@ describe('an assistant turn persists the sources it cited', () => {
     expect(persistedMetadata()['searchResults']).toEqual(SOURCES);
   });
 });
+
+const CITATIONS = [
+  { type: 'url_citation' as const, url: 'https://reuters.com/a', title: 'Reuters' },
+  { type: 'url_citation' as const, url: 'https://apnews.com/b', title: 'AP News' },
+];
+
+/**
+ * A native-search turn cites outlets the provider's searched list never
+ * mentions. With only the searched list on the row, a reloaded answer rendered
+ * its [n] markers against a shorter list: the markers opened the wrong page or
+ * nothing at all, and the Sources control counted fewer outlets than the live
+ * session had shown.
+ */
+describe('an assistant turn persists the citations behind its [n] markers', () => {
+  it('writes them under the key the transcript already reads, in marker order', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'Two outlets agree [1][2].',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+        sources: SOURCES,
+        citations: CITATIONS,
+      },
+    });
+
+    expect(persistedMetadata()['citations']).toEqual(CITATIONS);
+    expect(persistedMetadata()['searchResults']).toEqual(SOURCES);
+  });
+
+  it('writes a turn whose only output was citations, which would otherwise be dropped', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: '   ',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 0,
+        outputTokens: 0,
+        truncated: false,
+        citations: CITATIONS,
+      },
+    });
+
+    expect(persistedMetadata()['citations']).toEqual(CITATIONS);
+  });
+
+  it('leaves the key out entirely when the turn cited nothing', async () => {
+    await persistAssistantTurn({
+      processed,
+      userId: USER_ID,
+      snapshot: {
+        content: 'No search was needed.',
+        model: 'fixture-model',
+        provider: 'anthropic',
+        inputTokens: 10,
+        outputTokens: 20,
+        truncated: false,
+      },
+    });
+
+    expect(persistedMetadata()).not.toHaveProperty('citations');
+  });
+});

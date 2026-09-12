@@ -1624,8 +1624,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
-    if (citationsInModelMarkerOrder.length > 0) {
-      metadata.citations = citationsInModelMarkerOrder;
+    // A provider that gave us character positions has already had its markers
+    // renumbered onto the DELIVERED source order by withProviderCitationMarkers,
+    // so the citation list must be that same order or [2] opens whatever happens
+    // to sit second in the provider's own annotation order instead.
+    const deliveredCitationOrder = providerCitationSpans
+      ? existingSearchResults().map((result) => ({
+          type: WEB_SEARCH_CITATION_KIND,
+          url: result.url,
+          title: result.title || result.url,
+        }))
+      : [];
+    const citationsForTurn =
+      deliveredCitationOrder.length > 0 ? deliveredCitationOrder : citationsInModelMarkerOrder;
+    if (citationsForTurn.length > 0) {
+      metadata.citations = citationsForTurn;
     }
     if (webSearchRequestedForTurn) {
       metadata.webSearchRequested = true;

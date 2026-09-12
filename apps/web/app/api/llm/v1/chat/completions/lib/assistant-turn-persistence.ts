@@ -12,7 +12,7 @@ import {
   resolveAnsweredParentId,
   setActiveLeaf,
 } from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
-import type { PersistedTurnSource } from './assistant-turn-sources';
+import type { PersistedTurnCitation, PersistedTurnSource } from './assistant-turn-sources';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
@@ -51,6 +51,13 @@ export interface AssistantTurnSnapshot {
    * chips instead of an answer that looks unsourced.
    */
   sources?: readonly PersistedTurnSource[];
+  /**
+   * The pages the model cited, in marker order, under the same `citations` key
+   * the client uses. Without it a reloaded answer renders `[n]` markers with
+   * nothing behind them whenever the cited outlet was not also in the searched
+   * list.
+   */
+  citations?: readonly PersistedTurnCitation[];
   interactiveCards?: readonly InteractiveCard[];
   runReference?: {
     runId: string;
@@ -102,6 +109,7 @@ export async function persistAssistantTurn(params: {
     !snapshot.truncated &&
     !snapshot.runReference &&
     !snapshot.sources?.length &&
+    !snapshot.citations?.length &&
     interactiveCards.length === 0
   ) {
     return;
@@ -119,6 +127,7 @@ export async function persistAssistantTurn(params: {
     // later overwrites this key with its own richer copy. This is the floor,
     // not a competing writer.
     ...(snapshot.sources?.length ? { searchResults: snapshot.sources } : {}),
+    ...(snapshot.citations?.length ? { citations: snapshot.citations } : {}),
   };
   if (interactiveCards.length > 0) {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;

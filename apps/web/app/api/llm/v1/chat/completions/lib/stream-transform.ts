@@ -285,14 +285,8 @@ export async function buildStreamResponse(
   userId: string,
   _token: string,
 ): Promise<NextResponse> {
-  const {
-    requestId,
-    chatRequest,
-    requestedModel,
-    provider,
-    quotaWarningHeader,
-    usedFallback,
-  } = processed;
+  const { requestId, chatRequest, requestedModel, provider, quotaWarningHeader, usedFallback } =
+    processed;
 
   const modelUsed = chatRequest.model;
   const providerUsed = provider;
@@ -794,14 +788,8 @@ export async function buildAdapterStreamResponse(
   wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
   onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
-  const {
-    requestId,
-    chatRequest,
-    requestedModel,
-    provider,
-    quotaWarningHeader,
-    usedFallback,
-  } = processed;
+  const { requestId, chatRequest, requestedModel, provider, quotaWarningHeader, usedFallback } =
+    processed;
 
   const modelUsed = chatRequest.model;
   const providerUsed = provider;
@@ -832,6 +820,9 @@ export async function buildAdapterStreamResponse(
         outputTokens: usage.outputTokens,
         truncated,
         ...(sourceCollector.snapshot() ? { sources: sourceCollector.snapshot() } : {}),
+        ...(sourceCollector.citationSnapshot()
+          ? { citations: sourceCollector.citationSnapshot() }
+          : {}),
       },
     });
   };

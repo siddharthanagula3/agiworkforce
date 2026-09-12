@@ -102,14 +102,27 @@ export function collectMessageResearchSources(
     (citation): citation is { url: string; title: string; cited_text?: string; type?: string } =>
       Boolean(citation.url && citation.title),
   );
-  if (annotationCitations.length > 0 && collected.length === 0) {
-    annotationCitations.forEach((citation, index) => {
-      collected.push({
-        url: citation.url,
-        title: citation.title,
-        snippet: citation.cited_text,
-        citationIndex: index + 1,
-      });
+  // A native-search turn delivers two lists that only partly overlap: the pages
+  // the provider searched (`searchResults`) and the pages the model actually
+  // cited (`citations`). Taking the citations only when the search list was
+  // empty dropped every outlet that was cited but never listed, so the Sources
+  // control counted one source for a turn that named two, and a [n] marker
+  // pointing at one of the missing outlets opened nothing.
+  const collectedKeys = new Set(
+    collected.flatMap((source) => {
+      const key = normalizeUrlKey(source.url);
+      return key ? [key] : [];
+    }),
+  );
+  for (const citation of annotationCitations) {
+    const key = normalizeUrlKey(citation.url);
+    if (key && collectedKeys.has(key)) continue;
+    if (key) collectedKeys.add(key);
+    collected.push({
+      url: citation.url,
+      title: citation.title,
+      snippet: citation.cited_text,
+      citationIndex: collected.length + 1,
     });
   }
 
