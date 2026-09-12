@@ -33,6 +33,8 @@ vi.mock('@/lib/services/credit-service', () => ({
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
 
+  CreditSettlementUnavailableError: class extends Error {},
+
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idem-key'),
     deductCredits: vi.fn(async () => ({ success: true })),
