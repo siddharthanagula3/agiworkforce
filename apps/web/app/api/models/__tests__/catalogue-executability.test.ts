@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { listCanonicalModels, listManagedRoutesForModel } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockConfiguredProviders = vi.fn();
@@ -48,9 +49,9 @@ async function fetchCatalogue(): Promise<CatalogueBody> {
  * The hard invariant: customer selectable requires at least one actually
  * executable approved managed route.
  *
- * Production served gpt-oss-120b and gpt-oss-20b as admitted with an empty
- * route list, because their only approved managed route is on Groq and this
- * deployment holds no Groq credential. Admission consulted the entitlement
+ * Production served two open-weight models as admitted with an empty route
+ * list, because their only approved managed route is on a provider this
+ * deployment holds no credential for. Admission consulted the entitlement
  * tables and never asked whether anything could serve the request.
  */
 describe('model catalogue · executability gates selection', () => {
@@ -61,17 +62,33 @@ describe('model catalogue · executability gates selection', () => {
     mockAvailability.mockResolvedValue({});
   });
 
-  it('omits a model whose only approved route has no configured provider', async () => {
-    // Everything except Groq is credentialed, which is production's shape.
-    mockConfiguredProviders.mockReturnValue(
-      new Set(['openai', 'google', 'anthropic', 'deepseek', 'qwen', 'zhipu', 'open_router']),
-    );
+  it('omits a model no configured provider can serve', async () => {
+    // Production's shape: one provider in the registry holds no credential here.
+    const configured = new Set([
+      'openai',
+      'google',
+      'anthropic',
+      'deepseek',
+      'qwen',
+      'zhipu',
+      'open_router',
+    ]);
+    mockConfiguredProviders.mockReturnValue(configured);
 
     const body = await fetchCatalogue();
-    const ids = body.models.map((m) => m.id);
+    const served = new Set(body.models.map((m) => m.id));
 
-    expect(ids).not.toContain('gpt-oss-120b');
-    expect(ids).not.toContain('gpt-oss-20b');
+    // Derived rather than named, so this keeps testing the rule after the next
+    // curation edit: a model reachable by no configured provider must be absent,
+    // whichever models those turn out to be.
+    const unservable = listCanonicalModels()
+      .map((model) => model.id)
+      .filter((id) =>
+        listManagedRoutesForModel(id).every((route) => !configured.has(route.provider)),
+      );
+
+    expect(unservable.length).toBeGreaterThan(0);
+    for (const id of unservable) expect(served.has(id)).toBe(false);
   });
 
   it('never returns an entry that is admitted with no routes', async () => {
@@ -108,11 +125,13 @@ describe('model catalogue · executability gates selection', () => {
     mockConfiguredProviders.mockReturnValue(new Set(['openai', 'google', 'open_router']));
 
     const body = await fetchCatalogue();
-    const luna = body.models.find((m) => m.id === 'gpt-5.6-luna');
+    const freeModel = body.models.find(
+      (m) => m.admitted && m.routes.length > 0 && m.minimumPlanLabel === null,
+    );
 
-    expect(luna).toBeDefined();
-    expect(luna?.admitted).toBe(true);
-    expect(luna?.routes.length).toBeGreaterThan(0);
+    expect(freeModel).toBeDefined();
+    expect(freeModel?.admitted).toBe(true);
+    expect(freeModel?.routes.length).toBeGreaterThan(0);
   });
 });
 
