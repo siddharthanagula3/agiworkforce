@@ -58,6 +58,7 @@ import {
   FREE_TRIAL_MODEL,
   applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
+  isEventPromotedRequest,
   isFreeTrialRequest,
   isFreePlanTier,
   settleFreeTrialRequest,
@@ -3755,7 +3756,17 @@ export async function processRequest(
   );
 
   if (freeTrialEnabled) {
-    const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
+    const trialReservationResult = await beginFreeTrialRequest({
+      userId,
+      requestId,
+      // Charged to the global event ceiling as well as this user's window, so
+      // that an event which is within every per-user limit and simply far more
+      // popular than expected still stops at a number the operator chose.
+      eventPromoted: isEventPromotedRequest({
+        requestedModel,
+        planTier: subscription.plan_tier,
+      }),
+    });
     if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse(subscription);
 
     freeTrial = trialReservationResult.reservation;

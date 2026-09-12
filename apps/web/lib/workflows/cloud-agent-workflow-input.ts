@@ -133,6 +133,14 @@ const FreeTrialBillingSchema = z
     userId: z.string().min(1),
     requestId: z.string().min(1).max(256),
     reservedMicrousd: z.number().finite().nonnegative(),
+    // Carried across the invocation boundary so a durable turn returns its
+    // unspent global event headroom too. Dropping it here would leave every
+    // durable event turn holding its whole reservation forever, which spends
+    // the event budget at many times the real rate.
+    eventBudget: z
+      .object({ reservedMicrousd: z.number().finite().nonnegative() })
+      .strict()
+      .optional(),
   })
   .strict();
 
