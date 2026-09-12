@@ -147,7 +147,7 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: 'Enterprise',
       price: 'Custom',
       billingInterval: 'Annual contract',
-      usageCapacity: 'Dedicated capacity, SLA-backed',
+      usageCapacity: 'Uncapped managed usage, scoped to your contract',
       bestFor: 'Organizations needing SSO, audit, and data retention',
       ctaLabel: 'Contact sales',
       ctaHref: '/contact-sales',
