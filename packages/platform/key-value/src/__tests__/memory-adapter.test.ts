@@ -73,6 +73,25 @@ describe('memory key-value store', () => {
     await expect(store.delete('n')).resolves.toBe(0);
   });
 
+  /**
+   * A reserve-then-settle counter gives back what a request did not spend by
+   * incrementing negatively, which is what the global event spend ceiling does
+   * on every settlement. The Redis adapters get this from INCRBY; this adapter
+   * has to agree with them, or the same code paces the budget correctly in
+   * production and exhausts it early wherever this one is used.
+   */
+  it('takes a negative increment back off the counter', async () => {
+    await expect(store.increment('reserved', 500)).resolves.toBe(500);
+    await expect(store.increment('reserved', -400)).resolves.toBe(100);
+  });
+
+  it('lets a counter return to zero and go below it rather than clamping', async () => {
+    await store.increment('reserved', 10);
+
+    await expect(store.increment('reserved', -10)).resolves.toBe(0);
+    await expect(store.increment('reserved', -1)).resolves.toBe(-1);
+  });
+
   it('expires a hash and reports an absent hash as null', async () => {
     await store.hashSet('h', { reason: 'overloaded', untilMs: 42 });
     await expect(store.hashGetAll('h')).resolves.toEqual({ reason: 'overloaded', untilMs: 42 });
