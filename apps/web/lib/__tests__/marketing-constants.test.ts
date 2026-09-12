@@ -44,6 +44,20 @@ describe('marketing plan matrix', () => {
     expect(serialized).not.toMatch(/hobby/i);
     expect(serialized).not.toMatch(/20x/i);
   });
+
+  /**
+   * Enterprise shares the same managed pool as every other plan, with
+   * `unlimited: true` rather than anything reserved for it. The matrix held
+   * "Dedicated capacity, SLA-backed" long after the locale bundles and
+   * /contact-sales were corrected, surviving because only the `individual`
+   * slice is rendered. An unrendered claim is still a claim waiting to be
+   * rendered.
+   */
+  it('promises no plan a capacity reservation that does not exist', () => {
+    const serialized = JSON.stringify(MARKETING_FEATURE_MATRIX);
+    expect(serialized).not.toMatch(/dedicated capacity/i);
+    expect(serialized).not.toMatch(/reserved capacity/i);
+  });
 });
 
 describe('launch messaging', () => {
