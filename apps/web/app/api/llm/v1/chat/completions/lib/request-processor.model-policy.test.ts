@@ -194,13 +194,15 @@ describe('workspace model policy is re-checked on every model this request can r
     const plan = baseline.fallbackModels ?? [];
     expect(plan.length, 'auto routing must publish fallback candidates to test').toBeGreaterThan(0);
 
-    serveModelPolicy({ blockedModels: [plan[0] as string] });
+    const blocked = plan.find((model) => model !== baseline.chatRequest.model) as string;
+    serveModelPolicy({ blockedModels: [blocked] });
 
     const governed = await run('policy-plan-filtered', 'auto');
     expect(governed.ok).toBe(true);
     if (!governed.ok) return;
-    expect(governed.fallbackModels).not.toContain(plan[0]);
-    expect((governed.fallbackModels ?? []).slice(0, plan.length - 1)).toEqual(plan.slice(1));
+    expect(governed.fallbackModels).not.toContain(blocked);
+    const survivors = plan.filter((model) => model !== blocked);
+    expect((governed.fallbackModels ?? []).slice(0, survivors.length)).toEqual(survivors);
   });
 
   it('empties the failover plan when the workspace allows only the primary model', async () => {
@@ -214,8 +216,11 @@ describe('workspace model policy is re-checked on every model this request can r
     const governed = await run('policy-plan-empty', 'auto');
     expect(governed.ok).toBe(true);
     if (!governed.ok) return;
-    // Rotation-free, served by the primary model the gate already admitted.
-    expect(governed.fallbackModels).toEqual([]);
+    // Rotation stays on the primary model: another host serving the same model
+    // is admitted, a different model is not.
+    for (const model of governed.fallbackModels ?? []) {
+      expect(model).toBe(baseline.chatRequest.model);
+    }
   });
 
   it('downgrades to the cheapest ALLOWED model when credits run short', async () => {

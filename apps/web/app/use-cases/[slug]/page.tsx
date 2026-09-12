@@ -107,10 +107,7 @@ export default async function UseCaseDetailPage({ params }: Props) {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {entry.facts.map((fact) => (
-                <div
-                  key={fact.title}
-                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
-                >
+                <div key={fact.title} className="agi-ds-card">
                   <Eyebrow>{fact.meta}</Eyebrow>
                   <h3 className="agi-ds-h3">{fact.title}</h3>
                   <Prose size="sm">{fact.body}</Prose>

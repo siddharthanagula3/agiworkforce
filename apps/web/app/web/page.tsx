@@ -1,16 +1,16 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Bento,
-  CtaPanel,
   Eyebrow,
   Section,
   Stack,
   StatBand,
   SurfaceStatus,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FinalCta } from '@/features/marketing/components/SurfaceSections';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   AgentRunWindow,
@@ -35,25 +35,49 @@ const IDS = {
   numbers: 'agi-web-numbers-title',
   status: 'agi-web-status-title',
   inside: 'agi-web-inside-title',
-  close: 'agi-web-close-title',
 } as const;
 
 export default function WebSurfacePage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
-      <Header />
-      <main id="main-content">
-        <PageHero
-          id={IDS.hero}
-          eyebrow="AGI Web"
-          title="The whole workspace, zero install."
-          lede="Chat in the browser with every admitted model behind one selector. Projects, artifacts, memory, deep research and agents open from the same composer, and the reply names the route that served it."
-          ctas={[
-            { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/features', label: 'See every feature', variant: 'secondary' },
-          ]}
-          visual={<WebWindow />}
-        />
+    <div data-design="agi">
+      <main className="agi-shell agi-surface">
+        <Header />
+
+        <section className="agi-fl-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI Web · {SURFACE_STATUS.web}</p>
+              <h1 id={IDS.hero} className="agi-fl-h1">
+                <span className="agi-fl-h1-line">The whole workspace,</span>{' '}
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">zero install.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                Chat in the browser with every admitted model behind one selector. Projects,
+                artifacts, memory, deep research and agents open from the same composer, and the
+                reply names the route that served it.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
+                  Try AGI Web
+                </Link>
+                <Link href="/features" className="agi-fl-cta agi-fl-cta--secondary">
+                  See every feature
+                </Link>
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+                <li>Cloud · public alpha</li>
+                <li>Auto · route per message</li>
+                <li>Receipt · on every reply</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <WebWindow />
+            </div>
+          </div>
+        </section>
 
         <Section id="numbers" labelledBy={IDS.numbers} size="sm" rule>
           <h2 className="sr-only" id={IDS.numbers}>
@@ -92,7 +116,7 @@ export default function WebSurfacePage() {
             <div>
               <Eyebrow>Inside</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.inside}>
-                Everything a chat opens into.
+                Everything a chat <em className="agi-ds-accent">opens into.</em>
               </h2>
             </div>
             <Bento
@@ -139,41 +163,17 @@ export default function WebSurfacePage() {
           </Stack>
         </Section>
 
-        <Section id="close" labelledBy={IDS.close} rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Start</Eyebrow>
-              <h2 className="agi-ds-h2" id={IDS.close}>
-                Open it in a tab, or take it with you.
-              </h2>
-            </div>
-            <CtaPanel
-              label="Ways to start"
-              cards={[
-                {
-                  title: 'In the browser',
-                  body: 'Free to try. Every admitted model, projects, memory, artifacts and research from the first message.',
-                  points: [
-                    'Auto picks the model per message, or you pin one',
-                    'A served-by receipt under every reply',
-                    'Share links and account management included',
-                  ],
-                  cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
-                },
-                {
-                  title: 'On your machine',
-                  body: 'Desktop adds local models, encrypted keys, connectors and scheduled work on the same account.',
-                  points: [
-                    'Local runs never leave your hardware',
-                    'Bring your own provider keys',
-                    'The CLI and editor share the same sessions',
-                  ],
-                  cta: { href: '/download', label: 'Get AGI Desktop' },
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+        <FinalCta
+          eyebrow="Start"
+          title="Open it in a tab, or take it with you."
+          body="Free to try in the browser, with a served-by receipt under every reply. Desktop adds local models, encrypted keys, connectors and scheduled work on the same account."
+          ctas={[
+            { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/pricing', label: 'See pricing' },
+          ]}
+          stamp={SURFACE_STATUS.web}
+        />
       </main>
       <MarketingFooter />
     </div>

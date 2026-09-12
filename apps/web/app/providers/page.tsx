@@ -130,7 +130,8 @@ export default function ProvidersPage() {
           id="agi-providers-title"
           eyebrow="Provider catalog"
           title="Every provider, from the one catalogue the apps compile in."
-          lede="A cloud provider needs a key you own; a local runtime needs a URL for a server you already run. The label, the default model, and the list price on every row are read from the shared model catalog, so this page cannot name a provider the apps do not."
+          em="the apps compile in."
+          lede="A cloud provider needs a key you own; a local runtime needs a URL you already run. Every row reads its label, default model and list price from the shared catalog."
           ctas={[
             { href: '/byok', label: 'Add a provider key' },
             { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },

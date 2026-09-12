@@ -135,10 +135,7 @@ export default function MemoryFeaturePage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {ORIGINS.map((item) => (
-                <div
-                  key={item.meta}
-                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground)] p-6"
-                >
+                <div key={item.meta} className="agi-ds-card">
                   <Eyebrow>{item.meta}</Eyebrow>
                   <h3 className="agi-ds-h3">{item.title}</h3>
                   <Prose size="sm">{item.body}</Prose>

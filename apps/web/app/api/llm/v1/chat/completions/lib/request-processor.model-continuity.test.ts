@@ -5,6 +5,7 @@ import {
   type RoutingRuntimeState,
 } from '@agiworkforce/routing';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
 const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
   const snapshots: Record<string, RouteHealthSnapshot> = {};
@@ -46,10 +47,13 @@ function selected(decision: ReturnType<typeof resolveWebCloudModelRoute>) {
   return decision;
 }
 
-function unhealthyRuntimeState(routeId: string): RoutingRuntimeState {
+function unhealthyRuntimeState(routeIds: string | readonly string[]): RoutingRuntimeState {
+  const ids = typeof routeIds === 'string' ? [routeIds] : routeIds;
   return {
     ...emptyRuntimeState(NOW_MS),
-    routeHealth: { [routeId]: { available: false, reason: 'provider_unhealthy' } },
+    routeHealth: Object.fromEntries(
+      ids.map((routeId) => [routeId, { available: false, reason: 'provider_unhealthy' }]),
+    ),
   };
 }
 
@@ -90,9 +94,24 @@ describe('resolveWebCloudModelRoute · Auto model continuity across turns', () =
       }),
     );
 
-    expect(turnTwo.reason).not.toBe('continuity');
-    expect(turnTwo.modelKey).not.toBe(turnOne.modelKey);
-    expect(turnTwo.modelKey).toBe(ESCALATION_CODING_MODEL_ID);
-    expect(turnTwo.modelKey).not.toBe(WORKHORSE_MODEL_ID);
+    // One unhealthy route is not a failed model: the conversation stays on its
+    // model through another host serving it.
+    expect(turnTwo.reason).toBe('continuity');
+    expect(turnTwo.modelKey).toBe(turnOne.modelKey);
+    expect(turnTwo.routeId).not.toBe(turnOne.routeId);
+
+    const everyRoute = getRoutePricingForModel(turnOne.modelKey).map((route) => route.routeId);
+    const turnThree = selected(
+      resolveWebCloudModelRoute(AUTO_ALIAS, PAID_TIER, CODING_TASK, ZERO_COST_USAGE, undefined, {
+        runtimeState: unhealthyRuntimeState(everyRoute),
+        currentModelKey: turnOne.modelKey,
+        previousTaskType: CODING_TASK,
+      }),
+    );
+
+    expect(turnThree.reason).not.toBe('continuity');
+    expect(turnThree.modelKey).not.toBe(turnOne.modelKey);
+    expect(turnThree.modelKey).toBe(ESCALATION_CODING_MODEL_ID);
+    expect(turnThree.modelKey).not.toBe(WORKHORSE_MODEL_ID);
   });
 });
