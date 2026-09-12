@@ -595,3 +595,30 @@ moment assets exist.
 **Impact** LAUNCH-BLOCKING (the published verification steps fail today, and a
 missing file is indistinguishable from a tampered one to the user checking)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Legal] Privacy and cookie policy revision dates after a material correction
+
+**Why founder assistance is required**
+Bumping a policy revision date re-asks every existing user for cookie consent,
+because `POLICY_LAST_UPDATED` feeds `COOKIE_NOTICE_VERSION` and
+`hasCurrentConsent` compares against it. Re-consenting the whole user base
+against leaving a stale date on a policy that materially changed is a
+counsel call, not an engineering one.
+**Exact action** Decide whether to bump `POLICY_LAST_UPDATED.privacy` and
+`POLICY_LAST_UPDATED.cookies`. Both policies were materially corrected on
+2026-09-12: the privacy page had denied that any per-organisation retention
+window is enforced when a nightly job does delete past it, understated the
+erasure table count, and called the sandbox reclaim daily when it is hourly;
+the cookie page listed ten device-storage entries when fourteen persisted
+stores exist, including one holding an unsent message the user typed.
+**Where** `apps/web/lib/legal-constants.ts`.
+**Needed input** One decision, and counsel's view on whether the corrections
+require re-consent.
+**How to verify completion** Either the dates are bumped and a returning user
+is re-asked once, or a dated note records the decision to leave them.
+**What remains after founder action** Nothing; the page corrections have
+shipped and are pinned by tests. The subprocessors and trust dates were bumped
+already, since those are display-only and the subprocessors page runs its
+objection window from the date it publishes.
+**Impact** NON-BLOCKING (the policies are now accurate; this is about notice)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
