@@ -178,9 +178,10 @@ function toCatalogueEntry(
   // Executability, not presentation: these are the registry's approved managed
   // routes narrowed to providers this deployment actually holds a credential
   // for. A model with none of them cannot answer for anybody, so it is not part
-  // of the customer catalogue at any tier. gpt-oss-120b and gpt-oss-20b reached
-  // production selectable on Free with an empty route list because admission
-  // never consulted this. The registry keeps knowing about the model; the
+  // of the customer catalogue at any tier. Two open-weight models reached
+  // production selectable on Free with an empty route list, because their only
+  // approved route is on a provider this deployment holds no credential for and
+  // admission never consulted that. The registry keeps knowing about the model; the
   // customer surface simply stops offering something it cannot serve.
   const routes = toCatalogueRoutes(model.id, context);
   if (routes.length === 0) return null;
