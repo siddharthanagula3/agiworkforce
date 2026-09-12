@@ -489,3 +489,150 @@ describe('/vscode-extension and /solutions keep VS Code unpublished', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * Pre-release claim audit, 2026-09-12: /changelog and /contact-sales.
+ *
+ * A changelog is the one page a reader trusts to be literal, so each entry is
+ * pinned to the artefact that settles it. Three of them were not:
+ *
+ * - The 2026-09-05 entry repeated "a served-by receipt on every reply", the
+ *   exact phrasing the /web guard above already bans. The label renders in the
+ *   message actions menu.
+ * - The CLI v1.0 entry advertised a Homebrew tap and a tested install.sh.
+ *   siddharthanagula3/homebrew-tap is private, and install.sh refuses to
+ *   install without SHA256SUMS plus its sigstore bundle, neither of which is
+ *   published on v-cli-1.0.0 (five archives, nothing else).
+ * - The desktop entry read "desktop with release signing". release-desktop.yml
+ *   builds and verifies signatures; no published release carries one.
+ *
+ * And /contact-sales listed dedicated capacity among the shipped Enterprise
+ * controls while /faq lists it among what is not built, and called retention
+ * enforcement shipped when the owner has to turn it on.
+ */
+
+describe('/changelog, the served-by line names where the code renders it', () => {
+  it('renders the answering model inside the message actions menu', () => {
+    const bubble = collapsed('features/chat/components/messages/MessageBubble.tsx');
+    expect(bubble).toMatch(/const answeredByModelId = !isUser \?/u);
+    expect(bubble).toMatch(
+      /<DropdownMenuLabel[\s\S]{0,900}\{answeredByLabel && \( <span className="block truncate">\{answeredByLabel\}<\/span> \)\}/u,
+    );
+  });
+
+  it('dates the entry to the menu the label lives in', () => {
+    expect(collapsed('lib/changelog-entries.ts')).toMatch(
+      /the model that answered a reply named in that reply's actions menu/u,
+    );
+  });
+
+  it('never re-announces a receipt under every reply', () => {
+    const entries = collapsed('lib/changelog-entries.ts');
+    for (const [label, pattern] of [
+      ['a served-by receipt on every reply', /served-by receipt on every reply/u],
+      ['a receipt under every reply', /receipt under every reply/u],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(entries), `changelog still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/changelog, CLI v1.0 promises no install route the release cannot serve', () => {
+  it('reads the provenance gate install.sh actually enforces', () => {
+    const installer = repoText('scripts', 'install.sh');
+    expect(installer).toMatch(/releases\/download\/\$\{version\}\/SHA256SUMS/u);
+    expect(installer).toMatch(
+      /Release signature metadata is missing; refusing to install unverified bytes/u,
+    );
+  });
+
+  it('says why neither install route reaches that release', () => {
+    const entries = collapsed('lib/changelog-entries.ts');
+    expect(entries).toMatch(/the Homebrew tap repository is private/u);
+    expect(entries).toMatch(
+      /install\.sh refuses to install without the signed checksum manifest the release does not carry/u,
+    );
+  });
+
+  it('never presents the tap or the installer as a route a reader can take', () => {
+    const entries = collapsed('lib/changelog-entries.ts');
+    for (const [label, pattern] of [
+      ['the Homebrew tap is auto-generated', /Homebrew tap auto-generated/u],
+      ['install.sh is tested', /install\.sh tested/u],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(entries), `changelog still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/changelog, desktop signing is a pipeline and is dated as one', () => {
+  it('has a workflow that builds and verifies an updater signature', () => {
+    const workflow = repoText('.github', 'workflows', 'release-desktop.yml');
+    expect(workflow).toMatch(/target\/release\/bundle\/appimage\/\*\.AppImage\.sig/u);
+  });
+
+  it('states that no signed installer has been published from it', () => {
+    const entries = collapsed('lib/changelog-entries.ts');
+    expect(entries).toMatch(/No signed installer has been published from it yet/u);
+    expect(entries).toMatch(/\.AppImage, \.deb and \.rpm assets and no signature/u);
+  });
+
+  it('never dates release signing as a shipped desktop capability', () => {
+    expect(
+      /desktop with release signing/u.test(collapsed('lib/changelog-entries.ts')),
+      'changelog still dates release signing as something the desktop shipped',
+    ).toBe(false);
+  });
+});
+
+describe('/contact-sales, capacity matches the pool Enterprise is actually given', () => {
+  it('reads Enterprise off the same shared managed pool as every other plan', () => {
+    const caps = collapsed('lib/billing/managed-usage-caps.ts');
+    expect(caps).toMatch(
+      /enterprise: \{ monthlyUnits: 0, weeklyUnits: 0, fiveHourUnits: 0, dailyUnits: 0, unlimited: true, \}/u,
+    );
+    expect(collapsed('app/faq/page.tsx')).toMatch(/What is NOT built: dedicated capacity/u);
+  });
+
+  it('says so on the page a buyer reads before the FAQ', () => {
+    expect(collapsed('app/contact-sales/page.tsx')).toMatch(
+      /Dedicated capacity is not built: every plan draws on the same managed pool/u,
+    );
+  });
+
+  it('never lists dedicated capacity among the controls a contract turns on', () => {
+    const page = collapsed('app/contact-sales/page.tsx');
+    for (const [label, pattern] of [
+      [
+        'dedicated capacity is handled under contract',
+        /dedicated capacity is handled under contract/u,
+      ],
+      ['capacity is reserved for the org', /reserved capacity/iu],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/contact-sales, retention enforcement is named as the opt-in it is', () => {
+  it('reads the opt-in the enterprise page already states', () => {
+    expect(collapsed('app/enterprise/page.tsx')).toMatch(
+      /decides whether it is enforced; until enforcement is on, the window is recorded, nothing is deleted/u,
+    );
+  });
+
+  it('carries the same condition into the sales copy', () => {
+    expect(collapsed('app/contact-sales/page.tsx')).toMatch(
+      /per-organization retention windows and legal holds are shipped, with enforcement off until your owner turns it on/u,
+    );
+  });
+
+  it('never ships retention enforcement as unconditional', () => {
+    expect(
+      /retention windows with enforcement and legal holds are shipped/u.test(
+        collapsed('app/contact-sales/page.tsx'),
+      ),
+      'page still ships retention enforcement as unconditional',
+    ).toBe(false);
+  });
+});
