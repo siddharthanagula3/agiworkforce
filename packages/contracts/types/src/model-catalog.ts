@@ -1811,7 +1811,13 @@ export function canAccessModelForSubscriptionTier(
   if (!isNamedInAnyTier(canonicalModelId)) {
     const derived = deriveMinimumRequiredTier(canonicalModelId);
     if (!derived) return false;
-    if (derived === 'basic') return tier !== 'free' || rawTier === 'free';
+    // Free is never reached through the derived floor. A model NAMED in a tier
+    // table must clear both economy membership and minTier 'free' to be free,
+    // so letting an UNNAMED model through on price alone made absence from the
+    // tables broader than presence in them. That is how sonar, glm-5.3-flash,
+    // deepseek-v4-flash-vision-exp and both gpt-oss entries became selectable
+    // on Free in production. A model is free only by being named so.
+    if (derived === 'basic') return tier !== 'free';
     if (derived === 'pro') return tier === 'pro' || tier === 'max' || tier === 'enterprise';
     return tier === 'max' || tier === 'enterprise';
   }
