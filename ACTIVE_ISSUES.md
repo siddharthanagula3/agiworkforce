@@ -817,6 +817,46 @@ preservation.
 
 None of these is a confirmed defect.
 
+### Every published release predates its own verification, 2026-09-12
+
+**The download-verification instructions cannot be followed today, and failing
+them looks exactly like a tampered download.** Both published releases were cut
+before the machinery that signs them existed:
+
+| release           | published  | carries                                   | signing landed |
+| ----------------- | ---------- | ----------------------------------------- | -------------- |
+| `v-cli-1.0.0`     | 2026-05-03 | five archives, no `SHA256SUMS`, no bundle | 2026-07-16     |
+| `v-desktop-1.2.0` | 2026-05-04 | `.AppImage`, `.deb`, `.rpm`, no `.sig`    | 2026-07-31     |
+
+So a reader who follows "verify a download on your own machine" gets a
+missing-file error from `minisign` or `cosign` rather than a verification
+failure, and the two are indistinguishable to someone who is checking precisely
+because they do not trust the file.
+
+The release workflows themselves are correct and were verified line by line:
+`release-cli.yml` produces Sigstore-signed checksums with a pinned certificate
+identity, and `release-desktop.yml` signs, notarizes and staples, then re-checks
+each artifact against the committed updater public key and gates publication on
+a clean-container install, upgrade and rollback. **None of that has ever run
+into a published release.**
+
+The pages are honest about the consequence, because the download controls are
+gated on the live release API rather than on the workflow, so nothing offers a
+file that is not there. The gap is the release cut itself.
+
+**What closing it takes:** cut a CLI release and a desktop release from current
+`main` so the published assets come from the signing workflows, then re-run the
+verification transcript on each platform exactly as the page states it. Until
+then, treat every verification instruction on `/download` as documentation of
+intent. This is a founder action: it publishes artifacts under the project's
+signing identity.
+
+**Also worth a decision:** the Windows row on `/download` is hardcoded to "not
+published" while macOS and Linux are live-checked, even though
+`build-windows-release.yml` uploads a Trusted-Signing-verified installer on
+manual dispatch. It is accurate today and goes stale silently the first time
+anyone dispatches that workflow.
+
 ### Public pages claimed things the code does not do, 2026-09-12
 
 The flagship rewrite `d42d3cb15` moved about 38 public pages onto a new system.

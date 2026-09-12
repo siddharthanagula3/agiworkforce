@@ -571,3 +571,27 @@ than as a response to a known key disclosure. History was not rewritten, because
 force-updating a pushed branch is not a call to make unasked.
 **Impact** PRECAUTIONARY
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Release] Cut signed releases so the verification instructions work
+
+**Why founder assistance is required**
+Publishing artifacts under the project's signing identity is a release action,
+not an engineering change. The workflows are already correct.
+**Exact action** Cut one CLI release and one desktop release from current
+`main`, so the published assets are produced by the signing workflows, then
+follow the verification transcript on `/download` on each platform.
+**Where** GitHub releases, via `release-cli.yml` and `release-desktop.yml`.
+**Needed input** One release cut per surface, and a pass through the published
+verification steps.
+**How to verify completion** `v-cli-<version>` carries `SHA256SUMS` and its
+Sigstore bundle, and `cosign verify-blob` succeeds against the certificate
+identity `release-cli.yml@refs/tags/v-cli-<version>`. The desktop release
+carries a `.sig` beside each artifact and a notarized macOS build, and
+`minisign -Vm` succeeds against the updater public key committed in
+`tauri.conf.json`.
+**What remains after founder action** Nothing. The download controls already
+resolve against the live release API, so they start offering the platforms the
+moment assets exist.
+**Impact** LAUNCH-BLOCKING (the published verification steps fail today, and a
+missing file is indistinguishable from a tampered one to the user checking)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
