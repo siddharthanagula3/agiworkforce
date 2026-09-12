@@ -817,6 +817,32 @@ preservation.
 
 None of these is a confirmed defect.
 
+### Six failing tests on origin/main, 2026-09-12
+
+The whole `apps/web` suite had not been run this pass, only the files each change
+touched. Run in full on a clean worktree it is 17,059 passing and 11 failing.
+Five of those failures reproduce identically on a pristine `origin/main`, so they
+predate this work, and none of them is registered anywhere. CI runs
+`pnpm test:affected`, which can skip the package entirely, which is how they have
+stayed invisible.
+
+They are not cosmetic, and two matter for what ships next:
+
+- Three in the free-lane plan. The lane decides which models a FREE account is
+  served, so a substitution there is a product-behaviour question, and free
+  traffic is exactly what the event multiplies.
+- One in workspace model policy: a workspace whose policy permits only the
+  primary model still ends up with a non-empty failover plan, which means a
+  governed workspace can rotate onto a model its own policy forbids. That is the
+  same class as the recent governance findings.
+- One in model continuity, and one each in capability-health preview and
+  aggregator routing, both failing with a type error, which usually means a
+  shape changed underneath a caller.
+
+The eleventh failure was introduced by this pass and is fixed: making the usage
+summary one shared reading rather than one per component meant it outlived a
+test case, so the settings pane rendered the previous case's numbers.
+
 ### Production catalogue measurement, 2026-09-12 10:25 UTC
 
 Read-only, anonymous, against the live site. `/api/health` reports database,
