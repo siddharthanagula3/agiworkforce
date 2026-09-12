@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
-import type { ModelCatalogueEntry, ModelCatalogueRoute } from '@/app/api/models/catalogue/route';
+import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import type { ModelCatalogueDeveloper } from '@features/chat/lib/use-model-catalogue';
 import { ProviderLogo } from './ProviderLogo';
 
@@ -24,18 +24,8 @@ const NOT_PUBLISHED_TEXT = 'Not published';
 const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
 const RAIL_LABEL = 'Model developers';
-const ROUTES_LABEL = 'Available through';
-const ROUTE_STATUS_TEXT: Readonly<Record<ModelCatalogueRoute['status'], string>> = {
-  available: 'Available',
-  degraded: 'Recovering',
-  not_configured: 'Not configured',
-};
-const ROUTE_INVENTORY_TEXT: Readonly<
-  Record<NonNullable<ModelCatalogueRoute['freeInventory']>, string>
-> = {
-  promotional: 'Promotional quota',
-  recurring: 'Free allocation',
-};
+const UNAVAILABLE_TEXT = 'Temporarily unavailable';
+const EVENT_TAG_LABEL = 'Free during event';
 
 const RAIL_CLASS =
   'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r';
@@ -83,13 +73,6 @@ const CAPABILITY_CHIPS: readonly {
       entry.capabilities.audioInput === true || entry.capabilities.audioOutput === true,
   },
 ];
-
-function routeStatusText(route: ModelCatalogueRoute): string {
-  if (route.status === 'available' && route.freeInventory) {
-    return ROUTE_INVENTORY_TEXT[route.freeInventory];
-  }
-  return ROUTE_STATUS_TEXT[route.status];
-}
 
 function isNewRelease(entry: ModelCatalogueEntry, now: number): boolean {
   if (!entry.releasedOn) return false;
@@ -219,28 +202,8 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         )}
       </div>
 
-      {entry.routes.length > 0 && (
-        <>
-          <p className={`${CARD_LABEL_CLASS} mt-3`}>{ROUTES_LABEL}</p>
-          <ul className="mt-1 flex flex-col gap-1">
-            {entry.routes.map((route) => (
-              <li key={route.routeId} className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2">
-                  <ProviderLogo providerKey={route.provider} size={14} />
-                  <span className="truncate text-sm text-foreground">{route.label}</span>
-                </span>
-                <span
-                  className={[
-                    'shrink-0 text-xs',
-                    route.status === 'not_configured' ? 'text-muted-foreground' : 'text-foreground',
-                  ].join(' ')}
-                >
-                  {routeStatusText(route)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
+      {entry.temporarilyUnavailable && (
+        <p className="mt-3 text-xs text-muted-foreground">{UNAVAILABLE_TEXT}</p>
       )}
 
       {!entry.admitted && entry.minimumPlanLabel && (
@@ -298,12 +261,7 @@ export function ModelCatalogue({
         if (!favourites.has(entry.id)) return false;
       } else if (!needle && entry.developer !== railKey) return false;
       if (needle) {
-        const haystack = [
-          entry.displayName,
-          entry.developerLabel,
-          entry.family ?? '',
-          ...entry.routes.map((route) => route.label),
-        ].join(' ');
+        const haystack = [entry.displayName, entry.developerLabel, entry.family ?? ''].join(' ');
         if (!haystack.toLowerCase().includes(needle)) return false;
       }
       if (openWeightOnly && !entry.openWeight) return false;
@@ -462,7 +420,7 @@ export function ModelCatalogue({
                   ? isEnvironmentLocked(entry.requiresEnvironment)
                   : { locked: false };
                 const planLocked = !entry.admitted;
-                const hardLocked = comingSoon || environment.locked;
+                const hardLocked = comingSoon || environment.locked || entry.temporarilyUnavailable;
                 const locked = planLocked || hardLocked;
                 return (
                   <div key={entry.id} className="flex items-center gap-0">
@@ -471,15 +429,23 @@ export function ModelCatalogue({
                       role="option"
                       aria-selected={isSelected}
                       disabled={hardLocked}
-                      title={comingSoon ? COMING_SOON_TAG_LABEL : environment.reason}
+                      title={
+                        comingSoon
+                          ? COMING_SOON_TAG_LABEL
+                          : entry.temporarilyUnavailable
+                            ? UNAVAILABLE_TEXT
+                            : environment.reason
+                      }
                       aria-label={
                         comingSoon
                           ? `${entry.displayName} - ${COMING_SOON_TAG_LABEL}`
-                          : environment.locked
-                            ? `${entry.displayName} - ${environment.reason ?? ENVIRONMENT_TAG_LABEL}`
-                            : planLocked && entry.minimumPlanLabel
-                              ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
-                              : entry.displayName
+                          : entry.temporarilyUnavailable
+                            ? `${entry.displayName} - ${UNAVAILABLE_TEXT}`
+                            : environment.locked
+                              ? `${entry.displayName} - ${environment.reason ?? ENVIRONMENT_TAG_LABEL}`
+                              : planLocked && entry.minimumPlanLabel
+                                ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
+                                : entry.displayName
                       }
                       onClick={() => {
                         if (hardLocked) return;
@@ -537,6 +503,20 @@ export function ModelCatalogue({
                         {!comingSoon && environment.locked && (
                           <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>
                             {ENVIRONMENT_TAG_LABEL}
+                          </span>
+                        )}
+                        {entry.eventAccess && !entry.temporarilyUnavailable && (
+                          <span
+                            className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info)]`}
+                          >
+                            {EVENT_TAG_LABEL}
+                          </span>
+                        )}
+                        {entry.temporarilyUnavailable && (
+                          <span
+                            className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}
+                          >
+                            {UNAVAILABLE_TEXT}
                           </span>
                         )}
                         {!hardLocked && planLocked && entry.minimumPlanLabel && (
