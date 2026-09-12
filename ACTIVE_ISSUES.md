@@ -772,6 +772,47 @@ fresh occurrence.
 **Acceptance criteria:** no warning across a hundred turns.
 **Validation:** the stack, then a targeted test.
 
+### `AGI-33` The failure classification does not cross the AgentEvent envelope
+
+**Severity:** P3
+**Status:** Open, scheduled, and pinned by tests.
+**Area:** Protocol, routing
+**What is wrong:** the structured classification that now rides the stream chunk
+is dropped crossing the AgentEvent envelope, so a consumer on the far side falls
+back to re-reading prose. Three gates drop it, not one: the generated
+`AgentEventError` has no field, the hand-written Zod mirror in cloud-contracts
+strips unknown keys before the frame is emitted, and serde discards it for the
+desktop and extension consumers.
+**Why it is P3 and not P1:** the envelope is not on the chat router's
+classification path, and the converter has no production caller today. It is
+also fail-safe rather than fail-open: a classification smuggled onto an error
+frame is stripped, so the gap loses information and cannot inject a category.
+Both facts are now tests.
+**Do not partially fix it:** `code` and `retryable` already cross, so a
+classification could be synthesised from them. That is worse than the gap,
+because the runtime trusts a carried classification ahead of all text and only
+runs its matcher when the field is absent, so a guessed `fallbackable` would
+permanently silence the matcher for every error from this envelope. There is a
+test refusing exactly that.
+**What closing it takes, in order:** add an optional classification struct to
+`AgentEventError` in the protocol crate with `category` kept as a string, since
+the taxonomy owner is `ErrorCategory` in provider-runtime and a second copy in
+Rust would drift; fix the one struct literal that breaks and add a round-trip
+case; leave the schema version alone, because an optional additive field is
+backward compatible by that constant's own rule; regenerate with
+`pnpm generate:protocol-types`, which CI verifies, so the generated tree must
+never be hand-edited; extend the Zod mirror with the same validate-before-trust
+discipline the runtime uses; and only then the converter, both directions.
+**Noted while tracing it:** `crates/agiworkforce-protocol/bindings/` is a second
+committed copy of the same bindings, written when the cargo export test is run
+directly, and no guard compares it to the published tree. The two are identical
+today, checked 2026-09-12, so there is nothing to repair; it is recorded because
+nothing would say so if they diverged.
+**Acceptance criteria:** a classification survives a round trip through the
+envelope, and a malformed one is refused rather than trusted.
+**Validation:** the two pinning tests flip from asserting the loss to asserting
+preservation.
+
 ## 6. Needs live validation
 
 None of these is a confirmed defect.
