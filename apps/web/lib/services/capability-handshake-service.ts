@@ -52,6 +52,7 @@ import 'server-only';
 import {
   ALL_PLATFORM_CAPABILITIES,
   buildEffectiveCapabilityDocument,
+  canUseBillingPlanCapability,
   computeCapabilityDocumentVersion,
   getPlatformCapabilities,
   getTierPolicy,
@@ -190,18 +191,12 @@ function buildLimits(
       policySource: tierSource,
     });
   }
-  if (policy.flagshipDailyTokenCap != null) {
-    limits.push({
-      id: 'flagship_tokens_per_day',
-      capabilityId: 'canUseCloudModels',
-      limit: policy.flagshipDailyTokenCap,
-      unit: 'tokens',
-      window: 'day',
-      resetsAt: null,
-      policySource: tierSource,
-    });
-  }
-  if (policy.imageQuotaPerMonth != null) {
+  // `flagshipDailyTokenCap` is not published. It has never been enforced: this
+  // was its only reader, nothing counts against it and no request has ever been
+  // refused by it, so publishing it told Pro clients about a 50,000-token daily
+  // ceiling that does not exist. A limit nobody applies is worse than no limit,
+  // because a client can ration itself against it.
+  if (policy.imageQuotaPerMonth != null && canUseBillingPlanCapability(tier, 'image_generation')) {
     limits.push({
       id: 'images_per_month',
       capabilityId: 'canUseImages',
@@ -212,7 +207,19 @@ function buildLimits(
       policySource: tierSource,
     });
   }
-  if (policy.videoSecondsPerMonth != null) {
+  // Both of these are gated on the plan the customer actually bought, not on
+  // `TIER_POLICIES`, because `normalizeProductTier` folds max_15x into max and
+  // basic into pro and so cannot tell those plans apart. The result was a plan
+  // gate that contradicted itself in the customer's favour and then refused
+  // them: a Max subscriber was told they had 300 video seconds a month and got
+  // a paywall from `/api/media/video/generate`, which reads
+  // `BILLING_PLAN_CAPABILITY_TIERS` and admits only max_15x and enterprise.
+  // That table is what the pricing page derives its Video column from, so it is
+  // what the customer was sold, and it is the one that wins.
+  if (
+    policy.videoSecondsPerMonth != null &&
+    canUseBillingPlanCapability(tier, 'video_generation')
+  ) {
     limits.push({
       id: 'video_seconds_per_month',
       capabilityId: null,
