@@ -18,6 +18,8 @@ import {
   advancedStages,
   answeringModelKeys,
   buildProbePlan,
+  redactProbeDetail,
+  PROBE_DETAIL_MAX_LENGTH,
   routesNotHonouringTools,
   runProbes,
   silentPromotedModels,
@@ -321,4 +323,51 @@ test('the committed probe file covers exactly the models the plan names', () => 
     );
     assert.ok(CURATION.models[modelKey], `${modelKey} is not in the curation catalog`);
   }
+});
+
+test('a provider error reaching a committed file cannot carry a credential', () => {
+  // Measured on 2026-09-12: a Moonshot rate-limit error quoted the account id
+  // and an API key prefix back, and the tool probe wrote it verbatim. Run
+  // without --out that lands in the committed catalog, and check:secrets
+  // recognises neither shape, so nothing downstream would have stopped it.
+  const moonshot =
+    '429 Your account org-ffa26a52227a4118be9b03717d68d6a3<ak-fbn4of3isiji1kqv> exceeded quota';
+  const redacted = redactProbeDetail(moonshot);
+
+  assert.ok(!redacted.includes('ak-fbn4of3isiji1kqv'), 'key prefix survived');
+  assert.ok(!redacted.includes('org-ffa26a52227a4118be9b03717d68d6a3'), 'account id survived');
+  assert.ok(redacted.includes('429'), 'the status is why the detail exists');
+});
+
+test('every vendor key shape is replaced rather than trimmed', () => {
+  // A truncated key is still a leaked key prefix, so these are replaced.
+  for (const secret of [
+    'sk-proj-AAAABBBBCCCCDDDD',
+    'ak-fbn4of3isiji1kqv',
+    'sk-ant-api03-ZZZZYYYYXXXX',
+    'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+    'org-0123456789abcdef',
+    'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
+  ]) {
+    const redacted = redactProbeDetail(`400 request failed for ${secret} here`);
+    assert.ok(!redacted.includes(secret), `${secret} survived redaction`);
+    assert.ok(redacted.includes('request failed'), 'the prose was lost with it');
+  }
+});
+
+test('an ordinary provider message is left readable', () => {
+  const plain = '400 Your credit balance is too low to access the Anthropic API.';
+
+  assert.equal(redactProbeDetail(plain), plain);
+});
+
+test('a detail long enough to hide something is bounded', () => {
+  const long = `400 ${'x'.repeat(PROBE_DETAIL_MAX_LENGTH * 2)}`;
+
+  assert.ok(redactProbeDetail(long).length <= PROBE_DETAIL_MAX_LENGTH + 3);
+});
+
+test('a missing detail stays missing rather than becoming a string', () => {
+  assert.equal(redactProbeDetail(null), null);
+  assert.equal(redactProbeDetail(undefined), null);
 });
