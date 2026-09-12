@@ -12,6 +12,7 @@ import {
   SurfaceStatus,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const HERO_TRANSCRIPT_LABEL = 'Three commands that reach a working chat';
 
@@ -20,7 +21,7 @@ const HERO_TRANSCRIPT = [
   { kind: 'cmd', text: 'agi models scan' },
   { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
   { kind: 'dim', text: '# byok: paste your own provider key' },
-  { kind: 'cmd', text: 'agi login' },
+  { kind: 'cmd', text: 'agi login anthropic' },
 ] as const;
 
 export const metadata = buildMetadata({
@@ -43,7 +44,7 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede="Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, and Local and BYOK run on Desktop, the CLI and VS Code."
+          lede={`Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, and Local and BYOK run on Desktop and the CLI today, with the VS Code extension ${SURFACE_STATUS.vscode.toLowerCase()}.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },
@@ -85,7 +86,7 @@ export default function GetStartedPage() {
               <SurfaceStatus
                 state="pending"
                 name="Desktop"
-                blockedOn="A Linux build is pending its signature check, and the other platforms are not yet signed. The download page resolves what is live for your platform."
+                blockedOn="Linux x64 assets exist and macOS builds are signed and notarized, but each download opens only once the release API verifies that platform's signature. Windows installers have not been published. The download page resolves what is live for your platform."
               />
               <SurfaceStatus
                 state="absent"
@@ -121,7 +122,9 @@ export default function GetStartedPage() {
                   title: 'Free forever, your own key',
                   body: (
                     <>
-                      <code>agi login</code>. Paste your provider key. Encrypted on device.
+                      <code>agi login &lt;provider&gt;</code>, naming the provider whose key you
+                      hold. Paste the key at the prompt and it is saved to the OS credential store.
+                      A bare <code>agi login</code> signs into AGI managed cloud instead.
                     </>
                   ),
                 },
