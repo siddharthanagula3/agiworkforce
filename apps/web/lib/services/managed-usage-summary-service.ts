@@ -10,9 +10,9 @@ import {
 } from '@agiworkforce/types';
 import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
 import {
-  getPlanFlagshipWeeklyUsageBudgetCents,
-  getPlanSessionUsageBudgetCents,
-  getPlanWeeklyUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageBudgetMicrousd,
+  getPlanSessionUsageBudgetMicrousd,
+  getPlanWeeklyUsagePaidBudgetMicrousd,
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
@@ -49,21 +49,24 @@ export async function getManagedUsageSummary(
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
 
-  const sessionCapCents = getPlanSessionUsageBudgetCents(planTier);
-  const weeklyCapCents = getPlanWeeklyUsageBudgetCents(planTier);
-  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(planTier);
+  // The caps are compared against rolling spend, and rolling spend is summed in
+  // microUSD since 0182. Comparing a microUSD total against a cents cap is the
+  // unit error this whole file exists to avoid, so the caps come in microUSD too.
+  const sessionCapMicrousd = getPlanSessionUsageBudgetMicrousd(planTier);
+  const weeklyCapMicrousd = getPlanWeeklyUsagePaidBudgetMicrousd(planTier);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageBudgetMicrousd(planTier);
 
   const [session, weekly, flagshipWeekly] =
-    sessionCapCents > 0 || weeklyCapCents > 0
+    sessionCapMicrousd > 0 || weeklyCapMicrousd > 0
       ? await Promise.all([
           getRollingUsage(db, userId, ROLLING_SESSION_WINDOW_HOURS, false),
           getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
           getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
         ])
       : [
-          { usedCents: 0, oldestAt: null },
-          { usedCents: 0, oldestAt: null },
-          { usedCents: 0, oldestAt: null },
+          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
         ];
 
   const isUnallocated = !isFreePlan && creditsAllocated <= 0;
@@ -71,8 +74,8 @@ export async function getManagedUsageSummary(
   const hasPaidUsageRemaining =
     creditsAllocated > 0 &&
     (balance?.credits_remaining_cents ?? 0) > 0 &&
-    (sessionCapCents <= 0 || session.usedCents < sessionCapCents) &&
-    (weeklyCapCents <= 0 || weekly.usedCents < weeklyCapCents);
+    (sessionCapMicrousd <= 0 || session.usedMicrousd < sessionCapMicrousd) &&
+    (weeklyCapMicrousd <= 0 || weekly.usedMicrousd < weeklyCapMicrousd);
 
   const sessionResetAt =
     freeUsage?.sessionResetAt ?? rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS);
@@ -97,14 +100,14 @@ export async function getManagedUsageSummary(
           planAllowance.weekly,
           freeUsage
             ? creditsFromMicrousd(freeUsage.weeklyUsedMicrousd)
-            : creditsFromCents(weekly.usedCents),
+            : creditsFromMicrousd(weekly.usedMicrousd),
           weeklyResetAt,
         ),
         five_hour: creditWindow(
           planAllowance.fiveHour,
           freeUsage
             ? creditsFromMicrousd(freeUsage.fiveHourUsedMicrousd)
-            : creditsFromCents(session.usedCents),
+            : creditsFromMicrousd(session.usedMicrousd),
           sessionResetAt,
         ),
         flagship_weekly:
@@ -112,7 +115,7 @@ export async function getManagedUsageSummary(
             ? null
             : creditWindow(
                 planAllowance.flagshipWeekly,
-                creditsFromCents(flagshipWeekly.usedCents),
+                creditsFromMicrousd(flagshipWeekly.usedMicrousd),
                 flagshipWeeklyResetAt,
               ),
         purchased: {
@@ -135,14 +138,15 @@ export async function getManagedUsageSummary(
     subscription_status: subscription?.status ?? 'none',
     session_usage_percentage:
       freeUsage?.sessionUsagePercentage ??
-      toPublicUsagePercentage(session.usedCents, sessionCapCents),
+      toPublicUsagePercentage(session.usedMicrousd, sessionCapMicrousd),
     session_reset_at: sessionResetAt,
     weekly_usage_percentage:
-      freeUsage?.weeklyUsagePercentage ?? toPublicUsagePercentage(weekly.usedCents, weeklyCapCents),
+      freeUsage?.weeklyUsagePercentage ??
+      toPublicUsagePercentage(weekly.usedMicrousd, weeklyCapMicrousd),
     weekly_reset_at: weeklyResetAt,
     flagship_weekly_usage_percentage: toPublicUsagePercentage(
-      flagshipWeekly.usedCents,
-      flagshipWeeklyCapCents,
+      flagshipWeekly.usedMicrousd,
+      flagshipWeeklyCapMicrousd,
     ),
     flagship_weekly_reset_at: flagshipWeeklyResetAt,
     credit_balance_cents: spendableCredits.availableCents,
