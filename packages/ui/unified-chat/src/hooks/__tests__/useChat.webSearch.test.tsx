@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { classifyTaskLocally } from '@agiworkforce/routing';
+import { getProvidersWithImplementedHarnessFeature } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatRuntime } from '../../lib/runtime';
 import type { ModelInfo } from '../../lib/types';
@@ -8,7 +9,10 @@ import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTierStore } from '../../stores/tierStore';
-import { requireRoutableCatalogModel } from '../../test/modelCatalogFixtures';
+import {
+  requireRoutableCatalogModel,
+  requireRoutedCatalogModel,
+} from '../../test/modelCatalogFixtures';
 import { useChat } from '../useChat';
 
 const searchPrompt = 'What changed today?';
@@ -40,12 +44,17 @@ function catalogModelInfo(
   });
 }
 
+const nativeSearchProviders = new Set(getProvidersWithImplementedHarnessFeature('webSearch'));
+
 const searchableModel = catalogModelInfo(
-  requireRoutableCatalogModel(
-    (model) => model.capabilities.search && model.capabilities.tools,
+  requireRoutedCatalogModel(
+    (model, route) =>
+      model.capabilities.search &&
+      model.capabilities.tools &&
+      nativeSearchProviders.has(route.provider),
     managedRoute,
-    'a managed model with native search',
-  ),
+    'a managed model whose route provider serves native search',
+  ).model,
 );
 const genericOnlyModel = catalogModelInfo(
   requireRoutableCatalogModel(

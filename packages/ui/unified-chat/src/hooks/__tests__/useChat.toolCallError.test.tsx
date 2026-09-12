@@ -8,6 +8,7 @@ import { useTierStore } from '../../stores/tierStore';
 import { createChatModelInfo } from '../../lib/modelInfo';
 import {
   requireRoutableCatalogModel,
+  requireRoutedCatalogModel,
   requireSelectedCatalogRoute,
 } from '../../test/modelCatalogFixtures';
 import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
@@ -595,30 +596,28 @@ describe('useChat, registry-backed Auto routing', () => {
     });
   }
 
-  const explicitWebModel = toCatalogModelInfo(
-    requireRoutableCatalogModel(
-      (model) => model.contextWindow !== undefined && model.capabilities.tools,
-      {
-        taskType: explanationTaskType,
-        subscriptionTier: 'pro',
-        trustMode: 'managed_cloud',
-        runtimeProfileId: 'web/cloud-chat',
-      },
-      'a live explicit Web chat model',
-    ),
+  const explicitWebSelection = requireRoutedCatalogModel(
+    (model) => model.contextWindow !== undefined && model.capabilities.tools,
+    {
+      taskType: explanationTaskType,
+      subscriptionTier: 'pro',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    },
+    'a live explicit Web chat model',
   );
-  const explicitDesktopModel = toCatalogModelInfo(
-    requireRoutableCatalogModel(
-      (model) => model.contextWindow !== undefined && model.capabilities.tools,
-      {
-        taskType: explanationTaskType,
-        subscriptionTier: 'pro',
-        trustMode: 'managed_cloud',
-        runtimeProfileId: 'desktop/cloud-chat',
-      },
-      'a live explicit Desktop managed-cloud chat model',
-    ),
+  const explicitWebModel = toCatalogModelInfo(explicitWebSelection.model);
+  const explicitDesktopSelection = requireRoutedCatalogModel(
+    (model) => model.contextWindow !== undefined && model.capabilities.tools,
+    {
+      taskType: explanationTaskType,
+      subscriptionTier: 'pro',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'desktop/cloud-chat',
+    },
+    'a live explicit Desktop managed-cloud chat model',
   );
+  const explicitDesktopModel = toCatalogModelInfo(explicitDesktopSelection.model);
   const explicitByokModel = toCatalogModelInfo(
     requireRoutableCatalogModel(
       (model) => model.contextWindow !== undefined && model.capabilities.tools,
@@ -886,7 +885,7 @@ describe('useChat, registry-backed Auto routing', () => {
       explanationPrompt,
       expect.objectContaining({
         model: explicitDesktopModel.id,
-        provider: explicitDesktopModel.provider,
+        provider: explicitDesktopSelection.route.provider,
       }),
     );
   });
@@ -913,7 +912,7 @@ describe('useChat, registry-backed Auto routing', () => {
       explanationPrompt,
       expect.objectContaining({
         model: explicitWebModel.id,
-        provider: explicitWebModel.provider,
+        provider: explicitWebSelection.route.provider,
       }),
     );
   });
