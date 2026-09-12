@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { AssistantTurnSourceCollector, MAX_PERSISTED_TURN_SOURCES } from './assistant-turn-sources';
+import {
+  AssistantTurnSourceCollector,
+  MAX_PERSISTED_CODE_OUTPUT_CHARS,
+  MAX_PERSISTED_TURN_GENERATED_FILES,
+  MAX_PERSISTED_TURN_SOURCES,
+} from './assistant-turn-sources';
 
 function searchResultsEvent(content: unknown): Record<string, unknown> {
   return { choices: [{ delta: { x_search_results: { content } } }] };
@@ -12,6 +17,30 @@ function webResult(url: string, title = `Title for ${url}`, snippet = 'a snippet
 
 function citationEvent(url: string, title: string): Record<string, unknown> {
   return { choices: [{ delta: { x_citation: { url, title } } }] };
+}
+
+function codeResultEvent(content: unknown): Record<string, unknown> {
+  return {
+    choices: [{ delta: { x_code_result: { type: 'code_execution_tool_result', content } } }],
+  };
+}
+
+function generatedFilesEvent(files: unknown[]): Record<string, unknown> {
+  return { choices: [{ delta: { x_generated_files: { files } } }] };
+}
+
+function wireFile(fileName: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id: `asset-${fileName}`,
+    file_name: fileName,
+    mime_type: 'image/png',
+    uri: `/api/files/asset-${fileName}`,
+    byte_count: 12,
+    kind: 'image',
+    surface: 'file',
+    previewable: true,
+    ...overrides,
+  };
 }
 
 describe('AssistantTurnSourceCollector', () => {
@@ -171,6 +200,184 @@ describe('AssistantTurnSourceCollector', () => {
     }
 
     expect(collector.citationSnapshot()).toHaveLength(MAX_PERSISTED_TURN_SOURCES);
+  });
+
+  /**
+   * The result panel was written only by the client save. A non-retryable
+   * failure left a reloaded answer that said what the script printed with no
+   * output anywhere on the page, so the claim could not be checked at all.
+   */
+  it('collects what a code-execution run printed', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      codeResultEvent({
+        stdout: '42\n',
+        stderr: '',
+        return_code: 0,
+        type: 'code_execution_result',
+      }),
+    );
+
+    expect(collector.codeExecutionSnapshot()).toEqual({
+      stdout: '42\n',
+      stderr: '',
+      returnCode: 0,
+    });
+  });
+
+  it('keeps the last run of a turn that executed code twice', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(codeResultEvent({ stdout: 'first', stderr: '', return_code: 0 }));
+    collector.ingestWireEvent(
+      codeResultEvent({ stdout: 'second', stderr: 'oops', return_code: 1 }),
+    );
+
+    expect(collector.codeExecutionSnapshot()).toEqual({
+      stdout: 'second',
+      stderr: 'oops',
+      returnCode: 1,
+    });
+  });
+
+  it('records a failing run, which is the output a reader most needs', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      codeResultEvent({ stdout: '', stderr: 'Traceback: boom', return_code: 1 }),
+    );
+
+    expect(collector.codeExecutionSnapshot()).toEqual({
+      stdout: '',
+      stderr: 'Traceback: boom',
+      returnCode: 1,
+    });
+  });
+
+  it('bounds a run that printed megabytes', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      codeResultEvent({ stdout: 'x'.repeat(80_000), stderr: '', return_code: 0 }),
+    );
+
+    expect(collector.codeExecutionSnapshot()?.stdout.length).toBe(MAX_PERSISTED_CODE_OUTPUT_CHARS);
+  });
+
+  /**
+   * A tool error and a file-reference payload both carry no output record.
+   * Recording an empty result for either would have persisted a blank result
+   * panel onto a turn that never produced one.
+   */
+  it.each([
+    ['a tool error', { type: 'code_execution_tool_result_error', error_code: 'unavailable' }],
+    ['a file-reference payload', [{ type: 'code_execution_output', file_id: 'file_1' }]],
+    ['a content-free frame', { type: 'code_execution_result' }],
+  ])('records nothing for %s', (_label, content) => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(codeResultEvent(content));
+
+    expect(collector.codeExecutionSnapshot()).toBeUndefined();
+  });
+
+  /**
+   * The bytes behind a generated file were already persisted and downloadable.
+   * Only the row pointing at them was client-written, so a failed save dropped
+   * every chart and download chip off an answer whose text still described them.
+   */
+  it('collects the files a turn attached, in the camelCase shape the row holds', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      generatedFilesEvent([wireFile('chart.png', { checksum_sha256: 'a'.repeat(64) })]),
+    );
+
+    expect(collector.generatedFilesSnapshot()).toEqual([
+      {
+        id: 'asset-chart.png',
+        fileName: 'chart.png',
+        mimeType: 'image/png',
+        uri: '/api/files/asset-chart.png',
+        byteCount: 12,
+        kind: 'image',
+        checksumSha256: 'a'.repeat(64),
+        surface: 'file',
+        previewable: true,
+      },
+    ]);
+  });
+
+  it('replaces a re-emitted file in place rather than listing it twice', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(generatedFilesEvent([wireFile('chart.png'), wireFile('data.csv')]));
+    collector.ingestWireEvent(
+      generatedFilesEvent([wireFile('chart.png', { id: 'asset-final', byte_count: 99 })]),
+    );
+
+    const files = collector.generatedFilesSnapshot();
+    expect(files).toHaveLength(2);
+    expect(files?.[0]).toMatchObject({ fileName: 'chart.png', id: 'asset-final', byteCount: 99 });
+    expect(files?.[1]?.fileName).toBe('data.csv');
+  });
+
+  it('drops a file the shared wire parser rejects, exactly as the client does', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      generatedFilesEvent([{ id: 'asset-1', file_name: 'no-uri.png' }, wireFile('good.png')]),
+    );
+
+    expect(collector.generatedFilesSnapshot()).toHaveLength(1);
+    expect(collector.generatedFilesSnapshot()?.[0]?.fileName).toBe('good.png');
+  });
+
+  it('bounds how many files one turn can write into a row', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      generatedFilesEvent(
+        Array.from({ length: MAX_PERSISTED_TURN_GENERATED_FILES + 15 }, (_, index) =>
+          wireFile(`file-${index}.png`),
+        ),
+      ),
+    );
+
+    expect(collector.generatedFilesSnapshot()).toHaveLength(MAX_PERSISTED_TURN_GENERATED_FILES);
+  });
+
+  it('returns nothing for a turn that ran no code and attached no file', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent({ choices: [{ delta: { content: 'plain text' } }] });
+
+    expect(collector.codeExecutionSnapshot()).toBeUndefined();
+    expect(collector.generatedFilesSnapshot()).toBeUndefined();
+  });
+
+  /**
+   * The source cap short-circuits the rest of the ingest. A turn that searched
+   * widely before it ran code would otherwise have recorded no output.
+   */
+  it('still collects code output and files after the source cap is reached', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      searchResultsEvent(
+        Array.from({ length: MAX_PERSISTED_TURN_SOURCES }, (_, index) =>
+          webResult(`https://example.test/${index}`),
+        ),
+      ),
+    );
+    collector.ingestWireEvent(codeResultEvent({ stdout: 'after', stderr: '', return_code: 0 }));
+    collector.ingestWireEvent(generatedFilesEvent([wireFile('late.png')]));
+
+    expect(collector.codeExecutionSnapshot()?.stdout).toBe('after');
+    expect(collector.generatedFilesSnapshot()).toHaveLength(1);
+  });
+
+  it('reads both out of raw SSE bytes, the shape the stream really carries', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireBytes(
+      new TextEncoder().encode(
+        `data: ${JSON.stringify(codeResultEvent({ stdout: 'hi', stderr: '', return_code: 0 }))}\n\n` +
+          `data: ${JSON.stringify(generatedFilesEvent([wireFile('out.png')]))}\n\ndata: [DONE]\n\n`,
+      ),
+    );
+
+    expect(collector.codeExecutionSnapshot()?.stdout).toBe('hi');
+    expect(collector.generatedFilesSnapshot()?.[0]?.fileName).toBe('out.png');
   });
 
   it.each([
