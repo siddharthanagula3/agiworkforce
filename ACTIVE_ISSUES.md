@@ -817,6 +817,46 @@ preservation.
 
 None of these is a confirmed defect.
 
+### The migration reconciliation is not a renumber, 2026-09-12
+
+`pnpm check:neon-migrations` fails on this branch, so **CI cannot pass as it
+stands**: the local inventory jumps 0179 to 0183, because the branch carries
+`0183`/`0184`/`0185` while `origin/main` carries the same three names as
+`0180`/`0181`/`0182`, which memory records as applied in production 09-07 to
+09-11.
+
+**The obvious reconciliation is a trap, and the master plan states the premise
+that leads into it.** The plan says the local files "are the content of
+production's 0180-0182". Two of them nearly are, differing only in the migration
+number inside their own comments. The third is not:
+
+| file                        | `create trigger sync_*` |
+| --------------------------- | ----------------------- |
+| `origin/main` 0182, applied | 5                       |
+| local 0185, this branch     | 0                       |
+
+`origin/main`'s 0182 is a superset of local 0185 by about 188 lines: five unit
+sync triggers on `token_credits`, `credit_transactions`,
+`credit_settlement_jobs`, `managed_usage_requests` and
+`managed_usage_request_extensions`. Local 0185 is an earlier draft written
+before they were added.
+
+**So renumbering local 0185 to 0182 would silently drop them**, and the dropped
+thing is load bearing. Its own comment says why: writers that still speak cents,
+`operator-metrics.ts` at six call sites and the lease probe, leave the microUSD
+twin at its zero default. The functions the same migration installs read
+microUSD, so such an account holds no spendable balance, every reservation
+against it is declined, and such a transaction sums as zero spend in the rolling
+windows that bound a plan.
+
+**The correct direction is to take `origin/main`'s three and drop the local
+drafts, never the reverse.** That is not a file deletion on its own: the branch
+references `0185` in seven source comments and in
+`scripts/config/migration-dependency-allowlist.json`, all of which have to move
+to `0182`. Combined with the branch being 58 commits behind, this is the
+reconciliation the plan calls P0, and it needs the production migration status
+checked first (FA-1). It was not attempted here.
+
 ### Retracted: the origin/main comparison, 2026-09-12
 
 **Every number previously recorded here as an `origin/main` measurement was
