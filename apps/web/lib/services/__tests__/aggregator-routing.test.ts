@@ -5,7 +5,7 @@ import {
   requireProviderDefaultModel,
   type ModelMetadata,
 } from '@agiworkforce/types';
-import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { routeOverrides } = vi.hoisted(() => ({
@@ -199,19 +199,34 @@ const anthropicRoutes = getRoutePricingForModel(requireProviderDefaultModel('ant
 const DEFAULT_ANTHROPIC_ROUTE_ID = anthropicRoutes.find(
   ({ registryRoute }) => registryRoute.isDefault,
 )!.routeId;
-const MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID = anthropicRoutes.find(
+/** Trust-mode admission needs only a route closed to byok, at any commercial status. */
+const MANAGED_ONLY_ROUTE_ID = anthropicRoutes.find(
   ({ registryRoute }) =>
-    registryRoute.commercialStatus === 'experimental_only' &&
     registryRoute.trustModes.includes('managed_cloud') &&
     !registryRoute.trustModes.includes('byok'),
 )!.routeId;
-const BYOK_ONLY_EXPERIMENTAL_ROUTE_ID = anthropicRoutes.find(
-  ({ registryRoute }) =>
-    registryRoute.commercialStatus === 'experimental_only' &&
-    registryRoute.trustModes.includes('byok') &&
-    !registryRoute.trustModes.includes('managed_cloud'),
-)!.routeId;
+const CATALOGUE_ROUTE_IDS = Object.keys(modelRegistry.routes);
 const FIXTURE_BLOCKED_ROUTE_ID = 'fixture_blocked_provider/fixture-blocked-model';
+/**
+ * Commercial-status admission is pinned on an overridden route, not on whatever
+ * the catalogue happens to stock. Deriving the fixture from one vendor's routes
+ * left the whole file crashing at import the day that vendor shipped no
+ * experimental route, and the byok half of the rule has no catalogue example at
+ * all: every experimental route on record is managed-only.
+ */
+const FIXTURE_EXPERIMENTAL_ROUTE_ID = 'fixture_experimental_provider/fixture-experimental-model';
+const FIXTURE_EXPERIMENTAL_MODEL_KEY = 'fixture-experimental-model';
+
+function serveExperimentalFixtureRoute(): void {
+  routeOverrides.set(FIXTURE_EXPERIMENTAL_ROUTE_ID, {
+    modelKey: FIXTURE_EXPERIMENTAL_MODEL_KEY,
+    provider: 'fixture_experimental_provider',
+    harnessId: 'fixture-experimental-provider/chat-completions',
+    trustModes: ['managed_cloud', 'byok'],
+    isDefault: false,
+    commercialStatus: 'experimental_only',
+  });
+}
 
 describe('validateRouteSelection', () => {
   afterEach(() => {
@@ -246,7 +261,7 @@ describe('validateRouteSelection', () => {
     const model = requireProviderDefaultModel('anthropic');
 
     expect(
-      validateRouteSelection(MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID, {
+      validateRouteSelection(MANAGED_ONLY_ROUTE_ID, {
         modelId: model,
         trustMode: 'byok',
         hasUserProviderKey: true,
@@ -274,11 +289,11 @@ describe('validateRouteSelection', () => {
   });
 
   it('never admits an experimental-only route to managed traffic', () => {
-    const model = requireProviderDefaultModel('anthropic');
+    serveExperimentalFixtureRoute();
 
     expect(
-      validateRouteSelection(MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID, {
-        modelId: model,
+      validateRouteSelection(FIXTURE_EXPERIMENTAL_ROUTE_ID, {
+        modelId: FIXTURE_EXPERIMENTAL_MODEL_KEY,
         trustMode: 'managed_cloud',
         hasUserProviderKey: true,
       }),
@@ -286,23 +301,42 @@ describe('validateRouteSelection', () => {
   });
 
   it('admits an experimental-only route to byok traffic only when a user key exists', () => {
-    const model = requireProviderDefaultModel('anthropic');
+    serveExperimentalFixtureRoute();
 
     expect(
-      validateRouteSelection(BYOK_ONLY_EXPERIMENTAL_ROUTE_ID, {
-        modelId: model,
+      validateRouteSelection(FIXTURE_EXPERIMENTAL_ROUTE_ID, {
+        modelId: FIXTURE_EXPERIMENTAL_MODEL_KEY,
         trustMode: 'byok',
         hasUserProviderKey: false,
       }),
     ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
 
     expect(
-      validateRouteSelection(BYOK_ONLY_EXPERIMENTAL_ROUTE_ID, {
-        modelId: model,
+      validateRouteSelection(FIXTURE_EXPERIMENTAL_ROUTE_ID, {
+        modelId: FIXTURE_EXPERIMENTAL_MODEL_KEY,
         trustMode: 'byok',
         hasUserProviderKey: true,
       }),
     ).toEqual({ ok: true, reason: null });
+  });
+
+  // The rule above holds on a fixture; this walks what the catalogue actually
+  // ships, so a route that arrives experimental and open to managed traffic is
+  // caught here rather than in production. Vacuous when nothing is experimental.
+  it('refuses every experimental route the catalogue ships to managed traffic', () => {
+    for (const routeId of CATALOGUE_ROUTE_IDS) {
+      const route = getRegistryRoute(routeId);
+      if (route?.commercialStatus !== 'experimental_only') continue;
+      if (!route.trustModes.includes('managed_cloud')) continue;
+
+      expect(
+        validateRouteSelection(routeId, {
+          modelId: route.modelKey,
+          trustMode: 'managed_cloud',
+          hasUserProviderKey: true,
+        }),
+      ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
+    }
   });
 
   it('admits the default route for managed traffic', () => {
