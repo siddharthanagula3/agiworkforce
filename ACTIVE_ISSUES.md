@@ -842,6 +842,23 @@ preservation.
 
 None of these is a confirmed defect.
 
+### Suite health, branch against origin/main, 2026-09-12
+
+Both measured the same way, whole suite, clean worktree, node_modules symlinked.
+
+|                               | origin/main | branch |
+| ----------------------------- | ----------- | ------ |
+| web tests passing             | 16,789      | 17,059 |
+| web tests failing             | 6           | 4      |
+| `packages/ai/routing` passing | 776         | 785    |
+| `packages/ai/routing` failing | 13          | 13     |
+
+The branch adds 270 web tests and 9 routing tests, fixes three of the six
+pre-existing web failures, and introduces none: the one regression it did
+introduce was found by this measurement and fixed before the count was taken.
+The thirteen routing failures are identical on both sides, so nothing in this
+pass touched them.
+
 ### Six failing tests on origin/main, 2026-09-12
 
 The whole `apps/web` suite had not been run this pass, only the files each change
