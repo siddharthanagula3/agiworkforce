@@ -255,8 +255,13 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
-      "trustModes": ["byok"],
-      "features": {}
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "zeroDataRetentionOnRequest": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
     },
     "nvidia-nim/chat-completions": {
       "provider": "nvidia_nim",
@@ -354,6 +359,36 @@
       "protocol": "openai_chat",
       "hostPolicy": "registry_declared",
       "gatewayId": "novita"
+    },
+    "experientiallabs/chat-completions": {
+      "provider": "experientiallabs",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "experientiallabs"
+    },
+    "experientiallabs-anthropic/messages": {
+      "provider": "experientiallabs_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "experientiallabs_anthropic"
+    },
+    "workers-ai/chat-completions": {
+      "provider": "workers_ai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-workers-ai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "hostPolicy": "registry_declared",
+      "gatewayId": "workers_ai"
     }
   },
   "harnessGroups": {
@@ -376,7 +411,11 @@
       "cheaperinference-anthropic/messages",
       "deepinfra/chat-completions",
       "together/chat-completions",
-      "novita/chat-completions"
+      "novita/chat-completions",
+      "experientiallabs/chat-completions",
+      "experientiallabs-anthropic/messages",
+      "vercel_gateway/chat-completions",
+      "workers-ai/chat-completions"
     ],
     "byok-text": [
       "openai/responses",
@@ -394,7 +433,8 @@
       "open-router/chat-completions",
       "open-router/chat-completions-managed",
       "nvidia-nim/chat-completions",
-      "minimax/chat-completions"
+      "minimax/chat-completions",
+      "vercel_gateway/chat-completions"
     ],
     "managed-media": [
       "managed-cloud/gateway",

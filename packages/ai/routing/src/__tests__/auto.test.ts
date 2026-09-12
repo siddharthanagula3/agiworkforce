@@ -10,6 +10,7 @@ import {
   type PlatformCapability,
 } from '@agiworkforce/types';
 import { resolveAutoRoute } from '../auto';
+import { modelRegistry } from '@agiworkforce/model-registry';
 
 const FAST_MODEL_ID = getRoutingSlotModel('workhorse_general');
 const CODING_PREMIUM_MODEL_ID = getRoutingSlotModel('flagship_coding');
@@ -27,6 +28,12 @@ const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
 if (!OPENAI_FAST_MODEL_ID || !OPENAI_CHAT_MODEL_ID) {
   throw new Error('Canonical OpenAI fast and chat routes must exist');
 }
+
+const US_ONLY_EXCLUDED_PROVIDERS: readonly string[] = (
+  modelRegistry as unknown as {
+    policies: { auto: { providerPolicies: { usOnly: { excludedProviders: string[] } } } };
+  }
+).policies.auto.providerPolicies.usOnly.excludedProviders;
 
 describe('resolveAutoRoute', () => {
   it('honors the requested economy profile even when the tier allows premium', () => {
@@ -240,17 +247,13 @@ describe('resolveAutoRoute', () => {
       modelKey: CODING_PREMIUM_MODEL_ID,
       effectiveProfile: 'premium',
     });
-    expect(result.status === 'selected' ? result.fallbacks.slice(0, 2) : []).toMatchObject([
-      {
-        modelKey: CODING_ESCALATION_MODEL_ID,
-        provider: 'zhipu',
-        harnessId: 'zhipu/chat-completions',
-      },
-      {
-        modelKey: FAST_MODEL_ID,
-        provider: 'google',
-        harnessId: 'google/generate-content',
-      },
+    const fallbacks = result.status === 'selected' ? result.fallbacks : [];
+    const sameModel = fallbacks.filter((entry) => entry.modelKey === CODING_PREMIUM_MODEL_ID);
+    const substitutes = fallbacks.filter((entry) => entry.modelKey !== CODING_PREMIUM_MODEL_ID);
+    expect(fallbacks.indexOf(substitutes[0]!)).toBe(sameModel.length);
+    expect(substitutes.slice(0, 2).map((entry) => entry.modelKey)).toEqual([
+      CODING_BALANCED_MODEL_ID,
+      CODING_ESCALATION_MODEL_ID,
     ]);
   });
 
@@ -285,8 +288,10 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: OPENAI_DEFAULT_MODEL_ID,
-      provider: 'openai',
     });
+    expect(US_ONLY_EXCLUDED_PROVIDERS).not.toContain(
+      result.status === 'selected' ? result.provider : '',
+    );
   });
 
   it('keeps basic on the shared Free/Basic model pool', () => {
@@ -437,10 +442,10 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: OPENAI_FAST_MODEL_ID,
-      harnessId: 'openai/responses',
       reason: 'explicit',
-      fallbacks: [],
     });
+    const fallbacks = result.status === 'selected' ? result.fallbacks : [];
+    expect(fallbacks.every((entry) => entry.modelKey === OPENAI_FAST_MODEL_ID)).toBe(true);
   });
 
   it('fails closed rather than crossing into cloud from a local trust boundary', () => {
@@ -484,7 +489,6 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: OPENAI_DEFAULT_MODEL_ID,
-      provider: 'openai',
       reason: 'explicit',
     });
   });
@@ -550,8 +554,13 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: OPENAI_CHAT_MODEL_ID,
-      harnessId: 'openai/responses',
     });
+    const desktopHarnesses = (
+      modelRegistry as unknown as {
+        runtimeProfiles: Record<string, { allowedHarnessIds: string[] }>;
+      }
+    ).runtimeProfiles['desktop/cloud-chat']!.allowedHarnessIds;
+    expect(desktopHarnesses).toContain(result.status === 'selected' ? result.harnessId : '');
   });
 
   it('fails closed when the runtime profile trust mode differs from the request', () => {
