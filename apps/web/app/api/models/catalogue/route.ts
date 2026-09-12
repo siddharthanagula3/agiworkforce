@@ -136,6 +136,14 @@ export interface ModelCatalogueEntry {
   priceBand: ModelPickerPriceBand | null;
   capabilities: ModelCatalogueCapabilities;
   admitted: boolean;
+  /**
+   * Configured and entitled, but every route it has is currently degraded, so
+   * asking it a question right now fails. Distinct from `admitted`: the model
+   * stays known, priced and described, and recovers on its own when the route
+   * health mark expires. The picker offers it as unavailable rather than
+   * selectable.
+   */
+  temporarilyUnavailable: boolean;
   /** Selectable only because an event promotion is active, not by plan. */
   eventAccess: boolean;
   minimumPlanLabel: string | null;
@@ -179,7 +187,12 @@ function toCatalogueEntry(
   // Permanent entitlement OR an active event promotion, AND executable. The
   // promotion widens who may ask; it never manufactures supply, so the route
   // requirement above still decides whether anyone can be offered the model.
-  const eventAllowed = eventAllowsModel(model.id, planTier, context.eventPromotion);
+  // Health is separate from supply: a route that exists but is degraded still
+  // proves the model is configured, so it is reported rather than removed. An
+  // event never promotes a model nobody can currently reach.
+  const temporarilyUnavailable = routes.every((route) => route.status === 'degraded');
+  const eventAllowed =
+    !temporarilyUnavailable && eventAllowsModel(model.id, planTier, context.eventPromotion);
   const permanentlyAllowed = canAccessModelForSubscriptionTier(model.id, planTier);
   const admitted = (permanentlyAllowed || eventAllowed) && routes.length > 0;
   const minimumTier = getMinimumRequiredTier(model.id);
@@ -204,6 +217,7 @@ function toCatalogueEntry(
     priceBand: getModelPriceBand(model.id),
     capabilities: projectCapabilities(facts.capabilities),
     admitted,
+    temporarilyUnavailable,
     // Temporary access reads differently from a plan the user bought, so the
     // picker can say "Free during event" instead of implying it is included.
     eventAccess: eventAllowed && !permanentlyAllowed,
