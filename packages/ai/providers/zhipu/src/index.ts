@@ -42,6 +42,7 @@ import type {
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 import {
   classifyError,
+  toStreamErrorClassification,
   resolveValidatedBaseUrl,
   withStreamIdleWatchdog,
 } from '@agiworkforce/provider-runtime';
@@ -160,6 +161,7 @@ export function createZhipuAdapter(config: ZhipuAdapterConfig = {}): ProviderAda
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
       }
