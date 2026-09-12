@@ -44,12 +44,23 @@ const CURATION_JSON = path.join(
 export const PROBES_JSON = path.join(REPO_ROOT, 'packages/ai/model-registry/catalog/probes.json');
 
 /**
- * The smallest request the wire allows: one short user turn, one output token,
- * no tools, no sampling. Enough to prove the route answers and to time the
- * first byte, not enough to be worth caching or to cost anything meaningful.
+ * The smallest request the wire allows: one short user turn, the fewest output
+ * tokens every provider will accept, no tools, no sampling. Enough to prove the
+ * route answers and to time the first byte, not enough to be worth caching or to
+ * cost anything meaningful.
+ *
+ * Sixteen, not one. A one-token budget is not the smallest request the wire
+ * allows, it is below the floor OpenAI and Perplexity enforce, and both refuse
+ * it outright: "Invalid 'max_output_tokens': integer below minimum value.
+ * Expected a value >= 16" and "max_tokens must be at least 16". Measured on
+ * 2026-09-12, that made the probe report nine healthy models as failed, every
+ * OpenAI and every Perplexity model in the catalogue, while the same routes
+ * answered normally through their own APIs. With `--advance` it would also have
+ * refused to move any of them off `registered`, so the instrument was holding
+ * back the lifecycle it exists to advance.
  */
 export const PROBE_PROMPT = 'ping';
-export const PROBE_MAX_OUTPUT_TOKENS = 1;
+export const PROBE_MAX_OUTPUT_TOKENS = 16;
 export const PROBE_TIMEOUT_MS = 30_000;
 export const PROBE_SCHEMA_VERSION = 1;
 
@@ -82,6 +93,8 @@ export const TOOL_PROBE_OUTCOME = {
 };
 
 const TEXT_OUTPUT_CAPABILITY = 'textOutput';
+const TEXT_INPUT_CAPABILITY = 'textInput';
+const AUDIO_OUTPUT_CAPABILITY = 'audioOutput';
 const API_KEY_AUTH_KIND = 'api-key';
 const LIVE_AVAILABILITY = 'live';
 const RESPONSE_META_CHUNK = 'response-meta';
@@ -145,7 +158,20 @@ function today(now) {
 export function buildProbePlan(registry) {
   const plan = [];
   for (const [modelKey, model] of Object.entries(registry.models)) {
-    if (registry.capabilities[modelKey]?.[TEXT_OUTPUT_CAPABILITY] !== true) continue;
+    const capabilities = registry.capabilities[modelKey];
+    if (capabilities?.[TEXT_OUTPUT_CAPABILITY] !== true) continue;
+    // The probe sends a text prompt down the chat path, so a model that cannot
+    // read text or answers in speech is not something this probe can ask. A
+    // transcription model takes audio and refuses the chat endpoint outright,
+    // and a realtime voice model is served over its own session transport.
+    // Probing either reported an unservable request as a dead model.
+    //
+    // Both tests exclude only on an explicit capability, never on an absent
+    // one. Skipping is the dangerous direction for a health probe: a missing
+    // flag would drop a model out of coverage silently, while probing one model
+    // too many costs a single wasted request that the report then explains.
+    if (capabilities[TEXT_INPUT_CAPABILITY] === false) continue;
+    if (capabilities[AUDIO_OUTPUT_CAPABILITY] === true) continue;
     if (model.lifecycle.availability !== LIVE_AVAILABILITY) continue;
     if (model.lifecycle.deprecated) continue;
     if (!stageAtOrAfter(model.lifecycle.stage, LIFECYCLE_STAGE.registered)) continue;
