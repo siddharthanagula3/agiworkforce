@@ -147,24 +147,41 @@ export function parseSkillLayersConfig(raw: string | undefined): SkillLayer[] {
 const BUNDLED_SKILLS_DIRECTORY = '.agents/skills';
 const WORKSPACE_ROOT_FROM_APP = '../..';
 
+/**
+ * The skills tree and its manifest live at the workspace root, above this app,
+ * and the root is found by probing rather than declared, because the process
+ * starts from different directories in dev, in the standalone server and in a
+ * test. The bundler cannot follow that statically, so it concluded the whole
+ * repository was reachable and traced 12,869 files, the `public` directory
+ * included, into the server bundle.
+ *
+ * The `turbopackIgnore` markers below opt these reads out of that trace. They
+ * are safe precisely because the same files are already named explicitly in
+ * `outputFileTracingIncludes` in `next.config.ts`, so they still ship: the
+ * markers remove a wrong inference, not the dependency. Changing where these
+ * files live means changing that list too.
+ */
 function repositoryRoot(): string {
   const candidates = [process.cwd(), resolve(process.cwd(), WORKSPACE_ROOT_FROM_APP)];
   return (
-    candidates.find((candidate) => existsSync(join(candidate, BUNDLED_SKILLS_DIRECTORY))) ??
-    candidates[0]!
+    candidates.find((candidate) =>
+      existsSync(join(/* turbopackIgnore: true */ candidate, BUNDLED_SKILLS_DIRECTORY)),
+    ) ?? candidates[0]!
   );
 }
 
 function bundledSkillsRoot(): string {
-  return join(repositoryRoot(), BUNDLED_SKILLS_DIRECTORY);
+  return join(/* turbopackIgnore: true */ repositoryRoot(), BUNDLED_SKILLS_DIRECTORY);
 }
 
 function skillManifestPath(): string {
-  return join(repositoryRoot(), SKILL_MANIFEST_FILE_NAME);
+  return join(/* turbopackIgnore: true */ repositoryRoot(), SKILL_MANIFEST_FILE_NAME);
 }
 
 async function readSkillAudienceManifest(): Promise<SkillAudienceManifest> {
-  return parseSkillAudienceManifest(await readFile(skillManifestPath(), 'utf-8'));
+  return parseSkillAudienceManifest(
+    await readFile(/* turbopackIgnore: true */ skillManifestPath(), 'utf-8'),
+  );
 }
 
 export function getManagedSkillLayers(): SkillLayer[] {
