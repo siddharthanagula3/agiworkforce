@@ -167,3 +167,118 @@ describe('/cli, no subcommand the binary refuses to expose', () => {
     expect(collapsed('app/cli/page.tsx')).toMatch(/managed runs use the normal model path/iu);
   });
 });
+
+describe('/get-started, a bare agi login is the managed-cloud sign-in, not a BYOK key paste', () => {
+  it('reads the default login provider out of the binary', () => {
+    const auth = readFileSync(join(REPO_ROOT, 'apps', 'cli', 'src', 'auth.rs'), 'utf8');
+    expect(auth).toMatch(
+      /fn is_agiworkforce_login_provider[\s\S]{0,160}matches!\(provider, None \| Some\("agi"\) \| Some\("agiworkforce"\)\)/u,
+    );
+    expect(auth).toMatch(
+      /is_agiworkforce_login_provider\(provider\) \{\s*return login_agiworkforce\(\)/u,
+    );
+    expect(auth).toMatch(
+      /is_api_key_provider\(pid\) \{\s*interactive_api_key_login_for_provider\(pid\)/u,
+    );
+  });
+
+  it('names the provider argument and the store the key lands in', () => {
+    const page = collapsed('app/get-started/page.tsx');
+    expect(page).toMatch(/agi login &lt;provider&gt;/u);
+    expect(page).toMatch(/saved to the OS credential store/iu);
+    expect(page).toMatch(/bare <code>agi login<\/code> signs into AGI managed cloud/iu);
+    expect(page).toMatch(/agi login anthropic/u);
+  });
+
+  it('never offers a bare agi login as the way to paste a provider key', () => {
+    const page = collapsed('app/get-started/page.tsx');
+    for (const [label, pattern] of [
+      ['bare agi login pastes a provider key', /<code>agi login<\/code>\. Paste/u],
+      ['the key is merely encrypted on device', /Encrypted on device/iu],
+      [
+        'the byok transcript line is a bare agi login',
+        /# byok:[^}]*\}, \{ kind: 'cmd', text: 'agi login' \}/u,
+      ],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/get-started, desktop availability matches the release pipeline', () => {
+  it('requires Apple signing and notarization in the desktop release workflow', () => {
+    const workflow = readFileSync(
+      join(REPO_ROOT, '.github', 'workflows', 'release-desktop.yml'),
+      'utf8',
+    );
+    expect(workflow).toMatch(/build-macos:/u);
+    expect(workflow).toMatch(/Notarized/u);
+  });
+
+  it('states the signature gate and keeps Windows as unpublished', () => {
+    const page = collapsed('app/get-started/page.tsx');
+    expect(page).toMatch(/macOS builds are signed and notarized/iu);
+    expect(page).toMatch(/release API verifies that platform's signature/iu);
+    expect(page).toMatch(/Windows installers have not been published/iu);
+  });
+
+  it('does not tell a reader every platform but Linux is unsigned', () => {
+    const page = collapsed('app/get-started/page.tsx');
+    expect(
+      /other platforms are not yet signed/iu.test(page),
+      'page still claims macOS desktop builds are unsigned',
+    ).toBe(false);
+  });
+});
+
+describe('/get-started, BYOK surfaces are stated with their release state', () => {
+  it('keeps VS Code out of the list of surfaces BYOK runs on today', () => {
+    const page = collapsed('app/get-started/page.tsx');
+    expect(
+      /Local and BYOK run on Desktop, the CLI and VS Code/u.test(page),
+      'page claims BYOK runs on VS Code today, which has no published release',
+    ).toBe(false);
+    expect(page).toMatch(/Local and BYOK run on Desktop and the CLI today/u);
+  });
+});
+
+describe('/docs, the Chrome card names the route the panel actually answers on', () => {
+  it('agrees with /chrome-extension, which was corrected to name Managed Cloud', () => {
+    const chrome = collapsed('app/chrome-extension/page.tsx');
+    expect(chrome).toMatch(/Chat answers come back from AGI Managed Cloud/iu);
+    expect(chrome).toMatch(/the Desktop bridge is an optional local handoff/iu);
+  });
+
+  it('says the panel answers from Managed Cloud and pairing is optional', () => {
+    const page = collapsed('app/docs/page.tsx');
+    expect(page).toMatch(/Answers come back from AGI Managed Cloud/iu);
+    expect(page).toMatch(/pairing Desktop is an optional local road/iu);
+  });
+
+  it('never puts the panel chat work on the paired Desktop', () => {
+    const page = collapsed('app/docs/page.tsx');
+    expect(
+      /paired Desktop handles the real work/iu.test(page),
+      'page still routes extension chat through the paired Desktop',
+    ).toBe(false);
+  });
+});
+
+describe('/about, the colophon names every face the page is set in', () => {
+  it('loads Newsreader as the display face of the agi design system', () => {
+    const layout = readFileSync(join(WEB_ROOT, 'app', 'layout.tsx'), 'utf8');
+    expect(layout).toMatch(/Newsreader/u);
+    expect(layout).toMatch(/variable: '--font-newsreader'/u);
+    const globals = readFileSync(join(WEB_ROOT, 'app', 'globals.css'), 'utf8');
+    expect(globals).toMatch(/--agi-font-display: var\(--font-newsreader\)/u);
+  });
+
+  it('lists Newsreader alongside Geist and JetBrains Mono', () => {
+    const page = collapsed('app/about/page.tsx');
+    expect(page).toMatch(/Newsreader, Geist & JetBrains Mono/u);
+    expect(
+      /'Geist & JetBrains Mono'/u.test(page),
+      'colophon omits the Newsreader display face the headings are set in',
+    ).toBe(false);
+  });
+});

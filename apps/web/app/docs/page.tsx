@@ -140,7 +140,7 @@ const FEATURE_CARDS = [
   {
     href: '/chrome-extension',
     title: 'Chrome Extension',
-    body: 'Side panel UI in Chrome MV3. The paired Desktop handles the real work; no keys stored in the browser.',
+    body: 'Side panel UI in Chrome MV3. Answers come back from AGI Managed Cloud, and pairing Desktop is an optional local road for selections and captures. No provider keys in the browser.',
     cta: COMING_SOON_LABEL,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
