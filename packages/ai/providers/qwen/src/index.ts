@@ -31,6 +31,7 @@ import type {
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 import {
   classifyError,
+  toStreamErrorClassification,
   resolveValidatedBaseUrl,
   withStreamIdleWatchdog,
 } from '@agiworkforce/provider-runtime';
@@ -172,6 +173,7 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
             ...(classified.retryAfterSeconds !== undefined
               ? { retryAfterSeconds: classified.retryAfterSeconds }
               : {}),
+            classification: toStreamErrorClassification(classified),
           };
           yield { type: 'stop', reason: 'error' };
           return;

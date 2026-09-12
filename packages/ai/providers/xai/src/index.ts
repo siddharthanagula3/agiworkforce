@@ -27,7 +27,11 @@ import type {
   StreamChunk,
 } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
-import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  toStreamErrorClassification,
+  withStreamIdleWatchdog,
+} from '@agiworkforce/provider-runtime';
 import {
   translateChatRequest,
   translateOpenAIStream,
@@ -121,6 +125,7 @@ export function createXAIAdapter(config: XAIAdapterConfig = {}): ProviderAdapter
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
       }

@@ -24,6 +24,7 @@ import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 import {
   ALLOWED_MANAGED_PROVIDER_HOSTS,
   classifyError,
+  toStreamErrorClassification,
   resolveValidatedBaseUrl,
   withStreamIdleWatchdog,
 } from '@agiworkforce/provider-runtime';
@@ -153,6 +154,7 @@ export function createVercelGatewayAdapter(
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
       }

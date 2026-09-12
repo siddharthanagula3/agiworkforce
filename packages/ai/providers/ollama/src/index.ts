@@ -24,7 +24,11 @@ import type {
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
-import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  toStreamErrorClassification,
+  withStreamIdleWatchdog,
+} from '@agiworkforce/provider-runtime';
 
 import { fetchOllamaCatalog } from './catalog';
 import { translateChatRequest } from './translate';
@@ -104,6 +108,7 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
         return;
@@ -125,6 +130,7 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
           ...(classified.retryAfterSeconds !== undefined
             ? { retryAfterSeconds: classified.retryAfterSeconds }
             : {}),
+          classification: toStreamErrorClassification(classified),
         };
         yield { type: 'stop', reason: 'error' };
         return;
