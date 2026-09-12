@@ -158,7 +158,16 @@ function toCatalogueEntry(
 ): ModelCatalogueEntry | null {
   const facts = getModelRegistryFacts(model.id);
   if (!facts) return null;
-  const admitted = canAccessModelForSubscriptionTier(model.id, planTier);
+  // Executability, not presentation: these are the registry's approved managed
+  // routes narrowed to providers this deployment actually holds a credential
+  // for. A model with none of them cannot answer for anybody, so it is not part
+  // of the customer catalogue at any tier. gpt-oss-120b and gpt-oss-20b reached
+  // production selectable on Free with an empty route list because admission
+  // never consulted this. The registry keeps knowing about the model; the
+  // customer surface simply stops offering something it cannot serve.
+  const routes = toCatalogueRoutes(model.id, context);
+  if (routes.length === 0) return null;
+  const admitted = canAccessModelForSubscriptionTier(model.id, planTier) && routes.length > 0;
   const minimumTier = getMinimumRequiredTier(model.id);
   if (!admitted && !minimumTier) return null;
   return {
@@ -169,7 +178,7 @@ function toCatalogueEntry(
     developer: facts.developer,
     developerLabel: getDeveloperLabel(facts.developer),
     family: facts.family,
-    routes: toCatalogueRoutes(model.id, context),
+    routes,
     isRouter: facts.isRouter,
     releasedOn: facts.releasedOn,
     stage: facts.stage,
