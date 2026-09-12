@@ -86,7 +86,7 @@ export default function AgiCodePage() {
             {
               meta: 'Sessions',
               title: 'Resume & fork',
-              body: 'Pick a session back up where you left it, or fork it with /fork to explore a branch without losing the original.',
+              body: 'Pick a session back up where you left it, or run agi session fork to branch from a chosen turn without losing the original.',
               href: '/cli',
             },
             {

@@ -28,7 +28,7 @@ const IDS = {
 } as const;
 
 const RUN_FACTS = [
-  'three to six step plan before the first tool call',
+  'three to six steps asked for before the first tool call',
   'Pro plans and above',
   'every run listed end to end at /tasks',
   'approvals pause the run, never skip it',
@@ -38,12 +38,12 @@ const INSIDE_A_RUN = [
   {
     meta: 'Composer',
     title: 'A mode of the box you already type in',
-    body: 'Chat and AGI Work are two positions of one segmented control. Switching it reveals a project scope chip and two optional fields, constraints and deliverable.',
+    body: 'Chat and AGI Work are two positions of one segmented control. Switching it reveals a project scope chip, and opening scope from there adds two optional fields, constraints and deliverable.',
   },
   {
     meta: 'Plan',
     title: 'The plan lands before the first tool call',
-    body: 'AGI Work asks the model for three to six concrete steps, each moving from pending to in progress to completed as the run works.',
+    body: 'AGI Work asks the model for three to six concrete steps and shows them before any tool runs. The first step is marked in progress as the run starts; the rest settle when it ends. A planning turn that comes back unreadable leaves the run with no plan rather than stopping it.',
   },
   {
     meta: 'Approval',
