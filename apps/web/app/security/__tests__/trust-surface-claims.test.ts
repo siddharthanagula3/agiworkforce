@@ -74,9 +74,9 @@ describe('trust surface, the honest-gap sections stay present', () => {
     expect(source).not.toMatch(/\d+ of \d+ hosted API route files/);
   });
 
-  it('/security does not claim an audit-log schedule that has no route owner', () => {
+  it('/security names the audit-log schedule that actually owns the purge', () => {
     const source = read('security');
-    expect(source).toContain('no scheduled route invokes it today');
+    expect(source).toContain('Retention is 90 days and it is scheduled');
     expect(source).not.toContain('a scheduled job purges old rows');
   });
 
@@ -140,6 +140,153 @@ describe('trust surface, the erasure figure is derived, not remembered', () => {
         source,
         `/${page} must state the real erasure table count (${count}). Update the copy in the same change as the constant.`,
       ).toContain(`${count} user-scoped tables`);
+    }
+  });
+});
+
+/**
+ * Pre-release claim audit, 2026-09-12. Four statements on /security had drifted
+ * away from the code that decides them: an edge-protection count of six against
+ * twelve matcher groups, an erasure batch of 25 against a constant of 100, a
+ * daily sandbox reclaim against an hourly cron, and a flat denial that anything
+ * schedules the security-log retention routine while vercel.json schedules it.
+ * Each case below reads the deciding source rather than a remembered number,
+ * and bans the phrasing that shipped so a rewrite cannot restore it.
+ */
+
+const PROXY_SOURCE = path.join(APP_DIR, '..', 'proxy.ts');
+const PURGE_ACCOUNTS_ROUTE = path.join(
+  APP_DIR,
+  'api',
+  'cron',
+  'purge-deleted-accounts',
+  'route.ts',
+);
+const VERCEL_MANIFEST = path.join(APP_DIR, '..', '..', '..', 'vercel.json');
+
+const COUNT_WORDS: Record<number, string> = {
+  6: 'Six',
+  8: 'Eight',
+  10: 'Ten',
+  11: 'Eleven',
+  12: 'Twelve',
+  13: 'Thirteen',
+  14: 'Fourteen',
+};
+
+function protectedRouteGroups(): string[] {
+  const source = readFileSync(PROXY_SOURCE, 'utf8');
+  const block = /const isProtectedAppRoute = [^[]*\[([\s\S]*?)\]/u.exec(source);
+  expect(block, 'isProtectedAppRoute is gone from proxy.ts').not.toBeNull();
+  return [...block![1]!.matchAll(/'\/([a-z-]+)\(\.\*\)'/gu)].map((match) => match[1]!);
+}
+
+function cronSchedule(cronPath: string): string {
+  const manifest = JSON.parse(readFileSync(VERCEL_MANIFEST, 'utf8')) as {
+    crons?: Array<{ path: string; schedule: string }>;
+  };
+  const entry = manifest.crons?.find((cron) => cron.path === cronPath);
+  expect(entry, `${cronPath} is not scheduled in vercel.json`).toBeDefined();
+  return entry!.schedule;
+}
+
+describe('/security, access control states the edge coverage the proxy enforces', () => {
+  it('names every protected route group, and counts them correctly', () => {
+    const groups = protectedRouteGroups();
+    expect(groups.length).toBeGreaterThan(1);
+    const word = COUNT_WORDS[groups.length];
+    expect(word, `no word for ${groups.length} route groups`).toBeDefined();
+
+    const source = read('security');
+    expect(source).toContain(`${word} route groups`);
+    for (const group of groups) {
+      expect(source, `/security omits the protected route group ${group}`).toMatch(
+        new RegExp(`route groups \\([^)]*\\b${group}\\b`, 'u'),
+      );
+    }
+  });
+
+  it('never restates a route-group count the proxy does not match', () => {
+    const groups = protectedRouteGroups();
+    const source = read('security');
+    for (const [count, word] of Object.entries(COUNT_WORDS)) {
+      if (Number(count) === groups.length) continue;
+      expect(
+        source.includes(`${word} route groups`),
+        `/security claims ${word} protected route groups; proxy.ts matches ${groups.length}`,
+      ).toBe(false);
+    }
+  });
+});
+
+describe('/security, the deletion mechanism matches the jobs that run it', () => {
+  it('states the batch size the purge route actually claims', () => {
+    const route = readFileSync(PURGE_ACCOUNTS_ROUTE, 'utf8');
+    const declared = /const MAX_ACCOUNTS_PER_RUN = ([\d_]+)/u.exec(route);
+    expect(declared, 'MAX_ACCOUNTS_PER_RUN is gone from the purge route').not.toBeNull();
+    const batch = Number(declared![1]!.replace(/_/gu, ''));
+
+    const source = read('security');
+    expect(source).toContain(`up to ${batch} pending accounts per run`);
+    expect(
+      /up to 25 pending accounts per run/u.test(source),
+      '/security is back to the 25-account batch the route never used',
+    ).toBe(false);
+  });
+
+  it('does not describe the hourly sandbox reclaim as a daily job', () => {
+    const schedule = cronSchedule('/api/cron/reclaim-sandboxes');
+    const hourly = /^(\d+) \* \* \* \*$/u.exec(schedule);
+    expect(hourly, `reclaim-sandboxes is no longer hourly: ${schedule}`).not.toBeNull();
+
+    const source = read('security');
+    expect(source).toContain(`${hourly![1]!} minutes past every hour`);
+    expect(
+      /reclaim sandboxes at \d{2}:\d{2} UTC/u.test(source),
+      '/security gives the hourly sandbox reclaim a daily clock time again',
+    ).toBe(false);
+  });
+
+  it('keeps the daily account, media and temporary-chat times tied to vercel.json', () => {
+    const source = read('security');
+    const daily: Array<[string, string]> = [
+      ['/api/cron/purge-deleted-accounts', 'runs daily at'],
+      ['/api/cron/purge-deleted-media', 'purge deleted media at'],
+      ['/api/cron/purge-temporary-chats', 'temporary chats at'],
+    ];
+    for (const [cronPath, phrase] of daily) {
+      const parts = cronSchedule(cronPath).split(' ');
+      const clock = `${parts[1]!.padStart(2, '0')}:${parts[0]!.padStart(2, '0')} UTC`;
+      expect(source, `/security states the wrong clock time for ${cronPath}`).toContain(
+        `${phrase} ${clock}`,
+      );
+    }
+  });
+});
+
+describe('/security, security-log retention admits the cron that enforces it', () => {
+  it('states the retention window and the schedule from the code that owns them', async () => {
+    const { SECURITY_AUDIT_LOG_RETENTION_DAYS, SECURITY_LOG_RETENTION_CRON_PATH } =
+      await import('@/lib/server/security-log-retention');
+    const parts = cronSchedule(SECURITY_LOG_RETENTION_CRON_PATH).split(' ');
+    const clock = `${parts[1]!.padStart(2, '0')}:${parts[0]!.padStart(2, '0')} UTC`;
+
+    const source = read('security');
+    expect(source).toContain(`Retention is ${SECURITY_AUDIT_LOG_RETENTION_DAYS} days`);
+    expect(source).toContain(`a cron-authenticated job at ${clock}`);
+  });
+
+  it('never denies the schedule again', () => {
+    const source = read('security');
+    for (const banned of [
+      'no scheduled route invokes it today',
+      'automatic expiry is not promised',
+      'no scheduled route invokes it',
+    ]) {
+      expect(
+        source.includes(banned),
+        `/security denies the security-log retention cron with "${banned}"`,
+      ).toBe(false);
     }
   });
 });

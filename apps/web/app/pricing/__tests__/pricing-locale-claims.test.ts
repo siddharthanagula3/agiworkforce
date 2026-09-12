@@ -105,3 +105,65 @@ describe('pricing locale bundles, plan feature claims', () => {
     }
   });
 });
+
+/**
+ * Pre-release claim audit, 2026-09-12.
+ *
+ * `compareEnterpriseUsage` shipped as "Dedicated capacity, scoped to your org"
+ * in all twelve bundles. Nothing in the codebase reserves capacity for a
+ * workspace: `MANAGED_USAGE_LIMITS.enterprise` is the same shared managed pool
+ * as every other tier with `unlimited: true` set on it, and both
+ * `apps/web/app/faq/page.tsx` and `apps/web/app/contact-sales/page.tsx` already
+ * state that dedicated capacity is not built. The row now says what the tier
+ * actually grants, and the ban below is per-language so a translation cannot
+ * carry the old promise back in.
+ */
+
+const DEDICATED_CAPACITY_CLAIMS = [
+  /dedicated\s+capacity/iu,
+  /reserved\s+capacity/iu,
+  /capacidad\s+dedicada/iu,
+  /capacité\s+dédiée/iu,
+  /dedizierte\s+kapazität/iu,
+  /capacità\s+dedicata/iu,
+  /capacidade\s+dedicada/iu,
+  /выделенная\s+мощность/iu,
+  /専用容量/u,
+  /专属容量/u,
+  /전용\s*용량/u,
+  /سعة\s+مخصصة/u,
+  /समर्पित\s+क्षमता/u,
+];
+
+describe('pricing locale bundles, enterprise capacity claims', () => {
+  it('describes enterprise managed usage the way the usage table configures it', async () => {
+    const { MANAGED_USAGE_LIMITS } = await import('@/lib/billing/managed-usage-caps');
+    expect(
+      MANAGED_USAGE_LIMITS.enterprise.unlimited,
+      'enterprise is no longer uncapped; the pricing row has to be rewritten with it',
+    ).toBe(true);
+
+    const bundle = pricingBundles().find(([locale]) => locale === 'en');
+    expect(bundle).toBeDefined();
+    expect(bundle![1]['compareEnterpriseUsage']).toBe(
+      'Uncapped managed usage, scoped to your contract',
+    );
+  });
+
+  it('promises dedicated or reserved capacity in no language', () => {
+    const bundles = pricingBundles();
+    expect(bundles.length).toBeGreaterThan(0);
+
+    for (const [locale, bundle] of bundles) {
+      for (const [key, value] of Object.entries(bundle)) {
+        if (typeof value !== 'string') continue;
+        for (const claim of DEDICATED_CAPACITY_CLAIMS) {
+          expect(
+            claim.test(value),
+            `${locale}/pricing.json ${key} promises capacity nothing reserves: ${value}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+});

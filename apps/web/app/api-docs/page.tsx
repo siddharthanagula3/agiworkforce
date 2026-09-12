@@ -62,23 +62,29 @@ const reply = await client.chat.completions.create({
 
 const CREDENTIAL_TABS = [
   {
-    label: 'Chat and embeddings',
+    label: 'Session token',
     language: 'shell',
     code: `Authorization: Bearer <session token>
 
+GET  /api/llm/v1/models
 POST /api/llm/v1/chat/completions
-POST /api/llm/v1/embeddings`,
-    note: 'A session bearer token, the same one the apps hold.',
+POST /api/llm/v1/embeddings
+POST /api/llm/v1/audio/transcriptions
+POST /api/llm/v1/route/preview
+GET  /api/llm/v1/credits/balance`,
+    note: 'A session bearer token, the same one the apps hold. Every operation accepts it.',
   },
   {
-    label: 'Catalog, audio, balance',
+    label: 'API key',
     language: 'shell',
     code: `Authorization: Bearer sk_live_…
 
-GET  /api/llm/v1/models
-POST /api/llm/v1/audio/transcriptions
-GET  /api/llm/v1/credits`,
-    note: 'An AGI API key issued under Settings, API Keys.',
+models:read      GET  /api/llm/v1/models
+inference:write  POST /api/llm/v1/chat/completions
+inference:write  POST /api/llm/v1/audio/transcriptions
+inference:write  POST /api/llm/v1/route/preview
+usage:read       GET  /api/llm/v1/credits/balance`,
+    note: 'An AGI API key issued under Settings, API Keys. Embeddings refuses it, and a call missing the scope on its left answers 403 insufficient_scope.',
   },
 ] as const;
 
@@ -104,13 +110,16 @@ export default function ApiDocsPage() {
           <SplitFeature
             id="agi-api-docs-quickstart-title"
             eyebrow="Quick start"
-            title="Two credentials, and they are not interchangeable."
+            title="Two credentials, and only one of them is refused anywhere."
             body={
               <p>
-                An AGI API key (<code>sk_live_…</code>, issued under Settings, API Keys)
-                authenticates the model catalog, audio transcriptions, and the credit balance. Chat
-                completions and embeddings take a session bearer token. Every operation in the
-                bundle names the credential it accepts.
+                A session bearer token, the same one the apps hold, is accepted on every operation.
+                An AGI API key (<code>sk_live_…</code>, issued under Settings, API Keys) carries the
+                scopes you pick when you create it and reaches everything except embeddings:{' '}
+                <code>models:read</code> for the catalog, <code>inference:write</code> for chat
+                completions, audio transcriptions and route preview, <code>usage:read</code> for the
+                credit balance. Every operation in the bundle names the credential and the scope it
+                accepts.
               </p>
             }
             points={[
