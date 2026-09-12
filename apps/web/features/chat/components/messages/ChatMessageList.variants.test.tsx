@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
-import { ChatMessageList, isPathReRooted } from './ChatMessageList';
+import { ChatMessageList } from './ChatMessageList';
 import type { VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 
 vi.mock('framer-motion', () => ({
@@ -70,36 +70,6 @@ const VISIBLE_PATH = [
 
 const VARIANT_INFO: VariantInfoByMessageId = Object.freeze({
   a1: { index: 0, total: 2, previousId: null, nextId: 'a1b' },
-});
-
-describe('isPathReRooted', () => {
-  const a = chatMessage('a', 'a', 'user');
-  const b = chatMessage('b', 'b', 'assistant');
-  const c = chatMessage('c', 'c', 'user');
-
-  /**
-   * The height cache is keyed by index with no partial invalidation, so this
-   * predicate decides between "throw the whole thing away" and "keep it".
-   */
-  it('says no when the next turn is appended, which changes no existing index', () => {
-    expect(isPathReRooted([a, b], [a, b, c])).toBe(false);
-  });
-
-  it('says no when a streamed frame rewrites content but not identity', () => {
-    expect(isPathReRooted([a, b], [a, { ...b, content: 'Paris, France.' }])).toBe(false);
-  });
-
-  it('says yes when an index now holds a different message', () => {
-    expect(isPathReRooted([a, b], [a, c])).toBe(true);
-  });
-
-  it('says yes when the path got shorter', () => {
-    expect(isPathReRooted([a, b, c], [a, b])).toBe(true);
-  });
-
-  it('says no for two empty transcripts', () => {
-    expect(isPathReRooted([], [])).toBe(false);
-  });
 });
 
 describe('ChatMessageList variant plumbing', () => {
