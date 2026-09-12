@@ -74,7 +74,7 @@ export default function VscodeExtensionPage() {
         <TrustTriptych
           eyebrow="In the preview"
           title="A focused start, on the suite's rules."
-          lede="AGI in VS Code ships the way every AGI surface does: visible context, reviewable changes, no silent routing. Here's what works today."
+          lede="AGI in VS Code ships the way every AGI surface does: visible context, reviewable changes, no silent routing. No VSIX has been published yet; here is what the preview build carries."
           cards={[
             {
               mode: '@agi chat',
