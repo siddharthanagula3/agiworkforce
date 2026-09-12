@@ -850,12 +850,34 @@ against it is declined, and such a transaction sums as zero spend in the rolling
 windows that bound a plan.
 
 **The correct direction is to take `origin/main`'s three and drop the local
-drafts, never the reverse.** That is not a file deletion on its own: the branch
-references `0185` in seven source comments and in
-`scripts/config/migration-dependency-allowlist.json`, all of which have to move
-to `0182`. Combined with the branch being 58 commits behind, this is the
-reconciliation the plan calls P0, and it needs the production migration status
-checked first (FA-1). It was not attempted here.
+drafts, never the reverse**, and the files must be taken **byte for byte**
+rather than renumbered. `planMigrations` in `scripts/lib/neon-migrations.mjs`
+checksums each file and compares it against the applied ledger, and the local
+drafts differ from production's in the migration number inside their own first
+comment line. Renaming `0183` to `0180` therefore produces a file whose checksum
+does not match the `0180` production already applied, and the check reports
+drift. Copying `origin/main`'s bytes matches, because those are the bytes that
+were applied.
+
+Sequence contiguity is strict: the loop requires file `i` to carry sequence
+`i + 1` from `0001`, so the inventory has to read `0001` through `0182` with no
+gap.
+
+The remediation, when FA-1 has confirmed what production holds:
+
+1. Take `origin/main`'s `0180`, `0181` and `0182` verbatim
+   (`git show origin/main:<path> > <path>`), never a renamed local copy.
+2. Delete local `0183`, `0184`, `0185` and their `.down.sql` files. Their content
+   is superseded: two are the same but for a comment, and `0182` is a superset
+   of `0185`.
+3. Move the seven source comments and the
+   `scripts/config/migration-dependency-allowlist.json` reason string from
+   `0185` to `0182`, `0184` to `0181`, `0183` to `0180`.
+
+Step 2 loses the three `.down.sql` files the branch added, since `origin/main`
+carries no down file for these. Writing new ones against `0182` means writing a
+down for the five triggers as well, which is why this is a founder-sequenced
+task and not a tidy-up. It was not attempted here.
 
 ### Retracted: the origin/main comparison, 2026-09-12
 
