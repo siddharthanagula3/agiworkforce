@@ -168,7 +168,7 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
   private disposed = false;
   private ownsPool: boolean;
   private readonly reportedErrors = new WeakSet<object>();
-  private readonly guardedClients = new WeakSet<PoolClient>();
+  private readonly checkoutGuards = new WeakMap<PoolClient, (error: unknown) => void>();
 
   constructor(private config: PostgresDatabaseAdapterConfig) {
     if (config.pool) {
@@ -211,16 +211,31 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
   /**
    * The pool strips its own idle-error listener off a client for as long as it
    * is checked out, so without this a transport error during that window is
-   * unhandled and crashes the process. `pool.connect()` can hand back a client
-   * wired on an earlier checkout, hence the WeakSet.
+   * unhandled and crashes the process.
+   *
+   * The guard belongs to the CHECKOUT, not to the client. `withUser()` and
+   * `withOrg()` each build a fresh adapter over the same shared pool, so a
+   * guard left attached past release accumulated one `error` listener per
+   * request scope on the same reused client, and Node warned about a leaking
+   * emitter at the eleventh. Release takes the listener back off, so a turn of
+   * any length is net zero.
    */
   private async checkoutClient(pool: Pool): Promise<PoolClient> {
     const client = await pool.connect();
-    if (!this.guardedClients.has(client)) {
-      this.guardedClients.add(client);
-      client.on('error', (error: unknown) => this.reportTransportError('client', error));
-    }
+    const guard = (error: unknown): void => this.reportTransportError('client', error);
+    this.checkoutGuards.set(client, guard);
+    client.on('error', guard);
     return client;
+  }
+
+  private releaseClient(client: PoolClient, destroy = false): void {
+    const guard = this.checkoutGuards.get(client);
+    if (guard) {
+      this.checkoutGuards.delete(client);
+      client.removeListener('error', guard);
+    }
+    if (destroy) client.release(DESTROY_ON_RELEASE);
+    else client.release();
   }
 
   private reportTransportError(scope: DatabaseConnectionErrorScope, error: unknown): void {
@@ -283,9 +298,8 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  private static releaseAfterFailure(client: PoolClient, rolledBack: boolean): void {
-    if (rolledBack) client.release();
-    else client.release(DESTROY_ON_RELEASE);
+  private releaseAfterFailure(client: PoolClient, rolledBack: boolean): void {
+    this.releaseClient(client, !rolledBack);
   }
 
   private async runScoped<T>(
@@ -300,11 +314,11 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params)) as QueryResult;
       await client.query(COMMIT_STATEMENT);
-      client.release();
+      this.releaseClient(client);
       return read(result);
     } catch (err) {
       rolledBack = await PostgresDatabaseAdapter.rollbackQuietly(client);
-      PostgresDatabaseAdapter.releaseAfterFailure(client, rolledBack);
+      this.releaseAfterFailure(client, rolledBack);
       throw withStatementContext(err, sql);
     }
   }
@@ -342,11 +356,11 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
       await this.beginRlsScope(client);
       const result = await fn(new PostgresTransactionAdapter(client));
       await client.query(COMMIT_STATEMENT);
-      client.release();
+      this.releaseClient(client);
       return result;
     } catch (err) {
       const rolledBack = await PostgresDatabaseAdapter.rollbackQuietly(client);
-      PostgresDatabaseAdapter.releaseAfterFailure(client, rolledBack);
+      this.releaseAfterFailure(client, rolledBack);
       throw err;
     }
   }
