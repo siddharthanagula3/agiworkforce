@@ -75,7 +75,8 @@ export default function EnterprisePage() {
           id="agi-enterprise-title"
           eyebrow="AGI for enterprise"
           title="Your data can stay where it is while the security review runs."
-          lede="Most AI tools ask you to accept their data boundary before you are allowed to evaluate them. Local and BYOK invert that: a reviewer runs the product on their own hardware or their own provider contract, and the evaluation finishes without a conversation reaching AGI infrastructure. When you do buy, identity, policy, audit, and retention are administered by your own owner in a workspace console, and the ledgers below say which of those are built and which are still only commitments."
+          em="while the security review runs."
+          lede="Run the evaluation on your own hardware or your own provider contract, so nothing reaches AGI infrastructure until you decide to buy. Identity, policy, audit and retention then sit with your own owner in the workspace console."
           ctas={[
             { href: '/contact-sales', label: 'Contact sales' },
             { href: '/trust', label: 'Read the dated trust ledger', variant: 'secondary' },

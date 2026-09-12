@@ -4,6 +4,7 @@ import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google'
 import { headers } from 'next/headers';
 import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
 import './globals.css';
+import '@/features/marketing/components/legacy-pages.css';
 import Providers from './providers';
 import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
 import { CookieConsent } from '@shared/components/CookieConsent';

@@ -55,7 +55,8 @@ export default function PartnersPage() {
           id="agi-partners-title"
           eyebrow="Partners"
           title="No program yet. One open door."
-          lede="We are not going to describe a partner program we have not built. There is no application form, no directory, and no reseller agreement behind this page. What is real today is that AGI speaks MCP, so anything you build against that open protocol already works with it. Beyond that, here is what we are actively looking for."
+          em="One open door."
+          lede="There is no partner program yet: no application form, no directory, no reseller agreement. What is real today is that AGI speaks MCP, so anything built on that protocol already works with it."
           ctas={[
             { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
             { href: '/apps', label: 'See tools & connectors', variant: 'secondary' },
