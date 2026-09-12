@@ -25,21 +25,10 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
   return {
     id: 'fixture-model',
     displayName: 'Fixture Model',
-    provider: 'open_router',
-    providerLabel: 'OpenRouter',
     developer: 'openai',
     developerLabel: 'OpenAI',
     family: null,
-    routes: [
-      {
-        routeId: 'fixture-model@open_router',
-        provider: 'open_router',
-        label: 'OpenRouter',
-        isDefault: true,
-        status: 'available',
-        freeInventory: null,
-      },
-    ],
+    routeCount: 1,
     isRouter: false,
     releasedOn: null,
     stage: null,

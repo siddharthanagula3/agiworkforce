@@ -116,15 +116,36 @@ export type ModelCatalogueCapabilities = Readonly<
   Partial<Record<ModelPickerFilterCapability, boolean>>
 >;
 
+/**
+ * What admission reasoned over, kept on the server. Which reseller or gateway
+ * carries a model is commercial information: it names our suppliers, our route
+ * ids and which of them we hold free inventory on. It decides `admitted` and
+ * `temporarilyUnavailable` here and then stops; the customer chooses a model,
+ * never a supplier, so nothing downstream needs it.
+ */
+export interface CatalogueEntry extends ModelCatalogueEntry {
+  routes: ModelCatalogueRoute[];
+  /**
+   * The default route's source and its label. `providerLabel` is the hosting
+   * platform, not the model's author: Qwen's reads "Alibaba Model Studio" while
+   * its developer is "Qwen". The picker groups by developer and never showed
+   * either of these.
+   */
+  provider: string;
+  providerLabel: string;
+}
+
 export interface ModelCatalogueEntry {
   id: string;
   displayName: string;
-  provider: string;
-  providerLabel: string;
   developer: string;
   developerLabel: string;
   family: string | null;
-  routes: ModelCatalogueRoute[];
+  /**
+   * How many executable routes back this model. The count carries the only
+   * thing the client acts on, that at least one exists, without naming any.
+   */
+  routeCount: number;
   isRouter: boolean;
   releasedOn: string | null;
   stage: string | null;
@@ -172,7 +193,7 @@ function toCatalogueEntry(
   model: ModelMetadata,
   planTier: string,
   context: RouteContext,
-): ModelCatalogueEntry | null {
+): CatalogueEntry | null {
   const facts = getModelRegistryFacts(model.id);
   if (!facts) return null;
   // Executability, not presentation: these are the registry's approved managed
@@ -207,6 +228,7 @@ function toCatalogueEntry(
     developerLabel: getDeveloperLabel(facts.developer),
     family: facts.family,
     routes,
+    routeCount: routes.length,
     isRouter: facts.isRouter,
     releasedOn: facts.releasedOn,
     stage: facts.stage,
@@ -226,6 +248,25 @@ function toCatalogueEntry(
     availability: getModelAvailability(model),
     requiresEnvironment: model.requiresEnvironment ?? null,
   };
+}
+
+/**
+ * The admission decision with its evidence attached, for the server and for the
+ * tests that hold it to the executability rule. The HTTP body is the projection
+ * of this, so a test asserting here is asserting the real decision rather than
+ * what survives redaction.
+ */
+export async function buildCatalogueEntries(planTier: string): Promise<CatalogueEntry[]> {
+  const pickerModels = listPickerChatModels();
+  const context = await buildRouteContext(pickerModels);
+  return pickerModels
+    .map((model) => toCatalogueEntry(model, planTier, context))
+    .filter((entry): entry is CatalogueEntry => entry !== null);
+}
+
+function toWireEntry(entry: CatalogueEntry): ModelCatalogueEntry {
+  const { routes: _routes, provider: _provider, providerLabel: _providerLabel, ...wire } = entry;
+  return wire;
 }
 
 async function resolvePlanTier(request: NextRequest): Promise<string> {
@@ -249,11 +290,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const catalog = modelsData as { version: number; lastUpdated: string };
     const planTier = await resolvePlanTier(request);
-    const pickerModels = listPickerChatModels();
-    const context = await buildRouteContext(pickerModels);
-    const models = pickerModels
-      .map((model) => toCatalogueEntry(model, planTier, context))
-      .filter((entry): entry is ModelCatalogueEntry => entry !== null);
+    const models = (await buildCatalogueEntries(planTier)).map(toWireEntry);
 
     logger.info({ modelCount: models.length, planTier }, 'Model catalogue projection served');
 
