@@ -86,7 +86,7 @@ export default function GetStartedPage() {
               <SurfaceStatus
                 state="pending"
                 name="Desktop"
-                blockedOn="Linux x64 assets exist and macOS builds are signed and notarized, but each download opens only once the release API verifies that platform's signature. Windows installers have not been published. The download page resolves what is live for your platform."
+                blockedOn="Linux x64 assets are what the current release carries, and each download opens only once the release API verifies that platform's signature. The macOS build is signed and notarized by the release job but has not been published yet, and Windows installers have not been published. The download page resolves what is live for your platform."
               />
               <SurfaceStatus
                 state="absent"
