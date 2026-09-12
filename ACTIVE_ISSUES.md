@@ -140,7 +140,7 @@ settlement is idempotent and concurrency-safe.
 ### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
 
 **Severity:** P1
-**Status:** 48 of 57 findings fixed; 9 registered in
+**Status:** 49 of 57 findings fixed; 8 registered in
 `docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F31 and F39
 were closed on 2026-09-12 and their rows deleted: compaction now routes under
 the turn's own admission, and a scheduled run declares the project context it
@@ -189,6 +189,16 @@ natural next pass. F8, F35 and F38 are contained refactors that need their own
 verification rather than riding a security batch. Nothing unblocked is left in
 this entry: every remaining row names a migration, a deployment secret, a
 shipped contract, or a founder call.
+
+F8 closed 2026-09-12, and it was worse than its one-line summary. The router
+decided retry, failover and user-facing copy by re-parsing a free-text message
+that contains a user-chosen filename, because the adapter classified the failure
+correctly and then dropped the answer at the stream-chunk boundary. So an
+attachment named timeout.pdf turned a permanent refusal into a retry loop
+against a route that could never serve it, and one named content_filter.pdf
+classified as a safety refusal, which never rotates, so the turn ended and the
+reader was told a safety system had blocked their own document. The
+classification now rides the chunk and is validated before it is trusted.
 
 ## 4. P2, important
 
