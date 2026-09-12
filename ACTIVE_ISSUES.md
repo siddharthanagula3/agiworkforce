@@ -842,6 +842,27 @@ preservation.
 
 None of these is a confirmed defect.
 
+### Production catalogue measurement, 2026-09-12 10:25 UTC
+
+Read-only, anonymous, against the live site. `/api/health` reports database,
+Stripe and environment healthy. `/api/models/catalogue` shows the two defects
+this pass fixes are live right now, on the deployment customers are using.
+
+**Two models are offered to every anonymous visitor with zero routes.** They are
+admitted, carry no minimum-plan label, and have an empty route list, so choosing
+either cannot produce an answer under any circumstances. Six more are admitted
+than should be: the free roster is three models, and the response lists eight,
+which is the price-derived floor admitting models nobody named free.
+
+**Every supplier name is served to the customer.** Eight of them appear in the
+route labels the picker reads, including the two resellers.
+
+Both are fixed on `fix/provider-outage-health-2026-09-12` and neither fix is
+deployed, so the gap between this measurement and the branch is a deployment,
+not engineering. Re-run the same two requests after it ships: the admitted count
+should fall to the named free roster, no admitted entry should carry an empty
+route list, and no supplier label should appear in the response at all.
+
 ### Model usability sweep, 2026-09-12
 
 Every selectable managed chat route was called for real, one minimal turn each,
