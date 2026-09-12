@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  listManagedRoutesForModel,
+  normalizeModelId,
+} from '@agiworkforce/types';
 
 /**
  * Temporary event access, as an overlay on permanent entitlement.
@@ -21,6 +25,18 @@ import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 export const EVENT_ENABLED_ENV = 'AGI_EVENT_ENABLED';
 export const EVENT_MODELS_ENV = 'AGI_EVENT_MODELS';
 export const EVENT_DISABLED_MODELS_ENV = 'AGI_EVENT_DISABLED_MODELS';
+/**
+ * Withdraws every promoted model served by these providers, by provider id.
+ *
+ * Separate from the per-model switch because the failures have different
+ * shapes: one model behaving badly is not one supplier being down, expensive or
+ * unreliable, and during an event the operator needs to drop a whole supplier
+ * without naming each of its models. Deliberately event-scoped: it withdraws
+ * the promotion only, so paid customers who bought access to the same provider
+ * keep it. Taking a provider away from people who paid for it is a different
+ * decision, made with a different control.
+ */
+export const EVENT_DISABLED_PROVIDERS_ENV = 'AGI_EVENT_DISABLED_PROVIDERS';
 export const EVENT_STARTS_AT_ENV = 'AGI_EVENT_STARTS_AT';
 export const EVENT_ENDS_AT_ENV = 'AGI_EVENT_ENDS_AT';
 
@@ -73,6 +89,22 @@ function readModelIds(name: string): Set<string> {
   return ids;
 }
 
+/**
+ * Provider ids are not validated against a registry the way model ids are: an
+ * unrecognised entry here can only ever subtract, so a typo costs availability
+ * and never widens the promotion. Failing closed is the point.
+ */
+function readProviderIds(name: string): Set<string> {
+  const raw = process.env[name]?.trim();
+  if (!raw) return new Set<string>();
+  const ids = new Set<string>();
+  for (const part of raw.split(',')) {
+    const candidate = part.trim().toLowerCase();
+    if (candidate) ids.add(candidate);
+  }
+  return ids;
+}
+
 export function readEventPromotion(now: number = Date.now()): EventPromotion {
   if (!readFlag(EVENT_ENABLED_ENV)) return INACTIVE;
 
@@ -86,6 +118,18 @@ export function readEventPromotion(now: number = Date.now()): EventPromotion {
   const disabled = readModelIds(EVENT_DISABLED_MODELS_ENV);
   const allowed = readModelIds(EVENT_MODELS_ENV);
   for (const id of disabled) allowed.delete(id);
+
+  // A model survives a disabled supplier if some other supplier can still serve
+  // it, which is the same rule the catalogue uses for executability. Only a
+  // model left with no permitted route is withdrawn.
+  const disabledProviders = readProviderIds(EVENT_DISABLED_PROVIDERS_ENV);
+  if (disabledProviders.size > 0) {
+    for (const id of [...allowed]) {
+      const routes = listManagedRoutesForModel(id);
+      if (routes.every((route) => disabledProviders.has(route.provider))) allowed.delete(id);
+    }
+  }
+
   if (allowed.size === 0) return INACTIVE;
 
   return { active: true, modelIds: allowed, startsAt, endsAt };
