@@ -48,7 +48,9 @@ describe('context compaction routes under the same admission as the turn', () =>
   });
 
   it('carries the workspace model policy', () => {
-    const policy = { allowedModels: ['gpt-5.6-luna'] } as never;
+    // An allow list naming nothing real is the strictest possible policy, which
+    // is the case worth asserting, and it needs no id from the catalogue.
+    const policy = { allowedModels: ['no-model-matches-this'] } as never;
     const request = buildCompactionRoutingRequest({ organizationPolicy: policy });
 
     expect(request.organizationPolicy).toBe(policy);
