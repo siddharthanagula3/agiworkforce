@@ -1033,7 +1033,7 @@
 [data-design='agi'] .agi-web-chips .agi-web-chip--on {
   border-color: var(--agi-amber);
   background: var(--agi-amber);
-  color: var(--agi-accent-ink);
+  color: var(--agi-button-ink);
   animation: none;
 }
 [data-design='agi'] .agi-web-composer {
@@ -2316,7 +2316,7 @@
 [data-design='agi'] .agi-mk-btn--primary {
   border-color: var(--agi-amber);
   background: var(--agi-amber);
-  color: var(--agi-accent-ink);
+  color: var(--agi-button-ink);
 }
 [data-design='agi'] .agi-mk-receipt {
   display: flex;
