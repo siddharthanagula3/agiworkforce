@@ -1991,6 +1991,37 @@ function recordProviderStepFailure(input: {
   }
 }
 
+/**
+ * Private data is a sensitive source in its own right: memory facts,
+ * attachments and earlier turns are all in the model's hands when an injected
+ * page asks it to egress. This is one leg of the lethal-trifecta gate, and on
+ * an unattended run the gate has nobody to ask, so its answer is allow or deny.
+ *
+ * Every signal here except `sensitiveContextPresent` is read off the shape of
+ * the conversation, which is why a scheduled run defeated it: built as exactly
+ * one system message and one user message, it looks like a first turn with
+ * nothing private in it even when the project's context was folded into that
+ * system prompt. `WEB-SEC-SCAN-2026-09-09-F39`.
+ *
+ * Named rather than inlined so the gate has a seam a test can reach; it had
+ * none.
+ */
+export function hasPrivateContext(
+  processed: Pick<ProcessedRequest, 'autoMemoryFacts' | 'sensitiveContextPresent'>,
+  messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
+): boolean {
+  return (
+    processed.sensitiveContextPresent === true ||
+    (processed.autoMemoryFacts?.length ?? 0) > 0 ||
+    messages.filter((message) => message.role === 'user').length > 1 ||
+    messages.some(
+      (message) =>
+        Array.isArray(message.content) &&
+        message.content.some((part) => (part as { type?: string }).type !== 'text'),
+    )
+  );
+}
+
 function toolResultSecretBlockedMessage(toolName: string): string {
   return `The result from "${toolName}" was blocked because it contained a secret. This organization's policy blocks sensitive values before they reach the model.`;
 }
@@ -2141,16 +2172,7 @@ export async function* runToolLoop(
   const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
-  // Private data is a sensitive source in its own right: memory facts, attachments and
-  // earlier turns are all in the model's hands when an injected page asks it to egress.
-  const privateContextPresent =
-    (processed.autoMemoryFacts?.length ?? 0) > 0 ||
-    messages.filter((message) => message.role === 'user').length > 1 ||
-    messages.some(
-      (message) =>
-        Array.isArray(message.content) &&
-        message.content.some((part) => (part as { type?: string }).type !== 'text'),
-    );
+  const privateContextPresent = hasPrivateContext(processed, messages);
   const sensitiveSourceAvailable =
     privateContextPresent ||
     mcpTools.some((def) => isSensitiveSourceTool(def)) ||
