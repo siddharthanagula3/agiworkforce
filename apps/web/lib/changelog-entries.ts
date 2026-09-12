@@ -11,7 +11,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-09-05',
     headline: 'Model catalogue, route health and the operator console · live',
     body: [
-      'Web: a model catalogue behind the composer with favourites, a Recommended short list, plan admission derived from the billing catalogue, and a served-by receipt on every reply.',
+      "Web: a model catalogue behind the composer with favourites, a Recommended short list, plan admission derived from the billing catalogue, and the model that answered a reply named in that reply's actions menu.",
       'Routing: Auto now tracks provider, credential and capability health separately, rotates away from an unfunded provider account once, and tells you when a pinned model cannot be served.',
       'Operations: an operator console with feedback triage, user operations, attributed cost, routing health, takedowns and data-rights requests, every action with a reason and an audit row.',
     ],
@@ -61,7 +61,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-05-03',
     headline: 'CLI v1.0 · live',
     body: [
-      'Pure Rust binary on five platforms. GitHub Release, Homebrew tap auto-generated, install.sh tested.',
+      'Pure Rust binary on five platforms, published as five archives on the GitHub Release. Neither install route works against that release yet: the Homebrew tap repository is private, and install.sh refuses to install without the signed checksum manifest the release does not carry.',
       'Cleanup pass: removed ~70 codex-rs port crates and a large net of dead code. Audit closed most P0/P1 items.',
     ],
   },
@@ -69,7 +69,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-02 to 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      `Tauri + React desktop with release signing and installer publishing aligned to the public release path.`,
+      'Tauri + React desktop, with the release signing and installer publishing pipeline aligned to the public release path. No signed installer has been published from it yet: the newest desktop release carries .AppImage, .deb and .rpm assets and no signature.',
       'Public download links open only after verified GitHub release assets or configured signed-asset URLs are available.',
     ],
   },

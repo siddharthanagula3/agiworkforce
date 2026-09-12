@@ -74,10 +74,11 @@ export default function ContactSalesPage() {
                     <>
                       SSO and SCIM provisioning are implemented and configured by your org owner;
                       audit events are recorded append-only and your owner can read, filter and
-                      export them as JSONL; per-organization retention windows with enforcement and
-                      legal holds are shipped; your owner can disallow managed compute for the whole
-                      workspace so every seat runs local or on your own keys; dedicated capacity is
-                      handled under contract. The{' '}
+                      export them as JSONL; per-organization retention windows and legal holds are
+                      shipped, with enforcement off until your owner turns it on; your owner can
+                      disallow managed compute for the whole workspace so every seat runs local or
+                      on your own keys. Dedicated capacity is not built: every plan draws on the
+                      same managed pool. The{' '}
                       <a className="agi-ds-link" href="/enterprise">
                         enterprise page
                       </a>{' '}
