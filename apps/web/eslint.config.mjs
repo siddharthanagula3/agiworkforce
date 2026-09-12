@@ -25,6 +25,10 @@ const eslintConfig = defineConfig([
     'scripts/**',
     '!scripts',
     '!scripts/verify-built-css.mjs',
+    // Browser QA scratch, gitignored and never committed. Flat config does not
+    // read .gitignore, so without this the local run reports errors on files
+    // that do not exist in CI, and the two disagree for no reason.
+    '.playwright-mcp/**',
   ]),
   {
     rules: {
