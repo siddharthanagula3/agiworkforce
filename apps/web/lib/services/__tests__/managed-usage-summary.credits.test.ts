@@ -46,7 +46,7 @@ describe('managed usage summary, stated in credits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSpendableCredits.mockResolvedValue({ availableCents: 400, overageEnabled: true });
-    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
   });
 
   it('maps a paid plan from its cents ledger onto the published allowances', async () => {
@@ -63,10 +63,12 @@ describe('managed usage summary, stated in credits', () => {
       period_start: null,
       period_end: null,
     });
+    // Rolling windows are authoritative in microUSD since 0182: one credit is
+    // 20,000 microUSD, so these are the same 15 / 60 / 20 credits as before.
     mockGetRollingUsage
-      .mockResolvedValueOnce({ usedCents: 30, oldestAt: null })
-      .mockResolvedValueOnce({ usedCents: 120, oldestAt: null })
-      .mockResolvedValueOnce({ usedCents: 40, oldestAt: null });
+      .mockResolvedValueOnce({ usedMicrousd: 300_000, usedCents: 30, oldestAt: null })
+      .mockResolvedValueOnce({ usedMicrousd: 1_200_000, usedCents: 120, oldestAt: null })
+      .mockResolvedValueOnce({ usedMicrousd: 400_000, usedCents: 40, oldestAt: null });
 
     const summary = await getManagedUsageSummary(db, 'user-1');
 
