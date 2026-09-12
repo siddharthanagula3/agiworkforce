@@ -231,10 +231,10 @@ export default function ArtifactsFeaturePage() {
               </h2>
             </div>
             <Prose>
-              The panel belongs to one conversation, and Shift+A opens and closes it. The gallery is
-              the account-wide view: your own artifacts on one tab and a set of worked examples on
-              the other, with a search box and a type filter over both, plus a date window over your
-              own.
+              The panel belongs to one conversation, and Ctrl or Cmd with Shift and A opens and
+              closes it. The gallery is the account-wide view: your own artifacts on one tab and a
+              set of worked examples on the other, with a search box and a type filter over both,
+              plus a date window over your own.
             </Prose>
             <Prose>
               Artifacts are held in browser storage on the device that rendered them. Signed in,
