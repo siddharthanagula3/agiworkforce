@@ -343,16 +343,57 @@ export async function runProbes(registry, options) {
       outcome: result.outcome,
       ttfbMs: result.ttfbMs ?? null,
       echoedModelId: result.echoedModelId ?? UNKNOWN_ECHO,
-      detail: result.detail ?? null,
+      detail: redactProbeDetail(result.detail ?? null),
       ...(probeTools
         ? {
             toolOutcome: tool?.toolOutcome ?? TOOL_PROBE_OUTCOME.skipped,
-            toolDetail: tool?.toolDetail ?? UNPROBED_TOOL_SUPPORT,
+            toolDetail: redactProbeDetail(tool?.toolDetail ?? UNPROBED_TOOL_SUPPORT),
           }
         : {}),
     };
   }
   return { schemaVersion: PROBE_SCHEMA_VERSION, lastRunOn: probedOn, probes };
+}
+
+/**
+ * Provider error text reaches a COMMITTED file, so it is treated as untrusted
+ * before it is written.
+ *
+ * Measured on 2026-09-12: a Moonshot rate-limit error answered with
+ * "Your account org-<32 hex> <ak-...>" and a tool probe wrote it verbatim. Run
+ * without `--out`, that is a provider account id and an API key prefix
+ * committed to the repository by the repo's own sanctioned command, and
+ * `check:secrets` does not catch either shape, so nothing downstream would have
+ * stopped it.
+ *
+ * The detail exists to say why a route failed, and no credential or account
+ * identifier is needed for that, so anything shaped like one is replaced rather
+ * than trimmed: a truncated key is still a leaked key prefix.
+ */
+const PROBE_DETAIL_REDACTIONS = [
+  // Vendor key prefixes: OpenAI and compatible (sk-), Moonshot and Alibaba
+  // (ak-, sk-ant-), plus the bare account ids providers quote back at you.
+  /\b(?:sk|ak|pk|rk)-[A-Za-z0-9_-]{4,}/gi,
+  /\borg-[A-Za-z0-9]{8,}/gi,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{8,}=*/gi,
+  // A long unbroken hex or base64url run is an identifier or a token, never
+  // prose, and is worth losing to keep either out of the file.
+  /\b[A-Fa-f0-9]{24,}\b/g,
+  /\b[A-Za-z0-9_-]{40,}\b/g,
+];
+
+export const PROBE_DETAIL_REDACTED = '[redacted]';
+export const PROBE_DETAIL_MAX_LENGTH = 300;
+
+export function redactProbeDetail(detail) {
+  if (typeof detail !== 'string') return detail ?? null;
+  let text = detail;
+  for (const pattern of PROBE_DETAIL_REDACTIONS) {
+    text = text.replace(pattern, PROBE_DETAIL_REDACTED);
+  }
+  return text.length > PROBE_DETAIL_MAX_LENGTH
+    ? `${text.slice(0, PROBE_DETAIL_MAX_LENGTH)}...`
+    : text;
 }
 
 export function routesNotHonouringTools(probeFile) {
