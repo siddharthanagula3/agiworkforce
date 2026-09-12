@@ -121,7 +121,7 @@ GOOGLE_API_KEY=AIza...
         <section className="agi-section">
           <p className="agi-section-eyebrow">Desktop key entry</p>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
-            Desktop can add provider keys during onboarding or in Settings → Models &amp; Keys. The
+            Desktop can add provider keys during onboarding or in Settings, Models &amp; Keys. The
             native runtime writes them to secure local storage; self-hosted Web deployments continue
             to use environment variables. BYOK is not configured in AGI’s hosted Web or Mobile apps.
           </p>
