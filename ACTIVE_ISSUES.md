@@ -978,21 +978,40 @@ Sequence contiguity is strict: the loop requires file `i` to carry sequence
 `i + 1` from `0001`, so the inventory has to read `0001` through `0182` with no
 gap.
 
-The remediation, when FA-1 has confirmed what production holds:
+**The remediation, rehearsed in an isolated worktree on 2026-09-12 and verified
+to clear the check.** It was rehearsed, measured, then reverted; nothing was
+committed, because applying it for real belongs after FA-1 confirms what
+production holds.
 
 1. Take `origin/main`'s `0180`, `0181` and `0182` verbatim
    (`git show origin/main:<path> > <path>`), never a renamed local copy.
-2. Delete local `0183`, `0184`, `0185` and their `.down.sql` files. Their content
-   is superseded: two are the same but for a comment, and `0182` is a superset
-   of `0185`.
-3. Move the seven source comments and the
-   `scripts/config/migration-dependency-allowlist.json` reason string from
-   `0185` to `0182`, `0184` to `0181`, `0183` to `0180`.
+2. `git rm` local `0183`, `0184` and `0185`. Their content is superseded: two
+   are the same but for a comment, and `0182` is a superset of `0185`.
+3. Repoint the **five allowlist entries** in
+   `scripts/config/migration-dependency-allowlist.json` whose parsed
+   `"migration"` field reads `185` to `182`. This field is read, not prose, so
+   it is part of the fix rather than tidying. The entries are
+   `api/billing/overage/route.ts`, `api/stripe-webhook/lib/db.ts`,
+   `lib/server/spendable-credits.ts`, `lib/services/credit-service.ts` and
+   `lib/services/managed-usage-request-service.ts`.
+4. Renumber the prose in **13 files** that name the old migrations in comments
+   and reason strings, `0185` to `0182`, `0184` to `0181`, `0183` to `0180`.
 
-Step 2 loses the three `.down.sql` files the branch added, since `origin/main`
-carries no down file for these. Writing new ones against `0182` means writing a
-down for the five triggers as well, which is why this is a founder-sequenced
-task and not a tidy-up. It was not attempted here.
+**Measured result of steps 1 and 2:** the inventory loads, 182 migrations,
+contiguous from `0001`, ending at `0182_managed_usage_microusd_ledger.sql`,
+which is exactly the last migration production holds.
+
+**An earlier note here said step 2 loses three `.down.sql` files the branch
+added. That was wrong and is withdrawn.** No `.down.sql` exists for `0183`,
+`0184` or `0185` in any commit: they appear in `git ls-files`, which reads the
+index, and not in `git ls-tree HEAD`. They are another session's uncommitted
+work, so the reconciliation costs nothing here, and whoever owns them should
+know they are down files for migrations that are being withdrawn.
+
+**Worth knowing before choosing a path:** the older
+`fix/provider-outage-health-2026-09-12` branch already carries
+`0180`/`0181`/`0182`, because it was built on `origin/main`. The divergence
+belongs to local `main`'s lineage alone, not to every branch in the repository.
 
 ### Retracted: the origin/main comparison, 2026-09-12
 
