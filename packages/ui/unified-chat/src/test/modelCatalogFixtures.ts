@@ -29,14 +29,29 @@ export function requireSelectedCatalogRoute(
   return decision;
 }
 
+export interface RoutedCatalogModel {
+  model: ModelMetadata;
+  route: SelectedAutoRoute;
+}
+
+export function requireRoutedCatalogModel(
+  predicate: (model: ModelMetadata, route: SelectedAutoRoute) => boolean,
+  route: Omit<AutoRoutingRequest, 'selection'>,
+  requiredBehavior: string,
+): RoutedCatalogModel {
+  for (const model of listCanonicalModels()) {
+    const decision = resolveAutoRoute({ ...route, selection: model.id });
+    if (decision.status !== 'selected' || decision.modelKey !== model.id) continue;
+    if (!predicate(model, decision)) continue;
+    return { model, route: decision };
+  }
+  throw new Error(`The model catalog must expose ${requiredBehavior}`);
+}
+
 export function requireRoutableCatalogModel(
   predicate: (model: ModelMetadata) => boolean,
   route: Omit<AutoRoutingRequest, 'selection'>,
   requiredBehavior: string,
 ): ModelMetadata {
-  return requireCatalogModel((model) => {
-    if (!predicate(model)) return false;
-    const decision = resolveAutoRoute({ ...route, selection: model.id });
-    return decision.status === 'selected' && decision.modelKey === model.id;
-  }, requiredBehavior);
+  return requireRoutedCatalogModel((model) => predicate(model), route, requiredBehavior).model;
 }
