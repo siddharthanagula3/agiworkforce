@@ -288,12 +288,38 @@ export interface StreamChunkUsage {
   providerReportedCostUsd?: number;
 }
 
+/**
+ * The failure classification an adapter already computed, carried whole.
+ *
+ * `message` is free text and part of it can be attacker-chosen: the refusal an
+ * adapter raises for a file a route cannot read concatenates the attachment's
+ * filename. A consumer that re-runs a classifier over that string lets whoever
+ * named the file pick the failure class, and with it whether the turn is
+ * retried, rotated onto another provider, or ended. The adapter holds the
+ * structured answer at the moment it fails; this field is how that answer
+ * survives the chunk boundary instead of being re-derived from prose.
+ *
+ * Adapters fill it from their own classifier. A consumer that finds it absent
+ * falls back to reading `message`, so an adapter with nothing structured to
+ * report keeps working unchanged.
+ */
+export interface StreamChunkErrorClassification {
+  category: string;
+  code: string;
+  retryable: boolean;
+  fallbackable: boolean;
+  status?: number;
+  retryAfterSeconds?: number;
+  providerHint?: string;
+}
+
 export interface StreamChunkError {
   type: 'error';
   code?: string;
   message: string;
   retryable?: boolean;
   retryAfterSeconds?: number;
+  classification?: StreamChunkErrorClassification;
 }
 
 export interface StreamChunkStop {
