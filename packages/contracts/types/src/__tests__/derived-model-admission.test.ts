@@ -5,6 +5,7 @@ import {
   canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
   getMinimumRequiredTier,
+  getModelMetadataById,
   getModelPriceBand,
   isManagedTrafficPermitted,
   listCanonicalModels,
@@ -39,8 +40,20 @@ describe('derived model admission · the ceilings and the premium share are per 
   it('leaves every model the allow list names on its list verdict', () => {
     for (const tier of NAMED_TIERS) {
       for (const modelId of getAllowedModelsForTier(tier)) {
+        // Economy splits by the same rule the gate uses: an economy model named
+        // `minTier: 'free'` IS admitted to Free, so reporting it as Basic told
+        // a free user to upgrade for a model they could already run. Every
+        // other economy model still floors at Basic, and the point of this case
+        // is unchanged: a named model reports its list verdict and never the
+        // price-derived floor.
         const expected =
-          tier === 'flagship_additions' ? 'max' : tier === 'pro_additions' ? 'pro' : 'basic';
+          tier === 'flagship_additions'
+            ? 'max'
+            : tier === 'pro_additions'
+              ? 'pro'
+              : getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free'
+                ? 'free'
+                : 'basic';
         expect(getMinimumRequiredTier(modelId)).toBe(expected);
       }
     }
