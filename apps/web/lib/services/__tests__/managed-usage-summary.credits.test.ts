@@ -79,7 +79,13 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.credits?.purchased).toEqual({ remaining: 200, overage_enabled: true });
   });
 
-  it('maps the free lane from its microUSD counters, fractions intact', async () => {
+  /**
+   * Free is a meter and a reset time, never a credit figure. Its allowance is
+   * a company COGS ceiling that was never disclosed, and a credit window states
+   * it outright: this mapping published a 5-credit monthly allowance, which is
+   * the per-user subsidy budget, alongside the spend against it.
+   */
+  it('states no credit figure for the free lane, only its meter', async () => {
     mockResolveEffectiveSubscription.mockResolvedValue({
       plan_tier: 'free',
       status: 'active',
@@ -95,21 +101,15 @@ describe('managed usage summary, stated in credits', () => {
       weeklyUsagePercentage: 20,
       weeklyResetAt: null,
       hasUsageRemaining: true,
-      monthlyUsedMicrousd: 25_000,
-      weeklyUsedMicrousd: 15_000,
-      fiveHourUsedMicrousd: 10_000,
     });
 
     const summary = await getManagedUsageSummary(db, 'user-2');
 
-    expect(summary.credits?.monthly).toMatchObject({ allowance: 5, used: 1.25, remaining: 3.75 });
-    expect(summary.credits?.weekly).toMatchObject({ allowance: 3.75, used: 0.75, remaining: 3 });
-    expect(summary.credits?.five_hour).toMatchObject({
-      allowance: 1.25,
-      used: 0.5,
-      remaining: 0.75,
-    });
-    expect(summary.credits?.flagship_weekly).toBeNull();
+    expect(summary.credits).toBeUndefined();
+    expect(summary.usage_percentage).toBe(25);
+    expect(summary.session_usage_percentage).toBe(40);
+    expect(summary.weekly_usage_percentage).toBe(20);
+    expect(summary.has_usage_remaining).toBe(true);
   });
 
   it('states no allowance for a plan that spends nothing here', async () => {
