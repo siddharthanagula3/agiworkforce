@@ -180,6 +180,7 @@ import {
   WEB_SEARCH_MAX_CALLS_PER_TURN,
   WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
+  resolveRoutingRedirectUrls,
 } from '@/lib/web-search/web-search-tool';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import { readTurnToolHistory } from './turn-tool-history';
@@ -1173,6 +1174,83 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
     sources.push(typeof snippet === 'string' && snippet ? { url, title, snippet } : { url, title });
   }
   return sources;
+}
+
+/**
+ * Fill in a provider-grounded source frame before it reaches the reader.
+ *
+ * A grounded turn delivers what the provider hands over: Google's is a routing
+ * redirect for a URL, its registrable domain for a title, and nothing at all
+ * for a snippet or a date. Beside a searched source that carries all three, the
+ * card read as a worse source rather than as a differently-found one. So the
+ * redirect is resolved to the publisher page and the page's own metadata fills
+ * the three fields, through the same path a searched result already uses.
+ *
+ * Only frames that are missing something pay for it, and both hops are bounded
+ * by their own timeouts and cached for a day. A frame that resolves to nothing
+ * is forwarded exactly as it arrived: a redirect is dead only when it expires,
+ * while an emptied href is dead immediately.
+ */
+const BARE_DOMAIN_TITLE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)+$/i;
+
+export interface ServerSearchResultsEnrichment {
+  resolveRedirects?: typeof resolveRoutingRedirectUrls;
+  enrichTitles?: typeof enrichWebSearchResultTitles;
+}
+
+export async function enrichServerSearchResultsLine(
+  line: SseLine,
+  overrides: ServerSearchResultsEnrichment = {},
+): Promise<SseLine> {
+  if (!line.includes('x_search_results')) return line;
+  const payload = line.trim().startsWith('data: ') ? line.trim().slice(6) : null;
+  if (!payload) return line;
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(payload) as Record<string, unknown>;
+  } catch {
+    return line;
+  }
+  const choices = event['choices'];
+  if (!Array.isArray(choices)) return line;
+  const delta = (choices[0] as Record<string, unknown> | undefined)?.['delta'] as
+    | Record<string, unknown>
+    | undefined;
+  const block = delta?.['x_search_results'] as Record<string, unknown> | undefined;
+  const content = block?.['content'];
+  if (!Array.isArray(content)) return line;
+
+  const rows = content.flatMap((entry, index) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const record = entry as Record<string, unknown>;
+    if (record['type'] !== 'web_search_result' || typeof record['url'] !== 'string') return [];
+    const reported = typeof record['title'] === 'string' ? record['title'] : '';
+    return [
+      {
+        index,
+        url: record['url'],
+        // A grounded "title" is often the publisher's bare domain, which the
+        // card already shows beneath the headline. Treated as absent so the
+        // page's real title fills the line instead of repeating the host.
+        title: BARE_DOMAIN_TITLE.test(reported.trim()) ? '' : reported,
+        snippet: typeof record['encrypted_content'] === 'string' ? record['encrypted_content'] : '',
+        date: typeof record['page_age'] === 'string' ? record['page_age'] : '',
+      },
+    ];
+  });
+  if (rows.length === 0) return line;
+  if (rows.every((row) => row.title && row.snippet && row.date)) return line;
+
+  const resolved = await (overrides.resolveRedirects ?? resolveRoutingRedirectUrls)(rows);
+  const enriched = await (overrides.enrichTitles ?? enrichWebSearchResultTitles)(resolved);
+  for (const row of enriched) {
+    const target = content[row.index] as Record<string, unknown>;
+    target['url'] = row.url;
+    if (row.title) target['title'] = row.title;
+    if (row.snippet) target['encrypted_content'] = row.snippet;
+    if (row.date) target['page_age'] = row.date;
+  }
+  return `data: ${JSON.stringify(event)}\n\n`;
 }
 
 export interface CollectedProviderLine {
@@ -2461,7 +2539,7 @@ export async function* runToolLoop(
   }
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
-    yield encoder.encode(entry.line);
+    yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
     if (entry.reasoningDelta) {
       yield encoder.encode(
         eventStream.emit({ type: 'reasoning-delta', delta: entry.reasoningDelta }),

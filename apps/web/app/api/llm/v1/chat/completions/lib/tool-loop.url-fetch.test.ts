@@ -204,9 +204,24 @@ describe('tool-loop url_fetch integration', () => {
     };
     const block = parsed.choices[0]!.delta.x_search_results;
     expect(block.tool).toBe('url_fetch');
+    // `encrypted_content` is present and empty for a fetched source that
+    // carried no description: the card's three fields are the same three
+    // whether the source was searched or fetched.
     expect(block.content).toEqual([
-      { type: 'web_search_result', url: 'https://a.example/', title: 'A', position: 1 },
-      { type: 'web_search_result', url: 'https://b.example/', title: 'B', position: 2 },
+      {
+        type: 'web_search_result',
+        url: 'https://a.example/',
+        title: 'A',
+        encrypted_content: '',
+        position: 1,
+      },
+      {
+        type: 'web_search_result',
+        url: 'https://b.example/',
+        title: 'B',
+        encrypted_content: '',
+        position: 2,
+      },
     ]);
   });
   it(`stops fetching after ${URL_FETCH_MAX_CALLS_PER_TURN} pages so one turn cannot amass an unbounded source list`, async () => {
