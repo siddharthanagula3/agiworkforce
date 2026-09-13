@@ -27,6 +27,8 @@ export interface PublishedArtifactViewProps {
   language: string | null;
   content: string;
   publishedAt: string;
+  /** Who the publication is for. Drives the line under the title, nothing else. */
+  audience?: 'public' | 'organization';
 }
 
 function formatDate(value: string): string {
@@ -41,6 +43,7 @@ export function PublishedArtifactView({
   language,
   content,
   publishedAt,
+  audience = 'public',
 }: PublishedArtifactViewProps) {
   const { t } = useTranslation('chat');
   const sandboxed = isSandboxedPublishedKind(kind);
@@ -67,7 +70,9 @@ export function PublishedArtifactView({
           {publishedLabel
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
             : ''}
-          {t('artifactPublish.sharedFrom', 'Shared from AGI')}
+          {audience === 'organization'
+            ? t('artifactPublish.sharedWithWorkspace', 'Shared with your workspace')
+            : t('artifactPublish.sharedFrom', 'Shared from AGI')}
         </p>
       </header>
 

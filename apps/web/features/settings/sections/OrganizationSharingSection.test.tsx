@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -10,6 +10,7 @@ const {
   mockSetAccess,
   mockShareConnector,
   mockUnshareConnector,
+  mockUnshareArtifact,
 } = vi.hoisted(() => ({
   mockOverview: vi.fn(),
   mockShareProject: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockSetAccess: vi.fn(),
   mockShareConnector: vi.fn(),
   mockUnshareConnector: vi.fn(),
+  mockUnshareArtifact: vi.fn(),
 }));
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'token') }));
@@ -28,12 +30,14 @@ vi.mock('../hooks/use-settings-queries', () => ({
   useSetSharedProjectMemberAccess: () => ({ mutate: mockSetAccess, isPending: false }),
   useShareConnectorWithOrganization: () => ({ mutate: mockShareConnector, isPending: false }),
   useUnshareConnectorFromOrganization: () => ({ mutate: mockUnshareConnector, isPending: false }),
+  useUnshareArtifactFromOrganization: () => ({ mutate: mockUnshareArtifact, isPending: false }),
 }));
 
 import { OrganizationSharingSection } from './OrganizationSharingSection';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '33333333-3333-4333-8333-333333333333';
+const ARTIFACT = '55555555-5555-4555-8555-555555555555';
 
 function renderSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -51,6 +55,7 @@ function overview(overrides: Record<string, unknown> = {}) {
     error: null,
     data: {
       organizationId: ORG,
+      currentUserId: 'user-owner',
       currentUserRole: 'admin',
       canManageSharing: true,
       members: [
@@ -77,6 +82,20 @@ function overview(overrides: Record<string, unknown> = {}) {
           name: 'Jira',
           url: 'https://mcp.example.com/sse',
           transport: 'sse',
+          ownerUserId: 'user-owner',
+          sharedByUserId: 'user-owner',
+          createdAt: '2026-01-03T00:00:00.000Z',
+        },
+      ],
+      sharedArtifacts: [
+        {
+          organizationId: ORG,
+          publishedArtifactId: ARTIFACT,
+          token: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+          artifactId: 'artifact-1',
+          title: 'Quarterly plan',
+          kind: 'markdown',
+          visibility: 'organization',
           ownerUserId: 'user-owner',
           sharedByUserId: 'user-owner',
           createdAt: '2026-01-03T00:00:00.000Z',
@@ -146,7 +165,13 @@ describe('OrganizationSharingSection', () => {
   });
 
   it('hides every mutation control from a member who cannot manage sharing', () => {
-    mockOverview.mockReturnValue(overview({ currentUserRole: 'member', canManageSharing: false }));
+    mockOverview.mockReturnValue(
+      overview({
+        currentUserId: 'user-member',
+        currentUserRole: 'member',
+        canManageSharing: false,
+      }),
+    );
     renderSection();
 
     expect(screen.queryByRole('button', { name: /stop sharing/i })).toBeNull();
@@ -253,5 +278,69 @@ describe('OrganizationSharingSection', () => {
     mockOverview.mockReturnValue(overview());
     const { container } = renderSection();
     expect(container.textContent).not.toMatch(/auth|token|secret/i);
+  });
+});
+
+describe('shared artifacts', () => {
+  it('lists what the workspace can open and says the public link is closed', async () => {
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    expect(await screen.findByText('Quarterly plan')).toBeInTheDocument();
+    expect(screen.getByText(/Workspace only/)).toBeInTheDocument();
+  });
+
+  it('names who loses access before it stops sharing, and does not promise a public link', async () => {
+    mockOverview.mockReturnValue(overview());
+    const user = userEvent.setup();
+
+    renderSection();
+
+    const card = (await screen.findByText('Quarterly plan')).closest('li') as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Stop sharing' }));
+
+    expect(await screen.findByText(/Stop sharing Quarterly plan\?/)).toBeInTheDocument();
+    expect(screen.getByText(/loses access to this artifact/)).toBeInTheDocument();
+    expect(screen.getByText(/not made public in its place/)).toBeInTheDocument();
+    expect(mockUnshareArtifact).not.toHaveBeenCalled();
+  });
+
+  it('withdraws the share only after the confirmation is accepted', async () => {
+    mockOverview.mockReturnValue(overview());
+    const user = userEvent.setup();
+
+    renderSection();
+
+    const card = (await screen.findByText('Quarterly plan')).closest('li') as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Stop sharing' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Stop sharing' }));
+
+    await waitFor(() => expect(mockUnshareArtifact).toHaveBeenCalledWith(ARTIFACT));
+  });
+
+  it('lets a plain member withdraw an artifact they published themselves', async () => {
+    mockOverview.mockReturnValue(
+      overview({
+        currentUserId: 'user-owner',
+        currentUserRole: 'member',
+        canManageSharing: false,
+      }),
+    );
+
+    renderSection();
+
+    const card = (await screen.findByText('Quarterly plan')).closest('li') as HTMLElement;
+    expect(within(card).getByRole('button', { name: 'Stop sharing' })).toBeInTheDocument();
+  });
+
+  it('tells a workspace with nothing shared where artifacts come from', async () => {
+    mockOverview.mockReturnValue(overview({ sharedArtifacts: [] }));
+
+    renderSection();
+
+    expect(await screen.findByText(/No artifacts are shared yet/)).toBeInTheDocument();
   });
 });

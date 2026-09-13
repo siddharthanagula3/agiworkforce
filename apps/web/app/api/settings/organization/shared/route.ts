@@ -11,6 +11,10 @@ import {
   type SharedConnectorSummary,
 } from '@/lib/services/org-shared-connector-service';
 import {
+  listSharedArtifacts,
+  type SharedArtifactSummary,
+} from '@/lib/services/org-shared-artifact-service';
+import {
   listSharedProjects,
   requireOrgMember,
   resolveOrgMembership,
@@ -28,11 +32,13 @@ interface OrgMemberRosterEntry {
 
 export interface OrganizationSharedOverview {
   organizationId: string;
+  currentUserId: string;
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   canManageSharing: boolean;
   members: OrgMemberRosterEntry[];
   sharedProjects: SharedProjectSummary[];
   sharedConnectors: SharedConnectorSummary[];
+  sharedArtifacts: SharedArtifactSummary[];
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -42,7 +48,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
 
-  const [members, sharedProjects, sharedConnectors] = await Promise.all([
+  const [members, sharedProjects, sharedConnectors, sharedArtifacts] = await Promise.all([
     db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
       `select user_id, role, joined_at
          from public.organization_members
@@ -52,10 +58,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     ),
     listSharedProjects(db, membership.organizationId),
     listSharedConnectors(db, membership.organizationId),
+    listSharedArtifacts(db, membership.organizationId),
   ]);
 
   const payload: OrganizationSharedOverview = {
     organizationId: membership.organizationId,
+    currentUserId: userId,
     currentUserRole: membership.role,
     canManageSharing: isOrgAdminRole(membership.role),
     members: members.map((row) => ({
@@ -65,6 +73,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     })),
     sharedProjects,
     sharedConnectors,
+    sharedArtifacts,
   };
 
   return NextResponse.json(payload);
