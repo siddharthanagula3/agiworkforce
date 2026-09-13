@@ -3999,13 +3999,27 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const messageInlineEditHandlersRef = useRef(messageInlineEditHandlers);
   messageInlineEditHandlersRef.current = messageInlineEditHandlers;
+  const [requestedEditMessageId, setRequestedEditMessageId] = useState<string | null>(null);
+  const clearEditRequest = useCallback(() => setRequestedEditMessageId(null), []);
   const messageInlineEdit = useMemo<MessageInlineEditController>(
     () => ({
       beginEdit: (id) => messageInlineEditHandlersRef.current.beginEdit(id),
       submitEdit: (id, content) => messageInlineEditHandlersRef.current.submitEdit(id, content),
+      requestedEditMessageId,
+      onEditRequestHandled: clearEditRequest,
     }),
-    [],
+    [clearEditRequest, requestedEditMessageId],
   );
+
+  const editLastUserMessage = useCallback(() => {
+    for (let index = displayedMessages.length - 1; index >= 0; index -= 1) {
+      const candidate = displayedMessages[index];
+      if (candidate?.role === 'user') {
+        setRequestedEditMessageId(candidate.id);
+        return;
+      }
+    }
+  }, [displayedMessages]);
 
   // A failed turn leaves the user's message trailing with no reply. The error
   // banner offers to resend it, so recovering does not mean hunting for the
@@ -5311,6 +5325,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                       isLoading={isLoading}
                       isGenerating={isStreaming}
                       placeholder={t('chat:placeholder')}
+                      onEditLastMessage={editLastUserMessage}
                       prefillText={composerPrefill}
                       onPrefillConsumed={handleComposerPrefillConsumed}
                       onTypingChange={handleTypingChange}
