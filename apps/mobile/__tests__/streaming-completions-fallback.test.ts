@@ -504,6 +504,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       runId,
       runPath,
       lastSequence: 2,
+      detachable: false,
       state: 'completed',
       cancellationRequestedAt: null,
     });
