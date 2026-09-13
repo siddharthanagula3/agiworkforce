@@ -132,6 +132,16 @@ describe('asking the server', () => {
     ).resolves.toBe('idle');
   });
 
+  it('keeps waiting when the server predates staleForMs', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ runs: [{ id: 'run-1', state: 'running' }] }), { status: 200 }),
+    );
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toBe('running');
+  });
+
   it('keeps waiting rather than inventing a stall when the rows are unreadable', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ runs: [{ id: 'run-1', state: 'running' }] }), { status: 200 }),
@@ -160,6 +170,10 @@ describe('reading liveness off the run rows', () => {
         { state: 'running', staleForMs: IN_FLIGHT_TURN_STALL_DEADLINE_MS - 1 },
       ]),
     ).toBe('running');
+  });
+
+  it('treats a row from a server that sends no age as alive, not as a stall', () => {
+    expect(readInFlightTurnVerdict([{ state: 'running' }])).toBe('running');
   });
 
   it('calls a row quieter than the deadline stalled', () => {

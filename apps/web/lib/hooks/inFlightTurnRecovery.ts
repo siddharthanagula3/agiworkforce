@@ -32,7 +32,12 @@ export type InFlightTurnVerdict = 'running' | 'stalled' | 'idle';
 
 export interface InFlightRunLiveness {
   state: string;
-  staleForMs: number;
+  /**
+   * Absent from a server older than the field. Unknown age is not zero age and
+   * is not a stall; it reads as alive, which is how the client behaved before
+   * the field existed.
+   */
+  staleForMs?: number | undefined;
 }
 
 export function shouldAskWhetherTurnIsRunning(question: InFlightTurnQuestion): boolean {
@@ -51,15 +56,18 @@ export function shouldAskWhetherTurnIsRunning(question: InFlightTurnQuestion): b
  */
 const WAITING_STATES = new Set(['paused', 'awaiting_input', 'ready_for_review']);
 
+function isAlive(run: InFlightRunLiveness, stallDeadlineMs: number): boolean {
+  if (WAITING_STATES.has(run.state)) return true;
+  if (typeof run.staleForMs !== 'number') return true;
+  return run.staleForMs < stallDeadlineMs;
+}
+
 export function readInFlightTurnVerdict(
   runs: readonly InFlightRunLiveness[],
   stallDeadlineMs: number = IN_FLIGHT_TURN_STALL_DEADLINE_MS,
 ): InFlightTurnVerdict {
   if (runs.length === 0) return 'idle';
-  if (runs.some((run) => WAITING_STATES.has(run.state) || run.staleForMs < stallDeadlineMs)) {
-    return 'running';
-  }
-  return 'stalled';
+  return runs.some((run) => isAlive(run, stallDeadlineMs)) ? 'running' : 'stalled';
 }
 
 export async function askWhetherTurnIsRunning(
@@ -79,12 +87,11 @@ export async function askWhetherTurnIsRunning(
     (run): run is InFlightRunLiveness =>
       typeof run === 'object' &&
       run !== null &&
-      typeof (run as InFlightRunLiveness).state === 'string' &&
-      typeof (run as InFlightRunLiveness).staleForMs === 'number',
+      typeof (run as InFlightRunLiveness).state === 'string',
   );
-  // A payload that carries rows but none this client can read is a contract
-  // mismatch, not an idle conversation; keep the spinner rather than invent an
-  // error the server never reported.
+  // Rows this client cannot read at all are a contract mismatch, not an idle
+  // conversation; keep waiting rather than invent an error the server never
+  // reported.
   if (runs.length === 0) return payload.runs.length > 0 ? 'running' : 'idle';
   return readInFlightTurnVerdict(runs);
 }

@@ -94,8 +94,13 @@ export const CloudAgentRunSchema = z.object({
    * clock, and a run whose executor died stops moving `updatedAt` while its
    * state stays active, which is the only way to tell a working run from a
    * stranded one.
+   *
+   * Optional because a server older than this field sends no such key, and a
+   * client must not read that silence as "this run has been quiet for 0 ms".
+   * Absent means unknown, and every consumer owes an unknown run the benefit of
+   * the doubt: treat it as alive, exactly as before the field existed.
    */
-  staleForMs: z.number().int().min(0),
+  staleForMs: z.number().int().min(0).optional(),
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
   pendingInput: CloudAgentPendingInputSchema.optional(),
   usage: CloudAgentRunUsageSchema.optional(),
