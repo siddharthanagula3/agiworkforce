@@ -74,3 +74,33 @@ export function getSubscriptionOwnerGuard(
           : 'OK',
   };
 }
+
+export type BillingManagementTarget =
+  | { kind: 'portal' }
+  | { kind: 'external'; url: string; label: string }
+  | null;
+
+/**
+ * Where "Manage billing" actually goes. A store-billed subscription can only be
+ * changed in the store that owns it, and the hosted portal exists only for a
+ * web-billed account on a build that ships it. Anything else has no destination,
+ * and the row is not drawn rather than opening something that cannot help.
+ */
+export function billingManagementTarget(input: {
+  source: MobileBillingSource;
+  portalEnabled: boolean;
+}): BillingManagementTarget {
+  const { source, portalEnabled } = input;
+  if ((source === 'stripe' || source === 'manual') && portalEnabled) return { kind: 'portal' };
+
+  const url = subscriptionManagementUrl(source);
+  if (!url) return null;
+  return {
+    kind: 'external',
+    url,
+    label:
+      source === 'stripe' || source === 'manual'
+        ? 'Manage billing on the web'
+        : `Manage in ${subscriptionSourceLabel(source)}`,
+  };
+}
