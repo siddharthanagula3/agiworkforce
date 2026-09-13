@@ -107,6 +107,36 @@ export type {
 } from './shell';
 
 export {
+  LOCAL_CHAT_TIMEOUT_DEFAULT_MS,
+  LOCAL_CHAT_TIMEOUT_MAX_MS,
+  LOCAL_INFERENCE_COMMANDS,
+  LOCAL_MODEL_ID_PREFIX,
+  LOCAL_MODEL_SERVERS,
+  LOCAL_MODEL_SERVER_LABELS,
+  LocalInferenceRefused,
+  isLocalModelId,
+  isLocalModelServerId,
+  isLoopbackBaseUrl,
+  localModelId,
+  normalizeLocalBaseUrl,
+  normalizeLocalModelSettings,
+  parseLocalModelId,
+} from './inference';
+export type {
+  LocalChatMessage,
+  LocalChatRequest,
+  LocalChatResult,
+  LocalChatStopReason,
+  LocalInferenceCommand,
+  LocalModel,
+  LocalModelRef,
+  LocalModelServerId,
+  LocalModelServerStatus,
+  LocalModelSettings,
+  LocalModelSnapshot,
+} from './inference';
+
+export {
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
   desktopDeepLink,

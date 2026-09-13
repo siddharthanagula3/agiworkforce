@@ -25,6 +25,7 @@ export const DESKTOP_CAPABILITIES = [
   'simulator.ios',
   'emulator.android',
   'mcp.local',
+  'local.inference',
   'host.remote',
   'task.scheduled',
 ] as const;
