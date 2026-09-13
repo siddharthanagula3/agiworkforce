@@ -21,9 +21,11 @@ import {
   getModelReasoning as getCatalogModelReasoning,
   splitEffortsByEntitlement as splitCatalogEffortsByEntitlement,
   type EffortEntitlement,
+  getDefaultAutoRoutingProfile,
   getDisplayModels as getCatalogDisplayModels,
   getSelectableModels as getCatalogSelectableModels,
   isAutoModeModelId as isCatalogAutoModeModelId,
+  isFreeBillingPlanTier,
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
@@ -171,12 +173,13 @@ export function normalizeSubscriptionTier(tier: string | null | undefined): stri
 }
 
 export function getAllowedAutoModesForTier(_tier: string | null | undefined): string[] {
-  return ['auto'];
+  return [getDefaultAutoRoutingProfile().id];
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
-  if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
-  return 'auto';
+  return isFreeBillingPlanTier(normalizeSubscriptionTier(tier))
+    ? FREE_TRIAL_MODEL
+    : getDefaultAutoRoutingProfile().id;
 }
 
 export function canAccessManualModelSelection(tier: string | null | undefined): boolean {

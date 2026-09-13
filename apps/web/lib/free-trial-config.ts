@@ -1,11 +1,14 @@
 import {
+  canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
   getDefaultModelFor,
-  getModelMetadataById,
+  normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 
-export const FREE_TRIAL_MODEL = getDefaultModelFor('free', 'chat');
+const FREE_PLAN_TIER = normalizeBillingPlanTier(null);
+
+export const FREE_TRIAL_MODEL = getDefaultModelFor(FREE_PLAN_TIER, 'chat');
 
 export const FREE_TRIAL_MODELS: readonly string[] = getAllowedModelsForTier('economy').filter(
-  (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
+  (modelId) => canAccessModelForSubscriptionTier(modelId, FREE_PLAN_TIER),
 );
