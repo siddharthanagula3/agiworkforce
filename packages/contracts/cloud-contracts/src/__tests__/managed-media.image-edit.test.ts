@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { ManagedMediaImageGenerationRequestSchema } from './managed-media';
+import {
+  ManagedMediaImageGenerationRequestSchema,
+  supportsManagedMediaImageEdit,
+} from '../managed-media';
 
 const SOURCE = { asset_id: '11111111-1111-4111-8111-111111111111' };
 const MASK = { asset_id: '22222222-2222-4222-8222-222222222222' };
@@ -73,5 +76,23 @@ describe('managed image generation, operation validation', () => {
     const result = parse({ operation: 'edit', source_image: SOURCE, transparent_background: true });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.transparent_background).toBe(true);
+  });
+});
+
+describe('which model may take a source image', () => {
+  it('answers from the image API a catalog entry names, not from a provider id', () => {
+    expect(supportsManagedMediaImageEdit('openai')).toBe(true);
+    expect(supportsManagedMediaImageEdit('gemini')).toBe(false);
+    expect(supportsManagedMediaImageEdit('imagen')).toBe(false);
+  });
+
+  it('refuses a model whose catalog entry names no image API at all', () => {
+    expect(supportsManagedMediaImageEdit(undefined)).toBe(false);
+    expect(supportsManagedMediaImageEdit(null)).toBe(false);
+  });
+
+  it('is not satisfied by a provider name that happens to match nothing', () => {
+    expect(supportsManagedMediaImageEdit('google')).toBe(false);
+    expect(supportsManagedMediaImageEdit('stability')).toBe(false);
   });
 });
