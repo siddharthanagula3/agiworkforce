@@ -148,14 +148,6 @@ const STORAGE: StorageRow[] = [
     source: 'shared/stores/web-settings-store.ts',
   },
   {
-    key: 'agiworkforce-web-media',
-    store: 'Local storage',
-    holds:
-      'Your twenty most recent completed image and video generations, so the media panel is not empty on a reload. This can contain content you generated.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/stores/media-store.ts',
-  },
-  {
     key: 'agi-notification-store',
     store: 'Local storage',
     holds:
