@@ -33,6 +33,29 @@ function ok(body: Record<string, unknown>) {
   return { ok: true, json: async () => body } as unknown as Response;
 }
 
+describe('VideoGenerationPlaceholder · what it reports while the job runs', () => {
+  it('shows the provider percentage once one is known', () => {
+    render(<VideoGenerationPlaceholder taskId={TASK_ID} progress={42} />);
+    expect(screen.getByTestId('video-generation-placeholder').textContent).toContain(
+      '42% complete',
+    );
+  });
+
+  it('falls back to the duration hint when the provider reports no percentage', () => {
+    render(<VideoGenerationPlaceholder taskId={TASK_ID} />);
+    expect(screen.getByTestId('video-generation-placeholder').textContent).toContain(
+      'this usually takes a minute or two',
+    );
+  });
+
+  it('clamps a percentage the provider reports outside the 0 to 100 range', () => {
+    render(<VideoGenerationPlaceholder taskId={TASK_ID} progress={140} />);
+    expect(screen.getByTestId('video-generation-placeholder').textContent).toContain(
+      '100% complete',
+    );
+  });
+});
+
 describe('VideoGenerationPlaceholder · stopping a generation', () => {
   it('offers no stop control when there is no job to stop', () => {
     render(<VideoGenerationPlaceholder />);

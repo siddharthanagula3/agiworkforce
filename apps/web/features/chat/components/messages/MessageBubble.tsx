@@ -2216,6 +2216,9 @@ const MessageBubbleComponent = function MessageBubble({
               <VideoGenerationPlaceholder
                 startedAt={message.timestamp.toISOString()}
                 aspectRatio={message.metadata?.videoAspect}
+                {...(typeof message.metadata?.videoProgress === 'number'
+                  ? { progress: message.metadata.videoProgress }
+                  : {})}
                 taskId={
                   typeof message.metadata?.videoTaskId === 'string'
                     ? message.metadata.videoTaskId

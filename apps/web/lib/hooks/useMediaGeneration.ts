@@ -70,6 +70,17 @@ export type VideoWatchResult =
   | PendingVideoGeneration
   | FailedVideoGeneration;
 
+/**
+ * Emitted on every poll that finds the task still running. Without it the
+ * percentage the status route already reports stays inside this loop until the
+ * five-minute observation deadline, so a watcher can only show elapsed time
+ * while a job the provider is reporting progress for is in flight.
+ */
+export interface VideoProgressUpdate {
+  taskStatus: 'queued' | 'processing';
+  progress?: number;
+}
+
 const VIDEO_POLL_INTERVAL_MS = 5_000;
 const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
@@ -389,7 +400,11 @@ export function useMediaGeneration() {
   const watchVideo = useCallback(
     async (
       taskId: string,
-      options: { localJobId?: string; timeoutMs?: number } = {},
+      options: {
+        localJobId?: string;
+        timeoutMs?: number;
+        onProgress?: (update: VideoProgressUpdate) => void;
+      } = {},
     ): Promise<VideoWatchResult> => {
       const localJobId = options.localJobId ?? taskId;
       const deadline = Date.now() + (options.timeoutMs ?? VIDEO_POLL_TIMEOUT_MS);
@@ -425,6 +440,10 @@ export function useMediaGeneration() {
         }
         lastStatus = status.status;
         lastProgress = status.progress;
+        options.onProgress?.({
+          taskStatus: lastStatus,
+          ...(lastProgress === undefined ? {} : { progress: lastProgress }),
+        });
         if (Date.now() >= deadline) {
           return {
             status: 'pending',
