@@ -501,12 +501,36 @@ const TIER_RESTRICTED_CODES: ReadonlySet<string> = new Set([
   'restrictedmodelserror',
 ]);
 
-function matchesTierRestricted(e: SDKErrorLike, status: number | undefined): boolean {
+/**
+ * The same refusal arrives without any of those codes. Vercel AI Gateway
+ * answers a free-tier key asking for a premium model with a bare 403 whose
+ * only signal is the sentence, and read as a credential failure it took the
+ * whole gateway out of service and ended the turn on "the selected model is
+ * not available" while the reader was on Auto.
+ */
+const TIER_RESTRICTED_MARKERS: readonly string[] = [
+  'do not have access to this model',
+  'does not have access to this model',
+  'free tier users do not have access',
+  'upgrade to paid credits',
+  'not entitled to this model',
+];
+
+function matchesTierRestricted(
+  e: SDKErrorLike,
+  status: number | undefined,
+  lowerMessage: string,
+): boolean {
   if (status !== 403) return false;
   const codes = [e.name, e.code, e.type, e.error?.type, e.error?.code, e.error?.status];
-  return codes.some(
-    (raw) => typeof raw === 'string' && TIER_RESTRICTED_CODES.has(raw.trim().toLowerCase()),
-  );
+  if (
+    codes.some(
+      (raw) => typeof raw === 'string' && TIER_RESTRICTED_CODES.has(raw.trim().toLowerCase()),
+    )
+  ) {
+    return true;
+  }
+  return TIER_RESTRICTED_MARKERS.some((marker) => lowerMessage.includes(marker));
 }
 
 /**
@@ -812,7 +836,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesTierRestricted(e, status)) {
+  if (matchesTierRestricted(e, status, lower)) {
     return {
       category: 'invalid_model',
       code: 'model_tier_restricted',
