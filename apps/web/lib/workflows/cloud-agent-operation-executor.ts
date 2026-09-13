@@ -51,7 +51,36 @@ function classificationFields(error: unknown): Record<string, unknown> {
   };
 }
 
-function sanitizeExecutionError(error: unknown): unknown {
+/**
+ * A result our own contract rejected is not a provider payload, and calling it
+ * one sent the reader looking at the wrong system. A ZodError's message is a
+ * JSON array, so it matched the raw-payload pattern and was replaced by the
+ * sentence about an external response, which is how seven failed web searches
+ * reported themselves on 2026-09-13 with the cause recorded nowhere.
+ */
+function contractViolationError(error: unknown, operationKind: CloudAgentOperationKind): Error {
+  const issues = (error as { issues?: unknown }).issues;
+  logger.error(
+    { operationKind, issues: JSON.stringify(issues).slice(0, 2000) },
+    '[cloud-agent] operation result did not match its contract',
+  );
+  return new Error(
+    `The ${operationKind} step finished, but its result did not match what AGI expects, so it was discarded.`,
+    { cause: error },
+  );
+}
+
+function isZodError(error: unknown): boolean {
+  return (
+    Boolean(error) &&
+    typeof error === 'object' &&
+    Array.isArray((error as { issues?: unknown }).issues) &&
+    (error as { name?: unknown }).name === 'ZodError'
+  );
+}
+
+function sanitizeExecutionError(error: unknown, operationKind: CloudAgentOperationKind): unknown {
+  if (isZodError(error)) return contractViolationError(error, operationKind);
   const message = messageOf(error);
   if (message === null || !RAW_PAYLOAD_MESSAGE_PATTERN.test(message)) return error;
   // The replacement is all that reaches the model, the durable receipt and the
@@ -184,7 +213,7 @@ export async function executeCloudAgentOperation<TResult extends object>(
       ),
     );
   } catch (rawError) {
-    const error = sanitizeExecutionError(rawError);
+    const error = sanitizeExecutionError(rawError, input.operationKind);
     await failCloudAgentExecutionOperation(db, {
       userId: input.userId,
       operationId: claim.operationId,

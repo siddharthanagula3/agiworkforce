@@ -381,7 +381,7 @@ describe('durable cloud agent operation executor', () => {
     );
   });
 
-  it('replaces a raw Zod issues array error message the same way', async () => {
+  it('names a contract violation as one instead of blaming the external response', async () => {
     receiptMocks.claim.mockResolvedValue({
       disposition: 'acquired',
       operationId: '0190a000-0000-7000-8000-000000000002',
@@ -404,6 +404,8 @@ describe('durable cloud agent operation executor', () => {
 
     expect(rejection).toBeInstanceOf(Error);
     expect((rejection as Error).message.startsWith('[')).toBe(false);
+    expect((rejection as Error).message).toContain('did not match what AGI expects');
+    expect((rejection as Error).message).not.toContain('could not summarize');
   });
 
   it('keeps a human-authored failure message unchanged', async () => {
