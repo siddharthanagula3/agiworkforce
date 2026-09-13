@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BellOff, Bot, Cloud, RefreshCw } from 'lucide-react-native';
-import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
+import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -22,9 +22,12 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { CloudRunCard } from './components/CloudRunCard';
 import { CloudRunDetailSheet } from './components/CloudRunDetailSheet';
+import { StartWorkSheet, type StartWorkSubmission } from './components/StartWorkSheet';
+import { startCloudWorkRun, START_WORK_ERROR } from './startWork';
 import {
   cloudRunTitle,
   groupCloudRunsByRecency,
@@ -42,7 +45,7 @@ const SCOPE_NOTE = `Every agent run on your AGI Cloud account, whichever surface
 const BACKGROUND_ALERTS_OFF_NOTE =
   'Background approval alerts are off, so a task that pauses while the app is closed will wait silently.';
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () => void }) {
   const colors = useThemeColors();
 
   return (
@@ -86,6 +89,26 @@ function Header({ onBack }: { onBack: () => void }) {
         <Cloud size={13} color={colors.textSecondary} />
         <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>Cloud</Text>
       </View>
+      {onStartWork ? (
+        <Pressable
+          onPress={onStartWork}
+          accessibilityRole="button"
+          accessibilityLabel="New task"
+          hitSlop={8}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Plus size={20} color={colors.textPrimary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -291,6 +314,10 @@ export function CloudTasksScreen() {
   const stopRun = useCloudTaskStore((state) => state.stopRun);
   const reset = useCloudTaskStore((state) => state.reset);
 
+  const tier = useTierStore((state) => state.tier);
+  const [startWorkVisible, setStartWorkVisible] = useState(false);
+  const [startWorkSubmitting, setStartWorkSubmitting] = useState(false);
+  const [startWorkError, setStartWorkError] = useState<string | null>(null);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState ?? 'active');
   const isForeground = appState === 'active';
   const canLoad = FEATURES.cloudTasks && appMode === 'cloud' && cloudUnlocked;
@@ -354,6 +381,39 @@ export function CloudTasksScreen() {
     router.push('/(app)/settings/notifications' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleOpenStartWork = useCallback(() => {
+    setStartWorkError(null);
+    setStartWorkVisible(true);
+  }, []);
+
+  const handleCloseStartWork = useCallback(() => {
+    setStartWorkVisible(false);
+    setStartWorkError(null);
+  }, []);
+
+  const handleStartWork = useCallback(
+    (submission: StartWorkSubmission) => {
+      setStartWorkSubmitting(true);
+      setStartWorkError(null);
+      void startCloudWorkRun(submission, (runId) => {
+        void load('refresh');
+        void openRun(runId);
+      })
+        .then(() => {
+          setStartWorkSubmitting(false);
+          setStartWorkVisible(false);
+          void load('refresh');
+        })
+        .catch((error: unknown) => {
+          setStartWorkSubmitting(false);
+          setStartWorkError(
+            error instanceof Error && error.message ? error.message : START_WORK_ERROR,
+          );
+        });
+    },
+    [load, openRun],
+  );
+
   const handleOpenConversation = useCallback(
     (conversationId: string) => {
       closeRun();
@@ -374,9 +434,11 @@ export function CloudTasksScreen() {
     );
   }
 
+  const canStartWork = canUseBillingPlanCapability(tier, 'agi_work');
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <Header onBack={handleBack} />
+      <Header onBack={handleBack} {...(canStartWork ? { onStartWork: handleOpenStartWork } : {})} />
 
       <ScrollView
         horizontal
@@ -495,6 +557,14 @@ export function CloudTasksScreen() {
           }
         />
       )}
+
+      <StartWorkSheet
+        visible={startWorkVisible}
+        submitting={startWorkSubmitting}
+        error={startWorkError}
+        onClose={handleCloseStartWork}
+        onSubmit={handleStartWork}
+      />
 
       <CloudRunDetailSheet
         detail={detail}
