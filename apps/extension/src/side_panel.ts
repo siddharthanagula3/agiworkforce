@@ -70,10 +70,12 @@ import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
   hydrateStoredChatMessage,
+  pageContextStillDescribes,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
   trimChatMessages,
+  type PageContextSource,
   type SidePanelChatMessage,
 } from './features/side-panel/chat-state';
 import { setupVoiceInput } from './features/side-panel/voice';
@@ -434,6 +436,7 @@ interface ChatChunk {
 export interface SharedSidePanelContext {
   messages: ChatMessage[];
   pendingPageContext: string | null;
+  pendingPageContextSource: PageContextSource | null;
   isStreaming: boolean;
   currentStreamId: string | null;
   streamTimeoutHandle: ReturnType<typeof setTimeout> | null;
@@ -456,6 +459,7 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
   return {
     messages: [],
     pendingPageContext: null,
+    pendingPageContextSource: null,
     isStreaming: false,
     currentStreamId: null,
     streamTimeoutHandle: null,
@@ -887,11 +891,16 @@ function clearStoredMessages(): void {
   });
 }
 
+function clearPendingPageContext(): void {
+  _ctx.pendingPageContext = null;
+  _ctx.pendingPageContextSource = null;
+}
+
 function resetConversationView(): void {
   _ctx.messages.length = 0;
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
-  _ctx.pendingPageContext = null;
+  clearPendingPageContext();
   clearStoredMessages();
   updateContextButton();
   updateSendButton();
@@ -926,7 +935,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.needsMessageRebuild = true;
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
-  _ctx.pendingPageContext = null;
+  clearPendingPageContext();
   _ctx.conversationId = createBrowserConversationId();
   _ctx.selectedModel = 'auto';
   _ctx.currentModelKey = undefined;
@@ -4021,6 +4030,7 @@ function injectStyles(): void {
     .sp-context-chip.has-context { border: 0; }
     .sp-autonomy-control { position: relative; }
     .sp-autonomy-chip {
+      position: relative;
       height: 20px;
       padding: 0 4px 0 7px;
       border-color: transparent;
@@ -4029,6 +4039,15 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       font-size: 10.5px;
       font-weight: 550;
+    }
+    /* The chip is 20px by design and the pointer target may not be. The
+       overlay carries the hit area to 24px without moving anything. It grows
+       upward only: below the chip is the edge of the composer shell, which
+       clips anything that reaches past it. */
+    .sp-autonomy-chip::after {
+      content: '';
+      position: absolute;
+      inset: -4px 0 0;
     }
     .sp-autonomy-chip:hover { background: var(--agi-ext-hover); filter: none; }
     .sp-autonomy-chip[data-mode='full'] {
@@ -4085,6 +4104,13 @@ function injectStyles(): void {
       border-radius: 10px;
       background: transparent;
       font-size: 10.5px;
+      min-width: 0;
+    }
+    #sp-effort-btn-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     #sp-effort-btn:hover,
     #sp-effort-btn[aria-expanded='true'] {
@@ -4176,7 +4202,7 @@ function injectStyles(): void {
       #sp-input-area { padding-inline: 8px; }
       #sp-composer-shell { padding-inline: 9px; }
       .sp-context-chip { max-width: 82px; }
-      #sp-effort-btn { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+      #sp-effort-btn { max-width: 58px; }
     }
     @media (max-width: 340px) {
       .sp-context-chip { max-width: 64px; text-overflow: ellipsis; overflow: hidden; }
@@ -4394,7 +4420,9 @@ const PAGE_CONTEXT_DENIED_REASON =
 
 const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
 
-export type PageContextCapture = { ok: true; text: string } | { ok: false; reason: string };
+export type PageContextCapture =
+  | { ok: true; text: string; source: PageContextSource }
+  | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
   return /cannot access|host permission|must request permission|chrome:\/\/|extension gallery/i.test(
@@ -4438,7 +4466,9 @@ async function capturePageContext(): Promise<PageContextCapture> {
           const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
           const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
           resolve(
-            text.trim() ? { ok: true, text } : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
+            text.trim()
+              ? { ok: true, text, source: { tabId: tab.id!, url: tab.url ?? '' } }
+              : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
           );
         },
       );
@@ -4721,7 +4751,7 @@ function sendMessage(text: string): void {
     const displayText = slashCmd.display;
     const actualPrompt = slashCmd.prompt;
     const pageContextAtAdmission = _ctx.pendingPageContext;
-    _ctx.pendingPageContext = null;
+    clearPendingPageContext();
     const attachmentsToSend = pendingAttachments.slice();
     pendingAttachments.length = 0;
     composerAttachmentNotice = null;
@@ -4803,7 +4833,7 @@ function sendMessage(text: string): void {
   renderMessages();
 
   const pageCtx = _ctx.pendingPageContext;
-  _ctx.pendingPageContext = null;
+  clearPendingPageContext();
   const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
   composerAttachmentNotice = null;
@@ -5225,7 +5255,22 @@ function updateAttachmentPreview(): void {
   updateSendButton();
 }
 
-function updateActivePage(url: string): void {
+/**
+ * The attached page text is the page it was read from, not "the page". A tab
+ * switch or a navigation, including an in-page one on a single-page app, leaves
+ * the chip naming the new host while it still carries the old page's text, so
+ * the attachment is dropped the moment its source stops being what the user is
+ * looking at.
+ */
+function dropPageContextOnNavigation(tabId: number | undefined, url: string): void {
+  if (pageContextStillDescribes(_ctx.pendingPageContextSource, tabId, url)) return;
+  clearPendingPageContext();
+  composerContextNotice = t('spContextChipDropped');
+  updateAttachmentPreview();
+}
+
+function updateActivePage(url: string, tabId?: number): void {
+  dropPageContextOnNavigation(tabId, url);
   currentPageHostname = pageChipLabel(url);
   setBlockedState(isRestrictedUrl(url));
   updateContextButton();
@@ -5254,7 +5299,7 @@ function setBlockedState(blocked: boolean): void {
 
   if (blocked) {
     blockedEl.classList.add('visible');
-    _ctx.pendingPageContext = null;
+    clearPendingPageContext();
   } else {
     blockedEl.classList.remove('visible');
   }
@@ -5282,7 +5327,7 @@ function refreshPageHostname(): void {
       if (chrome.runtime.lastError) return;
       const tab = tabs[0];
       const url = tab?.url ?? '';
-      updateActivePage(url);
+      updateActivePage(url, tab?.id);
       refreshTabGroupUI();
     });
   } catch {
@@ -6204,7 +6249,7 @@ function buildUI(): void {
       _ctx.needsMessageRebuild = true;
       _ctx.isStreaming = false;
       _ctx.currentStreamId = null;
-      _ctx.pendingPageContext = null;
+      clearPendingPageContext();
       _ctx.conversationGeneration += 1;
       _ctx.conversationId = conversationOwner.conversationId;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
@@ -9405,7 +9450,7 @@ function buildUI(): void {
   contextBtn.textContent = currentPageHostname || t('spContextChipFallback');
   contextBtn.addEventListener('click', async () => {
     if (_ctx.pendingPageContext) {
-      _ctx.pendingPageContext = null;
+      clearPendingPageContext();
       updateContextButton();
       return;
     }
@@ -9419,6 +9464,7 @@ function buildUI(): void {
     chip.classList.remove('loading');
     if (capture.ok) {
       _ctx.pendingPageContext = capture.text;
+      _ctx.pendingPageContextSource = capture.source;
       composerContextNotice = null;
     } else {
       chip.textContent = prevText;
@@ -9557,6 +9603,8 @@ function buildUI(): void {
     'aria-haspopup': 'dialog',
     'aria-expanded': 'false',
   }) as HTMLButtonElement;
+  const effortButtonLabel = el('span', { id: 'sp-effort-btn-label' });
+  effortButton.appendChild(effortButtonLabel);
   const effortPopover = el('div', {
     id: 'sp-effort-popover',
     role: 'dialog',
@@ -9599,7 +9647,7 @@ function buildUI(): void {
         ? t('spEffortAuto')
         : t('spEffortUnavailable');
 
-    effortButton.textContent = t('spEffortButton', [valueLabel]);
+    effortButtonLabel.textContent = t('spEffortButton', [valueLabel]);
     effortButton.title = state.description;
     effortButton.dataset['disabled'] = String(!ready);
     effortButton.setAttribute(
@@ -10601,6 +10649,7 @@ function checkPendingChat(): void {
               return;
             }
             _ctx.pendingPageContext = capture.text;
+            _ctx.pendingPageContextSource = capture.source;
             composerContextNotice = null;
             sendMessage(SLASH_COMMANDS['/summarize']!.prompt);
           })

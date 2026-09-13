@@ -3,6 +3,7 @@ import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
   hydrateStoredChatMessage,
+  pageContextStillDescribes,
   projectCanonicalAgentActivity,
   resolveComposerPrompt,
   selectModelHistory,
@@ -248,5 +249,29 @@ describe('side-panel chat state', () => {
       expect(shouldRenderTextBubble({ text: '', streaming: false })).toBe(false);
       expect(shouldRenderTextBubble({ text: '   \n ', streaming: false })).toBe(false);
     });
+  });
+});
+
+describe('attached page context', () => {
+  const source = { tabId: 7, url: 'https://news.example/article/one' };
+
+  it('stays attached while the tab and the page are the ones it was read from', () => {
+    expect(pageContextStillDescribes(source, 7, 'https://news.example/article/one')).toBe(true);
+  });
+
+  it('nothing is attached, so nothing can be stale', () => {
+    expect(pageContextStillDescribes(null, 7, 'https://news.example/other')).toBe(true);
+  });
+
+  it('stops describing the page after an in-page navigation on the same tab', () => {
+    expect(pageContextStillDescribes(source, 7, 'https://news.example/article/two')).toBe(false);
+  });
+
+  it('stops describing the page after the user moves to another tab', () => {
+    expect(pageContextStillDescribes(source, 8, 'https://news.example/article/one')).toBe(false);
+  });
+
+  it('stops describing the page when no tab can be resolved at all', () => {
+    expect(pageContextStillDescribes(source, undefined, '')).toBe(false);
   });
 });
