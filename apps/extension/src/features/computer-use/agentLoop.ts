@@ -14,6 +14,14 @@ import {
   type AgentMessage,
   type ToolCall,
 } from './cloudAgentClient';
+import {
+  formatConsoleEntries,
+  readConsoleEntries,
+  type ConsoleLevel,
+} from '../browser-tools/consoleCapture';
+import { formatNetworkEntries, readNetworkEntries } from '../browser-tools/networkCapture';
+import { startPageWatch, stopPageWatch } from '../browser-tools/pageWatch';
+import { formatDownloadRecord, startBrowserToolDownload } from '../browser-tools/downloads';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
@@ -264,6 +272,41 @@ async function executeTool(
       return `Navigated to: ${url}\nverified: actual URL = ${actualUrl ?? 'unknown'}`;
     }
 
+    case 'download_file': {
+      const url = args['url'];
+      if (typeof url !== 'string') throw new Error('download_file requires url:string');
+      const record = await runOwnedOperation(options, () => startBrowserToolDownload(tabId, url));
+      return formatDownloadRecord(record);
+    }
+
+    case 'read_console': {
+      await assertRunOwnership(options);
+      const pattern = args['pattern'];
+      const level = args['level'];
+      const limit = args['limit'];
+      const entries = readConsoleEntries(tabId, {
+        ...(typeof pattern === 'string' ? { pattern } : {}),
+        ...(typeof level === 'string' ? { level: level as ConsoleLevel } : {}),
+        ...(typeof limit === 'number' ? { limit } : {}),
+      });
+      return formatConsoleEntries(entries);
+    }
+
+    case 'read_network': {
+      await assertRunOwnership(options);
+      const pattern = args['pattern'];
+      const resourceType = args['resourceType'];
+      const failedOnly = args['failedOnly'];
+      const limit = args['limit'];
+      const entries = readNetworkEntries(tabId, {
+        ...(typeof pattern === 'string' ? { pattern } : {}),
+        ...(typeof resourceType === 'string' ? { resourceType } : {}),
+        ...(failedOnly === true || failedOnly === 'true' ? { failedOnly: true } : {}),
+        ...(typeof limit === 'number' ? { limit } : {}),
+      });
+      return formatNetworkEntries(entries);
+    }
+
     case 'find': {
       const description = args['description'];
       await runOwnedOperation(options, () =>
@@ -298,6 +341,9 @@ export async function runAgentLoop(
   let finalMessage = '';
 
   try {
+    // The run holds the capture open so read_console and read_network answer
+    // for the whole run, not only for the moment the tool was called.
+    await startPageWatch(tabId, 'run').catch(() => undefined);
     const gatewayBase = await runOwnedOperation(options, resolveGatewayBase);
 
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));
@@ -311,7 +357,8 @@ export async function runAgentLoop(
       content:
         'You are a browser automation agent powered by AGI Cloud. ' +
         'You control a real Chrome browser tab on behalf of the user. ' +
-        'Use the provided tools (screenshot, click, scroll, type, read_dom, navigate, find) ' +
+        'Use the provided tools (screenshot, click, scroll, type, read_dom, navigate, find, ' +
+        'download_file, read_console, read_network) ' +
         "to accomplish the user's goal.\n\n" +
         'ELEMENT INDEXING: read_dom returns numbered elements like "[3] button \\"Submit\\"". ' +
         'ALWAYS prefer acting by index (e.g. click({index:3})) over authoring raw CSS selectors. ' +
@@ -425,6 +472,7 @@ export async function runAgentLoop(
       finalMessage = `Agent reached the maximum step limit (${maxSteps}). Partial progress may have been made.`;
     }
   } finally {
+    await stopPageWatch(tabId, 'run').catch(() => undefined);
     unregisterActiveTab(tabId);
   }
 

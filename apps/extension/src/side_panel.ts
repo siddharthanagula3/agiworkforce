@@ -101,6 +101,7 @@ import {
   Trash2,
   MessageSquare,
   Monitor,
+  Terminal,
   Globe,
   Mic,
   Camera,
@@ -127,6 +128,11 @@ import {
   CLOUD_RUNS_PANEL_CSS,
   type CloudRunsPanelAPI,
 } from './features/side-panel/cloudRunsPanel';
+import {
+  buildBrowserToolsPanel,
+  BROWSER_TOOLS_PANEL_CSS,
+  type BrowserToolsPanelAPI,
+} from './features/side-panel/browserToolsPanel';
 import {
   beginPairing,
   loadPairingState,
@@ -651,7 +657,7 @@ const assistantCloudIdByStreamId = new Map<string, string>();
 
 let currentPageHostname = '';
 
-type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs';
+type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page';
 
 const MAX_STORED_MESSAGES = 50;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
@@ -4198,7 +4204,15 @@ function injectStyles(): void {
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
   ) {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS + '\n' + CLOUD_RUNS_PANEL_CSS);
+    sheet.replaceSync(
+      cssText +
+        '\n' +
+        COMPUTER_USE_PANEL_CSS +
+        '\n' +
+        CLOUD_RUNS_PANEL_CSS +
+        '\n' +
+        BROWSER_TOOLS_PANEL_CSS,
+    );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
     const fallback = document.createElement('style');
@@ -6584,6 +6598,27 @@ function buildUI(): void {
     switchTab('computer-use');
   });
   viewsSection.appendChild(cuLaunchBtn);
+
+  const pageLaunchBtn = el('button', {
+    class: 'sp-drawer-launcher-btn',
+    id: 'sp-drawer-page-btn',
+    title: 'Open page downloads, console and network',
+  });
+  const pageIcon = el('div', { class: 'sp-drawer-launcher-icon' });
+  pageIcon.appendChild(renderIcon(Terminal, 14));
+  const pageTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
+  pageTextBlock.appendChild(el('div', {}, 'Page'));
+  pageTextBlock.appendChild(
+    el('div', { class: 'sp-drawer-launcher-desc' }, 'Downloads, console and network'),
+  );
+  pageLaunchBtn.appendChild(pageIcon);
+  pageLaunchBtn.appendChild(pageTextBlock);
+  pageLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '\u203A'));
+  pageLaunchBtn.addEventListener('click', () => {
+    closeDrawer();
+    switchTab('page');
+  });
+  viewsSection.appendChild(pageLaunchBtn);
   drawerBody.appendChild(viewsSection);
 
   const toolsSection = el('div', { class: 'sp-drawer-section' });
@@ -7980,10 +8015,24 @@ function buildUI(): void {
     },
     'Runs',
   );
+  const pageTabBtn = el(
+    'button',
+    {
+      class: 'sp-tab',
+      id: 'sp-tab-page',
+      'data-tab': 'page',
+      role: 'tab',
+      'aria-selected': 'false',
+      'aria-controls': 'sp-page-panel',
+      tabindex: '-1',
+    },
+    'Page',
+  );
   tabBar.appendChild(chatTabBtn);
   tabBar.appendChild(workflowsTabBtn);
   tabBar.appendChild(cuTabBtn);
   tabBar.appendChild(runsTabBtn);
+  tabBar.appendChild(pageTabBtn);
   document.body.appendChild(tabBar);
 
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
@@ -7996,6 +8045,11 @@ function buildUI(): void {
   runsPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-cloud-runs');
   runsPanel.panelEl.setAttribute('aria-hidden', 'true');
 
+  const pagePanel: BrowserToolsPanelAPI = buildBrowserToolsPanel();
+  pagePanel.panelEl.setAttribute('role', 'tabpanel');
+  pagePanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-page');
+  pagePanel.panelEl.setAttribute('aria-hidden', 'true');
+
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
     const workflowsPanelEl = document.getElementById('sp-workflows');
@@ -8005,22 +8059,27 @@ function buildUI(): void {
     workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
     cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
     runsTabBtn.classList.toggle('sp-tab-active', tab === 'cloud-runs');
+    pageTabBtn.classList.toggle('sp-tab-active', tab === 'page');
     chatTabBtn.setAttribute('aria-selected', String(tab === 'chat'));
     workflowsTabBtn.setAttribute('aria-selected', String(tab === 'workflows'));
     cuTabBtn.setAttribute('aria-selected', String(tab === 'computer-use'));
     runsTabBtn.setAttribute('aria-selected', String(tab === 'cloud-runs'));
+    pageTabBtn.setAttribute('aria-selected', String(tab === 'page'));
     chatTabBtn.tabIndex = tab === 'chat' ? 0 : -1;
     workflowsTabBtn.tabIndex = tab === 'workflows' ? 0 : -1;
     cuTabBtn.tabIndex = tab === 'computer-use' ? 0 : -1;
     runsTabBtn.tabIndex = tab === 'cloud-runs' ? 0 : -1;
+    pageTabBtn.tabIndex = tab === 'page' ? 0 : -1;
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
     runsPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'cloud-runs');
+    pagePanel.panelEl.classList.toggle('sp-tab-visible', tab === 'page');
     chatPanelEl?.setAttribute('aria-hidden', String(tab !== 'chat'));
     workflowsPanelEl?.setAttribute('aria-hidden', String(tab !== 'workflows'));
     cuPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'computer-use'));
     runsPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'cloud-runs'));
+    pagePanel.panelEl.setAttribute('aria-hidden', String(tab !== 'page'));
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     tabBar.classList.toggle('sp-tab-bar-exit', tab !== 'chat');
@@ -8034,12 +8093,16 @@ function buildUI(): void {
     // The runs list polls the gateway. Deactivating stops the timer and drops
     // every rendered row, so a hidden tab costs nothing and holds no data.
     runsPanel.setActive(tab === 'cloud-runs');
+    // The page lists poll the service worker. A hidden tab stops the timer and
+    // holds nothing, so console and request text is never retained unseen.
+    pagePanel.setActive(tab === 'page');
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
   cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
   runsTabBtn.addEventListener('click', () => switchTab('cloud-runs'));
-  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn];
+  pageTabBtn.addEventListener('click', () => switchTab('page'));
+  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn, pageTabBtn];
   tabBar.addEventListener('keydown', (event: KeyboardEvent) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -8780,6 +8843,8 @@ function buildUI(): void {
 
   document.body.appendChild(runsPanel.panelEl);
 
+  document.body.appendChild(pagePanel.panelEl);
+
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
@@ -8804,6 +8869,9 @@ function buildUI(): void {
           switchTab('computer-use');
         }
       }
+    } else if (m['type'] === 'AGI_DOWNLOAD_CHANGED') {
+      const download = m['download'] as Parameters<BrowserToolsPanelAPI['applyDownload']>[0];
+      if (download && typeof download.id === 'number') pagePanel.applyDownload(download);
     } else if (m['type'] === 'AGI_CU_STEP') {
       if (!cuPanel.ownsRun(runId)) return;
       cuPanel.noteRunActivity();

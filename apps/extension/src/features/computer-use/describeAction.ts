@@ -61,6 +61,18 @@ export function describeComputerUseAction(
     case 'screenshot':
       return 'Take a screenshot of this page.';
 
+    case 'download_file': {
+      const host = hostOf(a['url']);
+      const where = host ? ` from ${host}` : '';
+      return `Download a file${where} to your computer. Chrome saves it to your downloads folder.`;
+    }
+
+    case 'read_console':
+      return 'Read the console messages and errors this page has produced.';
+
+    case 'read_network':
+      return 'Read the list of requests this page has made, their status and timing. No bodies or headers are read.';
+
     default: {
       const name = truncate(toolName, 40) || 'an action';
       return `Run "${name}" on this page. This action is not one AGI can describe in detail, approve it only if you expect it.`;

@@ -40,6 +40,7 @@ describe('Chrome side-panel interaction accessibility', () => {
       'workflows',
       'computer-use',
       'cloud-runs',
+      'page',
     ]);
     // Two of the four panels are built in their own modules, so the element a
     // tab claims to control has to be looked for across all of them.
@@ -47,6 +48,7 @@ describe('Chrome side-panel interaction accessibility', () => {
       source,
       readSource('../src/features/side-panel/computerUsePanel.ts'),
       readSource('../src/features/side-panel/cloudRunsPanel.ts'),
+      readSource('../src/features/side-panel/browserToolsPanel.ts'),
     ].join('\n');
     for (const [, tab, controls] of tabs) {
       expect(source).toContain(`id: 'sp-tab-${tab}'`);
@@ -59,13 +61,19 @@ describe('Chrome side-panel interaction accessibility', () => {
 
   it('keeps the roving tabindex over the whole tab set, not a stale subset', () => {
     expect(source).toContain(
-      'const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn]',
+      'const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn, pageTabBtn]',
     );
     const switchBody = source.slice(
       source.indexOf('function switchTab(tab: SidePanelTab)'),
       source.indexOf("chatTabBtn.addEventListener('click'"),
     );
-    for (const button of ['chatTabBtn', 'workflowsTabBtn', 'cuTabBtn', 'runsTabBtn']) {
+    for (const button of [
+      'chatTabBtn',
+      'workflowsTabBtn',
+      'cuTabBtn',
+      'runsTabBtn',
+      'pageTabBtn',
+    ]) {
       expect(switchBody, `${button} has no aria-selected update`).toContain(
         `${button}.setAttribute('aria-selected'`,
       );
@@ -76,6 +84,9 @@ describe('Chrome side-panel interaction accessibility', () => {
   it('mounts every panel it declares a tab for, so no tab opens onto nothing', () => {
     expect(source).toContain('document.body.appendChild(cuPanel.panelEl)');
     expect(source).toContain('document.body.appendChild(runsPanel.panelEl)');
+    expect(source).toContain('document.body.appendChild(pagePanel.panelEl)');
+    expect(source).toContain('buildBrowserToolsPanel()');
+    expect(source).toContain('BROWSER_TOOLS_PANEL_CSS');
     expect(source).toContain('buildCloudRunsPanel()');
     expect(source).toContain('CLOUD_RUNS_PANEL_CSS');
     expect(source).toContain("runsPanel.setActive(tab === 'cloud-runs')");

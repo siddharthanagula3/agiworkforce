@@ -87,7 +87,13 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
-  | 'DELETE_CLOUD_CONVERSATION';
+  | 'DELETE_CLOUD_CONVERSATION'
+  | 'START_DOWNLOAD'
+  | 'LIST_DOWNLOADS'
+  | 'REVEAL_DOWNLOAD'
+  | 'SET_PAGE_WATCH'
+  | 'READ_PAGE_CONSOLE'
+  | 'READ_PAGE_NETWORK';
 
 export type InternalMessageType = 'CHAT_CHUNK';
 
@@ -982,6 +988,95 @@ export interface ComputerUseCommandResponse {
   error?: string;
 }
 
+export interface StartDownloadMessage extends BaseMessage {
+  type: 'START_DOWNLOAD';
+  url: string;
+}
+
+export interface ListDownloadsMessage extends BaseMessage {
+  type: 'LIST_DOWNLOADS';
+}
+
+export interface RevealDownloadMessage extends BaseMessage {
+  type: 'REVEAL_DOWNLOAD';
+  downloadId: number;
+}
+
+export interface SessionDownload {
+  id: number;
+  url: string;
+  filename: string;
+  origin: string;
+  state: 'in_progress' | 'complete' | 'interrupted';
+  bytesReceived: number;
+  totalBytes: number;
+  startedAt: number;
+  error?: string;
+}
+
+export interface DownloadResponse {
+  success: boolean;
+  download?: SessionDownload;
+  downloads?: SessionDownload[];
+  error?: string;
+}
+
+export interface DownloadChangedMessage {
+  type: 'AGI_DOWNLOAD_CHANGED';
+  download: SessionDownload;
+}
+
+export interface SetPageWatchMessage extends BaseMessage {
+  type: 'SET_PAGE_WATCH';
+  watching: boolean;
+}
+
+export interface ReadPageConsoleMessage extends BaseMessage {
+  type: 'READ_PAGE_CONSOLE';
+  pattern?: string;
+  level?: 'error' | 'warning' | 'info' | 'log' | 'debug';
+  limit?: number;
+}
+
+export interface ReadPageNetworkMessage extends BaseMessage {
+  type: 'READ_PAGE_NETWORK';
+  pattern?: string;
+  resourceType?: string;
+  failedOnly?: boolean;
+  limit?: number;
+}
+
+export interface PageConsoleEntry {
+  at: number;
+  level: 'error' | 'warning' | 'info' | 'log' | 'debug';
+  source: string;
+  text: string;
+  url?: string;
+  line?: number;
+}
+
+export interface PageNetworkEntry {
+  requestId: string;
+  at: number;
+  method: string;
+  url: string;
+  resourceType: string;
+  status?: number;
+  statusText?: string;
+  durationMs?: number;
+  bytes?: number;
+  failure?: string;
+}
+
+export interface PageWatchResponse {
+  success: boolean;
+  watching?: boolean;
+  origin?: string;
+  console?: PageConsoleEntry[];
+  network?: PageNetworkEntry[];
+  error?: string;
+}
+
 export type ExtensionMessage =
   | CaptureScreenshotMessage
   | ClickMessage
@@ -1059,7 +1154,13 @@ export type ExtensionMessage =
   | CancelComputerUseMessage
   | GetComputerUseStateMessage
   | ApproveContextHandoffMessage
-  | CancelContextHandoffMessage;
+  | CancelContextHandoffMessage
+  | StartDownloadMessage
+  | ListDownloadsMessage
+  | RevealDownloadMessage
+  | SetPageWatchMessage
+  | ReadPageConsoleMessage
+  | ReadPageNetworkMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -1098,7 +1199,9 @@ export type ExtensionResponse =
   | ScheduledTaskResponse
   | GetQuickModeResponse
   | ComputerUseCommandResponse
-  | ContextHandoffResponse;
+  | ContextHandoffResponse
+  | DownloadResponse
+  | PageWatchResponse;
 
 export interface PopupState {
   sessionStartTime: number;
