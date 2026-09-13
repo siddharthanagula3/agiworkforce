@@ -54,6 +54,9 @@ function watch(page: Page): PageFailures {
     // Analytics and telemetry beacons fail on a blocked network and say nothing
     // about the page a buyer is reading.
     if (/google-analytics|googletagmanager|clerk-telemetry|vitals\.vercel/.test(url)) return;
+    // A route prefetch the router abandons when the page moves on is not a
+    // failed request the buyer can see.
+    if (r.failure()?.errorText === 'net::ERR_ABORTED' && /[?&]_rsc=/.test(url)) return;
     f.failedRequests.push(`${r.failure()?.errorText ?? 'failed'} ${url.slice(0, 140)}`);
   });
   return f;

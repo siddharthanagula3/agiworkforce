@@ -6,7 +6,7 @@ const TITLE_ID = 'agi-not-found-title';
 
 export default function NotFound() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" data-route-state="not-found" className="agi-ds-page">
       <Header />
       <main id="main-content">
         <Section labelledBy={TITLE_ID} size="lg">
