@@ -72,6 +72,33 @@ describe('withAGIShareIntent patchMainActivity', () => {
     );
   });
 
+  it('copies a shared stream into the app cache before the deep link', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('Intent.ACTION_SEND_MULTIPLE');
+    expect(out).toContain('Intent.EXTRA_STREAM');
+    expect(out).toContain('contentResolver.openInputStream(uri)');
+    expect(out).toContain('Uri.fromFile(target).toString()');
+    expect(out).toContain('appendQueryParameter("files", files.toString())');
+    expect(out).toContain('MAX_SHARED_FILE_BYTES = 12L * 1024 * 1024');
+    expect(out).toContain('MAX_SHARED_FILES = 5');
+    expect(out.indexOf('copySharedStreams(intent)')).toBeLessThan(
+      out.indexOf('appendQueryParameter("files"'),
+    );
+  });
+
+  it('reads the display name and mime type from the content provider', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('import android.provider.OpenableColumns');
+    expect(out).toContain('OpenableColumns.DISPLAY_NAME');
+    expect(out).toContain('contentResolver.getType(uri) ?: "application/octet-stream"');
+  });
+
+  it('prunes the cached inbox so a share does not accumulate copies', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('private fun pruneSharedInbox(inbox: File)');
+    expect(out).toContain('SHARED_INBOX_TTL_MS');
+  });
+
   it('is idempotent, patching twice changes nothing', () => {
     const once = patchMainActivity(STOCK_MAIN_ACTIVITY);
     const twice = patchMainActivity(once);

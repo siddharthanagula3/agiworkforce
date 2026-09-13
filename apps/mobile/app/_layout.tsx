@@ -56,7 +56,10 @@ import { getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
-import { stageSharedFileAttachments } from '@/src/features/share-preview/sharedAttachments';
+import {
+  parseSharedFilesParam,
+  stageSharedFileAttachments,
+} from '@/src/features/share-preview/sharedAttachments';
 import { clearPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { completePendingPostAuthIntentForLoadedSession } from '@/src/features/auth/actions/postAuthIntent';
 
@@ -561,11 +564,14 @@ export default function RootLayout() {
       case 'share': {
         const text = getParam('text');
         const nativeTruncated = getParam('truncated') === '1';
-        if (text && text.trim()) {
+        const handoffKey = stageSharedFileAttachments(parseSharedFilesParam(getParam('files')));
+        if ((text && text.trim()) || handoffKey) {
           router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(text)}${
+            `/(app)/share-preview?text=${encodeURIComponent(text ?? '')}${
               nativeTruncated ? '&nativeTruncated=1' : ''
-            }` as Parameters<typeof router.push>[0],
+            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
+              typeof router.push
+            >[0],
           );
         }
         break;
