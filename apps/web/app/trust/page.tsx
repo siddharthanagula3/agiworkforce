@@ -156,7 +156,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Twelve protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-12.',
+      'Implemented. Thirteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-12.',
   },
   {
     label: 'Rate limiting',

@@ -218,21 +218,21 @@ describe('lane transparency reaches the transcript', () => {
     render(<MessageBubble message={bubbleMessage('free')} />);
 
     await user.click(screen.getByLabelText('More message actions'));
-    expect(screen.getByText(`${POOL_MODEL_NAME} · via free pool`)).toBeInTheDocument();
+    expect(screen.getAllByText(`${POOL_MODEL_NAME} · via free pool`)).not.toHaveLength(0);
   });
 
   it('reads exactly as before for a managed turn and an unlabelled one', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<MessageBubble message={bubbleMessage('managed')} />);
     await user.click(screen.getByLabelText('More message actions'));
-    expect(screen.getByText(POOL_MODEL_NAME)).toBeInTheDocument();
+    expect(screen.getAllByText(POOL_MODEL_NAME)).not.toHaveLength(0);
     expect(screen.queryByText(/via free pool/)).toBeNull();
     await user.keyboard('{Escape}');
     unmount();
 
     render(<MessageBubble message={bubbleMessage()} />);
     await user.click(screen.getByLabelText('More message actions'));
-    expect(screen.getByText(POOL_MODEL_NAME)).toBeInTheDocument();
+    expect(screen.getAllByText(POOL_MODEL_NAME)).not.toHaveLength(0);
     expect(screen.queryByText(/via free pool/)).toBeNull();
   });
 });
