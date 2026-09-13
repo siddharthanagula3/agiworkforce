@@ -76,6 +76,7 @@ export function collectMessageResearchSources(
         title: result.title || '',
         snippet: result.snippet,
         favicon: result.favicon,
+        ...(result.publishedDate ? { publishedDate: result.publishedDate } : {}),
         citationIndex: index + 1,
       });
     });

@@ -2354,6 +2354,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 url: r['url'] as string,
                 title: (r['title'] as string) || (r['url'] as string),
                 snippet: (r['encrypted_content'] as string) || '',
+                ...(typeof r['page_age'] === 'string' && r['page_age']
+                  ? { publishedDate: r['page_age'] }
+                  : {}),
               }));
             if (results.length > 0) {
               const spans = readCitationSpans(searchResultsBlock.citation_spans);

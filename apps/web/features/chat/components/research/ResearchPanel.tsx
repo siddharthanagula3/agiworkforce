@@ -70,13 +70,11 @@ export function humanizedPathTitle(url: string): string | undefined {
 function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }) {
   const [imgError, setImgError] = useState(false);
 
-  // Derive a clean display hostname from the URL
-  let displayHost = source.url;
-  try {
-    displayHost = new URL(source.url).hostname.replace(/^www\./, '');
-  } catch {
-    // keep raw
-  }
+  // The publisher, not the router: a grounded result's own host is the routing
+  // vendor, so reading the URL here printed the same vendor under every source
+  // in an answer while the favicon beside it already named the real publisher.
+  const publisherDomain = citationPublisherDomain(source);
+  const displayHost = publisherDomain ?? source.url;
 
   const displayTitle =
     source.title && source.title !== source.url
@@ -87,7 +85,6 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
   // for the PUBLISHER's domain. A grounded result's URL host is the routing
   // vendor, so deriving from it drew the same icon for every source in an
   // answer and claimed Google had published all of them.
-  const publisherDomain = citationPublisherDomain(source);
   const faviconSrc =
     source.favicon && !imgError
       ? source.favicon
@@ -132,7 +129,9 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {displayTitle}
         </h4>
-        <p className="truncate text-[12px] text-muted-foreground">{displayHost}</p>
+        <p className="truncate text-[12px] text-muted-foreground">
+          {source.publishedDate ? `${displayHost} · ${source.publishedDate}` : displayHost}
+        </p>
         {source.snippet && (
           <p className="line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">
             {source.snippet}
