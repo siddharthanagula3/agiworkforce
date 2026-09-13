@@ -62,6 +62,7 @@ import {
 import { getTokenCounter } from '../../data/tokenCounter';
 import {
   CREDIT_BALANCE_LABEL,
+  CREDIT_TOP_UP_LABEL,
   daysUntilReset,
   formatCreditBalance,
   formatCreditSpendability,
@@ -318,6 +319,7 @@ export interface UsageMeterCreditsRow {
   label: string;
   balanceLabel: string;
   spendabilityLabel: string;
+  topUpLabel: string;
 }
 
 export interface UsageMeterWebviewPayload {
@@ -388,6 +390,7 @@ function buildUsageMeterCredits(meter: ExtensionUsageMeter): UsageMeterCreditsRo
       meter.creditBalanceCents,
       meter.overageEnabled === true,
     ),
+    topUpLabel: CREDIT_TOP_UP_LABEL,
   };
 }
 
