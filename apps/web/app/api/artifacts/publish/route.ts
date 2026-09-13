@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -53,6 +54,26 @@ function publishingUnavailableResponse(): NextResponse {
     { error: { message: 'Artifact publishing is not configured in this environment yet.' } },
     { status: 503 },
   );
+}
+
+/**
+ * The workspace the publisher could share this with, or null when they belong
+ * to none. The panel renders its audience control from this rather than
+ * offering a workspace option that would answer 403.
+ */
+async function describeWorkspaceAudience(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+): Promise<{ memberCount: number } | null> {
+  if (!organizationId) return null;
+  const [row] = await db.query<{ member_count: number | string | null }>(
+    `select count(*) as member_count
+       from public.organization_members
+      where organization_id = $1`,
+    [organizationId],
+  );
+  const parsed = Number(row?.member_count ?? 0);
+  return { memberCount: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0 };
 }
 
 async function handlePublish(request: NextRequest): Promise<Response> {
@@ -137,6 +158,8 @@ async function handlePublish(request: NextRequest): Promise<Response> {
       kind: published.kind,
       title: published.title,
       sandboxed: requiresSandboxedRender(published.kind),
+      visibility: published.visibility,
+      workspace: await describeWorkspaceAudience(db, organizationId),
     },
     { status: 201 },
   );

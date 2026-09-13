@@ -19,13 +19,19 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
  * enforced in the database as well as in the query. The one deliberately
  * anonymous read, {@link getPublishedArtifactByToken}, is the public page's
  * token lookup and mirrors how `app/share/[token]/page.tsx` reads
- * `shared_sessions`: knowledge of the 144-bit token is the read grant.
+ * `shared_sessions`: knowledge of the 144-bit token is the read grant, and it
+ * now applies only to rows whose `visibility` is still `public`.
+ *
+ * Migration 0184 gave the row a second audience. A `visibility` of
+ * `organization` closes the anonymous path above and leaves the artifact
+ * readable through `lib/services/org-shared-artifact-service.ts`, where an
+ * RLS-scoped adapter and a grant row in `organization_shared_artifacts` decide
+ * the answer.
  *
  * Known gaps (founder-pending, deliberately NOT invented here):
  *   - No TTL. Published pages live until the publisher revokes them; no expiry
  *     window has been approved and a guessed one would silently delete pages.
- *   - View auth is public-by-token, matching the conversation-share precedent,
- *     and views are not counted or audited.
+ *   - Views are not counted or audited on either audience.
  */
 
 export const MAX_CONTENT_CHARS = 1_000_000;
@@ -52,6 +58,25 @@ export const PUBLISHABLE_KINDS = [
 ] as const;
 
 export type PublishableKind = (typeof PUBLISHABLE_KINDS)[number];
+
+/**
+ * Who the publication is for (migration 0184). `public` is the 0095 rule,
+ * knowledge of the token is the read grant. `organization` closes the anonymous
+ * page and leaves the artifact readable only to members holding the grant row
+ * in `organization_shared_artifacts`.
+ */
+export const PUBLISHED_ARTIFACT_VISIBILITIES = ['public', 'organization'] as const;
+
+export type PublishedArtifactVisibility = (typeof PUBLISHED_ARTIFACT_VISIBILITIES)[number];
+
+export function isPublishedArtifactVisibility(
+  value: unknown,
+): value is PublishedArtifactVisibility {
+  return (
+    typeof value === 'string' &&
+    (PUBLISHED_ARTIFACT_VISIBILITIES as readonly string[]).includes(value)
+  );
+}
 
 const SCRIPTED_KINDS: ReadonlySet<string> = new Set(['html', 'react', 'mermaid']);
 
@@ -115,6 +140,7 @@ interface PublishedArtifactRow {
   kind: string;
   language: string | null;
   content: string;
+  visibility: string;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -129,6 +155,7 @@ export interface PublishedArtifact {
   kind: PublishableKind;
   language: string | null;
   content: string;
+  visibility: PublishedArtifactVisibility;
   createdAt: string;
   updatedAt: string;
 }
@@ -140,6 +167,7 @@ export interface PublishedArtifactSummary {
   kind: PublishableKind;
   language: string | null;
   contentChars: number;
+  visibility: PublishedArtifactVisibility;
   createdAt: string;
   updatedAt: string;
 }
@@ -163,6 +191,10 @@ function rowKind(kind: string): PublishableKind {
   return isPublishableKind(kind) ? kind : 'text';
 }
 
+function rowVisibility(value: string | null | undefined): PublishedArtifactVisibility {
+  return isPublishedArtifactVisibility(value) ? value : 'public';
+}
+
 function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
   return {
     id: row.id,
@@ -174,6 +206,7 @@ function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
     kind: rowKind(row.kind),
     language: row.language,
     content: row.content,
+    visibility: rowVisibility(row.visibility),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -196,6 +229,7 @@ interface PublishedArtifactSummaryRow {
   kind: string;
   language: string | null;
   content_chars: number | string | null;
+  visibility: string;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -209,6 +243,7 @@ function rowToSummary(row: PublishedArtifactSummaryRow): PublishedArtifactSummar
     kind: rowKind(row.kind),
     language: row.language,
     contentChars: Number.isFinite(characters) && characters > 0 ? Math.floor(characters) : 0,
+    visibility: rowVisibility(row.visibility),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -298,7 +333,7 @@ export async function publishArtifactRecord(
        content = excluded.content,
        updated_at = now()
      returning id, token, user_id, artifact_id, conversation_id, title, kind,
-               language, content, created_at, updated_at`,
+               language, content, visibility, created_at, updated_at`,
       [
         mintPublishToken(),
         userId,
@@ -366,6 +401,32 @@ export async function unpublishArtifactsForConversations(
   return rows.map((row) => row.token);
 }
 
+/**
+ * Move one of the caller's own published artifacts between audiences.
+ *
+ * Only the publication's audience changes: the token, the content and the
+ * conversation link are untouched, so switching back restores the same URL.
+ */
+export async function setPublishedArtifactVisibility(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; visibility: PublishedArtifactVisibility },
+): Promise<PublishedArtifact | null> {
+  const userId = input.userId?.trim();
+  const token = input.token?.trim();
+  if (!userId || !token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
+
+  const rows = await db.query<PublishedArtifactRow>(
+    `update public.published_artifacts
+        set visibility = $3, updated_at = now()
+      where token = $1 and user_id = $2
+      returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                language, content, visibility, created_at, updated_at`,
+    [token, userId, input.visibility],
+  );
+  const row = rows[0];
+  return row ? rowToPublishedArtifact(row) : null;
+}
+
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },
@@ -376,7 +437,7 @@ export async function listPublishedArtifacts(
 
   const rows = await db.query<PublishedArtifactSummaryRow>(
     `select token, artifact_id, title, kind, language,
-            length(content) as content_chars, created_at, updated_at
+            length(content) as content_chars, visibility, created_at, updated_at
        from public.published_artifacts
       where user_id = $1
       order by created_at desc
@@ -393,9 +454,10 @@ export async function getPublishedArtifactByToken(
   if (!token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
   const rows = await db.query<PublishedArtifactRow>(
     `select id, token, user_id, artifact_id, conversation_id, title, kind,
-            language, content, created_at, updated_at
+            language, content, visibility, created_at, updated_at
        from public.published_artifacts
       where token = $1
+        and visibility = 'public'
       limit 1`,
     [token],
   );

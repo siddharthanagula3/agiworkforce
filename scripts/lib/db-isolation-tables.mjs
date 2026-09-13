@@ -64,6 +64,7 @@ export const USER_OWNED_TABLES = new Set([
   'organization_shared_projects',
   'organization_project_access',
   'organization_shared_connectors',
+  'organization_shared_artifacts',
   'mcp_app_payloads',
   'mcp_task_bindings',
 ]);

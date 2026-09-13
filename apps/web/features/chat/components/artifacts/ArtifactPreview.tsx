@@ -25,6 +25,7 @@ import {
   ChevronRight,
   AlertTriangle,
   FileText,
+  FolderOpen,
   Globe,
   Pencil,
 } from 'lucide-react';
@@ -134,6 +135,23 @@ export interface ArtifactPublishSelection {
   content: string;
   versionIndex: number;
 }
+
+/**
+ * Who may open the published page. Supplied only when the host knows the
+ * publisher belongs to a workspace, so the control is never a choice that would
+ * answer 403.
+ */
+export interface ArtifactAudienceControl {
+  current: 'public' | 'organization';
+  memberCount: number;
+  onChange: (next: 'public' | 'organization') => Promise<void>;
+}
+
+/** The project this artifact's conversation belongs to. */
+export interface ArtifactProjectLink {
+  id: string;
+  name: string;
+}
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
   onShare?: () => void;
@@ -145,6 +163,8 @@ interface ArtifactPreviewProps {
   onClose?: () => void;
   versionHistory?: SharedArtifact[];
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
+  artifactAudience?: ArtifactAudienceControl;
+  projectLink?: ArtifactProjectLink;
 }
 
 /**
@@ -196,6 +216,8 @@ export function ArtifactPreview({
   onClose,
   versionHistory,
   publishArtifact,
+  artifactAudience,
+  projectLink,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
@@ -208,6 +230,7 @@ export function ArtifactPreview({
   // so one artifact's link can never be shown under another's title.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [isChangingAudience, setIsChangingAudience] = useState(false);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
   // Version navigation (panel-only, view-only). null = show latest.
@@ -646,6 +669,46 @@ if (__AgiApp) {
       setIsPublishing(false);
     }
   }, [publishArtifact, isPublishing, activeContent, shownVersionIndex]);
+
+  const handleChangeAudience = useCallback(
+    (next: 'public' | 'organization') => {
+      if (!artifactAudience || isChangingAudience || next === artifactAudience.current) return;
+      const members = artifactAudience.memberCount;
+      const memberLabel = `${members} ${members === 1 ? 'member' : 'members'}`;
+      const apply = async () => {
+        setIsChangingAudience(true);
+        try {
+          await artifactAudience.onChange(next);
+          toast.success(
+            next === 'organization'
+              ? 'Only your workspace can open this now'
+              : 'Anyone with the link can open this now',
+          );
+        } catch (error) {
+          toast.error(toUserMessage(error, 'Could not change who can open this'));
+        } finally {
+          setIsChangingAudience(false);
+        }
+      };
+      confirmAction(
+        next === 'organization'
+          ? {
+              title: 'Limit this to your workspace?',
+              description: `The public link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
+              confirmLabel: 'Share with workspace',
+              onConfirm: apply,
+            }
+          : {
+              title: 'Make this public again?',
+              description:
+                'Anyone holding the link can open it, including people outside your workspace and anyone they forward it to. Publishing cannot un-share a copy somebody has already taken.',
+              confirmLabel: 'Make public',
+              onConfirm: apply,
+            },
+      );
+    },
+    [artifactAudience, isChangingAudience, confirmAction],
+  );
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
     const content = activeContent;
@@ -1433,11 +1496,30 @@ if (__AgiApp) {
           </div>
         )}
 
-        {/* CAP-015: the live public link for this artifact. Shown only after a
-            publish actually returned a URL, never as an aspirational bar. */}
+        {/* The project this artifact's conversation belongs to (WEBE-24). The
+            artifact carries no project of its own; the host derives it from the
+            conversation and passes the name here. */}
+        {projectLink && (
+          <div
+            className="flex shrink-0 items-center gap-2 border-b border-border/30 px-4 py-2"
+            data-testid="artifact-project-link"
+          >
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs text-muted-foreground">In project</span>
+            <a
+              href={`/chat/projects/${encodeURIComponent(projectLink.id)}`}
+              className="min-w-0 flex-1 truncate text-xs text-primary underline-offset-2 hover:underline"
+            >
+              {projectLink.name}
+            </a>
+          </div>
+        )}
+
+        {/* CAP-015: the live link for this artifact. Shown only after a publish
+            actually returned a URL, never as an aspirational bar. */}
         {publishedUrl && (
           <div
-            className="flex shrink-0 items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
+            className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
             data-testid="artifact-published-url"
           >
             <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -1462,6 +1544,29 @@ if (__AgiApp) {
             >
               Copy link
             </Button>
+            {artifactAudience && (
+              <div className="flex w-full items-center gap-2" data-testid="artifact-audience">
+                <label htmlFor="artifact-audience-select" className="text-xs text-muted-foreground">
+                  Who can open this
+                </label>
+                <select
+                  id="artifact-audience-select"
+                  value={artifactAudience.current}
+                  disabled={isChangingAudience}
+                  onChange={(event) =>
+                    handleChangeAudience(
+                      event.target.value === 'organization' ? 'organization' : 'public',
+                    )
+                  }
+                  className="h-7 min-w-0 flex-1 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground"
+                >
+                  <option value="public">Anyone with the link</option>
+                  <option value="organization">
+                    Everyone in this workspace ({artifactAudience.memberCount})
+                  </option>
+                </select>
+              </div>
+            )}
           </div>
         )}
 
