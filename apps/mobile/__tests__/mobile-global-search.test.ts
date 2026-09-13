@@ -177,4 +177,33 @@ describe('Mobile global search projection', () => {
       }),
     ).toHaveLength(1);
   });
+
+  it('adds server chats and projects that the device has not synced, device rows first', () => {
+    const result = buildMobileGlobalSearchGroups({
+      query: 'launch',
+      conversations: [
+        {
+          id: 'local-1',
+          title: 'Launch checklist',
+          createdAt: '',
+          updatedAt: '',
+          messageCount: 1,
+        },
+      ] as never,
+      conversationContentMatchIds: new Set<string>(),
+      projects: [{ id: 'proj-local', name: 'Launch plan' }],
+      files: [],
+      libraryImages: [],
+      artifacts: [],
+      remoteChats: [
+        { id: 'local-1', title: 'Server copy', subtitle: 'Matched chat title' },
+        { id: 'cloud-1', title: 'Launch retro', subtitle: 'Matched message content' },
+      ],
+      remoteProjects: [{ id: 'proj-cloud', title: 'Launch ops', subtitle: 'Project' }],
+    });
+
+    expect(result.chats.map((row) => row.id)).toEqual(['local-1', 'cloud-1']);
+    expect(result.chats[0]!.title).toBe('Launch checklist');
+    expect(result.projects.map((row) => row.id)).toEqual(['proj-local', 'proj-cloud']);
+  });
 });
