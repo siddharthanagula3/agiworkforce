@@ -157,6 +157,20 @@ third-party account, and vendor consent screens require a person.
 **Impact** NON-BLOCKING (connectors work; this closes the live-validation row)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Memory] Whether auto-memory may spend a model call per turn (AGI-29)
+
+**Why founder assistance is required**
+The extraction is written, wired and tested; what is not decided is whether
+memory may cost one cheap utility completion on every eligible turn. That is a
+per-turn spend, which is a founder call rather than an engineering one.
+**Exact action** Say yes or no. Yes means setting `AGI_MODEL_MEMORY_EXTRACTION=1` in the Vercel Production and Preview environments; no means the pattern list stays and the row closes as decided rather than open. Temporary chats, Memory-off chats, the API surface and zero-data-retention turns are never sent either way, and every failure falls back to the patterns, so the downside is spend rather than behaviour.
+**Where** Vercel environment variables, or a one-line answer.
+**Needed input** One decision.
+**How to verify completion** A fact stated with no trigger phrase, for example "I just moved to Berlin", is stored and answered in a second conversation.
+**What remains after founder action** Setting the variable and one live two-chat check, both engineering.
+**Impact** NON-BLOCKING (memory works today for the phrasings the patterns know)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Legal] Counsel review and grievance facts (DPDP)
 
 **Why founder assistance is required**
