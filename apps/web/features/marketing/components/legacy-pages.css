@@ -2783,9 +2783,9 @@
 }
 
 [data-design='agi'] .agi-fl-avail-dot--live {
-  background: #22c55e;
+  background: var(--agi-success);
   opacity: 1;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--agi-success) 45%, transparent);
 }
 
 [data-design='agi'] .agi-fl-avail-note {
@@ -6616,12 +6616,12 @@
 
 [data-theme='light'] [data-design='agi'] .agi-docs-tab--active,
 [data-theme='light'][data-design='agi'] .agi-docs-tab--active {
-  border-bottom-color: #4b56c0;
+  border-bottom-color: var(--agi-accent-text);
 }
 
 [data-theme='light'] [data-design='agi'] .agi-docs-breadcrumb,
 [data-theme='light'][data-design='agi'] .agi-docs-breadcrumb {
-  color: #4b56c0;
+  color: var(--agi-accent-text);
 }
 
 [data-theme='light'] [data-design='agi'] .agi-docs-card-icon,
@@ -6663,7 +6663,7 @@
 
 /* AUDIT-FIX ART-9: the highlight.js theme imported by unified-chat's
    MarkdownContent ships CONTAINER styling as well as token colours -
-   `.hljs { background: #0d1117 }` and `pre code.hljs { padding: 1em }` - which
+   `.hljs { background: <the theme's dark ground> }` and `pre code.hljs { padding: 1em }` - which
    paints a second, differently coloured box inside `.code-block-container` and
    doubles the code padding on top of `.code-block-body pre`'s `p-4`. Keep the
    theme's token colours, drop its container styling.
