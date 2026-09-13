@@ -4,12 +4,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
-import type {
-  ScimGroupRow,
-  ScimProvisionedUserRow,
-  ProfileRow,
-  SSOConnectionRow,
-} from '@/lib/server/neon-types';
+import type { ScimGroupRow, ScimProvisionedUserRow, ProfileRow } from '@/lib/server/neon-types';
+import { listVerifiedDomains, ownsEmailDomain } from '@/lib/services/organization-verified-domains';
 import {
   coerceScimBoolean,
   ScimError,
@@ -345,31 +341,6 @@ async function resolveMappedRole(
   return strongestMappedRole(rows.map((row) => row.mapped_role));
 }
 
-async function verifiedDomains(
-  db: DatabaseAdapter,
-  organizationId: string,
-): Promise<ReadonlySet<string>> {
-  const rows = await db.query<Pick<SSOConnectionRow, 'domain'>>(
-    `select lower(domain) as domain
-       from sso_connections
-      where organization_id = $1 and domain_verified_at is not null`,
-    [organizationId],
-  );
-  return new Set(rows.map((row) => row.domain));
-}
-
-function emailDomain(email: string): string | null {
-  const at = email.lastIndexOf('@');
-  if (at <= 0 || at === email.length - 1) return null;
-  return email.slice(at + 1).toLowerCase();
-}
-
-function ownsEmailDomain(email: string | null, domains: ReadonlySet<string>): boolean {
-  if (!email) return false;
-  const domain = emailDomain(email);
-  return domain !== null && domains.has(domain);
-}
-
 function emailChanged(previous: string | null, next: string | null): boolean {
   return (previous?.toLowerCase() ?? null) !== (next?.toLowerCase() ?? null);
 }
@@ -380,7 +351,7 @@ async function assertProvisionableEmail(
   email: string | null,
 ): Promise<void> {
   if (email === null) return;
-  if (ownsEmailDomain(email, await verifiedDomains(db, ctx.organizationId))) return;
+  if (ownsEmailDomain(email, await listVerifiedDomains(db, ctx.organizationId))) return;
   throw new ScimError(
     400,
     'Directory sync may only provision users on a domain this organization has verified',
@@ -501,7 +472,7 @@ export async function reconcileMembership(
   ctx: ScimConnectionContext,
   row: ScimProvisionedUserRow,
 ): Promise<MembershipOutcome> {
-  const domains = await verifiedDomains(db, ctx.organizationId);
+  const domains = await listVerifiedDomains(db, ctx.organizationId);
   const linkedUserId = await linkAccount(db, row, domains);
 
   if (!row.active) {
@@ -1287,7 +1258,7 @@ export async function reconcileGroupMembers(
     .filter((row): row is ScimProvisionedUserRow => Boolean(row));
   if (present.length === 0) return;
 
-  const domains = await verifiedDomains(db, ctx.organizationId);
+  const domains = await listVerifiedDomains(db, ctx.organizationId);
   await linkAccountsBatch(db, ctx, present, domains);
 
   // Inactive users lose non-owner membership; the single-user path issues one
