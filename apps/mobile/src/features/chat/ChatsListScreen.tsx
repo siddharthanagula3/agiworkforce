@@ -24,6 +24,10 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import {
+  RenameConversationModal,
+  useConversationActions,
+} from '@/src/features/conversation-actions';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -135,6 +139,7 @@ export function ChatsListScreen() {
   const searchConversations = useChatViewStore((state) => state.searchConversations);
   const searchResultQuery = useChatViewStore((state) => state.searchQuery);
   const searchResults = useChatViewStore((state) => state.searchResults);
+  const { openActions, rename } = useConversationActions();
   const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
   const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
   const localProjects = useProjectStore((state) => state.projects);
@@ -322,8 +327,14 @@ export function ChatsListScreen() {
     ({ item }: { item: ChatsListItem }) => (
       <PressableBox
         onPress={() => openItem(item)}
+        onLongPress={
+          item.kind === 'chat'
+            ? () => openActions(item.id, item.title, item.pinned === true)
+            : undefined
+        }
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}`}
+        accessibilityHint={item.kind === 'chat' ? 'Long press to rename, pin or delete' : undefined}
         style={({ pressed }) => ({
           minHeight: 66,
           borderRadius: 14,
@@ -370,7 +381,7 @@ export function ChatsListScreen() {
         )}
       </PressableBox>
     ),
-    [colors, isSearching, openItem],
+    [colors, isSearching, openActions, openItem],
   );
 
   const hasResults = sections.some((section) => section.data.length > 0);
@@ -500,6 +511,7 @@ export function ChatsListScreen() {
         inputRef={searchInputRef}
         autoFocus={autoFocusSearch}
       />
+      <RenameConversationModal rename={rename} />
     </SafeAreaView>
   );
 }

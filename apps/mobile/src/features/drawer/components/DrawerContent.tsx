@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { View, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
@@ -32,8 +32,11 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { archiveConversation } from '@/src/features/archived-chats';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import {
+  RenameConversationModal,
+  useConversationActions,
+} from '@/src/features/conversation-actions';
 
 type RoutePath =
   | '/(app)/chats'
@@ -239,63 +242,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
   const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
-  const pinConversation = useChatStore((s) => s.pinConversation);
-  const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const { openActions, rename } = useConversationActions();
 
-  // Long-press a recent chat → pin/unpin, archive (Cloud only) or delete.
-  // Surfaces the pin/delete store actions (previously only reachable from the
-  // unused sidebar) in the live drawer.
-  const handleConversationLongPress = useCallback(
-    (id: string, title: string, pinned: boolean) => {
-      // `archived` is a column on web_conversations, so archiving only exists
-      // for Cloud chats. Local Mode chats never leave the device and have no
-      // archived set to move into.
-      const conversation =
-        conversations.find((c) => c.id === id) ?? cloudConversations.find((c) => c.id === id);
-      const isCloudConversation =
-        conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
-
-      const archive = () => {
-        void (async () => {
-          try {
-            await archiveConversation(id);
-            // Only hide the row once the server has acknowledged the write; a
-            // swallowed failure would leave the chat visibly gone here and
-            // still present on web and desktop.
-            useChatCloudMessageStore.getState().removeCloudConversation(id);
-          } catch (error) {
-            Alert.alert(
-              'Could not archive',
-              error instanceof Error ? error.message : 'Check your connection and try again.',
-            );
-          }
-        })();
-      };
-
-      Alert.alert(title || 'Chat', undefined, [
-        {
-          text: pinned ? 'Unpin' : 'Pin',
-          onPress: () => void pinConversation(id),
-        },
-        ...(isCloudConversation ? [{ text: 'Archive', onPress: archive }] : []),
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () =>
-            Alert.alert('Delete chat?', 'This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => void deleteConversation(id),
-              },
-            ]),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    },
-    [cloudConversations, conversations, pinConversation, deleteConversation],
-  );
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -512,7 +460,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                       key={conversation.id}
                       onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
                       onLongPress={() =>
-                        handleConversationLongPress(
+                        openActions(
                           conversation.id,
                           conversation.title || 'Untitled chat',
                           Boolean(conversation.pinned),
@@ -577,6 +525,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
+      <RenameConversationModal rename={rename} />
     </SafeAreaView>
   );
 }
