@@ -36,6 +36,8 @@ const EMOJI_OPTIONS: readonly string[] = [
 
 export interface ProjectGalleryProps {
   onSelect?: (project: Project) => void;
+  /** Where each row links to, so the card is an anchor and not only a button. */
+  projectHref?: (project: Project) => string;
   onCreate?: (input: ProjectGalleryCreateInput) => Promise<Project> | Project;
   onShareProject?: (project: Project) => void;
   onEditProject?: (project: Project) => void;
@@ -64,6 +66,7 @@ function generateLocalId(): string {
 
 export function ProjectGallery({
   onSelect,
+  projectHref,
   onCreate,
   onShareProject,
   onEditProject,
@@ -394,6 +397,7 @@ export function ProjectGallery({
                 key={project.id}
                 project={project}
                 active={project.id === activeProjectId}
+                {...(projectHref ? { href: projectHref(project) } : {})}
                 onSelect={handleSelect}
                 onShare={onShareProject}
                 onEdit={onEditProject}

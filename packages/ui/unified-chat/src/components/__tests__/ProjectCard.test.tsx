@@ -143,3 +143,70 @@ describe('ProjectCard, kebab menu (leader-matched shape)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Share' })).toBeNull();
   });
 });
+
+/**
+ * The row navigated with `router.push` from a button, so middle-click,
+ * cmd-click and "open in new tab" all did nothing and the browser could not
+ * show the destination before the click. It is an anchor when the host says
+ * where it goes, and a plain left click is still taken over so client-side
+ * navigation is unchanged.
+ */
+describe('ProjectCard as a link', () => {
+  const HREF = '/chat/projects/proj_card_1';
+
+  it('renders the open action as an anchor carrying the destination', () => {
+    render(<ProjectCard project={PROJECT} href={HREF} />);
+    const open = screen.getByRole('link', { name: /open project design system/i });
+    expect(open.tagName).toBe('A');
+    expect(open.getAttribute('href')).toBe(HREF);
+  });
+
+  it('takes over a plain left click so the host still routes client-side', () => {
+    const onSelect = vi.fn();
+    render(<ProjectCard project={PROJECT} href={HREF} onSelect={onSelect} />);
+
+    const open = screen.getByRole('link', { name: /open project design system/i });
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    open.dispatchEvent(event);
+
+    expect(onSelect).toHaveBeenCalledWith(PROJECT);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('leaves a modified click to the browser so a new tab actually opens', () => {
+    const onSelect = vi.fn();
+    render(<ProjectCard project={PROJECT} href={HREF} onSelect={onSelect} />);
+
+    const open = screen.getByRole('link', { name: /open project design system/i });
+    for (const modifier of ['metaKey', 'ctrlKey', 'shiftKey'] as const) {
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        [modifier]: true,
+      });
+      open.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row actions as siblings, not descendants of the link', () => {
+    render(<ProjectCard project={PROJECT} href={HREF} onDelete={vi.fn()} onEdit={vi.fn()} />);
+    const open = screen.getByRole('link', { name: /open project design system/i });
+    const buttons = screen.getAllByRole('button');
+
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(open.contains(button)).toBe(false);
+    }
+  });
+
+  it('stays a button when the host supplies no destination', () => {
+    render(<ProjectCard project={PROJECT} />);
+    expect(screen.getByRole('button', { name: /open project design system/i }).tagName).toBe(
+      'BUTTON',
+    );
+    expect(screen.queryByRole('link', { name: /open project design system/i })).toBeNull();
+  });
+});

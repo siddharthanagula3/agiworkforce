@@ -29,6 +29,10 @@ const SORT_LABELS: Record<SortMode, string> = {
   starred: 'Starred first',
 };
 
+function projectPath(project: Pick<Project, 'id'>): string {
+  return `/chat/projects/${encodeURIComponent(project.id)}`;
+}
+
 function sortProjects(projects: Project[], mode: SortMode): Project[] {
   const active = projects.filter((p) => !p.isArchived);
   return [...active].sort((a, b) => {
@@ -381,8 +385,9 @@ export default function ProjectsPage() {
                 description=""
                 layout="grid"
                 onCreate={handleCreateProject}
+                projectHref={projectPath}
                 onSelect={(project) => {
-                  router.push(`/chat/projects/${encodeURIComponent(project.id)}`);
+                  router.push(projectPath(project));
                 }}
                 onShareProject={(project) => void handleShareProject(project)}
                 onEditProject={(project) => setEditProject(project)}
@@ -461,9 +466,10 @@ export default function ProjectsPage() {
                       <ProjectCard
                         key={project.id}
                         project={project}
+                        href={projectPath(project)}
                         onSelect={(p) => {
                           setActiveProject(p.id);
-                          router.push(`/chat/projects/${encodeURIComponent(p.id)}`);
+                          router.push(projectPath(p));
                         }}
                         onShare={(p) => void handleShareProject(p)}
                         onEdit={(p) => setEditProject(p)}
