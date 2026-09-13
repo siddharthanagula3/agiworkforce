@@ -49,7 +49,11 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
   } as ModelCatalogueEntry;
 }
 
-function renderCatalogue(entries: ModelCatalogueEntry[], onSelect = vi.fn()) {
+function renderCatalogue(
+  entries: ModelCatalogueEntry[],
+  onSelect = vi.fn(),
+  recentModelIds: readonly string[] = [],
+) {
   render(
     <ModelCatalogue
       entries={entries}
@@ -57,6 +61,7 @@ function renderCatalogue(entries: ModelCatalogueEntry[], onSelect = vi.fn()) {
         { key: 'openai', label: 'OpenAI', admittedCount: 1, totalCount: entries.length },
       ]}
       favouriteModelIds={[]}
+      recentModelIds={recentModelIds}
       selectedModelId="other-model"
       query=""
       onQueryChange={vi.fn()}
@@ -153,5 +158,42 @@ describe('model catalogue - event access reads as temporary', () => {
 
     expect(screen.queryByText(/free during event/i)).toBeNull();
     expect(screen.getAllByText(/temporarily unavailable/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe('model catalogue - capability chips and the recent rail', () => {
+  it('filters on web search and on code execution', () => {
+    renderCatalogue([
+      entry({ id: 'searcher', displayName: 'Searcher', capabilities: { webSearch: true } }),
+      entry({ id: 'coder', displayName: 'Coder', capabilities: { codeExecution: true } }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByRole('option', { name: /searcher/i })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /coder/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Code execution' }));
+    expect(screen.getByRole('option', { name: /coder/i })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /searcher/i })).toBeNull();
+  });
+
+  it('lists the recently used models newest first on their own rail', () => {
+    renderCatalogue(
+      [
+        entry({ id: 'first-model', displayName: 'First Model' }),
+        entry({ id: 'second-model', displayName: 'Second Model' }),
+        entry({ id: 'never-used', displayName: 'Never Used' }),
+      ],
+      vi.fn(),
+      ['second-model', 'first-model'],
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Recent/ }));
+
+    const rows = screen.getAllByRole('option').map((row) => row.textContent ?? '');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain('Second Model');
+    expect(rows[1]).toContain('First Model');
   });
 });
