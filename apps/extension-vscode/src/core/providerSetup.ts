@@ -9,6 +9,7 @@ import { activateTokenCounter } from '../data/tokenCounter';
 import { activateTerminal } from '../providers/terminalProvider';
 import { activateErrorExplainer } from '../providers/errorExplainerProvider';
 import { Config } from '../platform/config';
+import { registerPathLinks } from '../features/path-links';
 
 export interface ProviderState {
   diffDecorationProvider: DiffDecorationProvider;
@@ -25,6 +26,12 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
     }),
     vscode.languages.registerHoverProvider('*', new AgiHoverProvider()),
   );
+
+  try {
+    registerPathLinks(context);
+  } catch (err) {
+    console.warn('[AGI Workforce] Path link providers init failed:', err);
+  }
 
   const codeLensProvider = new AgiCodeLensProvider();
   let codeLensRegistration: vscode.Disposable | undefined;

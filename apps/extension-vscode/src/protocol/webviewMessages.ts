@@ -63,6 +63,14 @@ const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
 const openWebTasks = z.object({ type: z.literal('openWebTasks') });
+const openPathReference = z.object({
+  type: z.literal('openPathReference'),
+  payload: z.object({
+    path: z.string().min(1).max(1024),
+    line: z.number().int().positive().max(1_000_000).optional(),
+    column: z.number().int().positive().max(1_000_000).optional(),
+  }),
+});
 
 const attachFiles = z.object({
   type: z.literal('attachFiles'),
@@ -160,6 +168,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openPermissionDocs,
   openPrivacySettings,
   openWebTasks,
+  openPathReference,
   attachFiles,
   removePendingAttachment,
 ]);
