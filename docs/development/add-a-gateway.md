@@ -88,9 +88,12 @@ That single field is the last step between a cheaper route and live managed
 traffic; everything above it is already wired.
 
 The live examples: `cheaperinference`, `cheaperinference_anthropic`,
-`deepinfra`, `together` and `novita` are gateway-backed harnesses in the
-`managed-text` group, refused today only by that commercial field and by the
-flag.
+`experientiallabs`, `experientiallabs_anthropic`, `deepinfra`, `together` and
+`novita` are gateway-backed harnesses in the `managed-text` group, refused
+today only by that commercial field and by the flag. `workers_ai` is the one
+gateway definition whose routes ship `agi_direct`: Cloudflare Workers AI is
+the company's own account on a first-party cloud, so only the flag and the
+two env names stand between it and managed traffic.
 
 ## Discount policies
 
