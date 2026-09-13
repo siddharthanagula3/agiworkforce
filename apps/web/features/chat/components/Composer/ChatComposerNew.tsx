@@ -45,8 +45,12 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
+import { DesktopRuntimeError } from '@agiworkforce/local-runtime-contract';
 import {
+  LocalCommandDialog,
   LocalFolderAttachDialog,
+  clipboardAttachments,
+  readHostClipboard,
   useDesktopHost,
   useDesktopVoiceHotkey,
 } from '@/features/desktop-host';
@@ -1348,6 +1352,8 @@ const ChatComposerNewComponent = ({
 
   const desktopHost = useDesktopHost();
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
+  const [localCommandOpen, setLocalCommandOpen] = useState(false);
+  const [readingClipboard, setReadingClipboard] = useState(false);
   useDesktopVoiceHotkey(() => {
     if (dictation.isActive) dictation.stop();
     else dictation.start();
@@ -1493,6 +1499,32 @@ const ChatComposerNewComponent = ({
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
       setIsCapturingScreenshot(false);
+    }
+  }, [addChatAttachments]);
+
+  /**
+   * The host reads the clipboard only on this click. A page cannot ask the
+   * shell for it on its own, and the shell asks the user for the clipboard
+   * permission the first time, so nothing is read in the background.
+   */
+  const handleAttachClipboard = useCallback(async () => {
+    setShowOverflowMenu(false);
+    setReadingClipboard(true);
+    try {
+      const files = clipboardAttachments(await readHostClipboard(), Date.now());
+      if (files.length === 0) {
+        setLocalNotice('Your clipboard is empty, so there was nothing to attach.');
+        return;
+      }
+      addChatAttachments(files);
+    } catch (cause) {
+      setLocalNotice(
+        cause instanceof DesktopRuntimeError
+          ? `The clipboard was not attached. ${cause.message}`
+          : 'The clipboard could not be read.',
+      );
+    } finally {
+      setReadingClipboard(false);
     }
   }, [addChatAttachments]);
 
@@ -3503,6 +3535,16 @@ const ChatComposerNewComponent = ({
                       setLocalFolderPickerOpen(true);
                       closeMenu();
                     }}
+                    showDesktopActionRows={desktopHost !== null}
+                    isReadingClipboard={readingClipboard}
+                    onAttachClipboard={() => {
+                      void handleAttachClipboard();
+                      closeMenu();
+                    }}
+                    onRunLocalCommand={() => {
+                      setLocalCommandOpen(true);
+                      closeMenu();
+                    }}
                     mediaModeActive={mediaModeActive}
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
@@ -4129,6 +4171,12 @@ const ChatComposerNewComponent = ({
         <LocalFolderAttachDialog
           open={localFolderPickerOpen}
           onClose={() => setLocalFolderPickerOpen(false)}
+          onAttach={addChatAttachments}
+        />
+
+        <LocalCommandDialog
+          open={localCommandOpen}
+          onClose={() => setLocalCommandOpen(false)}
           onAttach={addChatAttachments}
         />
       </div>

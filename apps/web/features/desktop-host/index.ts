@@ -3,18 +3,29 @@ export { conversationDeepLink, deepLinkDestination } from './lib/deep-links';
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
+  cancelLocalCommand,
+  clipboardAttachments,
   listWorkspaceFiles,
   listWorkspaceRoots,
+  openWorkspacePath,
   pickWorkspaceRoot,
+  readHostClipboard,
+  readLocalCommandPolicy,
   readWorkspaceFile,
   readWorkspaceFileBytes,
+  revealWorkspacePath,
   revealWorkspaceRoot,
   revokeWorkspaceRoot,
+  startLocalCommand,
+  writeLocalCommandPolicy,
+  type LocalCommandOutput,
+  type LocalCommandRun,
 } from './lib/runtime-client';
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
-export { LocalFoldersSection } from './components/LocalFoldersSection';
+export { LocalAccessSection } from './components/LocalAccessSection';
+export { LocalCommandDialog, type LocalCommandDialogProps } from './components/LocalCommandDialog';
 export {
   LocalFolderAttachDialog,
   type LocalFolderAttachDialogProps,
