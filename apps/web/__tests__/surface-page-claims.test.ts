@@ -332,7 +332,7 @@ describe('/byok, VS Code is named with the release state it actually has', () =>
   it('states the released surfaces the way /help already does', () => {
     const page = collapsed('app/byok/page.tsx');
     expect(page).toMatch(
-      /Desktop and the CLI have published releases; the VS Code extension is coming soon/u,
+      /Desktop and the CLI have published releases\. The VS Code extension is coming soon/u,
     );
     expect(page).toMatch(/Released', value: 'Desktop and the CLI\. VS Code is coming soon\./u);
     expect(page).toMatch(/Coming soon\. The extension hands the key/u);

@@ -742,6 +742,7 @@ describe('useChatStream', () => {
         runPath: MANAGED_RUN_PATH,
         state: 'ready_for_review',
         lastSequence: 0,
+        detachable: false,
       });
     });
 
@@ -837,6 +838,7 @@ describe('useChatStream', () => {
         lastSequence: 4,
         state: 'ready_for_review',
         cancellationRequestedAt: null,
+        detachable: false,
       });
       expect(assistant?.metadata?.agentActivity).toMatchObject({
         lastSequence: 4,
