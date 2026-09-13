@@ -44,7 +44,7 @@ function renderRowMenu(overrides: Partial<SidebarProps> = {}) {
       {...overrides}
     />,
   );
-  fireEvent.click(screen.getByLabelText('Conversation actions'));
+  fireEvent.click(screen.getByLabelText('More options for Repository structure overview'));
   return screen.getByRole('menu');
 }
 
@@ -119,5 +119,54 @@ describe('chat row menu (Sidebar > SessionItem)', () => {
   it('omits Move to project entirely when there are no projects', () => {
     const menu = renderRowMenu({ projects: [] });
     expect(itemLabels(menu)).not.toContain('Move to project');
+  });
+
+  it('names each row trigger for its own conversation', () => {
+    render(
+      <Sidebar
+        sessions={[session, { ...session, id: 's2', title: 'Launch checklist' }]}
+        projects={projects}
+        onNewChat={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onSelect={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        getSessionHref={(s) => `/chat/${s.id}`}
+      />,
+    );
+    expect(screen.getByLabelText('More options for Repository structure overview')).toBeTruthy();
+    expect(screen.getByLabelText('More options for Launch checklist')).toBeTruthy();
+    expect(screen.queryByLabelText('Conversation actions')).toBeNull();
+  });
+
+  it('offers Restore instead of Archive once the conversation is archived', () => {
+    render(
+      <Sidebar
+        sessions={[{ ...session, archived: true }]}
+        projects={projects}
+        onNewChat={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onSelect={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onArchive={vi.fn()}
+        onRestore={vi.fn()}
+        getSessionHref={(s) => `/chat/${s.id}`}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Archived (1)'));
+    fireEvent.click(screen.getByLabelText('More options for Repository structure overview'));
+    const labels = itemLabels(screen.getByRole('menu'));
+    expect(labels).toContain('Restore');
+    expect(labels).not.toContain('Archive');
+  });
+
+  it('hands focus back to the row trigger when a menu item is chosen', () => {
+    // The panel unmounts with focus inside it, so without this the reader lands
+    // on <body>, and anything the selection opens records <body> as its opener.
+    const menu = renderRowMenu();
+    const trigger = screen.getByLabelText('More options for Repository structure overview');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Pin' }));
+    expect(document.activeElement).toBe(trigger);
   });
 });

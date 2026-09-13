@@ -274,8 +274,10 @@ function SessionItemBase({
             trigger={({ toggle }) => (
               <button
                 type="button"
-                title={t('sidebar.moreActions', 'More actions')}
-                aria-label={t('sidebar.conversationActions', 'Conversation actions')}
+                title={t('sidebar.moreOptions', 'More options')}
+                aria-label={t('sidebar.moreOptionsFor', 'More options for {{name}}', {
+                  name: rowLabel,
+                })}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggle();
