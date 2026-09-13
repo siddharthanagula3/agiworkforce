@@ -79,6 +79,10 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast_model: Option<String>,
 
+    /// Reasoning effort chosen at onboarding: low, medium, high, max.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+
     /// Approval mode: suggest (default), auto-edit, full-auto.
     #[serde(default = "default_approval_mode")]
     pub approval_mode: String,
@@ -155,6 +159,7 @@ impl DefaultConfig {
             temperature: None,
             fallback_chain: Vec::new(),
             fast_model: None,
+            reasoning_effort: None,
             approval_mode: default_approval_mode(),
             sandbox_mode: None,
             review_model: None,
@@ -569,6 +574,10 @@ impl CliConfig {
         // Merge approval_mode if non-default
         if other.default.approval_mode != default_approval_mode() {
             self.default.approval_mode = other.default.approval_mode.clone();
+        }
+        // Merge reasoning_effort if set
+        if other.default.reasoning_effort.is_some() {
+            self.default.reasoning_effort = other.default.reasoning_effort.clone();
         }
         // Merge sandbox_mode if set
         if other.default.sandbox_mode.is_some() {
@@ -2179,5 +2188,43 @@ model = "fixture-config-model"
             project.providers["local"].base_url.as_deref(),
             Some("http://localhost:11434")
         );
+    }
+}
+
+#[cfg(test)]
+mod reasoning_effort_tests {
+    use super::CliConfig;
+
+    /// Onboarding writes `[default] reasoning_effort`, and `load()` folds the
+    /// parsed file onto the builtin defaults through `merge_from`. A field
+    /// missing from that merge is parsed and then silently dropped, which is
+    /// how a session onboarded at high reasoning ran (and reported) Medium.
+    #[test]
+    fn reasoning_effort_survives_the_merge_onto_builtin_defaults() {
+        let loaded: CliConfig =
+            toml::from_str("[default]\nreasoning_effort = \"high\"\n").expect("parse");
+        assert_eq!(loaded.default.reasoning_effort.as_deref(), Some("high"));
+
+        let mut merged = CliConfig::default();
+        merged.merge_from(&loaded);
+        assert_eq!(
+            merged.default.reasoning_effort.as_deref(),
+            Some("high"),
+            "merge_from must carry reasoning_effort, or the TUI footer reports the default"
+        );
+    }
+
+    #[test]
+    fn every_effort_spelling_onboarding_writes_parses_back() {
+        use crate::design_system::Effort;
+        for (written, expected) in [
+            ("low", Effort::Low),
+            ("medium", Effort::Medium),
+            ("high", Effort::High),
+            ("max", Effort::Max),
+        ] {
+            assert_eq!(Effort::from_config_value(written), Some(expected));
+        }
+        assert_eq!(Effort::from_config_value("nonsense"), None);
     }
 }
