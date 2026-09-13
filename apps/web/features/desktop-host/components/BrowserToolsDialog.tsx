@@ -1,5 +1,6 @@
 'use client';
 
+import { toUserMessage } from '@/lib/user-error-message';
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -76,7 +77,7 @@ function messageFor(error: unknown): string | null {
   if (error instanceof DesktopRuntimeError) {
     return error.code === 'cancelled' ? null : error.message;
   }
-  return error instanceof Error ? error.message : FAILED;
+  return toUserMessage(error, FAILED);
 }
 
 async function runAction(
