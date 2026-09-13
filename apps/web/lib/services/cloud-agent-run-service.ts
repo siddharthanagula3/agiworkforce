@@ -987,7 +987,7 @@ export async function listCloudAgentRuns(
         and ($3::text is null or runs.request_id = $3)
         and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
         and ($7::text[] is null or runs.work_mode = any($7::text[]))
-        and ($8::uuid is null or conversations.project_id = $8::uuid)
+        and ($8::text is null or conversations.project_id = $8::text)
       order by runs.updated_at desc, runs.id desc
       limit $6`,
     [

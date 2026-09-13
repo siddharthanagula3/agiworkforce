@@ -35,6 +35,13 @@ interface ArtifactIndexState {
   artifacts: IndexedArtifact[];
   /** False until the first response lands, so callers can avoid an empty flash. */
   loaded: boolean;
+  /**
+   * Set when the read failed. The gallery still degrades quietly, because it
+   * has locally derived artifacts to fall back on, but a project-scoped list
+   * has none: without this a failed read is indistinguishable from a project
+   * that produced nothing, and the panel would state the second as fact.
+   */
+  error: string | null;
 }
 
 export interface ArtifactIndexOptions {
@@ -45,14 +52,18 @@ export interface ArtifactIndexOptions {
 export function useArtifactIndex(options: ArtifactIndexOptions = {}): ArtifactIndexState {
   const { isLoaded, isSignedIn, getToken } = useSession();
   const projectId = options.projectId;
-  const [state, setState] = useState<ArtifactIndexState>({ artifacts: [], loaded: false });
+  const [state, setState] = useState<ArtifactIndexState>({
+    artifacts: [],
+    loaded: false,
+    error: null,
+  });
 
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) {
       // Signed out: there is no account index to read. Mark loaded so the
       // gallery shows its real empty state instead of a permanent skeleton.
-      setState({ artifacts: [], loaded: true });
+      setState({ artifacts: [], loaded: true, error: null });
       return;
     }
 
@@ -71,14 +82,19 @@ export function useArtifactIndex(options: ArtifactIndexOptions = {}): ArtifactIn
         if (!res.ok) throw new Error(`artifact index responded ${res.status}`);
         const body = (await res.json()) as { artifacts?: IndexedArtifact[] };
         if (cancelled) return;
-        setState({ artifacts: body.artifacts ?? [], loaded: true });
-      } catch {
-        if (cancelled) return;
+        setState({ artifacts: body.artifacts ?? [], loaded: true, error: null });
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) return;
         // The index is a discovery aid layered on top of what the device
         // already derived locally. If it cannot be read, the gallery still
-        // shows every artifact from conversations this device has opened.
-        // degrade quietly rather than blanking a working surface.
-        setState((prev) => ({ artifacts: prev.artifacts, loaded: true }));
+        // shows every artifact from conversations this device has opened, so
+        // keep what is there rather than blanking a working surface, and say
+        // that the read failed for the callers that have no fallback.
+        setState((prev) => ({
+          artifacts: prev.artifacts,
+          loaded: true,
+          error: error instanceof Error ? error.message : 'The artifact index could not be read',
+        }));
       }
     })();
 

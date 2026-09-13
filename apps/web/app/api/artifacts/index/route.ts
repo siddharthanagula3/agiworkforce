@@ -83,7 +83,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
          on conversations.id = artifacts.conversation_id
         and conversations.deleted_at is null
       where artifacts.user_id = $1
-        and ($3::uuid is null or conversations.project_id = $3::uuid)
+        and ($3::text is null or conversations.project_id = $3::text)
       order by artifacts.created_at desc
       limit $2`,
     [userId, limit, projectId],

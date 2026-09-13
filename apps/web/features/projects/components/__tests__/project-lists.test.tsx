@@ -26,7 +26,7 @@ beforeEach(() => {
 
 describe('ProjectArtifactsPanel', () => {
   it('asks the index for this project only', () => {
-    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: true });
+    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: true, error: null });
 
     render(<ProjectArtifactsPanel projectId={PROJECT} projectName="Launch" />);
 
@@ -36,6 +36,7 @@ describe('ProjectArtifactsPanel', () => {
   it('lists the project artifacts and opens the chat that produced one', () => {
     mocks.artifactIndex.mockReturnValue({
       loaded: true,
+      error: null,
       artifacts: [
         {
           id: 'a1',
@@ -58,7 +59,7 @@ describe('ProjectArtifactsPanel', () => {
   });
 
   it('names the project in its empty state instead of showing a bare list', () => {
-    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: true });
+    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: true, error: null });
 
     render(<ProjectArtifactsPanel projectId={PROJECT} projectName="Launch" />);
 
@@ -67,11 +68,24 @@ describe('ProjectArtifactsPanel', () => {
   });
 
   it('shows a loading status rather than an empty state before the first response', () => {
-    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: false });
+    mocks.artifactIndex.mockReturnValue({ artifacts: [], loaded: false, error: null });
 
     render(<ProjectArtifactsPanel projectId={PROJECT} projectName="Launch" />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('No artifacts yet')).not.toBeInTheDocument();
+  });
+
+  it('says the read failed rather than claiming the project produced nothing', () => {
+    mocks.artifactIndex.mockReturnValue({
+      artifacts: [],
+      loaded: true,
+      error: 'artifact index responded 500',
+    });
+
+    render(<ProjectArtifactsPanel projectId={PROJECT} projectName="Launch" />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText('No artifacts yet')).not.toBeInTheDocument();
   });
 });

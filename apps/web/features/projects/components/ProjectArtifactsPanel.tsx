@@ -25,12 +25,20 @@ function formatDate(value: string): string {
  */
 export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifactsPanelProps) {
   const router = useRouter();
-  const { artifacts, loaded } = useArtifactIndex({ projectId });
+  const { artifacts, loaded, error } = useArtifactIndex({ projectId });
 
   if (!loaded) {
     return (
       <p role="status" style={{ color: 'var(--agi-ink-2)', fontSize: 13, textAlign: 'center' }}>
         Loading artifacts...
+      </p>
+    );
+  }
+
+  if (error && artifacts.length === 0) {
+    return (
+      <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 13, textAlign: 'center' }}>
+        This project&rsquo;s artifacts could not be loaded.
       </p>
     );
   }
