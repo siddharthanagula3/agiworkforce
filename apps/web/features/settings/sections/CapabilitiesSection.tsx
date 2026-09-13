@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
-import { LocalAccessSection } from '@/features/desktop-host';
+import { BrowserPairingSection, LocalAccessSection } from '@/features/desktop-host';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
@@ -73,6 +73,7 @@ export function CapabilitiesSection() {
       </section>
 
       <LocalAccessSection />
+      <BrowserPairingSection />
 
       <ToolApprovalDefaultsPanel />
 

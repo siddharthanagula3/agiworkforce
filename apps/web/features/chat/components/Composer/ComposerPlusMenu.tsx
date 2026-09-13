@@ -22,6 +22,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Globe,
   ImagePlus,
   ListChecks,
   Paperclip,
@@ -71,6 +72,7 @@ const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
 const ROW_LABEL_CLIPBOARD = 'Attach clipboard';
 const ROW_LABEL_CLIPBOARD_BUSY = 'Reading clipboard…';
 const ROW_LABEL_LOCAL_COMMAND = 'Run a local command';
+const ROW_LABEL_BROWSER = 'Use the browser';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
@@ -440,6 +442,7 @@ export interface ComposerPlusMenuProps {
   isReadingClipboard: boolean;
   onAttachClipboard: () => void;
   onRunLocalCommand: () => void;
+  onUseBrowser: () => void;
 
   showWorkingFolderRow: boolean;
   canPickFolder: boolean;
@@ -662,6 +665,20 @@ function LocalCommandRow({ props, role }: { props: ComposerPlusMenuProps; role?:
   );
 }
 
+function BrowserRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
+  return (
+    <button
+      type="button"
+      role={role}
+      onClick={props.onUseBrowser}
+      className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
+    >
+      <Globe className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-left">{ROW_LABEL_BROWSER}</span>
+    </button>
+  );
+}
+
 function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   const { folderName, canPickFolder } = props;
   return (
@@ -755,6 +772,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       {props.showLocalFolderRow && <LocalFolderRow props={props} />}
       {props.showDesktopActionRows && <ClipboardRow props={props} />}
       {props.showDesktopActionRows && <LocalCommandRow props={props} />}
+      {props.showDesktopActionRows && <BrowserRow props={props} />}
 
       {props.hostCanGenerateImage && <ImageRow props={props} />}
       {props.hostCanGenerateVideo && <VideoRow props={props} />}
@@ -1122,6 +1140,9 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     ),
     props.showDesktopActionRows && matches(ROW_LABEL_LOCAL_COMMAND) && (
       <LocalCommandRow key="local-command" props={props} role="menuitem" />
+    ),
+    props.showDesktopActionRows && matches(ROW_LABEL_BROWSER) && (
+      <BrowserRow key="use-browser" props={props} role="menuitem" />
     ),
     props.hostCanGenerateImage && matches(ROW_LABEL_IMAGE) && (
       <ImageRow key="image" props={props} role="menuitem" />

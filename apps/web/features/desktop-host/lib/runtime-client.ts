@@ -4,6 +4,7 @@ import {
   DesktopRuntimeError,
   getHostBridge,
   type ApplicationOpenResult,
+  type BrowserPairingState,
   type ClipboardSnapshot,
   type FileEntry,
   type FileBinaryContent,
@@ -11,6 +12,7 @@ import {
   type ShellRunResult,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
+import type { BrowserPageSummary } from '@agiworkforce/types';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -184,4 +186,77 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
     );
   }
   return files;
+}
+
+export function readBrowserPairing(): Promise<BrowserPairingState> {
+  return invoke<BrowserPairingState>('browser_pairing_state');
+}
+
+export function installBrowserHost(): Promise<string[]> {
+  return invoke<string[]>('browser_pairing_install_host');
+}
+
+export function unpairBrowser(): Promise<BrowserPairingState> {
+  return invoke<BrowserPairingState>('browser_pairing_unpair');
+}
+
+export function readPairedPage(): Promise<BrowserPageSummary> {
+  return invoke<BrowserPageSummary>('browser_read_page');
+}
+
+export function clickInPairedBrowser(selector: string): Promise<{ clicked: boolean }> {
+  return invoke<{ clicked: boolean }>('browser_click', { selector });
+}
+
+export function typeInPairedBrowser(
+  selector: string,
+  text: string,
+  clear = false,
+): Promise<{ typed: boolean }> {
+  return invoke<{ typed: boolean }>('browser_type', { selector, text, clear });
+}
+
+export function navigatePairedBrowser(url: string): Promise<{ url: string }> {
+  return invoke<{ url: string }>('browser_navigate', { url });
+}
+
+export function capturePairedBrowser(): Promise<{ dataUrl: string }> {
+  return invoke<{ dataUrl: string }>('browser_screenshot');
+}
+
+export function readPairedBrowserConsole(options: {
+  pattern?: string;
+  level?: string;
+  limit?: number;
+}): Promise<{ origin: string; console: unknown[] }> {
+  return invoke<{ origin: string; console: unknown[] }>('browser_console', options);
+}
+
+export function readPairedBrowserNetwork(options: {
+  pattern?: string;
+  resourceType?: string;
+  failedOnly?: boolean;
+  limit?: number;
+}): Promise<{ origin: string; network: unknown[] }> {
+  return invoke<{ origin: string; network: unknown[] }>('browser_network', options);
+}
+
+export function downloadThroughPairedBrowser(
+  url: string,
+): Promise<{ download: { filename?: string; url?: string } | null }> {
+  return invoke<{ download: { filename?: string; url?: string } | null }>('browser_download', {
+    url,
+  });
+}
+
+/**
+ * A browser screenshot as the composer's own attachment type, so it meets the
+ * same size and kind rules a dragged-in image does.
+ */
+export function screenshotAttachment(dataUrl: string, nowMs: number): File {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  return new File([decodeBase64(base64)], `browser-${nowMs}.png`, {
+    type: 'image/png',
+    lastModified: nowMs,
+  });
 }
