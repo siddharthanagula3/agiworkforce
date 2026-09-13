@@ -114,6 +114,8 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
 } from '@agiworkforce/types';
+import type { CloudWorkMode } from '@agiworkforce/types';
+import type { AgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
@@ -155,6 +157,13 @@ export interface SendMessageOptions {
    * which means this send is not branching at all.
    */
   branchParentId?: string | null;
+  /**
+   * Start this turn as an AGI Work run regardless of the composer's mode. The
+   * plan entitlement still decides, an unentitled account falls back to chat.
+   */
+  workMode?: CloudWorkMode;
+  agiWorkGoal?: AgiWorkGoalInput;
+  onRunStarted?: (runId: string) => void;
 }
 
 interface DeferredSend {
@@ -1571,7 +1580,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         entitlementState.codeExecutionAvailable &&
         isCapabilityRequestable('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
-      const requestedWorkMode = useChatViewStore.getState().workMode;
+      const requestedWorkMode = options?.workMode ?? useChatViewStore.getState().workMode;
       const workMode = canUseBillingPlanCapability(entitlementState.tier, 'agi_work')
         ? requestedWorkMode
         : 'chat';
@@ -1609,6 +1618,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(officeCreationEnabled ? { office_creation: true } : {}),
           x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
+          ...(workMode === 'agiwork' && options?.agiWorkGoal
+            ? { agi_work_goal: options.agiWorkGoal }
+            : {}),
           ...(options?.skillName ? { skill_name: options.skillName } : {}),
         },
         {
@@ -1622,7 +1634,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 agentActivity?.lastSequence ?? -1,
               ),
             };
+            const firstReference = !activeCloudRuns.has(conversationId);
             activeCloudRuns.set(conversationId, { ...cloudAgentRun });
+            if (firstReference) options?.onRunStarted?.(cloudAgentRun.runId);
             const currentMsgStore = getConversationMessageStore(conversationId);
             currentMsgStore.setState((s) => ({
               messages: {

@@ -184,6 +184,7 @@ interface InitialStreamRequest {
   code_execution?: boolean;
   office_creation?: boolean;
   work_mode?: CloudWorkMode;
+  agi_work_goal?: { goal: string; constraints?: string; deliverable?: string };
   skill_name?: string;
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
