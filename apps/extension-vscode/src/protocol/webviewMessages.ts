@@ -62,7 +62,7 @@ const openAccount = z.object({ type: z.literal('openAccount') });
 const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
-const openWebTasks = z.object({ type: z.literal('openWebTasks') });
+const openCloudTasks = z.object({ type: z.literal('openCloudTasks') });
 export const CONTEXT_ATTACHMENT_KINDS = [
   'selection',
   'open-files',
@@ -182,7 +182,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   completeOnboarding,
   openPermissionDocs,
   openPrivacySettings,
-  openWebTasks,
+  openCloudTasks,
   openPathReference,
   requestContextMenuState,
   attachContext,

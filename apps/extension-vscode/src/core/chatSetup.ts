@@ -9,10 +9,16 @@ import {
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
+import {
+  CLOUD_TASKS_VIEW_ID,
+  CloudTasksTreeProvider,
+  resolveCloudAgentRunClient,
+} from '../features/cloud-tasks';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 
 export interface ChatState {
   conversationTreeProvider: ConversationTreeProvider;
+  cloudTasksTreeProvider: CloudTasksTreeProvider;
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -60,11 +66,27 @@ export function setupChat(
     memoryTreeProvider,
   );
 
+  const cloudTasksTreeProvider = new CloudTasksTreeProvider(() =>
+    resolveCloudAgentRunClient(context.secrets),
+  );
+  const cloudTasksView = vscode.window.createTreeView(CLOUD_TASKS_VIEW_ID, {
+    treeDataProvider: cloudTasksTreeProvider,
+  });
+  cloudTasksTreeProvider.setAutoRefreshEnabled(cloudTasksView.visible);
+  context.subscriptions.push(
+    cloudTasksView.onDidChangeVisibility((event) => {
+      cloudTasksTreeProvider.setAutoRefreshEnabled(event.visible);
+    }),
+    cloudTasksView,
+    cloudTasksTreeProvider,
+  );
+
   const indexer = new WorkspaceIndexer(context);
   context.subscriptions.push(...indexer.registerFileWatcher());
 
   return {
     conversationTreeProvider,
+    cloudTasksTreeProvider,
     sidebarProvider,
     contextPanelProvider,
     memoryTreeProvider,

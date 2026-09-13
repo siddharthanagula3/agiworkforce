@@ -129,7 +129,7 @@ export type WebviewToExtMessage =
   | { type: 'completeOnboarding' }
   | { type: 'openPermissionDocs' }
   | { type: 'openPrivacySettings' }
-  | { type: 'openWebTasks' }
+  | { type: 'openCloudTasks' }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
@@ -768,10 +768,8 @@ export class ChatStateManager {
         break;
       }
 
-      case 'openWebTasks': {
-        await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/tasks?from=vscode-extension'),
-        );
+      case 'openCloudTasks': {
+        await vscode.commands.executeCommand('agi-workforce.showCloudTasks');
         break;
       }
 
