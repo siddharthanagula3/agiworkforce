@@ -245,7 +245,20 @@ pub(super) async fn handle_slash_command(
             eprintln!("  Skip perms: {}", session.skip_permissions);
         }
         "/usage" => {
-            output::print_block(&crate::claude_parity::render_stats(session));
+            output::print_block(
+                &crate::usage_summary::render_usage_report(
+                    &crate::usage_summary::SessionEstimate {
+                        turns: session.turn_count,
+                        input_tokens: session.total_input_tokens,
+                        output_tokens: session.total_output_tokens,
+                        cache_read_tokens: session.total_cache_read_tokens,
+                        cache_write_tokens: session.total_cache_creation_tokens,
+                        estimated_cost_usd: session.cost_ledger.total_usd,
+                        model: session.model.clone(),
+                    },
+                )
+                .await,
+            );
         }
         "/sessions" => {
             registry::handle_sessions(arg);
