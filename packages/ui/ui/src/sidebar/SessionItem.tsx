@@ -18,6 +18,7 @@ import {
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator, MenuSubmenu } from './Menu';
+import { INLINE_EDIT_ATTRIBUTE } from './escape-guard';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type { SidebarProject, SidebarSession } from './types';
 
@@ -178,6 +179,7 @@ function SessionItemBase({
       <div className="mb-1 rounded-lg px-2 py-1.5">
         <input
           ref={inputRef}
+          {...{ [INLINE_EDIT_ATTRIBUTE]: '' }}
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
           onBlur={submitRename}
@@ -187,6 +189,7 @@ function SessionItemBase({
               submitRename();
             }
             if (e.key === 'Escape') {
+              e.stopPropagation();
               returnFocusOnExitRef.current = true;
               cancelRename();
             }
