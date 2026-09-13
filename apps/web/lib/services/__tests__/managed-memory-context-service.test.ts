@@ -271,7 +271,7 @@ describe('persistManagedAutoMemoryFacts', () => {
     const secondBatch = JSON.parse(insertCalls[1]?.[1]?.[1] as string) as typeof firstBatch;
 
     expect(sql).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
-    expect(sql).toContain('on conflict (id) do nothing');
+    expect(sql).toContain('on conflict (user_id, id) do nothing');
     expect(firstBatch).toHaveLength(5);
     expect(firstBatch[0]).toMatchObject({
       content: 'User prefers Rust',
