@@ -7,6 +7,8 @@ export interface ResearchSource {
   title: string;
   snippet?: string;
   favicon?: string;
+  /** When the page was published, when the search backend reported it. */
+  publishedDate?: string;
   citationIndex?: number;
 }
 

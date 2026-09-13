@@ -323,12 +323,13 @@ export function nativeSearchBudgetExhaustedMessage(limit: number): string {
 
 export function webSearchResultsToFetchedSources(
   outcome: WebSearchOutcome,
-): Array<{ url: string; title: string; snippet?: string }> {
+): Array<{ url: string; title: string; snippet?: string; date?: string }> {
   if (!outcome.ok) return [];
   return outcome.results.map((r) => ({
     url: r.url,
     title: r.title,
     ...(r.snippet ? { snippet: r.snippet } : {}),
+    ...(r.date ? { date: r.date } : {}),
   }));
 }
 

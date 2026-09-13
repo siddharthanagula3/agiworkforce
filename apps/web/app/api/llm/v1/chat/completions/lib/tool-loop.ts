@@ -922,6 +922,8 @@ export interface FetchedSource {
   url: string;
   title: string;
   snippet?: string;
+  /** When the page was published, when the search backend reported it. */
+  date?: string;
 }
 
 /**
@@ -1000,6 +1002,7 @@ export function searchResultsEvent(
               url: source.url,
               title: source.title,
               encrypted_content: source.snippet ?? '',
+              ...(source.date ? { page_age: source.date } : {}),
               position: positionFor?.(source.url) ?? index + 1,
             })),
           },

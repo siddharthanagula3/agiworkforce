@@ -120,6 +120,7 @@ const SourceSchema = z
     url: z.string(),
     title: z.string(),
     snippet: z.string().optional(),
+    date: z.string().optional(),
   })
   .strict();
 const sourceSchemaCoversFetchedSource: SameKeys<z.infer<typeof SourceSchema>, FetchedSource> = true;
