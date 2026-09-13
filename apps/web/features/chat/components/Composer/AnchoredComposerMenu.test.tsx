@@ -92,3 +92,32 @@ describe('AnchoredComposerMenu focus on open', () => {
     expect(input).toHaveFocus();
   });
 });
+
+describe('AnchoredComposerMenu tab out', () => {
+  it('closes and hands focus back to the anchor when Tab leaves the panel', async () => {
+    const onRequestClose = vi.fn();
+    render(<Harness onRequestClose={onRequestClose} />);
+    const input = openByTyping('@');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: FIRST_ITEM_LABEL })).toHaveFocus(),
+    );
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(onRequestClose).toHaveBeenCalledOnce();
+    expect(input).toHaveFocus();
+  });
+
+  it('leaves Tab to the host when the menu never took focus', async () => {
+    const onRequestClose = vi.fn();
+    render(<Harness autoFocusFirstItem={false} onRequestClose={onRequestClose} />);
+    const input = openByTyping('@');
+    await screen.findByRole('dialog', { name: MENU_LABEL });
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(onRequestClose).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+  });
+});
