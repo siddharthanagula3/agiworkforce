@@ -120,6 +120,13 @@ import {
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
+  BROWSER_COMMAND_POLL_WINDOW_MS,
+  BROWSER_COMMAND_PROTOCOL_VERSION,
+  NATIVE_BROWSER_POLL_MESSAGE,
+  NATIVE_BROWSER_RESULT_MESSAGE,
+} from '@agiworkforce/types';
+import { runDesktopBrowserCommand } from './features/native-bridge/desktopCommands';
+import {
   cancelChromeManagedRun,
   findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
@@ -839,6 +846,7 @@ function connectToNativeHost(): void {
         }
 
         state.isNativeConnected = true;
+        void pollDesktopBrowserCommands();
         _bgCtx.nativeReconnectAttempt = 0;
         _bgCtx.nativeReconnectGaveUp = false;
         clearNativeReconnectTimer();
@@ -2861,6 +2869,76 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
     return activeTabs.find(isWebTab)?.id ?? null;
   } catch {
     return null;
+  }
+}
+
+const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
+const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
+
+let desktopPollRunning = false;
+
+/**
+ * Desktop-issued page work, pulled rather than pushed.
+ *
+ * The native client only resolves responses to its own requests, so a host that
+ * pushed a command would be talking to nobody. A host that does not know these
+ * message types, the Rust one the Tauri app ships, answers an error and the
+ * loop stops asking.
+ */
+async function pollDesktopBrowserCommands(): Promise<void> {
+  if (desktopPollRunning) return;
+  desktopPollRunning = true;
+  let failures = 0;
+
+  try {
+    while (state.nativePort && state.isNativeConnected) {
+      let command: unknown = null;
+      try {
+        const response = (await sendNativeRequest(
+          { type: NATIVE_BROWSER_POLL_MESSAGE, version: BROWSER_COMMAND_PROTOCOL_VERSION },
+          { timeoutMs: DESKTOP_POLL_TIMEOUT_MS, requireAuthenticatedSession: true },
+        )) as unknown as { success?: boolean; command?: unknown };
+        if (response?.success !== true) throw new Error('Desktop refused the command poll');
+        failures = 0;
+        command = response.command ?? null;
+      } catch (error) {
+        failures += 1;
+        logger.debug('Desktop browser command poll failed', error);
+        if (failures >= DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES) return;
+        await sleep(5000);
+        continue;
+      }
+
+      if (!command) continue;
+
+      const result = await runDesktopBrowserCommand(command, {
+        resolveTabId: () => resolveBrowserToolTabId(undefined),
+        send: async (tabId, message) =>
+          (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
+            id: chrome.runtime.id,
+            url: chrome.runtime.getURL('side_panel.html'),
+            origin: chrome.runtime.getURL('/').replace(/\/+$/, ''),
+          })) as unknown as Record<string, unknown>,
+        navigate: async (tabId, url) => {
+          await chrome.tabs.update(tabId, { url });
+        },
+      });
+
+      try {
+        await sendNativeRequest(
+          {
+            type: NATIVE_BROWSER_RESULT_MESSAGE,
+            version: BROWSER_COMMAND_PROTOCOL_VERSION,
+            result,
+          },
+          { requireAuthenticatedSession: true },
+        );
+      } catch (error) {
+        logger.debug('Desktop browser command result was not delivered', error);
+      }
+    }
+  } finally {
+    desktopPollRunning = false;
   }
 }
 
