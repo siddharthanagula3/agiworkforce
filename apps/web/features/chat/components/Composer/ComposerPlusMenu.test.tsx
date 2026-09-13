@@ -141,6 +141,30 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.queryByLabelText('Search the AGI Work palette')).not.toBeInTheDocument();
   });
 
+  it('toggles per-chat memory from its own row', () => {
+    const { props } = renderMenu();
+
+    const row = screen.getByRole('button', { name: 'Memory' });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(row);
+    expect(props.onToggleMemory).toHaveBeenCalledOnce();
+  });
+
+  it('disables the memory row and keeps its reason when the capability is off', () => {
+    const { props } = renderMenu({
+      memoryEnabled: false,
+      memoryDisabled: true,
+      memoryTitle: 'Turn on Memory in Settings.',
+    });
+
+    const row = screen.getByRole('button', { name: 'Memory' });
+    expect(row).toBeDisabled();
+    expect(row).toHaveAttribute('aria-pressed', 'false');
+    expect(row).toHaveAttribute('title', 'Turn on Memory in Settings.');
+    fireEvent.click(row);
+    expect(props.onToggleMemory).not.toHaveBeenCalled();
+  });
+
   it('lists connected connectors only once the Connectors row is expanded', () => {
     renderMenu({ connectorsSubmenuOpen: true });
 

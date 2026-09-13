@@ -13,6 +13,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Brain,
   Camera,
   Check,
   ChevronRight,
@@ -69,6 +70,7 @@ const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
 const ROW_LABEL_RESEARCH = 'Deep Research';
 const ROW_LABEL_OFFICE = 'Create Office files';
+const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = 'Temporary chat';
 const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
@@ -707,6 +709,15 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         onToggle={props.onToggleOfficeCreation}
         disabled={props.officeCreationDisabled}
         title={props.officeCreationTitle}
+      />
+
+      <MenuToggleRow
+        icon={Brain}
+        label={ROW_LABEL_MEMORY}
+        checked={props.memoryEnabled}
+        onToggle={props.onToggleMemory}
+        disabled={props.memoryDisabled}
+        title={props.memoryTitle}
       />
 
       <div className={DIVIDER_CLASS} />
