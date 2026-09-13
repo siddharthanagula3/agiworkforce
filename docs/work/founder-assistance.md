@@ -215,11 +215,14 @@ three fixes trade security against pairing UX and force every device to re-pair.
 **Why founder assistance is required**
 A free-tier account can script around the Pro-only API paywall with a bare
 session token; two remediations were rejected in review, and the durable fix
-changes what a credential carries.
-**Exact action** Choose: bind the surface into a Clerk custom session claim; require a surface-bearing credential for non-browser callers (parked patch `agiworkforce-security-run/blocked/w1-W1-E-surface-header-trust.patch`); or accept the residual and gate on billing audit.
-**Where** `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts`.
-**Needed input** One security-architecture decision.
-**How to verify completion** A free-tier bare token can no longer reach the developer surfaces.
+changes what a credential carries. Registered as
+`WEB-SEC-SCAN-2026-09-09-F88`: an API key and a developer credential already
+pin their surface, a bare session token does not, so the plan gate reads the
+advisory `x-agi-surface` header the caller controls.
+**Exact action** Choose one of three: bind the surface into a Clerk custom session claim (`CLERK_SECRET_KEY` already set, no new environment variable; the claim is added in the Clerk dashboard under Sessions, Customize session token); require a surface-bearing credential for non-browser callers, which makes every CLI, extension and IDE caller mint a developer token first; or accept the residual and gate on billing audit instead.
+**Where** The header is trusted in `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts`; the plan gate that acts on it is `enforceManagedCloudSurface` in `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts`.
+**Needed input** One security-architecture decision. No new deployment secret under any of the three options.
+**How to verify completion** With a free-tier account, a bare session token sent to `POST /api/llm/v1/chat/completions` with `x-agi-surface: cli` answers `developer_surface_plan_required` rather than completing the turn.
 **What remains after founder action** Engineering.
 **Impact** RELEASE-BLOCKING (revenue integrity, no data exposure)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -566,7 +569,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0186 in production before the next deploy
+## [Database] Apply migrations 0183 to 0188 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -577,25 +580,36 @@ refuses to promote while a draft migration is unapplied.
    0175 to 0182 batch used: `pnpm db:migrate -- apply --target branch`, then
    `pnpm db:migrate -- apply --target production --confirm-production`, with
    the production URL exported for the command.
-2. The four drafts: `0183_video_generation_completion_notice.sql` (a claim
+2. The six drafts: `0183_video_generation_completion_notice.sql` (a claim
    column so a finished video job is announced once), `0184_organization_shared_artifacts.sql`
    (artifact visibility plus the workspace grant table),
    `0185_org_shared_artifact_policy_recursion.sql` (splits the grant policy per
-   command; without it every publish raises 42P17) and
+   command; without it every publish raises 42P17),
    `0186_organization_shared_sessions.sql` (the same two-part shape for
    conversation shares: a `visibility` column on `shared_sessions`, the
    `organization_shared_sessions` grant table, and row level security on
    `shared_sessions` itself with SELECT and UPDATE granted to `app_rls`, so a
-   member read is decided by a policy rather than by a route). Apply all four
-   together.
+   member read is decided by a policy rather than by a route),
+   `0187_device_refresh_token_workspace_binding.sql` (an `organization_id`
+   column on `device_refresh_tokens`, so removing a member from one workspace
+   revokes the credentials that workspace issued instead of every credential on
+   their account) and
+   `0188_github_installation_verified_repositories.sql` (a
+   `verified_repositories` column on `github_installations`, so a connected
+   installation lists and clones only the repositories the linking GitHub
+   account proved it can reach). Apply all six together. The deployment carrying
+   0187 and 0188 must not go out before they are applied: the device pairing
+   insert and the GitHub connect flow both name the new columns.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0186 as applied; the deploy job's migration verify step passes; a video
+lists 0188 as applied; the deploy job's migration verify step passes; a video
 job completion produces one notice; an artifact and a conversation can each be
 shared with the workspace, read by a member, and refused to a signed-out
-visitor holding the link.
+visitor holding the link; a desktop pairs and refreshes without error; and the
+GitHub connect flow reconnects an installation and still lists its
+repositories.
 **What remains after founder action** Nothing in code.
 **Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
