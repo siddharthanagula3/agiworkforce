@@ -397,7 +397,7 @@ describe('tool-loop web_search integration', () => {
       );
 
       expect(output).toContain('"status":"failed"');
-      expect(output).toContain('Search failed (not_configured)');
+      expect(output).toContain('not configured on this server');
       expect(output).not.toContain('"x_search_results"');
       expect(output).not.toContain('"x_stream_error"');
       expect(fetchMock).not.toHaveBeenCalled();
@@ -407,7 +407,7 @@ describe('tool-loop web_search integration', () => {
         messages: Array<{ role: string; content: string }>;
       };
       const toolMsg = secondRequest.messages.find((m) => m.role === 'tool');
-      expect(toolMsg?.content).toContain('not_configured');
+      expect(toolMsg?.content).toContain('not configured on this server');
       expect(output).toContain('I could not search the web, but here is what I know.');
       expect(output).toContain('data: [DONE]');
     } finally {

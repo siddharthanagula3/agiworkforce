@@ -321,13 +321,32 @@ describe('formatWebSearchResultForModel', () => {
     expect(text).toContain('1. A');
   });
 
-  it('falls back to the position within the call when the turn has no number for a url', () => {
+  it('drops a result the turn cannot number rather than showing it with a number nobody has', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
       query: 'q',
       results: [{ url: 'https://example.com/z', title: 'Z', snippet: '' }],
     };
-    expect(formatWebSearchResultForModel(outcome, () => undefined)).toContain('1. Z');
+    const text = formatWebSearchResultForModel(outcome, () => undefined);
+    expect(text).not.toContain('Z');
+    expect(text).toContain('as many sources as it can cite');
+  });
+
+  it('keeps the numbered results and says how many the source limit left out', () => {
+    const outcome: WebSearchOutcome = {
+      ok: true,
+      query: 'q',
+      results: [
+        { url: 'https://example.com/a', title: 'A', snippet: '' },
+        { url: 'https://example.com/b', title: 'B', snippet: '' },
+      ],
+    };
+    const text = formatWebSearchResultForModel(outcome, (url) =>
+      url.endsWith('/a') ? 4 : undefined,
+    );
+    expect(text).toContain('4. A');
+    expect(text).not.toContain('B');
+    expect(text).toContain('1 further result(s) were not added');
   });
 
   it('formats a no-results outcome honestly', () => {
@@ -335,15 +354,34 @@ describe('formatWebSearchResultForModel', () => {
     expect(formatWebSearchResultForModel(outcome)).toBe('No results found for "nothing here".');
   });
 
-  it('formats a failure outcome with the error code', () => {
-    const outcome: WebSearchOutcome = {
+  it('names what went wrong in plain words instead of an internal error code', () => {
+    expect(
+      formatWebSearchResultForModel({
+        ok: false,
+        errorCode: 'not_configured',
+        error: 'missing key',
+      }),
+    ).toContain('not configured on this server');
+
+    const rateLimited = formatWebSearchResultForModel({
       ok: false,
-      errorCode: 'not_configured',
-      error: 'missing key',
-    };
-    const text = formatWebSearchResultForModel(outcome);
-    expect(text).toContain('not_configured');
-    expect(text).toContain('missing key');
+      errorCode: 'rate_limited',
+      error: 'the search backend answered HTTP 429',
+      status: 429,
+      retryable: true,
+    });
+    expect(rateLimited).toContain('rate limiting');
+    expect(rateLimited).toContain('once more');
+
+    const upstream = formatWebSearchResultForModel({
+      ok: false,
+      errorCode: 'upstream_error',
+      error: 'the search backend answered HTTP 502',
+      status: 502,
+      retryable: true,
+    });
+    expect(upstream).toContain('HTTP 502');
+    expect(upstream).toContain('once more');
   });
 });
 
@@ -474,16 +512,98 @@ describe('enrichWebSearchResultTitles', () => {
     return { url, title: '', snippet: '' };
   }
 
-  it('leaves an already-titled result untouched and never fetches it', async () => {
+  it('leaves a result that already has all three fields untouched and never fetches it', async () => {
     const fetchImpl = vi.fn();
     const results: WebSearchResultItem[] = [
-      { url: 'https://example.com/already-titled', title: 'Existing Title', snippet: 's' },
+      {
+        url: 'https://example.com/already-titled',
+        title: 'Existing Title',
+        snippet: 's',
+        date: '2026-09-01',
+      },
     ];
     const enriched = await enrichWebSearchResultTitles(results, {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(enriched).toEqual(results);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fills a missing snippet and date from the page's own metadata", async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse(
+        '<html><head><title>Real Headline</title>' +
+          '<meta property="og:description" content="What the page is about.">' +
+          '<meta property="article:published_time" content="2026-09-01T10:00:00Z">' +
+          '</head><body></body></html>',
+      ),
+    );
+    const enriched = await enrichWebSearchResultTitles(
+      [{ url: 'https://example.com/grounded', title: 'Grounded result', snippet: '' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]).toMatchObject({
+      title: 'Grounded result',
+      snippet: 'What the page is about.',
+      date: '2026-09-01T10:00:00Z',
+    });
+  });
+
+  it('takes a published date from JSON-LD when the page ships no article metadata', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse(
+        '<html><head><title>T</title>' +
+          '<script type="application/ld+json">{"@type":"NewsArticle","datePublished":"2026-08-14"}</script>' +
+          '</head><body></body></html>',
+      ),
+    );
+    const enriched = await enrichWebSearchResultTitles<WebSearchResultItem>(
+      [{ url: 'https://example.com/jsonld', title: 'T', snippet: 's' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.date).toBe('2026-08-14');
+  });
+
+  it('discards a published date that is not a date', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse(
+        '<html><head><title>T</title>' +
+          '<meta property="article:published_time" content="recently"></head><body></body></html>',
+      ),
+    );
+    const enriched = await enrichWebSearchResultTitles<WebSearchResultItem>(
+      [{ url: 'https://example.com/bad-date', title: 'T', snippet: 's' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.date).toBeUndefined();
+  });
+
+  it('never overwrites a snippet or date the search backend already reported', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse(
+        '<html><head><title>T</title>' +
+          '<meta property="og:description" content="page copy">' +
+          '<meta property="article:published_time" content="2026-01-01"></head><body></body></html>',
+      ),
+    );
+    const enriched = await enrichWebSearchResultTitles(
+      [
+        {
+          url: 'https://example.com/complete',
+          title: '',
+          snippet: 'backend snippet',
+          date: '2026-05-05',
+        },
+      ],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.snippet).toBe('backend snippet');
+    expect(enriched[0]?.date).toBe('2026-05-05');
+    expect(enriched[0]?.title).toBe('T');
   });
 
   it('fills in a missing title from the page <title> element', async () => {
