@@ -147,8 +147,11 @@ describe('free trial service', () => {
       weeklyUsagePercentage: 40,
       weeklyResetAt: '2026-07-25T12:00:00.000Z',
       hasUsageRemaining: true,
+      fiveHourUsedMicrousd: 15_000,
+      weeklyUsedMicrousd: 30_000,
+      monthlyUsedMicrousd: 50_000,
     });
-    expect(JSON.stringify(snapshot)).not.toMatch(/microusd|budget|cost|reserved/i);
+    expect(JSON.stringify(snapshot)).not.toMatch(/budget|cost|reserved/i);
     // The snapshot reads only the connection it was handed, never the
     // schema-owner pool that bypasses row-level security.
     expect(db.query).not.toHaveBeenCalled();
@@ -173,6 +176,9 @@ describe('free trial service', () => {
       weeklyUsagePercentage: 0,
       weeklyResetAt: null,
       hasUsageRemaining: true,
+      fiveHourUsedMicrousd: 0,
+      weeklyUsedMicrousd: 0,
+      monthlyUsedMicrousd: 0,
     });
   });
 

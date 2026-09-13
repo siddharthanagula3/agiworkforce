@@ -111,7 +111,7 @@ interface ImageGenerationResponse {
 
 /**
  * The rate card publishes microUSD, which is the unit the ledger settles in
- * since 0185. centsFromMicrousdCeil is kept only for the surfaces that report
+ * since 0182. centsFromMicrousdCeil is kept only for the surfaces that report
  * a whole-cent figure.
  */
 function rateCardMicrousd(feature: RateCardFeature): number {

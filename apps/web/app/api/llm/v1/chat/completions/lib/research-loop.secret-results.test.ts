@@ -28,7 +28,6 @@ vi.mock('./tool-loop-anthropic', () => ({
   buildServingRouteId: vi.fn(),
 }));
 vi.mock('@/lib/services/credit-service', () => ({
-  CreditSettlementUnavailableError: class extends Error {},
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
@@ -37,6 +36,7 @@ vi.mock('@/lib/services/credit-service', () => ({
     generateIdempotencyKey: vi.fn(() => 'idem-key'),
     deductCredits: vi.fn(async () => ({ success: true })),
   },
+  CreditSettlementUnavailableError: class extends Error {},
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {

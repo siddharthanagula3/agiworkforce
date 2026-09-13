@@ -1,4 +1,4 @@
--- 0185 : give the managed-usage ledger a microUSD unit.
+-- 0182 : give the managed-usage ledger a microUSD unit.
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
@@ -183,8 +183,196 @@ alter table public.managed_usage_request_extensions
   add constraint managed_usage_request_extensions_microusd_non_negative
   check (estimated_cost_microusd >= 0);
 
+-- KEEPING THE TWO UNITS CONSISTENT FOR WRITERS THAT NEVER MOVED.
+--
+-- The backfill above is a one-shot. Every row written afterwards by code that
+-- still speaks cents, operator-metrics.ts adjusts balances and inserts
+-- transactions in cents at six call sites, and the lease probe seeds an
+-- account the same way, would leave the microUSD twin at its zero default.
+-- Because the functions below read microUSD, such an account holds no
+-- spendable balance at all and every reservation against it is declined, and
+-- such a transaction sums as zero spend in the rolling windows that bound a
+-- plan. Mirrored columns are only safe if something maintains the mirror in
+-- both directions, so these triggers do.
+--
+-- microUSD wins whenever the writer supplied it, which keeps every function
+-- below authoritative; cents is read only when the microUSD side was left at
+-- its default, which is exactly the cents-only writer.
+
+create or replace function public.sync_token_credits_units()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.credits_allocated_microusd = 0 and new.credits_allocated_cents <> 0 then
+      new.credits_allocated_microusd := new.credits_allocated_cents::bigint * 10000;
+    end if;
+    if new.credits_used_microusd = 0 and new.credits_used_cents <> 0 then
+      new.credits_used_microusd := new.credits_used_cents::bigint * 10000;
+    end if;
+    if new.top_up_allocated_microusd = 0 and new.top_up_allocated_cents <> 0 then
+      new.top_up_allocated_microusd := new.top_up_allocated_cents::bigint * 10000;
+    end if;
+    if new.flagship_used_today_microusd = 0
+      and coalesce(new.flagship_used_today_cents, 0) <> 0 then
+      new.flagship_used_today_microusd := new.flagship_used_today_cents::bigint * 10000;
+    end if;
+  else
+    if new.credits_allocated_microusd is not distinct from old.credits_allocated_microusd
+      and new.credits_allocated_cents is distinct from old.credits_allocated_cents then
+      new.credits_allocated_microusd := new.credits_allocated_cents::bigint * 10000;
+    end if;
+    if new.credits_used_microusd is not distinct from old.credits_used_microusd
+      and new.credits_used_cents is distinct from old.credits_used_cents then
+      new.credits_used_microusd := new.credits_used_cents::bigint * 10000;
+    end if;
+    if new.top_up_allocated_microusd is not distinct from old.top_up_allocated_microusd
+      and new.top_up_allocated_cents is distinct from old.top_up_allocated_cents then
+      new.top_up_allocated_microusd := new.top_up_allocated_cents::bigint * 10000;
+    end if;
+    if new.flagship_used_today_microusd is not distinct from old.flagship_used_today_microusd
+      and new.flagship_used_today_cents is distinct from old.flagship_used_today_cents then
+      new.flagship_used_today_microusd := coalesce(new.flagship_used_today_cents, 0)::bigint * 10000;
+    end if;
+  end if;
+
+  new.credits_allocated_cents := public.microusd_to_cents_mirror(new.credits_allocated_microusd);
+  new.credits_used_cents := public.microusd_to_cents_mirror(new.credits_used_microusd);
+  new.top_up_allocated_cents := public.microusd_to_cents_mirror(new.top_up_allocated_microusd);
+  new.flagship_used_today_cents :=
+    public.microusd_to_cents_mirror(new.flagship_used_today_microusd);
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_token_credits_units() from public;
+
+drop trigger if exists sync_token_credits_units on public.token_credits;
+create trigger sync_token_credits_units
+  before insert or update on public.token_credits
+  for each row execute function public.sync_token_credits_units();
+
+create or replace function public.sync_credit_transactions_units()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.amount_microusd = 0 and new.amount_cents <> 0 then
+      new.amount_microusd := new.amount_cents::bigint * 10000;
+    end if;
+  elsif new.amount_microusd is not distinct from old.amount_microusd
+    and new.amount_cents is distinct from old.amount_cents then
+    new.amount_microusd := new.amount_cents::bigint * 10000;
+  end if;
+
+  new.amount_cents := public.microusd_to_cents_mirror(new.amount_microusd);
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_credit_transactions_units() from public;
+
+-- Named to sort after label_managed_usage_transaction_flagship: Postgres fires
+-- same-timing row triggers in name order and each returns NEW, so the two
+-- compose, but only one may be the last word on the amount columns.
+drop trigger if exists sync_zz_credit_transactions_units on public.credit_transactions;
+create trigger sync_zz_credit_transactions_units
+  before insert or update on public.credit_transactions
+  for each row execute function public.sync_credit_transactions_units();
+
+create or replace function public.sync_credit_settlement_jobs_units()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.amount_microusd = 0 and new.amount_cents <> 0 then
+      new.amount_microusd := new.amount_cents::bigint * 10000;
+    end if;
+  elsif new.amount_microusd is not distinct from old.amount_microusd
+    and new.amount_cents is distinct from old.amount_cents then
+    new.amount_microusd := new.amount_cents::bigint * 10000;
+  end if;
+
+  new.amount_cents := public.microusd_to_cents_mirror(new.amount_microusd);
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_credit_settlement_jobs_units() from public;
+
+drop trigger if exists sync_credit_settlement_jobs_units on public.credit_settlement_jobs;
+create trigger sync_credit_settlement_jobs_units
+  before insert or update on public.credit_settlement_jobs
+  for each row execute function public.sync_credit_settlement_jobs_units();
+
+create or replace function public.sync_managed_usage_request_units()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.estimated_cost_microusd = 0 and new.estimated_cost_cents <> 0 then
+      new.estimated_cost_microusd := new.estimated_cost_cents::bigint * 10000;
+    end if;
+    if new.actual_cost_microusd is null and new.actual_cost_cents is not null then
+      new.actual_cost_microusd := new.actual_cost_cents::bigint * 10000;
+    end if;
+  else
+    if new.estimated_cost_microusd is not distinct from old.estimated_cost_microusd
+      and new.estimated_cost_cents is distinct from old.estimated_cost_cents then
+      new.estimated_cost_microusd := new.estimated_cost_cents::bigint * 10000;
+    end if;
+    if new.actual_cost_microusd is not distinct from old.actual_cost_microusd
+      and new.actual_cost_cents is distinct from old.actual_cost_cents then
+      new.actual_cost_microusd := new.actual_cost_cents::bigint * 10000;
+    end if;
+  end if;
+
+  new.estimated_cost_cents := public.microusd_to_cents_mirror(new.estimated_cost_microusd);
+  new.actual_cost_cents := public.microusd_to_cents_mirror(new.actual_cost_microusd);
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_managed_usage_request_units() from public;
+
+drop trigger if exists sync_managed_usage_request_units on public.managed_usage_requests;
+create trigger sync_managed_usage_request_units
+  before insert or update on public.managed_usage_requests
+  for each row execute function public.sync_managed_usage_request_units();
+
+create or replace function public.sync_managed_usage_extension_units()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.estimated_cost_microusd = 0 and new.estimated_cost_cents <> 0 then
+      new.estimated_cost_microusd := new.estimated_cost_cents::bigint * 10000;
+    end if;
+  elsif new.estimated_cost_microusd is not distinct from old.estimated_cost_microusd
+    and new.estimated_cost_cents is distinct from old.estimated_cost_cents then
+    new.estimated_cost_microusd := new.estimated_cost_cents::bigint * 10000;
+  end if;
+
+  new.estimated_cost_cents := public.microusd_to_cents_mirror(new.estimated_cost_microusd);
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_managed_usage_extension_units() from public;
+
+drop trigger if exists sync_managed_usage_extension_units
+  on public.managed_usage_request_extensions;
+create trigger sync_managed_usage_extension_units
+  before insert or update on public.managed_usage_request_extensions
+  for each row execute function public.sync_managed_usage_extension_units();
+
 comment on column public.token_credits.credits_used_microusd is
-  'Authoritative spend. credits_used_cents is its round-half-up mirror, kept for readers that predate 0185.';
+  'Authoritative spend. credits_used_cents is its round-half-up mirror, kept for readers that predate 0182.';
 comment on column public.credit_transactions.amount_microusd is
   'Authoritative ledger amount. Rolling windows sum this column; amount_cents is a per-row mirror and does not sum to it.';
 
@@ -851,7 +1039,7 @@ as $$
   );
 $$;
 
--- A result written before 0185 carries only the cents key. Reading it as
+-- A result written before 0182 carries only the cents key. Reading it as
 -- microUSD is exact for those rows, because they were whole cents.
 create or replace function public.settlement_result_microusd(
   p_result jsonb,

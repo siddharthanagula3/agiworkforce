@@ -12,6 +12,7 @@ const {
   mockEvaluateManagedComputeAccess,
   mockResolveSessionOrganizationId,
   mockRecordSettledProviderCost,
+  mockGetOrganizationMonthToDateSpendCents,
   mockCalculateCost,
   mockCalculateListCost,
   mockEstimateListCost,
@@ -38,6 +39,7 @@ const {
   mockEvaluateManagedComputeAccess: vi.fn(),
   mockResolveSessionOrganizationId: vi.fn(),
   mockRecordSettledProviderCost: vi.fn(),
+  mockGetOrganizationMonthToDateSpendCents: vi.fn(),
   mockCalculateCost: vi.fn(),
   mockCalculateListCost: vi.fn(),
   mockEstimateListCost: vi.fn(),
@@ -106,7 +108,7 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: mockRecordSettledProviderCost,
-  getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
+  getOrganizationMonthToDateSpendCents: mockGetOrganizationMonthToDateSpendCents,
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   UnpricedModelError: MockUnpricedModelError,
@@ -217,6 +219,7 @@ beforeEach(() => {
   mockWriteCachedAccess.mockResolvedValue(undefined);
   mockInvalidateCachedAccess.mockResolvedValue(undefined);
   mockRecordSettledProviderCost.mockResolvedValue(undefined);
+  mockGetOrganizationMonthToDateSpendCents.mockResolvedValue(0);
   mockCalculateCost.mockReturnValue(7);
   mockCalculateListCost.mockReturnValue(9);
   mockEstimateListCost.mockReturnValue(20);

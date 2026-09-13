@@ -1,8 +1,8 @@
--- Reversal of 0183 : take the customer and provider split back off the COGS ledger.
+-- Reversal of 0180 : take the customer and provider split back off the COGS ledger.
 --
--- WHAT THIS COSTS: every customer charge recorded since 0183 applied is lost.
+-- WHAT THIS COSTS: every customer charge recorded since 0180 applied is lost.
 -- The backfilled rows can be reconstructed from metadata->>'retailCostCents',
--- but any row written AFTER 0183 whose customer charge came from a caller
+-- but any row written AFTER 0180 whose customer charge came from a caller
 -- rather than from that metadata key has no other copy. Reconciliation status
 -- and provider-reported figures are lost outright. Per-feature, per-surface
 -- and per-token-class slicing goes back to a jsonb scan.
@@ -30,6 +30,6 @@ alter table public.provider_cost_events
 comment on column public.provider_cost_events.billed_cents is null;
 
 delete from public.schema_migrations
-  where filename = '0183_provider_cost_events_customer_and_cogs_split.sql';
+  where filename = '0180_provider_cost_events_customer_and_cogs_split.sql';
 
 commit;

@@ -78,6 +78,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
   makeUserConnectorExecutor: workflowMocks.connectorExecutor,
 }));
 
+import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 import { runCloudAgentTurn, startCloudAgentWorkflowExecution } from './start-cloud-agent-workflow';
 import { CloudAgentWorkflowBillingUnavailableError } from './cloud-agent-workflow-input';
 import {
@@ -166,6 +167,44 @@ describe('cloud agent workflow starter', () => {
 
     await expect(startCloudAgentWorkflowExecution(baseInput())).rejects.toThrow('attach failed');
     expect(workflowRun.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('gives up on a platform start that never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.buildInput.mockReturnValue({ version: 1 });
+      workflowMocks.start.mockReturnValue(new Promise(() => undefined));
+
+      const pending = startCloudAgentWorkflowExecution(baseInput());
+      const outcome = expect(pending).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(WORKFLOW_WORLD_CALL_DEADLINE_MS);
+      await outcome;
+      expect(workflowMocks.attach).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds a cancel the platform never acknowledges', async () => {
+    vi.useFakeTimers();
+    try {
+      const workflowRun = {
+        runId: 'wrun_123',
+        getReadable: vi.fn(() => new ReadableStream<Uint8Array>()),
+        cancel: vi.fn(() => new Promise<void>(() => undefined)),
+      };
+      workflowMocks.buildInput.mockReturnValue({ version: 1 });
+      workflowMocks.start.mockResolvedValue(workflowRun);
+      workflowMocks.attach.mockResolvedValue(undefined);
+
+      const started = await startCloudAgentWorkflowExecution(baseInput());
+      const outcome = expect(started.cancel()).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(WORKFLOW_WORLD_CALL_DEADLINE_MS);
+      await outcome;
+      expect(workflowRun.cancel).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

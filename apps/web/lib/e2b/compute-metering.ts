@@ -89,13 +89,10 @@ function isBillableInterval(elapsedMs: number): boolean {
 
 /**
  * Sandbox seconds are priced in microUSD per second, so this is the exact
- * charge. Rounding it to cents before 0185 discarded every interval under
+ * charge. Rounding it to cents before 0182 discarded every interval under
  * half a cent: those seconds billed nothing and moved no usage cap.
  */
-export function sandboxComputeCostMicrousd(
-  elapsedMs: number,
-  microusdPerSecond: number,
-): number {
+export function sandboxComputeCostMicrousd(elapsedMs: number, microusdPerSecond: number): number {
   if (!isBillableInterval(elapsedMs)) return 0;
   if (microusdPerSecond <= 0) return 0;
   return Math.ceil((elapsedMs / MILLISECONDS_PER_SECOND) * microusdPerSecond);

@@ -74,6 +74,9 @@ export type FreeTrialPublicUsage = {
   weeklyUsagePercentage: number;
   weeklyResetAt: string | null;
   hasUsageRemaining: boolean;
+  monthlyUsedMicrousd: number;
+  weeklyUsedMicrousd: number;
+  fiveHourUsedMicrousd: number;
 };
 
 const FREE_USAGE_SNAPSHOT_SQL = `
@@ -312,6 +315,9 @@ export async function getFreeTrialPublicUsage(
       weeklyUsagePercentage: 0,
       weeklyResetAt: null,
       hasUsageRemaining: true,
+      monthlyUsedMicrousd: 0,
+      weeklyUsedMicrousd: 0,
+      fiveHourUsedMicrousd: 0,
     };
   }
 
@@ -330,6 +336,9 @@ export async function getFreeTrialPublicUsage(
       fiveHourUsed < fiveHourBudgetMicrousd &&
       weeklyUsed < weeklyBudgetMicrousd &&
       monthlyUsed < monthlyBudgetMicrousd,
+    monthlyUsedMicrousd: monthlyUsed,
+    weeklyUsedMicrousd: weeklyUsed,
+    fiveHourUsedMicrousd: fiveHourUsed,
   };
 }
 

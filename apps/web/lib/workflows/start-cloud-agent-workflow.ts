@@ -2,6 +2,9 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { start, type WorkflowReadableStream } from 'workflow/api';
+import { withTimeout } from '@agiworkforce/utils';
+
+import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
 import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
@@ -61,7 +64,13 @@ export async function startCloudAgentWorkflowExecution(
   cancel: () => Promise<void>;
 }> {
   const workflowInput = buildCloudAgentWorkflowInput(input);
-  const workflowRun = await start(cloudAgentWorkflow, [workflowInput]);
+  const workflowRun = await withTimeout(
+    () => start(cloudAgentWorkflow, [workflowInput]),
+    WORKFLOW_WORLD_CALL_DEADLINE_MS,
+  );
+  const cancel = async () => {
+    await withTimeout(() => workflowRun.cancel(), WORKFLOW_WORLD_CALL_DEADLINE_MS);
+  };
   try {
     await attachCloudAgentWorkflow(input.db, {
       userId: input.userId,
@@ -69,16 +78,14 @@ export async function startCloudAgentWorkflowExecution(
       workflowRunId: workflowRun.runId,
     });
   } catch (error) {
-    await workflowRun.cancel();
+    await cancel().catch(() => undefined);
     throw error;
   }
 
   return {
     workflowRunId: workflowRun.runId,
     readable: workflowRun.getReadable<Uint8Array>(),
-    cancel: async () => {
-      await workflowRun.cancel();
-    },
+    cancel,
   };
 }
 
