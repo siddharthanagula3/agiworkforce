@@ -60,6 +60,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: [
     'undici',
+    'pdfjs-dist',
     '@opentelemetry/api',
     '@opentelemetry/exporter-trace-otlp-http',
     '@opentelemetry/resources',
