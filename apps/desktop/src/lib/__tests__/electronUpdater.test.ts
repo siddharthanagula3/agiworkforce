@@ -16,6 +16,7 @@ function installHost(openExternal: ElectronHostBridge['openExternal']): void {
       error: { code: 'unsupported-platform' as const, message: 'not available in this test host' },
     }),
     onDeepLink: () => () => undefined,
+    onRuntimeEvent: () => () => undefined,
     onVoiceHotkey: () => () => undefined,
     openExternal,
     windowControl: async () => false,
