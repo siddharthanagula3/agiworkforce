@@ -33,7 +33,7 @@ function startRename(onRename = vi.fn()) {
       getSessionHref={(s) => `/chat/${s.id}`}
     />,
   );
-  fireEvent.click(screen.getByLabelText('Conversation actions'));
+  fireEvent.click(screen.getByLabelText('More options for Repository structure overview'));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
   return screen.getByDisplayValue(session.title);
 }
