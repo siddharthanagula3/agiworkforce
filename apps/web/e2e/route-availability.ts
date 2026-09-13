@@ -1,6 +1,6 @@
 import type { Page, Response } from '@playwright/test';
 
-const NOT_FOUND_HEADING = /^404$/;
+const NOT_FOUND_MARKER = '[data-route-state="not-found"]';
 const HEADING_SETTLE_MS = 5_000;
 
 /**
@@ -15,7 +15,9 @@ const HEADING_SETTLE_MS = 5_000;
  *
  * Both the real page and the not-found page render an `h1`, so waiting for the
  * first one to attach turns the race into a decision. A route that renders no
- * heading at all is answered on what is there rather than stalling.
+ * heading at all is answered on what is there rather than stalling. The
+ * not-found page is recognised by its `data-route-state` marker, never by its
+ * copy, which changes with the design system.
  */
 export async function routeIsServed(page: Page, response: Response | null): Promise<boolean> {
   if (response?.status() === 404) return false;
@@ -26,5 +28,5 @@ export async function routeIsServed(page: Page, response: Response | null): Prom
     .waitFor({ state: 'attached', timeout: HEADING_SETTLE_MS })
     .catch(() => undefined);
 
-  return (await page.locator('h1', { hasText: NOT_FOUND_HEADING }).count()) === 0;
+  return (await page.locator(NOT_FOUND_MARKER).count()) === 0;
 }
