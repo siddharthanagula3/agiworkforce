@@ -94,6 +94,7 @@
     "managed-media",
     "managed-media.image-edit.test",
     "me",
+    "message-metadata-projection",
     "message-thread",
     "plugin-marketplaces",
     "project-knowledge",
