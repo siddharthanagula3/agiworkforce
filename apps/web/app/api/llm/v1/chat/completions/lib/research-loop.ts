@@ -53,6 +53,7 @@ import type {
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
+import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import type { ToolLoopFailoverPlan } from './tool-loop';
 import {
@@ -140,6 +141,14 @@ const RESEARCH_FETCH_MAX_CONTENT_CHARS = 12_000;
 export const READY_MARKER = 'READY_TO_REPORT';
 /** Marker the model emits when it wants another search round. */
 const CONTINUE_MARKER = 'CONTINUE_RESEARCH';
+/**
+ * Prefix the model uses to abandon a planned query on the record.
+ *
+ * `DROP <query>: <reason>`. It exists so that finishing early is a stated
+ * decision with a reason a reader can see, rather than a plan step left
+ * pending and a report that never mentions it.
+ */
+export const DROP_MARKER = 'DROP';
 
 export type ResearchPhase =
   | 'planning'
@@ -327,6 +336,7 @@ export function researchPlanEvent(steps: ResearchStep[], responseModel: string):
               ...(typeof step.sourcesConsulted === 'number'
                 ? { sources_consulted: step.sourcesConsulted }
                 : {}),
+              ...(step.note ? { note: step.note } : {}),
             })),
           },
         },
@@ -495,6 +505,8 @@ export interface ResearchSourceEntry {
   url: string;
   title: string;
   snippet?: string;
+  /** When the page says it was published, so a report's cards are dated. */
+  date?: string;
 }
 
 /**
@@ -505,21 +517,23 @@ export interface ResearchSourceEntry {
 export class SourceAggregator {
   private readonly byUrl = new Map<string, ResearchSourceEntry>();
 
-  add(entry: { url?: unknown; title?: unknown; snippet?: unknown }): boolean {
+  add(entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown }): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     if (!url) return false;
     const key = normalizeSourceUrlKey(url);
     const existing = this.byUrl.get(key);
     if (existing) {
-      // Backfill a better title/snippet if a later result has one.
+      // Backfill a better title/snippet/date if a later result has one.
       if (!existing.title && typeof entry.title === 'string') existing.title = entry.title;
       if (!existing.snippet && typeof entry.snippet === 'string') existing.snippet = entry.snippet;
+      if (!existing.date && typeof entry.date === 'string') existing.date = entry.date;
       return false;
     }
     this.byUrl.set(key, {
       url,
       title: typeof entry.title === 'string' && entry.title ? entry.title : '',
       snippet: typeof entry.snippet === 'string' && entry.snippet ? entry.snippet : undefined,
+      date: typeof entry.date === 'string' && entry.date ? entry.date : undefined,
     });
     return true;
   }
@@ -572,6 +586,7 @@ export class SourceAggregator {
                 title: s.title,
                 // Client maps `encrypted_content` to the snippet field.
                 encrypted_content: s.snippet ?? '',
+                ...(s.date ? { page_age: s.date } : {}),
                 position: s.position,
               })),
             },
@@ -666,10 +681,46 @@ function stripThinkingTags(text: string): string {
  *
  * Yields SSE lines to forward; returns the collected turn result.
  */
+/**
+ * One search frame's results, best first, in the shape the aggregator adds.
+ * Anything the frame did not carry is left absent rather than guessed at.
+ */
+export function rankResearchResults(
+  content: readonly unknown[],
+  queryText: string,
+): Array<{ url?: unknown; title?: unknown; snippet?: unknown; date?: unknown }> {
+  const entries = content.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const record = entry as Record<string, unknown>;
+    const url = typeof record['url'] === 'string' ? record['url'] : '';
+    if (!url) return [];
+    const title = typeof record['title'] === 'string' ? record['title'] : undefined;
+    const snippetValue = record['encrypted_content'] ?? record['snippet'];
+    const snippet = typeof snippetValue === 'string' ? snippetValue : undefined;
+    const pageAge = record['page_age'] ?? record['date'];
+    return [
+      {
+        url,
+        ...(title !== undefined ? { title } : {}),
+        ...(snippet !== undefined ? { snippet } : {}),
+        ...(typeof pageAge === 'string' ? { publishedDate: pageAge } : {}),
+        ...(publisherFromTitle(title) ? { publisher: publisherFromTitle(title) } : {}),
+      },
+    ];
+  });
+  return rankSources(entries, { queryText }).map(({ source }) => ({
+    url: source.url,
+    title: source.title,
+    snippet: source.snippet,
+    date: source.publishedDate,
+  }));
+}
+
 async function* collectTurn(
   stream: ReadableStream,
   sources: SourceAggregator,
   forwardContent: boolean,
+  queryText: string,
   emitPublicText?: (delta: string) => string,
 ): AsyncGenerator<string, TurnResult> {
   const reader = stream.getReader();
@@ -736,15 +787,11 @@ async function* collectTurn(
         const resultsContent = searchResults?.['content'];
         if (Array.isArray(resultsContent)) {
           searchEvents += 1;
-          for (const r of resultsContent) {
-            if (r && typeof r === 'object') {
-              const rec = r as Record<string, unknown>;
-              sources.add({
-                url: rec['url'],
-                title: rec['title'],
-                snippet: rec['encrypted_content'] ?? rec['snippet'],
-              });
-            }
+          // Ranked before insertion, because the aggregator's insertion order
+          // IS the citation numbering: a frame's primary account has to enter
+          // the list ahead of the aggregator copies that arrived with it.
+          for (const entry of rankResearchResults(resultsContent, queryText)) {
+            sources.add(entry);
           }
         }
 
@@ -854,7 +901,9 @@ function gatheringDirective(
       ? plannedQueries.length > 0
         ? `Research phase, round 1: run the searches you planned.${planned}`
         : 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
-      : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
+      : plannedQueries.length > 0
+        ? `Research phase, round ${round} of up to ${maxRounds}: these planned searches have still not been run.${planned}`
+        : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
   const searchNote = runtimeSearch
     ? ` This model has no built-in search, so every search runs through the ${WEB_SEARCH_TOOL} tool: call it (one query per call, at most ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls this round) and wait for the results before writing any notes.`
     : '';
@@ -865,22 +914,42 @@ function gatheringDirective(
     sources.size > 0
       ? ` You have collected ${sources.size} source${sources.size === 1 ? '' : 's'} so far.`
       : '';
+  const dropNote =
+    plannedQueries.length > 0
+      ? ` A planned search you are not going to run must be said so on its own line, as` +
+        ` "${DROP_MARKER} <the planned query>: <why it is not worth running>". That line goes in the report;` +
+        ` leaving a planned search silently unrun does not.`
+      : '';
   return (
     base +
     searchNote +
     fetchNote +
     sourceNote +
+    dropNote +
     ' Reply ONLY with concise research notes: key facts found, with the source they came from.' +
     ` Do not write the report yet. End your reply with the single line ${READY_MARKER} if you have enough material to write a thorough report, or ${CONTINUE_MARKER} if another round of searching is needed.`
   );
 }
 
-function synthesisDirective(sources: SourceAggregator, cutShortReason: string | null): string {
+function synthesisDirective(
+  sources: SourceAggregator,
+  cutShortReason: string | null,
+  droppedSteps: readonly ResearchStep[] = [],
+): string {
   const sourceList =
     sources.size > 0 ? `\n\nSources gathered (cite as [n]):\n${sources.toPromptList()}` : '';
   const cutShort = cutShortReason
     ? ` Note: the research phase ended early (${cutShortReason}); state clearly in the report if coverage is therefore incomplete.`
     : '';
+  // A planned query that was never run is a hole in the report, and the reader
+  // finds it far later than the writer does. Naming it is cheaper than a reader
+  // trusting a section that was never researched.
+  const dropped =
+    droppedSteps.length > 0
+      ? `\n\nThese planned searches were not run. Say so in the report, in the section each belongs to, with the reason given:\n${droppedSteps
+          .map((step) => `- ${step.description} (${step.note ?? 'no reason recorded'})`)
+          .join('\n')}`
+      : '';
   return (
     'Synthesis phase: write the final research report now, based on your research notes above.' +
     ' Structure it with a brief executive summary and clearly labeled sections.' +
@@ -889,7 +958,8 @@ function synthesisDirective(sources: SourceAggregator, cutShortReason: string | 
     ' the app renders the numbered sources beside the report from the numbers you cite.' +
     ' Do not include the markers or your raw notes in the report.' +
     cutShort +
-    sourceList
+    sourceList +
+    dropped
   );
 }
 
@@ -898,10 +968,116 @@ function stripMarkers(text: string): string {
     .split('\n')
     .filter((line) => {
       const t = line.trim();
-      return t !== READY_MARKER && t !== CONTINUE_MARKER;
+      return t !== READY_MARKER && t !== CONTINUE_MARKER && !DROP_LINE.test(t);
     })
     .join('\n')
     .trim();
+}
+
+const DROP_LINE = new RegExp(`^${DROP_MARKER}\\s+(.+?):\\s*(.+)$`, 'i');
+
+/** Words that carry meaning, for matching a dropped query back to its step. */
+function queryTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^\p{Letter}\p{Number}]+/u)
+      .filter((token) => token.length > 2),
+  );
+}
+
+function queryOverlap(a: string, b: string): number {
+  const left = queryTokens(a);
+  const right = queryTokens(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  return shared / Math.min(left.size, right.size);
+}
+
+/** The share of a planned query's words a drop line must name to be about it. */
+export const DROP_MATCH_THRESHOLD = 0.5;
+
+/**
+ * Which of this round's planned steps the round actually searched.
+ *
+ * Two cases, and the difference is what the loop can observe rather than what
+ * a model reports. When the loop ran the searches itself, it has the query text
+ * of each one and matches them to planned steps, so a round that ran one of
+ * three planned queries covers exactly one.
+ *
+ * A provider that searched natively never says which query produced which
+ * result, so attribution falls back to the count: one planned query per
+ * observed search, in plan order. That is weaker than matching and it is the
+ * strongest claim the wire supports today, because `server-tool-use` carries no
+ * query. It is still the point of the rule: a round that grounded once no
+ * longer closes a plan of five, so the loop comes back for the other four
+ * instead of finishing on whichever marker the model happened to emit.
+ *
+ * A round that searched nothing covers nothing either way.
+ */
+export function coveredPlanStepIds(
+  plannedStepIds: readonly string[],
+  executedQueries: readonly string[],
+  searchEvents: number,
+  descriptionOf: (id: string) => string,
+): string[] {
+  if (plannedStepIds.length === 0) return [];
+  if (executedQueries.length > 0) {
+    const covered: string[] = [];
+    const unmatched = [...executedQueries];
+    for (const id of plannedStepIds) {
+      const index = unmatched.findIndex(
+        (query) => queryOverlap(query, descriptionOf(id)) >= DROP_MATCH_THRESHOLD,
+      );
+      if (index === -1) continue;
+      unmatched.splice(index, 1);
+      covered.push(id);
+    }
+    // A loop-run search the plan did not name still closed one planned query's
+    // worth of work; without this a model that rewords its own plan could never
+    // finish. Attribution stops at the number of searches actually run.
+    for (const id of plannedStepIds) {
+      if (unmatched.length === 0) break;
+      if (covered.includes(id)) continue;
+      unmatched.pop();
+      covered.push(id);
+    }
+    return covered;
+  }
+  return plannedStepIds.slice(0, Math.max(0, searchEvents));
+}
+
+/**
+ * Planned steps the turn explicitly abandoned, each with the reason it gave.
+ *
+ * A drop line that names no planned query is ignored rather than guessed at:
+ * dropping the wrong step would record a gap the run does not have and hide
+ * one it does.
+ */
+export function parseDroppedPlanSteps(
+  text: string,
+  pending: readonly ResearchStep[],
+): Array<{ id: string; reason: string }> {
+  const dropped = new Map<string, string>();
+  for (const rawLine of text.split('\n')) {
+    const match = DROP_LINE.exec(rawLine.trim());
+    const query = match?.[1]?.trim();
+    const reason = match?.[2]?.trim();
+    if (!query || !reason) continue;
+    let best: ResearchStep | undefined;
+    let bestOverlap = DROP_MATCH_THRESHOLD;
+    for (const step of pending) {
+      if (dropped.has(step.id)) continue;
+      const overlap = queryOverlap(query, step.description);
+      if (overlap >= bestOverlap) {
+        best = step;
+        bestOverlap = overlap;
+      }
+    }
+    if (best) dropped.set(best.id, reason.slice(0, MAX_PLAN_QUERY_CHARS));
+  }
+  return [...dropped].map(([id, reason]) => ({ id, reason }));
 }
 
 // ─── Main loop ────────────────────────────────────────────────────────────────
@@ -1064,7 +1240,7 @@ export async function* runResearchLoop(
       step.status = status;
       if (status === 'running') {
         step.startedAt = stamp;
-      } else if (status === 'completed' || status === 'failed') {
+      } else if (status === 'completed' || status === 'failed' || status === 'dropped') {
         step.completedAt = stamp;
         if (step.startedAt) {
           const started = Date.parse(step.startedAt);
@@ -1077,6 +1253,22 @@ export async function* runResearchLoop(
 
   const pendingPlanStepIds = (): string[] =>
     plan.filter((step) => step.status === 'pending').map((step) => step.id);
+
+  /** Planned queries still owed a search, in the order they were planned. */
+  const pendingPlannedQueries = (): ResearchStep[] =>
+    plan.filter((step) => step.status === 'pending' && step.id.startsWith('plan-'));
+
+  /**
+   * Record a planned query the run will not search, and why. A dropped step is
+   * not a completed one and not a failed one: it is a decision, and the report
+   * carries the reason so a reader can weigh the gap rather than discover it.
+   */
+  const dropPlanSteps = (ids: string[], reason: string): void => {
+    markPlanSteps(ids, 'dropped');
+    for (const step of plan) {
+      if (ids.includes(step.id)) step.note = reason;
+    }
+  };
 
   // ── Durable report persistence (CAP-045 slice 1) ──
   let reportPersisted = false;
@@ -1264,7 +1456,7 @@ export async function* runResearchLoop(
       throw error;
     }
     armed.markFirstToken();
-    const gen = collectTurn(stream, sources, forwardContent, (delta) =>
+    const gen = collectTurn(stream, sources, forwardContent, userQuery, (delta) =>
       eventStream.emit({ type: 'text-delta', delta }),
     );
     try {
@@ -1326,7 +1518,7 @@ export async function* runResearchLoop(
     calls: ResearchToolCall[],
     turn: ResearchTurn,
     turnMessages: ProcessedRequest['llmRequest']['messages'],
-    roundCounts: { fetches: number; searches: number },
+    roundCounts: { fetches: number; searches: number; queries: string[] },
   ): AsyncGenerator<Uint8Array, boolean> {
     // Anthropic extended-thinking continuity (known-flaw
     // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01), mirroring runToolLoop: when
@@ -1371,6 +1563,9 @@ export async function* runResearchLoop(
           );
         } else {
           roundCounts.searches += 1;
+          if (typeof call.args['query'] === 'string') {
+            roundCounts.queries.push(call.args['query']);
+          }
           // Deep research runs unattended and searches in bulk, so its calls
           // are charged at the rate card rather than included.
           const searchOrdinal = totalSearches + roundCounts.searches;
@@ -1405,7 +1600,18 @@ export async function* runResearchLoop(
             });
           }
           if (outcome.ok) {
-            for (const result of webSearchResultsToFetchedSources(outcome)) sources.add(result);
+            const fetched = webSearchResultsToFetchedSources(outcome);
+            const ranked = rankSources(
+              fetched.map((result) => ({
+                ...result,
+                ...(result.date ? { publishedDate: result.date } : {}),
+                ...(publisherFromTitle(result.title)
+                  ? { publisher: publisherFromTitle(result.title) }
+                  : {}),
+              })),
+              { queryText: outcome.query },
+            );
+            for (const { originalIndex } of ranked) sources.add(fetched[originalIndex]!);
           }
           isError = !outcome.ok;
           content = await applyToolResultSecretPolicy(
@@ -1447,7 +1653,12 @@ export async function* runResearchLoop(
           maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
         });
         if (outcome.ok) {
-          sources.add({ url: outcome.url, title: outcome.title });
+          sources.add({
+            url: outcome.url,
+            title: outcome.title,
+            ...(outcome.snippet ? { snippet: outcome.snippet } : {}),
+            ...(outcome.date ? { date: outcome.date } : {}),
+          });
           content = fenceFetchedPage(outcome.url, outcome.title, outcome.content);
           isError = false;
         } else {
@@ -1603,6 +1814,12 @@ export async function* runResearchLoop(
           });
         }
         roundStepIds = pendingPlanStepIds();
+      } else if (pendingPlannedQueries().length > 0) {
+        // The plan still owes searches, so this round is those searches rather
+        // than free-form gap filling. This is what makes the stop rule
+        // plan-driven: the loop keeps returning to the plan until every query
+        // has been run or dropped on the record.
+        roundStepIds = pendingPlannedQueries().map((step) => step.id);
       } else {
         plan.push({
           id: `round-${round}`,
@@ -1623,6 +1840,8 @@ export async function* runResearchLoop(
 
       let turn: ResearchTurn;
       let roundSearchEvents = 0;
+      /** Queries the loop itself issued this round, when the model has no native search. */
+      let roundExecutedQueries: string[] = [];
       try {
         if (yield* flushCancellationIfRequested()) return;
         // Directives ride as 'user' turns: several providers (e.g. Google)
@@ -1638,11 +1857,9 @@ export async function* runResearchLoop(
               sources,
               fetchAvailable,
               runtimeSearchAvailable,
-              round === 1
-                ? plan
-                    .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
-                    .map((step) => step.description)
-                : [],
+              plan
+                .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
+                .map((step) => step.description),
             ),
           },
         ];
@@ -1656,7 +1873,7 @@ export async function* runResearchLoop(
         // this round's turnMessages, the persistent thread gets the capped
         // notes below, so the token budget stays under control.
         let toolPasses = 0;
-        const roundCounts = { fetches: 0, searches: 0 };
+        const roundCounts = { fetches: 0, searches: 0, queries: [] as string[] };
         while (
           turn.finishReason === 'tool_calls' &&
           turn.toolCalls.length > 0 &&
@@ -1672,6 +1889,7 @@ export async function* runResearchLoop(
           roundSearchEvents += turn.searchEvents;
         }
         roundSearchEvents += roundCounts.searches;
+        roundExecutedQueries = roundCounts.queries;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);
@@ -1712,7 +1930,32 @@ export async function* runResearchLoop(
       totalSearches += roundSearchEvents;
       await sources.enrichTitles();
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
-      markPlanSteps(roundStepIds, 'completed');
+
+      // What this round covered, and what it did not. Provider-native search
+      // does not say which query produced which result, so a round covers as
+      // many planned queries as it ran searches, in plan order, and the rest
+      // stay pending. Claiming the whole plan for one search was how a run
+      // could report a completed plan it had not executed.
+      const plannedThisRound = roundStepIds.filter((id) => id.startsWith('plan-'));
+      const unplannedThisRound = roundStepIds.filter((id) => !id.startsWith('plan-'));
+      const coveredThisRound = coveredPlanStepIds(
+        plannedThisRound,
+        roundExecutedQueries,
+        roundSearchEvents,
+        (id) => plan.find((step) => step.id === id)?.description ?? '',
+      );
+      markPlanSteps([...unplannedThisRound, ...coveredThisRound], 'completed');
+      // A planned query this round did not reach goes back to pending, which is
+      // what it is. Left running it would read as work in progress forever, and
+      // the loop would take it for finished.
+      for (const step of plan) {
+        if (plannedThisRound.includes(step.id) && !coveredThisRound.includes(step.id)) {
+          step.status = 'pending';
+          delete step.startedAt;
+        }
+      }
+      const dropped = parseDroppedPlanSteps(turn.canonicalText, pendingPlannedQueries());
+      for (const { id, reason } of dropped) dropPlanSteps([id], reason);
       yield planEvent();
 
       // Append the model's notes (truncated) so later turns build on them.
@@ -1726,7 +1969,13 @@ export async function* runResearchLoop(
       if (cumulative) yield encoder.encode(cumulative);
       yield status('searching', `Found ${sources.size} source${sources.size === 1 ? '' : 's'}`);
 
-      if (turn.canonicalText.includes(READY_MARKER)) break;
+      // The stop rule is the plan's, not the model's. READY_TO_REPORT says the
+      // model believes it has enough; it ends the gathering phase only once
+      // every planned query has been searched or dropped on the record. One
+      // model family emitted the marker after a single round and the loop
+      // stopped there while another ran three, which made coverage a property
+      // of the provider rather than of the question.
+      if (turn.canonicalText.includes(READY_MARKER) && pendingPlannedQueries().length === 0) break;
       if (totalSearches >= maxSearches) {
         cutShortReason = 'the search budget was reached';
         break;
@@ -1735,6 +1984,21 @@ export async function* runResearchLoop(
         cutShortReason = 'the time budget was reached';
         break;
       }
+    }
+
+    // Whatever the plan still owes when gathering ends was not searched, and
+    // the report says so with the reason rather than carrying a pending step
+    // nobody explains.
+    const unsearched = pendingPlannedQueries();
+    if (unsearched.length > 0) {
+      const reason = cutShortReason
+        ? `not searched: ${cutShortReason}`
+        : 'not searched: the run reached its last gathering round';
+      dropPlanSteps(
+        unsearched.map((step) => step.id),
+        reason,
+      );
+      yield planEvent();
     }
 
     // ── Synthesis turn (always runs when any gathering succeeded) ──
@@ -1754,7 +2018,17 @@ export async function* runResearchLoop(
     try {
       if (yield* flushCancellationIfRequested()) return;
       const synthesis = yield* runTurn(
-        [...messages, { role: 'user', content: synthesisDirective(sources, cutShortReason) }],
+        [
+          ...messages,
+          {
+            role: 'user',
+            content: synthesisDirective(
+              sources,
+              cutShortReason,
+              plan.filter((step) => step.status === 'dropped'),
+            ),
+          },
+        ],
         true,
       );
       if (yield* flushCancellationIfRequested()) return;
