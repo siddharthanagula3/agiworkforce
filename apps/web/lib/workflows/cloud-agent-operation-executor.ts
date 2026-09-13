@@ -54,6 +54,14 @@ function classificationFields(error: unknown): Record<string, unknown> {
 function sanitizeExecutionError(error: unknown): unknown {
   const message = messageOf(error);
   if (message === null || !RAW_PAYLOAD_MESSAGE_PATTERN.test(message)) return error;
+  // The replacement is all that reaches the model, the durable receipt and the
+  // transcript, so without this line the only copy of the diagnosis is gone.
+  // Measured on 2026-09-13: seven web searches across three QA questions failed
+  // with nothing but the replacement sentence to go on, on either side.
+  logger.error(
+    { rawMessage: message.slice(0, 2000), ...classificationFields(error) },
+    '[cloud-agent] external operation failed with a raw payload message',
+  );
   return Object.assign(
     new Error(RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE, { cause: error }),
     classificationFields(error),
