@@ -44,6 +44,7 @@ import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcut
 import { createTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy } from './windowPolicy';
+import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
   shouldGrantCloudPermissionCheck,
@@ -313,6 +314,13 @@ function registerIpcHandlers(): void {
       if (target) mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, target);
     });
     notification.show();
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.workspaceDrop, async (event, paths) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (!Array.isArray(paths)) return;
+    const candidates = paths.filter((path): path is string => typeof path === 'string');
+    await handleWorkspaceDrop(BrowserWindow.fromWebContents(event.sender), candidates);
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {

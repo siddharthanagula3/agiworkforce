@@ -1,17 +1,11 @@
 import { Notification, type BrowserWindow, type WebContents } from 'electron';
 import { focusPageComposer } from './composerFocus';
-import { RENDERER_MODE } from './config';
 import { ELECTRON_IPC_CHANNELS } from '../src/lib/tauri-electron/bridgeContract';
 import { isQuickAskVisible, quickAskPanel, surfaceQuickAsk } from './quickAsk';
 
 const COMPOSER_SETTLE_MS = 120;
-const UNAVAILABLE_TITLE = 'Dictation unavailable';
-const UNAVAILABLE_BODY =
-  'The dictation shortcut needs the renderer AGI Cloud ships. Unset AGI_CLOUD_RENDERER and relaunch.';
 const NO_SURFACE_TITLE = 'No AGI Cloud window';
 const NO_SURFACE_BODY = 'Open AGI Cloud from the tray, then press the dictation shortcut again.';
-
-let explainedUnavailable = false;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,19 +45,12 @@ function sendToggle(contents: WebContents): void {
   contents.send(ELECTRON_IPC_CHANNELS.voiceHotkey);
 }
 
+/**
+ * Both renderer modes attach the preload, so the press reaches a receiver in
+ * either. The composer is focused first and the page starts its own capture,
+ * which keeps one dictation implementation rather than a second one here.
+ */
 export async function toggleGlobalDictation(mainWindow: BrowserWindow | null): Promise<void> {
-  if (RENDERER_MODE !== 'bundled') {
-    console.warn(
-      `[dictation] dropped the global dictation press: renderer mode "${RENDERER_MODE}" ` +
-        'loads the cloud app top-level with no preload, so no IPC receiver is attached.',
-    );
-    if (!explainedUnavailable) {
-      explainedUnavailable = true;
-      notify(UNAVAILABLE_TITLE, UNAVAILABLE_BODY);
-    }
-    return;
-  }
-
   const target = dictationTarget(mainWindow);
   if (!isLive(target)) {
     notify(NO_SURFACE_TITLE, NO_SURFACE_BODY);
