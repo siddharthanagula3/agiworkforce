@@ -336,7 +336,6 @@
         "reason": "Pre-existing unreachable VS Code extension modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",
         "paths": [
-          "apps/extension-vscode/src/core/commands.ts",
           "apps/extension-vscode/src/core/index.ts",
           "apps/extension-vscode/src/data/contextBuilder.ts",
           "apps/extension-vscode/src/data/index.ts",
