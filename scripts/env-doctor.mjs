@@ -42,10 +42,14 @@ export const contracts = {
         'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
         'GITHUB_TOKEN_ENCRYPTION_KEY',
         'LOG_SALT',
+        // Without it every call into the Workflow world hangs on Node 24, so no
+        // durable turn ever finishes. See apps/web/.env.example.
+        'WORKFLOW_NODE_HTTP',
       ],
       development: [
         'NEXT_PUBLIC_APP_URL',
         'NEXT_PUBLIC_API_URL',
+        'WORKFLOW_NODE_HTTP',
         'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
         'CLERK_SECRET_KEY',
         'CSRF_SECRET',
@@ -86,6 +90,7 @@ export const contracts = {
       'GOOGLE_PLACES_API_KEY',
       'AGI_PLACES_SEARCH_MICROUSD_PER_CALL',
       'AGI_DURABLE_INITIAL_TURNS',
+      'WORKFLOW_NODE_HTTP',
       'AGI_CONTEXT_COMPACTION_ENABLED',
       'AGI_MANAGED_COMPUTE_PRIVATE_BETA',
       'ACCOUNT_STATUS_FAIL_OPEN',

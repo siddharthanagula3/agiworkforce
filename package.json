@@ -81,7 +81,7 @@
       "typescript": "5.9.3",
       "@types/node": "^24.13.3",
       "@wdio/native-utils": "2.5.0",
-      "@workflow/world-vercel": "4.6.1",
+      "@workflow/world-vercel": "4.7.4",
       "@workflow/world-local": "4.4.0",
       "@hono/node-server": ">=1.19.15",
       "@opentelemetry/core": ">=2.8.0",
