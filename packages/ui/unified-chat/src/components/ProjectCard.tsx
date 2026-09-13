@@ -9,6 +9,13 @@ export interface ProjectCardProps {
   project: Project;
   active?: boolean;
   onSelect?: (project: Project) => void;
+  /**
+   * Where opening this project goes, so the row is a real link: middle-click,
+   * cmd-click and "open in new tab" all work, and the status bar shows the
+   * destination before the click. Surface-neutral, the host supplies the URL.
+   * Without it the row stays a button and only `onSelect` opens it.
+   */
+  href?: string;
   onShare?: (project: Project) => void;
   onEdit?: (project: Project) => void;
   onArchive?: (project: Project) => void;
@@ -37,6 +44,7 @@ export function ProjectCard({
   project,
   active = false,
   onSelect,
+  href,
   onShare,
   onEdit,
   onArchive,
@@ -112,12 +120,36 @@ export function ProjectCard({
           className,
         )}
       >
-        <button
-          type="button"
-          onClick={() => onSelect?.(project)}
-          aria-label={`Open project ${project.name}`}
-          className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
-        />
+        {href ? (
+          // A modified click is the browser's to handle: preventing it here is
+          // what made middle-click and cmd-click do nothing. Only a plain left
+          // click is taken over, so the host still gets client-side navigation.
+          <a
+            href={href}
+            onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+              event.preventDefault();
+              onSelect?.(project);
+            }}
+            aria-label={`Open project ${project.name}`}
+            className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSelect?.(project)}
+            aria-label={`Open project ${project.name}`}
+            className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+          />
+        )}
         <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <FolderOpen
