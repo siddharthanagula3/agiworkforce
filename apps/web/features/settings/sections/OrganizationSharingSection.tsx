@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FolderGit2, Plug, Share2, Users } from 'lucide-react';
+import { FileCode2, FolderGit2, Plug, Share2, Users } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
@@ -11,6 +11,7 @@ import {
   useShareConnectorWithOrganization,
   useShareProjectWithOrganization,
   useUnshareConnectorFromOrganization,
+  useUnshareArtifactFromOrganization,
   useUnshareProjectFromOrganization,
   type OrgSharedOverview,
 } from '../hooks/use-settings-queries';
@@ -286,6 +287,77 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   );
 }
 
+function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
+  const unshareArtifact = useUnshareArtifactFromOrganization();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const artifacts = overview.sharedArtifacts ?? [];
+
+  return (
+    <SectionCard
+      icon={<FileCode2 size={14} aria-hidden />}
+      title="Shared artifacts"
+      description="An artifact shared here opens for every member without a public link. Members can read and download it; only the publisher can change or withdraw it."
+    >
+      {artifacts.length === 0 ? (
+        <Empty>
+          No artifacts are shared yet. Publish one from a chat and choose your workspace.
+        </Empty>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+          {artifacts.map((artifact) => {
+            const name = artifact.title || 'Untitled artifact';
+            const canWithdraw =
+              overview.canManageSharing || artifact.ownerUserId === overview.currentUserId;
+            return (
+              <li
+                key={artifact.publishedArtifactId}
+                style={{
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {artifact.kind} ·{' '}
+                    {artifact.visibility === 'organization'
+                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      : 'Also reachable by public link'}
+                  </div>
+                </div>
+                {canWithdraw ? (
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    disabled={unshareArtifact.isPending}
+                    onClick={() =>
+                      confirm({
+                        title: `Stop sharing ${name}?`,
+                        description: `${everyoneHere(overview.members.length)} loses access to this artifact, and any workspace link to it stops opening. It is not made public in its place: it stays yours until you choose an audience again from the artifact panel.`,
+                        confirmLabel: 'Stop sharing',
+                        onConfirm: () => unshareArtifact.mutate(artifact.publishedArtifactId),
+                      })
+                    }
+                  >
+                    Stop sharing
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {confirmDialog}
+    </SectionCard>
+  );
+}
+
 function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
   const shareConnector = useShareConnectorWithOrganization();
@@ -460,6 +532,7 @@ export function OrganizationSharingSection() {
       </SectionCard>
 
       <SharedProjects overview={overview} />
+      <SharedArtifacts overview={overview} />
       <SharedConnectors overview={overview} />
     </div>
   );

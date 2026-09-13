@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
-import { useChatUIStore } from '@agiworkforce/unified-chat';
+import { useChatProjectStore, useChatUIStore } from '@agiworkforce/unified-chat';
 import type { PrivacyMode, SharedArtifact } from '@agiworkforce/types';
 import {
   publishArtifact as publishArtifactService,
@@ -19,10 +19,20 @@ import {
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
-import { ArtifactPreview, type ArtifactPublishSelection } from './ArtifactPreview';
+import {
+  ArtifactPreview,
+  type ArtifactAudienceControl,
+  type ArtifactProjectLink,
+  type ArtifactPublishSelection,
+} from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
-import { createWebCloudPublisher } from './publishArtifactClient';
+import {
+  createWebCloudPublisher,
+  setPublishedArtifactAudience,
+  type PublishedArtifactAudience,
+  type WebPublishDetails,
+} from './publishArtifactClient';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
 import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
@@ -104,11 +114,15 @@ function ArtifactViewer({
   versionHistory,
   onClose,
   publishArtifact,
+  artifactAudience,
+  projectLink,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
   onClose: () => void;
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
+  artifactAudience?: ArtifactAudienceControl;
+  projectLink?: ArtifactProjectLink;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -119,6 +133,8 @@ function ArtifactViewer({
         variant="panel"
         onClose={onClose}
         {...(publishArtifact ? { publishArtifact } : {})}
+        {...(artifactAudience ? { artifactAudience } : {})}
+        {...(projectLink ? { projectLink } : {})}
       />
     </div>
   );
@@ -245,9 +261,40 @@ export function ArtifactsPanel() {
     (s) =>
       s.conversations.find((conversation) => conversation.id === s.activeConversationId) ?? null,
   );
+  const projects = useChatProjectStore((s) => s.projects);
+  const [publishDetails, setPublishDetails] = useState<WebPublishDetails | null>(null);
   const cloudPublisher = useMemo(
-    () => createWebCloudPublisher({ conversationId: activeConversationId ?? null }),
+    () =>
+      createWebCloudPublisher({
+        conversationId: activeConversationId ?? null,
+        onPublished: setPublishDetails,
+      }),
     [activeConversationId],
+  );
+  const changeAudience = useCallback(
+    async (next: PublishedArtifactAudience) => {
+      if (!publishDetails) return;
+      const changed = await setPublishedArtifactAudience(publishDetails.shareUrl, next);
+      setPublishDetails({ ...publishDetails, ...changed });
+    },
+    [publishDetails],
+  );
+  const projectLink = useMemo(() => {
+    const projectId = activeConversation?.projectId;
+    if (!projectId) return undefined;
+    const project = projects.find((candidate) => candidate.id === projectId);
+    return project ? { id: project.id, name: project.name } : undefined;
+  }, [activeConversation, projects]);
+  const artifactAudience = useMemo(
+    () =>
+      publishDetails?.workspace
+        ? {
+            current: publishDetails.visibility,
+            memberCount: publishDetails.workspace.memberCount,
+            onChange: changeAudience,
+          }
+        : undefined,
+    [publishDetails, changeAudience],
   );
   const makePublishHandler = useCallback(
     (artifact: Artifact) => (selection: ArtifactPublishSelection) =>
@@ -605,6 +652,8 @@ export function ArtifactsPanel() {
                   versionHistory={getArtifactVersions(selectedArtifact.id)}
                   onClose={() => setPanelOpen(false)}
                   publishArtifact={makePublishHandler(selectedArtifact)}
+                  {...(artifactAudience ? { artifactAudience } : {})}
+                  {...(projectLink ? { projectLink } : {})}
                 />
               ) : (
                 <ArtifactsEmptyState />

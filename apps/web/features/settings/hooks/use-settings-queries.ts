@@ -1810,13 +1810,29 @@ export interface OrgSharedConnector {
   createdAt: string;
 }
 
+export interface OrgSharedArtifact {
+  organizationId: string;
+  publishedArtifactId: string;
+  token: string;
+  artifactId: string;
+  title: string;
+  kind: string;
+  /** `organization` means the public link is closed and only members can open it. */
+  visibility: 'public' | 'organization';
+  ownerUserId: string;
+  sharedByUserId: string;
+  createdAt: string;
+}
+
 export interface OrgSharedOverview {
   organizationId: string;
+  currentUserId: string;
   currentUserRole: OrgSharingRole;
   canManageSharing: boolean;
   members: { userId: string; role: OrgSharingRole; joinedAt: string }[];
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];
+  sharedArtifacts: OrgSharedArtifact[];
 }
 
 const ORG_SHARED_QUERY_KEY = ['settings', 'organization', 'shared'] as const;
@@ -1934,6 +1950,28 @@ export function useUnshareConnectorFromOrganization(): UseMutationResult<unknown
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Connector is no longer shared');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+/**
+ * Withdraw one artifact from the workspace. The artifact is not made public in
+ * its place: it returns to being its owner's alone until they pick an audience
+ * again from the artifact panel.
+ */
+export function useUnshareArtifactFromOrganization(): UseMutationResult<unknown, Error, string> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (publishedArtifactId: string) =>
+      sharingRequest(
+        `/api/settings/organization/shared/artifacts/${publishedArtifactId}`,
+        'DELETE',
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'published-artifacts'] });
+      toast.success('Artifact is no longer shared');
     },
     onError: (error: Error) => toast.error(error.message),
   });
