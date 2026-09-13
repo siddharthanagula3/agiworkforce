@@ -80,7 +80,7 @@ import {
   canUseBillingPlanCapability,
   getModels,
   isExecutableVideoModel,
-  isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
   type CloudWorkMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
@@ -108,7 +108,6 @@ import {
 } from '@features/chat/lib/pending-composer-draft';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
-import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_OFFICE_FILE_TOOL_NAME,
@@ -723,7 +722,8 @@ const ChatComposerNewComponent = ({
     return () => window.removeEventListener(MCP_CONTEXT_SELECTED_EVENT, listener);
   }, []);
 
-  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
+  const subscriptionTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
+  const entitlementTier = isFreeTrial ? normalizeBillingPlanTier(null) : subscriptionTier;
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingPolicyError = useBillingStore((s) => s.error);
   const refreshBillingPolicy = useBillingStore((s) => s.refreshUser);
@@ -733,9 +733,6 @@ const ChatComposerNewComponent = ({
     billingPolicyReady &&
     !isFreeTrial &&
     canUseBillingPlanCapability(subscriptionTier, 'image_generation');
-  // Video is a narrower entitlement than image (billing-catalog.ts:
-  // video_generation → ['max_15x', 'enterprise']), so it gets its own read of
-  // the same canonical catalog rather than riding the image flag.
   const canUseVideoGeneration =
     billingPolicyReady &&
     !isFreeTrial &&
@@ -1004,11 +1001,7 @@ const ChatComposerNewComponent = ({
   const mediaModeNoun = imageMode ? 'Image' : 'Video';
   const mediaAttachmentConflict = mediaModeActive && attachments.length > 0;
   const compatibleModels = getSelectableModels().filter(
-    (model) =>
-      model.capabilities.vision &&
-      (isFreeTrial || isFreeBillingPlanTier(subscriptionTier)
-        ? FREE_TRIAL_MODELS.includes(model.id)
-        : isModelAllowedForTier(model.id, subscriptionTier)),
+    (model) => model.capabilities.vision && isModelAllowedForTier(model.id, entitlementTier),
   );
   const genericWebSearchConfigured = useBillingStore(
     (s) => s.featureFlags?.generic_web_search ?? false,
@@ -2789,12 +2782,27 @@ const ChatComposerNewComponent = ({
       }
 
       if (e.key === 'Escape') {
+        const menuWasOpen = showMentions || showOverflowMenu || showSlashMenu;
         setShowMentions(false);
         setShowOverflowMenu(false);
         setShowSlashMenu(false);
+        if (!menuWasOpen && isTurnActive) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleStop();
+        }
       }
     },
-    [handleSubmit, showMentions, showSlashMenu, mentionItems.length, commitActiveMention],
+    [
+      handleSubmit,
+      handleStop,
+      isTurnActive,
+      showMentions,
+      showOverflowMenu,
+      showSlashMenu,
+      mentionItems.length,
+      commitActiveMention,
+    ],
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);

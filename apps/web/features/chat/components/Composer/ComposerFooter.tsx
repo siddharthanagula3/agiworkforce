@@ -48,7 +48,7 @@ import {
   type Effort,
   getPickerModelTier,
   evaluateModelEnvironment,
-  isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
   type ModelEnvironment,
   type EnvironmentAvailability,
 } from '@agiworkforce/types';
@@ -62,7 +62,6 @@ import {
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
 import type { ModelReasoning } from '@agiworkforce/types';
-import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import {
   resolveFreeLaneUiBuildEnabled,
@@ -74,6 +73,7 @@ import { ModelCatalogue } from './ModelCatalogue';
 import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
 import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
+import { useChatModelStore } from '@agiworkforce/unified-chat';
 import {
   buildModelPickerShortList,
   resolvePlanLockLabel,
@@ -237,13 +237,9 @@ function isModelSelectableForTier(model: AIModel, tier: string | null): boolean 
   // so the tier gate withholds its claim until the plan resolves; the server
   // still enforces the real entitlement on send.
   if (tier === null) return true;
-  // Free users may select any of the cost-efficient tool-capable trial models
-  // while the server privately enforces the unpublished dynamic usage ceiling.
-  if (FREE_TRIAL_MODELS.includes(model.id)) return true;
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
   }
-  if (isFreeBillingPlanTier(tier)) return false;
   return isModelAllowedForTier(model.id, tier);
 }
 
@@ -766,7 +762,7 @@ export function ComposerFooter({
   const subscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingUnauthenticated = useBillingStore((s) => s.unauthenticated === true);
-  const tier = subscription?.tier ?? 'free';
+  const tier = normalizeBillingPlanTier(subscription?.tier);
   // Free is the right answer for a signed-out visitor and for a resolved Free
   // subscription; it is a guess in every other state, and this picker turns a
   // guess into an "requires upgrade" claim against paying subscribers.
@@ -806,6 +802,7 @@ export function ComposerFooter({
   const commitModel = useCallback(
     async (id: string) => {
       closeModelPopover();
+      recordRecentModel(id);
       if (!onModelChange) {
         setSelectedModelId(id);
         return;
@@ -827,7 +824,7 @@ export function ComposerFooter({
         setModelChangePending(false);
       }
     },
-    [closeModelPopover, modelChangePending, onModelChange, setSelectedModelId],
+    [closeModelPopover, modelChangePending, onModelChange, recordRecentModel, setSelectedModelId],
   );
 
   const handleSelectModel = useCallback(
@@ -857,7 +854,7 @@ export function ComposerFooter({
   );
 
   const lockedDisplayModel =
-    AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
+    AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier(tier)) ?? selectedModel;
 
   const freeLaneUiEnabled = useFreeLaneUiEnabled();
   const lockedSlotText = freeLaneUiEnabled ? FREE_LANE_SLOT_TEXT : lockedDisplayModel.name;
@@ -867,6 +864,8 @@ export function ComposerFooter({
 
   const catalogue = useModelCatalogue(open);
   const { favouriteModelIds, toggleFavourite } = useModelFavourites();
+  const recentModelIds = useChatModelStore((state) => state.recentModelIds);
+  const recordRecentModel = useChatModelStore((state) => state.selectModel);
 
   const lockOverrides = useMemo(() => {
     const overrides = new Map<string, ModelPickerLock>();
@@ -1107,6 +1106,7 @@ export function ComposerFooter({
                       status={catalogue.status}
                       onRetry={catalogue.retry}
                       favouriteModelIds={favouriteModelIds}
+                      recentModelIds={recentModelIds}
                       selectedModelId={selectedModelId}
                       query={searchQuery}
                       onQueryChange={setSearchQuery}

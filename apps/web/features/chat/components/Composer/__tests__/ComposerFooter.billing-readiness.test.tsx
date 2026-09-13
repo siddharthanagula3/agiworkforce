@@ -112,7 +112,7 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   getBestAutoModeForTier: () => 'fixture-economy-auto',
   getModelMetadata: () => null,
   getModelReasoning: () => ({ capable: false, control: 'none' }),
-  isModelAllowedForTier: () => true,
+  isModelAllowedForTier: (_modelId: string, tier: string) => tier !== 'free',
   splitEffortsByEntitlement: () => ({ allowed: [], gated: [] }),
   normalizeModelId: (id: string) => id,
   FREE_TRIAL_MODELS: [],
