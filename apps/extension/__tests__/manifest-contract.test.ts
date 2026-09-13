@@ -28,6 +28,7 @@ const EXPECTED_PERMISSIONS = [
   'notifications',
   'tabGroups',
   'debugger',
+  'downloads',
 ];
 
 const EXPECTED_HOST_PERMISSIONS = [
