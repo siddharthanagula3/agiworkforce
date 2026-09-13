@@ -526,7 +526,7 @@ describe('cloudApi', () => {
     expect(onEvent).toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
-    expect(onRunHandle).toHaveBeenCalledWith({ runId, runPath });
+    expect(onRunHandle).toHaveBeenCalledWith({ runId, runPath, detachable: false });
     expect(onRunHandle).toHaveBeenCalledOnce();
   });
 
