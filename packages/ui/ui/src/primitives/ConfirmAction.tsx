@@ -46,8 +46,15 @@ export function useConfirmAction(): {
   const [pending, setPending] = React.useState<PendingConfirm | null>(null);
   const [busy, setBusy] = React.useState(false);
   const nextKey = React.useRef(0);
+  const openerRef = React.useRef<HTMLElement | null>(null);
 
+  // Read at the moment of the request, not when the dialog mounts. A confirm
+  // raised from a menu item mounts a frame later, by which time the menu panel
+  // is gone and the page has moved focus on: measured from a conversation row's
+  // Delete, Cancel dropped the reader onto <body> instead of the row's trigger.
   const confirm = React.useCallback((request: ConfirmActionRequest) => {
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
     nextKey.current += 1;
     setPending({ ...request, key: nextKey.current });
   }, []);
@@ -79,7 +86,7 @@ export function useConfirmAction(): {
         if (!open && !busy) close();
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent opener={openerRef.current}>
         <AlertDialogHeader>
           <AlertDialogTitle>{pending.title}</AlertDialogTitle>
           <AlertDialogDescription>{pending.description}</AlertDialogDescription>
