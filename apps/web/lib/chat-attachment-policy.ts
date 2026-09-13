@@ -22,10 +22,10 @@ export {
 export const CHAT_ATTACHMENT_UNAVAILABLE_NOTES = {
   removed: 'was removed from your Library. Attach it again to include it.',
   unreadable: 'could not be loaded. Attach it again to include it.',
-  unsupported: 'is not a file type this chat can read, so it was not sent.',
+  unsupported: 'is not a file type this chat can read.',
   foreign: 'is not available to this account.',
   over_budget: 'was left out because this conversation has reached its attachment limit.',
-  too_large: 'is larger than this chat can send, so it was not sent.',
+  too_large: 'is larger than this chat can send.',
   too_many: 'was left out because this message already carries as many files as it can.',
 } as const;
 
