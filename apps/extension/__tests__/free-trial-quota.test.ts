@@ -1237,6 +1237,7 @@ describe('streamFreeChat, model routing', () => {
         runId,
         runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
         lastSequence: -1,
+        detachable: false,
       },
     });
     expect(chunks).toContainEqual({ type: 'agent-event', envelope });
