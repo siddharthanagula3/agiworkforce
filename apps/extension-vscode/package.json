@@ -434,6 +434,16 @@
         "title": "AGI Workforce: Open Cloud Task"
       },
       {
+        "command": "agi-workforce.approveCloudTask",
+        "title": "AGI Workforce: Approve Cloud Task",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agi-workforce.rejectCloudTask",
+        "title": "AGI Workforce: Reject Cloud Task",
+        "icon": "$(x)"
+      },
+      {
         "command": "agi-workforce.mentionFileFromProject",
         "title": "AGI Workforce: Mention File from Project",
         "icon": "$(mention)"
@@ -657,6 +667,16 @@
           "command": "agi-workforce.memory.delete",
           "when": "view == agi-workforce.memory && viewItem == memoryFact",
           "group": "inline@2"
+        },
+        {
+          "command": "agi-workforce.approveCloudTask",
+          "when": "view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval",
+          "group": "inline@1"
+        },
+        {
+          "command": "agi-workforce.rejectCloudTask",
+          "when": "view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval",
+          "group": "inline@2"
         }
       ],
       "view/title": [
@@ -817,6 +837,14 @@
         },
         {
           "command": "agi-workforce.openCloudTask",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.approveCloudTask",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.rejectCloudTask",
           "when": "false"
         }
       ]

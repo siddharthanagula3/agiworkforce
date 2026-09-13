@@ -12,6 +12,13 @@ import {
   isCloudRunSettled,
   readCloudRunSteps,
 } from './cloudRunPresentation';
+import { decideCloudRunApprovalInteractively, describeCloudRunFailure } from './cloudRunApproval';
+
+export {
+  decideCloudRunApproval,
+  describeCloudRunFailure,
+  type CloudRunApprovalOptions,
+} from './cloudRunApproval';
 
 export type CloudRunDetailClient = Pick<
   ManagedCloudAgentRunClient,
@@ -25,22 +32,6 @@ export interface CloudRunDetailItem extends vscode.QuickPickItem {
 }
 
 const STOP_CONFIRMATION = 'Stop this task';
-
-export async function decideCloudRunApproval(
-  client: CloudRunDetailClient,
-  run: CloudAgentRun,
-  decision: 'approved' | 'rejected',
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const toolCalls = run.pendingApproval?.toolCalls ?? [];
-  if (toolCalls.length === 0) return false;
-  await client.resumeRun(
-    run.id,
-    toolCalls.map((call) => ({ toolCallId: call.toolCallId, decision })),
-    signal === undefined ? {} : { signal },
-  );
-  return true;
-}
 
 export function cloudRunWebUrl(run: CloudAgentRun, webOrigin: string): string {
   const path =
@@ -163,13 +154,10 @@ export async function showCloudRunDetail(
     return;
   }
 
-  const decision = picked.action === 'approve' ? 'approved' : 'rejected';
-  await runCloudRunMutation(
-    () => decideCloudRunApproval(client, run, decision),
-    decision === 'approved'
-      ? 'Approved, the task continues.'
-      : 'Rejected, the task will not run it.',
-    'your decision could not be sent',
+  await decideCloudRunApprovalInteractively(
+    client,
+    run,
+    picked.action === 'approve' ? 'approved' : 'rejected',
     host,
   );
 }
@@ -190,12 +178,4 @@ async function runCloudRunMutation(
   } finally {
     host.onChanged();
   }
-}
-
-export function describeCloudRunFailure(error: unknown): string {
-  const status = (error as { status?: unknown } | null)?.status;
-  if (status === 409) return 'another device already answered this one';
-  if (status === 410) return 'the approval expired, so the task cannot continue from it';
-  const message = error instanceof Error ? error.message.trim() : String(error).trim();
-  return message === '' ? 'AGI Cloud gave no reason' : message;
 }
