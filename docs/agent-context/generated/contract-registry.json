@@ -12,6 +12,7 @@
     "auth",
     "billing-catalog",
     "billing-topups",
+    "browser-bridge",
     "capabilities",
     "capability-handshake",
     "chat",
