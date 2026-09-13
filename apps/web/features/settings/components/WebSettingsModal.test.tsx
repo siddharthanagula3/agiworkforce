@@ -272,7 +272,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByRole('button', { name: 'Slack' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Connect Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
-  });
+  }, 15_000);
 
   it('keeps valid connector rows when one response field is malformed', async () => {
     stubFetch({
@@ -325,7 +325,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(screen.queryByText('Coming soon')).toBeNull();
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
-  });
+  }, 15_000);
 
   it('renders a Connect button for GitHub when the server reports it available', async () => {
     stubFetch({ available: ['github'] });

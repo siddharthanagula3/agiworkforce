@@ -32,7 +32,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
-  buildProtocolRouteAdapter: () => ({ stream: () => (async function* () {})() }),
+  buildProtocolRouteAdapter: vi.fn(),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
 }));
 

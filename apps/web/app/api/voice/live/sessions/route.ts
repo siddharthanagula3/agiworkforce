@@ -109,7 +109,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');
   if (rateLimitResponse) return rateLimitResponse;
-  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const { userId } = await getClerkAuthUser(request);
 
   const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
   const backendModel = getModelMetadataById(getRoutingSlotModel('voice_live_backend'));
@@ -170,7 +170,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
-  const scoped = await getUserScopedDb(request, { apiKeyScope: 'inference:write' });
+  const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
     return managedUsageErrorResponse(
       request,

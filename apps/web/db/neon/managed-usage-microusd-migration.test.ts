@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MIGRATION = '0185_managed_usage_microusd_ledger.sql';
+const MIGRATION = '0182_managed_usage_microusd_ledger.sql';
 
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, MIGRATION), 'utf8');
 const down = fs.readFileSync(
@@ -47,7 +47,7 @@ const MICROUSD_FUNCTIONS = [
   'finalize_managed_usage_request_microusd',
 ] as const;
 
-/** Every cents signature that must survive 0185 as a delegating wrapper. */
+/** Every cents signature that must survive 0182 as a delegating wrapper. */
 const CENTS_WRAPPERS = [
   'get_credit_balance',
   'check_credits_available',
@@ -65,7 +65,7 @@ const CENTS_WRAPPERS = [
   'finalize_managed_usage_request',
 ] as const;
 
-describe('0185 managed usage microUSD ledger', () => {
+describe('0182 managed usage microUSD ledger', () => {
   it('is a draft until someone approves running it', () => {
     expect(migration).toContain('NOT YET APPLIED');
   });
@@ -174,9 +174,49 @@ describe('0185 managed usage microUSD ledger', () => {
     );
   });
 
-  it('reads a pre-0185 settlement result through the cents key', () => {
+  it('reads a pre-0182 settlement result through the cents key', () => {
     expect(migration).toContain('create or replace function public.settlement_result_microusd');
     expect(migration).toContain('(p_result->>p_cents_key)::bigint * 10000');
+  });
+
+  it('keeps the mirror maintained for writers that still speak cents', () => {
+    // The backfill is one-shot. Without these, a row written afterwards in
+    // cents alone leaves the microUSD twin at zero, and because the functions
+    // read microUSD such an account holds no spendable balance and every
+    // reservation against it is declined.
+    for (const table of [
+      'token_credits',
+      'credit_transactions',
+      'credit_settlement_jobs',
+      'managed_usage_requests',
+      'managed_usage_request_extensions',
+    ]) {
+      expect(migration).toMatch(
+        new RegExp(`create trigger \\w+\\s+before insert or update on public\\.${table}`),
+      );
+    }
+    expect(migration).toContain('create or replace function public.sync_token_credits_units()');
+    expect(migration).toContain('new.credits_allocated_cents::bigint * 10000');
+  });
+
+  it('lets the microUSD side win whenever the writer supplied it', () => {
+    // Reading cents only when microUSD was left at its default is what keeps
+    // every function in this migration authoritative over its own writes.
+    expect(migration).toContain(
+      'if new.credits_allocated_microusd = 0 and new.credits_allocated_cents <> 0',
+    );
+    expect(migration).toContain(
+      'new.credits_allocated_microusd is not distinct from old.credits_allocated_microusd',
+    );
+  });
+
+  it('orders the transaction trigger after the flagship labeller', () => {
+    // Same-timing row triggers fire in name order and each returns NEW, so the
+    // two compose, but only one may be the last word on the amount columns.
+    expect(migration).toContain('sync_zz_credit_transactions_units');
+    expect('label_managed_usage_transaction_flagship' < 'sync_zz_credit_transactions_units').toBe(
+      true,
+    );
   });
 
   it('changes no plan allowance, cap ratio or price', () => {
@@ -196,6 +236,15 @@ describe('0185 managed usage microUSD ledger', () => {
       expect(down).toContain(`drop function if exists public.${name}(`);
     }
     expect(down).toContain(`filename = '${MIGRATION}'`);
+    for (const trigger of [
+      'sync_token_credits_units',
+      'sync_zz_credit_transactions_units',
+      'sync_credit_settlement_jobs_units',
+      'sync_managed_usage_request_units',
+      'sync_managed_usage_extension_units',
+    ]) {
+      expect(down).toContain(`drop trigger if exists ${trigger}`);
+    }
   });
 
   it('restores every cents body inline, so the reversal is one file', () => {
@@ -207,9 +256,20 @@ describe('0185 managed usage microUSD ledger', () => {
     expect(down).not.toContain('microusd_to_cents_mirror(reservation.estimated_cost_microusd)');
   });
 
+  it('drops the unit triggers before the columns and helper they depend on', () => {
+    const triggerAt = down.indexOf('drop trigger if exists sync_token_credits_units');
+    const columnAt = down.indexOf('drop column if exists credits_allocated_microusd');
+    const helperAt = down.indexOf('drop function if exists public.microusd_to_cents_mirror');
+    expect(triggerAt).toBeGreaterThan(-1);
+    expect(columnAt).toBeGreaterThan(triggerAt);
+    expect(helperAt).toBeGreaterThan(triggerAt);
+  });
+
   it('restores the cents bodies before dropping what the wrappers call', () => {
     const restoreAt = down.indexOf('create or replace function public.enqueue_credit_settlement(');
-    const dropAt = down.indexOf('drop function if exists public.enqueue_credit_settlement_microusd');
+    const dropAt = down.indexOf(
+      'drop function if exists public.enqueue_credit_settlement_microusd',
+    );
     expect(restoreAt).toBeGreaterThan(-1);
     expect(dropAt).toBeGreaterThan(restoreAt);
   });

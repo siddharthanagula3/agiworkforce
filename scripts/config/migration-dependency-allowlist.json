@@ -133,13 +133,13 @@
     },
     {
       "file": "apps/web/app/api/billing/overage/route.ts",
-      "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/memory/import-store.ts",
@@ -222,6 +222,11 @@
       "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 180,
+      "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
+    },
+    {
       "file": "apps/web/lib/services/conversation-branch-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -280,6 +285,11 @@
       "file": "apps/web/lib/services/route-cache-observability-service.ts",
       "migration": 166,
       "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/route-cache-observability-service.ts",
+      "migration": 180,
+      "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
     },
     {
       "file": "apps/web/lib/services/schedule-service.ts",
@@ -357,19 +367,39 @@
       "reason": "the Code session base branch column is founder-gated; the deploy runbook applies migration 0177 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/server/rolling-usage.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/lib/server/spendable-credits.ts",
-      "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/services/credit-service.ts",
-      "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/services/managed-usage-request-service.ts",
-      "migration": 185,
-      "reason": "0185 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0185 keeps serve every unmigrated caller unchanged."
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/app/api/cron/reconcile-provider-costs/route.ts",
+      "migration": 181,
+      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
+    },
+    {
+      "file": "apps/web/features/admin/services/economics-summary.ts",
+      "migration": 180,
+      "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
+    },
+    {
+      "file": "apps/web/features/admin/services/economics-summary.ts",
+      "migration": 181,
+      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
     }
   ]
 }

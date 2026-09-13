@@ -207,7 +207,7 @@ export class LLMCostCalculator {
    * Whole ledger cents, with a one-cent floor on any non-empty provider work.
    * The floor is arbitrage in both directions: it overcharges a sub-cent turn
    * elevenfold and makes a hundred of them cost more than one call of the same
-   * total. The managed-usage ledger settles in microUSD since 0185, so billing
+   * total. The managed-usage ledger settles in microUSD since 0182, so billing
    * paths call the microUSD calculators below; this remains for the surfaces
    * that report a whole-cent figure and for callers not yet migrated.
    * @throws Never - returns 0 on error for safety

@@ -278,7 +278,7 @@ const MICROUSD_PER_USD = 1_000_000;
 const MICROUSD_PER_LEDGER_CENT = 10_000;
 
 /**
- * The ledger's unit since 0185. Work that produced nothing costs nothing, and
+ * The ledger's unit since 0182. Work that produced nothing costs nothing, and
  * work that produced anything costs at least one microUSD. The one-cent floor
  * this replaced overcharged a sub-cent turn elevenfold and made a hundred
  * sub-cent turns cost more than a single call of the same total.

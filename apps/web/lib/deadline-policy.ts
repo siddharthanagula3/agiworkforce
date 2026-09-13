@@ -28,6 +28,8 @@ export const DURABLE_STREAM_SILENCE_DEADLINE_MS =
 
 export const DURABLE_STREAM_DETACH_DEADLINE_MS = CHAT_TOOL_LOOP_BUDGET_MS;
 
+export const WORKFLOW_WORLD_CALL_DEADLINE_MS = 10_000;
+
 export const CLOUD_CODE_TURN_BUDGET_MS = 10 * 60_000;
 
 export const CLOUD_CODE_COMMAND_DEADLINE_MS = 60_000;
@@ -84,6 +86,12 @@ export const DEADLINE_HIERARCHY = [
     parentMs: CHAT_COMPLETIONS_FUNCTION_LIMIT_MS,
     child: 'chat tool loop budget',
     childMs: CHAT_TOOL_LOOP_BUDGET_MS,
+  },
+  {
+    parent: 'chat tool loop budget',
+    parentMs: CHAT_TOOL_LOOP_BUDGET_MS,
+    child: 'workflow world call',
+    childMs: WORKFLOW_WORLD_CALL_DEADLINE_MS,
   },
   {
     parent: 'chat tool loop budget',

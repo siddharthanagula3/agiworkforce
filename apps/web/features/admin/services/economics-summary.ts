@@ -624,7 +624,7 @@ async function readReconciliationGaps(
   } catch (error) {
     logger.warn(
       { error: error instanceof Error ? error.message : String(error) },
-      'Provider cost reconciliation days are unavailable; migration 0184 may not be applied',
+      'Provider cost reconciliation days are unavailable; migration 0181 may not be applied',
     );
     return { available: false, gaps: [] };
   }
