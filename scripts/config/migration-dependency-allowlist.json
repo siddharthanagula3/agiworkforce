@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "file": "apps/web/app/api/billing/overage/route.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/route.ts",
       "migration": 156,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -60,6 +65,11 @@
       "file": "apps/web/app/api/cron/purge-deleted-organizations/route.ts",
       "migration": 162,
       "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/cron/reconcile-provider-costs/route.ts",
+      "migration": 181,
+      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
     },
     {
       "file": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
@@ -122,6 +132,11 @@
       "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
     },
     {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/app/api/user/export/route.ts",
       "migration": 47,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -132,14 +147,24 @@
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     },
     {
-      "file": "apps/web/app/api/billing/overage/route.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+      "file": "apps/web/features/admin/services/economics-summary.ts",
+      "migration": 180,
+      "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
     },
     {
-      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+      "file": "apps/web/features/admin/services/economics-summary.ts",
+      "migration": 181,
+      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
+    },
+    {
+      "file": "apps/web/features/plugins/server/directory/install.ts",
+      "migration": 159,
+      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
+    },
+    {
+      "file": "apps/web/features/plugins/server/directory/installed-skills.ts",
+      "migration": 159,
+      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
     },
     {
       "file": "apps/web/lib/memory/import-store.ts",
@@ -177,6 +202,16 @@
       "reason": "scheduled task project scope is founder-gated; the deploy runbook applies migration 0168 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 174,
+      "reason": "identities are founder-gated; the deploy runbook applies migration 0174 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 175,
+      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
       "file": "apps/web/lib/server/neon-chat.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -197,14 +232,39 @@
       "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/server/rolling-usage.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/lib/server/spendable-credits.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/lib/server/two-factor-replay.ts",
       "migration": 154,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     },
     {
+      "file": "apps/web/lib/server/video-generation-jobs.ts",
+      "migration": 183,
+      "reason": "the column is read and written by claimVideoCompletionNotice alone and is deliberately absent from JOB_COLUMNS, so before 0183 applies that one statement raises, deliverVideoCompletionNotice logs it and sends nothing, and every other query over video_generation_jobs is unaffected; the deploy runbook applies 0183 before the notice is relied on."
+    },
+    {
       "file": "apps/web/lib/services/cloud-agent-run-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-agent-service.ts",
+      "migration": 176,
+      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-durable-run.ts",
+      "migration": 176,
+      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
     },
     {
       "file": "apps/web/lib/services/cloud-code-session-service.ts",
@@ -215,6 +275,21 @@
       "file": "apps/web/lib/services/cloud-code-session-service.ts",
       "migration": 165,
       "reason": "cloud code session extra hosts are founder-gated; the deploy runbook applies migration 0165 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 176,
+      "reason": "the Code session working branch, pull request, archive and context columns are founder-gated; the deploy runbook applies migration 0176 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 177,
+      "reason": "the Code session base branch column is founder-gated; the deploy runbook applies migration 0177 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-turn-reaper.ts",
+      "migration": 176,
+      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
     },
     {
       "file": "apps/web/lib/services/cogs-ledger-service.ts",
@@ -230,6 +305,11 @@
       "file": "apps/web/lib/services/conversation-branch-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/credit-service.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
       "file": "apps/web/lib/services/enterprise-billing-service.ts",
@@ -257,6 +337,11 @@
       "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 182,
+      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
       "file": "apps/web/lib/services/organization-policy-service.ts",
       "migration": 164,
       "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
@@ -275,6 +360,21 @@
       "file": "apps/web/lib/services/plugin-marketplace-service.ts",
       "migration": 159,
       "reason": "plugin marketplace sources are founder-gated; the deploy runbook applies migration 0159 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-marketplace-service.ts",
+      "migration": 175,
+      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
+      "migration": 159,
+      "reason": "migration 0159 shipped before the 2026-09-06 baseline and 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
+      "migration": 175,
+      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
     },
     {
       "file": "apps/web/lib/services/project-context-service.ts",
@@ -305,101 +405,6 @@
       "file": "apps/web/lib/services/web-push-service.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
-    },
-    {
-      "file": "apps/web/features/plugins/server/directory/install.ts",
-      "migration": 159,
-      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
-    },
-    {
-      "file": "apps/web/features/plugins/server/directory/installed-skills.ts",
-      "migration": 159,
-      "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
-    },
-    {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 174,
-      "reason": "identities are founder-gated; the deploy runbook applies migration 0174 before this code reaches production."
-    },
-    {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 175,
-      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-code-session-service.ts",
-      "migration": 176,
-      "reason": "the Code session working branch, pull request, archive and context columns are founder-gated; the deploy runbook applies migration 0176 before this code reaches production."
-    },
-    {
-      "file": "apps/web/lib/services/plugin-marketplace-service.ts",
-      "migration": 175,
-      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
-      "migration": 159,
-      "reason": "migration 0159 shipped before the 2026-09-06 baseline and 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/plugin-owned-source-service.ts",
-      "migration": 175,
-      "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-code-agent-service.ts",
-      "migration": 176,
-      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-code-turn-reaper.ts",
-      "migration": 176,
-      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-code-durable-run.ts",
-      "migration": 176,
-      "reason": "migration 0176 was applied to production on 2026-09-08 and recorded against d4c6f997c; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-code-session-service.ts",
-      "migration": 177,
-      "reason": "the Code session base branch column is founder-gated; the deploy runbook applies migration 0177 before this code reaches production."
-    },
-    {
-      "file": "apps/web/lib/server/rolling-usage.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
-    },
-    {
-      "file": "apps/web/lib/server/spendable-credits.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
-    },
-    {
-      "file": "apps/web/lib/services/credit-service.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
-    },
-    {
-      "file": "apps/web/lib/services/managed-usage-request-service.ts",
-      "migration": 182,
-      "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
-    },
-    {
-      "file": "apps/web/app/api/cron/reconcile-provider-costs/route.ts",
-      "migration": 181,
-      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
-    },
-    {
-      "file": "apps/web/features/admin/services/economics-summary.ts",
-      "migration": 180,
-      "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
-    },
-    {
-      "file": "apps/web/features/admin/services/economics-summary.ts",
-      "migration": 181,
-      "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
     }
   ]
 }

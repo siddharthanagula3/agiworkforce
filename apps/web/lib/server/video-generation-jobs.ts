@@ -980,6 +980,38 @@ export function claimVideoIncidentAlert(input: {
   );
 }
 
+/**
+ * Take the single right to tell this job's owner it finished.
+ *
+ * A terminal job is observed by every reconciler that touches it after the
+ * transition -- the Workflow, a late status poll, a webhook nudge -- so the
+ * claim is the update itself: the first caller stamps the column and gets the
+ * row, and every later caller matches nothing and sends nothing.
+ *
+ * `completion_notified_at` is the ONLY place this column is read or written,
+ * and it is deliberately absent from `JOB_COLUMNS`: until 0183 is applied this
+ * statement raises, the caller logs it and sends nothing, and every other query
+ * over the table is untouched. A column in the shared projection would have
+ * taken the whole video path down with it instead.
+ */
+export function claimVideoCompletionNotice(input: {
+  db: DatabaseAdapter;
+  jobId: string;
+}): Promise<boolean> {
+  return input.db
+    .query<{ id: string }>(
+      `update public.video_generation_jobs
+          set completion_notified_at = now(),
+              updated_at = now()
+        where id = $1
+          and completion_notified_at is null
+          and status in ('completed', 'failed', 'outcome_unknown')
+        returning id`,
+      [input.jobId],
+    )
+    .then((rows) => rows.length > 0);
+}
+
 export function completeVideoIncidentAlert(input: {
   db: DatabaseAdapter;
   jobId: string;
