@@ -289,8 +289,12 @@ export default function SharePreviewScreen() {
             gap: 8,
           }}
         >
-          {hasAttachments ? <Paperclip size={16} color="#fff" /> : <Send size={16} color="#fff" />}
-          <Text style={{ color: '#fff', fontWeight: '600' }}>{primaryLabel}</Text>
+          {hasAttachments ? (
+            <Paperclip size={16} color={themeColors.white} />
+          ) : (
+            <Send size={16} color={themeColors.white} />
+          )}
+          <Text style={{ color: themeColors.white, fontWeight: '600' }}>{primaryLabel}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
