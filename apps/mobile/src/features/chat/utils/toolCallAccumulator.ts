@@ -102,6 +102,7 @@ const STEP_MARKERS: Record<ResearchStep['status'], string> = {
   running: '▸',
   completed: '✓',
   failed: '✕',
+  dropped: '○',
 };
 
 function readCount(source: Record<string, unknown>, key: string): number | undefined {
