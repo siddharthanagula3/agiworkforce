@@ -37,11 +37,13 @@ const MCP_URL = 'https://mcp.example.test/mcp';
 const ORIGINAL_ISSUER = 'https://auth.example.test';
 let currentIssuer: string;
 let registrationMethod: 'cimd' | 'dynamic';
+let resourceScopes: string[] | null;
 let tokenRequests: { url: string; body: URLSearchParams }[];
 
 beforeEach(() => {
   currentIssuer = ORIGINAL_ISSUER;
   registrationMethod = 'cimd';
+  resourceScopes = null;
   tokenRequests = [];
   vi.stubEnv('CONNECTOR_OAUTH_REDIRECT_BASE_URL', 'https://app.example.test');
   const clients = new Map<string, McpOAuthClientRecord>();
@@ -54,7 +56,11 @@ beforeEach(() => {
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp') {
-        return Response.json({ resource: MCP_URL, authorization_servers: [currentIssuer] });
+        return Response.json({
+          resource: MCP_URL,
+          authorization_servers: [currentIssuer],
+          ...(resourceScopes ? { scopes_supported: resourceScopes } : {}),
+        });
       }
       if (url === `${currentIssuer}/.well-known/oauth-authorization-server`) {
         return Response.json({
@@ -280,5 +286,57 @@ describe('discovered MCP OAuth with the v2 SDK', () => {
     );
     expect(redirect.searchParams.get('code_challenge')).toBeTruthy();
     expect(redirect.searchParams.get('state')).toBe(start.state);
+  });
+});
+
+describe('documented scope ceilings on the discovered path', () => {
+  it('asks only for the ceiling scopes the resource advertises', async () => {
+    registrationMethod = 'dynamic';
+    resourceScopes = ['read', 'write', 'admin:destroy'];
+
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'linear',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+    });
+
+    expect(start.status).toBe('redirect');
+    if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
+    const scope = new URL(start.authorizationUrl).searchParams.get('scope');
+    expect(scope).toBe('read write');
+    const pending = mocks.savePending.mock.calls[0]?.[0] as PendingAuthorization;
+    expect(pending.requestedScopes).toEqual(['read', 'write']);
+  });
+
+  it('leaves a connector whose ceiling is still under review alone', async () => {
+    registrationMethod = 'dynamic';
+    resourceScopes = ['read', 'write'];
+
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'stripe',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+    });
+
+    expect(start.status).toBe('redirect');
+    if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
+    expect(new URL(start.authorizationUrl).searchParams.get('scope')).toBe('read write');
+  });
+
+  it('refuses rather than asking for everything when the ceiling matches nothing', async () => {
+    registrationMethod = 'dynamic';
+    resourceScopes = ['admin:destroy'];
+
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'linear',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+    });
+
+    expect(start.status).toBe('error');
+    expect(mocks.savePending).not.toHaveBeenCalled();
   });
 });
