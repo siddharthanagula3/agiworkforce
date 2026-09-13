@@ -6,12 +6,14 @@
  * Pure logic (no `server-only`).
  */
 
-export type E2BUnavailableCause = 'not-configured' | 'no-capacity' | 'policy';
+export type E2BUnavailableCause = 'not-configured' | 'no-capacity' | 'policy' | 'over-quota';
 
 const CAUSE_SENTENCE: Record<E2BUnavailableCause, string> = {
   'not-configured': 'code execution is not configured on this deployment',
   'no-capacity': 'no sandbox was available for this account right now',
   policy: 'the network policy for this request does not allow a sandbox',
+  'over-quota':
+    'this account has no usage budget left to pay for sandbox time; add credits or upgrade the plan',
 };
 
 export const GENERIC_CODE_EXECUTION_UNAVAILABLE = 'Code execution is unavailable for this request.';

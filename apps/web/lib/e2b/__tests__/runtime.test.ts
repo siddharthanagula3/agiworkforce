@@ -25,12 +25,27 @@ vi.mock('../templates', async (importOriginal) => {
 const meterSandboxComputeInterval = vi.fn(async (_interval: unknown) => 0);
 const sandboxComputeIsPriceable = vi.fn(() => true);
 const getSandboxComputeMicrousdPerSecond = vi.fn((_shape?: unknown) => 46);
+const COMPUTE_RESERVATION = {
+  idempotencyKey: 'agi.e2b.compute.res-1',
+  requestHash: 'hash-1',
+  leaseToken: 'lease-1',
+  estimatedCostMicrousd: 1_000_000,
+  provider: 'e2b',
+  model: 'e2b',
+};
+const reserveSandboxComputeInterval = vi.fn(async (_input: unknown) => ({
+  outcome: 'reserved' as const,
+  reservation: COMPUTE_RESERVATION,
+}));
+const releaseSandboxComputeReservation = vi.fn(async (_input: unknown) => {});
 vi.mock('../compute-metering', () => ({
   E2B_COMPUTE_RATE_ENV: 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
   sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
   getSandboxComputeMicrousdPerSecond: (shape?: unknown) =>
     getSandboxComputeMicrousdPerSecond(shape),
+  reserveSandboxComputeInterval: (input: unknown) => reserveSandboxComputeInterval(input),
+  releaseSandboxComputeReservation: (input: unknown) => releaseSandboxComputeReservation(input),
 }));
 
 const resolveEffectiveSubscription = vi.fn(
@@ -232,6 +247,32 @@ describe('getE2BExecutor, unpriced compute (GOV-5)', () => {
 
     await expect(getE2BExecutor(scope('conv-unrated', 'user-unrated'))).resolves.toBeNull();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an over-quota account before any sandbox second is burned', async () => {
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'refused',
+      error: { status: 402, code: 'insufficient_credits' },
+    } as never);
+    const causes: string[] = [];
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(
+      getE2BExecutor(scope('conv-broke', 'user-broke'), (cause) => causes.push(cause)),
+    ).resolves.toBeNull();
+    expect(create).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    expect(causes).toEqual(['over-quota']);
+  });
+
+  it('releases the hold when the sandbox it was taken for never starts', async () => {
+    create.mockRejectedValueOnce(new Error('no capacity'));
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(getE2BExecutor(scope('conv-nostart', 'user-nostart'))).resolves.toBeNull();
+    expect(releaseSandboxComputeReservation).toHaveBeenCalledWith(
+      expect.objectContaining({ reservation: COMPUTE_RESERVATION }),
+    );
   });
 
   it('snapshots the admitted rate onto the session it persists', async () => {

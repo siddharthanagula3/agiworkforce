@@ -65,7 +65,10 @@ import {
   E2B_COMPUTE_RATE_ENV,
   getSandboxComputeMicrousdPerSecond,
   meterSandboxComputeInterval,
+  releaseSandboxComputeReservation,
+  reserveSandboxComputeInterval,
   sandboxComputeIsPriceable,
+  type SandboxComputeReservationRecord,
 } from './compute-metering';
 import {
   CHAT_SANDBOX_NETWORK_ACCESS,
@@ -527,6 +530,9 @@ async function closeBillableInterval(
     ...(session.computeMicrousdPerSecond === undefined
       ? {}
       : { snapshotMicrousdPerSecond: session.computeMicrousdPerSecond }),
+    ...(session.computeReservation === undefined
+      ? {}
+      : { reservation: session.computeReservation }),
     startedAtMs,
     endedAtMs: Date.now(),
     reason,
@@ -665,6 +671,46 @@ export async function getE2BExecutor(
     return unavailable('policy');
   }
   const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
+
+  // The account holds the sandbox's whole admitted lifetime before the sandbox
+  // exists, so an account over its quota is refused here rather than after it
+  // has already burned seconds it cannot pay for.
+  let computeReservation: SandboxComputeReservationRecord | undefined;
+  if (scope && planTier !== null) {
+    const reserved = await reserveSandboxComputeInterval({
+      userId: scope.userId,
+      planTier,
+      templateId: template,
+      ...(conversationId ? { conversationId } : {}),
+      ...(codeSessionId ? { codeSessionId } : {}),
+      microusdPerSecond: provisioningRate,
+      ttlMs: sandboxTimeoutMs,
+    });
+    if (reserved.outcome === 'refused') {
+      logger.warn(
+        { ...scopeLog(scope), code: reserved.error.code, status: reserved.error.status },
+        '[e2b] refusing to provision: sandbox compute could not be reserved (fail-closed)',
+      );
+      return unavailable(
+        reserved.error.status === 402 || reserved.error.status === 429
+          ? 'over-quota'
+          : 'no-capacity',
+      );
+    }
+    computeReservation = reserved.reservation;
+  }
+  const abandonReservation = async (reason: string): Promise<null> => {
+    if (scope && computeReservation) {
+      await releaseSandboxComputeReservation({
+        userId: scope.userId,
+        reservation: computeReservation,
+        reason,
+      });
+      computeReservation = undefined;
+    }
+    return null;
+  };
+
   const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
   const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;
   const createOpts = scope
@@ -758,13 +804,13 @@ export async function getE2BExecutor(
       await releaseUnreachableSandbox(scope, existingSession);
       for (const key of Object.keys(contexts)) delete contexts[key];
       const fresh = await createFresh();
-      if (!fresh) return null;
+      if (!fresh) return abandonReservation('sandbox_create_failed');
       sandbox = fresh;
       sandboxId = fresh.sandboxId;
     }
   } else {
     const fresh = await createFresh();
-    if (!fresh) return null;
+    if (!fresh) return abandonReservation('sandbox_create_failed');
     sandbox = fresh;
     sandboxId = fresh.sandboxId;
   }
@@ -783,7 +829,7 @@ export async function getE2BExecutor(
       } catch {
         // The plan timeout remains the billing and lifecycle backstop.
       }
-      return null;
+      return abandonReservation('network_policy_unenforceable');
     }
   }
 
@@ -797,6 +843,7 @@ export async function getE2BExecutor(
       ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
       ...(template ? { templateId: template } : {}),
       ...(computeMicrousdPerSecond === undefined ? {} : { computeMicrousdPerSecond }),
+      ...(computeReservation === undefined ? {} : { computeReservation }),
     };
     await saveE2BSession(scope, session);
   }
@@ -1065,6 +1112,7 @@ export async function getE2BExecutor(
           ...(computeMicrousdPerSecond === undefined
             ? {}
             : { snapshotMicrousdPerSecond: computeMicrousdPerSecond }),
+          ...(computeReservation === undefined ? {} : { reservation: computeReservation }),
           startedAtMs: intervalStartedAtMs,
           endedAtMs: Date.now(),
           reason: 'pause',

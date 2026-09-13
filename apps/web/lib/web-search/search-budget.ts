@@ -4,13 +4,21 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   centsFromMicrousdCeil,
   customerChargeMicrousd,
+  normalizeBillingPlanTier,
   type RateCardFeature,
 } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { countUserFeatureUnitsSince } from '@/lib/services/cogs-ledger-service';
-import { CreditService, CreditSettlementUnavailableError } from '@/lib/services/credit-service';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
+import {
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  ManagedUsageRequestError,
+  estimateMicrousdOf,
+  reserveManagedUsageRequest,
+} from '@/lib/services/managed-usage-request-service';
 
 /**
  * Search is bought per call and never resold, so an unbounded free plan is an
@@ -28,7 +36,6 @@ export const SEARCH_RATE_CARD_FEATURES = [
 ] as const satisfies readonly RateCardFeature[];
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-const MICROUSD_PER_LEDGER_CENT = 10_000;
 const SEARCH_QUOTA_FEATURE = 'search';
 
 /**
@@ -125,18 +132,26 @@ export async function resolveSearchBudget(input: SearchBudgetInput): Promise<Sea
   return { outcome: 'charge', feature: input.feature, chargeMicrousd, chargeCents };
 }
 
-export interface SearchChargeInput {
-  userId: string;
-  requestId: string;
-  callOrdinal: number;
+/**
+ * A search call's hold on the account, carried from admission to settlement.
+ * Holds only the fields the ledger needs; the scoped connection is supplied
+ * again at settlement.
+ */
+export interface SearchChargeReservation {
+  idempotencyKey: string;
+  requestHash: string;
+  leaseToken: string;
+  estimatedCostMicrousd: number;
+  provider: string;
   feature: RateCardFeature;
-  /** The rate card's exact charge. `chargeCents` is the deprecated alias. */
-  chargeMicrousd?: number;
-  chargeCents?: number;
-  surface?: string | null;
-  scope?: SearchChargeScope;
-  db: DatabaseAdapter;
 }
+
+export type SearchChargeReservationOutcome =
+  | { outcome: 'reserved'; reservation: SearchChargeReservation }
+  /** The account cannot pay. The search must not run. */
+  | { outcome: 'refused'; error: ManagedUsageRequestError }
+  /** Nothing to hold, or billing could not answer. The search runs uncharged. */
+  | { outcome: 'unreserved' };
 
 /**
  * Provider-native grounding settles once at the end of a turn rather than per
@@ -155,58 +170,135 @@ export function searchChargeIdempotencyKey(
     : `search:${requestId}:${scope}:${callOrdinal}`;
 }
 
-/**
- * Deducts one search call's charge. Returns false only when the account cannot
- * pay, which is a refusal the caller must honour. A settlement backend that is
- * unreachable fails OPEN: a cent of search is not worth failing the turn over,
- * and the COGS row is still written either way.
- */
-export async function settleSearchCharge(input: SearchChargeInput): Promise<boolean> {
-  const amountMicrousd =
-    input.chargeMicrousd !== undefined
-      ? Math.round(input.chargeMicrousd)
-      : (input.chargeCents ?? 0) * MICROUSD_PER_LEDGER_CENT;
-  if (amountMicrousd <= 0) return true;
+export interface SearchReservationInput {
+  userId: string;
+  organizationId?: string | null;
+  planTier: string | null | undefined;
+  requestId: string;
+  callOrdinal: number;
+  feature: RateCardFeature;
+  /** Who sells the call. The rate card names the price, not the seller. */
+  provider: string;
+  chargeMicrousd: number;
+  scope?: SearchChargeScope;
+  db: DatabaseAdapter;
+}
 
+/**
+ * One search call is bought per lease, and the whole exchange is short.
+ */
+const SEARCH_LEASE_SECONDS = 300;
+
+/**
+ * Holds the call's charge against the account BEFORE the search runs. A
+ * quota block is a refusal the caller must honour; anything else fails OPEN,
+ * because a cent of search is not worth failing the turn over and the COGS row
+ * is written either way.
+ */
+export async function reserveSearchCharge(
+  input: SearchReservationInput,
+): Promise<SearchChargeReservationOutcome> {
+  const chargeMicrousd = Math.round(input.chargeMicrousd);
+  if (chargeMicrousd <= 0) return { outcome: 'unreserved' };
+
+  const scope = input.scope ?? 'tool';
   try {
-    const result = await CreditService.settleCreditsDurably(
-      {
-        userId: input.userId,
-        amountMicrousd,
-        description: 'Web search',
-        idempotencyKey: searchChargeIdempotencyKey(
-          input.requestId,
-          input.callOrdinal,
-          input.scope ?? 'tool',
-        ),
-        metadata: {
-          type: SEARCH_QUOTA_FEATURE,
-          quotaFeature: SEARCH_QUOTA_FEATURE,
-          feature: input.feature,
-          ...(input.surface ? { surface: input.surface } : {}),
-        },
+    const reservation = await reserveManagedUsageRequest({
+      db: input.db,
+      userId: input.userId,
+      organizationId: input.organizationId ?? null,
+      idempotencyKey: searchChargeIdempotencyKey(input.requestId, input.callOrdinal, scope),
+      requestHash: fingerprintManagedUsageRequest({
+        feature: input.feature,
+        scope,
+        callOrdinal: input.callOrdinal,
+      }),
+      provider: input.provider,
+      model: input.feature,
+      estimatedCostMicrousd: chargeMicrousd,
+      leaseSeconds: SEARCH_LEASE_SECONDS,
+      planTier: normalizeBillingPlanTier(input.planTier),
+      isFlagship: false,
+      quotaFeature: SEARCH_QUOTA_FEATURE,
+    });
+    return {
+      outcome: 'reserved',
+      reservation: {
+        idempotencyKey: reservation.idempotencyKey,
+        requestHash: reservation.requestHash,
+        leaseToken: reservation.leaseToken,
+        estimatedCostMicrousd: estimateMicrousdOf(reservation),
+        provider: input.provider,
+        feature: input.feature,
       },
-      input.db,
-    );
-    if (!result.success && result.status === 'terminal') {
+    };
+  } catch (error) {
+    const managed = error instanceof ManagedUsageRequestError ? error : null;
+    if (managed && (managed.status === 402 || managed.status === 429)) {
       logger.warn(
         {
           event: 'search_charge_refused',
           userId: input.userId,
-          code: result.code,
+          code: managed.code,
           feature: input.feature,
         },
-        '[web-search] search charge refused; the call will not run',
+        '[web-search] search reservation refused; the call will not run',
       );
-      return false;
+      return { outcome: 'refused', error: managed };
     }
-    return true;
-  } catch (error) {
-    const unavailable = error instanceof CreditSettlementUnavailableError;
     logger.error(
-      { event: 'search_charge_unsettled', error, userId: input.userId, unavailable },
-      '[web-search] search charge could not be settled; the call runs uncharged',
+      {
+        event: 'search_charge_unreserved',
+        error,
+        userId: input.userId,
+        code: managed?.code ?? null,
+      },
+      '[web-search] search charge could not be reserved; the call runs uncharged',
     );
-    return true;
+    return { outcome: 'unreserved' };
+  }
+}
+
+export interface SearchChargeInput {
+  userId: string;
+  reservation: SearchChargeReservation;
+  surface?: string | null;
+  db: DatabaseAdapter;
+}
+
+/**
+ * Settles what the reserved call actually cost and releases the rest. The
+ * charge is the rate card's fixed per-call figure, so this normally settles
+ * the whole hold. A settlement that cannot be written fails OPEN: the lease
+ * recovery sweep reclaims the hold rather than the turn dying on its own
+ * accounting.
+ */
+export async function settleSearchCharge(input: SearchChargeInput): Promise<void> {
+  const reservation = input.reservation;
+  try {
+    await finalizeManagedUsageRequest({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: reservation.idempotencyKey,
+      requestHash: reservation.requestHash,
+      leaseToken: reservation.leaseToken,
+      estimatedCostMicrousd: reservation.estimatedCostMicrousd,
+      estimatedCostCents: ledgerCentsFromMicrousd(reservation.estimatedCostMicrousd),
+      quotaFeature: SEARCH_QUOTA_FEATURE,
+      provider: reservation.provider,
+      model: reservation.feature,
+      outcome: 'completed',
+      actualCostMicrousd: reservation.estimatedCostMicrousd,
+      usage: {
+        operation: SEARCH_QUOTA_FEATURE,
+        feature: reservation.feature,
+        ...(input.surface ? { surface: input.surface } : {}),
+      },
+    });
+  } catch (error) {
+    logger.error(
+      { event: 'search_charge_unsettled', error, userId: input.userId },
+      '[web-search] search charge could not be settled; the reservation is left to recovery',
+    );
   }
 }
