@@ -9,6 +9,13 @@
     "./models.json": "./src/models.json",
     "./protocol": "./src/generated/protocol/index.ts"
   },
+  "typesVersions": {
+    "*": {
+      "protocol": [
+        "./src/generated/protocol/index.ts"
+      ]
+    }
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
