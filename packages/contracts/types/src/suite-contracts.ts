@@ -767,6 +767,74 @@ export function formatGeneratedFileKindLabel(kind?: GeneratedFileKind | string |
   );
 }
 
+const DELIVERABLE_CATEGORY_LABELS: Readonly<Record<GeneratedFileKind, string>> = {
+  pdf: 'Document',
+  docx: 'Document',
+  markdown: 'Document',
+  html: 'Document',
+  pptx: 'Presentation',
+  xlsx: 'Spreadsheet',
+  csv: 'Spreadsheet',
+  json: 'Data',
+  image: 'Image',
+  archive: 'Archive',
+  other: 'File',
+};
+
+const FILE_EXTENSION_PATTERN = /\.([A-Za-z0-9]{1,8})$/;
+
+const EXTENSION_KINDS: ReadonlySet<string> = new Set([
+  'pdf',
+  'docx',
+  'xlsx',
+  'pptx',
+  'csv',
+  'json',
+  'html',
+]);
+
+const ARCHIVE_EXTENSIONS: ReadonlySet<string> = new Set(['zip', 'tar', 'gz']);
+
+export function resolveGeneratedFileKind(fileName: string, mimeType: string): GeneratedFileKind {
+  const ext = fileName.toLowerCase().split('.').pop() ?? '';
+  if (EXTENSION_KINDS.has(ext)) return ext as GeneratedFileKind;
+  if (ext === 'md' || ext === 'markdown') return 'markdown';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (ARCHIVE_EXTENSIONS.has(ext)) return 'archive';
+  return 'other';
+}
+
+export interface DeliverableTypeLineInput {
+  kind?: GeneratedFileKind | string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+}
+
+export function formatDeliverableCategoryLabel(kind?: GeneratedFileKind | string | null): string {
+  if (!kind) return DELIVERABLE_CATEGORY_LABELS.other;
+  return (
+    DELIVERABLE_CATEGORY_LABELS[kind as GeneratedFileKind] ?? DELIVERABLE_CATEGORY_LABELS.other
+  );
+}
+
+export function formatDeliverableFormatLabel(input: DeliverableTypeLineInput): string | undefined {
+  const extension = input.fileName?.match(FILE_EXTENSION_PATTERN)?.[1];
+  if (extension) return extension.toUpperCase();
+  const subtype = input.mimeType?.split(';')[0]?.split('/')[1];
+  const tail = subtype?.split('+')[0]?.split('.').pop();
+  if (tail && /^[A-Za-z0-9-]{1,12}$/.test(tail)) return tail.toUpperCase();
+  if (input.kind) return formatGeneratedFileKindLabel(input.kind).toUpperCase();
+  return undefined;
+}
+
+export function formatDeliverableTypeLine(input: DeliverableTypeLineInput): string {
+  const declared = input.kind && input.kind !== 'other' ? input.kind : undefined;
+  const kind = declared ?? resolveGeneratedFileKind(input.fileName ?? '', input.mimeType ?? '');
+  const category = formatDeliverableCategoryLabel(kind);
+  const format = formatDeliverableFormatLabel(input);
+  return format && format !== category.toUpperCase() ? `${category}, ${format}` : category;
+}
+
 export function formatComputeSessionStatusLabel(
   status?: ComputeSessionStatus | string | null,
 ): string {

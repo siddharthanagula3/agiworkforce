@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash } from 'crypto';
 import type { GeneratedFileSurface } from '@agiworkforce/cloud-contracts';
+import { resolveGeneratedFileKind } from '@agiworkforce/types';
 import {
   deleteStoredMedia,
   isGeneratedMediaStorageConfigured,
@@ -36,12 +37,7 @@ export type PersistGeneratedFileOutcome =
   | { ok: false; reason: 'not_configured' | 'too_large' | 'storage_error' };
 
 export function generatedFileKind(fileName: string, mime: string): string {
-  const ext = fileName.toLowerCase().split('.').pop() ?? '';
-  if (['pdf', 'docx', 'xlsx', 'pptx', 'csv', 'json', 'html'].includes(ext)) return ext;
-  if (ext === 'md' || ext === 'markdown') return 'markdown';
-  if (mime.startsWith('image/')) return 'image';
-  if (ext === 'zip' || ext === 'tar' || ext === 'gz') return 'archive';
-  return 'other';
+  return resolveGeneratedFileKind(fileName, mime);
 }
 
 /**
