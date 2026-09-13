@@ -183,6 +183,7 @@ import {
 import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskDockSummary';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
+import { ChatConversationBoundary } from '../components/ChatConversationBoundary';
 import type { ResearchPlanDecision } from '../components/research/ResearchActivity';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
@@ -5121,237 +5122,250 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             </div>
           </div>
 
-          {turnFailureNotice.placement === 'banner' && (
-            <div
-              role="alert"
-              aria-live="polite"
-              className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
-            >
-              <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
-                {turnFailureNotice.message}
-              </span>
-              {(retryableTurnId || retryableCardResumeMessageId) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChatError(null);
-                    void handleRegenerateMessage(
-                      (retryableTurnId ?? retryableCardResumeMessageId)!,
-                    );
-                  }}
-                  className="shrink-0 rounded-md border border-destructive/40 px-2 py-1 text-xs font-semibold text-danger transition-colors hover:bg-destructive/5"
-                >
-                  Retry
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setChatError(null)}
-                className="rounded-md p-1 text-danger transition-colors hover:bg-destructive/5"
-                aria-label="Dismiss chat error"
-              >
-                <XIcon className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          )}
-
-          {displayedImageTranscriptRecoveries.map((recovery) => (
-            <ImageTranscriptRecoveryNotice
-              key={recovery.assistantMessageId}
-              phase={recovery.phase}
-              resultKind={recovery.phase === 'result' ? recovery.kind : undefined}
-              retrying={recovery.status === 'retrying'}
-              onRetry={() => handleRetryImageTranscriptRecovery(recovery)}
-              onDismiss={() => removeImageTranscriptRecovery(recovery.assistantMessageId)}
-            />
-          ))}
-
-          {/* Notification permission banner · shown during long generations */}
-          {showNotifBanner && (
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
-                <span className="text-[var(--chat-text-secondary)]">
-                  Get notified when the response is ready.
-                </span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleRequestNotifPermission()}
-                  className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
-                >
-                  Enable
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDismissNotifBanner}
-                  className="text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
-                  aria-label="Dismiss notification prompt"
-                >
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Message list */}
-          {isConversationTranscriptPending ? (
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <ChatLoadingState className="w-full" />
-            </div>
-          ) : isEmptyChat ? (
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {/* Empty state: greeting banner + centered composer. */}
-              <div className="flex h-full w-full flex-col items-center justify-center gap-6">
-                {!voiceModeActive && <GreetingBanner />}
-                <div className="mx-auto w-full max-w-3xl px-4">
-                  {usageBanner}
-                  {unavailableModelNotice}
-                  <AgiWorkAutonomyNotice
-                    active={composerToggles?.workMode === AGI_WORK_MODE}
-                    onReviewApprovals={handleReviewApprovals}
-                  />
-                  {voiceModeActive ? (
-                    <VoiceModeSurface
-                      variant={VOICE_SURFACE_VARIANT.empty}
-                      {...voiceSurfaceProps}
-                    />
-                  ) : (
-                    <ChatComposerNew
-                      onSend={handleSend}
-                      onEnterVoiceMode={enterVoiceSession}
-                      conversationId={displayedConversationId}
-                      onStop={handleStopGeneration}
-                      isLoading={isLoading}
-                      isGenerating={isStreaming}
-                      placeholder={t('chat:placeholderEmpty')}
-                      prefillText={composerPrefill}
-                      onPrefillConsumed={handleComposerPrefillConsumed}
-                      onTypingChange={handleTypingChange}
-                      clearSignal={composerClearSignal}
-                      droppedFiles={restoredAttachments}
-                      onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
-                      emptyState
-                      attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                      sendPreviewPresentation={sendPreviewPresentation}
-                      onUpgradeRequest={handleOpenUpgradeDialog}
-                      onModelChange={handleConversationModelChange}
-                      onGenerateImage={handleGenerateImage}
-                      onGenerateVideo={handleGenerateVideo}
-                      projectPicker={composerProjectPicker}
-                      onSetTemporaryChat={handleSetTemporaryChat}
-                      freeTrial={{
-                        enabled: isWebsiteFreeTrial,
-                        limitReached: freeUsageLimitReached,
-                      }}
-                      {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
+          {/* A render failure inside the transcript used to reach the route
+              boundary, which replaces the page and takes the sidebar and the
+              header with it: the user lost every other conversation and every
+              way to navigate along with the one that broke. The shell is
+              rendered outside this boundary, so a failure below costs only the
+              conversation column, and the same two recovery actions stay in
+              reach. A throw from this page's own hooks still reaches
+              app/chat/error.tsx, which renders the identical notice. */}
+          <ChatConversationBoundary>
+            {turnFailureNotice.placement === 'banner' && (
               <div
-                className={cn(
-                  'min-h-0 flex-1 overflow-hidden',
-                  voiceFocusMode && VOICE_FOCUS_FADE_CLASS,
-                )}
+                role="alert"
+                aria-live="polite"
+                className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
               >
-                {/* Provide the manual tool-approval resolver to per-message
-                    approval cards (MessageBubble consumes it via context). */}
-                <ToolApprovalProvider value={resolveToolApproval}>
-                  <MessageInlineEditProvider value={messageInlineEdit}>
-                    <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                      <ChatMessageList
-                        messages={chatMessages}
-                        currentTier={currentTier}
-                        conversationId={displayedConversationId}
-                        isLoading={isLoading && !isStreaming}
-                        isUserTyping={isUserTyping}
-                        onRegenerate={handleRegenerateMessage}
-                        onRetryResearch={handleRetryResearch}
-                        onResearchPlanDecision={handleResearchPlanDecision}
-                        retryingResearchMessageId={retryingResearchMessageId}
-                        onContinue={handleContinueMessage}
-                        onEdit={handleEditMessage}
-                        onDelete={handleDeleteMessage}
-                        onDeleteVariant={handleDeleteVariant}
-                        countVariantFollowers={countVariantFollowers}
-                        onReact={handleReactMessage}
-                        onPin={handlePinMessage}
-                        branchGroupsByMessageId={branchGroupsByMessageId}
-                        branchingMessageId={branchingMessageId}
-                        onBranch={createBranch}
-                        onSwitchBranch={switchBranch}
-                        variantInfoByMessageId={variantInfoByMessageId}
-                        onSelectVariant={handleSelectVariant}
-                        activeLeafId={activeLeafId}
-                        variantAnchorMessageId={variantAnchorMessageId}
-                        isConversationStreaming={isStreaming}
-                        onRegenerateImage={handleRegenerateImageInPlace}
-                        onResumeVideo={handleResumeVideo}
-                        onRetryVideo={handleRetryVideo}
-                        onSendMessage={setComposerPrefill}
-                        onPaywallUpgrade={handlePaywallRecovery}
-                        onPaywallDismiss={handlePaywallDismiss}
-                        onRegenerateWithModel={handleRegenerateWithModel}
-                        regenerateModelOptions={regenerateModelOptions}
-                        turnErrorActive={turnErrorNotice !== null}
-                      />
-                    </InteractiveCardResumeProvider>
-                  </MessageInlineEditProvider>
-                </ToolApprovalProvider>
+                <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
+                  {turnFailureNotice.message}
+                </span>
+                {(retryableTurnId || retryableCardResumeMessageId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChatError(null);
+                      void handleRegenerateMessage(
+                        (retryableTurnId ?? retryableCardResumeMessageId)!,
+                      );
+                    }}
+                    className="shrink-0 rounded-md border border-destructive/40 px-2 py-1 text-xs font-semibold text-danger transition-colors hover:bg-destructive/5"
+                  >
+                    Retry
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setChatError(null)}
+                  className="rounded-md p-1 text-danger transition-colors hover:bg-destructive/5"
+                  aria-label="Dismiss chat error"
+                >
+                  <XIcon className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
+            )}
 
-              <div className="shrink-0 pb-4">
-                <div className="mx-auto w-full max-w-3xl px-4">
-                  {usageBanner}
-                  {unavailableModelNotice}
-                  <AgiWorkAutonomyNotice
-                    active={composerToggles?.workMode === AGI_WORK_MODE}
-                    onReviewApprovals={handleReviewApprovals}
-                  />
-                  {turnErrorNoticeElement}
-                  {voiceModeActive ? (
-                    <VoiceModeSurface variant={VOICE_SURFACE_VARIANT.chat} {...voiceSurfaceProps} />
-                  ) : (
-                    <ChatComposerNew
-                      onSend={handleSend}
-                      onEnterVoiceMode={enterVoiceSession}
-                      conversationId={displayedConversationId}
-                      onStop={handleStopGeneration}
-                      isLoading={isLoading}
-                      isGenerating={isStreaming}
-                      placeholder={t('chat:placeholder')}
-                      onEditLastMessage={editLastUserMessage}
-                      prefillText={composerPrefill}
-                      onPrefillConsumed={handleComposerPrefillConsumed}
-                      onTypingChange={handleTypingChange}
-                      clearSignal={composerClearSignal}
-                      droppedFiles={restoredAttachments}
-                      onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
-                      attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                      sendPreviewPresentation={sendPreviewPresentation}
-                      onUpgradeRequest={handleOpenUpgradeDialog}
-                      onModelChange={handleConversationModelChange}
-                      onGenerateImage={handleGenerateImage}
-                      onGenerateVideo={handleGenerateVideo}
-                      projectPicker={composerProjectPicker}
-                      onSetTemporaryChat={handleSetTemporaryChat}
-                      freeTrial={{
-                        enabled: isWebsiteFreeTrial,
-                        limitReached: freeUsageLimitReached,
-                      }}
-                      {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
-                      suppressAutoFocus={Boolean(highlightMessageId)}
-                    />
-                  )}
+            {displayedImageTranscriptRecoveries.map((recovery) => (
+              <ImageTranscriptRecoveryNotice
+                key={recovery.assistantMessageId}
+                phase={recovery.phase}
+                resultKind={recovery.phase === 'result' ? recovery.kind : undefined}
+                retrying={recovery.status === 'retrying'}
+                onRetry={() => handleRetryImageTranscriptRecovery(recovery)}
+                onDismiss={() => removeImageTranscriptRecovery(recovery.assistantMessageId)}
+              />
+            ))}
+
+            {/* Notification permission banner · shown during long generations */}
+            {showNotifBanner && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                  <span className="text-[var(--chat-text-secondary)]">
+                    Get notified when the response is ready.
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleRequestNotifPermission()}
+                    className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    Enable
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissNotifBanner}
+                    className="text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                    aria-label="Dismiss notification prompt"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-            </>
-          )}
+            )}
+
+            {/* Message list */}
+            {isConversationTranscriptPending ? (
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <ChatLoadingState className="w-full" />
+              </div>
+            ) : isEmptyChat ? (
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {/* Empty state: greeting banner + centered composer. */}
+                <div className="flex h-full w-full flex-col items-center justify-center gap-6">
+                  {!voiceModeActive && <GreetingBanner />}
+                  <div className="mx-auto w-full max-w-3xl px-4">
+                    {usageBanner}
+                    {unavailableModelNotice}
+                    <AgiWorkAutonomyNotice
+                      active={composerToggles?.workMode === AGI_WORK_MODE}
+                      onReviewApprovals={handleReviewApprovals}
+                    />
+                    {voiceModeActive ? (
+                      <VoiceModeSurface
+                        variant={VOICE_SURFACE_VARIANT.empty}
+                        {...voiceSurfaceProps}
+                      />
+                    ) : (
+                      <ChatComposerNew
+                        onSend={handleSend}
+                        onEnterVoiceMode={enterVoiceSession}
+                        conversationId={displayedConversationId}
+                        onStop={handleStopGeneration}
+                        isLoading={isLoading}
+                        isGenerating={isStreaming}
+                        placeholder={t('chat:placeholderEmpty')}
+                        prefillText={composerPrefill}
+                        onPrefillConsumed={handleComposerPrefillConsumed}
+                        onTypingChange={handleTypingChange}
+                        clearSignal={composerClearSignal}
+                        droppedFiles={restoredAttachments}
+                        onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                        emptyState
+                        attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                        sendPreviewPresentation={sendPreviewPresentation}
+                        onUpgradeRequest={handleOpenUpgradeDialog}
+                        onModelChange={handleConversationModelChange}
+                        onGenerateImage={handleGenerateImage}
+                        onGenerateVideo={handleGenerateVideo}
+                        projectPicker={composerProjectPicker}
+                        onSetTemporaryChat={handleSetTemporaryChat}
+                        freeTrial={{
+                          enabled: isWebsiteFreeTrial,
+                          limitReached: freeUsageLimitReached,
+                        }}
+                        {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div
+                  className={cn(
+                    'min-h-0 flex-1 overflow-hidden',
+                    voiceFocusMode && VOICE_FOCUS_FADE_CLASS,
+                  )}
+                >
+                  {/* Provide the manual tool-approval resolver to per-message
+                    approval cards (MessageBubble consumes it via context). */}
+                  <ToolApprovalProvider value={resolveToolApproval}>
+                    <MessageInlineEditProvider value={messageInlineEdit}>
+                      <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
+                        <ChatMessageList
+                          messages={chatMessages}
+                          currentTier={currentTier}
+                          conversationId={displayedConversationId}
+                          isLoading={isLoading && !isStreaming}
+                          isUserTyping={isUserTyping}
+                          onRegenerate={handleRegenerateMessage}
+                          onRetryResearch={handleRetryResearch}
+                          onResearchPlanDecision={handleResearchPlanDecision}
+                          retryingResearchMessageId={retryingResearchMessageId}
+                          onContinue={handleContinueMessage}
+                          onEdit={handleEditMessage}
+                          onDelete={handleDeleteMessage}
+                          onDeleteVariant={handleDeleteVariant}
+                          countVariantFollowers={countVariantFollowers}
+                          onReact={handleReactMessage}
+                          onPin={handlePinMessage}
+                          branchGroupsByMessageId={branchGroupsByMessageId}
+                          branchingMessageId={branchingMessageId}
+                          onBranch={createBranch}
+                          onSwitchBranch={switchBranch}
+                          variantInfoByMessageId={variantInfoByMessageId}
+                          onSelectVariant={handleSelectVariant}
+                          activeLeafId={activeLeafId}
+                          variantAnchorMessageId={variantAnchorMessageId}
+                          isConversationStreaming={isStreaming}
+                          onRegenerateImage={handleRegenerateImageInPlace}
+                          onResumeVideo={handleResumeVideo}
+                          onRetryVideo={handleRetryVideo}
+                          onSendMessage={setComposerPrefill}
+                          onPaywallUpgrade={handlePaywallRecovery}
+                          onPaywallDismiss={handlePaywallDismiss}
+                          onRegenerateWithModel={handleRegenerateWithModel}
+                          regenerateModelOptions={regenerateModelOptions}
+                          turnErrorActive={turnErrorNotice !== null}
+                        />
+                      </InteractiveCardResumeProvider>
+                    </MessageInlineEditProvider>
+                  </ToolApprovalProvider>
+                </div>
+
+                <div className="shrink-0 pb-4">
+                  <div className="mx-auto w-full max-w-3xl px-4">
+                    {usageBanner}
+                    {unavailableModelNotice}
+                    <AgiWorkAutonomyNotice
+                      active={composerToggles?.workMode === AGI_WORK_MODE}
+                      onReviewApprovals={handleReviewApprovals}
+                    />
+                    {turnErrorNoticeElement}
+                    {voiceModeActive ? (
+                      <VoiceModeSurface
+                        variant={VOICE_SURFACE_VARIANT.chat}
+                        {...voiceSurfaceProps}
+                      />
+                    ) : (
+                      <ChatComposerNew
+                        onSend={handleSend}
+                        onEnterVoiceMode={enterVoiceSession}
+                        conversationId={displayedConversationId}
+                        onStop={handleStopGeneration}
+                        isLoading={isLoading}
+                        isGenerating={isStreaming}
+                        placeholder={t('chat:placeholder')}
+                        onEditLastMessage={editLastUserMessage}
+                        prefillText={composerPrefill}
+                        onPrefillConsumed={handleComposerPrefillConsumed}
+                        onTypingChange={handleTypingChange}
+                        clearSignal={composerClearSignal}
+                        droppedFiles={restoredAttachments}
+                        onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                        attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                        sendPreviewPresentation={sendPreviewPresentation}
+                        onUpgradeRequest={handleOpenUpgradeDialog}
+                        onModelChange={handleConversationModelChange}
+                        onGenerateImage={handleGenerateImage}
+                        onGenerateVideo={handleGenerateVideo}
+                        projectPicker={composerProjectPicker}
+                        onSetTemporaryChat={handleSetTemporaryChat}
+                        freeTrial={{
+                          enabled: isWebsiteFreeTrial,
+                          limitReached: freeUsageLimitReached,
+                        }}
+                        {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
+                        suppressAutoFocus={Boolean(highlightMessageId)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </ChatConversationBoundary>
         </div>
         {showWorkSession && (
           <WorkSessionPanel
