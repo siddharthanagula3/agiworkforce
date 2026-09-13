@@ -98,6 +98,8 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0053_projects_managed_cloud_contract). A member’s project demotes to Personal scope rather than being destroyed when the workspace is decommissioned; ownership stays with the member who created it.',
   video_generation_jobs:
     'organization_id is ON DELETE SET NULL (0105_durable_video_generation_jobs). A billed video job is a financial/asset record that must survive the workspace it ran in, the same reasoning account-erasure.ts applies to this table for an erased user.',
+  device_refresh_tokens:
+    'organization_id is ON DELETE SET NULL (0187_device_refresh_token_workspace_binding). The credential belongs to the member, not to the workspace it was paired in: decommissioning a workspace demotes the binding to personal rather than signing the member’s device out of their own account.',
 };
 
 const PG_UNDEFINED_TABLE = '42P01';

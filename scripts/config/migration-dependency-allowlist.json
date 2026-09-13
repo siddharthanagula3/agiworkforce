@@ -405,6 +405,36 @@
       "file": "apps/web/lib/server/video-generation-jobs.ts",
       "migration": 183,
       "reason": "the column is read and written by claimVideoCompletionNotice alone and is deliberately absent from JOB_COLUMNS, so before 0183 applies that one statement raises, deliverVideoCompletionNotice logs it and sends nothing, and every other query over video_generation_jobs is unaffected; the deploy runbook applies 0183 before the notice is relied on."
+    },
+    {
+      "file": "apps/web/app/api/auth/device/refresh/route.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/app/api/auth/device/token/route.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/app/api/device/poll/route.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/services/deprovision-service.ts",
+      "migration": 187,
+      "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
     }
   ]
 }
