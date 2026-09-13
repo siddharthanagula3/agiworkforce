@@ -22,7 +22,7 @@ const STATE_DESCRIPTION: Record<ToggleState, string> = {
 export interface WebPushToggleState {
   checked: boolean;
   disabled: boolean;
-  blocked: boolean;
+  unavailable: boolean;
   description: string;
   onCheckedChange: (next: boolean) => void;
 }
@@ -71,7 +71,7 @@ export function useWebPushToggle(): WebPushToggleState {
   return {
     checked: state === 'on',
     disabled: busy || !interactive,
-    blocked: state === 'blocked',
+    unavailable: !interactive,
     description: STATE_DESCRIPTION[state],
     onCheckedChange: (next) => void change(next),
   };

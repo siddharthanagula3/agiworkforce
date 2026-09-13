@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
     checked: false,
     disabled: false,
     description: 'Get told when a run finishes, fails, or needs your approval.',
-    blocked: false,
+    unavailable: false,
     onCheckedChange: vi.fn(),
   },
 }));
@@ -45,7 +45,8 @@ describe('NotificationsSection row density', () => {
   });
 
   it('shows one description line: the blocked sentence when blocked', async () => {
-    mocks.webPush.blocked = true;
+    mocks.webPush.unavailable = true;
+    mocks.webPush.disabled = true;
     mocks.webPush.description = 'Notifications are blocked for this site in your browser settings.';
 
     render(<NotificationsSection />);
@@ -55,11 +56,29 @@ describe('NotificationsSection row density', () => {
     expect(runRow?.textContent).toContain('blocked for this site');
     expect(runRow?.textContent).not.toContain('Applies only to this browser');
 
-    mocks.webPush.blocked = false;
+    mocks.webPush.unavailable = false;
+    mocks.webPush.disabled = false;
+  });
+
+  it('says why the switch is dead when the browser cannot receive notifications', async () => {
+    mocks.webPush.unavailable = true;
+    mocks.webPush.disabled = true;
+    mocks.webPush.description = 'This browser cannot receive notifications.';
+
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+
+    const runRow = screen.getByText('Agent run updates').closest('section');
+    expect(screen.getByRole('switch', { name: 'Agent run updates' })).toBeDisabled();
+    expect(runRow?.textContent).toContain('cannot receive notifications');
+    expect(runRow?.textContent).not.toContain('Applies only to this browser');
+
+    mocks.webPush.unavailable = false;
+    mocks.webPush.disabled = false;
   });
 
   it('shows one description line: the browser-scope note otherwise', async () => {
-    mocks.webPush.blocked = false;
+    mocks.webPush.unavailable = false;
 
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());

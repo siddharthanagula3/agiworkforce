@@ -225,7 +225,7 @@ export function NotificationsSection() {
 }
 
 function AgentRunRow() {
-  const { checked, disabled, blocked, description, onCheckedChange } = useWebPushToggle();
+  const { checked, disabled, unavailable, description, onCheckedChange } = useWebPushToggle();
 
   return (
     <section
@@ -241,7 +241,7 @@ function AgentRunRow() {
       <div style={{ minWidth: 0, maxWidth: 480 }}>
         <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
         <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-          {blocked ? description : AGENT_RUN_SCOPE_NOTE}
+          {unavailable ? description : AGENT_RUN_SCOPE_NOTE}
         </div>
       </div>
       <Switch
