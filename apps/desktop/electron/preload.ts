@@ -6,7 +6,7 @@
  * surface the renderer has beyond the DOM. No Node globals leak into the page
  * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
  */
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { DesktopRuntimeResponse } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
@@ -107,3 +107,16 @@ const agiHost: ElectronHostBridge = {
  * for one, because the main process cannot be lied to about the caller.
  */
 contextBridge.exposeInMainWorld('agiHost', agiHost);
+
+/**
+ * A dropped folder never reaches the page: a directory has no bytes for the
+ * DOM to hand over, so the main process is told its path and asks for a
+ * workspace grant. Files fall through untouched to the page's own handler.
+ */
+window.addEventListener('drop', (event) => {
+  const dropped = Array.from((event as DragEvent).dataTransfer?.files ?? []);
+  if (dropped.length === 0) return;
+  const paths = dropped.map((file) => webUtils.getPathForFile(file)).filter((path) => path !== '');
+  if (paths.length === 0) return;
+  void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.workspaceDrop, paths);
+});
