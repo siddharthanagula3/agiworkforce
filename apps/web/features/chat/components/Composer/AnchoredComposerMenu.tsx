@@ -177,11 +177,23 @@ export function AnchoredComposerMenu({
   // Synchronous (not a setTimeout(0) passive effect): a key pressed right
   // after open, before the deferred timer ever ran, used to find no item
   // holding focus and misfire the wrap-around math against index -1.
+  const focusedOnOpenRef = useRef(false);
   useLayoutEffect(() => {
-    if (!open || !mounted || !autoFocusFirstItem) return;
+    if (!open) {
+      focusedOnOpenRef.current = false;
+      return;
+    }
+    // `position` gates this: until it is computed the panel still carries
+    // `visibility: hidden`, and `checkVisibility()` reports every row
+    // unfocusable, so the first pass found nothing and focus stayed on the
+    // trigger in a real browser while jsdom (no checkVisibility) passed.
+    if (!mounted || !autoFocusFirstItem || !position || focusedOnOpenRef.current) return;
     const node = contentRef?.current ?? internalRef.current;
-    focusableItems(node)[0]?.focus();
-  }, [open, mounted, contentRef, autoFocusFirstItem]);
+    const first = focusableItems(node)[0];
+    if (!first) return;
+    first.focus();
+    focusedOnOpenRef.current = true;
+  }, [open, mounted, contentRef, autoFocusFirstItem, position]);
 
   // Capture phase: a surrounding list (the sidebar) runs its own arrow-key
   // navigation on a bubble-phase listener and must lose this race. A plain
