@@ -108,6 +108,15 @@ describe('GitHub App user authorization ownership proof', () => {
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [{ full_name: 'Verified-Org/App' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
       );
     const github = await loadConfiguredGitHubApp();
 
@@ -117,14 +126,133 @@ describe('GitHub App user authorization ownership proof', () => {
       installationId: 987654,
       accountLogin: 'verified-org',
       accountType: 'Organization',
+      verifiedRepositories: ['verified-org/app'],
     });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockFetch.mock.calls[0]?.[0]).toBe(
       'https://api.github.com/user/installations?per_page=100&page=1',
     );
     expect(mockFetch.mock.calls[1]?.[0]).toBe(
       'https://api.github.com/user/installations?per_page=100&page=2',
     );
+  });
+
+  it('narrows the proof to the repositories the account itself reaches', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F38: /user/installations lists an installation to
+    // anyone who can see one repository under it, while the row it writes grants
+    // a full-installation credential. Only this second call bounds the link to
+    // the caller's own GitHub access.
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 1,
+            installations: [{ id: 42, account: { login: 'big-org', type: 'Organization' } }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ total_count: 1, repositories: [{ full_name: 'big-org/public-docs' }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    const github = await loadConfiguredGitHubApp();
+
+    const installation = await github.findGitHubInstallationForUser('ghu_ephemeral', 42);
+
+    expect(installation?.verifiedRepositories).toEqual(['big-org/public-docs']);
+    expect(mockFetch.mock.calls[1]?.[0]).toBe(
+      'https://api.github.com/user/installations/42/repositories?per_page=100&page=1',
+    );
+  });
+
+  it('refuses the link rather than recording a short repository set', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 1,
+            installations: [{ id: 42, account: { login: 'big-org', type: 'Organization' } }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValue(
+        new Response(JSON.stringify({ total_count: 1, repositories: [] }), {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    const github = await loadConfiguredGitHubApp();
+
+    await expect(github.findGitHubInstallationForUser('ghu_ephemeral', 42)).rejects.toThrow(
+      /repositories for this installation/i,
+    );
+  });
+
+  it('lists only the repositories the linking account proved it can reach', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F38: /installation/repositories answers with every
+    // repository the installation covers, which is the whole organization when
+    // the app was installed on "All repositories".
+    mocks.dbQuery.mockResolvedValue([
+      {
+        access_token_enc: null,
+        access_token_expires_at: null,
+        ownership_verified_at: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ token: 'ghs_scoped', expires_at: '2026-09-13T01:00:00.000Z' }),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 2,
+            repositories: [
+              {
+                full_name: 'big-org/public-docs',
+                name: 'public-docs',
+                private: false,
+                default_branch: 'main',
+                owner: { login: 'big-org' },
+              },
+              {
+                full_name: 'big-org/payroll',
+                name: 'payroll',
+                private: true,
+                default_branch: 'main',
+                owner: { login: 'big-org' },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    const github = await loadConfiguredGitHubApp(
+      Buffer.from(TEST_PRIVATE_KEY as string).toString('base64'),
+    );
+
+    const listed = await github.listInstallationRepositories(
+      42,
+      { perPage: 100, maxPages: 2, maxItems: 100 },
+      ['big-org/public-docs'],
+    );
+
+    expect(listed.repositories.map((entry) => entry.fullName)).toEqual(['big-org/public-docs']);
+  });
+
+  it('refuses to list an installation linked before repository access was proved', async () => {
+    const github = await loadConfiguredGitHubApp();
+
+    await expect(
+      github.listInstallationRepositories(42, { perPage: 100, maxPages: 2, maxItems: 100 }, null),
+    ).rejects.toThrow(/Reconnect it/i);
   });
 
   it('refuses to mint an installation token from an unverified legacy row', async () => {

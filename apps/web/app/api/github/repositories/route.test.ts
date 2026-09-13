@@ -79,7 +79,13 @@ beforeEach(() => {
     db: {
       query: vi.fn(async (sql: string, params: unknown[]) => {
         queried.push({ sql, params });
-        return [{ installation_id: '11', account_login: 'acme' }];
+        return [
+          {
+            installation_id: '11',
+            account_login: 'acme',
+            verified_repositories: ['acme/widgets', 'acme/apparatus'],
+          },
+        ];
       }),
     },
   });
@@ -102,7 +108,41 @@ describe('GET /api/github/repositories', () => {
       'acme/widgets',
     ]);
     expect(body.installationCount).toBe(1);
-    expect(mockListInstallationRepositories).toHaveBeenCalledWith(11, expect.any(Object));
+    expect(mockListInstallationRepositories).toHaveBeenCalledWith(11, expect.any(Object), [
+      'acme/widgets',
+      'acme/apparatus',
+    ]);
+  });
+
+  it('passes the proved repository set so the listing cannot widen to the installation', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F38: /installation/repositories answers at full
+    // installation scope. Without this bound the picker offers private
+    // repositories the signed-in account has no GitHub access to.
+    await GET(listRequest());
+    const [, , verified] = mockListInstallationRepositories.mock.calls[0] as [
+      number,
+      unknown,
+      string[] | null,
+    ];
+    expect(verified).toEqual(['acme/widgets', 'acme/apparatus']);
+  });
+
+  it('reports an installation linked before the check as unreachable rather than listing it', async () => {
+    mockGetUserScopedDb.mockResolvedValue({
+      userId: 'user-1',
+      organizationId: null,
+      db: {
+        query: vi.fn(async () => [
+          { installation_id: '11', account_login: 'acme', verified_repositories: null },
+        ]),
+      },
+    });
+    mockListInstallationRepositories.mockRejectedValue(new Error('reconnect it'));
+
+    const response = await GET(listRequest());
+
+    expect(response.status).toBe(503);
+    expect(mockListInstallationRepositories).toHaveBeenCalledWith(11, expect.any(Object), null);
   });
 
   it('scopes the installation read to the signed-in user and to verified ownership', async () => {
