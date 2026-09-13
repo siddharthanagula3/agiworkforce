@@ -27,6 +27,7 @@ export * from './auth';
 export * from './voice';
 
 export * from './time-focus';
+export * from './tool-approval-policy';
 
 export * from './content-safety';
 

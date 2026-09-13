@@ -27,12 +27,12 @@ import {
   useChatAppModeStore,
   type MobileChatAppMode,
 } from '@/src/features/chat/store/appModeStore';
+import { toolApprovalPolicyOption, type ToolApprovalPolicy } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
-import type { AutoApproveMode } from '@/types/chat';
 import type { ToolAccess } from '@/stores/chat/chatViewStore';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
@@ -54,12 +54,6 @@ interface CapabilitySection {
   rows: CapabilityRowMeta[];
 }
 
-const APPROVAL_MODE_LABELS: Record<AutoApproveMode, string> = {
-  ask: 'Ask',
-  smart: 'Low-risk',
-  full: 'All actions',
-};
-
 const TOOL_ACCESS_LABELS: Record<ToolAccess, string> = {
   auto: 'Auto',
   'on-demand': 'On demand',
@@ -69,11 +63,11 @@ const TOOL_ACCESS_LABELS: Record<ToolAccess, string> = {
 function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
-  autoApproveMode: AutoApproveMode;
+  toolApprovalPolicy: ToolApprovalPolicy;
   toolAccess: ToolAccess;
   memoryFreshness: string | null;
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, autoApproveMode, toolAccess, memoryFreshness } = input;
+  const { cloudUnlocked, appMode, toolApprovalPolicy, toolAccess, memoryFreshness } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
@@ -161,7 +155,7 @@ function makeSections(input: {
           tone: 'review',
           label: 'Action approvals',
           description: 'Choose how AGI asks before tool actions.',
-          value: APPROVAL_MODE_LABELS[autoApproveMode],
+          value: toolApprovalPolicyOption(toolApprovalPolicy).shortLabel,
           href: '/(app)/settings/auto-approve',
         },
       ],
@@ -227,7 +221,7 @@ export default function CapabilitiesScreen() {
   const chatFeatures = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
+  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
   const toolAccess = useChatStore((s) => s.toolAccess);
   const memoryEntries = useMemoryStore((s) => s.entries);
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
@@ -238,7 +232,7 @@ export default function CapabilitiesScreen() {
   const sections = makeSections({
     cloudUnlocked,
     appMode,
-    autoApproveMode,
+    toolApprovalPolicy,
     toolAccess,
     memoryFreshness,
   });

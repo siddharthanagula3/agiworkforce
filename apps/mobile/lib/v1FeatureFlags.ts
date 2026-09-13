@@ -1,6 +1,4 @@
 export const FEATURES = {
-  v1LocalOnly: false,
-
   projects: true,
 
   cloudChat: true,
@@ -11,11 +9,7 @@ export const FEATURES = {
 
   auth: true,
 
-  byokKeys: false,
-
   cloudTasks: true,
-
-  agents: false,
 
   dispatch: true,
 
@@ -30,8 +24,6 @@ export const FEATURES = {
   webSearch: true,
 
   research: true,
-
-  computerUse: false,
 
   imageGen: true,
 

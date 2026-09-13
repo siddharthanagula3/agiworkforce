@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  isToolApprovalPolicy,
+  type ToolApprovalPolicy,
+} from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import type { AutoApproveMode } from '@/types/chat';
 
 // ── Types re-exported for consumers and mode-specific stores ─────────────────
 
@@ -45,7 +49,7 @@ interface Capabilities {
 }
 
 export interface SettingsState {
-  autoApproveMode: AutoApproveMode;
+  toolApprovalPolicy: ToolApprovalPolicy;
   hapticsEnabled: boolean;
   voiceEnabled: boolean;
   backgroundFetchEnabled: boolean;
@@ -60,7 +64,7 @@ export interface SettingsState {
   isTemporaryChat: boolean;
   capabilities: Capabilities;
 
-  setAutoApproveMode: (mode: AutoApproveMode) => void;
+  setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setBackgroundFetchEnabled: (enabled: boolean) => void;
@@ -77,6 +81,17 @@ export interface SettingsState {
 }
 
 /**
+ * The pre-server approval union. `full` had no server policy behind it, so it
+ * fails closed onto the default rather than carrying a promise the backend
+ * never honoured.
+ */
+const MIGRATED_APPROVAL_MODES: Record<string, ToolApprovalPolicy> = {
+  ask: 'ask_every_time',
+  smart: 'auto_approve_read_only',
+  full: DEFAULT_TOOL_APPROVAL_POLICY,
+};
+
+/**
  * Persist migration. Coerces any dead persisted `ttsProvider` value (notably
  * the removed `'cloud'` provider, PAR-M20 / MOBILE-TTS-CLOUD-DEADSTATE-01) to
  * {@link TTS_DEFAULT_PROVIDER}. Pure and exported so it can be unit-tested
@@ -87,16 +102,21 @@ export function migratePersistedSettings(
   _version: number,
 ): Record<string, unknown> {
   const state = (persisted ?? {}) as Record<string, unknown>;
-  if (state.ttsProvider !== TTS_DEFAULT_PROVIDER) {
-    return { ...state, ttsProvider: TTS_DEFAULT_PROVIDER };
-  }
-  return state;
+  const next = { ...state };
+  if (next.ttsProvider !== TTS_DEFAULT_PROVIDER) next.ttsProvider = TTS_DEFAULT_PROVIDER;
+  const storedPolicy =
+    next.toolApprovalPolicy ?? MIGRATED_APPROVAL_MODES[String(next.autoApproveMode)];
+  next.toolApprovalPolicy = isToolApprovalPolicy(storedPolicy)
+    ? storedPolicy
+    : DEFAULT_TOOL_APPROVAL_POLICY;
+  delete next.autoApproveMode;
+  return next;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
-      autoApproveMode: 'ask',
+      toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
       hapticsEnabled: true,
       voiceEnabled: true,
       backgroundFetchEnabled: true,
@@ -120,7 +140,7 @@ export const useSettingsStore = create<SettingsState>()(
         camera: true,
       },
 
-      setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
+      setToolApprovalPolicy: (policy) => set({ toolApprovalPolicy: policy }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
       setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
@@ -138,7 +158,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'settings-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
+      version: 2,
       migrate: migratePersistedSettings,
       skipHydration: true,
       onRehydrateStorage: () => (state, error) => {
@@ -146,8 +166,11 @@ export const useSettingsStore = create<SettingsState>()(
         // Belt-and-suspenders: sanitize any dead TTS value that slipped past
         // migrate (e.g. state written by a same-version build before the union
         // narrowed). See MOBILE-TTS-CLOUD-DEADSTATE-01.
-        else if (state && state.ttsProvider !== TTS_DEFAULT_PROVIDER) {
-          state.ttsProvider = TTS_DEFAULT_PROVIDER;
+        else if (state) {
+          if (state.ttsProvider !== TTS_DEFAULT_PROVIDER) state.ttsProvider = TTS_DEFAULT_PROVIDER;
+          if (!isToolApprovalPolicy(state.toolApprovalPolicy)) {
+            state.toolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY;
+          }
         }
       },
     },
