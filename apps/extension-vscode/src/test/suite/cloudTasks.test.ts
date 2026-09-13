@@ -59,6 +59,8 @@ suite('AGI Workforce cloud tasks', () => {
       'agi-workforce.refreshCloudTasks',
       'agi-workforce.openCloudTask',
       'agi-workforce.openCloudTasksOnWeb',
+      'agi-workforce.approveCloudTask',
+      'agi-workforce.rejectCloudTask',
     ]) {
       assert.ok(commands.includes(command), `${command} must be registered`);
     }

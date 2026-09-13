@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import * as vscode from 'vscode';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
@@ -13,6 +16,13 @@ import {
   describeCloudRunFailure,
   type CloudRunDetailClient,
 } from '../features/cloud-tasks/cloudRunDetail';
+import {
+  APPROVE_CLOUD_TASK_COMMAND,
+  REJECT_CLOUD_TASK_COMMAND,
+  decideCloudRunApprovalInteractively,
+  isRecoverableCloudRunFailure,
+  readCloudRunCommandArgument,
+} from '../features/cloud-tasks/cloudRunApproval';
 import {
   cloudRunDescription,
   cloudRunQuietLabel,
@@ -251,3 +261,155 @@ describe('cloud task detail', () => {
 function envelope(sequence: number, event: AgentEventEnvelope['event']): AgentEventEnvelope {
   return { turnId: 'turn_1', sequence, event } as AgentEventEnvelope;
 }
+
+describe('cloud task inline approval', () => {
+  beforeEach(() => {
+    vi.mocked(vscode.window.showWarningMessage).mockReset().mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showInputBox).mockReset().mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showErrorMessage).mockReset().mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showInformationMessage).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('reads the run off the tree item the inline button hands the command', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const provider = new CloudTasksTreeProvider(() =>
+      Promise.resolve({
+        status: 'ready',
+        client: { listRuns: vi.fn().mockResolvedValue({ runs: [run], nextCursor: null }) },
+      }),
+    );
+    const [item] = (await provider.getChildren()) as CloudRunTreeItem[];
+
+    expect(readCloudRunCommandArgument(item)?.id).toBe(run.id);
+    expect(readCloudRunCommandArgument(undefined)).toBeUndefined();
+    expect(readCloudRunCommandArgument({ run: { id: '' } })).toBeUndefined();
+    provider.dispose();
+  });
+
+  it('names the tools before it lets the cloud run them, and sends nothing when declined', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const client = makeDetailClient(run);
+    const onChanged = vi.fn();
+
+    await decideCloudRunApprovalInteractively(client, run, 'approved', { onChanged });
+
+    const [question, options] = vi.mocked(vscode.window.showWarningMessage).mock.calls[0] ?? [];
+    expect(question).toBe('Let this task run run_command?');
+    expect((options as { modal?: boolean; detail?: string }).modal).toBe(true);
+    expect((options as { detail: string }).detail).toContain('cannot be taken back');
+    expect((options as { detail: string }).detail).toContain('pnpm db:migrate -- apply');
+    expect(client.resumeRun).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('sends the approval once the consequence is confirmed', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const client = makeDetailClient(run);
+    const onChanged = vi.fn();
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Approve and continue');
+
+    await decideCloudRunApprovalInteractively(client, run, 'approved', { onChanged });
+
+    expect(client.resumeRun).toHaveBeenCalledWith(
+      run.id,
+      [{ toolCallId: 'call_1', decision: 'approved' }],
+      {},
+    );
+    expect(vscode.window.withProgress).toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('carries an optional rejection reason to the run as guidance', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const client = makeDetailClient(run);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('  run it on staging first  ');
+
+    await decideCloudRunApprovalInteractively(client, run, 'rejected', { onChanged: vi.fn() });
+
+    expect(client.resumeRun).toHaveBeenCalledWith(
+      run.id,
+      [{ toolCallId: 'call_1', decision: 'rejected' }],
+      { guidance: 'run it on staging first' },
+    );
+  });
+
+  it('rejects without guidance when the reason is left empty, and keeps waiting on escape', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const empty = makeDetailClient(run);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('');
+    await decideCloudRunApprovalInteractively(empty, run, 'rejected', { onChanged: vi.fn() });
+    expect(empty.resumeRun).toHaveBeenCalledWith(
+      run.id,
+      [{ toolCallId: 'call_1', decision: 'rejected' }],
+      {},
+    );
+
+    const escaped = makeDetailClient(run);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue(undefined);
+    await decideCloudRunApprovalInteractively(escaped, run, 'rejected', { onChanged: vi.fn() });
+    expect(escaped.resumeRun).not.toHaveBeenCalled();
+  });
+
+  it('offers a retry that resends the same decision after a transient failure', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const client = makeDetailClient(run);
+    client.resumeRun
+      .mockRejectedValueOnce(new Error('HTTP 503: upstream is down'))
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Approve and continue');
+    vi.mocked(vscode.window.showErrorMessage).mockResolvedValueOnce('Retry');
+
+    await decideCloudRunApprovalInteractively(client, run, 'approved', { onChanged: vi.fn() });
+
+    expect(client.resumeRun).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(vscode.window.showErrorMessage).mock.calls[0]?.[0]).toContain(
+      'HTTP 503: upstream is down',
+    );
+  });
+
+  it('does not offer a retry for a decision another device already answered', async () => {
+    const run = makeRun({ pendingApproval: PENDING_APPROVAL });
+    const client = makeDetailClient(run);
+    client.resumeRun.mockRejectedValue(Object.assign(new Error('HTTP 409'), { status: 409 }));
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Approve and continue');
+
+    await decideCloudRunApprovalInteractively(client, run, 'approved', { onChanged: vi.fn() });
+
+    expect(vi.mocked(vscode.window.showErrorMessage).mock.calls[0]).toHaveLength(1);
+    expect(isRecoverableCloudRunFailure(Object.assign(new Error('x'), { status: 410 }))).toBe(
+      false,
+    );
+  });
+
+  it('says the decision is gone instead of sending one for a run that moved on', async () => {
+    const run = makeRun();
+    const client = makeDetailClient(run);
+
+    await decideCloudRunApprovalInteractively(client, run, 'approved', { onChanged: vi.fn() });
+
+    expect(client.resumeRun).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls[0]?.[0]).toContain(
+      'no longer waiting',
+    );
+  });
+
+  it('contributes both inline actions on a run that is waiting for one', () => {
+    const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8')) as {
+      contributes: {
+        commands: { command: string; icon?: string }[];
+        menus: { 'view/item/context': { command: string; when: string; group?: string }[] };
+      };
+    };
+    const declared = manifest.contributes.commands.map((entry) => entry.command);
+    const inline = manifest.contributes.menus['view/item/context'].filter(
+      (entry) =>
+        entry.when === 'view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval',
+    );
+
+    for (const command of [APPROVE_CLOUD_TASK_COMMAND, REJECT_CLOUD_TASK_COMMAND]) {
+      expect(declared).toContain(command);
+      expect(manifest.contributes.commands.find((e) => e.command === command)?.icon).toBeTruthy();
+      expect(inline.find((entry) => entry.command === command)?.group).toMatch(/^inline/);
+    }
+  });
+});
