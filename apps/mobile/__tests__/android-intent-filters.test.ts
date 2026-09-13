@@ -55,11 +55,27 @@ describe('app.config.js, Android intentFilters use Expo short names', () => {
     }
   });
 
-  it('declares a text/plain-only SEND share target (no image/*, no ingestion path exists)', () => {
+  it('declares a SEND share target for every type the composer accepts', () => {
     const send = filters.find((f) => f.action === 'SEND');
     expect(send).toBeDefined();
     expect(send!.category).toEqual(['DEFAULT']);
-    expect(send!.data?.map((d) => d.mimeType)).toEqual(['text/plain']);
+    expect(send!.data?.map((d) => d.mimeType)).toEqual([
+      'text/plain',
+      'text/*',
+      'image/*',
+      'application/pdf',
+    ]);
+  });
+
+  it('declares a SEND_MULTIPLE target for the stream types, matching SEND', () => {
+    const sendMultiple = filters.find((f) => f.action === 'SEND_MULTIPLE');
+    expect(sendMultiple).toBeDefined();
+    expect(sendMultiple!.category).toEqual(['DEFAULT']);
+    expect(sendMultiple!.data?.map((d) => d.mimeType)).toEqual([
+      'text/*',
+      'image/*',
+      'application/pdf',
+    ]);
   });
 
   it('declares a text/plain PROCESS_TEXT selected-text action', () => {
