@@ -147,8 +147,10 @@ import {
 import {
   forgetPageWatchTab,
   getPageWatch,
+  resumePageWatchAfterNavigation,
   startPageWatch,
   stopPageWatch,
+  suspendPageWatchForNavigation,
 } from './features/browser-tools/pageWatch';
 import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
@@ -4180,7 +4182,7 @@ async function handleMessageAsync(
         const consoleTab = await authorizeBrowserToolTab(consoleTabId);
         return {
           success: true,
-          watching: getPageWatch(consoleTabId) !== null,
+          watching: getPageWatch(consoleTabId)?.suspended === false,
           origin: consoleTab.origin,
           console: readConsoleEntries(consoleTabId, {
             ...(consoleMsg.pattern ? { pattern: consoleMsg.pattern } : {}),
@@ -4203,7 +4205,7 @@ async function handleMessageAsync(
         const networkTab = await authorizeBrowserToolTab(networkTabId);
         return {
           success: true,
-          watching: getPageWatch(networkTabId) !== null,
+          watching: getPageWatch(networkTabId)?.suspended === false,
           origin: networkTab.origin,
           network: readNetworkEntries(networkTabId, {
             ...(networkMsg.pattern ? { pattern: networkMsg.pattern } : {}),
@@ -4823,6 +4825,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   ) {
     computerUseStartGeneration += 1;
     cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+  }
+  if (changeInfo.url !== undefined || changeInfo.status === 'loading') {
+    suspendPageWatchForNavigation(tabId);
+  }
+  if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
+    void resumePageWatchAfterNavigation(tabId);
   }
   if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
   invalidateWebMCPToolsForNavigation(tabId);
