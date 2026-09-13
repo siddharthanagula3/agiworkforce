@@ -30,6 +30,12 @@ interface VideoGenerationPlaceholderProps {
    * appears no matter how long the job runs.
    */
   taskId?: string;
+  /**
+   * Percent complete as the provider last reported it. The elapsed counter
+   * alone cannot say whether a job is moving, so a two-minute generation read
+   * as a stalled one whenever the provider was in fact reporting progress.
+   */
+  progress?: number;
   className?: string;
 }
 
@@ -64,10 +70,17 @@ function videoAspectClass(aspectRatio: string | undefined): string {
   return VIDEO_ASPECT_CLASSES[aspectRatio] ?? DEFAULT_VIDEO_ASPECT_CLASS;
 }
 
+function formatProgress(progress: number | undefined): string | null {
+  if (typeof progress !== 'number' || !Number.isFinite(progress)) return null;
+  const clamped = Math.min(100, Math.max(0, Math.round(progress)));
+  return `${clamped}% complete`;
+}
+
 export function VideoGenerationPlaceholder({
   startedAt,
   aspectRatio,
   taskId,
+  progress,
   className,
 }: VideoGenerationPlaceholderProps) {
   const [elapsed, setElapsed] = useState(0);
@@ -120,8 +133,12 @@ export function VideoGenerationPlaceholder({
           <Video className="size-5 text-muted-foreground" aria-hidden="true" />
         </span>
         <span className="text-[13px] font-medium text-foreground">Generating your video…</span>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {formatElapsed(elapsed)} · this usually takes a minute or two
+        {/* The region is polite, and this line changes every second, so leaving
+            it live reads the clock aloud once a second for the whole job. The
+            label above is the announcement worth making. */}
+        <span aria-live="off" className="text-xs tabular-nums text-muted-foreground">
+          {formatElapsed(elapsed)} ·{' '}
+          {formatProgress(progress) ?? 'this usually takes a minute or two'}
         </span>
 
         {taskId && cancelState !== 'sent' && (
