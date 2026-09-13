@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FolderGit2, Plug, Share2, Users } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   useOrganizationSharedOverview,
@@ -125,6 +126,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   const shareProject = useShareProjectWithOrganization();
   const unshareProject = useUnshareProjectFromOrganization();
   const setAccess = useSetSharedProjectMemberAccess();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const ownProjects = useQuery<OwnProject[], Error>({
     queryKey: ['projects', 'shareable'],
@@ -218,7 +220,14 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                       type="button"
                       style={buttonStyle}
                       disabled={unshareProject.isPending}
-                      onClick={() => unshareProject.mutate(project.projectId)}
+                      onClick={() =>
+                        confirm({
+                          title: `Stop sharing ${project.name}?`,
+                          description: `All ${overview.members.length} members of this organization lose access to the project's instructions and knowledge files. You keep the project and can share it again.`,
+                          confirmLabel: 'Stop sharing',
+                          onConfirm: () => unshareProject.mutate(project.projectId),
+                        })
+                      }
                     >
                       Stop sharing
                     </button>
@@ -268,6 +277,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
           })}
         </ul>
       )}
+      {confirmDialog}
     </SectionCard>
   );
 }
@@ -276,6 +286,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
   const shareConnector = useShareConnectorWithOrganization();
   const unshareConnector = useUnshareConnectorFromOrganization();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const ownConnectors = useQuery<OwnConnector[], Error>({
     queryKey: ['connectors', 'custom', 'shareable'],
@@ -364,7 +375,14 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
                   type="button"
                   style={buttonStyle}
                   disabled={unshareConnector.isPending}
-                  onClick={() => unshareConnector.mutate(connector.connectorRowId)}
+                  onClick={() =>
+                    confirm({
+                      title: `Stop sharing ${connector.name}?`,
+                      description: `All ${overview.members.length} members of this organization lose orgmcp-${connector.orgShortId} in chat, and any tool call already relying on it stops working. Your stored credential is untouched and you can share it again.`,
+                      confirmLabel: 'Stop sharing',
+                      onConfirm: () => unshareConnector.mutate(connector.connectorRowId),
+                    })
+                  }
                 >
                   Stop sharing
                 </button>
@@ -373,6 +391,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
           ))}
         </ul>
       )}
+      {confirmDialog}
     </SectionCard>
   );
 }
