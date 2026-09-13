@@ -314,12 +314,11 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
   });
 
-  it('opens permission, privacy, and background-task handoffs on their canonical Web routes', async () => {
+  it('opens permission and privacy handoffs on their canonical Web routes', async () => {
     const harness = makeHarness();
 
     await harness.manager.handleMessage({ type: 'openPermissionDocs' });
     await harness.manager.handleMessage({ type: 'openPrivacySettings' });
-    await harness.manager.handleMessage({ type: 'openWebTasks' });
 
     expect(vscode.env.openExternal).toHaveBeenNthCalledWith(
       1,
@@ -330,8 +329,16 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(vi.mocked(vscode.env.openExternal).mock.calls.map(([uri]) => uri.path)).toEqual([
       'https://agiworkforce.com/docs?topic=permissions&from=vscode-extension',
       'https://agiworkforce.com/settings/privacy?from=vscode-extension',
-      'https://agiworkforce.com/tasks?from=vscode-extension',
     ]);
+  });
+
+  it('routes the background-task handoff to the in-IDE cloud task list', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'openCloudTasks' });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showCloudTasks');
+    expect(vscode.env.openExternal).not.toHaveBeenCalled();
   });
 
   it('does not mislabel unresolved Auto routing as AGI Cloud', async () => {

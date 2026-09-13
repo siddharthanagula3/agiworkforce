@@ -17,7 +17,7 @@ describe('VS Code onboarding host contract', () => {
     expect(shouldShowOnboarding(state)).toBe(false);
   });
 
-  it.each(['completeOnboarding', 'openPermissionDocs', 'openPrivacySettings', 'openWebTasks'])(
+  it.each(['completeOnboarding', 'openPermissionDocs', 'openPrivacySettings', 'openCloudTasks'])(
     'runtime-validates the %s webview action',
     (type) => {
       expect(parseWebviewMessage({ type })).toEqual({ type });
@@ -50,7 +50,7 @@ describe('VS Code onboarding host contract', () => {
     );
 
     expect(commandIds).toContain('agi-workforce.showOnboarding');
-    expect(commandIds).toContain('agi-workforce.openWebTasks');
+    expect(commandIds).toContain('agi-workforce.showCloudTasks');
     expect(walkthrough?.steps).toHaveLength(4);
     for (const step of walkthrough?.steps ?? []) {
       expect(step.completionEvents.length).toBeGreaterThan(0);

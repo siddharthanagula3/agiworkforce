@@ -119,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
       setupCommands(context, {
         sidebarProvider: chatState.sidebarProvider,
         conversationTreeProvider: chatState.conversationTreeProvider,
+        cloudTasksTreeProvider: chatState.cloudTasksTreeProvider,
         localRuntimes,
         contextPanelProvider: chatState.contextPanelProvider,
         memoryTreeProvider: chatState.memoryTreeProvider,
