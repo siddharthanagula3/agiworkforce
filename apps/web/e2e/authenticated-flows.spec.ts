@@ -239,7 +239,7 @@ test.describe('authenticated primary workflows', () => {
     ).toBeGreaterThan(0);
 
     await page.goto('/chat/library', { waitUntil: 'domcontentloaded' });
-    const librarySearch = page.getByRole('searchbox', { name: 'Search library files' });
+    const librarySearch = page.getByRole('searchbox', { name: 'Search the library by name' });
     await expect(librarySearch).toBeVisible({ timeout: 20_000 });
     const libraryGrid = page.getByTestId('library-grid');
     await expect(libraryGrid).toBeVisible({ timeout: 20_000 });
