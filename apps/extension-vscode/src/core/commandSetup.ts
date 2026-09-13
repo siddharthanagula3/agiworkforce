@@ -15,10 +15,15 @@ import {
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import {
+  APPROVE_CLOUD_TASK_COMMAND,
   CLOUD_TASKS_VIEW_ID,
   CloudTasksTreeProvider,
+  REJECT_CLOUD_TASK_COMMAND,
+  decideCloudRunApprovalInteractively,
+  readCloudRunCommandArgument,
   resolveCloudAgentRunClient,
   showCloudRunDetail,
+  type CloudRunApprovalDecision,
 } from '../features/cloud-tasks';
 import {
   loadFacts,
@@ -330,6 +335,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       recordFailure(`command:${id}`, err);
       return new vscode.Disposable(() => undefined);
     }
+  };
+  const decideOnCloudTask = async (
+    item: unknown,
+    decision: CloudRunApprovalDecision,
+  ): Promise<void> => {
+    const run = readCloudRunCommandArgument(item);
+    if (run === undefined) return;
+    const resolution = await resolveCloudAgentRunClient(context.secrets);
+    if (resolution.status === 'signed-out') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    await decideCloudRunApprovalInteractively(resolution.client, run, decision, {
+      onChanged: () => cloudTasksTreeProvider.refresh(),
+    });
   };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
@@ -1654,6 +1674,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.Uri.parse(`${getCloudWebOrigin()}/tasks?from=vscode-extension`),
       );
     }),
+    register(APPROVE_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'approved')),
+    register(REJECT_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'rejected')),
     register('agi-workforce.openCloudTask', async (runId: unknown) => {
       if (typeof runId !== 'string' || runId === '') return;
       const resolution = await resolveCloudAgentRunClient(context.secrets);
