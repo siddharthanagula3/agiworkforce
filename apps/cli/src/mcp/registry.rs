@@ -121,7 +121,9 @@ impl McpRegistry {
     pub fn add(&mut self, name: &str, entry: Value, overwrite: bool) -> Result<()> {
         let name = validate_server_name(name)?;
         if !overwrite && self.contains(name) {
-            bail!("MCP server '{name}' already exists, pass overwrite/--force to replace it");
+            bail!(
+                "MCP server '{name}' already exists. Replace it with `agi mcp add {name} ... --force` or `/mcp reconfigure {name} ...`"
+            );
         }
         self.disabled.remove(name);
         self.enabled.insert(name.to_string(), entry);
