@@ -255,6 +255,52 @@ describe('GitHub App user authorization ownership proof', () => {
     ).rejects.toThrow(/Reconnect it/i);
   });
 
+  it('mints a repository-scoped token fresh and never writes it to the row', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F35: serving the cached unscoped token for a
+    // scoped request, or caching the scoped one, would defeat the narrowing in
+    // both directions.
+    mocks.dbQuery.mockResolvedValue([
+      {
+        access_token_enc: 'sealed',
+        access_token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        ownership_verified_at: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ token: 'ghs_scoped', expires_at: '2026-09-13T01:00:00.000Z' }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const github = await loadConfiguredGitHubApp(
+      Buffer.from(TEST_PRIVATE_KEY as string).toString('base64'),
+    );
+
+    const token = await github.getInstallationAccessToken(42, {
+      repositories: ['widgets'],
+      permissions: { contents: 'write' },
+    });
+
+    expect(token).toBe('ghs_scoped');
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      repositories: ['widgets'],
+      permissions: { contents: 'write' },
+    });
+    expect(mocks.dbExecute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a scoped request that names no repository', async () => {
+    const github = await loadConfiguredGitHubApp();
+
+    await expect(
+      github.getInstallationAccessToken(42, {
+        repositories: [],
+        permissions: { contents: 'read' },
+      }),
+    ).rejects.toThrow(/at least one repository/i);
+  });
+
   it('refuses to mint an installation token from an unverified legacy row', async () => {
     mocks.dbQuery.mockResolvedValue([
       {

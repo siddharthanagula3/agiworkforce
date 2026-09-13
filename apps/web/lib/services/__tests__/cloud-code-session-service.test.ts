@@ -1157,7 +1157,7 @@ describe('cloud code session GitHub App credentials', () => {
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 42, login: 'acme' },
+      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/widgets'] },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('installation-token');
 
@@ -1170,6 +1170,46 @@ describe('cloud code session GitHub App credentials', () => {
         password: 'installation-token',
       }),
     );
+  });
+
+  it('mints a clone credential narrowed to this repository and to read', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F35: the git helper materialises this credential
+    // inside the sandbox, which runs repository code and model-directed
+    // commands. An unscoped installation token there is write access to every
+    // repository the installation covers, reachable over the sandbox's own
+    // allowlisted egress to github.com.
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('installation-token');
+
+    await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+
+    expect(getInstallationAccessToken).toHaveBeenCalledWith(42, {
+      repositories: ['widgets'],
+      permissions: { contents: 'read' },
+    });
+  });
+
+  it('refuses to clone a repository the linking account never proved it can reach', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/public-docs'] },
+    ]);
+
+    await expect(createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER)).rejects.toBeInstanceOf(
+      CloudCodeValidationError,
+    );
+    expect(getInstallationAccessToken).not.toHaveBeenCalled();
   });
 
   it('clones anonymously when no installation covers the repository owner', async () => {
@@ -1213,10 +1253,29 @@ describe('commitAndPushCloudCodeSession', () => {
     expect(executor.git.push).not.toHaveBeenCalled();
   });
 
+  it('mints a push credential narrowed to this repository and to write', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    await commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix things');
+
+    expect(getInstallationAccessToken).toHaveBeenCalledWith(7, {
+      repositories: ['widgets'],
+      permissions: { contents: 'write' },
+    });
+  });
+
   it('stages, commits and pushes through the authenticated remote', async () => {
     const db = createFakeDb();
     const executor = gitExecutor();
-    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
 
@@ -1273,7 +1332,9 @@ describe('commitAndPushCloudCodeSession', () => {
   it('works on a branch of its own and pushes that branch, never the base', async () => {
     const db = createFakeDb();
     const executor = gitExecutor();
-    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
 
@@ -1297,7 +1358,9 @@ describe('commitAndPushCloudCodeSession', () => {
   it('rejects an empty commit message', async () => {
     const db = createFakeDb();
     const executor = gitExecutor();
-    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
 

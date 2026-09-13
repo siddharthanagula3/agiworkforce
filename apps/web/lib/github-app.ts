@@ -428,7 +428,25 @@ function decryptToken(encryptedValue: string): string {
   return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple').plaintext;
 }
 
-export async function getInstallationAccessToken(installationId: number): Promise<string> {
+/**
+ * Narrows a minted installation token to the repositories and permissions a
+ * caller actually needs.
+ *
+ * A token minted with no scope carries every permission and every repository
+ * the installation grants, for an hour. That is acceptable inside this process
+ * and unacceptable anywhere the token is written down where other code can read
+ * it, which is what handing one to a sandbox does.
+ */
+export interface GitHubTokenScope {
+  /** Repository names, not `owner/name`: GitHub scopes by name within the installation account. */
+  repositories: readonly string[];
+  permissions: Readonly<Record<string, 'read' | 'write'>>;
+}
+
+export async function getInstallationAccessToken(
+  installationId: number,
+  scope?: GitHubTokenScope,
+): Promise<string> {
   if (!Number.isSafeInteger(installationId) || installationId <= 0) {
     throw new Error('Invalid GitHub installation id');
   }
@@ -436,6 +454,9 @@ export async function getInstallationAccessToken(installationId: number): Promis
     throw new Error(
       'GitHub installation ownership has not been verified; refusing to mint an access token',
     );
+  }
+  if (scope && scope.repositories.length === 0) {
+    throw new Error('A scoped GitHub token must name at least one repository');
   }
 
   const db = getNeonDb();
@@ -457,8 +478,14 @@ export async function getInstallationAccessToken(installationId: number): Promis
     throw new Error('GitHub installation ownership has not been verified');
   }
 
+  // The cached token is the unscoped one. Serving it for a scoped request would
+  // hand back exactly the credential the scope exists to avoid, and caching a
+  // scoped token under the same column would widen the next unscoped caller's
+  // answer down to this scope. Scoped tokens are therefore always minted fresh
+  // and never written down.
   const fiveMinFromNow = new Date(Date.now() + 5 * 60 * 1000);
   if (
+    !scope &&
     installation?.access_token_enc &&
     installation?.access_token_expires_at &&
     new Date(installation.access_token_expires_at) > fiveMinFromNow
@@ -477,7 +504,16 @@ export async function getInstallationAccessToken(installationId: number): Promis
         Authorization: `Bearer ${jwt}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': GITHUB_API_VERSION,
+        ...(scope ? { 'Content-Type': 'application/json' } : {}),
       },
+      ...(scope
+        ? {
+            body: JSON.stringify({
+              repositories: [...scope.repositories],
+              permissions: { ...scope.permissions },
+            }),
+          }
+        : {}),
       signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
@@ -491,6 +527,8 @@ export async function getInstallationAccessToken(installationId: number): Promis
     throw new Error('GitHub installation token response was invalid');
   }
   const { token, expires_at } = parsed.data;
+
+  if (scope) return token;
 
   await db.execute(
     `UPDATE github_installations

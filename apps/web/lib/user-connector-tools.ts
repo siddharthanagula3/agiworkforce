@@ -250,6 +250,7 @@ const NOT_HANDLED: ConnectorExecResult = { handled: false, content: '', isError:
 interface GithubInstallationRow {
   installation_id: string | number;
   account_login: string;
+  verified_repositories: string[] | null;
 }
 
 const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
@@ -316,13 +317,13 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
 
 export async function getUserGithubInstallations(
   userId: string,
-): Promise<{ installationId: number; login: string }[]> {
+): Promise<{ installationId: number; login: string; verifiedRepositories: string[] | null }[]> {
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return [];
   const db = getNeonDb();
   let rows: GithubInstallationRow[];
   try {
     rows = await db.query<GithubInstallationRow>(
-      `select installation_id, account_login
+      `select installation_id, account_login, verified_repositories
          from github_installations
         where user_id = $1
           and ownership_verified_at is not null
@@ -340,7 +341,11 @@ export async function getUserGithubInstallations(
     throw error;
   }
   return rows
-    .map((r) => ({ installationId: Number(r.installation_id), login: r.account_login }))
+    .map((r) => ({
+      installationId: Number(r.installation_id),
+      login: r.account_login,
+      verifiedRepositories: r.verified_repositories,
+    }))
     .filter((r) => Number.isFinite(r.installationId));
 }
 
