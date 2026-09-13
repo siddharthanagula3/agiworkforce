@@ -831,9 +831,9 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
             };
             let short_id = &session.id[..session.id.len().min(8)];
             out.push_str(&format!(
-                "    {:<40} {:>4} msgs  {}\n",
+                "    {:<40} {:>9}  {}\n",
                 format!("{title} [{short_id}]"),
-                session.message_count,
+                crate::output::format_message_count(session.message_count),
                 if session.model.is_empty() {
                     "unknown"
                 } else {

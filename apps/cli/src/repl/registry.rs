@@ -106,7 +106,7 @@ pub fn handle_history() {
                         .format("%Y-%m-%d %H:%M")
                         .to_string()
                         .dimmed(),
-                    format!("{} msgs", summary.message_count).dimmed(),
+                    crate::output::format_message_count(summary.message_count as i64).dimmed(),
                 );
             }
             if summaries.len() > 20 {
@@ -132,7 +132,7 @@ pub fn handle_history() {
                     s.id.bold(),
                     ts::muted(s.title.as_str()),
                     format!("[{}]", s.model).dimmed(),
-                    format!("{} msgs", s.message_count).dimmed(),
+                    crate::output::format_message_count(s.message_count as i64).dimmed(),
                 );
             }
             if summaries.len() > 20 {
@@ -442,14 +442,14 @@ pub(super) fn handle_sessions(arg: &str) {
                 }
                 for summary in &list {
                     eprintln!(
-                        "  {}  {}  {} msgs  {}",
+                        "  {}  {}  {}  {}",
                         summary.session_id.bold(),
                         summary
                             .updated_at
                             .format("%Y-%m-%d %H:%M")
                             .to_string()
                             .dimmed(),
-                        summary.message_count,
+                        crate::output::format_message_count(summary.message_count as i64),
                         summary.path.display()
                     );
                 }
@@ -943,6 +943,7 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
             session.total_input_tokens,
             session.total_output_tokens,
             session.cost_ledger.total_usd,
+            crate::design_system::AccessMode::for_provider(&session.provider),
         );
         let value = crate::oneshot_result_json_value(
             &session.model,

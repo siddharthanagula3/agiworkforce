@@ -347,7 +347,12 @@ pub fn format_model_pricing_report(model: &str) -> String {
 }
 
 /// Format a cost summary string.
-pub fn format_cost(model: &str, input_tokens: u32, output_tokens: u32) -> String {
+pub fn format_cost(
+    model: &str,
+    input_tokens: u32,
+    output_tokens: u32,
+    access: crate::design_system::AccessMode,
+) -> String {
     let rates = crate::cost_ledger::rates_for_input(model, input_tokens);
     let input_cost = (input_tokens as f64 / 1_000_000.0) * rates.input_per_mtok;
     let output_cost = (output_tokens as f64 / 1_000_000.0) * rates.output_per_mtok;
@@ -355,8 +360,10 @@ pub fn format_cost(model: &str, input_tokens: u32, output_tokens: u32) -> String
 
     if total == 0.0 {
         format!(
-            "Tokens: {} in / {} out (no cost, local model)",
-            input_tokens, output_tokens
+            "Tokens: {} in / {} out ({})",
+            input_tokens,
+            output_tokens,
+            access.zero_cost_note()
         )
     } else {
         format!(
@@ -373,11 +380,14 @@ pub fn format_recorded_cost(
     total_input_tokens: u32,
     total_output_tokens: u32,
     recorded_usd: f64,
+    access: crate::design_system::AccessMode,
 ) -> String {
     if recorded_usd == 0.0 {
         format!(
-            "Tokens: {} in / {} out (no cost, local model)",
-            total_input_tokens, total_output_tokens
+            "Tokens: {} in / {} out ({})",
+            total_input_tokens,
+            total_output_tokens,
+            access.zero_cost_note()
         )
     } else {
         format!(
@@ -392,8 +402,9 @@ pub fn format_accumulated_cost(
     total_input_tokens: u32,
     total_output_tokens: u32,
     total_usd: f64,
+    access: crate::design_system::AccessMode,
 ) -> String {
-    format_recorded_cost(total_input_tokens, total_output_tokens, total_usd)
+    format_recorded_cost(total_input_tokens, total_output_tokens, total_usd, access)
 }
 
 /// Format a cost summary for subscription-routed requests ($0.00).
@@ -405,14 +416,24 @@ pub fn format_subscription_cost(input_tokens: u32, output_tokens: u32) -> String
 }
 
 /// Print a cost summary line.
-pub fn print_cost(model: &str, input_tokens: u32, output_tokens: u32) {
-    let summary = format_cost(model, input_tokens, output_tokens);
+pub fn print_cost(
+    model: &str,
+    input_tokens: u32,
+    output_tokens: u32,
+    access: crate::design_system::AccessMode,
+) {
+    let summary = format_cost(model, input_tokens, output_tokens, access);
     eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
 /// Print a turn cost already resolved per provider request by the ledger.
-pub fn print_recorded_cost(input_tokens: u32, output_tokens: u32, recorded_usd: f64) {
-    let summary = format_recorded_cost(input_tokens, output_tokens, recorded_usd);
+pub fn print_recorded_cost(
+    input_tokens: u32,
+    output_tokens: u32,
+    recorded_usd: f64,
+    access: crate::design_system::AccessMode,
+) {
+    let summary = format_recorded_cost(input_tokens, output_tokens, recorded_usd, access);
     eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
@@ -423,8 +444,14 @@ pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
 }
 
 /// Print a session total cost.
-pub fn print_session_cost(total_input: u32, total_output: u32, turn_count: u32, total_usd: f64) {
-    let summary = format_accumulated_cost(total_input, total_output, total_usd);
+pub fn print_session_cost(
+    total_input: u32,
+    total_output: u32,
+    turn_count: u32,
+    total_usd: f64,
+    access: crate::design_system::AccessMode,
+) {
+    let summary = format_accumulated_cost(total_input, total_output, total_usd, access);
     eprintln!(
         "\n{}\n  {} turns | {} in / {} out\n  {}",
         ts::accent_header("Session Summary"),
@@ -502,6 +529,16 @@ pub fn print_mcp_status(server_name: &str, tool_count: usize) {
         ts::accent(sanitize_terminal_text(server_name)),
         ts::muted(tools_display)
     );
+}
+
+/// Pluralise a message count for a listing row, so a single-message session
+/// never reads "1 msgs".
+pub fn format_message_count(count: i64) -> String {
+    if count == 1 {
+        "1 msg".to_string()
+    } else {
+        format!("{count} msgs")
+    }
 }
 
 /// Print a session-loaded confirmation line.
@@ -786,6 +823,28 @@ mod tests {
         assert!(format_model_pricing_report("fixture-unknown-local-model").contains("no cost"));
     }
 
+    #[test]
+    fn a_single_message_session_is_not_reported_as_one_msgs() {
+        assert_eq!(format_message_count(0), "0 msgs");
+        assert_eq!(format_message_count(1), "1 msg");
+        assert_eq!(format_message_count(2), "2 msgs");
+    }
+
+    #[test]
+    fn a_zero_dollar_total_reports_who_is_billing() {
+        use crate::design_system::AccessMode;
+        assert!(format_recorded_cost(10, 5, 0.0, AccessMode::Local).contains("local model"));
+        let byok = format_recorded_cost(10, 5, 0.0, AccessMode::Byok);
+        assert!(
+            byok.contains("billed by your provider"),
+            "a BYOK session is billed by the provider, not free: {byok}"
+        );
+        assert!(!byok.contains("local"), "{byok}");
+        let cloud = format_recorded_cost(10, 5, 0.0, AccessMode::Cloud);
+        assert!(cloud.contains("included in your plan"), "{cloud}");
+        assert!(!cloud.contains("local"), "{cloud}");
+    }
+
     // -- format_cost tests --------------------------------------------------
 
     #[test]
@@ -796,7 +855,12 @@ mod tests {
         let rates = crate::cost_ledger::rates_for(&model.id);
         let input_cost = f64::from(input_tokens) / 1_000_000.0 * rates.input_per_mtok;
         let output_cost = f64::from(output_tokens) / 1_000_000.0 * rates.output_per_mtok;
-        let result = format_cost(&model.id, input_tokens, output_tokens);
+        let result = format_cost(
+            &model.id,
+            input_tokens,
+            output_tokens,
+            crate::design_system::AccessMode::Local,
+        );
         assert!(result.contains(&format!("{input_tokens} in")));
         assert!(result.contains("500000 out"));
         assert!(result.contains(&format!("${:.4}", input_cost + output_cost)));
@@ -806,7 +870,12 @@ mod tests {
 
     #[test]
     fn test_format_cost_local_model_zero() {
-        let result = format_cost("fixture-unknown-local-model", 5000, 2000);
+        let result = format_cost(
+            "fixture-unknown-local-model",
+            5000,
+            2000,
+            crate::design_system::AccessMode::Local,
+        );
         assert!(result.contains("no cost"));
         assert!(result.contains("local model"));
         assert!(result.contains("5000 in"));
@@ -815,7 +884,12 @@ mod tests {
 
     #[test]
     fn test_format_cost_zero_tokens() {
-        let result = format_cost("unknown-local-model", 0, 0);
+        let result = format_cost(
+            "unknown-local-model",
+            0,
+            0,
+            crate::design_system::AccessMode::Local,
+        );
         // 0 tokens of anything is $0.00, treated as local/zero
         assert!(result.contains("no cost"));
     }
@@ -823,7 +897,7 @@ mod tests {
     #[test]
     fn test_format_cost_small_token_counts() {
         let model = paid_catalog_model();
-        let result = format_cost(&model.id, 100, 50);
+        let result = format_cost(&model.id, 100, 50, crate::design_system::AccessMode::Local);
         assert!(result.contains("Cost:"));
         assert!(result.contains("100 in"));
         assert!(result.contains("50 out"));
@@ -869,7 +943,12 @@ mod tests {
             crate::cost_ledger::dollars_for(&model, aggregate_input, 0, 0, 0);
         assert_ne!(recorded, retroactively_repriced);
 
-        let result = format_recorded_cost(aggregate_input, 0, recorded);
+        let result = format_recorded_cost(
+            aggregate_input,
+            0,
+            recorded,
+            crate::design_system::AccessMode::Local,
+        );
         assert!(result.contains(&format!("${recorded:.4}")));
         assert!(!result.contains(&format!("${retroactively_repriced:.4}")));
     }
