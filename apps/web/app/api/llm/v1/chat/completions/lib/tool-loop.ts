@@ -180,6 +180,8 @@ import {
   WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
+import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
+import { readTurnToolHistory } from './turn-tool-history';
 import {
   isRequiredSearchToolChoice,
   REQUIRED_SEARCH_RETRY_DIRECTIVE,
@@ -728,24 +730,6 @@ function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
   });
 }
 
-const SOURCE_URL_TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|msclkid|ref|mc_[ce]id)$/i;
-
-function normalizedSourceUrlKey(url: string): string {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = '';
-    if (parsed.pathname.length > 1) {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
-    }
-    for (const key of Array.from(new Set(parsed.searchParams.keys()))) {
-      if (SOURCE_URL_TRACKING_PARAM_PATTERN.test(key)) parsed.searchParams.delete(key);
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
 function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
   const raw = args?.['url'];
   if (typeof raw !== 'string') return undefined;
@@ -959,7 +943,11 @@ export interface FetchedSource {
  *
  * Exported for unit testing only.
  */
-export function fetchSourcesEvent(sources: FetchedSource[], responseModel: string): SseLine {
+export function fetchSourcesEvent(
+  sources: FetchedSource[],
+  responseModel: string,
+  positionFor?: (url: string) => number,
+): SseLine {
   return sseData({
     choices: [
       {
@@ -970,7 +958,7 @@ export function fetchSourcesEvent(sources: FetchedSource[], responseModel: strin
               type: 'web_search_result',
               url: source.url,
               title: source.title,
-              position: index + 1,
+              position: positionFor?.(source.url) ?? index + 1,
             })),
           },
         },
@@ -997,7 +985,11 @@ export function fetchSourcesEvent(sources: FetchedSource[], responseModel: strin
  *
  * Exported for unit testing only.
  */
-export function searchResultsEvent(sources: FetchedSource[], responseModel: string): SseLine {
+export function searchResultsEvent(
+  sources: FetchedSource[],
+  responseModel: string,
+  positionFor?: (url: string) => number,
+): SseLine {
   return sseData({
     choices: [
       {
@@ -1008,7 +1000,7 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
               url: source.url,
               title: source.title,
               encrypted_content: source.snippet ?? '',
-              position: index + 1,
+              position: positionFor?.(source.url) ?? index + 1,
             })),
           },
         },
@@ -1459,7 +1451,7 @@ async function runMcpTool(
     webSearchMaxResults?: number;
     surface?: string | null;
     searchChargeCents?: number | null;
-    citationNumberFor?: (url: string) => number;
+    sourcePositionFor?: (url: string) => number;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -1619,7 +1611,7 @@ async function runMcpTool(
       ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
       : outcome;
     return {
-      content: formatWebSearchResultForModel(enrichedAfterCap, executionContext?.citationNumberFor),
+      content: formatWebSearchResultForModel(enrichedAfterCap, executionContext?.sourcePositionFor),
       isError: !enrichedAfterCap.ok,
       sources: webSearchResultsToFetchedSources(enrichedAfterCap),
     };
@@ -2476,17 +2468,27 @@ export async function* runToolLoop(
 
   const fetchedSources: FetchedSource[] = [];
   const searchedSources: FetchedSource[] = [];
-  const searchCitationNumbers = new Map<string, number>();
-  const citationNumberFor = (url: string): number => {
-    const key = normalizedSourceUrlKey(url);
-    const known = searchCitationNumbers.get(key);
+  // Everything this TURN has delivered, including what an earlier request of the
+  // same turn delivered before it stopped for an approval. One ledger, because
+  // the reader sees one list: a number handed to the model has to name the same
+  // row the browser will render at that position.
+  const turnHistory = readTurnToolHistory(messages, isWebSearchTool, isUrlFetchTool);
+  const sourcePositions = new Map<string, number>();
+  const deliveredSourceKeys = new Set<string>();
+  const sourcePositionFor = (url: string): number => {
+    const key = normalizeSourceUrlKey(url);
+    const known = sourcePositions.get(key);
     if (known !== undefined) return known;
-    const next = searchCitationNumbers.size + 1;
-    searchCitationNumbers.set(key, next);
+    const next = sourcePositions.size + 1;
+    sourcePositions.set(key, next);
     return next;
   };
+  for (const url of turnHistory.deliveredUrls) {
+    sourcePositionFor(url);
+    deliveredSourceKeys.add(normalizeSourceUrlKey(url));
+  }
   const agiWorkTurn = processed.chatRequest?.work_mode === 'agiwork';
-  let webSearchCallsUsed = 0;
+  let webSearchCallsUsed = turnHistory.searchCalls;
   const webSearchCallBudget = agiWorkTurn
     ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
     : WEB_SEARCH_MAX_CALLS_PER_TURN;
@@ -2494,7 +2496,7 @@ export async function* runToolLoop(
   // What each search call in this turn was charged, so the COGS row records the
   // customer figure alongside the provider one instead of leaving it null.
   const searchChargeCentsByOrdinal = new Map<number, number>();
-  let urlFetchCallsUsed = 0;
+  let urlFetchCallsUsed = turnHistory.fetchCalls;
   const urlFetchCallBudget = agiWorkTurn
     ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
     : URL_FETCH_MAX_CALLS_PER_TURN;
@@ -3051,7 +3053,7 @@ export async function* runToolLoop(
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               surface: processed.chatSurface,
               searchChargeCents: searchChargeCentsByOrdinal.get(searchCallOrdinal) ?? null,
-              citationNumberFor,
+              sourcePositionFor,
               loadSkillInstallOverrides,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
@@ -3260,24 +3262,30 @@ export async function* runToolLoop(
         );
       }
 
-      const turnSourceCount = () => fetchedSources.length + searchedSources.length;
+      const turnSourceCount = () => deliveredSourceKeys.size;
 
-      if (source && turnSourceCount() < turnSourceBudget) {
-        const sourceKey = normalizedSourceUrlKey(source.url);
-        if (!fetchedSources.some((s) => normalizedSourceUrlKey(s.url) === sourceKey)) {
-          fetchedSources.push(source);
-          sourcesAdded = true;
-        }
-      }
-
+      // Searched before fetched, and the two events below go out in that same
+      // order, because the browser lists sources in the order they arrive. A
+      // ledger position the model was handed has to be the position the reader
+      // sees, so the order a source is numbered in and the order it is sent in
+      // are one order, not two.
       for (const s of sources ?? []) {
         if (turnSourceCount() >= turnSourceBudget) break;
-        const sourceKey = normalizedSourceUrlKey(s.url);
-        if (
-          !searchedSources.some((existing) => normalizedSourceUrlKey(existing.url) === sourceKey)
-        ) {
-          searchedSources.push(s);
-          searchSourcesAdded = true;
+        const key = normalizeSourceUrlKey(s.url);
+        if (deliveredSourceKeys.has(key)) continue;
+        deliveredSourceKeys.add(key);
+        sourcePositionFor(s.url);
+        searchedSources.push(s);
+        searchSourcesAdded = true;
+      }
+
+      if (source && turnSourceCount() < turnSourceBudget) {
+        const key = normalizeSourceUrlKey(source.url);
+        if (!deliveredSourceKeys.has(key)) {
+          deliveredSourceKeys.add(key);
+          sourcePositionFor(source.url);
+          fetchedSources.push(source);
+          sourcesAdded = true;
         }
       }
 
@@ -3291,11 +3299,11 @@ export async function* runToolLoop(
       }
     }
 
-    if (sourcesAdded) {
-      yield encoder.encode(fetchSourcesEvent(fetchedSources, responseModel));
-    }
     if (searchSourcesAdded) {
-      yield encoder.encode(searchResultsEvent(searchedSources, responseModel));
+      yield encoder.encode(searchResultsEvent(searchedSources, responseModel, sourcePositionFor));
+    }
+    if (sourcesAdded) {
+      yield encoder.encode(fetchSourcesEvent(fetchedSources, responseModel, sourcePositionFor));
     }
 
     // A connector paused for input (MCP input_required). Suspend on the exact
