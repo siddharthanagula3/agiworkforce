@@ -114,7 +114,7 @@ import {
   MOBILE_NAV_DRAWER_WIDTH,
   Sidebar,
   keepOpenForMenuEscape,
-  useConfirm,
+  useConfirmAction,
   type SidebarSession,
   type SidebarNavItem,
   type SidebarProject,
@@ -200,6 +200,7 @@ import {
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
 import { approvedResearchSteps, completedResearchSteps } from '../utils/research-plan';
+import { notifyJobComplete } from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
@@ -259,6 +260,11 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
 const EMPTY_NAV_IDS: string[] = [];
+
+const AGI_WORK_DONE_TITLE = 'AGI Work finished';
+const RESEARCH_DONE_TITLE = 'Your research report is ready';
+const IMAGE_DONE_TITLE = 'Your image is ready';
+const VIDEO_DONE_TITLE = 'Your video is ready';
 
 type SendMeta = {
   /** Composer work mode at send time ('chat' | 'agiwork'). */
@@ -483,13 +489,17 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     m.model ||
     m.fallbackReason ||
     m.routeLane ||
+    m.requestedModel ||
     m.secretRedactionCount ||
+    m.turnDetachable !== undefined ||
     tokensUsed !== undefined
       ? {
           ...m.metadata,
           model: m.model ?? m.metadata?.model,
           ...(m.fallbackReason ? { fallbackReason: m.fallbackReason } : {}),
           ...(m.routeLane ? { routeLane: m.routeLane } : {}),
+          ...(m.requestedModel ? { requestedModel: m.requestedModel } : {}),
+          ...(m.turnDetachable !== undefined ? { turnDetachable: m.turnDetachable } : {}),
           ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
@@ -759,7 +769,7 @@ interface WebChatPageProps {
 export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   useArtifactCloudSync();
 
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   // Only a handful of strings on this surface are translated. Display language
   // is chosen in Settings → General, which states that coverage honestly
@@ -1774,6 +1784,17 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             memoryEnabled: options.meta?.memoryEnabled,
           });
 
+        const announceDesktopCompletion = () => {
+          const heading =
+            options.meta?.workMode === 'agiwork'
+              ? AGI_WORK_DONE_TITLE
+              : options.meta?.researchEnabled
+                ? RESEARCH_DONE_TITLE
+                : null;
+          if (!heading) return;
+          void notifyJobComplete({ title: heading, body: content, conversationId: convId });
+        };
+
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
         const replace = sendReplacingMessagesRef.current;
         if (pendingEdit && replace) {
@@ -1783,12 +1804,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             releaseUnresolvedPlaceholder();
             return abandonSend();
           }
+          announceDesktopCompletion();
           return true;
         }
         if (!(await doSend())) {
           releaseUnresolvedPlaceholder();
           return abandonSend();
         }
+        announceDesktopCompletion();
         return true;
       } catch (error) {
         const message = toUserMessage(error, 'Could not attach the selected files.');
@@ -2300,6 +2323,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
         if (outcome.status === 'completed') {
           removeImageTranscriptRecovery(messageId);
+          void notifyJobComplete({
+            title: IMAGE_DONE_TITLE,
+            body: opts.prompt,
+            conversationId: ownerConversationId,
+          });
           return outcome.imageUrl;
         }
 
@@ -2539,6 +2567,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             },
             input.conversationId,
           );
+          void notifyJobComplete({
+            title: VIDEO_DONE_TITLE,
+            conversationId: input.conversationId,
+          });
           return;
         }
         if (result.status === 'failed') {
@@ -3267,17 +3299,20 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
 
   const handleDeleteSession = useCallback(
-    async (id: string) => {
+    (id: string) => {
       const conversation = conversations.find((c) => c.id === id);
-      const confirmed = await confirmDestructive(conversationDeleteConfirm(conversation?.title));
-      if (!confirmed) return;
-      const deleted = await deleteConversation(id);
-      if (!deleted) return;
-      if (id === displayedConversationId) {
-        setBareChatSessionId(null);
-        setActiveConversation(null);
-        router.push('/chat');
-      }
+      confirmDestructive({
+        ...conversationDeleteConfirm(conversation?.title),
+        onConfirm: async () => {
+          const deleted = await deleteConversation(id);
+          if (!deleted) return;
+          if (id === displayedConversationId) {
+            setBareChatSessionId(null);
+            setActiveConversation(null);
+            router.push('/chat');
+          }
+        },
+      });
     },
     [
       confirmDestructive,
@@ -3315,11 +3350,6 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [router],
   );
 
-  /**
-   * Start a new chat scoped to the project. We navigate to /chat (new session)
-   * with the projectId in the query so the composer can pick it up. Threading the
-   * projectId straight into createConversation is a follow-up once the API takes it.
-   */
   const handleProjectNewChat = useCallback(
     (projectId: string) => {
       router.push(`/chat?projectId=${projectId}`);
@@ -3390,21 +3420,24 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   }, []);
 
   const handleProjectDelete = useCallback(
-    async (projectId: string) => {
+    (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
-      const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
-      if (!confirmed) return;
-      // Optimistic remove, with rollback on server failure so the sidebar
-      // never lies about what actually got deleted.
-      removeProjectFromStore(projectId);
-      try {
-        await webManagedCloudProjects.deleteProject(projectId);
-      } catch (err) {
-        if (project) {
-          setStoreProjects([...useProjectStore.getState().projects, project]);
-        }
-        toast.error(toUserMessage(err, 'Failed to delete project'));
-      }
+      confirmDestructive({
+        ...projectDeleteConfirm(project?.name),
+        onConfirm: async () => {
+          // Optimistic remove, with rollback on server failure so the sidebar
+          // never lies about what actually got deleted.
+          removeProjectFromStore(projectId);
+          try {
+            await webManagedCloudProjects.deleteProject(projectId);
+          } catch (err) {
+            if (project) {
+              setStoreProjects([...useProjectStore.getState().projects, project]);
+            }
+            toast.error(toUserMessage(err, 'Failed to delete project'));
+          }
+        },
+      });
     },
     [confirmDestructive, storeProjects, removeProjectFromStore, setStoreProjects],
   );
@@ -3944,18 +3977,15 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         if (!conversationId) return;
         const discarded = variantsEnabled ? 0 : planned.plan.rollbackIds.length - 1;
         if (discarded > 0) {
-          void (async () => {
-            const proceed = await confirmDestructive({
-              title: 'Replace this message?',
-              description:
-                discarded === 1
-                  ? 'The reply below it is deleted and cannot be recovered.'
-                  : `The ${discarded} messages below it are deleted and cannot be recovered.`,
-              confirmText: 'Replace',
-              variant: 'destructive',
-            });
-            if (proceed) runSubmitEdit(id, next, planned, conversationId);
-          })();
+          confirmDestructive({
+            title: 'Replace this message?',
+            description:
+              discarded === 1
+                ? 'The reply below it is deleted and cannot be recovered.'
+                : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+            confirmLabel: 'Replace',
+            onConfirm: () => runSubmitEdit(id, next, planned, conversationId),
+          });
           return;
         }
         runSubmitEdit(id, next, planned, conversationId);

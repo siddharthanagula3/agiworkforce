@@ -1,4 +1,3 @@
-
 export {
   CHAT_ATTACHMENT_MIME_TYPES,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -7,4 +6,5 @@ export {
   isChatImageMimeType,
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
+  resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';

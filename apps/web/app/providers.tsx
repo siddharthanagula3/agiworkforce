@@ -15,6 +15,7 @@ import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
+import { DesktopHostMount } from '@/features/desktop-host';
 
 export default function Providers({
   children,
@@ -40,6 +41,7 @@ export default function Providers({
               <SupportWidgetMount />
               <Toaster position="top-center" richColors closeButton />
               <ConnectorOutcomeAnnouncer />
+              <DesktopHostMount />
             </WaitlistModalProvider>
           </I18nextProvider>
         </QueryProvider>
