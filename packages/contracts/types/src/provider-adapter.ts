@@ -379,6 +379,8 @@ export interface ModelInfo {
   name?: string;
   provider: Provider;
   modelType?: ModelType;
+  /** Parameter count in billions, where the provider publishes one. */
+  sizeBillion?: number;
   contextWindow?: number;
   maxOutputTokens?: number;
   capabilities?: Partial<ModelCapabilities>;
