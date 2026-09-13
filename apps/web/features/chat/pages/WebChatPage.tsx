@@ -201,7 +201,7 @@ import {
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
 import { approvedResearchSteps, completedResearchSteps } from '../utils/research-plan';
-import { notifyJobComplete } from '@/features/desktop-host';
+import { notifyJobComplete, useLocalModelSelection } from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
@@ -834,10 +834,15 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const isWebsiteFreeTrial = billingPolicyReady && isFreeBillingPlanTier(subscriptionTier);
   const freeTrialModelId = getBestAutoModeForTier('free');
   const validatedSelectedModelId = resolveSelectableModelId(selectedModelId);
-  const activeModelId =
+  // The plan tier decides which cloud model a send may use. A model running on
+  // this Mac is outside that question entirely: it spends no plan, so it is
+  // resolved after the downgrade rather than through it.
+  const cloudModelId =
     isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(validatedSelectedModelId)
       ? freeTrialModelId
       : validatedSelectedModelId;
+  const localModelSelection = useLocalModelSelection((state) => state.selected);
+  const activeModelId = localModelSelection?.id ?? cloudModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
   const isTrialExhausted = isWebsiteFreeTrial && freeUsageLimitReached;
@@ -1713,7 +1718,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         clientConvId = existingConvId ? null : crypto.randomUUID();
         const convId = existingConvId || clientConvId!;
         resolvedUserMessageId ??= crypto.randomUUID();
-        const temporaryIntent = useChatStore.getState().pendingTemporaryChat;
+        // A chat on a model running on this Mac is temporary by construction:
+        // its turns are answered here and never uploaded, so a durable
+        // conversation row would only ever hold an empty transcript.
+        const temporaryIntent =
+          useChatStore.getState().pendingTemporaryChat || localModelSelection !== null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -1730,7 +1739,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           ? async (): Promise<string | null> => {
               const c = await createConversation(
                 NEW_CHAT_TITLE,
-                activeModelId,
+                cloudModelId,
                 sendProjectId,
                 temporaryIntent ? { isTemporary: true } : undefined,
               );
@@ -1837,6 +1846,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       parkBlockedSend,
       sendMessage,
       activeModelId,
+      cloudModelId,
+      localModelSelection,
       activeProjectId,
       router,
       setChatError,

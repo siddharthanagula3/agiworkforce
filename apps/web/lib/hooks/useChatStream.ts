@@ -37,6 +37,7 @@ import {
   LOCAL_ATTACHMENTS_UNSUPPORTED,
   LOCAL_TURN_IN_CLOUD_CHAT,
   conversationHoldsLocalTurns,
+  resolveLocalModel,
   runLocalTurn,
   toLocalChatMessages,
 } from '@features/chat/lib/local-turn';
@@ -2711,9 +2712,11 @@ export function useChatStream(): UseChatStreamReturn {
 
       // Local is a trust boundary, not a routing preference: the answer is
       // produced on this machine, so this turn never reaches the completions
-      // route, the managed ledger, or the conversation's cloud rows.
-      const localModel = options.model ? null : readSelectedLocalModel();
-      const model = options.model || localModel?.id || selectedModel;
+      // route, the managed ledger, or the conversation's cloud rows. The id
+      // decides it, which is why a regenerate of a local answer stays local.
+      const selectedLocalModel = readSelectedLocalModel();
+      const model = options.model || selectedLocalModel?.id || selectedModel;
+      const localModel = resolveLocalModel(model, selectedLocalModel);
 
       if (localModel && options.attachments?.length) {
         setError(LOCAL_ATTACHMENTS_UNSUPPORTED, conversationId);

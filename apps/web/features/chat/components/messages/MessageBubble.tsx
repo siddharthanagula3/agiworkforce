@@ -322,6 +322,10 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
   );
 }
 
+const LOCAL_BOUNDARY_LABEL = 'Local';
+const LOCAL_BOUNDARY_TITLE =
+  'Answered by a model running on this device. Nothing in this turn was sent to AGI Cloud or a provider, and it used none of your plan.';
+
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
   byok: 'DirectByok',
@@ -2590,6 +2594,15 @@ const MessageBubbleComponent = function MessageBubble({
                 isUser ? 'mt-1 justify-end' : 'mt-2',
               )}
             >
+              {!isUser && trustBoundary.privacyMode === 'local' && (
+                <span
+                  data-testid="message-local-boundary"
+                  className="mr-1 shrink-0 rounded-full bg-muted/60 px-1.5 py-px text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  title={LOCAL_BOUNDARY_TITLE}
+                >
+                  {LOCAL_BOUNDARY_LABEL}
+                </span>
+              )}
               <div
                 data-testid="message-action-row"
                 className={cn(

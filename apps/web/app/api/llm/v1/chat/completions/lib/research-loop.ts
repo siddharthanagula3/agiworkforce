@@ -260,8 +260,8 @@ function sseDone(): string {
   return `data: [DONE]\n\n`;
 }
 
-function safeUpstreamErrorMessage(err: unknown, provider: string): string {
-  return mapClassifiedUpstreamError(classifyError(err), provider).message;
+function safeUpstreamErrorMessage(err: unknown, provider: string, requestedModel: string): string {
+  return mapClassifiedUpstreamError(classifyError(err), provider, { requestedModel }).message;
 }
 
 /**
@@ -1906,7 +1906,11 @@ export async function* runResearchLoop(
         roundExecutedQueries = roundCounts.queries;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);
+        const safeMessage = safeUpstreamErrorMessage(
+          err,
+          servingProcessed.provider,
+          processed.requestedModel,
+        );
         logger.error(
           { provider: processed.provider, round, error: msg },
           '[research-loop] gathering turn failed',
@@ -2104,7 +2108,11 @@ export async function* runResearchLoop(
       await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);
+      const safeMessage = safeUpstreamErrorMessage(
+        err,
+        servingProcessed.provider,
+        processed.requestedModel,
+      );
       logger.error(
         { provider: processed.provider, error: msg },
         '[research-loop] synthesis failed',

@@ -416,7 +416,7 @@ export function buildUpstreamErrorResponse(
           code: 'insufficient_credits',
           message: 'This request could not be paid for. Top up credits and try again.',
         }
-      : mapClassifiedUpstreamError(classified, provider);
+      : mapClassifiedUpstreamError(classified, provider, { requestedModel });
 
   return NextResponse.json(
     {

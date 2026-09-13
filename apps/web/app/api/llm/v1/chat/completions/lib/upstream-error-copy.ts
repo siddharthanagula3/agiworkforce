@@ -3,6 +3,7 @@ import {
   SPENDING_CAP_PROVIDER_HINT,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
+import { isAutoModeModelId } from '@agiworkforce/types';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { logger } from '@/lib/logger';
 import { getTraceContext } from '@/lib/observability/trace-context';
@@ -13,6 +14,23 @@ export interface UpstreamErrorShape {
   code: string;
   message: string;
 }
+
+/**
+ * What the caller asked for, which decides what the reader is told to do next.
+ *
+ * Seven of the messages below used to end in "choose Auto", and a request
+ * already on Auto is the one that most often reaches them: Auto is what
+ * rotates, so the copy lands only once the rotation is over. It told a user who
+ * had already made the right choice to make it again. The Auto wording names
+ * the one move left instead, and claims nothing about how far the rotation got,
+ * which this boundary cannot see. `requestedModel` is the pre-routing
+ * selection, not the model that served, so it answers the question directly.
+ */
+export interface UpstreamErrorContext {
+  requestedModel?: string | undefined;
+}
+
+const PICK_A_MODEL = 'pick a specific model from the model picker';
 
 /**
  * The boundary a thrown provider failure crosses to become text a reader sees.
@@ -27,8 +45,9 @@ export interface UpstreamErrorShape {
 export function upstreamFailureCopy(
   error: unknown,
   provider: string,
+  context?: UpstreamErrorContext,
 ): { message: string; code: string } {
-  const mapped = mapClassifiedUpstreamError(classifyError(error), provider);
+  const mapped = mapClassifiedUpstreamError(classifyError(error), provider, context);
   return { message: mapped.message, code: mapped.code };
 }
 
@@ -60,8 +79,10 @@ function logProviderRejection(classified: ClassifiedError, provider: string): vo
 export function mapClassifiedUpstreamError(
   classified: ClassifiedError,
   provider: string,
+  context?: UpstreamErrorContext,
 ): UpstreamErrorShape {
   logProviderRejection(classified, provider);
+  const onAuto = isAutoModeModelId(context?.requestedModel);
   switch (classified.category) {
     case 'aborted':
       return {
@@ -86,7 +107,9 @@ export function mapClassifiedUpstreamError(
         status: 429,
         type: 'rate_limit_error',
         code: 'provider_rate_limited',
-        message: `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`,
+        message: onAuto
+          ? `${providerLabel} is temporarily at capacity. Try again shortly, or ${PICK_A_MODEL}.`
+          : `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`,
       };
     }
 
@@ -97,8 +120,9 @@ export function mapClassifiedUpstreamError(
         status: 503,
         type: 'service_unavailable',
         code: 'provider_overloaded',
-        message:
-          'This model is overloaded right now. Try again in a moment, or choose Auto to use another available model.',
+        message: onAuto
+          ? `This model is overloaded right now. Try again in a moment, or ${PICK_A_MODEL}.`
+          : 'This model is overloaded right now. Try again in a moment, or choose Auto to use another available model.',
       };
 
     case 'context_overflow':
@@ -144,8 +168,9 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'empty_response',
-        message:
-          'The model finished without returning a response. Try again, or choose Auto to use another available model.',
+        message: onAuto
+          ? `The model finished without returning a response. Try again, or ${PICK_A_MODEL}.`
+          : 'The model finished without returning a response. Try again, or choose Auto to use another available model.',
       };
 
     case 'media_too_large':
@@ -171,7 +196,9 @@ export function mapClassifiedUpstreamError(
         status: 404,
         type: 'not_found',
         code: 'model_not_found',
-        message: 'The selected model is not available. Choose another model, or switch to Auto.',
+        message: onAuto
+          ? `The model Auto selected is not available. Try again, or ${PICK_A_MODEL}.`
+          : 'The selected model is not available. Choose another model, or switch to Auto.',
       };
 
     case 'invalid_input':
@@ -232,7 +259,9 @@ export function mapClassifiedUpstreamError(
       const message =
         classified.providerHint === SPENDING_CAP_PROVIDER_HINT
           ? `${providerLabel}'s spending cap for this project is exceeded, so this model is unavailable right now. Pick another model or try later.`
-          : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`;
+          : onAuto
+            ? `${providerLabel} capacity for this model is exhausted for now. Try again later, or ${PICK_A_MODEL}.`
+            : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`;
       return {
         status: 429,
         type: 'rate_limit_error',
@@ -246,8 +275,9 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'provider_unreachable',
-        message:
-          'The model could not be reached. Try again, or choose Auto to use another available model.',
+        message: onAuto
+          ? `The model could not be reached. Try again, or ${PICK_A_MODEL}.`
+          : 'The model could not be reached. Try again, or choose Auto to use another available model.',
       };
 
     case 'pause_turn':
@@ -272,8 +302,9 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'provider_error',
-        message:
-          'The model failed to produce a response. Try again, or choose Auto to use another available model.',
+        message: onAuto
+          ? `The model failed to produce a response. Try again, or ${PICK_A_MODEL}.`
+          : 'The model failed to produce a response. Try again, or choose Auto to use another available model.',
       };
   }
 }
