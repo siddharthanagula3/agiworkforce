@@ -14,6 +14,7 @@ import {
   Presentation,
   Shield,
   FolderDown,
+  Download,
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { MermaidDiagram } from '@agiworkforce/unified-chat';
@@ -24,6 +25,8 @@ import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import type { ArtifactData } from './ArtifactPreview';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
+
+const ARTIFACT_DOWNLOAD_ACTION = 'Download';
 
 interface InlineArtifactCardsProps {
   artifacts: ArtifactData[];
@@ -230,85 +233,110 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
     return <MermaidFullCard artifact={artifact} onClick={onClick} />;
   }
 
+  const downloadUri = artifact.generatedFile?.uri;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group w-full flex items-stretch overflow-hidden rounded-xl border border-border/40',
-        'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
-      )}
-      aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
-    >
-      {/* Preview area · 80px wide on the left */}
-      <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
-        {canRender ? (
-          <iframe
-            title={artifact.title || 'Artifact preview'}
-            // 80px static thumbnail, same reasoning as the gallery grid: no
-            // scripts to run, and running them only produced inherited-CSP
-            // violations. The interactive viewer (ArtifactPreview) keeps
-            // allow-scripts, because there the execution is the point.
-            sandbox=""
-            srcDoc={(() => {
-              if (artifact.type === 'html') {
-                return buildSandboxSrcDoc(artifact.content.slice(0, 800));
-              }
-              const preview = artifact.content.slice(0, 800);
-              return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${preview}</body></html>`;
-            })()}
-            className="pointer-events-none h-full w-full"
-            style={{
-              width: '250%',
-              height: '250%',
-              transform: 'scale(0.4)',
-              transformOrigin: 'top left',
-            }}
-            aria-hidden="true"
-          />
-        ) : (
-          <div className="flex h-full w-full min-h-[64px] items-center justify-center">
-            <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground" />
+    <div className="relative w-full">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          'group w-full flex items-stretch overflow-hidden rounded-xl border border-border/40',
+          'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
+        )}
+        aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
+      >
+        {/* Preview area · 80px wide on the left */}
+        <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
+          {canRender ? (
+            <iframe
+              title={artifact.title || 'Artifact preview'}
+              // 80px static thumbnail, same reasoning as the gallery grid: no
+              // scripts to run, and running them only produced inherited-CSP
+              // violations. The interactive viewer (ArtifactPreview) keeps
+              // allow-scripts, because there the execution is the point.
+              sandbox=""
+              srcDoc={(() => {
+                if (artifact.type === 'html') {
+                  return buildSandboxSrcDoc(artifact.content.slice(0, 800));
+                }
+                const preview = artifact.content.slice(0, 800);
+                return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${preview}</body></html>`;
+              })()}
+              className="pointer-events-none h-full w-full"
+              style={{
+                width: '250%',
+                height: '250%',
+                transform: 'scale(0.4)',
+                transformOrigin: 'top left',
+              }}
+              aria-hidden="true"
+            />
+          ) : (
+            <div className="flex h-full w-full min-h-[64px] items-center justify-center">
+              <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground" />
+            </div>
+          )}
+          {/* Hover open indicator */}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
+            <ChevronRight
+              className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-hidden="true"
+            />
           </div>
-        )}
-        {/* Hover open indicator */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
-          <ChevronRight
-            className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-            aria-hidden="true"
-          />
-        </div>
-      </div>
-
-      {/* Text area · fills remaining width */}
-      <div className="flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
-            {artifact.title || 'Untitled'}
-          </span>
-          <span
-            className={cn(
-              'shrink-0 inline-block rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight tracking-wide',
-              badgeClass(artifact.type),
-            )}
-          >
-            {typeBadge(artifact.type)}
-          </span>
         </div>
 
-        {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
-          <span className="inline-flex w-fit items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight text-muted-foreground">
-            <Shield className="h-2.5 w-2.5" aria-hidden="true" />
-            {generatedFileSummary.privacyShortLabel}
-          </span>
-        )}
+        {/* Text area · fills remaining width */}
+        <div
+          className={cn(
+            'flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5',
+            downloadUri && 'pr-28',
+          )}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
+              {artifact.title || 'Untitled'}
+            </span>
+            <span
+              className={cn(
+                'shrink-0 inline-block rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight tracking-wide',
+                badgeClass(artifact.type),
+              )}
+            >
+              {typeBadge(artifact.type)}
+            </span>
+          </div>
 
-        {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
-        <span className="text-[12px] text-muted-foreground truncate">
-          {kindLabel(artifact.type)} · {extLabel(artifact)}
-        </span>
-      </div>
-    </button>
+          {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
+            <span className="inline-flex w-fit items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight text-muted-foreground">
+              <Shield className="h-2.5 w-2.5" aria-hidden="true" />
+              {generatedFileSummary.privacyShortLabel}
+            </span>
+          )}
+
+          {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
+          <span className="text-[12px] text-muted-foreground truncate">
+            {kindLabel(artifact.type)} · {extLabel(artifact)}
+          </span>
+        </div>
+      </button>
+      {downloadUri && (
+        <a
+          href={downloadUri}
+          download={artifact.title || undefined}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`${ARTIFACT_DOWNLOAD_ACTION} ${artifact.title || 'Untitled'}`}
+          className={cn(
+            'absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background px-2 py-1',
+            'text-[12px] font-medium text-foreground no-underline transition-colors hover:bg-muted/60',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+          )}
+        >
+          <Download className="h-3 w-3" aria-hidden="true" />
+          {ARTIFACT_DOWNLOAD_ACTION}
+        </a>
+      )}
+    </div>
   );
 }
 
