@@ -21,7 +21,7 @@ export interface AppRouteParams {
   '/(app)/(tabs)/chat': undefined;
   '/(app)/(tabs)/settings': undefined;
   '/(app)/chat/[id]': ChatRouteParams;
-  '/(app)/agents': undefined;
+  '/(app)/tasks': undefined;
   '/(app)/companion': CompanionRouteParams | undefined;
   '/(app)/profile': undefined;
   '/(app)/schedules': undefined;

@@ -212,23 +212,23 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
   }
 
   for (const type of ['agent_failed', 'emergency_stop_triggered', 'agent_paused']) {
-    it(`routes ${type} to the live /(app)/agents runs list (not the agents-gated detail)`, () => {
+    it(`routes ${type} to the live /(app)/tasks runs list (not a per-agent detail)`, () => {
       signIn();
       fireNotification({ type, agentId: 'agent-1' });
-      expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
+      expect(mockRouterPush).toHaveBeenCalledWith('/(app)/tasks');
       for (const call of mockRouterPush.mock.calls) {
         const target = call[0] as { pathname?: string } | string;
         const pathname = typeof target === 'string' ? target : target?.pathname;
         expect(pathname).not.toBe('/(app)/companion/agent/[id]');
-        expect(pathname).not.toBe('/(app)/agents/[id]');
+        expect(pathname).not.toBe('/(app)/agents');
       }
     });
   }
 
-  it('routes agent lifecycle notifications to /(app)/agents even without an agentId', () => {
+  it('routes agent lifecycle notifications to /(app)/tasks even without an agentId', () => {
     signIn();
     fireNotification({ type: 'agent_failed' });
-    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
+    expect(mockRouterPush).toHaveBeenCalledWith('/(app)/tasks');
   });
 
   it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {

@@ -3,6 +3,10 @@ import { join } from 'node:path';
 
 const appRoot = join(__dirname, '..', 'app', '(app)');
 const layoutSource = readFileSync(join(appRoot, '_layout.tsx'), 'utf8');
+const drawerSource = readFileSync(
+  join(__dirname, '..', 'src', 'features', 'drawer', 'components', 'DrawerContent.tsx'),
+  'utf8',
+);
 
 describe('authenticated drawer route contract', () => {
   it('registers only routes backed by a screen or nested layout', () => {
@@ -29,6 +33,32 @@ describe('authenticated drawer route contract', () => {
   });
 
   it('does not register retired dead-end surfaces', () => {
-    expect(layoutSource).not.toMatch(/name="(?:code(?:\/|")|dispatch(?:\/|")|switch-probe")/);
+    expect(layoutSource).not.toMatch(
+      /name="(?:code(?:\/|")|dispatch(?:\/|")|agents(?:\/|")|switch-probe")/,
+    );
+  });
+
+  it('backs every drawer primary destination with a registered route', () => {
+    const drawerRoutes = Array.from(
+      drawerSource.matchAll(/route: '\/\(app\)\/([^']+)'/g),
+      (match) => match[1],
+    ).filter((route) => !route.includes('['));
+
+    expect(drawerRoutes).toContain('tasks');
+
+    for (const route of drawerRoutes) {
+      const segments = route.replace(/^\(tabs\)\//, '');
+      const candidates = [
+        join(appRoot, `${route}.tsx`),
+        join(appRoot, route, 'index.tsx'),
+        join(appRoot, route, '_layout.tsx'),
+        join(appRoot, '(tabs)', `${segments}.tsx`),
+      ];
+
+      expect({
+        route,
+        exists: candidates.some((candidate) => existsSync(candidate)),
+      }).toMatchObject({ route, exists: true });
+    }
   });
 });

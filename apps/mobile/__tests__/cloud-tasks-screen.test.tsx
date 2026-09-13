@@ -6,6 +6,7 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockListRuns = jest.fn();
+const mockFollowRun = jest.fn();
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -30,21 +31,14 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
-  return {
-    ArrowLeft: icon,
-    Bot: icon,
-    CheckCircle2: icon,
-    ChevronRight: icon,
-    Clock3: icon,
-    Cloud: icon,
-    PauseCircle: icon,
-    Plus: icon,
-    RefreshCw: icon,
-  };
+  return new Proxy({}, { get: () => icon });
 });
 
 jest.mock('../services/streaming', () => ({
-  createMobileCloudAgentRunClient: () => ({ listRuns: mockListRuns }),
+  createMobileCloudAgentRunClient: () => ({
+    listRuns: mockListRuns,
+    followRun: mockFollowRun,
+  }),
 }));
 
 jest.mock('../lib/mmkv', () => ({
@@ -62,10 +56,17 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import TasksScreen, { TASK_POLL_INTERVAL_MS } from '../app/(app)/agents';
+import {
+  CloudTasksScreen,
+  ALL_CLOUD_RUN_STATES,
+  DEFAULT_CLOUD_RUN_FILTER,
+  CLOUD_TASK_LIST_POLL_INTERVAL_MS,
+  useCloudTaskStore,
+} from '../src/features/tasks';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import {
   __resetCloudAccountSessionForTests,
@@ -89,6 +90,8 @@ const RUN = {
   updatedAt: '2026-07-17T20:00:00.000Z',
 };
 
+const CARD_LABEL = 'Open Audit the launch checklist. Waiting on you. Started on Mobile';
+
 describe('Mobile Cloud tasks screen', () => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   const removeAppStateListener = jest.fn();
@@ -108,6 +111,8 @@ describe('Mobile Cloud tasks screen', () => {
     jest.clearAllMocks();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
+    useCloudTaskStore.getState().reset();
+    useCloudTaskStore.setState({ filter: DEFAULT_CLOUD_RUN_FILTER });
     useAuthStore.setState({
       isClerkLoaded: true,
       isClerkSignedIn: true,
@@ -116,6 +121,7 @@ describe('Mobile Cloud tasks screen', () => {
     appStateListener = undefined;
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({ cloudUnlocked: true });
+    useSettingsStore.setState({ backgroundFetchEnabled: true });
     useChatStore.setState({
       conversations: [
         {
@@ -129,28 +135,65 @@ describe('Mobile Cloud tasks screen', () => {
       ],
     } as never);
     mockListRuns.mockResolvedValue({ runs: [RUN], nextCursor: null });
+    mockFollowRun.mockImplementation(
+      async (_runId: string, options: { onSnapshot: (page: unknown) => void }) => {
+        options.onSnapshot({ run: RUN, events: [] });
+      },
+    );
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  it('loads real active Cloud runs and opens the owning conversation', async () => {
-    const { getByText, getByLabelText } = render(<TasksScreen />);
+  it('loads real active Cloud runs from the server state query', async () => {
+    const { getByText } = render(<CloudTasksScreen />);
 
     await waitFor(() => expect(getByText('Audit the launch checklist')).toBeTruthy());
-    expect(getByText('Awaiting input')).toBeTruthy();
     expect(mockListRuns).toHaveBeenCalledWith(
-      expect.objectContaining({
-        states: ['queued', 'running', 'paused', 'awaiting_input', 'ready_for_review'],
-      }),
+      expect.objectContaining({ states: [...ALL_CLOUD_RUN_STATES] }),
     );
+  });
 
-    fireEvent.press(getByLabelText('Open task: Audit the launch checklist'));
+  it('opens the conversation a run belongs to from its detail sheet', async () => {
+    const { getByLabelText } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(getByLabelText(CARD_LABEL)).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByLabelText(CARD_LABEL));
+    });
+
+    const openConversation = await waitFor(() =>
+      getByLabelText('Open the conversation this task belongs to'),
+    );
+    fireEvent.press(openConversation);
+
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/chat/[id]',
       params: { id: 'conversation-1' },
     });
+    expect(useCloudTaskStore.getState().detail).toBeNull();
+  });
+
+  it('offers no conversation action for a run that has none', async () => {
+    const detachedRun = { ...RUN, conversationId: null };
+    mockListRuns.mockResolvedValue({ runs: [detachedRun], nextCursor: null });
+    mockFollowRun.mockImplementation(
+      async (_runId: string, options: { onSnapshot: (page: unknown) => void }) => {
+        options.onSnapshot({ run: detachedRun, events: [] });
+      },
+    );
+
+    const { getByLabelText, queryByLabelText } = render(<CloudTasksScreen />);
+    const label = 'Open AGI work task. Waiting on you. Started on Mobile';
+    await waitFor(() => expect(getByLabelText(label)).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByLabelText(label));
+    });
+
+    await waitFor(() => expect(useCloudTaskStore.getState().detail?.run).toBeTruthy());
+    expect(queryByLabelText('Open the conversation this task belongs to')).toBeNull();
   });
 
   it('does not render an account-A task response after switching to account B', async () => {
@@ -158,7 +201,7 @@ describe('Mobile Cloud tasks screen', () => {
     mockListRuns
       .mockReturnValueOnce(accountAResponse.promise)
       .mockResolvedValueOnce({ runs: [], nextCursor: null });
-    const screen = render(<TasksScreen />);
+    const screen = render(<CloudTasksScreen />);
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -172,64 +215,30 @@ describe('Mobile Cloud tasks screen', () => {
   });
 
   it('uses semantic filters backed by the server state query', async () => {
-    const { getByLabelText } = render(<TasksScreen />);
+    const { getByLabelText } = render(<CloudTasksScreen />);
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
 
-    fireEvent.press(getByLabelText('Filter tasks: Needs input'));
+    fireEvent.press(getByLabelText('Filter Cloud tasks: Needs you'));
 
     await waitFor(() =>
       expect(mockListRuns).toHaveBeenLastCalledWith(
-        expect.objectContaining({ states: ['awaiting_input'] }),
+        expect.objectContaining({ states: ['awaiting_input', 'paused'] }),
       ),
     );
   });
 
-  it('dates every run and groups them by day like the Chats list', async () => {
-    const now = new Date();
-    now.setHours(12, 0, 0, 0);
-    jest.useFakeTimers();
-    jest.setSystemTime(now);
-    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
-    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
-    mockListRuns.mockResolvedValue({
-      runs: [
-        {
-          ...RUN,
-          id: '33333333-3333-4333-8333-333333333333',
-          conversationId: null,
-          state: 'ready_for_review',
-          updatedAt: fiveDaysAgo,
-          completedAt: fiveDaysAgo,
-        },
-        { ...RUN, updatedAt: twoHoursAgo },
-      ],
-      nextCursor: null,
-    });
-
-    const { getByText } = render(<TasksScreen />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(getByText('Updated 2h ago')).toBeTruthy();
-    expect(getByText('Finished 5 days ago')).toBeTruthy();
-    expect(getByText('Today')).toBeTruthy();
-    expect(getByText('This Week')).toBeTruthy();
-  });
-
-  it('starts a new AGI work task from the floating action', async () => {
-    const { getByLabelText } = render(<TasksScreen />);
-    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
-
-    fireEvent.press(getByLabelText('Start a new task'));
-
-    expect(useChatStore.getState().workMode).toBe('agiwork');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
-  });
-
   it('does not contact Cloud while Local mode is active', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
-    const { getByText } = render(<TasksScreen />);
+    const { getByText } = render(<CloudTasksScreen />);
+
+    expect(getByText('Tasks run in AGI Cloud')).toBeTruthy();
+    expect(mockListRuns).not.toHaveBeenCalled();
+  });
+
+  it('does not contact Cloud when a signed-out session has stale Cloud mode state', () => {
+    useWaitlistStore.setState({ cloudUnlocked: false });
+
+    const { getByText } = render(<CloudTasksScreen />);
 
     expect(getByText('Tasks run in AGI Cloud')).toBeTruthy();
     expect(mockListRuns).not.toHaveBeenCalled();
@@ -237,21 +246,12 @@ describe('Mobile Cloud tasks screen', () => {
 
   it('renders an actionable retry state when the run list fails', async () => {
     mockListRuns.mockRejectedValueOnce(new Error('offline'));
-    const { getByText, getByLabelText } = render(<TasksScreen />);
+    const { getByText } = render(<CloudTasksScreen />);
 
     await waitFor(() => expect(getByText('Tasks could not be loaded')).toBeTruthy());
-    fireEvent.press(getByLabelText('Retry loading tasks'));
+    fireEvent.press(getByText('Try again'));
 
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
-  });
-
-  it('does not contact Cloud when a signed-out session has stale Cloud mode state', () => {
-    useWaitlistStore.setState({ cloudUnlocked: false });
-
-    const { getByText } = render(<TasksScreen />);
-
-    expect(getByText('Tasks run in AGI Cloud')).toBeTruthy();
-    expect(mockListRuns).not.toHaveBeenCalled();
   });
 
   it('loads the next cursor page without duplicating runs', async () => {
@@ -267,43 +267,41 @@ describe('Mobile Cloud tasks screen', () => {
       .mockResolvedValueOnce({ runs: [RUN], nextCursor: 'cursor-2' })
       .mockResolvedValueOnce({ runs: [RUN, nextRun], nextCursor: null });
 
-    const { getByLabelText, getAllByText } = render(<TasksScreen />);
-    await waitFor(() => expect(getByLabelText('Load more tasks')).toBeTruthy());
+    const { getByLabelText, getAllByText } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(getByLabelText('Load more Cloud tasks')).toBeTruthy());
 
-    fireEvent.press(getByLabelText('Load more tasks'));
+    fireEvent.press(getByLabelText('Load more Cloud tasks'));
 
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
     expect(mockListRuns).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: 'cursor-2', limit: 25 }),
     );
-    expect(getAllByText('Awaiting input')).toHaveLength(1);
+    expect(getAllByText('Waiting on you')).toHaveLength(1);
   });
 
-  it('polls only while mounted in foreground Cloud mode and removes runs that leave Active', async () => {
+  it('polls only while mounted in foreground Cloud mode', async () => {
     jest.useFakeTimers();
     mockListRuns
       .mockResolvedValueOnce({ runs: [RUN], nextCursor: null })
-      .mockResolvedValueOnce({ runs: [], nextCursor: null });
+      .mockResolvedValue({ runs: [], nextCursor: null });
 
-    const screen = render(<TasksScreen />);
+    const screen = render(<CloudTasksScreen />);
     await act(async () => {
       await Promise.resolve();
     });
     expect(mockListRuns).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      jest.advanceTimersByTime(TASK_POLL_INTERVAL_MS);
+      jest.advanceTimersByTime(CLOUD_TASK_LIST_POLL_INTERVAL_MS);
       await Promise.resolve();
     });
 
     expect(mockListRuns).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('No active Cloud tasks')).toBeTruthy();
-    const pollingSignal = mockListRuns.mock.calls[1]?.[0]?.signal as AbortSignal;
+    expect(screen.getByText('No Cloud tasks yet')).toBeTruthy();
 
     act(() => appStateListener?.('background'));
-    expect(pollingSignal.aborted).toBe(true);
     await act(async () => {
-      jest.advanceTimersByTime(TASK_POLL_INTERVAL_MS * 2);
+      jest.advanceTimersByTime(CLOUD_TASK_LIST_POLL_INTERVAL_MS * 2);
       await Promise.resolve();
     });
     expect(mockListRuns).toHaveBeenCalledTimes(2);

@@ -61,16 +61,19 @@ export function CloudRunDetailSheet({
   onClose,
   onResolveApproval,
   onStop,
+  onOpenConversation,
 }: {
   detail: CloudRunDetail | null;
   title: string;
   onClose: () => void;
   onResolveApproval: (decision: ManagedCloudAgentRunApprovalDecision) => void;
   onStop: () => void;
+  onOpenConversation: (conversationId: string) => void;
 }) {
   const colors = useThemeColors();
   const run = detail?.run ?? null;
   const busy = detail?.pendingAction != null;
+  const conversationId = run?.conversationId ?? null;
 
   return (
     <Modal
@@ -290,6 +293,15 @@ export function CloudRunDetailSheet({
                   </Text>
                 ))}
               </View>
+            ) : null}
+
+            {conversationId ? (
+              <Button
+                title="Open conversation"
+                variant="outline"
+                accessibilityLabel="Open the conversation this task belongs to"
+                onPress={() => onOpenConversation(conversationId)}
+              />
             ) : null}
 
             {run && isCloudRunSteerable(run) ? (

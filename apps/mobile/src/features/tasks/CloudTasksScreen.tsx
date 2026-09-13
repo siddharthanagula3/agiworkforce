@@ -354,6 +354,14 @@ export function CloudTasksScreen() {
     router.push('/(app)/settings/notifications' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleOpenConversation = useCallback(
+    (conversationId: string) => {
+      closeRun();
+      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
+    },
+    [closeRun, router],
+  );
+
   if (!FEATURES.cloudTasks) return <FeatureUnavailable feature="Cloud tasks" />;
 
   if (appMode !== 'cloud' || !cloudUnlocked) {
@@ -494,6 +502,7 @@ export function CloudTasksScreen() {
         onClose={closeRun}
         onResolveApproval={(decision) => void resolveApproval(decision)}
         onStop={() => void stopRun()}
+        onOpenConversation={handleOpenConversation}
       />
     </SafeAreaView>
   );
