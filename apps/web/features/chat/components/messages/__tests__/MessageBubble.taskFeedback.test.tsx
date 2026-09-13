@@ -40,6 +40,7 @@ function taskReply() {
         runId: RUN_ID,
         runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
         lastSequence: 7,
+        detachable: true,
       },
     },
   };

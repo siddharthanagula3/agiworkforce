@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-10
+Last updated: 2026-09-13
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -535,6 +535,46 @@ deploy. What is still unobservable from a checkout is everything behind a
 session: a durable run, a real sandbox, a live voice session, a reload, and a
 long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Durability] Ship the world transport fix and end the two stranded runs
+
+**Why founder assistance is required**
+Deploying is gated on CI and on the founder's own approval, and cancelling a
+production workflow run mutates live state.
+**Exact action**
+
+1. Deploy main to production once CI is green on the same commit. The fix is the
+   `@workflow/world-vercel` override raised to `4.7.4` in the root `package.json`
+   plus the lockfile; nothing in the Vercel dashboard needs to change, because
+   `WORKFLOW_NODE_HTTP=1` is already set on production and preview and was only
+   ever being ignored.
+2. Cancel the two runs still stranded on the retired deployment
+   `dpl_BCUkf2a6vE4xsymKphDiAhDNQXcE`, which the queue redelivers every fifteen
+   minutes into an 800 s function each time:
+
+   ```
+   WORKFLOW_NODE_HTTP=1 npx workflow cancel wrun_01M29D4FY1WTT3T8FYR2T726JP \
+     --backend vercel --project agiworkforce --team siddharthanagula4 --env production
+   WORKFLOW_NODE_HTTP=1 npx workflow cancel wrun_01M27B9P5V0K81W755HBD4HVH7 \
+     --backend vercel --project agiworkforce --team siddharthanagula4 --env production
+   ```
+
+   The flag is required on the command too: without it the CLI's own world calls
+   hang and the command never returns.
+
+**Where** GitHub Actions or the Vercel project, then a terminal.
+**Needed input** One deploy approval and the two cancels.
+**How to verify completion** A signed-in AGI Work turn on the deployed build
+returns `X-AGI-Tool-Loop: durable`; the run lists as `completed` rather than
+`running`; and `/.well-known/workflow/v1/flow` stops answering 504 on the
+quarter hour. Before this change no production run had ever reached a terminal
+state other than `cancelled`.
+**What remains after founder action** Nothing in code. The transport fix, its
+regression guard, the run-age contract and the stalled-run UI are implemented
+and exercised on `:3100`; what cannot be observed from a checkout is a
+production run.
+**Impact** RELEASE-BLOCKING (AGI Work is not durable in production)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Security] A Moonshot account string reached a pushed commit

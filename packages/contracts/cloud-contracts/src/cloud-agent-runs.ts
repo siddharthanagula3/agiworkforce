@@ -5,6 +5,9 @@ import { AgentEventEnvelopeSchema, AgentTaskStateSchema } from './agent-events';
 export const MANAGED_CLOUD_AGENT_RUNS_BASE_PATH = '/api/llm/v1/chat/completions/runs';
 export const MANAGED_CLOUD_AGENT_RUN_ID_HEADER = 'X-AGI-Agent-Run-Id';
 export const MANAGED_CLOUD_AGENT_RUN_URL_HEADER = 'X-AGI-Agent-Run-URL';
+export const MANAGED_CLOUD_TOOL_LOOP_HEADER = 'X-AGI-Tool-Loop';
+/** The one tool-loop value that means this turn outlives its request. */
+export const MANAGED_CLOUD_TOOL_LOOP_DURABLE = 'durable';
 
 export const CloudAgentOriginSurfaceSchema = z.enum([
   'web',
@@ -85,6 +88,14 @@ export const CloudAgentRunSchema = z.object({
   completedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+  /**
+   * How long the row has sat untouched, measured on the server that read it. A
+   * client cannot compute this from `updatedAt` without sharing the server's
+   * clock, and a run whose executor died stops moving `updatedAt` while its
+   * state stays active, which is the only way to tell a working run from a
+   * stranded one.
+   */
+  staleForMs: z.number().int().min(0),
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
   pendingInput: CloudAgentPendingInputSchema.optional(),
   usage: CloudAgentRunUsageSchema.optional(),

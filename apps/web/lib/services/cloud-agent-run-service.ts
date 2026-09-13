@@ -448,7 +448,15 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     completedAt: toIsoTimestamp(row.completed_at),
     createdAt: toIsoTimestamp(row.created_at),
     updatedAt: toIsoTimestamp(row.updated_at),
+    staleForMs: staleForMs(row.updated_at),
   });
+}
+
+function staleForMs(updatedAt: string | Date): number {
+  const touchedAtMs =
+    updatedAt instanceof Date ? updatedAt.getTime() : new Date(updatedAt).getTime();
+  if (!Number.isFinite(touchedAtMs)) return 0;
+  return Math.max(0, Date.now() - touchedAtMs);
 }
 
 function requireRun(rows: CloudAgentRunRow[]): CloudAgentRun {

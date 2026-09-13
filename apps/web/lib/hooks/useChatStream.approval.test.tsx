@@ -477,6 +477,7 @@ describe('useChatStream, tool approval → resume', () => {
               runId: RUN_ID,
               runPath: RUN_PATH,
               lastSequence: 9,
+              detachable: true,
               state: 'awaiting_input',
             },
             cloudApproval: {
@@ -559,6 +560,7 @@ describe('useChatStream, tool approval → resume', () => {
               runId: RUN_ID,
               runPath: RUN_PATH,
               lastSequence: 9,
+              detachable: true,
               state: 'awaiting_input',
             },
             cloudApproval: {
