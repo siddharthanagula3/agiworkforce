@@ -213,6 +213,7 @@ describe('GET /api/connectors/directory', () => {
       'api-key-form',
       'desktop-and-cli',
       'needs-setup',
+      'unavailable',
     ]);
     expect(body.categories).toContain('Productivity');
   });
@@ -341,7 +342,13 @@ describe('GET /api/connectors/directory', () => {
     expect(body.stats).toEqual({
       totalRecords: 7,
       remoteRecords: 6,
-      byConnectable: { connect: 4, 'api-key-form': 1, 'desktop-and-cli': 1, 'needs-setup': 1 },
+      byConnectable: {
+        connect: 4,
+        'api-key-form': 1,
+        'desktop-and-cli': 1,
+        'needs-setup': 1,
+        unavailable: 0,
+      },
       byBadge: { 'first-party': 2, official: 1, verified: 0, registry: 2, community: 2 },
       bootstrapComplete: true,
       lastSyncAt: LAST_SYNC_AT,

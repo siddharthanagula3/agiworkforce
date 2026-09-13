@@ -34,6 +34,7 @@ describe('directory enumerations', () => {
       'api-key-form',
       'desktop-and-cli',
       'needs-setup',
+      'unavailable',
     ]);
     expect(DIRECTORY_AUTH_MODES).toEqual(['none', 'oauth', 'api-key', 'unknown']);
   });
@@ -87,7 +88,13 @@ describe('computeDirectoryCounts', () => {
     expect(counts).toEqual({
       totalRecords: 5,
       remoteRecords: 4,
-      byConnectable: { connect: 2, 'api-key-form': 1, 'desktop-and-cli': 1, 'needs-setup': 1 },
+      byConnectable: {
+        connect: 2,
+        'api-key-form': 1,
+        'desktop-and-cli': 1,
+        'needs-setup': 1,
+        unavailable: 0,
+      },
       byBadge: { 'first-party': 1, official: 1, verified: 0, registry: 1, community: 2 },
     });
   });
@@ -96,7 +103,7 @@ describe('computeDirectoryCounts', () => {
     const counts = computeDirectoryCounts([]);
     expect(counts.totalRecords).toBe(0);
     expect(counts.remoteRecords).toBe(0);
-    expect(Object.values(counts.byConnectable)).toEqual([0, 0, 0, 0]);
+    expect(Object.values(counts.byConnectable)).toEqual([0, 0, 0, 0, 0]);
     expect(Object.values(counts.byBadge)).toEqual([0, 0, 0, 0, 0]);
   });
 });
