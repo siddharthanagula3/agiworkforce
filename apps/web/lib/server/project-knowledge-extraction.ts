@@ -4,6 +4,11 @@ import { isTextAttachmentMeta, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types'
 import { matchDenylistedUpload } from '@/lib/moderation';
 import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
 import { objectKeyFromStorageUri, StoredObjectTooLargeError } from './object-storage';
+import {
+  extractOfficeDocumentText,
+  officeDocumentKind,
+  OfficeDocumentUnreadableError,
+} from './office-document-text';
 import { getProjectKnowledgeObject } from './project-knowledge-object-storage';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
@@ -256,6 +261,19 @@ export async function extractProjectKnowledgeFile(
 
   if (declaredMimeType === 'application/pdf') {
     return { extractedText: await extractPdfText(object.data) };
+  }
+  const officeKind = officeDocumentKind(input.fileName, declaredMimeType);
+  if (officeKind) {
+    try {
+      const text = await extractOfficeDocumentText(object.data, input.fileName, officeKind);
+      return { extractedText: text || null };
+    } catch (error) {
+      if (!(error instanceof OfficeDocumentUnreadableError)) throw error;
+      throw new ProjectKnowledgeExtractionError(
+        'document_unreadable',
+        `${input.fileName} could not be read as an Office document.`,
+      );
+    }
   }
   if (declaredMimeType === 'application/x-ipynb+json') {
     return { extractedText: extractNotebookText(object.data, input.fileName) };

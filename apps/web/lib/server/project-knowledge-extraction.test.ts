@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+
+import JSZip from 'jszip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMocks = vi.hoisted(() => {
@@ -62,6 +64,42 @@ describe('extractProjectKnowledgeFile', () => {
       'knowledge-files/projects/project-1/object.txt',
       data.byteLength,
     );
+  });
+
+  it('extracts a spreadsheet the project uploaded, sheet names and formulas included', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Budget" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Total</t></is></c><c r="B1"><f>SUM(B2:B4)</f></c></row></sheetData></worksheet>',
+    );
+    const data = await zip.generateAsync({ type: 'nodebuffer' });
+    storageMocks.objectKeyFromStorageUri.mockReturnValue(
+      'knowledge-files/projects/project-1/object.xlsx',
+    );
+    storageMocks.getBoundedPrivateObject.mockResolvedValue({
+      data,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const result = await extractProjectKnowledgeFile({
+      projectId: 'project-1',
+      storageUri: 'https://files.example.test/knowledge-files/projects/project-1/object.xlsx',
+      fileName: 'budget.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      byteCount: data.byteLength,
+      checksumSha256: checksum(data),
+    });
+
+    expect(result.extractedText).toContain('## Sheet: Budget');
+    expect(result.extractedText).toContain('=SUM(B2:B4)');
   });
 
   it('refuses to buffer a stored object that outgrew its declared byte count', async () => {

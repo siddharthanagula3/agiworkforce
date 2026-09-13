@@ -122,6 +122,14 @@ export const IMAGE_ATTACHMENT_EXTENSIONS: readonly string[] = [
   'heic',
 ];
 
+export const OFFICE_ATTACHMENT_MIME_TYPES: readonly string[] = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+
+export const OFFICE_ATTACHMENT_EXTENSIONS: readonly string[] = ['docx', 'xlsx', 'pptx'];
+
 export const TEXT_ATTACHMENT_EXTENSIONS: readonly string[] = [
   'txt',
   'md',
@@ -144,11 +152,13 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   ...IMAGE_ATTACHMENT_EXTENSIONS,
   'pdf',
   ...TEXT_ATTACHMENT_EXTENSIONS,
+  ...OFFICE_ATTACHMENT_EXTENSIONS,
 ];
 
 export const ALLOWED_ATTACHMENT_ACCEPT = [
   ...IMAGE_ATTACHMENT_MIME_TYPES,
   'application/pdf',
+  ...OFFICE_ATTACHMENT_MIME_TYPES,
   'text/*',
   'application/json',
   'application/xml',
@@ -206,6 +216,7 @@ export function validateAttachmentMeta(
   const mimeAllowed =
     mime.length > 0 &&
     (IMAGE_ATTACHMENT_MIME_TYPES.includes(mime) ||
+      OFFICE_ATTACHMENT_MIME_TYPES.includes(mime) ||
       ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)));
   const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(ext);
   if (!mimeAllowed && !extAllowed) {
