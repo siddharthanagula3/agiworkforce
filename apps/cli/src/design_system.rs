@@ -109,6 +109,49 @@ impl AccessMode {
     pub const ORDER: &'static [AccessMode] =
         &[AccessMode::Local, AccessMode::Byok, AccessMode::Cloud];
 
+    /// Classify the runtime provider into an access mode. Presentation only,
+    /// it never affects routing. A keyless OpenAI-compatible endpoint and local
+    /// Ollama are Local; the AGI-managed endpoint is Cloud; anything reached
+    /// with a key is BYOK.
+    pub fn for_provider(provider: &crate::models::Provider) -> AccessMode {
+        use crate::models::{OllamaMode, Provider};
+        match provider {
+            Provider::ManagedCloud => AccessMode::Cloud,
+            Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
+            Provider::Ollama(OllamaMode::Cloud) => AccessMode::Byok,
+            Provider::Custom { api_key_env, .. } => {
+                if api_key_env.is_some() {
+                    AccessMode::Byok
+                } else {
+                    AccessMode::Local
+                }
+            }
+            Provider::OpenAICompatible {
+                name, api_key_env, ..
+            } => {
+                if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
+                    AccessMode::Cloud
+                } else if api_key_env.is_none() {
+                    AccessMode::Local
+                } else {
+                    AccessMode::Byok
+                }
+            }
+            Provider::Anthropic | Provider::Google => AccessMode::Byok,
+        }
+    }
+
+    /// What a zero-dollar session total means for this access mode. Zero cost
+    /// is only "free" when the model runs on the device: a BYOK session is
+    /// billed by the provider and a managed session against the plan.
+    pub fn zero_cost_note(self) -> &'static str {
+        match self {
+            AccessMode::Local => "no cost, local model",
+            AccessMode::Byok => "billed by your provider",
+            AccessMode::Cloud => "included in your plan",
+        }
+    }
+
     /// Short section label.
     pub fn label(self) -> &'static str {
         match self {
@@ -322,6 +365,17 @@ impl Effort {
             Effort::Medium => "Medium",
             Effort::High => "High",
             Effort::Max => "Max",
+        }
+    }
+
+    /// Parse the `[default] reasoning_effort` config value onboarding writes.
+    pub fn from_config_value(value: &str) -> Option<Effort> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "low" => Some(Effort::Low),
+            "medium" => Some(Effort::Medium),
+            "high" => Some(Effort::High),
+            "max" => Some(Effort::Max),
+            _ => None,
         }
     }
 
