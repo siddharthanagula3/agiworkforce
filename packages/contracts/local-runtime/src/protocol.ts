@@ -78,4 +78,5 @@ export type DesktopRuntimeEvent =
       path: string;
       change: 'created' | 'modified' | 'deleted';
     }
-  | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope };
+  | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope }
+  | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string };

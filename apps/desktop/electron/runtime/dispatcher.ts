@@ -1,14 +1,22 @@
 import { dialog, shell, type BrowserWindow } from 'electron';
 import {
+  DESKTOP_RUNTIME_EVENT_CHANNEL,
+  ShellCommandRefused,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
   type DesktopRuntimeErrorCode,
   type DesktopRuntimeResponse,
   type PermissionScope,
+  type ShellPolicy,
+  type ShellPolicyVerdict,
   type WorkspaceRoot,
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
+import { openWithDefaultApplication, revealInFileManager } from './appsService';
+import { readClipboard } from './clipboardService';
+import { cancelShellRun, runShellCommand } from './shellService';
+import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
   createDirectory,
   globFiles,
@@ -41,6 +49,30 @@ function requireString(args: Args, key: string): string {
     throw new InvalidArguments(`"${key}" must be a non-empty string.`);
   }
   return value;
+}
+
+function optionalNumber(args: Args, key: string): number | undefined {
+  const value = args[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new InvalidArguments(`"${key}" must be a number.`);
+  }
+  return value;
+}
+
+function requirePolicy(args: Args): ShellPolicy {
+  const value = args['policy'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArguments('"policy" must be an object with allow and deny lists.');
+  }
+  const candidate = value as Partial<ShellPolicy>;
+  const list = (entries: unknown, name: string): string[] => {
+    if (!Array.isArray(entries) || entries.some((entry) => typeof entry !== 'string')) {
+      throw new InvalidArguments(`"policy.${name}" must be a list of program names.`);
+    }
+    return entries as string[];
+  };
+  return { allow: list(candidate.allow, 'allow'), deny: list(candidate.deny, 'deny') };
 }
 
 function optionalString(args: Args, key: string, fallback: string): string {
@@ -106,6 +138,34 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'filesystem.read',
     reason: 'The agent wants to show this folder in your file manager.',
   },
+  shell_run: {
+    capability: 'shell.execute',
+    reason:
+      'Commands you run here start real programs on this Mac, with your account, in this folder.',
+  },
+  app_open_path: {
+    capability: 'application.control',
+    reason: 'Opening a file here hands it to whichever app your Mac opens that kind of file with.',
+  },
+  app_reveal_path: {
+    capability: 'filesystem.read',
+    reason: 'The agent wants to show a file from this folder in your file manager.',
+  },
+};
+
+/**
+ * Capabilities that are not about one folder. The clipboard belongs to the
+ * session rather than to a workspace, so it carries a global scope and asks
+ * once.
+ */
+const GLOBAL_CAPABILITY_BY_COMMAND: Record<
+  string,
+  { capability: DesktopCapability; reason: string }
+> = {
+  clipboard_read: {
+    capability: 'clipboard.read',
+    reason: 'Attaching the clipboard copies whatever it holds right now into this conversation.',
+  },
 };
 
 async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
@@ -133,6 +193,41 @@ async function pickRoot(window: BrowserWindow | null): Promise<WorkspaceRoot> {
 }
 
 class Cancelled extends Error {}
+
+function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
+  if (!window || window.isDestroyed()) return;
+  window.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
+}
+
+/**
+ * The second gate on a local command.
+ *
+ * The capability grant says this folder may run programs at all; this asks
+ * about the one command about to start, quoting it verbatim so the text the
+ * user approves is the text that is spawned. Programs the user has put on the
+ * allow list never reach here.
+ */
+async function approveShellCommand(
+  window: BrowserWindow | null,
+  verdict: ShellPolicyVerdict,
+  command: string,
+  cwd: string,
+): Promise<boolean> {
+  const options = {
+    type: 'warning' as const,
+    buttons: ['Cancel', 'Run once'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Run a local command?',
+    message: `Run ${verdict.program} in ${cwd}?`,
+    detail: `${command}\n\nThis starts a real program with your account. Add ${verdict.program} to the allowed list in Settings if you want it to run without asking.`,
+    noLink: true,
+  };
+  const result = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options);
+  return result.response === 1;
+}
 
 async function execute(
   window: BrowserWindow | null,
@@ -181,6 +276,32 @@ async function execute(
         requireString(args, 'query'),
         optionalString(args, 'path', ''),
       );
+    case 'shell_run': {
+      const root = resolveRoot(args);
+      const timeoutMs = optionalNumber(args, 'timeoutMs');
+      return runShellCommand({
+        runId: requireString(args, 'runId'),
+        root,
+        relativePath: optionalString(args, 'path', ''),
+        command: requireString(args, 'command'),
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        policy: readShellPolicy(),
+        approve: (verdict, command, cwd) => approveShellCommand(window, verdict, command, cwd),
+        emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+      });
+    }
+    case 'shell_cancel':
+      return cancelShellRun(requireString(args, 'runId'));
+    case 'shell_policy_read':
+      return readShellPolicy();
+    case 'shell_policy_write':
+      return writeShellPolicy(requirePolicy(args));
+    case 'app_open_path':
+      return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
+    case 'app_reveal_path':
+      return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
+    case 'clipboard_read':
+      return readClipboard();
     default:
       throw new UnknownCommand(command);
   }
@@ -205,6 +326,14 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure('permission-denied', error.message);
   }
   if (error instanceof Cancelled) return runtimeFailure('cancelled', error.message);
+  if (error instanceof ShellCommandRefused) {
+    return runtimeFailure(
+      error.reason === 'control-characters' || error.reason === 'unparseable'
+        ? 'invalid-arguments'
+        : 'permission-denied',
+      error.message,
+    );
+  }
   if (error instanceof UnknownCommand) {
     return runtimeFailure(
       'unknown-command',
@@ -238,6 +367,31 @@ export async function dispatch(
   const args: Args = rawArgs ?? {};
 
   try {
+    const globalRequirement = GLOBAL_CAPABILITY_BY_COMMAND[command];
+    if (globalRequirement) {
+      const scope: PermissionScope = { kind: 'global' };
+      const state =
+        getPermissionState(globalRequirement.capability, scope) === 'prompt'
+          ? await requestPermission(
+              window,
+              globalRequirement.capability,
+              scope,
+              globalRequirement.reason,
+            )
+          : getPermissionState(globalRequirement.capability, scope);
+
+      if (state !== 'granted') {
+        return runtimeFailure(
+          'permission-denied',
+          `Permission to ${globalRequirement.capability.replace('.', ' ')} was not granted.`,
+          { capability: globalRequirement.capability, scope },
+        );
+      }
+      const value = await execute(window, command, args);
+      consumeSingleUse(globalRequirement.capability, scope);
+      return runtimeSuccess(value);
+    }
+
     const requirement = CAPABILITY_BY_COMMAND[command];
     if (requirement) {
       const root = resolveRoot(args);

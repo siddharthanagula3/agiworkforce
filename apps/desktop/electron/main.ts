@@ -26,6 +26,7 @@ import {
 import { DESKTOP_RUNTIME_CHANNEL } from '@agiworkforce/local-runtime-contract';
 import { handleBridgeCommand } from './accountBridge';
 import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
+import { cancelAllShellRuns } from './runtime/shellService';
 import { installAppMenu } from './appMenu';
 import { applyLaunchAtLogin } from './launchAtLogin';
 import {
@@ -38,6 +39,7 @@ import {
   RENDERER_ORIGIN,
   RENDERER_SCHEME,
 } from './config';
+import { pickableCaptureSources } from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
 import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
@@ -399,24 +401,26 @@ function configureSession(targetSession: Electron.Session): void {
         return;
       }
       desktopCapturer
-        .getSources({ types: ['screen'] })
+        .getSources({ types: ['screen', 'window'] })
         .then(async (sources) => {
-          if (sources.length === 0) {
+          const offered = pickableCaptureSources(sources);
+          if (offered.length === 0) {
             callback({});
             return;
           }
-          const cancelId = sources.length;
+          const cancelId = offered.length;
           const selection = await dialog.showMessageBox({
             type: 'question',
-            title: 'Share your screen',
-            message: 'Choose a screen to share with AGI Cloud',
-            detail: 'Sharing stops when you end screen capture in the chat.',
-            buttons: [...sources.map((source) => source.name), 'Cancel'],
+            title: 'Share a screen or window',
+            message: 'Choose what to share with AGI Cloud',
+            detail:
+              'A window shares only that window, even when something else is in front of it. Sharing stops when you end screen capture in the chat.',
+            buttons: [...offered.map((source) => source.name), 'Cancel'],
             defaultId: 0,
             cancelId,
             noLink: true,
           });
-          const source = sources[selection.response];
+          const source = offered[selection.response];
           callback(source ? { video: source } : {});
         })
         .catch(() => callback({}));
@@ -667,6 +671,7 @@ if (!hasSingleInstanceLock) {
 
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
+    cancelAllShellRuns();
   });
 
   app.on('window-all-closed', () => {

@@ -1,4 +1,4 @@
-import type { DesktopRuntimeResponse } from './protocol';
+import type { DesktopRuntimeEvent, DesktopRuntimeResponse } from './protocol';
 
 export const DESKTOP_DEEP_LINK_SCHEME = 'agiworkforce-cloud';
 
@@ -63,6 +63,11 @@ export interface HostBridge {
   ): Promise<DesktopRuntimeResponse<T>>;
   onDeepLink(callback: (url: string) => void): () => void;
   onVoiceHotkey(callback: () => void): () => void;
+  /**
+   * Progress from a runtime command that outlives its response, which today is
+   * a local command's output arriving line by line while it still runs.
+   */
+  onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void;
   openExternal(url: string): Promise<void>;
   notify(request: HostNotifyRequest): Promise<void>;
 }
