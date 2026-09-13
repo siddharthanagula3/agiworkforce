@@ -212,7 +212,7 @@ describe('OrganizationSharingSection', () => {
     expect(mockUnshareProject).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Stop sharing Roadmap?');
-    expect(dialog).toHaveTextContent('All 2 members of this organization lose access');
+    expect(dialog).toHaveTextContent('Everyone in this organization (2 members) loses access');
 
     await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
     await waitFor(() => expect(mockUnshareProject).toHaveBeenCalledWith(PROJECT));
@@ -229,7 +229,7 @@ describe('OrganizationSharingSection', () => {
     expect(mockUnshareConnector).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Stop sharing Jira?');
-    expect(dialog).toHaveTextContent('lose orgmcp-a1b2c3d4e5 in chat');
+    expect(dialog).toHaveTextContent('loses orgmcp-a1b2c3d4e5 in chat');
 
     await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
     await waitFor(() =>
