@@ -540,11 +540,11 @@ describe('enrichWebSearchResultTitles', () => {
       ),
     );
     const enriched = await enrichWebSearchResultTitles(
-      [{ url: 'https://example.com/grounded', title: 'Grounded result', snippet: '' }],
+      [{ url: 'https://example.com/grounded', title: '', snippet: '' }],
       { fetchImpl },
     );
     expect(enriched[0]).toMatchObject({
-      title: 'Grounded result',
+      title: 'Real Headline',
       snippet: 'What the page is about.',
       date: '2026-09-01T10:00:00Z',
     });
@@ -560,7 +560,7 @@ describe('enrichWebSearchResultTitles', () => {
       ),
     );
     const enriched = await enrichWebSearchResultTitles<WebSearchResultItem>(
-      [{ url: 'https://example.com/jsonld', title: 'T', snippet: 's' }],
+      [{ url: 'https://example.com/jsonld', title: '', snippet: 's' }],
       { fetchImpl },
     );
     expect(enriched[0]?.date).toBe('2026-08-14');
