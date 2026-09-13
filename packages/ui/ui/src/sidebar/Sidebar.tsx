@@ -154,9 +154,6 @@ export function Sidebar(props: SidebarProps) {
   const { t: tCommon } = useUiTranslation('common');
   const codeLabel = t('sidebar.codeAction', 'AGI Code');
 
-  const modKeySymbol =
-    typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
-
   const [showArchived, setShowArchived] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<SidebarTemporalGroup>>(
     new Set(DEFAULT_EXPANDED),
@@ -542,13 +539,11 @@ export function Sidebar(props: SidebarProps) {
             className="flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
           >
             <Search className="h-4 w-4" />
+            {/* No shortcut badge: Cmd/Ctrl+K is claimed by the command palette
+                in the capture phase, so it never reaches this dialog, and no
+                other binding opens it. Advertising one sent the reader to a
+                different surface than the row they pressed. */}
             <span>{tCommon('search', 'Search')}</span>
-            <span className="ml-auto flex items-center gap-1">
-              <kbd className="rounded bg-[hsl(var(--card))] px-1.5 py-0.5 text-xs">
-                {modKeySymbol}
-              </kbd>
-              <kbd className="rounded bg-[hsl(var(--card))] px-1.5 py-0.5 text-xs">K</kbd>
-            </span>
           </button>
         </div>
 
