@@ -1,12 +1,16 @@
 import { dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  LocalInferenceRefused,
   ShellCommandRefused,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
   type DesktopRuntimeErrorCode,
   type DesktopRuntimeResponse,
+  type LocalChatMessage,
+  type LocalModelSettings,
+  type LocalModelSnapshot,
   type PermissionScope,
   type ShellPolicy,
   type ShellPolicyVerdict,
@@ -27,6 +31,13 @@ import {
   type BrowserCommandPlan,
 } from '../browser/commandGate';
 import { openWithDefaultApplication, revealInFileManager } from './appsService';
+import {
+  cancelLocalChat,
+  listLocalModels,
+  listLocalServers,
+  runLocalChat,
+} from './localInferenceService';
+import { readLocalModelSettings, writeLocalModelSettings } from './localModelSettingsStore';
 import { readClipboard } from './clipboardService';
 import { cancelShellRun, runShellCommand } from './shellService';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
@@ -98,6 +109,42 @@ function optionalString(args: Args, key: string, fallback: string): string {
 }
 
 class InvalidArguments extends Error {}
+
+function requireLocalMessages(args: Args): LocalChatMessage[] {
+  const value = args['messages'];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new InvalidArguments('"messages" must be a non-empty list of turns.');
+  }
+  return value.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new InvalidArguments('Every message must be an object.');
+    }
+    const candidate = entry as Partial<LocalChatMessage>;
+    if (
+      candidate.role !== 'system' &&
+      candidate.role !== 'user' &&
+      candidate.role !== 'assistant'
+    ) {
+      throw new InvalidArguments('Every message needs a system, user or assistant role.');
+    }
+    if (typeof candidate.content !== 'string') {
+      throw new InvalidArguments('Every message needs string content.');
+    }
+    return { role: candidate.role, content: candidate.content };
+  });
+}
+
+function requireLocalSettings(args: Args): Partial<LocalModelSettings> {
+  const value = args['settings'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArguments('"settings" must be an object of base URLs.');
+  }
+  const baseUrls = (value as Partial<LocalModelSettings>).baseUrls;
+  if (baseUrls !== undefined && (typeof baseUrls !== 'object' || baseUrls === null)) {
+    throw new InvalidArguments('"settings.baseUrls" must be an object.');
+  }
+  return { ...(baseUrls ? { baseUrls } : {}) } as Partial<LocalModelSettings>;
+}
 
 function resolveRoot(args: Args): WorkspaceRoot {
   const rootId = requireString(args, 'rootId');
@@ -178,6 +225,16 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   clipboard_read: {
     capability: 'clipboard.read',
     reason: 'Attaching the clipboard copies whatever it holds right now into this conversation.',
+  },
+  local_model_list: {
+    capability: 'local.inference',
+    reason:
+      'Listing them reads which models you have pulled with Ollama or LM Studio. Nothing is sent anywhere.',
+  },
+  local_chat_start: {
+    capability: 'local.inference',
+    reason:
+      'The conversation is answered by a model running on this Mac. Nothing in it reaches AGI Cloud or any provider.',
   },
 };
 
@@ -379,6 +436,35 @@ async function execute(
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
     case 'clipboard_read':
       return readClipboard();
+    case 'local_model_servers':
+      return {
+        granted: getPermissionState('local.inference', { kind: 'global' }) === 'granted',
+        servers: await listLocalServers(),
+      } satisfies LocalModelSnapshot;
+    case 'local_model_list':
+      return listLocalModels();
+    case 'local_chat_start': {
+      const timeoutMs = optionalNumber(args, 'timeoutMs');
+      const temperature = optionalNumber(args, 'temperature');
+      const maxOutputTokens = optionalNumber(args, 'maxOutputTokens');
+      return runLocalChat(
+        {
+          runId: requireString(args, 'runId'),
+          modelId: requireString(args, 'modelId'),
+          messages: requireLocalMessages(args),
+          ...(timeoutMs === undefined ? {} : { timeoutMs }),
+          ...(temperature === undefined ? {} : { temperature }),
+          ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
+        },
+        (delta) => emitRuntimeEvent(window, { kind: 'local-chat-delta', ...delta }),
+      );
+    }
+    case 'local_chat_cancel':
+      return cancelLocalChat(requireString(args, 'runId'));
+    case 'local_model_settings_read':
+      return readLocalModelSettings();
+    case 'local_model_settings_write':
+      return writeLocalModelSettings(requireLocalSettings(args));
     case 'browser_pairing_state':
       return pairingState();
     case 'browser_pairing_install_host':
@@ -415,6 +501,12 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure('permission-denied', error.message);
   }
   if (error instanceof Cancelled) return runtimeFailure('cancelled', error.message);
+  if (error instanceof LocalInferenceRefused) {
+    return runtimeFailure(
+      error.reason === 'unknown-model' ? 'not-found' : 'invalid-arguments',
+      error.message,
+    );
+  }
   if (error instanceof ShellCommandRefused) {
     return runtimeFailure(
       error.reason === 'control-characters' || error.reason === 'unparseable'

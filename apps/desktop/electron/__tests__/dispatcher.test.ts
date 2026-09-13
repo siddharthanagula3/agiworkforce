@@ -23,9 +23,16 @@ const writeShellPolicy = vi.fn();
 const openWithDefaultApplication = vi.fn();
 const revealInFileManager = vi.fn();
 const readClipboard = vi.fn();
+const listLocalServers = vi.fn();
+const listLocalModels = vi.fn();
+const runLocalChat = vi.fn();
+const cancelLocalChat = vi.fn();
+const readLocalModelSettings = vi.fn();
+const writeLocalModelSettings = vi.fn();
 const send = vi.fn();
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp' },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   shell: { openPath: vi.fn() },
 }));
@@ -62,6 +69,21 @@ vi.mock('../runtime/filesystemService', () => ({
   writeTextFile: vi.fn(),
 }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit: vi.fn() }));
+vi.mock('../runtime/localInferenceService', () => ({
+  listLocalServers,
+  listLocalModels,
+  runLocalChat,
+  cancelLocalChat,
+}));
+vi.mock('../runtime/localModelSettingsStore', () => ({
+  LOCAL_MODEL_DEFAULT_BASE_URLS: {
+    ollama: 'http://localhost:11434',
+    lmstudio: 'http://localhost:1234/v1',
+  },
+  readLocalModelSettings,
+  readLocalBaseUrl: vi.fn(),
+  writeLocalModelSettings,
+}));
 
 const { dispatch } = await import('../runtime/dispatcher');
 
@@ -76,6 +98,36 @@ beforeEach(() => {
   readShellPolicy.mockReturnValue({ allow: ['git'], deny: [] });
   writeShellPolicy.mockImplementation((policy: unknown) => policy);
   runShellCommand.mockResolvedValue({ runId: 'run-1', exitCode: 0 });
+  listLocalServers.mockResolvedValue([
+    {
+      id: 'ollama',
+      label: 'Ollama',
+      baseUrl: 'http://localhost:11434',
+      reachable: true,
+      modelCount: 1,
+    },
+  ]);
+  listLocalModels.mockResolvedValue([
+    {
+      id: 'local:ollama/tiny-chat:1b',
+      serverId: 'ollama',
+      serverLabel: 'Ollama',
+      name: 'tiny-chat:1b',
+    },
+  ]);
+  runLocalChat.mockResolvedValue({
+    runId: 'run-1',
+    modelId: 'local:ollama/tiny-chat:1b',
+    serverId: 'ollama',
+    text: 'hello',
+    thinking: '',
+    stopReason: 'end_turn',
+    durationMs: 4,
+  });
+  readLocalModelSettings.mockReturnValue({
+    baseUrls: { ollama: 'http://localhost:11434', lmstudio: 'http://localhost:1234/v1' },
+  });
+  writeLocalModelSettings.mockImplementation((settings: unknown) => settings);
 });
 
 function scopeOf(call: unknown[]): PermissionScope {
@@ -236,5 +288,119 @@ describe('dispatch, opening files', () => {
   it('still refuses a command it cannot classify', async () => {
     const response = await dispatch(window, 'shell_run_unchecked', { rootId: root.id });
     expect(response).toMatchObject({ ok: false, error: { code: 'unknown-command' } });
+  });
+});
+
+describe('dispatch, local models', () => {
+  it('reports server status without asking for anything', async () => {
+    getPermissionState.mockReturnValue('prompt');
+
+    const response = await dispatch(window, 'local_model_servers', {});
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ ok: true, value: { granted: false } });
+  });
+
+  it('says the grant is held once local.inference is granted', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    const response = await dispatch(window, 'local_model_servers', {});
+
+    expect(response).toMatchObject({ ok: true, value: { granted: true } });
+  });
+
+  it('gates listing installed models on local.inference', async () => {
+    getPermissionState.mockReturnValue('prompt');
+    requestPermission.mockResolvedValue('granted');
+
+    await dispatch(window, 'local_model_list', {});
+
+    const call = requestPermission.mock.calls[0] as unknown as unknown[];
+    expect(call[1]).toBe('local.inference');
+    expect(listLocalModels).toHaveBeenCalled();
+  });
+
+  it('never reaches the local server when the grant is refused', async () => {
+    getPermissionState.mockReturnValue('prompt');
+    requestPermission.mockResolvedValue('denied');
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-1',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect(runLocalChat).not.toHaveBeenCalled();
+  });
+
+  it('runs a granted turn and streams its deltas to the page', async () => {
+    getPermissionState.mockReturnValue('granted');
+    runLocalChat.mockImplementation(async (_input: unknown, emit: (delta: unknown) => void) => {
+      emit({ runId: 'run-1', channel: 'text', delta: 'hel' });
+      emit({ runId: 'run-1', channel: 'text', delta: 'lo' });
+      return {
+        runId: 'run-1',
+        modelId: 'local:ollama/tiny-chat:1b',
+        serverId: 'ollama',
+        text: 'hello',
+        thinking: '',
+        stopReason: 'end_turn',
+        durationMs: 4,
+      };
+    });
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-1',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(response).toMatchObject({ ok: true, value: { text: 'hello' } });
+    expect(send).toHaveBeenCalledWith(expect.any(String), {
+      kind: 'local-chat-delta',
+      runId: 'run-1',
+      channel: 'text',
+      delta: 'hel',
+    });
+  });
+
+  it('refuses a turn with no messages before it starts', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-1',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [],
+    });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    expect(runLocalChat).not.toHaveBeenCalled();
+  });
+
+  it('refuses a message list with an unknown role', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-1',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [{ role: 'tool', content: 'hi' }],
+    });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+  });
+
+  it('reads and writes the base urls without a prompt', async () => {
+    getPermissionState.mockReturnValue('prompt');
+
+    await dispatch(window, 'local_model_settings_read', {});
+    await dispatch(window, 'local_model_settings_write', {
+      settings: { baseUrls: { ollama: 'http://127.0.0.1:11434' } },
+    });
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(writeLocalModelSettings).toHaveBeenCalledWith({
+      baseUrls: { ollama: 'http://127.0.0.1:11434' },
+    });
   });
 });

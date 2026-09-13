@@ -30,11 +30,9 @@ import {
   withStreamIdleWatchdog,
 } from '@agiworkforce/provider-runtime';
 
-import { fetchOllamaCatalog } from './catalog';
+import { fetchOllamaCatalog, OLLAMA_DEFAULT_BASE_URL } from './catalog';
 import { translateChatRequest } from './translate';
 import { parseOllamaStream, translateOllamaStream } from './stream';
-
-const DEFAULT_BASE_URL = 'http://localhost:11434';
 
 const OLLAMA_AUTH_METHODS: readonly AuthMethod[] = [
   { kind: 'none', label: 'Local Ollama (no auth)' },
@@ -53,7 +51,7 @@ export interface OllamaAdapterConfig extends ProviderAdapterConfig {
 }
 
 export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderAdapter {
-  const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+  const baseUrl = config.baseUrl ?? OLLAMA_DEFAULT_BASE_URL;
   const fetchFn = config.fetch ?? fetch;
 
   return {
@@ -152,7 +150,7 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
 export const ollamaAdapterFactory: ProviderAdapterFactory = (config) =>
   createOllamaAdapter(config as OllamaAdapterConfig);
 
-export { fetchOllamaCatalog } from './catalog';
+export { fetchOllamaCatalog, OLLAMA_DEFAULT_BASE_URL } from './catalog';
 export { translateChatRequest } from './translate';
 export { parseOllamaStream, translateOllamaStream } from './stream';
 export type {

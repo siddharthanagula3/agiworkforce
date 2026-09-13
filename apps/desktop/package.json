@@ -45,6 +45,8 @@
     "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
+    "@agiworkforce/providers-lmstudio": "workspace:*",
+    "@agiworkforce/providers-ollama": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/sync": "workspace:*",

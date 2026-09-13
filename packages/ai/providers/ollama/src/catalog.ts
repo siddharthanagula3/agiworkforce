@@ -1,9 +1,8 @@
-
 import type { ModelInfo } from '@agiworkforce/types';
 
 import type { OllamaTagsResponse } from './types';
 
-const DEFAULT_BASE_URL = 'http://localhost:11434';
+export const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
 function parseParameterSizeBillion(text: string | undefined): number | undefined {
   if (!text) return undefined;
@@ -18,7 +17,7 @@ export async function fetchOllamaCatalog(params: {
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<ModelInfo[]> {
-  const baseUrl = params.baseUrl?.replace(/\/{1,32}$/, '') ?? DEFAULT_BASE_URL;
+  const baseUrl = params.baseUrl?.replace(/\/{1,32}$/, '') ?? OLLAMA_DEFAULT_BASE_URL;
   const fetchFn = params.fetch ?? fetch;
   let res: Response;
   try {
