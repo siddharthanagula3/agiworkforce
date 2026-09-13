@@ -19,7 +19,7 @@ pub use tui_app::run;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 
 /// True while the full-screen ratatui TUI owns the terminal (alternate screen +
 /// raw mode). Lower layers (e.g. the streaming dispatcher) check this to avoid
@@ -90,6 +90,122 @@ pub(crate) fn truncate_cols(s: &str, max: usize) -> String {
         truncated.push(ellipsis);
         truncated
     }
+}
+
+/// Clip a label to `max` terminal columns with no ellipsis. Used for the
+/// status-bar abbreviations, where a `…` would cost the column it saves.
+pub(crate) fn clip_cols(s: &str, max: usize) -> String {
+    split_at_cols(s, max).0.to_string()
+}
+
+/// Split a string into alternating runs of spaces and non-spaces, so a wrapper
+/// can break between words without losing the original spacing.
+fn space_runs(s: &str) -> Vec<&str> {
+    let mut runs = Vec::new();
+    let mut start = 0;
+    let mut prev: Option<bool> = None;
+    for (index, ch) in s.char_indices() {
+        let is_space = ch == ' ';
+        if prev.is_some_and(|p| p != is_space) {
+            runs.push(&s[start..index]);
+            start = index;
+        }
+        prev = Some(is_space);
+    }
+    if start < s.len() {
+        runs.push(&s[start..]);
+    }
+    runs
+}
+
+/// Split `s` at the last char boundary that keeps the head within `cols`.
+fn split_at_cols(s: &str, cols: usize) -> (&str, &str) {
+    let mut width = 0usize;
+    for (index, ch) in s.char_indices() {
+        let ch_width = display_width(&ch.to_string());
+        if width + ch_width > cols {
+            return (&s[..index], &s[index..]);
+        }
+        width += ch_width;
+    }
+    (s, "")
+}
+
+/// Word-wrap one styled line to `width` columns, indenting every continuation
+/// row by the line's own leading indent plus `hang`.
+///
+/// Ratatui's own `Wrap` restarts a continuation at column 0, which puts wrapped
+/// body text hard against the panel's left border with no gutter. Pre-wrapping
+/// here keeps the gutter and preserves each span's style.
+pub(crate) fn wrap_styled_line<'a>(line: Line<'a>, width: usize, hang: usize) -> Vec<Line<'a>> {
+    if width == 0 || line.width() <= width {
+        return vec![line];
+    }
+
+    let leading = line
+        .spans
+        .iter()
+        .flat_map(|span| span.content.chars())
+        .take_while(|ch| *ch == ' ')
+        .count();
+    let indent = (leading + hang).min(width.saturating_sub(1));
+
+    let mut rows: Vec<Line<'a>> = Vec::new();
+    let mut row: Vec<Span<'a>> = Vec::new();
+    let mut row_width = 0usize;
+
+    for span in &line.spans {
+        for chunk in space_runs(span.content.as_ref()) {
+            let is_space = chunk.starts_with(' ');
+            if is_space && row.is_empty() && !rows.is_empty() {
+                continue;
+            }
+            let chunk_width = display_width(chunk);
+            if row_width + chunk_width <= width {
+                row.push(Span::styled(chunk.to_string(), span.style));
+                row_width += chunk_width;
+                continue;
+            }
+            if !row.is_empty() {
+                rows.push(Line::from(std::mem::take(&mut row)));
+                row_width = indent;
+                row.push(Span::raw(" ".repeat(indent)));
+            }
+            if is_space {
+                continue;
+            }
+            let mut rest = chunk;
+            while row_width + display_width(rest) > width {
+                let (head, tail) = split_at_cols(rest, width - row_width);
+                if head.is_empty() {
+                    break;
+                }
+                row.push(Span::styled(head.to_string(), span.style));
+                rows.push(Line::from(std::mem::take(&mut row)));
+                row_width = indent;
+                row.push(Span::raw(" ".repeat(indent)));
+                rest = tail;
+            }
+            if !rest.is_empty() {
+                row.push(Span::styled(rest.to_string(), span.style));
+                row_width += display_width(rest);
+            }
+        }
+    }
+    rows.push(Line::from(row));
+    rows
+}
+
+/// Word-wrap a block of styled lines, see [`wrap_styled_line`].
+pub(crate) fn wrap_styled_lines<'a>(
+    lines: Vec<Line<'a>>,
+    width: usize,
+    hang: usize,
+) -> Vec<Line<'a>> {
+    lines
+        .into_iter()
+        .flat_map(|line| wrap_styled_line(line, width, hang))
+        .collect()
 }
 
 /// Truncate and right-pad a value to exactly `width` terminal columns.

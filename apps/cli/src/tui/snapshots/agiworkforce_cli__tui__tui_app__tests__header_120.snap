@@ -1,0 +1,8 @@
+---
+source: apps/cli/src/tui/tui_app.rs
+assertion_line: 5961
+expression: "draw_header(120, Some(&hud))"
+---
+┌───────────────────────────────────────────────────────────────────────────── ▮ in 1.2K · out 567 · $0.0421 · ctx 42% ┐
+│ AGI  v1.7.1  │ fixture-flagship │ anthropic │ 42% ctx                                                                │
+├ 1.2Kin / 567out │ Turns: 3 ──────────────────────────────────────────────────────────────────────────────────────────┤

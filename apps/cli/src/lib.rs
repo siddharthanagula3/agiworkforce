@@ -1571,9 +1571,9 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             println!("{}", ts::accent_header("Recent sessions:"));
             for s in summaries {
                 println!(
-                    "  {}  {:>4} msgs  {}",
+                    "  {}  {:>9}  {}",
                     s.session_id.dimmed(),
-                    s.message_count,
+                    output::format_message_count(s.message_count as i64),
                     s.created_at.format("%Y-%m-%d %H:%M:%S"),
                 );
             }
@@ -2823,10 +2823,10 @@ pub async fn run_main() -> Result<()> {
                 };
                 let short_id = &s.id[..s.id.len().min(8)];
                 println!(
-                    "  {} {}  {} msgs  {}",
+                    "  {} {}  {}  {}",
                     short_id.dimmed(),
                     title.bold(),
-                    s.message_count,
+                    output::format_message_count(s.message_count),
                     s.model.dimmed(),
                 );
                 // Show matching message snippets
@@ -3878,6 +3878,7 @@ pub async fn run_oneshot(
                         turn.input_tokens,
                         turn.output_tokens,
                         turn.cost_usd,
+                        crate::design_system::AccessMode::for_provider(&session.provider),
                     )
                 };
                 let json_out = oneshot_result_json_value(
@@ -3959,6 +3960,7 @@ pub async fn run_oneshot(
                         turn.input_tokens,
                         turn.output_tokens,
                         turn.cost_usd,
+                        crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
             }

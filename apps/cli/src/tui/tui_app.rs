@@ -14,7 +14,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Terminal;
 
 use crate::agent::AgentSession;
@@ -27,7 +27,7 @@ use crate::terminal_text::{
     sanitize_terminal_line, sanitize_terminal_lines, sanitize_terminal_text,
 };
 
-use super::{display_width, pad_to_cols, truncate_cols};
+use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,6 +39,11 @@ const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
 /// How long a first Ctrl-C keeps the session armed for exit.
 const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
+
+/// How long a transient status-line notice stays on screen. Matched to
+/// [`EXIT_CONFIRM_WINDOW`] so the "press again to exit" hint disappears exactly
+/// when pressing again stops exiting.
+const STATUS_NOTICE_TTL: Duration = Duration::from_secs(2);
 
 // ---------------------------------------------------------------------------
 // Interaction mode (Shift+Tab cycling)
@@ -225,6 +230,8 @@ struct TuiApp {
     /// A second press inside `EXIT_CONFIRM_WINDOW` exits; otherwise the intent
     /// lapses, so a stray keystroke minutes later cannot end the session.
     exit_armed_at: Option<Instant>,
+    /// Transient status-line notice, cleared after [`STATUS_NOTICE_TTL`].
+    status_notice: Option<(String, Instant)>,
     model_name: String,
     provider_name: String,
     turn_count: u32,
@@ -386,6 +393,13 @@ impl TuiApp {
 
         let keybindings = crate::keybindings::Keybindings::from_config(&config.ui.keybindings);
 
+        let effort = config
+            .default
+            .reasoning_effort
+            .as_deref()
+            .and_then(crate::design_system::Effort::from_config_value)
+            .unwrap_or_default();
+
         Self {
             session,
             config,
@@ -398,6 +412,7 @@ impl TuiApp {
             spinner_tick: 0,
             should_quit: false,
             exit_armed_at: None,
+            status_notice: None,
             model_name,
             provider_name,
             turn_count,
@@ -417,7 +432,7 @@ impl TuiApp {
             },
             terminal_title_config:
                 super::widgets::terminal_title_setup::TerminalTitleConfig::default(),
-            effort: crate::design_system::Effort::Medium,
+            effort,
             theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
             theme_choice,
             mode_banner_shown_at: None,
@@ -932,14 +947,8 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
         .split(area);
 
     let ctx = FrameCtx::from_app(app);
-    render_header(frame, chunks[0], &ctx);
-    render_chat(frame, chunks[1], &ctx);
-    render_input(frame, chunks[2], app);
-    render_status_bar(frame, chunks[3], &ctx);
-    render_fallback_banner(frame, chunks[1], app);
-
-    // Live cost HUD anchored to the top-right; sits on top of the header
-    // border so it never steals real-estate from the chat area.
+    // Live cost HUD, drawn as the header block's own right-aligned title so it
+    // composes with the top border instead of painting over it.
     let hud = super::cost_hud::CostHud {
         in_tokens: app.total_input_tokens,
         out_tokens: app.total_output_tokens,
@@ -950,7 +959,11 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
         context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
         context_window: crate::model_catalog::context_window(&app.model_name) as u64,
     };
-    super::cost_hud::render(frame, area, &hud, &app.model_name);
+    render_header(frame, chunks[0], &ctx, Some(&hud));
+    render_chat(frame, chunks[1], &ctx);
+    render_input(frame, chunks[2], app);
+    render_status_bar(frame, chunks[3], &ctx);
+    render_fallback_banner(frame, chunks[1], app);
 
     // Mode-change banner (self-clears after MODE_BANNER_TTL)
     render_mode_banner(frame, chunks[1], app);
@@ -1011,7 +1024,7 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
         ])
         .split(area);
 
-    render_header(frame, chunks[0], ctx);
+    render_header(frame, chunks[0], ctx, None);
     render_chat(frame, chunks[1], ctx);
 
     let hint = Paragraph::new(Line::from(Span::styled(
@@ -1100,6 +1113,8 @@ struct FrameCtx<'a> {
     effort_label: &'a str,
     sandbox_type: Option<crate::sandbox::SandboxType>,
     cost_str: String,
+    /// Transient notice shown ahead of the optional status-bar fields.
+    notice: Option<&'a str>,
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
 }
@@ -1132,12 +1147,29 @@ impl<'a> FrameCtx<'a> {
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
                 app.session.cost_ledger.total_usd,
+                provider_access_mode(&app.session.provider),
             ),
+            notice: app.live_notice(),
         }
     }
 }
 
-fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+impl TuiApp {
+    /// The status-line notice while it is still within its TTL.
+    fn live_notice(&self) -> Option<&str> {
+        self.status_notice
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() <= STATUS_NOTICE_TTL)
+            .map(|(text, _)| text.as_str())
+    }
+}
+
+fn render_header(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    ctx: &FrameCtx,
+    hud: Option<&super::cost_hud::CostHud>,
+) {
     use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_danger, ui_muted};
     let provider_display = match ctx.provider_name {
         "ollama" => "Local",
@@ -1190,16 +1222,51 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         ctx.turn_count,
     );
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(ui_muted()))
-        .title_bottom(Line::from(Span::styled(
-            tokens_text,
-            Style::default().fg(ui_muted()),
-        )));
+    // The header and the transcript are one continuous frame: the header owns
+    // the top border, the transcript the sides, and the row between them is a
+    // tee-junction divider, never a `└┘` that closes a box the content then
+    // carries on inside.
+    let mut block = Block::default()
+        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+        .border_style(Style::default().fg(ui_muted()));
 
-    let header = Paragraph::new(header_text).block(block);
-    frame.render_widget(header, area);
+    if let Some(hud) = hud {
+        let hud_line = super::cost_hud::title_line(hud, ctx.model_name);
+        if header_text.width() + hud_line.width() + 4 <= area.width as usize {
+            block = block.title_top(hud_line);
+        }
+    }
+
+    frame.render_widget(Paragraph::new(header_text).block(block), area);
+    render_header_divider(frame, area, &tokens_text);
+}
+
+/// Draw the header/transcript divider across the last row of the header area.
+fn render_header_divider(frame: &mut ratatui::Frame, area: Rect, tokens_text: &str) {
+    use crate::tui::terminal_palette::ui_muted;
+    if area.height < 2 || area.width < 2 {
+        return;
+    }
+    let style = Style::default().fg(ui_muted());
+    let inner = area.width as usize - 2;
+    let label = if display_width(tokens_text) <= inner {
+        tokens_text
+    } else {
+        ""
+    };
+    let line = Line::from(vec![
+        Span::styled("├", style),
+        Span::styled(label.to_string(), style),
+        Span::styled("─".repeat(inner - display_width(label)), style),
+        Span::styled("┤", style),
+    ]);
+    let row = Rect {
+        x: area.x,
+        y: area.y + area.height - 1,
+        width: area.width,
+        height: 1,
+    };
+    frame.render_widget(Paragraph::new(line), row);
 }
 
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
@@ -1355,21 +1422,23 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // ratatui hands a span's bytes to the terminal unchanged.
     sanitize_terminal_lines(&mut lines);
 
+    // Wrap here rather than with `Wrap`, which restarts a continuation row at
+    // column 0 and puts the text hard against the left border. Wrapping first
+    // also makes the scroll maths count rendered rows, not logical lines.
+    let lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
+
     // Scroll
-    let visible_height = area.height.saturating_sub(2) as usize;
+    let visible_height = area.height.saturating_sub(1) as usize;
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
     let effective_scroll = ctx.scroll_offset.min(max_scroll);
     let scroll_pos = max_scroll.saturating_sub(effective_scroll);
 
     let block = Block::default()
-        .borders(Borders::LEFT | Borders::RIGHT)
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .border_style(Style::default().fg(ui_muted()));
 
-    let chat = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_pos, 0));
+    let chat = Paragraph::new(lines).block(block).scroll((scroll_pos, 0));
 
     frame.render_widget(chat, area);
 }
@@ -1654,54 +1723,66 @@ fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_sys
     }
 }
 
+/// Total terminal columns a row of spans occupies.
+fn row_width(spans: &[Span]) -> usize {
+    spans.iter().map(|s| display_width(&s.content)).sum()
+}
+
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::{
         ui_accent, ui_cloud, ui_danger, ui_muted, ui_on_dark, ui_on_light, ui_status_bar_bg,
-        ui_success,
+        ui_success, ui_warning,
     };
     let badge_fg = if ctx.mode == InteractionMode::Chat {
         ui_on_dark()
     } else {
         ui_on_light()
     };
-    let mode_span = Span::styled(
-        format!(" {} ", ctx.mode.label()),
-        Style::default().fg(badge_fg).bg(ctx.mode.color()),
-    );
-
     let cost_str = ctx.cost_str.clone();
 
-    let effort_str = format!("effort:{}", ctx.effort_label);
-
-    // Sandbox indicator: positive when a sandbox backend is active, critical otherwise.
-    let (sandbox_label, sandbox_color) = match ctx.sandbox_type {
-        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", ui_success()),
-        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", ui_success()),
-        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", ui_success()),
-        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", ui_danger()),
+    // Sandbox indicator: positive when a sandbox backend is active, critical
+    // otherwise. Abbreviated at narrow widths, never omitted: a user who cannot
+    // see the sandbox state cannot tell what a tool call is allowed to touch.
+    let (sandbox_full, sandbox_short, sandbox_color) = match ctx.sandbox_type {
+        Some(crate::sandbox::SandboxType::MacosSeatbelt) => {
+            ("sandbox: seatbelt", "sb:seatbelt", ui_success())
+        }
+        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => {
+            ("sandbox: bwrap", "sb:bwrap", ui_success())
+        }
+        Some(crate::sandbox::SandboxType::LinuxLandlock) => {
+            ("sandbox: landlock", "sb:landlock", ui_success())
+        }
+        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", "no sandbox", ui_danger()),
+    };
+    let sandboxed = sandbox_color == ui_success();
+    let sandbox_indicator = move |tier: usize| match tier {
+        0 => sandbox_full,
+        1 => sandbox_short,
+        _ if sandboxed => "sb✓",
+        _ => "sb✗",
     };
 
     // Access-mode chip: always show whether the active model is reached via
     // LOCAL (on-device), BYOK (your own key), or CLOUD (managed subscription).
-    // Keeps AGI's core differentiator visible at all times. Purely a label.
+    // Keeps AGI's core differentiator visible at all times. Purely a label,
     // it reflects the active provider, it never changes routing.
-    let access_span = {
+    let access_span = |tier: usize| -> Span<'static> {
         use crate::agent::PrivacyMode;
         use crate::design_system::AccessMode;
-        let tier = match ctx.access_mode {
+        let name = match ctx.access_mode {
             AccessMode::Local => "local",
             AccessMode::Byok => "byok",
             AccessMode::Cloud => "cloud",
         };
+        let dot = if tier >= 2 { "" } else { "◉ " };
         // The session privacy mode governs whether a send is allowed; the access
         // tier only reflects where the active model routes. A Local session with
         // an off-device model is BLOCKED, surface the mismatch in danger color
-        // so the session mode is visible. (Previously the chip showed only the
-        // tier, e.g. "byok", which hid that the session was Local and left
-        // users confused about why sends were refused.)
+        // so the session mode is visible.
         if ctx.privacy_mode == PrivacyMode::Local && ctx.access_mode != AccessMode::Local {
             Span::styled(
-                format!("◉ local≠{tier}"),
+                format!("{dot}local≠{name}"),
                 Style::default()
                     .fg(ui_danger())
                     .add_modifier(Modifier::BOLD),
@@ -1713,16 +1794,15 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                 AccessMode::Cloud => ui_cloud(),
             };
             Span::styled(
-                format!("◉ {tier}"),
+                format!("{dot}{name}"),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             )
         }
     };
 
-    // Context-usage fill bar with escalating color (green → accent → red).
+    // Context-usage fill bar with escalating color (green → accent → red),
+    // shortened then reduced to a bare percentage as the terminal narrows.
     let ctx_pct = ctx.context_percent;
-    let bar_w = 8usize;
-    let filled = ((ctx_pct as usize * bar_w) / 100).min(bar_w);
     let ctx_color = if ctx_pct >= 85 {
         ui_danger()
     } else if ctx_pct >= 60 {
@@ -1730,30 +1810,112 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     } else {
         ui_success()
     };
-    let ctx_str = format!(
-        "ctx [{}{}] {ctx_pct:>3}%",
-        "█".repeat(filled),
-        "░".repeat(bar_w - filled),
-    );
+    let ctx_indicator = move |tier: usize| -> String {
+        if tier >= 2 {
+            return format!("{ctx_pct}%");
+        }
+        let bar_w = if tier == 0 { 8usize } else { 4usize };
+        let filled = ((ctx_pct as usize * bar_w) / 100).min(bar_w);
+        format!(
+            "ctx [{}{}] {ctx_pct:>3}%",
+            "█".repeat(filled),
+            "░".repeat(bar_w - filled),
+        )
+    };
 
-    // Essential items, highest priority first. The `mode` badge is toggled by the
-    // /statusline "mode" field (default on); access-tier and the context bar are
-    // always shown (not user-configurable).
+    // Indicators a user must be able to trust at a glance: the permission mode,
+    // the access tier, context usage, the sandbox state, the effort level and
+    // the running token/cost total. A narrow terminal abbreviates these; it
+    // never silently drops one, least of all the sandbox state. Only the
+    // keyboard hints and the opt-in fields are droppable.
     let sl = ctx.statusline;
-    let mut spans: Vec<Span> = Vec::new();
-    if sl.show_mode {
-        spans.push(mode_span);
-        spans.push(Span::raw(" "));
-    }
-    spans.push(access_span);
-    spans.push(Span::raw("  "));
-    spans.push(Span::styled(ctx_str, Style::default().fg(ctx_color)));
-    spans.push(Span::raw("  "));
+    let build_essentials = |tier: usize| -> Vec<Span<'static>> {
+        let gap = if tier >= 2 { " " } else { "  " };
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        if sl.show_mode {
+            let label = if tier == 0 {
+                ctx.mode.label().to_string()
+            } else {
+                clip_cols(ctx.mode.label(), 3)
+            };
+            spans.push(Span::styled(
+                format!(" {label} "),
+                Style::default().fg(badge_fg).bg(ctx.mode.color()),
+            ));
+            spans.push(Span::raw(" "));
+        }
+        spans.push(access_span(tier));
+        spans.push(Span::raw(gap));
+        spans.push(Span::styled(
+            ctx_indicator(tier),
+            Style::default().fg(ctx_color),
+        ));
+        spans.push(Span::raw(gap));
+        spans.push(Span::styled(
+            sandbox_indicator(tier).to_string(),
+            Style::default().fg(sandbox_color),
+        ));
+        spans.push(Span::raw(gap));
+        spans.push(Span::styled(
+            match tier {
+                0 => format!("effort:{}", ctx.effort_label),
+                1 => format!("eff:{}", ctx.effort_label),
+                _ => format!("e:{}", clip_cols(ctx.effort_label, 1)),
+            },
+            Style::default().fg(ui_muted()),
+        ));
+        spans
+    };
 
-    // Optional items in descending priority, added only while they fit, so a
-    // narrow terminal drops the low-priority hints instead of hard-clipping the
-    // important indicators on the right. The model/tokens/cost/branch fields are
-    // gated by /statusline (model/tokens/branch default off, cost default on).
+    let avail = area.width as usize;
+    let mut spans = build_essentials(0);
+    for tier in 1..=2 {
+        if row_width(&spans) <= avail {
+            break;
+        }
+        spans = build_essentials(tier);
+    }
+    let mut used = row_width(&spans);
+
+    // A transient notice outranks the droppable fields: it is the only thing on
+    // the bar telling the user what their last keypress actually did.
+    if let Some(notice) = ctx.notice {
+        let room = avail.saturating_sub(used + 2);
+        if room > 0 {
+            let text = truncate_cols(notice, room);
+            used += display_width(&text) + 2;
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                text,
+                Style::default()
+                    .fg(ui_warning())
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+
+    // The running total is tiered on its own budget: a long cost string that no
+    // longer fits shrinks to bare token counts rather than abbreviating every
+    // other indicator alongside it, and it is never dropped outright.
+    if sl.show_cost {
+        let forms = [
+            cost_str.clone(),
+            format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
+            format!("↑{}↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
+        ];
+        if let Some(form) = forms
+            .into_iter()
+            .find(|form| used + display_width(form) + 2 <= avail)
+        {
+            used += display_width(&form) + 2;
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(form, Style::default().fg(ui_muted())));
+        }
+    }
+
+    // Droppable extras in descending priority. A field that does not fit is
+    // skipped rather than ending the loop, so a short hint still lands when a
+    // long one ahead of it could not.
     let mut optional: Vec<Span> = Vec::new();
     if sl.show_model {
         optional.push(Span::styled(
@@ -1775,36 +1937,18 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ));
         }
     }
-    if sl.show_cost {
-        optional.push(Span::styled(cost_str, Style::default().fg(ui_muted())));
+    for hint in ["Shift+Tab: mode", "/: commands", "Esc: quit"] {
+        optional.push(Span::styled(
+            hint.to_string(),
+            Style::default().fg(ui_muted()),
+        ));
     }
-    optional.push(Span::styled(
-        sandbox_label.to_string(),
-        Style::default().fg(sandbox_color),
-    ));
-    optional.push(Span::styled(effort_str, Style::default().fg(ui_muted())));
-    optional.push(Span::styled(
-        "Shift+Tab: mode".to_string(),
-        Style::default().fg(ui_muted()),
-    ));
-    optional.push(Span::styled(
-        "/: commands".to_string(),
-        Style::default().fg(ui_muted()),
-    ));
-    optional.push(Span::styled(
-        "Esc: quit".to_string(),
-        Style::default().fg(ui_muted()),
-    ));
-    let avail = area.width as usize;
-    let mut used: usize = spans.iter().map(|s| display_width(&s.content)).sum();
     for opt in optional {
         let w = display_width(&opt.content) + 2;
         if used + w <= avail {
-            spans.push(opt);
             spans.push(Span::raw("  "));
+            spans.push(opt);
             used += w;
-        } else {
-            break;
         }
     }
 
@@ -2005,11 +2149,16 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                 return InputAction::Quit;
             }
             app.exit_armed_at = Some(Instant::now());
+            app.status_notice = Some((
+                "nothing to interrupt · Ctrl-C again to exit".to_string(),
+                Instant::now(),
+            ));
             return InputAction::None;
         }
         app.input.clear();
         app.cursor = 0;
         app.exit_armed_at = None;
+        app.status_notice = Some(("cleared the composer".to_string(), Instant::now()));
         return InputAction::None;
     }
     if app
@@ -2675,6 +2824,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
                 app.session.cost_ledger.total_usd,
+                provider_access_mode(&app.session.provider),
             );
             SlashResult::SystemMessage(format!("Turns: {} │ {}", app.session.turn_count, cost))
         }
@@ -3761,6 +3911,7 @@ pub async fn run(
         app.session.total_output_tokens,
         app.session.turn_count,
         app.session.cost_ledger.total_usd,
+        provider_access_mode(&app.session.provider),
     );
 
     result
@@ -4255,7 +4406,9 @@ async fn send_message(
         app.session.total_input_tokens,
         app.session.total_output_tokens,
         app.session.cost_ledger.total_usd,
+        turn_access_mode,
     );
+    let turn_notice = app.live_notice().map(str::to_string);
 
     let result = {
         let callback = Box::new(move |chunk: &str| {
@@ -4307,6 +4460,7 @@ async fn send_message(
                             effort_label: app.effort.label(),
                             sandbox_type: app.sandbox_type,
                             cost_str: turn_cost_str.clone(),
+                            notice: turn_notice.as_deref(),
                         };
                         let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
                         broker
@@ -4338,6 +4492,8 @@ async fn send_message(
                                         .modifiers
                                         .contains(crossterm::event::KeyModifiers::CONTROL));
                             if cancel {
+                                app.status_notice =
+                                    Some(("interrupted the turn".to_string(), Instant::now()));
                                 break None;
                             }
                         }
@@ -4378,6 +4534,7 @@ async fn send_message(
                         effort_label: app.effort.label(),
                         sandbox_type: app.sandbox_type,
                         cost_str: turn_cost_str.clone(),
+                        notice: turn_notice.as_deref(),
                     };
                     render_turn_frame(terminal, &ctx)?;
 
@@ -5627,6 +5784,7 @@ mod tests {
             effort_label: "Medium",
             sandbox_type: None,
             cost_str: "$0.00".to_string(),
+            notice: None,
         };
 
         let mut overlay = ApprovalOverlayState::default();
@@ -5667,6 +5825,267 @@ mod tests {
             rendered.contains("Esc or Ctrl-C to cancel") || rendered.contains("working"),
             "composer/status chrome must still be visible under the approval overlay, not blanked"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Header and footer layout at the three widths a developer actually uses.
+    // Both are drawn against a real `TestBackend`, so the snapshots capture the
+    // border characters and the abbreviation tier, not just the field values.
+    // -----------------------------------------------------------------------
+
+    fn layout_fixture_ctx<'a>(
+        statusline: &'a crate::tui::widgets::statusline_setup::StatusLineConfig,
+        chat_messages: &'a [ChatMessage],
+        tool_cells: &'a [ToolCell],
+        effort_label: &'a str,
+        notice: Option<&'a str>,
+    ) -> FrameCtx<'a> {
+        FrameCtx {
+            model_name: "fixture-flagship",
+            statusline,
+            provider_name: "anthropic",
+            git_branch: None,
+            total_input_tokens: 1_234,
+            total_output_tokens: 567,
+            turn_count: 3,
+            context_percent: 42,
+            chat_messages,
+            tool_cells,
+            is_loading: false,
+            stream_start: None,
+            stream_buffer: "",
+            spinner_char: "⠋",
+            loading_verb: "Reasoning",
+            scroll_offset: 0,
+            access_mode: crate::design_system::AccessMode::Byok,
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            mode: InteractionMode::Chat,
+            effort_label,
+            sandbox_type: Some(crate::sandbox::SandboxType::MacosSeatbelt),
+            cost_str: "Tokens: 1234 in / 567 out (billed by your provider)".to_string(),
+            notice,
+        }
+    }
+
+    fn draw_header(width: u16, hud: Option<&super::super::cost_hud::CostHud>) -> String {
+        use ratatui::backend::TestBackend;
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        let mut terminal = Terminal::new(TestBackend::new(width, 3)).expect("terminal");
+        terminal
+            .draw(|frame| render_header(frame, Rect::new(0, 0, width, 3), &ctx, hud))
+            .expect("draw");
+        buffer_rows(&terminal, width)
+    }
+
+    fn draw_footer(width: u16, effort_label: &str, notice: Option<&str>) -> String {
+        use ratatui::backend::TestBackend;
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, effort_label, notice);
+        let mut terminal = Terminal::new(TestBackend::new(width, 1)).expect("terminal");
+        terminal
+            .draw(|frame| render_status_bar(frame, Rect::new(0, 0, width, 1), &ctx))
+            .expect("draw");
+        buffer_rows(&terminal, width)
+    }
+
+    fn buffer_rows(terminal: &Terminal<ratatui::backend::TestBackend>, width: u16) -> String {
+        let symbols: Vec<String> = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_string())
+            .collect();
+        symbols
+            .chunks(width as usize)
+            .map(|row| row.concat().trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The status-line fields `TuiApp::new` actually ships with, which differ
+    /// from `StatusLineConfig::default()`.
+    fn shipped_statusline() -> crate::tui::widgets::statusline_setup::StatusLineConfig {
+        crate::tui::widgets::statusline_setup::StatusLineConfig {
+            show_model: false,
+            show_tokens: false,
+            show_cost: true,
+            show_branch: false,
+            show_mode: true,
+        }
+    }
+
+    fn layout_fixture_hud() -> super::super::cost_hud::CostHud {
+        super::super::cost_hud::CostHud {
+            in_tokens: 1_234,
+            out_tokens: 567,
+            total_usd: 0.0421,
+            context_used: 42_000,
+            context_window: 100_000,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn header_border_is_unbroken_at_every_width() {
+        for width in [120u16, 80, 40] {
+            let rendered = draw_header(width, Some(&layout_fixture_hud()));
+            let rows: Vec<&str> = rendered.lines().collect();
+            assert_eq!(rows.len(), 3, "header is three rows at {width}");
+            assert!(
+                rows[0].starts_with('┌') && rows[0].ends_with('┐'),
+                "top border must open and close at {width}: {}",
+                rows[0]
+            );
+            assert!(
+                rows[1].starts_with('│'),
+                "content row must keep its left border at {width}: {}",
+                rows[1]
+            );
+            assert!(
+                rows[2].starts_with('├') && rows[2].ends_with('┤'),
+                "the header/transcript divider must be a tee, not a closed box, at {width}: {}",
+                rows[2]
+            );
+            assert!(
+                !rows[2].contains('└') && !rows[2].contains('┘'),
+                "a `└┘` here closes a box the transcript then continues inside, at {width}"
+            );
+        }
+    }
+
+    #[test]
+    fn header_snapshot_120_80_40() {
+        let hud = layout_fixture_hud();
+        insta::assert_snapshot!("header_120", draw_header(120, Some(&hud)));
+        insta::assert_snapshot!("header_80", draw_header(80, Some(&hud)));
+        insta::assert_snapshot!("header_40", draw_header(40, Some(&hud)));
+    }
+
+    #[test]
+    fn footer_snapshot_120_80_40() {
+        insta::assert_snapshot!("footer_120", draw_footer(120, "High", None));
+        insta::assert_snapshot!("footer_80", draw_footer(80, "High", None));
+        insta::assert_snapshot!("footer_40", draw_footer(40, "High", None));
+    }
+
+    /// A user who cannot see the sandbox state cannot tell what a tool call is
+    /// allowed to touch, so it abbreviates but never disappears. Same for the
+    /// running token counts.
+    #[test]
+    fn footer_keeps_sandbox_and_tokens_at_every_width() {
+        for width in [120u16, 80, 40] {
+            let rendered = draw_footer(width, "High", None);
+            assert!(
+                rendered.contains("sandbox: seatbelt")
+                    || rendered.contains("sb:seatbelt")
+                    || rendered.contains("sb✓"),
+                "sandbox state dropped at {width}: {rendered}"
+            );
+            assert!(
+                rendered.contains("1234") && rendered.contains("567"),
+                "token counts dropped at {width}: {rendered}"
+            );
+            assert!(
+                rendered.contains("High") || rendered.contains("e:H"),
+                "effort dropped at {width}: {rendered}"
+            );
+            assert!(
+                display_width(&rendered) <= width as usize,
+                "footer overflows {width} columns: {rendered}"
+            );
+        }
+    }
+
+    /// The footer reports the session's own effort, not a hardcoded default.
+    #[test]
+    fn footer_reports_the_session_effort() {
+        let high = draw_footer(120, "High", None);
+        assert!(high.contains("High"), "{high}");
+        assert!(!high.contains("Medium"), "{high}");
+        let max = draw_footer(120, "Max", None);
+        assert!(max.contains("Max"), "{max}");
+    }
+
+    /// A first Ctrl-C has to say what it did somewhere the user is looking.
+    #[test]
+    fn footer_shows_a_transient_notice() {
+        let rendered = draw_footer(
+            120,
+            "High",
+            Some("nothing to interrupt · Ctrl-C again to exit"),
+        );
+        assert!(
+            rendered.contains("Ctrl-C again to exit"),
+            "the notice must reach the status line: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_first_ctrl_c_explains_itself_in_the_status_line() {
+        let mut app = minimal_app();
+        let ctrl_c = crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('c'),
+            crossterm::event::KeyModifiers::CONTROL,
+        );
+
+        assert!(app.live_notice().is_none(), "no notice before any keypress");
+        let action = handle_key_event(&mut app, ctrl_c);
+        assert!(matches!(action, InputAction::None));
+        assert!(
+            app.live_notice()
+                .is_some_and(|n| n.contains("Ctrl-C again to exit")),
+            "the first Ctrl-C must report what it did, got {:?}",
+            app.live_notice()
+        );
+    }
+
+    #[test]
+    fn clearing_a_written_composer_says_so() {
+        let mut app = minimal_app();
+        app.input = "half a thought".to_string();
+        app.cursor = app.input.len();
+        handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('c'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert!(app.input.is_empty());
+        assert!(
+            app.live_notice()
+                .is_some_and(|n| n.contains("cleared the composer")),
+            "clearing the composer must be reported, got {:?}",
+            app.live_notice()
+        );
+    }
+
+    /// Ratatui's own `Wrap` restarts a continuation at column 0, which puts the
+    /// text hard against the panel's left border.
+    #[test]
+    fn wrapped_body_text_keeps_a_left_gutter() {
+        let line = Line::from(Span::raw(
+            "  unavailable: no credential, so this session runs local or BYOK, run login to see usage",
+        ));
+        let rows = crate::tui::wrap_styled_line(line, 40, 2);
+        assert!(rows.len() > 1, "the fixture must actually wrap");
+        for (index, row) in rows.iter().enumerate() {
+            let text: String = row.spans.iter().map(|s| s.content.as_ref()).collect();
+            assert!(
+                text.starts_with("  "),
+                "row {index} lost its gutter and sits on the border: {text:?}"
+            );
+            assert!(
+                display_width(&text) <= 40,
+                "row {index} overflows the panel: {text:?}"
+            );
+        }
     }
 
     const ESCAPE_PAYLOAD: &str = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H\u{1b}[31m";
@@ -5751,6 +6170,7 @@ mod tests {
             effort_label: "Medium",
             sandbox_type: None,
             cost_str: "$0.00".to_string(),
+            notice: None,
         };
 
         let mut terminal = Terminal::new(TestBackend::new(120, 60)).expect("terminal");
@@ -5802,6 +6222,7 @@ mod tests {
             effort_label: "Medium",
             sandbox_type: None,
             cost_str: "$0.00".to_string(),
+            notice: None,
         };
 
         let diff_review = DiffReviewView::new(vec![FileDiff::new(
@@ -5918,6 +6339,7 @@ mod tests {
             effort_label: "Medium",
             sandbox_type: None,
             cost_str: "$0.00".to_string(),
+            notice: None,
         };
 
         let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("terminal");
