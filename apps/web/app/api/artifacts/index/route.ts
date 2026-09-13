@@ -11,8 +11,9 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 /**
  * The account-wide artifact index (migration 0121).
  *
- *   GET /api/artifacts/index        - newest indexed artifacts for the caller
- *   GET /api/artifacts/index?limit= - bounded page
+ *   GET /api/artifacts/index            - newest indexed artifacts for the caller
+ *   GET /api/artifacts/index?limit=     - bounded page
+ *   GET /api/artifacts/index?projectId= - only the artifacts of that project
  *
  * Read-only. Rows are written by the message-persist route as assistant
  * messages land (`lib/index-artifacts.ts`), never by a client.
@@ -24,12 +25,19 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
  *
  * Every query runs through `getUserScopedDb`, so 0120's FORCE'd RLS policy
  * enforces isolation in the DATABASE rather than only in this WHERE clause.
+ *
+ * The project is DERIVED, not stored (WEBE-24). An artifact belongs to whatever
+ * project its source conversation belongs to, so a chat moved between projects
+ * takes its artifacts with it and there is no second copy of the association to
+ * drift. The join is to `web_conversations.project_id`, the column
+ * `createConversation` already writes from the active project.
  */
 
 export const runtime = 'nodejs';
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
+  projectId: z.string().uuid().optional(),
 });
 
 interface ArtifactIndexRow {
@@ -39,6 +47,7 @@ interface ArtifactIndexRow {
   title: string | null;
   artifact_type: string;
   language: string | null;
+  project_id: string | null;
   created_at: Date | string;
 }
 
@@ -49,6 +58,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
   const parsed = QuerySchema.safeParse({
     limit: url.searchParams.get('limit') ?? undefined,
+    projectId: url.searchParams.get('projectId') ?? undefined,
   });
   if (!parsed.success) {
     throw createError.badRequest('Invalid artifact index query', parsed.error.flatten());
@@ -57,13 +67,26 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request);
   const limit = parsed.data.limit ?? 200;
 
+  const projectId = parsed.data.projectId ?? null;
+
   const rows = await db.query<ArtifactIndexRow>(
-    `select id, conversation_id, message_id, title, artifact_type, language, created_at
-       from web_artifact_index
-      where user_id = $1
-      order by created_at desc
+    `select artifacts.id,
+            artifacts.conversation_id,
+            artifacts.message_id,
+            artifacts.title,
+            artifacts.artifact_type,
+            artifacts.language,
+            artifacts.created_at,
+            conversations.project_id
+       from web_artifact_index artifacts
+       join web_conversations conversations
+         on conversations.id = artifacts.conversation_id
+        and conversations.deleted_at is null
+      where artifacts.user_id = $1
+        and ($3::uuid is null or conversations.project_id = $3::uuid)
+      order by artifacts.created_at desc
       limit $2`,
-    [userId, limit],
+    [userId, limit, projectId],
   );
 
   return NextResponse.json({
@@ -74,6 +97,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       title: r.title,
       type: r.artifact_type,
       language: r.language,
+      projectId: r.project_id,
       createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
     })),
   });
