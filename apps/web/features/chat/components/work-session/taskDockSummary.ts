@@ -46,6 +46,7 @@ export interface TaskDockSourceGroup {
 export interface TaskDockOutput {
   id: string;
   name: string;
+  kind?: string;
   mimeType?: string;
   byteCount?: number;
   uri?: string;
@@ -234,6 +235,7 @@ function outputFromArtifact(artifact: Artifact): TaskDockOutput {
   return {
     id: generatedFile ? `file:${generatedFile.id}` : `artifact:${artifact.id}`,
     name: generatedFile?.fileName ?? artifact.title,
+    ...(generatedFile?.kind ? { kind: generatedFile.kind } : {}),
     ...(generatedFile?.mimeType ? { mimeType: generatedFile.mimeType } : {}),
     ...(generatedFile?.byteCount !== undefined ? { byteCount: generatedFile.byteCount } : {}),
     ...(generatedFile?.uri ? { uri: generatedFile.uri } : {}),
@@ -457,6 +459,7 @@ export function buildTaskDockSummary({
       addOutput(outputs, {
         id: `file:${file.id}`,
         name: file.fileName,
+        ...(file.kind ? { kind: file.kind } : {}),
         mimeType: file.mimeType,
         ...(file.byteCount !== undefined ? { byteCount: file.byteCount } : {}),
         uri: file.uri,
@@ -468,6 +471,7 @@ export function buildTaskDockSummary({
       addOutput(outputs, {
         id: `file:${generated.id}`,
         name: generated.fileName,
+        ...(generated.kind ? { kind: generated.kind } : {}),
         mimeType: generated.mimeType,
         ...(generated.byteCount !== undefined ? { byteCount: generated.byteCount } : {}),
         uri: generated.uri,

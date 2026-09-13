@@ -211,14 +211,11 @@ describe('WorkSessionPanel', () => {
     });
   });
 
-  it('mirrors the collapsed activity line and discloses the steps behind it', () => {
+  it('names the progress section and lists the plan steps under the activity line', () => {
     render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
 
-    const progressLine = screen.getByRole('button', { name: /Worked for/ });
-    expect(progressLine).toBeVisible();
-    expect(screen.queryByRole('list', { name: 'task steps' })).toBeNull();
-
-    fireEvent.click(progressLine);
+    expect(screen.getByText('Progress')).toBeVisible();
+    expect(screen.getByText(/Worked for/)).toBeVisible();
     const steps = screen.getByRole('list', { name: 'task steps' });
     expect(steps).toBeVisible();
     expect(screen.getByText('Plan the report')).toBeVisible();
@@ -250,7 +247,8 @@ describe('WorkSessionPanel', () => {
 
     expect(screen.getByText('Files created during this task appear here')).toBeVisible();
     expect(screen.getByText('No connectors used yet')).toBeVisible();
-    expect(screen.getByRole('button', { name: /Working for/ })).toBeVisible();
+    expect(screen.getByText(/Working for/)).toBeVisible();
+    expect(screen.getByText('Steps appear here once the task plans its work')).toBeVisible();
   });
 
   it('offers a way back to the artifacts half of the shared slot', () => {

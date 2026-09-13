@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 
 const MOBILE_OVERLAY_QUERY = '(max-width: 639px)';
 
+export const SHEET_OVERLAY_QUERY = '(max-width: 767px)';
+
 export type OverlayLayout = 'unknown' | 'mobile' | 'desktop';
 
 /**
@@ -9,7 +11,7 @@ export type OverlayLayout = 'unknown' | 'mobile' | 'desktop';
  * on a narrow one. Only the covering form is a dialog, so only that form gets
  * dialog semantics.
  */
-export function useOverlayLayout(): OverlayLayout {
+export function useOverlayLayout(mediaQuery: string = MOBILE_OVERLAY_QUERY): OverlayLayout {
   const [layout, setLayout] = useState<OverlayLayout>('unknown');
 
   useEffect(() => {
@@ -17,13 +19,13 @@ export function useOverlayLayout(): OverlayLayout {
       setLayout('desktop');
       return;
     }
-    const query = window.matchMedia(MOBILE_OVERLAY_QUERY);
+    const query = window.matchMedia(mediaQuery);
     const apply = (): void => setLayout(query.matches ? 'mobile' : 'desktop');
     apply();
     if (typeof query.addEventListener !== 'function') return;
     query.addEventListener('change', apply);
     return () => query.removeEventListener('change', apply);
-  }, []);
+  }, [mediaQuery]);
 
   return layout;
 }
