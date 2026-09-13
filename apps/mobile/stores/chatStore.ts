@@ -130,6 +130,10 @@ export interface CombinedChatState {
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
+  appendVoiceTurn: (
+    conversationId: string,
+    turn: { id: string; role: 'user' | 'assistant'; content: string; model: string },
+  ) => void;
   sendMessage: (
     conversationId: string,
     content: string,
@@ -199,6 +203,7 @@ function buildCombinedState(
     stopVideoGeneration: msg.stopVideoGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
+    appendVoiceTurn: msg.appendVoiceTurn,
     isStreaming: exec.isStreaming,
     streamingConversationIds: exec.streamingConversationIds,
     streamingContent: exec.streamingContent,

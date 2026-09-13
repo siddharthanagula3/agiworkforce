@@ -1,4 +1,3 @@
-
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -27,7 +26,7 @@ function relative(file: string): string {
 
 const ENTRY_POINT_SCREENS = FILES.filter((f) => read(f).includes('const handleOpenVoiceMode'));
 
-describe('voice has exactly one presentation', () => {
+describe('voice has exactly two presentations, live and the turn-based fallback', () => {
   it('has entry points to check (the grep did not silently go stale)', () => {
     expect(ENTRY_POINT_SCREENS.length).toBeGreaterThan(0);
   });
@@ -42,23 +41,41 @@ describe('voice has exactly one presentation', () => {
   });
 
   it.each(ENTRY_POINT_SCREENS.map((f) => [relative(f), f]))(
-    '%s opens the inline bar and nothing else',
+    '%s opens the live bar or the turn-based bar, and nothing else',
     (_label: string, file: string) => {
       const src = read(file);
 
       const openers = [...src.matchAll(/set([A-Za-z]*Voice[A-Za-z]*)\(true\)/g)]
         .map((m) => m[1])
         .filter((name) => name !== 'VoiceIntroVisible' && name !== 'VoicePickerVisible');
-      expect(new Set(openers)).toEqual(new Set(['VoiceInlineVisible']));
+      for (const opener of openers) {
+        expect(['VoiceInlineVisible', 'LiveVoiceVisible']).toContain(opener);
+      }
 
       expect(src.match(/<VoiceInlineBar\b/g)).toHaveLength(1);
+      expect((src.match(/<LiveVoiceComposer\b/g) ?? []).length).toBeLessThan(2);
     },
   );
 
-  it('mounts the inline bar from every screen that can start voice', () => {
+  it('mounts the turn-based bar from every screen that can start voice', () => {
     for (const file of ENTRY_POINT_SCREENS) {
       expect(read(file)).toContain('<VoiceInlineBar');
     }
+  });
+
+  it('states why voice fell back whenever a screen can fall back', () => {
+    for (const file of ENTRY_POINT_SCREENS) {
+      const src = read(file);
+      if (!src.includes('liveVoiceModeUnavailableReason')) continue;
+      expect(src).toContain('notice={voiceFallbackReason}');
+    }
+  });
+
+  it('renders the live session from exactly one component', () => {
+    const hosts = FILES.filter(
+      (f) => read(f).includes('<LiveVoiceBar') && !f.endsWith('LiveVoiceBar.tsx'),
+    );
+    expect(hosts.map(relative)).toEqual(['src/features/voice/components/LiveVoiceComposer.tsx']);
   });
 });
 

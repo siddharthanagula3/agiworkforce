@@ -153,6 +153,10 @@ interface MessageState {
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
+  appendVoiceTurn: (
+    conversationId: string,
+    turn: { id: string; role: 'user' | 'assistant'; content: string; model: string },
+  ) => void;
 }
 
 export const useChatMessageStore = create<MessageState>()(
@@ -631,6 +635,48 @@ export const useChatMessageStore = create<MessageState>()(
             messages: { ...state.messages, [conversationId]: [...existing, userMessage] },
           };
         });
+      },
+
+      appendVoiceTurn: (conversationId, turn) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        const now = new Date().toISOString();
+        const message: ChatMessage = {
+          id: turn.id,
+          conversationId,
+          role: turn.role,
+          content: turn.content,
+          createdAt: now,
+          model: turn.model,
+        };
+        ownerStore.setState((state) => {
+          const existing = state.messages[conversationId] ?? [];
+          if (existing.some((m) => m.id === turn.id)) return state;
+          return {
+            messages: { ...state.messages, [conversationId]: [...existing, message] },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: turn.content,
+                    messageCount: (conversation.messageCount ?? 0) + 1,
+                    updatedAt: now,
+                    model: conversation.model ?? turn.model,
+                  }
+                : conversation,
+            ),
+          };
+        });
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, message.id);
+        }
       },
 
       beginImageGeneration: (conversationId, commandContent, prompt, model, attachments) => {
