@@ -8,6 +8,9 @@ const mockOpenDrawer = jest.fn();
 let mockSearchParams: Record<string, string> = {};
 const mockLoadConversations = jest.fn().mockResolvedValue(undefined);
 const mockSearchConversations = jest.fn();
+const mockPinConversation = jest.fn();
+const mockDeleteConversation = jest.fn();
+const mockRenameConversation = jest.fn();
 
 const mockConversations = Array.from({ length: 10 }, (_, index) => ({
   id: `chat-${index + 1}`,
@@ -42,6 +45,9 @@ const mockChatState = {
     ],
   },
   loadConversations: mockLoadConversations,
+  pinConversation: mockPinConversation,
+  deleteConversation: mockDeleteConversation,
+  renameConversation: mockRenameConversation,
 };
 const mockViewState = {
   searchConversations: mockSearchConversations,
@@ -245,5 +251,42 @@ describe('ChatsListScreen', () => {
       pathname: '/(app)/library',
       params: { imageId: 'image-1' },
     });
+  });
+
+  it('offers the same rename, pin and delete actions the drawer has, on a long press', () => {
+    const { getByLabelText, getByText } = render(<ChatsListScreen />);
+
+    fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
+
+    const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls.at(-1) as [
+      string,
+      undefined,
+      Array<{ text: string; onPress?: () => void }>,
+    ];
+    expect(title).toBe('Launch checklist');
+    expect(buttons.map((button) => button.text)).toEqual(['Rename', 'Pin', 'Delete', 'Cancel']);
+
+    act(() => buttons.find((button) => button.text === 'Pin')?.onPress?.());
+    expect(mockPinConversation).toHaveBeenCalledWith('chat-1');
+
+    act(() => buttons.find((button) => button.text === 'Rename')?.onPress?.());
+    fireEvent.changeText(getByLabelText('Chat title'), 'Launch checklist v2');
+    fireEvent.press(getByLabelText('Submit rename'));
+
+    expect(mockRenameConversation).toHaveBeenCalledWith('chat-1', 'Launch checklist v2');
+    expect(getByText('Launch checklist')).toBeTruthy();
+  });
+
+  it('does not offer chat actions on a non-chat search result', () => {
+    const { getByLabelText } = render(<ChatsListScreen />);
+    fireEvent.changeText(
+      getByLabelText('Search chats, projects, files, library, and artifacts'),
+      'launch',
+    );
+    (Alert.alert as jest.Mock).mockClear();
+
+    fireEvent(getByLabelText('Open project: Launch project'), 'longPress');
+
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
