@@ -1,4 +1,5 @@
 import {
+  COMPAT_CAPABILITY_SOURCES,
   MODEL_FAMILY_REGISTRY,
   MODEL_PRICE_BAND_SCALE,
   PLAN_LABEL,
@@ -35,11 +36,13 @@ export const MODEL_PICKER_CAPABILITY_KEYS = [
 export type ModelPickerCapabilityKey = (typeof MODEL_PICKER_CAPABILITY_KEYS)[number];
 
 export const MODEL_PICKER_FILTER_CAPABILITIES = [
-  'imageInput',
-  'reasoning',
-  'functionCalling',
-  'imageOutput',
-  'videoOutput',
+  COMPAT_CAPABILITY_SOURCES.vision,
+  COMPAT_CAPABILITY_SOURCES.thinking,
+  COMPAT_CAPABILITY_SOURCES.tools,
+  COMPAT_CAPABILITY_SOURCES.search,
+  COMPAT_CAPABILITY_SOURCES.codeExecution,
+  COMPAT_CAPABILITY_SOURCES.imageGen,
+  COMPAT_CAPABILITY_SOURCES.videoGen,
   'audioInput',
   'audioOutput',
 ] as const;
