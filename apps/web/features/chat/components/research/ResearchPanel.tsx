@@ -81,6 +81,12 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
       ? source.title
       : (humanizedPathTitle(source.url) ?? pathTrimmedUrl(source.url));
 
+  // A grounded result's title IS its publisher's domain, so printing the host
+  // under it repeats the same word twice and says nothing.
+  const subtitle = [displayTitle === displayHost ? null : displayHost, source.publishedDate]
+    .filter(Boolean)
+    .join(' · ');
+
   // Fall back to Google's favicon service when no favicon was provided, drawn
   // for the PUBLISHER's domain. A grounded result's URL host is the routing
   // vendor, so deriving from it drew the same icon for every source in an
@@ -129,9 +135,7 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {displayTitle}
         </h4>
-        <p className="truncate text-[12px] text-muted-foreground">
-          {source.publishedDate ? `${displayHost} · ${source.publishedDate}` : displayHost}
-        </p>
+        {subtitle && <p className="truncate text-[12px] text-muted-foreground">{subtitle}</p>}
         {source.snippet && (
           <p className="line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">
             {source.snippet}

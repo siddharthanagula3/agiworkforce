@@ -95,7 +95,9 @@ describe('ResearchPanel · source row title fallback', () => {
       );
     render(<ResearchPanel />);
 
-    expect(await screen.findAllByText('openai.com')).toHaveLength(2);
+    // Once, not twice: when the fallback title IS the publisher's domain, the
+    // host line under it would repeat the same word and say nothing.
+    expect(await screen.findAllByText('openai.com')).toHaveLength(1);
   });
 });
 
