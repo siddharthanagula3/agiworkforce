@@ -32,6 +32,11 @@ export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null 
     ) {
       step.sourcesConsulted = Math.max(0, wire['sources_consulted']);
     }
+    // The reason a planned query was dropped. Without it the panel shows a
+    // dropped step and no explanation, which reads as a bug rather than a call.
+    if (typeof wire['note'] === 'string' && wire['note'].trim()) {
+      step.note = wire['note'].slice(0, 300);
+    }
     steps.push(step);
     if (steps.length >= 50) break;
   }

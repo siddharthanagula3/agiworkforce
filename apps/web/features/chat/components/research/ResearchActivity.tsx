@@ -7,6 +7,7 @@ import {
   CircleStop,
   CircleCheck,
   CircleDashed,
+  CircleSlash,
   ListChecks,
   LoaderCircle,
   Play,
@@ -40,6 +41,7 @@ const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
   running: 'In progress',
   completed: 'Done',
   failed: 'Failed',
+  dropped: 'Not run',
 };
 
 function PlanStepRow({ step }: { step: ResearchStep }) {
@@ -50,7 +52,9 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         ? CircleAlert
         : step.status === 'running'
           ? LoaderCircle
-          : CircleDashed;
+          : step.status === 'dropped'
+            ? CircleSlash
+            : CircleDashed;
   const TypeIcon = step.type === 'synthesize' ? FileText : Search;
 
   return (
@@ -66,6 +70,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
           step.status === 'failed' && 'text-danger',
           step.status === 'running' && 'animate-spin text-primary',
           step.status === 'pending' && 'text-muted-foreground',
+          step.status === 'dropped' && 'text-muted-foreground',
         )}
         aria-hidden="true"
       />
@@ -75,9 +80,13 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
           'min-w-0 flex-1 leading-snug',
           step.status === 'pending' ? 'text-muted-foreground' : 'text-foreground',
           step.status === 'completed' && 'text-muted-foreground',
+          step.status === 'dropped' && 'text-muted-foreground',
         )}
       >
         {step.description}
+        {step.status === 'dropped' && step.note ? (
+          <span className="block text-[12px] text-muted-foreground">{step.note}</span>
+        ) : null}
       </span>
       <span className="shrink-0 text-[12px] uppercase tracking-wide text-muted-foreground">
         {STEP_STATUS_LABELS[step.status]}
