@@ -7,7 +7,11 @@
  * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { DesktopRuntimeResponse } from '@agiworkforce/local-runtime-contract';
+import {
+  DESKTOP_RUNTIME_EVENT_CHANNEL,
+  type DesktopRuntimeEvent,
+  type DesktopRuntimeResponse,
+} from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
   ELECTRON_IPC_CHANNELS,
@@ -62,6 +66,18 @@ const agiHost: ElectronHostBridge = {
     ipcRenderer.on(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
     return () => {
       ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
+    };
+  },
+
+  onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void {
+    const listener = (_event: unknown, payload: unknown) => {
+      if (payload && typeof payload === 'object' && 'kind' in payload) {
+        callback(payload as DesktopRuntimeEvent);
+      }
+    };
+    ipcRenderer.on(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
     };
   },
 

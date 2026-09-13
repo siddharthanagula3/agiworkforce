@@ -69,6 +69,36 @@ export type {
   FilesystemCommand,
 } from './filesystem';
 
+export { APPLICATION_COMMANDS } from './apps';
+export type { ApplicationCommand, ApplicationOpenResult } from './apps';
+
+export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH, isEmptyClipboard } from './clipboard';
+export type { ClipboardCommand, ClipboardImage, ClipboardSnapshot } from './clipboard';
+
+export {
+  ALWAYS_REFUSED_PROGRAMS,
+  EMPTY_SHELL_POLICY,
+  MAX_SHELL_COMMAND_LENGTH,
+  MAX_SHELL_OUTPUT_BYTES,
+  SHELL_COMMANDS,
+  SHELL_CONTROL_CHARACTERS,
+  SHELL_TIMEOUT_DEFAULT_MS,
+  SHELL_TIMEOUT_MAX_MS,
+  ShellCommandRefused,
+  evaluateShellPolicy,
+  findControlCharacter,
+  normalizeShellPolicy,
+  parseCommandLine,
+} from './shell';
+export type {
+  ShellCommand,
+  ShellPolicy,
+  ShellPolicyDecision,
+  ShellPolicyVerdict,
+  ShellRunRequest,
+  ShellRunResult,
+} from './shell';
+
 export {
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,

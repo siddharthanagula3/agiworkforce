@@ -164,6 +164,33 @@ export function pickSourceForDisplay<T extends CapturerSourceLike>(
   return sources[0] ?? null;
 }
 
+export interface PickableSourceLike {
+  id?: string;
+  name?: string;
+}
+
+/** A dialog with forty buttons is not a picker. */
+export const MAX_PICKABLE_CAPTURE_SOURCES = 12;
+
+/**
+ * The screens and windows worth offering, screens first.
+ *
+ * `desktopCapturer` returns every window the compositor knows about, including
+ * unnamed helper surfaces that capture as a blank rectangle. Those are dropped
+ * rather than listed, because a user who picks one gets an empty share and no
+ * explanation.
+ */
+export function pickableCaptureSources<T extends PickableSourceLike>(
+  sources: readonly T[],
+  limit: number = MAX_PICKABLE_CAPTURE_SOURCES,
+): T[] {
+  const screens = sources.filter((source) => source.id?.startsWith('screen:'));
+  const windows = sources.filter(
+    (source) => source.id?.startsWith('window:') && (source.name ?? '').trim() !== '',
+  );
+  return [...screens, ...windows].slice(0, limit);
+}
+
 export interface RectLike {
   x: number;
   y: number;

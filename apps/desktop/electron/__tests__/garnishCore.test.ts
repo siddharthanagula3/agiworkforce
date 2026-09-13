@@ -8,6 +8,7 @@ import {
   normalizeShortcuts,
   parseSettingsFile,
   pickSourceForDisplay,
+  pickableCaptureSources,
 } from '../garnishCore';
 
 describe('parseSettingsFile', () => {
@@ -123,5 +124,43 @@ describe('centeredUpperPosition', () => {
   it('never pushes the panel below the bottom of a short display', () => {
     const { y } = centeredUpperPosition({ x: 0, y: 0, width: 1280, height: 700 }, 480, 620);
     expect(y).toBeLessThanOrEqual(80);
+  });
+});
+
+describe('pickableCaptureSources', () => {
+  it('lists screens before windows', () => {
+    const sources = [
+      { id: 'window:9:0', name: 'Safari' },
+      { id: 'screen:1:0', name: 'Built-in Retina Display' },
+    ];
+    expect(pickableCaptureSources(sources).map((source) => source.id)).toEqual([
+      'screen:1:0',
+      'window:9:0',
+    ]);
+  });
+
+  it('drops unnamed helper windows that would capture as blank', () => {
+    const sources = [
+      { id: 'screen:1:0', name: 'Screen 1' },
+      { id: 'window:9:0', name: '   ' },
+      { id: 'window:10:0', name: 'Terminal' },
+    ];
+    expect(pickableCaptureSources(sources).map((source) => source.id)).toEqual([
+      'screen:1:0',
+      'window:10:0',
+    ]);
+  });
+
+  it('bounds the list so the picker stays a picker', () => {
+    const sources = Array.from({ length: 40 }, (_, index) => ({
+      id: `window:${index}:0`,
+      name: `Window ${index}`,
+    }));
+    expect(pickableCaptureSources(sources)).toHaveLength(12);
+    expect(pickableCaptureSources(sources, 3)).toHaveLength(3);
+  });
+
+  it('returns nothing when no source is offerable', () => {
+    expect(pickableCaptureSources([{ id: 'window:1:0', name: '' }])).toEqual([]);
   });
 });
