@@ -202,6 +202,14 @@ export function AnchoredComposerMenu({
         anchorRef.current?.focus();
         return;
       }
+      if (event.key === 'Tab') {
+        if (!onRequestClose || !autoFocusFirstItem) return;
+        const panel = contentRef?.current ?? internalRef.current;
+        if (!panel?.contains(document.activeElement)) return;
+        anchorRef.current?.focus();
+        onRequestClose();
+        return;
+      }
       if (!autoFocusFirstItem || !NAV_KEYS.includes(event.key)) return;
       const node = contentRef?.current ?? internalRef.current;
       const items = focusableItems(node);
