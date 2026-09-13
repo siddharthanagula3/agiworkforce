@@ -158,13 +158,45 @@ describe('a turn on a model installed on this machine', () => {
     await act(async () => {
       sent = await result.current.sendMessage('look at this', {
         conversationId: CONVERSATION_ID,
-        attachments: [{ id: 'a1', name: 'notes.txt', type: 'text/plain', size: 4, url: 'blob:x' }],
+        attachments: [{ id: 'a1', name: 'notes.txt', type: 'file', size: 4, url: 'blob:x' }],
       });
     });
 
     expect(sent).toBe(false);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
     expect(useChatStore.getState().error).toContain('not sent to a model on this device');
+  });
+});
+
+describe('a local model the page names for the turn', () => {
+  it('routes locally on the id alone, with nothing selected in the composer', async () => {
+    useLocalModelSelection.getState().select(null);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', {
+        conversationId: CONVERSATION_ID,
+        model: LOCAL_MODEL.id,
+      });
+    });
+
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(assistantMessage()?.content).toBe('Hello from this Mac');
+    expect(assistantMessage()?.metadata?.privacyMode).toBe('local');
+  });
+
+  it('still calls the cloud when the page names a catalogue model', async () => {
+    useLocalModelSelection.getState().select(null);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network stub')));
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', {
+        conversationId: CONVERSATION_ID,
+        model: 'a-managed-catalogue-id',
+      });
+    });
+
+    expect(vi.mocked(fetch)).toHaveBeenCalled();
+    expect(assistantMessage()?.metadata?.privacyMode).toBeUndefined();
   });
 });
 

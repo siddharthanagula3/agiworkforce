@@ -4020,7 +4020,9 @@ export async function* runToolLoop(
                 message: msg,
               }
             : classifyError(err);
-        const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider);
+        const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
+          requestedModel: processed.requestedModel,
+        });
         const streamError = {
           message: mappedUpstream.message,
           code: mappedUpstream.code,
@@ -4133,7 +4135,9 @@ export async function* runToolLoop(
             },
             '[tool-loop] provider step ended with no assistant text, tool call, or artifact',
           );
-          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider);
+          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
+            requestedModel: processed.requestedModel,
+          });
           const streamError = {
             message: mappedUpstream.message,
             code: mappedUpstream.code,

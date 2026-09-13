@@ -186,6 +186,9 @@ export interface FailoverStepContext {
  * not about the model the user picked, and the plan it rotates onto serves
  * that same model. A vendor's own 400 still ends the turn, because the next
  * route would put the same request to the same vendor and get the same answer.
+ *
+ * "First step" means the first dispatch, so the AGI Work planning turn, which
+ * runs ahead of step one, qualifies on the same reasoning.
  */
 function isRotatableRequestRejection(
   processed: ProcessedRequest,
@@ -193,7 +196,7 @@ function isRotatableRequestRejection(
   context: FailoverStepContext | undefined,
   servingHarnessId: string | undefined,
 ): boolean {
-  if (!context || context.step !== FIRST_PROVIDER_STEP) return false;
+  if (!context || context.step > FIRST_PROVIDER_STEP) return false;
   if (classified.category !== REQUEST_REJECTION_CATEGORY) return false;
   if (classified.status !== REQUEST_REJECTION_STATUS) return false;
   if (isAutoModeModelId(processed.requestedModel)) return true;
@@ -278,13 +281,20 @@ function requestCarriesFunctionTools(processed: ProcessedRequest): boolean {
  * From the second step onward the transcript carries ids the previous provider
  * minted, so the pin stands. A caller that cannot say which step it is on gets
  * the pin too: the safe reading of an unknown step is the later one.
+ *
+ * A step BELOW the first one is the AGI Work planning turn, which runs before
+ * any tool is offered and therefore before any id is minted. Reading it as the
+ * later case pinned every Work run to its primary provider, and because an
+ * inadmissible candidate is dropped from the plan rather than deferred, the
+ * planning turn spent the whole ladder on skips: the work step that followed
+ * had nothing left to rotate onto and an overloaded flagship ended the run.
  */
 function toolStateBindsProvider(
   processed: ProcessedRequest,
   context: FailoverStepContext | undefined,
 ): boolean {
   if (!requestCarriesFunctionTools(processed)) return false;
-  return !context || context.step !== FIRST_PROVIDER_STEP;
+  return !context || context.step > FIRST_PROVIDER_STEP;
 }
 
 export function buildFailoverAttemptView(

@@ -7,6 +7,7 @@ import {
   MAX_CHAT_ATTACHMENT_COUNT,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
+  type UnavailableChatAttachment,
 } from '@/lib/chat-attachment-policy';
 
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
@@ -54,6 +55,12 @@ export interface UseAttachmentsReturn {
   attachments: File[];
   previews: AttachmentPreview[];
   canAddMore: boolean;
+  /**
+   * Files this draft refused, so the send can say so instead of leaving the
+   * model to answer a prompt about a file it never received. Cleared with the
+   * rest of the draft, so a refusal rides exactly the turn it happened on.
+   */
+  refused: UnavailableChatAttachment[];
   addFiles: (files: File[]) => void;
   removeFile: (index: number) => void;
   clearAll: () => void;
@@ -84,6 +91,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
+  const [refused, setRefused] = useState<UnavailableChatAttachment[]>([]);
   const previewUrlsRef = useRef<string[]>([]);
 
   const revokeUrl = useCallback((url: string) => {
@@ -110,8 +118,13 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       if (incoming.length === 0) return;
 
       const availableSlots = maxFiles - attachments.length;
+      const rejected: UnavailableChatAttachment[] = [];
       if (availableSlots <= 0) {
         onError?.(`Maximum ${maxFiles} files allowed.`);
+        setRefused((prev) => [
+          ...prev,
+          ...incoming.map((file) => ({ filename: file.name, reason: 'too_many' as const })),
+        ]);
         return;
       }
 
@@ -121,6 +134,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       for (const file of incoming) {
         if (accepted.length >= availableSlots) {
           onError?.(`Only ${availableSlots} more file(s) can be added (max ${maxFiles}).`);
+          rejected.push({ filename: file.name, reason: 'too_many' });
           break;
         }
 
@@ -128,11 +142,13 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           onError?.(
             `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(maxFileSize)}.`,
           );
+          rejected.push({ filename: file.name, reason: 'too_large' });
           continue;
         }
 
         if (!isAllowedType(file)) {
           onError?.(`"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`);
+          rejected.push({ filename: file.name, reason: 'unsupported' });
           continue;
         }
 
@@ -147,6 +163,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         setAttachments((prev) => [...prev, ...accepted]);
         setPreviews((prev) => [...prev, ...newPreviews]);
       }
+      if (rejected.length > 0) setRefused((prev) => [...prev, ...rejected]);
     },
     [attachments.length, maxFiles, maxFileSize, onError],
   );
@@ -170,12 +187,14 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     revokeAllUrls();
     setAttachments([]);
     setPreviews([]);
+    setRefused([]);
   }, [revokeAllUrls]);
 
   return {
     attachments,
     previews,
     canAddMore: attachments.length < maxFiles,
+    refused,
     addFiles,
     removeFile,
     clearAll,

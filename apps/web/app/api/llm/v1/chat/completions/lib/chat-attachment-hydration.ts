@@ -7,6 +7,8 @@ import {
   isChatImageMimeType,
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
+  unavailableChatAttachmentNote,
+  type ChatAttachmentUnavailableReason,
 } from '@/lib/chat-attachment-policy';
 import {
   extractOfficeDocumentText,
@@ -69,16 +71,6 @@ export class ChatAttachmentHydrationError extends Error {
  * proceeds. Only the turn being sent right now can still fail, because that is
  * the only one whose files the reader can still change.
  */
-function unavailableAttachment(filename: string, note: string): string {
-  return `[attachment unavailable: ${filename} ${note}]`;
-}
-
-const ATTACHMENT_REMOVED_NOTE = 'was removed from your Library. Attach it again to include it.';
-const ATTACHMENT_UNREADABLE_NOTE = 'could not be loaded. Attach it again to include it.';
-const ATTACHMENT_UNSUPPORTED_NOTE = 'is not a file type this chat can read.';
-const ATTACHMENT_FOREIGN_NOTE = 'is not available to this account.';
-const ATTACHMENT_OVER_BUDGET_NOTE =
-  'was left out because this conversation has reached its attachment limit.';
 
 /**
  * Reached before the asset row is read, so there is no filename to print and
@@ -370,8 +362,8 @@ export async function hydrateChatAttachments(
     const slot = pending[index]!;
     const outcome = outcomes[index]!;
     const live = slot.fromCurrentTurn;
-    const degrade = (filename: string, note: string): void => {
-      slot.resolved = [{ type: 'text', text: unavailableAttachment(filename, note) }];
+    const degrade = (filename: string, reason: ChatAttachmentUnavailableReason): void => {
+      slot.resolved = [{ type: 'text', text: unavailableChatAttachmentNote(filename, reason) }];
     };
 
     if (outcome.kind === 'foreign') {
@@ -382,12 +374,12 @@ export async function hydrateChatAttachments(
           'An attached file is unavailable or does not belong to this account.',
         );
       }
-      degrade(`attachment-${slot.assetId}`, ATTACHMENT_FOREIGN_NOTE);
+      degrade(`attachment-${slot.assetId}`, 'foreign');
       continue;
     }
 
     if (outcome.kind === 'removed') {
-      degrade(outcome.filename, ATTACHMENT_REMOVED_NOTE);
+      degrade(outcome.filename, 'removed');
       continue;
     }
 
@@ -399,12 +391,12 @@ export async function hydrateChatAttachments(
           `${outcome.filename} is not a file type this chat can read.`,
         );
       }
-      degrade(outcome.filename, ATTACHMENT_UNSUPPORTED_NOTE);
+      degrade(outcome.filename, 'unsupported');
       continue;
     }
 
     if (outcome.kind === 'unreadable') {
-      degrade(outcome.filename, ATTACHMENT_UNREADABLE_NOTE);
+      degrade(outcome.filename, 'unreadable');
       continue;
     }
 
@@ -418,7 +410,7 @@ export async function hydrateChatAttachments(
           'The files attached to this message are too large to send together. Remove one and try again.',
         );
       }
-      degrade(filename, ATTACHMENT_OVER_BUDGET_NOTE);
+      degrade(filename, 'over_budget');
       continue;
     }
     totalBytes += object.data.byteLength;
@@ -464,7 +456,7 @@ export async function hydrateChatAttachments(
             `${filename} could not be read as a PDF.`,
           );
         }
-        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+        degrade(filename, 'unreadable');
         continue;
       }
       stageForSandbox();
@@ -504,7 +496,7 @@ export async function hydrateChatAttachments(
             `${filename} could not be read as an Office document.`,
           );
         }
-        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+        degrade(filename, 'unreadable');
         continue;
       }
       stageForSandbox();
@@ -524,7 +516,7 @@ export async function hydrateChatAttachments(
             `${filename} is not a readable Jupyter notebook.`,
           );
         }
-        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+        degrade(filename, 'unreadable');
         continue;
       }
       stageForSandbox();

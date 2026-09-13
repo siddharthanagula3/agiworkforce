@@ -99,6 +99,9 @@ function LocalModelsPanel() {
         setUrlError(null);
         await models.refresh();
       } catch (cause) {
+        // The field goes back to the address actually in force. Leaving the
+        // refused text in place would read as though it had been accepted.
+        setDrafts((current) => ({ ...current, [serverId]: undefined }));
         setUrlError(messageFor(cause, MODELS_URL_SAVE_FAILED));
       }
     },
