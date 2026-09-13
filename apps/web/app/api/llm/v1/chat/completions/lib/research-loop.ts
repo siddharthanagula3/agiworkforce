@@ -81,7 +81,13 @@ import {
   WEB_SEARCH_MAX_CALLS_PER_TURN,
   WEB_SEARCH_TOOL,
 } from '@/lib/web-search/web-search-tool';
-import { resolveSearchBudget, settleSearchCharge } from '@/lib/web-search/search-budget';
+import {
+  reserveSearchCharge,
+  resolveSearchBudget,
+  settleSearchCharge,
+  type SearchChargeReservation,
+} from '@/lib/web-search/search-budget';
+import { PERPLEXITY_SEARCH_PROVIDER_ID } from '@/lib/web-search/perplexity-search-cost';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { classifyAttachedSearchTool, nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -967,9 +973,18 @@ export async function* runResearchLoop(
    * research run dying on its own accounting. Only a refusal to pay stops a
    * search.
    */
-  async function chargeResearchSearch(
-    callOrdinal: number,
-  ): Promise<{ paid: boolean; chargeCents: number | null }> {
+  function researchScopedDb() {
+    return createClaimedUserScopedDb(getNeonDb(), {
+      userId: _billing.userId,
+      organizationId: processed.organizationId ?? null,
+    });
+  }
+
+  async function admitResearchSearch(callOrdinal: number): Promise<{
+    admitted: boolean;
+    chargeCents: number | null;
+    reservation: SearchChargeReservation | null;
+  }> {
     try {
       const decision = await resolveSearchBudget({
         userId: _billing.userId,
@@ -977,23 +992,31 @@ export async function* runResearchLoop(
         feature: 'web_search_perplexity',
         callerKind: 'automated',
       });
-      if (decision.outcome !== 'charge') return { paid: true, chargeCents: null };
-      const paid = await settleSearchCharge({
+      if (decision.outcome !== 'charge') {
+        return { admitted: true, chargeCents: null, reservation: null };
+      }
+      const reserved = await reserveSearchCharge({
         userId: _billing.userId,
+        organizationId: processed.organizationId ?? null,
+        planTier: processed.subscriptionTier ?? null,
         requestId: processed.requestId,
         callOrdinal,
         feature: decision.feature,
+        provider: PERPLEXITY_SEARCH_PROVIDER_ID,
         chargeMicrousd: decision.chargeMicrousd,
-        surface: processed.chatSurface,
-        db: createClaimedUserScopedDb(getNeonDb(), {
-          userId: _billing.userId,
-          organizationId: processed.organizationId ?? null,
-        }),
+        db: researchScopedDb(),
       });
-      return { paid, chargeCents: paid ? decision.chargeCents : null };
+      if (reserved.outcome === 'refused') {
+        return { admitted: false, chargeCents: null, reservation: null };
+      }
+      return {
+        admitted: true,
+        chargeCents: reserved.outcome === 'reserved' ? decision.chargeCents : null,
+        reservation: reserved.outcome === 'reserved' ? reserved.reservation : null,
+      };
     } catch (error) {
       logger.warn({ error }, '[research] search charge skipped; the search runs uncharged');
-      return { paid: true, chargeCents: null };
+      return { admitted: true, chargeCents: null, reservation: null };
     }
   }
 
@@ -1361,8 +1384,8 @@ export async function* runResearchLoop(
           // Deep research runs unattended and searches in bulk, so its calls
           // are charged at the rate card rather than included.
           const searchOrdinal = totalSearches + roundCounts.searches;
-          const searchCharge = await chargeResearchSearch(searchOrdinal);
-          if (!searchCharge.paid) {
+          const searchCharge = await admitResearchSearch(searchOrdinal);
+          if (!searchCharge.admitted) {
             content = await applyToolResultSecretPolicy(
               _billing.userId,
               call.name,
@@ -1383,6 +1406,14 @@ export async function* runResearchLoop(
             customerChargeCents: searchCharge.chargeCents,
             ...(options.signal ? { signal: options.signal } : {}),
           });
+          if (searchCharge.reservation) {
+            await settleSearchCharge({
+              userId: _billing.userId,
+              reservation: searchCharge.reservation,
+              surface: processed.chatSurface,
+              db: researchScopedDb(),
+            });
+          }
           if (outcome.ok) {
             for (const result of webSearchResultsToFetchedSources(outcome)) sources.add(result);
           }

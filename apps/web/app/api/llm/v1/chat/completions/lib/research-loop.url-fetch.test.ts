@@ -54,6 +54,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 }));
 vi.mock('@/lib/web-search/perplexity-search-cost', () => ({
   recordPerplexitySearchCost: searchCostMocks.record,
+  PERPLEXITY_SEARCH_PROVIDER_ID: 'perplexity',
 }));
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { runResearchLoop, READY_MARKER } from './research-loop';

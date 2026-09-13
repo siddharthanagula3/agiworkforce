@@ -5,13 +5,33 @@ vi.mock('server-only', () => ({}));
 const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 vi.mock('@/lib/logger', () => ({ logger }));
 
-const settleCreditsDurably = vi.fn(async (_op: unknown) => ({ status: 'settled' }));
 vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
+}));
 
-  CreditService: { settleCreditsDurably: (op: unknown) => settleCreditsDurably(op) },
+const TestManagedUsageRequestError = vi.hoisted(
+  () =>
+    class extends Error {
+      constructor(
+        message: string,
+        readonly status: number,
+        readonly code: string,
+      ) {
+        super(message);
+      }
+    },
+);
+const reserveManagedUsageRequest = vi.hoisted(() => vi.fn());
+const finalizeManagedUsageRequest = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  reserveManagedUsageRequest,
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest: (value: unknown) => JSON.stringify(value),
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? source.estimatedCostCents * 10_000,
+  ManagedUsageRequestError: TestManagedUsageRequestError,
 }));
 
 const RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
@@ -23,12 +43,37 @@ function clearScopedEnv(): void {
   vi.stubEnv(RATE_ENV, undefined);
 }
 
+const HELD_MICROUSD = 1_000_000;
+
+const reservation = {
+  idempotencyKey: 'agi.e2b.compute.res-1',
+  requestHash: 'hash-1',
+  leaseToken: 'lease-1',
+  estimatedCostMicrousd: HELD_MICROUSD,
+  provider: 'e2b',
+  model: 'e2b',
+};
+
 function resetMocks(): void {
   logger.warn.mockClear();
   logger.error.mockClear();
   logger.info.mockClear();
-  settleCreditsDurably.mockClear();
-  settleCreditsDurably.mockResolvedValue({ status: 'settled' });
+  reserveManagedUsageRequest.mockReset();
+  reserveManagedUsageRequest.mockImplementation(async (input: Record<string, unknown>) => ({
+    db: input['db'],
+    userId: input['userId'],
+    idempotencyKey: input['idempotencyKey'],
+    requestHash: input['requestHash'],
+    leaseToken: 'lease-1',
+    estimatedCostMicrousd: input['estimatedCostMicrousd'],
+    estimatedCostCents: 1,
+  }));
+  finalizeManagedUsageRequest.mockReset();
+  finalizeManagedUsageRequest.mockResolvedValue({
+    requestStatus: 'completed',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+  });
 }
 
 async function loadModule() {
@@ -43,6 +88,7 @@ function interval(overrides: Record<string, unknown> = {}) {
     startedAtMs: 1_000_000,
     endedAtMs: 1_000_000 + 60_000,
     reason: 'pause' as const,
+    reservation,
     ...overrides,
   };
 }
@@ -135,10 +181,10 @@ describe('meterSandboxComputeInterval', () => {
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountMicrousd: 165600,
-        metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
+        actualCostMicrousd: 165600,
+        usage: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
     expect(logger.error).toHaveBeenCalled();
@@ -151,8 +197,8 @@ describe('meterSandboxComputeInterval', () => {
     // Rounding it to cents billed zero and moved no usage cap, so a sandbox
     // paused every minute ran indefinitely for free.
     await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(2_760);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
-      expect.objectContaining({ amountMicrousd: 2_760 }),
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ actualCostMicrousd: 2_760 }),
     );
     expect(logger.warn).not.toHaveBeenCalled();
   });
@@ -174,11 +220,13 @@ describe('meterSandboxComputeInterval', () => {
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(100800);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        amountMicrousd: 100800,
-        idempotencyKey: 'e2b-compute:sbx-1:1000000',
+        actualCostMicrousd: 100800,
+        idempotencyKey: 'agi.e2b.compute.res-1',
+        leaseToken: 'lease-1',
+        quotaFeature: 'sandbox_compute',
       }),
     );
     expect(logger.error).not.toHaveBeenCalled();
@@ -189,11 +237,11 @@ describe('meterSandboxComputeInterval', () => {
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        amountMicrousd: 165600,
-        metadata: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
+        actualCostMicrousd: 165600,
+        usage: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
   });
@@ -207,10 +255,10 @@ describe('meterSandboxComputeInterval', () => {
     });
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(331200);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountMicrousd: 331200,
-        metadata: expect.objectContaining({ microusd_per_second: 92 }),
+        actualCostMicrousd: 331200,
+        usage: expect.objectContaining({ microusd_per_second: 92 }),
       }),
     );
   });
@@ -226,10 +274,10 @@ describe('meterSandboxComputeInterval', () => {
     });
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
-    expect(settleCreditsDurably).toHaveBeenCalledWith(
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountMicrousd: 165600,
-        metadata: expect.objectContaining({ microusd_per_second: 46 }),
+        actualCostMicrousd: 165600,
+        usage: expect.objectContaining({ microusd_per_second: 46 }),
       }),
     );
   });
@@ -237,10 +285,100 @@ describe('meterSandboxComputeInterval', () => {
   it('swallows a ledger failure so pause / kill / reclaim still release the sandbox', async () => {
     vi.stubEnv(RATE_ENV, '5000');
     const mod = await loadModule();
-    settleCreditsDurably.mockRejectedValueOnce(new Error('ledger down'));
+    finalizeManagedUsageRequest.mockRejectedValueOnce(new Error('ledger down'));
 
     await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
     expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('never settles an interval that carries no reservation', async () => {
+    const mod = await loadModule();
+    const { reservation: _unreserved, ...noHold } = interval();
+
+    await expect(mod.meterSandboxComputeInterval(noHold)).resolves.toBe(0);
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('never settles past what the account agreed to hold', async () => {
+    vi.stubEnv(RATE_ENV, '5000');
+    const mod = await loadModule();
+    const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
+
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(HELD_MICROUSD);
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ actualCostMicrousd: HELD_MICROUSD }),
+    );
+  });
+});
+
+describe('reserveSandboxComputeInterval', () => {
+  beforeEach(() => {
+    clearScopedEnv();
+    resetMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const reserveInput = {
+    userId: 'user-1',
+    planTier: 'pro',
+    templateId: 'tpl-1',
+    microusdPerSecond: DEFAULT_SHAPE_RATE,
+    ttlMs: 3_600_000,
+  };
+
+  it('holds the whole admitted lifetime before the sandbox exists', async () => {
+    const mod = await loadModule();
+
+    const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
+    expect(outcome.outcome).toBe('reserved');
+    const held = reserveManagedUsageRequest.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(held['estimatedCostMicrousd']).toBe(3_600 * DEFAULT_SHAPE_RATE);
+    expect(held['provider']).toBe('e2b');
+    expect(held['model']).toBe('tpl-1');
+    expect(held['quotaFeature']).toBe('sandbox_compute');
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses an account that is over its quota, so no sandbox is provisioned', async () => {
+    const mod = await loadModule();
+    reserveManagedUsageRequest.mockRejectedValue(
+      new TestManagedUsageRequestError('no budget', 402, 'insufficient_credits'),
+    );
+
+    const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
+    expect(outcome).toMatchObject({ outcome: 'refused' });
+    if (outcome.outcome !== 'refused') throw new Error('expected a refusal');
+    expect(outcome.error.status).toBe(402);
+    expect(outcome.error.code).toBe('insufficient_credits');
+  });
+
+  it('refuses rather than provisions when billing itself cannot answer', async () => {
+    const mod = await loadModule();
+    reserveManagedUsageRequest.mockRejectedValue(new Error('billing down'));
+
+    const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
+    expect(outcome).toMatchObject({ outcome: 'refused' });
+    if (outcome.outcome !== 'refused') throw new Error('expected a refusal');
+    expect(outcome.error.status).toBe(503);
+  });
+
+  it('releases a hold whose sandbox never ran', async () => {
+    const mod = await loadModule();
+    const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+
+    await mod.releaseSandboxComputeReservation({
+      userId: 'user-1',
+      reservation: outcome.reservation,
+      reason: 'sandbox_create_failed',
+    });
+    expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+    );
   });
 });
 

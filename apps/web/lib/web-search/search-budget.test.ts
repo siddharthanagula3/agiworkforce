@@ -6,7 +6,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const countUserFeatureUnitsSince = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/services/cogs-ledger-service', () => ({ countUserFeatureUnitsSince }));
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  countUserFeatureUnitsSince,
+  getOrganizationMonthToDateSpendCents: vi.fn(),
+  recordSettledProviderCost: vi.fn(),
+}));
 
 const settleCreditsDurably = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/credit-service', () => ({
@@ -18,9 +22,33 @@ vi.mock('@/lib/services/credit-service', () => ({
   CreditSettlementUnavailableError: class extends Error {},
 }));
 
+const reserveManagedUsageRequest = vi.hoisted(() => vi.fn());
+const finalizeManagedUsageRequest = vi.hoisted(() => vi.fn());
+const TestManagedUsageRequestError = vi.hoisted(
+  () =>
+    class extends Error {
+      constructor(
+        message: string,
+        readonly status: number,
+        readonly code: string,
+      ) {
+        super(message);
+      }
+    },
+);
+vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  reserveManagedUsageRequest,
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest: (value: unknown) => JSON.stringify(value),
+  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
+    source.estimatedCostMicrousd ?? source.estimatedCostCents * 10_000,
+  ManagedUsageRequestError: TestManagedUsageRequestError,
+}));
+
 import {
   FREE_PLAN_MONTHLY_SEARCH_CALLS,
   PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS,
+  reserveSearchCharge,
   resolveSearchBudget,
   resolveSearchCallerKind,
   searchChargeCents,
@@ -30,10 +58,39 @@ import {
 
 const db = {} as never;
 
+const reserveInput = {
+  userId: 'user-1',
+  planTier: 'pro',
+  requestId: 'req-1',
+  callOrdinal: 1,
+  feature: 'web_search_perplexity',
+  provider: 'perplexity',
+  chargeMicrousd: 10_000,
+  db,
+} as const;
+
 beforeEach(() => {
   countUserFeatureUnitsSince.mockReset();
   settleCreditsDurably.mockReset();
   settleCreditsDurably.mockResolvedValue({ status: 'succeeded', success: true, attempt_count: 1 });
+  reserveManagedUsageRequest.mockReset();
+  reserveManagedUsageRequest.mockImplementation(async (input: Record<string, unknown>) => ({
+    db: input['db'],
+    userId: input['userId'],
+    idempotencyKey: input['idempotencyKey'],
+    requestHash: input['requestHash'],
+    leaseToken: 'lease-1',
+    estimatedCostMicrousd: input['estimatedCostMicrousd'],
+    estimatedCostCents: 1,
+  }));
+  finalizeManagedUsageRequest.mockReset();
+  finalizeManagedUsageRequest.mockResolvedValue({
+    requestStatus: 'completed',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+    actualCostMicrousd: 10_000,
+    actualCostCents: 1,
+  });
 });
 
 describe('resolveSearchCallerKind', () => {
@@ -177,77 +234,82 @@ describe('paid plan interactive bound', () => {
   });
 });
 
-describe('settleSearchCharge', () => {
+describe('reserveSearchCharge', () => {
   it('keys each call so a retry cannot charge twice', () => {
     expect(searchChargeIdempotencyKey('req-1', 2)).toBe('search:req-1:2');
     expect(searchChargeIdempotencyKey('req-1', 0, 'grounding')).toBe('search:req-1:grounding:0');
   });
 
-  it('records the search as its own quota feature', async () => {
+  it('holds the charge against the canonical owner before the search runs', async () => {
+    const outcome = await reserveSearchCharge({ ...reserveInput, scope: 'tool' });
+    expect(outcome.outcome).toBe('reserved');
+    const held = reserveManagedUsageRequest.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(held['idempotencyKey']).toBe('search:req-1:1');
+    expect(held['estimatedCostMicrousd']).toBe(10_000);
+    expect(held['quotaFeature']).toBe('search');
+    expect(held['provider']).toBe('perplexity');
+    expect(held['model']).toBe('web_search_perplexity');
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses the call when the account is over quota', async () => {
+    reserveManagedUsageRequest.mockRejectedValue(
+      new TestManagedUsageRequestError('no budget', 402, 'insufficient_credits'),
+    );
+    const outcome = await reserveSearchCharge(reserveInput);
+    expect(outcome.outcome).toBe('refused');
+  });
+
+  it('refuses the call when a rolling usage limit is reached', async () => {
+    reserveManagedUsageRequest.mockRejectedValue(
+      new TestManagedUsageRequestError('slow down', 429, 'rolling_weekly_limit_reached'),
+    );
+    expect((await reserveSearchCharge(reserveInput)).outcome).toBe('refused');
+  });
+
+  it('lets the call run when billing itself is unreachable', async () => {
+    reserveManagedUsageRequest.mockRejectedValue(new Error('billing down'));
+    expect((await reserveSearchCharge(reserveInput)).outcome).toBe('unreserved');
+  });
+
+  it('never reserves for a zero charge', async () => {
+    const outcome = await reserveSearchCharge({ ...reserveInput, chargeMicrousd: 0 });
+    expect(outcome.outcome).toBe('unreserved');
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('settleSearchCharge', () => {
+  it('settles the held amount through the canonical owner', async () => {
+    const outcome = await reserveSearchCharge(reserveInput);
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
     await settleSearchCharge({
       userId: 'user-1',
-      requestId: 'req-1',
-      callOrdinal: 1,
-      feature: 'web_search_perplexity',
-      chargeMicrousd: 10_000,
+      reservation: outcome.reservation,
       surface: 'cli',
       db,
     });
-    const operation = settleCreditsDurably.mock.calls[0]?.[0] as {
-      amountMicrousd: number;
+    const settled = finalizeManagedUsageRequest.mock.calls[0]?.[0] as {
       idempotencyKey: string;
-      metadata: Record<string, unknown>;
+      leaseToken: string;
+      actualCostMicrousd: number;
+      quotaFeature: string;
+      usage: Record<string, unknown>;
     };
-    expect(operation.amountMicrousd).toBe(10_000);
-    expect(operation.idempotencyKey).toBe('search:req-1:1');
-    expect(operation.metadata['quotaFeature']).toBe('search');
-    expect(operation.metadata['surface']).toBe('cli');
-  });
-
-  it('refuses the call when the account cannot pay', async () => {
-    settleCreditsDurably.mockResolvedValue({
-      status: 'terminal',
-      success: false,
-      code: 'insufficient_credits',
-      attempt_count: 1,
-    });
-    await expect(
-      settleSearchCharge({
-        userId: 'user-1',
-        requestId: 'req-1',
-        callOrdinal: 1,
-        feature: 'web_search_perplexity',
-        chargeCents: 1,
-        db,
-      }),
-    ).resolves.toBe(false);
-  });
-
-  it('lets the call run when the settlement backend is unreachable', async () => {
-    settleCreditsDurably.mockRejectedValue(new Error('settlement down'));
-    await expect(
-      settleSearchCharge({
-        userId: 'user-1',
-        requestId: 'req-1',
-        callOrdinal: 1,
-        feature: 'web_search_perplexity',
-        chargeCents: 1,
-        db,
-      }),
-    ).resolves.toBe(true);
-  });
-
-  it('never calls settlement for a zero charge', async () => {
-    await expect(
-      settleSearchCharge({
-        userId: 'user-1',
-        requestId: 'req-1',
-        callOrdinal: 1,
-        feature: 'web_search_perplexity',
-        chargeCents: 0,
-        db,
-      }),
-    ).resolves.toBe(true);
+    expect(settled.idempotencyKey).toBe('search:req-1:1');
+    expect(settled.leaseToken).toBe('lease-1');
+    expect(settled.actualCostMicrousd).toBe(10_000);
+    expect(settled.quotaFeature).toBe('search');
+    expect(settled.usage['surface']).toBe('cli');
     expect(settleCreditsDurably).not.toHaveBeenCalled();
+  });
+
+  it('leaves the hold to recovery when settlement cannot be written', async () => {
+    const outcome = await reserveSearchCharge(reserveInput);
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    finalizeManagedUsageRequest.mockRejectedValue(new Error('settlement down'));
+    await expect(
+      settleSearchCharge({ userId: 'user-1', reservation: outcome.reservation, db }),
+    ).resolves.toBeUndefined();
   });
 });
