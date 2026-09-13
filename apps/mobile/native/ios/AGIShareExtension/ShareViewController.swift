@@ -4,12 +4,34 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
   private static let appGroupIdentifier = "group.com.agiworkforce.app.share"
   private static let inboxDirectoryName = "PendingShares"
+  private static let fileDirectoryName = "files"
   private static let maximumSharedBytes = 100 * 1024
+  // Mirrors maxAttachmentBytesFor('cloud') in
+  // src/features/chat/utils/attachmentValidation.ts. The app re-validates every
+  // staged file against that module, this cap only keeps the App Group copy
+  // bounded.
+  private static let maximumSharedFileBytes = 12 * 1024 * 1024
+  private static let maximumSharedFiles = 5
+
+  private struct PendingShareFile: Encodable {
+    let fileName: String
+    let mimeType: String
+    let relativePath: String
+    let byteSize: Int
+  }
 
   private struct PendingShare: Encodable {
     let text: String
     let truncated: Bool
+    let files: [PendingShareFile]
     let createdAt: TimeInterval
+  }
+
+  private struct LoadedFile {
+    let fileName: String
+    let mimeType: String
+    let sourceURL: URL
+    let byteSize: Int
   }
 
   private let titleLabel = UILabel()
@@ -20,6 +42,7 @@ final class ShareViewController: UIViewController {
   private let activityIndicator = UIActivityIndicatorView(style: .medium)
 
   private var sharedText: String?
+  private var sharedFiles: [LoadedFile] = []
   private var contentWasTruncated = false
   private var hasFinished = false
 
@@ -99,17 +122,118 @@ final class ShareViewController: UIViewController {
       .flatMap { $0.attachments ?? [] }
 
     guard !providers.isEmpty else {
-      showLoadError("No text or link was shared.")
+      showLoadError("No text, link or file was shared.")
       return
     }
 
-    loadFirstValue(typeIdentifier: UTType.plainText.identifier, providers: providers) {
+    let fileProviders = providers.filter(Self.carriesFile)
+    let textProviders = providers.filter { !Self.carriesFile($0) }
+
+    loadFirstValue(typeIdentifier: UTType.plainText.identifier, providers: textProviders) {
       [weak self] textValue in
-      self?.loadFirstValue(typeIdentifier: UTType.url.identifier, providers: providers) {
+      self?.loadFirstValue(typeIdentifier: UTType.url.identifier, providers: textProviders) {
         [weak self] urlValue in
-        self?.finishLoading(text: textValue, url: urlValue)
+        self?.loadFiles(providers: fileProviders) { [weak self] files in
+          self?.finishLoading(text: textValue, url: urlValue, files: files)
+        }
       }
     }
+  }
+
+  private static func carriesFile(_ provider: NSItemProvider) -> Bool {
+    if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) { return true }
+    if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) { return true }
+    if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) { return false }
+    if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) { return false }
+    return provider.hasItemConformingToTypeIdentifier(UTType.data.identifier)
+  }
+
+  private static func fileTypeIdentifier(for provider: NSItemProvider) -> String? {
+    for identifier in provider.registeredTypeIdentifiers {
+      guard let type = UTType(identifier), !type.isDynamic, !type.conforms(to: .plainText) else {
+        continue
+      }
+      if type.conforms(to: .image) || type.conforms(to: .fileURL) || type.conforms(to: .data) {
+        return identifier
+      }
+    }
+    return nil
+  }
+
+  private func loadFiles(
+    providers: [NSItemProvider],
+    index: Int = 0,
+    collected: [LoadedFile] = [],
+    completion: @escaping ([LoadedFile]) -> Void
+  ) {
+    guard index < providers.count, collected.count < Self.maximumSharedFiles else {
+      DispatchQueue.main.async { completion(collected) }
+      return
+    }
+
+    let provider = providers[index]
+    guard let typeIdentifier = Self.fileTypeIdentifier(for: provider) else {
+      loadFiles(
+        providers: providers, index: index + 1, collected: collected, completion: completion)
+      return
+    }
+
+    provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] url, _ in
+      guard let self else { return }
+      var next = collected
+      // loadFileRepresentation deletes its temporary file as soon as this
+      // closure returns, so the bytes have to be staged synchronously here.
+      if let url, let staged = Self.stageTemporaryCopy(of: url, typeIdentifier: typeIdentifier) {
+        next.append(staged)
+      }
+      self.loadFiles(
+        providers: providers, index: index + 1, collected: next, completion: completion)
+    }
+  }
+
+  private static func stageTemporaryCopy(of url: URL, typeIdentifier: String) -> LoadedFile? {
+    let fileManager = FileManager.default
+    guard
+      let byteSize = (try? fileManager.attributesOfItem(atPath: url.path)[.size]) as? Int,
+      byteSize > 0,
+      byteSize <= maximumSharedFileBytes
+    else {
+      return nil
+    }
+
+    let staging = fileManager.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let fileName = sanitizedFileName(url.lastPathComponent, typeIdentifier: typeIdentifier)
+    let destination = staging.appendingPathComponent(fileName, isDirectory: false)
+    do {
+      try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+      try fileManager.copyItem(at: url, to: destination)
+    } catch {
+      return nil
+    }
+
+    let type = UTType(typeIdentifier) ?? UTType(filenameExtension: destination.pathExtension)
+    return LoadedFile(
+      fileName: fileName,
+      mimeType: type?.preferredMIMEType ?? "application/octet-stream",
+      sourceURL: destination,
+      byteSize: byteSize
+    )
+  }
+
+  private static func sanitizedFileName(_ raw: String, typeIdentifier: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_. "))
+    let stripped = String(
+      raw.unicodeScalars.filter { allowed.contains($0) }.map(Character.init)
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    let base = stripped.isEmpty || stripped.hasPrefix(".") ? "shared-file" : stripped
+    let bounded = String(base.prefix(120))
+    if URL(fileURLWithPath: bounded).pathExtension.isEmpty,
+      let fileExtension = UTType(typeIdentifier)?.preferredFilenameExtension
+    {
+      return "\(bounded).\(fileExtension)"
+    }
+    return bounded
   }
 
   private func loadFirstValue(
@@ -166,7 +290,7 @@ final class ShareViewController: UIViewController {
     }
   }
 
-  private func finishLoading(text: String?, url: String?) {
+  private func finishLoading(text: String?, url: String?, files: [LoadedFile]) {
     let combined: String
     if let text, let url, text != url {
       combined = "\(text)\n\n\(url)"
@@ -175,14 +299,19 @@ final class ShareViewController: UIViewController {
     } else if let url {
       combined = url
     } else {
-      showLoadError("AGI can receive shared text and web links from this screen.")
+      combined = ""
+    }
+
+    guard !combined.isEmpty || !files.isEmpty else {
+      showLoadError("AGI can receive shared text, web links, images and files from this screen.")
       return
     }
 
     let bounded = Self.boundedUTF8(combined, maximumBytes: Self.maximumSharedBytes)
     sharedText = bounded.value
+    sharedFiles = files
     contentWasTruncated = bounded.truncated
-    previewView.text = Self.previewText(bounded.value, truncated: bounded.truncated)
+    previewView.text = Self.previewText(bounded.value, truncated: bounded.truncated, files: files)
     activityIndicator.stopAnimating()
     reviewButton.isEnabled = true
   }
@@ -204,13 +333,28 @@ final class ShareViewController: UIViewController {
     return ("", true)
   }
 
-  private static func previewText(_ value: String, truncated: Bool) -> String {
+  private static func previewText(
+    _ value: String,
+    truncated: Bool,
+    files: [LoadedFile]
+  ) -> String {
     let previewLimit = 4_000
     let preview = value.count > previewLimit ? String(value.prefix(previewLimit)) + "…" : value
-    return truncated ? "Content was truncated to 100 KB.\n\n\(preview)" : preview
+    var sections: [String] = []
+    if truncated { sections.append("Content was truncated to 100 KB.") }
+    if !files.isEmpty {
+      let names = files.map { "• \($0.fileName)" }.joined(separator: "\n")
+      sections.append(files.count == 1 ? "1 file\n\(names)" : "\(files.count) files\n\(names)")
+    }
+    if !preview.isEmpty { sections.append(preview) }
+    return sections.joined(separator: "\n\n")
   }
 
-  private static func persistForReview(_ text: String, truncated: Bool) throws {
+  private static func persistForReview(
+    _ text: String,
+    truncated: Bool,
+    files: [LoadedFile]
+  ) throws {
     let fileManager = FileManager.default
     guard
       let container = fileManager.containerURL(
@@ -225,10 +369,35 @@ final class ShareViewController: UIViewController {
     }
 
     let inbox = container.appendingPathComponent(inboxDirectoryName, isDirectory: true)
-    try fileManager.createDirectory(at: inbox, withIntermediateDirectories: true)
+    let fileInbox = inbox.appendingPathComponent(fileDirectoryName, isDirectory: true)
+    try fileManager.createDirectory(at: fileInbox, withIntermediateDirectories: true)
+
+    var persistedFiles: [PendingShareFile] = []
+    for file in files {
+      let relativePath = "\(fileDirectoryName)/\(UUID().uuidString)-\(file.fileName)"
+      let destination = inbox.appendingPathComponent(relativePath, isDirectory: false)
+      do {
+        try fileManager.copyItem(at: file.sourceURL, to: destination)
+      } catch {
+        continue
+      }
+      try? fileManager.setAttributes(
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+        ofItemAtPath: destination.path
+      )
+      persistedFiles.append(
+        PendingShareFile(
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          relativePath: relativePath,
+          byteSize: file.byteSize
+        )
+      )
+    }
 
     let now = Date().timeIntervalSince1970
-    let pending = PendingShare(text: text, truncated: truncated, createdAt: now)
+    let pending = PendingShare(
+      text: text, truncated: truncated, files: persistedFiles, createdAt: now)
     let data = try JSONEncoder().encode(pending)
     let fileName = "\(Int(now * 1_000))-\(UUID().uuidString).json"
     let destination = inbox.appendingPathComponent(fileName, isDirectory: false)
@@ -241,20 +410,24 @@ final class ShareViewController: UIViewController {
 
   private func showLoadError(_ message: String) {
     sharedText = nil
+    sharedFiles = []
     previewView.text = message
     activityIndicator.stopAnimating()
     reviewButton.isEnabled = false
   }
 
   @objc private func saveForReview() {
-    guard !hasFinished, let sharedText, !sharedText.isEmpty else { return }
+    guard !hasFinished else { return }
+    let text = sharedText ?? ""
+    let files = sharedFiles
+    guard !text.isEmpty || !files.isEmpty else { return }
 
     reviewButton.isEnabled = false
     activityIndicator.startAnimating()
     let truncated = contentWasTruncated
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       do {
-        try Self.persistForReview(sharedText, truncated: truncated)
+        try Self.persistForReview(text, truncated: truncated, files: files)
         DispatchQueue.main.async { self?.finishExtension() }
       } catch {
         DispatchQueue.main.async {

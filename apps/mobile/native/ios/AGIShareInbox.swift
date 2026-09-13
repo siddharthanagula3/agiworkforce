@@ -9,11 +9,21 @@ import React
 final class AGIShareInbox: NSObject {
   private static let appGroupIdentifier = "group.com.agiworkforce.app.share"
   private static let inboxDirectoryName = "PendingShares"
+  private static let stagedDirectoryName = "AGISharedInbox"
   private static let maximumSharedBytes = 100 * 1024
+  private static let maximumSharedFiles = 10
+
+  private struct PendingShareFile: Decodable {
+    let fileName: String
+    let mimeType: String
+    let relativePath: String
+    let byteSize: Int
+  }
 
   private struct PendingShare: Decodable {
     let text: String
     let truncated: Bool
+    let files: [PendingShareFile]?
   }
 
   @objc static func requiresMainQueueSetup() -> Bool { false }
@@ -66,36 +76,93 @@ final class AGIShareInbox: NSObject {
         continue
       }
       let text = share.text.trimmingCharacters(in: .whitespacesAndNewlines)
-      if !text.isEmpty {
-        shares.append(PendingShare(text: text, truncated: share.truncated))
+      let attachments = share.files ?? []
+      if !text.isEmpty || !attachments.isEmpty {
+        shares.append(PendingShare(text: text, truncated: share.truncated, files: attachments))
       }
     }
+
+    let staged = stageSharedFiles(shares.flatMap { $0.files ?? [] }, inbox: inbox)
 
     guard !shares.isEmpty else {
       for file in consumedFiles { try? fileManager.removeItem(at: file) }
       return nil
     }
 
+    let texts = shares.map { $0.text }.filter { !$0.isEmpty }
     let combined =
-      shares.count == 1
-      ? shares[0].text
-      : shares.enumerated().map { index, share in
-        "Shared item \(index + 1):\n\(share.text)"
+      texts.count <= 1
+      ? (texts.first ?? "")
+      : texts.enumerated().map { index, text in
+        "Shared item \(index + 1):\n\(text)"
       }.joined(separator: "\n\n---\n\n")
     let bounded = boundedUTF8(combined, maximumBytes: maximumSharedBytes)
 
-    // Delete only after every valid draft has been decoded and the aggregate
-    // is ready. Cleanup is best-effort: a rare failed delete may show the draft
-    // again, but never prevents delivery or silently loses unreviewed content.
+    // Delete only after every valid draft has been decoded, its files moved out
+    // of the App Group, and the aggregate is ready. Cleanup is best-effort: a
+    // rare failed delete may show the draft again, but never prevents delivery
+    // or silently loses unreviewed content.
     for file in consumedFiles {
       try? fileManager.removeItem(at: file)
     }
+    try? fileManager.removeItem(at: inbox.appendingPathComponent("files", isDirectory: true))
+
+    guard !bounded.value.isEmpty || !staged.isEmpty else { return nil }
 
     return [
       "text": bounded.value,
       "truncated": bounded.truncated || shares.contains(where: { $0.truncated }),
       "count": shares.count,
+      "files": staged,
     ]
+  }
+
+  // Move the shared bytes out of the App Group and into the app's own caches so
+  // the container does not accumulate copies the extension can no longer reach.
+  private static func stageSharedFiles(
+    _ files: [PendingShareFile],
+    inbox: URL
+  ) -> [[String: Any]] {
+    guard !files.isEmpty else { return [] }
+    let fileManager = FileManager.default
+    guard
+      let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+    else {
+      return []
+    }
+
+    let stagingRoot = caches.appendingPathComponent(stagedDirectoryName, isDirectory: true)
+    guard (try? fileManager.createDirectory(at: stagingRoot, withIntermediateDirectories: true))
+      != nil
+    else {
+      return []
+    }
+
+    var staged: [[String: Any]] = []
+    for file in files.prefix(maximumSharedFiles) {
+      let source = inbox.appendingPathComponent(file.relativePath, isDirectory: false)
+        .standardizedFileURL
+      guard
+        source.path.hasPrefix(inbox.standardizedFileURL.path),
+        fileManager.fileExists(atPath: source.path)
+      else {
+        continue
+      }
+      let destination = stagingRoot.appendingPathComponent(
+        "\(UUID().uuidString)-\(file.fileName)", isDirectory: false)
+      do {
+        try fileManager.moveItem(at: source, to: destination)
+      } catch {
+        continue
+      }
+      staged.append([
+        "uri": destination.absoluteString,
+        "fileName": file.fileName,
+        "mimeType": file.mimeType,
+        "byteSize": file.byteSize,
+      ])
+    }
+    return staged
   }
 
   private static func boundedUTF8(

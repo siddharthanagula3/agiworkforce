@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import fs from 'fs';
 import path from 'path';
@@ -67,7 +66,7 @@ describe('iOS Share Extension contract', () => {
     expect(appConfig.expo.plugins).toContain('./native/ios/withAGIShareExtension.cjs');
   });
 
-  it('advertises only text and one web URL through the Apple share-services point', () => {
+  it('advertises text, one web URL, images and files through the Apple share-services point', () => {
     expect(infoPlist.NSExtension?.NSExtensionPointIdentifier).toBe('com.apple.share-services');
     expect(infoPlist.NSExtension?.NSExtensionPrincipalClass).toBe(
       '$(PRODUCT_MODULE_NAME).ShareViewController',
@@ -75,6 +74,8 @@ describe('iOS Share Extension contract', () => {
     expect(infoPlist.NSExtension?.NSExtensionAttributes?.NSExtensionActivationRule).toEqual({
       NSExtensionActivationSupportsText: true,
       NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+      NSExtensionActivationSupportsImageWithMaxCount: 5,
+      NSExtensionActivationSupportsFileWithMaxCount: 5,
     });
   });
 
@@ -140,6 +141,25 @@ describe('iOS Share Extension contract', () => {
     expect(source).toContain('extensionContext?.completeRequest(returningItems: nil)');
     expect(source).not.toContain('extensionContext?.open');
     expect(source).not.toContain('UIApplication.shared');
+  });
+
+  it('stages bounded image and file copies in the App Group beside the text draft', () => {
+    expect(source).toContain('maximumSharedFileBytes = 12 * 1024 * 1024');
+    expect(source).toContain('maximumSharedFiles = 5');
+    expect(source).toContain('loadFileRepresentation(forTypeIdentifier: typeIdentifier)');
+    expect(source).toContain('UTType.fileURL.identifier');
+    expect(source).toContain('UTType.image.identifier');
+    expect(source).toContain('byteSize <= maximumSharedFileBytes');
+    expect(source).toContain(
+      'protectionKey: FileProtectionType.completeUntilFirstUserAuthentication',
+    );
+  });
+
+  it('moves the shared files out of the App Group before the drafts are deleted', () => {
+    expect(hostInboxSource).toContain('stageSharedFiles');
+    expect(hostInboxSource).toContain('cachesDirectory');
+    expect(hostInboxSource).toContain('moveItem(at: source, to: destination)');
+    expect(hostInboxSource).toContain('source.path.hasPrefix(inbox.standardizedFileURL.path)');
   });
 
   it('wires a main-app native inbox consumer for the second review', () => {

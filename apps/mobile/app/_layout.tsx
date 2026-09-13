@@ -56,6 +56,7 @@ import { getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
+import { stageSharedFileAttachments } from '@/src/features/share-preview/sharedAttachments';
 import { clearPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { completePendingPostAuthIntentForLoadedSession } from '@/src/features/auth/actions/postAuthIntent';
 
@@ -471,11 +472,14 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isInitialized || !isClerkSignedIn) return;
     return subscribeToIOSShareInbox(
-      ({ text, truncated }) => {
+      ({ text, truncated, files }) => {
+        const handoffKey = stageSharedFileAttachments(files);
         router.push(
           `/(app)/share-preview?text=${encodeURIComponent(text)}${
             truncated ? '&nativeTruncated=1' : ''
-          }` as Parameters<typeof router.push>[0],
+          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
+            typeof router.push
+          >[0],
         );
       },
       (error) => {
