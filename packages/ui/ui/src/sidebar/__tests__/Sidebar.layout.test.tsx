@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { Sidebar } from '../Sidebar';
@@ -30,6 +30,14 @@ describe('Sidebar root layout', () => {
     // what left the mobile navigation drawer rendering as an empty panel.
     expect(root?.className).toContain('relative');
     expect(root?.className).toContain('inset-auto');
+  });
+
+  it('badges the Search row with no shortcut, because none opens it', () => {
+    // Cmd/Ctrl+K is taken by the command palette in the capture phase, so the
+    // badge sent the reader to a different surface than the row they pressed.
+    renderSidebar();
+    const search = screen.getByRole('button', { name: 'Search' });
+    expect(within(search).queryAllByText(/^(⌘|Ctrl|K)$/)).toHaveLength(0);
   });
 
   it('transitions only its width, not every animatable property', () => {
