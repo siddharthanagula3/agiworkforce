@@ -18,7 +18,7 @@ vi.mock('@/features/notifications', () => ({
     checked: false,
     disabled: false,
     description: 'Get told when a run finishes, fails, or needs your approval.',
-    blocked: false,
+    unavailable: false,
     onCheckedChange: vi.fn(),
   }),
 }));
