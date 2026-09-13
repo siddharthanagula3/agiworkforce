@@ -1,14 +1,14 @@
 export { Sidebar, MOBILE_NAV_DRAWER_WIDTH, type SidebarProps } from './Sidebar';
 export { SessionItem, type SessionItemProps, type SessionItemHandlers } from './SessionItem';
+export { Menu, MenuItem, MenuSeparator, type MenuProps, type MenuItemProps } from './Menu';
 export {
-  Menu,
-  MenuItem,
-  MenuSeparator,
+  isInlineEditActive,
   isMenuPanelOpen,
+  isTransientSidebarLayerOpen,
   keepOpenForMenuEscape,
-  type MenuProps,
-  type MenuItemProps,
-} from './Menu';
+  INLINE_EDIT_ATTRIBUTE,
+  MENU_PANEL_ATTRIBUTE,
+} from './escape-guard';
 export { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
 export {
   PROJECT_ICON_REGISTRY,
