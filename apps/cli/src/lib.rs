@@ -121,6 +121,7 @@ pub mod terminal_text;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
+pub mod usage_summary;
 
 // Phase-2 candidates, implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
@@ -819,6 +820,8 @@ enum Command {
     Init,
     /// Run the first-run onboarding wizard again.
     Onboarding,
+    /// Show the account's managed allowance from the shared usage ledger.
+    Usage,
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -2515,6 +2518,12 @@ pub async fn run_main() -> Result<()> {
                 registry.register_project(&project_root, "trusted")?;
                 registry.save(&home)?;
                 println!("Registered project: {}", project_root.display());
+                Ok(())
+            }
+
+            // --- Usage ---
+            Command::Usage => {
+                println!("{}", usage_summary::account_lines().await.join("\n"));
                 Ok(())
             }
 

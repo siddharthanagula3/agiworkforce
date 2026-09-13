@@ -650,10 +650,8 @@ mod tests {
     fn ssot_models() -> &'static serde_json::Map<String, serde_json::Value> {
         static SSOT: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
         SSOT.get_or_init(|| {
-            serde_json::from_str(include_str!(
-                "../../../packages/contracts/types/src/models.json"
-            ))
-            .expect("models.json must parse")
+            serde_json::from_str(crate::model_catalog::SHARED_MODELS_JSON)
+                .expect("models.json must parse")
         })
         .get("models")
         .and_then(|models| models.as_object())
