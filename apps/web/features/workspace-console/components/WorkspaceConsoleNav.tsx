@@ -83,7 +83,7 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         href: '/workspace/sharing',
         label: 'Sharing',
         icon: Share2,
-        hint: 'Shared projects and connectors',
+        hint: 'Shared projects, artifacts and connectors',
       },
     ],
   },

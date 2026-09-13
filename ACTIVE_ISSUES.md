@@ -323,33 +323,42 @@ removed from shipped builds.
 ### `AGI-10` Artifacts can only be shared publicly, never with an organization
 
 **Severity:** P2
-**Status:** Open
+**Status:** Resolved for artifacts on web, 2026-09-13. Conversation sharing
+(`shared_sessions`) still has the identical gap and is tracked below.
 **Area:** Artifacts, enterprise
-**Root cause:** `published_artifacts` has no audience model. Publication mints a
-144-bit token and the read path is deliberately anonymous.
-**Current behavior:** Sharing an artifact means creating a public URL. There is
-no authenticated, membership-scoped share, and no expiry.
-**Required behavior:** An artifact can be shared to an organization so only
-members can open it, with membership revocation taking effect.
-**Evidence:** `apps/web/lib/services/published-artifact-service.ts:217-219, :226-331, :333-349, :389-404`;
-`apps/web/db/neon/0095_published_artifacts.sql` (no organization column, RLS
-protects only the authenticated management surface).
-**Not artifact-specific:** conversation sharing has the identical gap.
-`apps/web/db/neon/0051_shared_sessions.sql` is also public-token-only with no
-organization scoping. Fix both against one model.
-**User impact:** Team customers cannot share internal work without making it
-public.
-**Dependencies:** None.
-**Implementation direction:** The pattern already exists. Migration
-`apps/web/db/neon/0086_org_shared_ecosystem.sql` implements organization
-sharing for projects and connectors with join tables, table-resolved membership
-predicates (`app_org_resource_is_readable`, `app_org_resource_is_manageable`)
-and forced RLS. Extend the same shape to artifacts. Do not invent a second
-sharing model, and do not reuse the `organization_id` governance column from
-0073, which 0086 explicitly separates from sharing.
+**Root cause:** `published_artifacts` had no audience model. Publication minted
+a 144-bit token and the read path was deliberately anonymous.
+**Resolution:** Migration `apps/web/db/neon/0184_organization_shared_artifacts.sql`
+follows 0086's shape exactly: a `visibility` column on the publication answering
+"is the anonymous token path open", and a separate grant row in
+`organization_shared_artifacts` answering "which organization may read it".
+`0185_org_shared_artifact_policy_recursion.sql` splits that table's write policy
+per command; the FOR ALL policy 0184 shipped also governed SELECT and recursed
+through `published_artifacts_org_shared_read`, raising 42P17 on every publish.
+The anonymous read in `published-artifact-service.ts` now demands
+`visibility = 'public'`; members read through
+`org-shared-artifact-service.ts` on an RLS-scoped adapter, so the grant, not the
+route, decides. `/shared-artifact` was added to the identity-session routes in
+`apps/web/proxy.ts`, without which the page carried no session and a member saw
+the same "unavailable" as a stranger.
+**Surfaces:** the artifact panel's published bar carries the audience control,
+confirmed in both directions; the workspace sharing console lists what is shared
+with a confirm before withdrawing, and withdrawing never republishes.
+**Still open, not artifact-specific:** conversation sharing has the identical
+gap. `apps/web/db/neon/0051_shared_sessions.sql` is public-token-only with no
+organization scoping, and 0184's two-part model is what it should adopt.
 **Acceptance criteria:** A member can open an organization-shared artifact, a
-non-member cannot, and removing a member revokes access.
-**Validation:** RLS tests mirroring the 0086 project-sharing tests.
+non-member cannot, and removing a member revokes access. The first two are
+verified; the third is enforced by the policy's `app_has_org_role` lookup and by
+the composite membership FK, and has not been exercised on a second account
+because the QA workspace has one member.
+**Validation:** `apps/web/db/neon/organization-shared-artifacts-migration.test.ts`,
+`apps/web/lib/services/__tests__/org-shared-artifact-service.test.ts`,
+`apps/web/lib/services/__tests__/published-artifact-service.visibility.test.ts`,
+the visibility route test, and a live run against the local stack on 2026-09-13:
+published public, switched to workspace, confirmed the token page refuses a
+signed-out visitor and serves a member, then withdrew the share behind the
+confirm and confirmed the token stayed closed.
 
 ### `AGI-14` There is no second speech-to-text vendor to fail over to
 
@@ -1270,8 +1279,9 @@ Dependency-aware, not severity-ordered.
    the same provenance story project retrieval closed.
 6. `AGI-7`, desktop voice. Web voice is now a live session; the desktop
    gates are its own ledger.
-7. `AGI-10`. Enterprise sharing, independent. `AGI-14` needs a vendor decision
-   before it needs an implementer.
+7. `AGI-10` is closed for artifacts; what remains under it is conversation
+   sharing, which should adopt 0184's two-part model. `AGI-14` needs a vendor
+   decision before it needs an implementer.
 8. `AGI-11`, `AGI-20`, `AGI-29`, `AGI-30`, `AGI-31`. Background and polish.
    `AGI-17` needs a decision before it needs an implementer.
 
@@ -1279,21 +1289,21 @@ Dependency-aware, not severity-ordered.
 
 ## 8. Acceptance matrix
 
-| Issue    | Automated                                           | Manual or live                      | Gate                                      |
-| -------- | --------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
-| `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer    | nothing the transcript rendered is lost   |
-| `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break | required check fails on the PR            |
-| `AGI-7`  | spec gate ledger                                    | signed build                        | 12 of 12 gates, or surface removed        |
-| `AGI-10` | RLS tests mirroring 0086                            | member and non-member open attempt  | revocation takes effect                   |
-| `AGI-11` | service and cron tests                              | none                                | expired token stops resolving             |
-| `AGI-12` | `check:boundaries`, desktop tests                   | none                                | zero `task-1.3` markers                   |
-| `AGI-14` | per-provider route tests, registry contract         | none                                | a second STT vendor exists and fails over |
-| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn            | a citation survives redirect expiry       |
-| `AGI-17` | none until the decision is taken                    | none                                | founder decides conform or forgive        |
-| `AGI-20` | e2e retry in a long thread                          | none                                | retried message stays in view             |
-| `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
-| `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
-| `AGI-27` | tool-loop staging cases                             | a CSV total on a non-gateway model  | no write_file copy before execute_code    |
+| Issue    | Automated                                           | Manual or live                            | Gate                                      |
+| -------- | --------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
+| `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer          | nothing the transcript rendered is lost   |
+| `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break       | required check fails on the PR            |
+| `AGI-7`  | spec gate ledger                                    | signed build                              | 12 of 12 gates, or surface removed        |
+| `AGI-10` | 0184/0185 migration and service tests               | signed-out refusal, member open, withdraw | closed for artifacts; conversations open  |
+| `AGI-11` | service and cron tests                              | none                                      | expired token stops resolving             |
+| `AGI-12` | `check:boundaries`, desktop tests                   | none                                      | zero `task-1.3` markers                   |
+| `AGI-14` | per-provider route tests, registry contract         | none                                      | a second STT vendor exists and fails over |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn                  | a citation survives redirect expiry       |
+| `AGI-17` | none until the decision is taken                    | none                                      | founder decides conform or forgive        |
+| `AGI-20` | e2e retry in a long thread                          | none                                      | retried message stays in view             |
+| `AGI-22` | conformance fixtures, consent record migration      | none                                      | no Chinese-HQ route without consent       |
+| `AGI-23` | classification test over the observed 404           | none                                      | excluded route is not offered             |
+| `AGI-27` | tool-loop staging cases                             | a CSV total on a non-gateway model        | no write_file copy before execute_code    |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -1306,7 +1316,7 @@ AGI-23                     routing, independent now that the pin is narrowed
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-7          desktop voice, measure before building
-AGI-10                     enterprise sharing, independent
+AGI-10                     artifacts done; conversation sharing remains
 AGI-14                     blocked on a second STT vendor, not on code
 AGI-11, AGI-12             background
 AGI-17, AGI-20             polish, independent of everything
