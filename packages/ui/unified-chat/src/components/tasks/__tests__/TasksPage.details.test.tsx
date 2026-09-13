@@ -110,6 +110,39 @@ describe('Tasks task-detail panel', () => {
     ROOT_GRAPH_TEST_TIMEOUT_MS,
   );
 
+  it('opens the detail from anywhere on the row, not only its title button', async () => {
+    // The card hover-highlights and takes a selected border, so it reads as one
+    // row; only the title button answered a click, and on an approval card that
+    // button is a small part of the card's height.
+    const taskClient = client();
+    render(
+      <TasksPage
+        transport={{ client: taskClient, openConversation: vi.fn(), notifyError: vi.fn() }}
+      />,
+    );
+
+    const titleButton = await screen.findByRole('button', { name: /^View details for AGI Work,/ });
+    const card = titleButton.closest('div.rounded-lg');
+    expect(card).toBeTruthy();
+    expect(titleButton.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(card as HTMLElement);
+
+    await waitFor(() => expect(titleButton.getAttribute('aria-pressed')).toBe('true'));
+    expect(taskClient.getRun).toHaveBeenCalled();
+  });
+
+  it('leaves a row action alone when the click lands on it', async () => {
+    const openConversation = vi.fn();
+    render(<TasksPage transport={{ client: client(), openConversation, notifyError: vi.fn() }} />);
+
+    const titleButton = await screen.findByRole('button', { name: /^View details for AGI Work,/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+
+    expect(openConversation).toHaveBeenCalledWith('conversation-1');
+    expect(titleButton.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('reads paginated journals up to the run sequence without dropping events', async () => {
     const first = Array.from({ length: 500 }, (_, sequence) =>
       event(sequence, {
