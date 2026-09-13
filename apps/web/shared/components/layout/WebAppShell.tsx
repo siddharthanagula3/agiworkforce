@@ -31,7 +31,7 @@ import {
   Sidebar,
   MOBILE_NAV_DRAWER_WIDTH,
   keepOpenForMenuEscape,
-  useConfirm,
+  useConfirmAction,
   type SidebarSession,
   type SidebarProject,
   type SidebarNavItem,
@@ -125,10 +125,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     openSettings,
   });
 
-  // Destructive-action confirmation (shell-nav-ia-gap-01): the product's own
-  // AlertDialog with a red confirm, not `window.confirm`. `useConfirm` returns
-  // an awaitable boolean, so the guards below keep the same shape.
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   // ---- Narrow-viewport navigation (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
   // Below 768px the persistent ~260px sidebar reduced every route on this
@@ -225,11 +222,12 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [router],
   );
   const handleDeleteSession = useCallback(
-    async (id: string) => {
+    (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      const confirmed = await confirmDestructive(conversationDeleteConfirm(convo?.title));
-      if (!confirmed) return;
-      await deleteConversation(id);
+      confirmDestructive({
+        ...conversationDeleteConfirm(convo?.title),
+        onConfirm: () => deleteConversation(id),
+      });
     },
     [confirmDestructive, conversations, deleteConversation],
   );
@@ -286,20 +284,23 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   }, []);
   const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
   const handleProjectDelete = useCallback(
-    async (projectId: string) => {
+    (projectId: string) => {
       // The shared <Sidebar> invokes this straight from the project row's
       // three-dot menu with no confirmation of its own, so this shell deleted a
       // project on a single stray click, worse than the native confirm the chat
       // shell at least had. Same dialog and copy as ProjectSettingsDialog.
       const project = storeProjects.find((p) => p.id === projectId);
-      const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
-      if (!confirmed) return;
-      try {
-        await webManagedCloudProjects.deleteProject(projectId);
-        removeProjectFromStore(projectId);
-      } catch (error) {
-        toast.error(toUserMessage(error, 'Failed to delete project'));
-      }
+      confirmDestructive({
+        ...projectDeleteConfirm(project?.name),
+        onConfirm: async () => {
+          try {
+            await webManagedCloudProjects.deleteProject(projectId);
+            removeProjectFromStore(projectId);
+          } catch (error) {
+            toast.error(toUserMessage(error, 'Failed to delete project'));
+          }
+        },
+      });
     },
     [confirmDestructive, removeProjectFromStore, storeProjects],
   );

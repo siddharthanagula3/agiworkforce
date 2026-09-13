@@ -85,6 +85,7 @@ import {
   IN_FLIGHT_TURN_RECHECK_MS,
   askWhetherTurnIsRunning,
   shouldAskWhetherTurnIsRunning,
+  type InFlightTurnVerdict,
 } from './inFlightTurnRecovery';
 import {
   startTurnStartTicker,
@@ -2652,15 +2653,28 @@ export function useChatStream(): UseChatStreamReturn {
       ) {
         return;
       }
-      let running: boolean;
+      let verdict: InFlightTurnVerdict;
       try {
-        running = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
+        verdict = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
       } catch {
         return;
       }
       if (stopped) return;
-      useChatStore.getState().setLoading(running, conversationId as string);
-      if (running) timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+      useChatStore.getState().setLoading(verdict === 'running', conversationId as string);
+      if (verdict === 'running') {
+        timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+        return;
+      }
+      // A stalled row would otherwise keep showing "Generating response" with a
+      // Stop button until the reaper ends it, at best at the next quarter hour.
+      if (verdict === 'stalled') {
+        useChatStore
+          .getState()
+          .setError(
+            'This turn stopped running on the server and will not finish. Send it again to retry.',
+            conversationId as string,
+          );
+      }
     };
 
     void ask();
@@ -2792,6 +2806,7 @@ export function useChatStream(): UseChatStreamReturn {
         content: '',
         createdAt: new Date(assistantStartedAtMs).toISOString(),
         model,
+        requestedModel: model,
         isStreaming: true,
         ...(assistantParentId ? { parentId: assistantParentId } : {}),
         metadata: {
@@ -3051,6 +3066,16 @@ export function useChatStream(): UseChatStreamReturn {
             onRunHandle: (handle) => {
               if (handle) {
                 activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+                // AGI Work is the only mode sold as work that outlives the tab,
+                // so it is the only one that owes the reader a correction when
+                // the server could not give it the durable transport.
+                if (options.workMode === 'agiwork') {
+                  updateMessage(
+                    assistantMessageId,
+                    { turnDetachable: handle.detachable },
+                    conversationId,
+                  );
+                }
               } else {
                 activeRunsRef.current.delete(conversationId);
               }

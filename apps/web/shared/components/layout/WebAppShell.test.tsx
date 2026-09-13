@@ -38,9 +38,11 @@ const shellState = vi.hoisted(() => ({
 
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
 
-/** Stable stub for the shared `useConfirm` destructive-confirm hook. */
+/** Stable stub for the shared `useConfirmAction` destructive-confirm hook. */
 const confirmStub = vi.hoisted(() => ({
-  confirm: vi.fn(async () => true),
+  confirm: vi.fn((request: { onConfirm: () => unknown }) => {
+    void request.onConfirm();
+  }),
   dialog: null as React.ReactNode,
 }));
 
@@ -240,11 +242,9 @@ vi.mock('@agiworkforce/ui', async () => {
     Label: ({ children, ...rest }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
       <label {...rest}>{children}</label>
     ),
-    // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
-    // delete project) go through the shared AlertDialog wrapper instead of
-    // window.confirm. Stable identity so the shell's useCallback deps do not
-    // churn on every render, matching the real hook.
-    useConfirm: () => confirmStub,
+    // Stable identity so the shell's useCallback deps do not churn on every
+    // render, matching the real hook.
+    useConfirmAction: () => confirmStub,
     keepOpenForMenuEscape: menuEscape.keepOpenForMenuEscape,
     shortcutLabel: (key: string) => key,
   };

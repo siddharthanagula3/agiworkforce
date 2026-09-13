@@ -34,7 +34,6 @@ export function variantDeleteConfirm(options: {
   return {
     title: 'Delete this response?',
     description: `${deleted(options.followerCount)}. ${surviving(options.siblingCount)}. This cannot be undone.`,
-    confirmText: 'Delete response',
-    variant: 'destructive',
+    confirmLabel: 'Delete response',
   } satisfies DestructiveConfirmCopy;
 }
