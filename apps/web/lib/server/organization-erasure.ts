@@ -39,6 +39,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_project_access', column: 'organization_id' },
   { table: 'organization_shared_connectors', column: 'organization_id' },
   { table: 'organization_shared_artifacts', column: 'organization_id' },
+  { table: 'organization_shared_sessions', column: 'organization_id' },
   { table: 'organization_retention_sweeps', column: 'organization_id' },
   { table: 'legal_holds', column: 'organization_id' },
   { table: 'support_cases', column: 'organization_id' },
