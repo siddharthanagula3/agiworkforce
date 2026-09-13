@@ -203,6 +203,14 @@ export interface MessageInlineEditController {
    * turn is durable.
    */
   submitEdit: (messageId: string, content: string) => void;
+  /**
+   * Message the surface wants opened for editing without a click on its own
+   * Edit control, which is how ArrowUp on an empty composer reaches the last
+   * user turn. The bubble that matches opens its editor and clears the
+   * request through {@link onEditRequestHandled}.
+   */
+  requestedEditMessageId?: string | null;
+  onEditRequestHandled?: () => void;
 }
 
 const MessageInlineEditContext = React.createContext<MessageInlineEditController | null>(null);
@@ -761,6 +769,13 @@ const MessageBubbleComponent = function MessageBubble({
     }
     onEdit?.(message.id);
   }, [inlineEdit, message.id, onEdit]);
+  const requestedEditMessageId = inlineEdit?.requestedEditMessageId ?? null;
+  useEffect(() => {
+    if (!isUser || requestedEditMessageId !== message.id) return;
+    inlineEdit?.onEditRequestHandled?.();
+    if (inlineEdit?.beginEdit(message.id)) setIsEditing(true);
+  }, [inlineEdit, isUser, message.id, requestedEditMessageId]);
+
   const handleCancelEdit = useCallback(() => setIsEditing(false), []);
   const handleSaveEdit = useCallback(
     (next: string) => {
