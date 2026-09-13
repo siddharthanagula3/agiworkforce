@@ -472,8 +472,24 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
               return (
                 <div
                   key={run.id}
+                  // The card hover-highlights and takes a selected border, so it
+                  // reads as one row, but only the title button answered a
+                  // click: a press anywhere else, which on an approval card is
+                  // most of its height, did nothing at all. The button stays the
+                  // keyboard and screen-reader control; this only widens the
+                  // pointer target to the row the reader already sees.
+                  onClick={(event) => {
+                    if (
+                      (event.target as HTMLElement).closest(
+                        'button, a, input, textarea, select, [role="button"]',
+                      )
+                    ) {
+                      return;
+                    }
+                    setSelectedRunId(run.id);
+                  }}
                   className={cn(
-                    'rounded-lg border p-3 transition-colors',
+                    'cursor-pointer rounded-lg border p-3 transition-colors',
                     selected ? 'border-primary bg-primary/5' : 'hover:bg-accent',
                   )}
                 >
