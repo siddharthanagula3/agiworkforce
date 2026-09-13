@@ -26,6 +26,8 @@ export interface IndexedArtifact {
   title: string | null;
   type: string;
   language: string | null;
+  /** Derived from the source conversation's project, never stored on the row. */
+  projectId: string | null;
   createdAt: string;
 }
 
@@ -35,8 +37,14 @@ interface ArtifactIndexState {
   loaded: boolean;
 }
 
-export function useArtifactIndex(): ArtifactIndexState {
+export interface ArtifactIndexOptions {
+  /** Only the artifacts whose source conversation belongs to this project. */
+  projectId?: string;
+}
+
+export function useArtifactIndex(options: ArtifactIndexOptions = {}): ArtifactIndexState {
   const { isLoaded, isSignedIn, getToken } = useSession();
+  const projectId = options.projectId;
   const [state, setState] = useState<ArtifactIndexState>({ artifacts: [], loaded: false });
 
   useEffect(() => {
@@ -54,7 +62,8 @@ export function useArtifactIndex(): ArtifactIndexState {
     void (async () => {
       try {
         const token = await getToken();
-        const res = await fetch('/api/artifacts/index', {
+        const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+        const res = await fetch(`/api/artifacts/index${query}`, {
           credentials: 'include',
           signal: controller.signal,
           ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
@@ -77,7 +86,7 @@ export function useArtifactIndex(): ArtifactIndexState {
       cancelled = true;
       controller.abort();
     };
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, getToken, projectId]);
 
   return state;
 }

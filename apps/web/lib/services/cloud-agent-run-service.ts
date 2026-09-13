@@ -953,6 +953,12 @@ export async function listCloudAgentRuns(
     limit?: number;
     /** Restrict to runs started in these work modes. Omit for every mode. */
     workModes?: readonly CloudWorkMode[];
+    /**
+     * Restrict to runs whose conversation belongs to this project (WEBA-24).
+     * A run stores no project of its own; the association is the conversation's,
+     * so a chat moved between projects moves its runs with it.
+     */
+    projectId?: string;
   },
 ): Promise<CloudAgentRunList> {
   const states = z.array(AgentTaskStateSchema).min(1).max(9).parse(input.states);
@@ -962,6 +968,7 @@ export async function listCloudAgentRuns(
     : null;
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
   const workModes = input.workModes?.length ? [...input.workModes] : null;
+  const projectId = input.projectId ? z.string().uuid().parse(input.projectId) : null;
   // The conversation title is the only human name a run has: the runs table
   // stores none, so a list of them is otherwise headed by its work mode and
   // every agiwork row reads identically. Left-joined because a run may have no
@@ -980,6 +987,7 @@ export async function listCloudAgentRuns(
         and ($3::text is null or runs.request_id = $3)
         and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
         and ($7::text[] is null or runs.work_mode = any($7::text[]))
+        and ($8::uuid is null or conversations.project_id = $8::uuid)
       order by runs.updated_at desc, runs.id desc
       limit $6`,
     [
@@ -990,6 +998,7 @@ export async function listCloudAgentRuns(
       before?.id ?? null,
       limit + 1,
       workModes,
+      projectId,
     ],
   );
   const pageRows = rows.slice(0, limit);
