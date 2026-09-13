@@ -10,7 +10,7 @@ const read = (relativePath: string): string =>
 describe('computer-use options trust boundary', () => {
   const options = read('src/options.ts');
   const background = read('src/background.ts');
-  const driver = read('src/features/computer-use/cdpDriver.ts');
+  const session = read('src/features/computer-use/debuggerSession.ts');
 
   it('discloses CDP, approved-site scope, default approval, and the bounded driver', () => {
     expect(options).toContain('Chrome DevTools Protocol (CDP)');
@@ -21,6 +21,9 @@ describe('computer-use options trust boundary', () => {
 
   it('keeps the disclosure tied to the enforced default and per-action detach lifecycle', () => {
     expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
-    expect(driver).toMatch(/await fn\(\);[\s\S]*finally \{[\s\S]*await detach\(tabId\)/);
+    expect(session).toMatch(/await fn\(\);[\s\S]*finally \{[\s\S]*await releaseDebugger\(tabId\)/);
+    // The release only detaches once the last holder is gone, which is what
+    // keeps an action from tearing down a watch and a watch from outliving it.
+    expect(session).toMatch(/holds\.delete\(tabId\);\s*await detachDebuggee\(tabId\);/);
   });
 });
