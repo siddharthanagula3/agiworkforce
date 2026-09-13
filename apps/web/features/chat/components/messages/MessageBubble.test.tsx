@@ -1449,8 +1449,8 @@ describe('MessageBubble', () => {
         />,
       );
       expect(screen.getByRole('button', { name: /open artifact: report\.pdf/i })).toBeTruthy();
-      // Not duplicated as a download chip.
-      expect(screen.queryByRole('link', { name: /report\.pdf/i })).toBeNull();
+      // The artifact card carries its own download; no second deliverable card.
+      expect(screen.queryByTestId('deliverable-card')).toBeNull();
     });
 
     it('restores generated-file provenance onto a matching persisted PDF artifact', async () => {
@@ -1570,7 +1570,7 @@ describe('MessageBubble', () => {
           '/api/files/gf-html',
           expect.objectContaining({ credentials: 'same-origin' }),
         );
-        expect(screen.queryByRole('link', { name: /dashboard\.html/i })).toBeNull();
+        expect(screen.queryByTestId('deliverable-card')).toBeNull();
         await waitFor(() =>
           expect(
             useArtifactsStore
@@ -1614,7 +1614,7 @@ describe('MessageBubble', () => {
         await waitFor(() =>
           expect(screen.getByRole('button', { name: /open artifact: notes\.txt/i })).toBeTruthy(),
         );
-        expect(screen.queryByRole('link', { name: /notes\.txt/i })).toBeNull();
+        expect(screen.queryByTestId('deliverable-card')).toBeNull();
       } finally {
         vi.unstubAllGlobals();
       }
@@ -1647,6 +1647,34 @@ describe('MessageBubble', () => {
       } finally {
         vi.unstubAllGlobals();
       }
+    });
+
+    it('gives a deliverable its type line and a download control', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Brief attached.',
+            metadata: {
+              generatedFiles: [
+                genFile({
+                  id: 'gf-md',
+                  fileName: 'brief.md',
+                  mimeType: 'text/markdown',
+                  uri: '/api/files/gf-md',
+                  byteCount: 2048,
+                  kind: 'markdown',
+                }),
+              ],
+            },
+          })}
+        />,
+      );
+
+      const card = screen.getByTestId('deliverable-card') as HTMLAnchorElement;
+      expect(card.getAttribute('href')).toBe('/api/files/gf-md');
+      expect(card.getAttribute('download')).toBe('brief.md');
+      expect(screen.getByText('Document, MD · 2.0 KB')).toBeVisible();
     });
 
     it('renders non-renderable kinds (archive) as a download chip', () => {
