@@ -243,13 +243,17 @@ describe('SourceAggregator', () => {
     expect(agg.toSearchResultsEvent('m')).toBeNull();
   });
 
-  it('dedupes across protocol, www, and trailing-slash variants like the client card list does', () => {
+  it('dedupes across protocol, www, trailing-slash and tracking-parameter variants like the client card list does', () => {
     const agg = new SourceAggregator();
     expect(agg.add({ url: 'http://example.com/report', title: 'Report' })).toBe(true);
     expect(agg.add({ url: 'https://www.example.com/report/', title: 'Report dup' })).toBe(false);
-    expect(
-      agg.add({ url: 'https://example.com/report?utm_source=x', title: 'Different query' }),
-    ).toBe(true);
+    // A share link is the same page. It used to open a second card under the
+    // same answer, because this loop kept the query verbatim while the card
+    // list that renders it strips trackers.
+    expect(agg.add({ url: 'https://example.com/report?utm_source=x', title: 'Shared link' })).toBe(
+      false,
+    );
+    expect(agg.add({ url: 'https://example.com/report?page=2', title: 'Page two' })).toBe(true);
     expect(agg.size).toBe(2);
   });
 });

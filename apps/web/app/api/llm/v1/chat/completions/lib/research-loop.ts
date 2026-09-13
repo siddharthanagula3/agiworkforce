@@ -69,6 +69,7 @@ import {
 } from '@/lib/deadline-policy';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
+import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import {
   enrichWebSearchResultTitles,
   executeWebSearch,
@@ -494,17 +495,6 @@ export interface ResearchSourceEntry {
   url: string;
   title: string;
   snippet?: string;
-}
-
-function normalizeSourceUrlKey(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    const path = parsed.pathname.replace(/\/+$/, '');
-    return `${host}${path}${parsed.search}`;
-  } catch {
-    return url.toLowerCase();
-  }
 }
 
 /**
