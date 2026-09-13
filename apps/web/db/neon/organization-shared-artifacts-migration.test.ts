@@ -75,3 +75,55 @@ describe('0184 organization sharing for published artifacts', () => {
     expect(down).toMatch(/drop column if exists visibility/i);
   });
 });
+
+describe('0185 the grant table has no FOR ALL policy', () => {
+  const sql = readMigration('0185_org_shared_artifact_policy_recursion.sql');
+  const down = readMigration('down/0185_org_shared_artifact_policy_recursion.down.sql');
+
+  /**
+   * A FOR ALL policy also governs SELECT. Reading the grant table then
+   * evaluates its ownership EXISTS against published_artifacts, whose
+   * org-shared read policy reads the grant table again: Postgres raises 42P17
+   * and every publish, list and read of published_artifacts fails. Only a live
+   * statement can see it, so the shape is asserted here.
+   */
+  it('drops the FOR ALL policy 0184 created', () => {
+    expect(sql).toMatch(
+      /drop policy if exists organization_shared_artifacts_owner_write on public\.organization_shared_artifacts/i,
+    );
+    expect(sql).not.toMatch(/on public\.organization_shared_artifacts for all/i);
+  });
+
+  it('replaces it with one policy per write command', () => {
+    for (const command of ['insert', 'update', 'delete']) {
+      expect(sql).toMatch(
+        new RegExp(
+          `create policy organization_shared_artifacts_owner_${command}[\\s\\S]*?for ${command} to app_rls`,
+          'i',
+        ),
+      );
+    }
+  });
+
+  it('keeps ownership and the sharer identity on every write', () => {
+    const insert = sql.slice(
+      sql.indexOf('create policy organization_shared_artifacts_owner_insert'),
+      sql.indexOf('create policy organization_shared_artifacts_owner_update'),
+    );
+    expect(insert).toMatch(/shared_by_user_id = public\.current_app_user_id\(\)/i);
+    expect(insert).toMatch(/artifact\.user_id = public\.current_app_user_id\(\)/i);
+  });
+
+  it('reverses in one transaction and retracts its ledger row', () => {
+    const statements = down
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n')
+      .trim();
+    expect(statements.startsWith('begin;')).toBe(true);
+    expect(statements.endsWith('commit;')).toBe(true);
+    expect(down).toMatch(
+      /delete from public\.schema_migrations\s+where filename = '0185_org_shared_artifact_policy_recursion\.sql';/i,
+    );
+  });
+});

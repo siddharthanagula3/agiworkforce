@@ -162,6 +162,13 @@ const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   '/workspace(.*)',
   '/operator(.*)',
   '/welcome(.*)',
+  // A published artifact shared with a workspace is readable only by a member,
+  // and the page resolves that through the request's session. Without this the
+  // route carries no identity context, `getCurrentUserRlsDb` answers null, and
+  // a member sees the same "unavailable" page as a stranger. The route stays
+  // public: it is absent from `isProtectedAppRoute`, so a signed-out visitor
+  // still reaches it and is refused by the read, not by a redirect.
+  '/shared-artifact(.*)',
   AGI_WORK_PATH,
   AGI_CODE_PATH,
   '/api/(.*)',
