@@ -1,3 +1,4 @@
+import type { BrowserPairingState } from './browser-bridge';
 import type { DesktopCapability, PermissionRequest, PermissionScope } from './capabilities';
 
 export const DESKTOP_RUNTIME_CHANNEL = 'agi:desktop-runtime';
@@ -79,4 +80,5 @@ export type DesktopRuntimeEvent =
       change: 'created' | 'modified' | 'deleted';
     }
   | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope }
-  | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string };
+  | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string }
+  | { kind: 'browser-pairing-changed'; state: BrowserPairingState };

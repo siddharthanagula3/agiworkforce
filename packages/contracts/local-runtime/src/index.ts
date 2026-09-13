@@ -44,6 +44,13 @@ export type {
   DesktopRuntimeResponse,
 } from './protocol';
 
+export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
+export type {
+  BrowserPairRequestPrompt,
+  BrowserPairingCommand,
+  BrowserPairingState,
+} from './browser-bridge';
+
 export { WORKSPACE_COMMANDS } from './workspace';
 export type {
   WorkspaceCommand,
