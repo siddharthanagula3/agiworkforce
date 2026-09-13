@@ -40,6 +40,7 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     isReadingClipboard: false,
     onAttachClipboard: vi.fn(),
     onRunLocalCommand: vi.fn(),
+    onUseBrowser: vi.fn(),
     onAttachFromLocalFolder: vi.fn(),
     showWorkingFolderRow: false,
     canPickFolder: false,

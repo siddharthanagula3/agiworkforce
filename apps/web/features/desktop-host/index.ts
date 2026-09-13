@@ -4,6 +4,18 @@ export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
   cancelLocalCommand,
+  capturePairedBrowser,
+  clickInPairedBrowser,
+  downloadThroughPairedBrowser,
+  installBrowserHost,
+  navigatePairedBrowser,
+  readBrowserPairing,
+  readPairedBrowserConsole,
+  readPairedBrowserNetwork,
+  readPairedPage,
+  screenshotAttachment,
+  typeInPairedBrowser,
+  unpairBrowser,
   clipboardAttachments,
   listWorkspaceFiles,
   listWorkspaceRoots,
@@ -24,6 +36,8 @@ export {
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
+export { BrowserPairingSection } from './components/BrowserPairingSection';
+export { BrowserToolsDialog, type BrowserToolsDialogProps } from './components/BrowserToolsDialog';
 export { LocalAccessSection } from './components/LocalAccessSection';
 export { LocalCommandDialog, type LocalCommandDialogProps } from './components/LocalCommandDialog';
 export {

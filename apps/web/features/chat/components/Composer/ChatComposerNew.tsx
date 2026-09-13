@@ -47,6 +47,7 @@ import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { DesktopRuntimeError } from '@agiworkforce/local-runtime-contract';
 import {
+  BrowserToolsDialog,
   LocalCommandDialog,
   LocalFolderAttachDialog,
   clipboardAttachments,
@@ -1353,6 +1354,7 @@ const ChatComposerNewComponent = ({
   const desktopHost = useDesktopHost();
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
   const [localCommandOpen, setLocalCommandOpen] = useState(false);
+  const [browserToolsOpen, setBrowserToolsOpen] = useState(false);
   const [readingClipboard, setReadingClipboard] = useState(false);
   useDesktopVoiceHotkey(() => {
     if (dictation.isActive) dictation.stop();
@@ -3552,6 +3554,10 @@ const ChatComposerNewComponent = ({
                       setLocalCommandOpen(true);
                       closeMenu();
                     }}
+                    onUseBrowser={() => {
+                      setBrowserToolsOpen(true);
+                      closeMenu();
+                    }}
                     mediaModeActive={mediaModeActive}
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
@@ -4188,6 +4194,12 @@ const ChatComposerNewComponent = ({
         <LocalCommandDialog
           open={localCommandOpen}
           onClose={() => setLocalCommandOpen(false)}
+          onAttach={addChatAttachments}
+        />
+
+        <BrowserToolsDialog
+          open={browserToolsOpen}
+          onClose={() => setBrowserToolsOpen(false)}
           onAttach={addChatAttachments}
         />
       </div>
