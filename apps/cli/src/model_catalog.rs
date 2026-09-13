@@ -613,28 +613,50 @@ pub fn resolve_auto_model_with_context(
     };
 
     match resolve_auto_route(&request).map_err(|error| error.to_string())? {
-        AutoRouteDecision::Selected(selected) => Ok(CliAutoModelSelection {
-            model_key: selected.model_key,
-            provider_model_id: selected.provider_model_id,
-            upstream_provider: selected.provider,
-            harness_id: selected.harness_id,
-            fallback_provider_model_ids: selected
-                .fallbacks
-                .into_iter()
-                .map(|fallback| fallback.provider_model_id)
-                // Gateway and marketplace routes carry a namespaced upstream id
-                // that only a gateway harness can dispatch. The CLI rotates its
-                // BYOK chain through direct providers, so an id this catalog
-                // cannot resolve would be a fallback that fails on use.
-                .filter(|provider_model_id| find(provider_model_id).is_some())
-                .collect(),
-        }),
+        AutoRouteDecision::Selected(selected) => {
+            let provider_model_id =
+                cli_dispatchable_model_id(&selected.model_key, &selected.provider_model_id);
+            let mut routed_models = HashSet::from([selected.model_key.clone()]);
+            Ok(CliAutoModelSelection {
+                model_key: selected.model_key,
+                upstream_provider: selected.provider,
+                harness_id: selected.harness_id,
+                // Several ladder slots can resolve to one model through
+                // different harnesses. The CLI rotates its BYOK chain through
+                // direct providers, so each model may appear once, never as the
+                // primary again, and never as an id this catalog cannot
+                // dispatch.
+                fallback_provider_model_ids: selected
+                    .fallbacks
+                    .into_iter()
+                    .filter(|fallback| routed_models.insert(fallback.model_key.clone()))
+                    .map(|fallback| {
+                        cli_dispatchable_model_id(&fallback.model_key, &fallback.provider_model_id)
+                    })
+                    .filter(|fallback_id| {
+                        *fallback_id != provider_model_id && find(fallback_id).is_some()
+                    })
+                    .collect(),
+                provider_model_id,
+            })
+        }
         AutoRouteDecision::Unavailable(unavailable) => Err(format!(
             "Auto routing is unavailable ({:?}): {}",
             unavailable.code,
             unavailable.reasons.join("; ")
         )),
     }
+}
+
+/// A gateway or marketplace route states an upstream-namespaced model id that
+/// can collide with an unrelated catalog row carrying that string as its own
+/// `apiModelId`. Resolving through the route's canonical model key instead
+/// keeps eligibility and dispatch pointed at the model the router chose.
+fn cli_dispatchable_model_id(model_key: &str, provider_model_id: &str) -> String {
+    shared_catalog()
+        .and_then(|catalog| api_model_id_for(catalog, model_key))
+        .filter(|model_id| find(model_id).is_some())
+        .unwrap_or_else(|| provider_model_id.to_string())
 }
 
 pub fn default_model() -> &'static str {
@@ -1944,6 +1966,71 @@ mod tests {
         assert_eq!(selected.provider_model_id, expected.provider_model_id);
         assert_eq!(selected.upstream_provider, expected.provider);
         assert!(!selected.provider_model_id.starts_with("auto"));
+    }
+
+    /// A managed Auto route reaches the dispatch gate in
+    /// `provider_dispatch::resolve_selected_provider`, which rejects any model
+    /// the catalog does not mark cloud-eligible. Resolving a gateway route's
+    /// upstream id against the catalog once matched an unrelated row and made
+    /// the economy default undispatchable, so every managed tier is checked.
+    #[test]
+    fn managed_auto_routes_resolve_to_cloud_eligible_catalog_models() {
+        let mut checked = 0;
+        for tier in [
+            "free",
+            "basic",
+            "pro",
+            "max",
+            "max_15x",
+            "team",
+            "enterprise",
+        ] {
+            for selection in ["auto-economy", "auto-balanced", "auto-premium"] {
+                let Ok(selected) = resolve_auto_model(
+                    selection,
+                    RoutingTaskType::SimpleChat,
+                    tier,
+                    TrustMode::ManagedCloud,
+                ) else {
+                    continue;
+                };
+                let model = find(&selected.provider_model_id).unwrap_or_else(|| {
+                    panic!(
+                        "{tier}/{selection} resolved to '{}', which this catalog cannot dispatch",
+                        selected.provider_model_id
+                    )
+                });
+                assert!(
+                    model.cloud_eligible,
+                    "{tier}/{selection} resolved to '{}', which the catalog does not mark cloud-eligible",
+                    selected.provider_model_id
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no managed Auto route resolved to check");
+    }
+
+    /// Several ladder slots can resolve to one model through different
+    /// harnesses. Rotating through the same model twice wastes a retry.
+    #[test]
+    fn auto_fallback_chains_never_repeat_a_model() {
+        for tier in ["byok", "free", "pro", "max"] {
+            for trust in [TrustMode::Byok, TrustMode::ManagedCloud] {
+                let Ok(selected) =
+                    resolve_auto_model("auto-economy", RoutingTaskType::SimpleChat, tier, trust)
+                else {
+                    continue;
+                };
+                let mut seen = HashSet::from([selected.provider_model_id.clone()]);
+                for fallback in &selected.fallback_provider_model_ids {
+                    assert!(
+                        seen.insert(fallback.clone()),
+                        "{tier}/{trust:?} rotates through '{fallback}' twice"
+                    );
+                }
+            }
+        }
     }
 
     /// The registry ladder spans gateway and marketplace routes whose upstream
