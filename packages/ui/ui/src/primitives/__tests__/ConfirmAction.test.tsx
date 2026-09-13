@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,17 +6,28 @@ import { reportUncaughtConfirmError, useConfirmAction } from '../ConfirmAction';
 
 afterEach(cleanup);
 
-function Harness({ onConfirm }: { onConfirm: () => Promise<unknown> }) {
+function Harness({
+  onConfirm,
+  stealFocus = false,
+}: {
+  onConfirm: () => Promise<unknown>;
+  stealFocus?: boolean;
+}) {
   const { confirm, dialog } = useConfirmAction();
+  const thief = React.useRef<HTMLButtonElement>(null);
   return (
     <>
       <button
         type="button"
-        onClick={() =>
-          confirm({ title: 'Remove it?', description: 'This cannot be undone.', onConfirm })
-        }
+        onClick={() => {
+          confirm({ title: 'Remove it?', description: 'This cannot be undone.', onConfirm });
+          if (stealFocus) thief.current?.focus();
+        }}
       >
         Remove
+      </button>
+      <button type="button" ref={thief}>
+        Composer
       </button>
       {dialog}
     </>
@@ -66,6 +78,24 @@ describe('useConfirmAction', () => {
     await waitFor(() => expect(scheduled).toHaveBeenCalledTimes(1));
     expect(() => scheduled.mock.calls[0]![0]()).toThrow('delete failed');
     scheduled.mockRestore();
+  });
+});
+
+describe('useConfirmAction focus return', () => {
+  it('restores the control that asked, not whatever took focus before the dialog mounted', async () => {
+    // The shape of a confirm raised from a menu: the panel unmounts with focus
+    // inside it and the page moves focus on, all before the dialog commits, so
+    // reading document.activeElement at mount time records the wrong element.
+    render(<Harness onConfirm={async () => undefined} stealFocus />);
+    const trigger = screen.getByRole('button', { name: 'Remove' });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    await screen.findByText('Remove it?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByText('Remove it?')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });
 

@@ -34,9 +34,16 @@ interface AlertDialogContentProps extends React.ComponentPropsWithoutRef<
   typeof AlertDialogPrimitive.Content
 > {
   ref?: React.Ref<React.ElementRef<typeof AlertDialogPrimitive.Content>>;
+  /**
+   * What to restore focus to on close, for a caller that knows it and cannot
+   * rely on the reading below: a dialog opened from a menu mounts after the
+   * menu panel has already unmounted with focus inside it, so by then
+   * document.activeElement is <body> or whatever claimed it next.
+   */
+  opener?: HTMLElement | null;
 }
 
-function AlertDialogContent({ className, ref, ...props }: AlertDialogContentProps) {
+function AlertDialogContent({ className, ref, opener, ...props }: AlertDialogContentProps) {
   // The same two things DialogContent already does, which this sibling was
   // missing. An alert dialog is the destructive-confirmation surface, so losing
   // your place on close costs more here than anywhere: measured on the delete
@@ -54,10 +61,10 @@ function AlertDialogContent({ className, ref, ...props }: AlertDialogContentProp
   const captureOpener = React.useCallback(
     (event: Event) => {
       const active = document.activeElement;
-      openerRef.current = active instanceof HTMLElement ? active : null;
+      openerRef.current = opener ?? (active instanceof HTMLElement ? active : null);
       onOpenAutoFocus?.(event as never);
     },
-    [onOpenAutoFocus],
+    [onOpenAutoFocus, opener],
   );
 
   const restoreFocus = React.useCallback((event: Event) => {

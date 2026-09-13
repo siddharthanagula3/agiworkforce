@@ -75,7 +75,18 @@ export function Menu({
     onOpenChangeRef.current?.(open);
   }, [open]);
 
-  const close = () => setOpen(false);
+  // Synchronous, and before any consumer state change: a panel that unmounts
+  // with focus still inside it drops focus to <body>, and anything the
+  // selection opens next (a confirm dialog reads document.activeElement to
+  // learn what to restore to) then records <body> or whatever grabbed it.
+  const focusTrigger = useCallback(() => {
+    containerRef.current?.querySelector<HTMLElement>('button, [role="button"]')?.focus();
+  }, []);
+
+  const close = useCallback(() => {
+    focusTrigger();
+    setOpen(false);
+  }, [focusTrigger]);
 
   // role="menu" promises the menu keyboard pattern. Without it a keyboard or
   // screen-reader user can open this menu and then reach nothing inside it.
@@ -209,10 +220,7 @@ export function Menu({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        setOpen(false);
-        // Closing must hand focus back to the trigger; otherwise focus falls to
-        // <body> and the keyboard user restarts from the top of the page.
-        containerRef.current?.querySelector<HTMLElement>('button, [role="button"]')?.focus();
+        close();
         return;
       }
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End', 'Tab'].includes(e.key)) return;
@@ -244,7 +252,7 @@ export function Menu({
       window.removeEventListener('scroll', onScrollOrResize, { capture: true });
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [open, computePosition, focusItem, menuItems]);
+  }, [open, close, computePosition, focusItem, menuItems]);
 
   // Synchronous for the same reason as the listener registration above: a
   // setTimeout(0) auto-focus left a window where the very first key of a
@@ -320,8 +328,8 @@ export function MenuItem({
       role="menuitem"
       onClick={(e) => {
         e.stopPropagation();
-        onSelect();
         close();
+        onSelect();
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
