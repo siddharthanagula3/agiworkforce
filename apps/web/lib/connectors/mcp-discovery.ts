@@ -20,6 +20,10 @@ import {
   upsertConnectorOAuthGrant,
   type PendingAuthorization,
 } from '@/lib/connectors/oauth-store';
+import {
+  getConnectorScopeCeiling,
+  isConnectorScopeCeilingEnforced,
+} from '@/lib/connectors/oauth-scope-allowlist';
 
 export type McpAuthorizationStart =
   | { status: 'redirect'; authorizationUrl: string; state: string }
@@ -79,6 +83,45 @@ export async function mcpServerRequiresAuthorization(mcpUrl: string): Promise<bo
   }
 }
 
+/**
+ * Discovery hands the SDK the resource's whole advertised scope set, writes
+ * included, so a connector with a documented ceiling was asking for more than
+ * the ceiling permits on the only path this deployment can actually use. The
+ * request is narrowed to the ceiling here; an enforced ceiling that intersects
+ * nothing the resource advertises is a stale ceiling, and asking for everything
+ * instead is the failure this exists to prevent, so it stops.
+ */
+async function ceilingScopeFor(
+  connectorId: string,
+  mcpUrl: string,
+): Promise<{ scope: string } | { error: string } | null> {
+  if (!isConnectorScopeCeilingEnforced(connectorId)) return null;
+  const ceiling = getConnectorScopeCeiling(connectorId);
+  if (ceiling === null || typeof ceiling === 'string') return null;
+  if (ceiling.length === 0) return null;
+
+  let advertised: readonly string[] | undefined;
+  try {
+    const info = await discoverOAuthServerInfo(mcpUrl);
+    advertised =
+      info.resourceMetadata?.scopes_supported ?? info.authorizationServerMetadata?.scopes_supported;
+  } catch {
+    advertised = undefined;
+  }
+  if (!advertised || advertised.length === 0) return { scope: ceiling.join(' ') };
+
+  const permitted = new Set(ceiling);
+  const granted = advertised.filter((scope) => permitted.has(scope));
+  if (granted.length === 0) {
+    return {
+      error:
+        'This connector has a documented permission ceiling that matches nothing the provider ' +
+        'offers, so authorization would have to ask for more access than the ceiling allows.',
+    };
+  }
+  return { scope: granted.join(' ') };
+}
+
 export interface BeginMcpAuthorizationParams {
   userId: string;
   connectorId: string;
@@ -91,6 +134,14 @@ export async function beginMcpAuthorization(
   params: BeginMcpAuthorizationParams,
 ): Promise<McpAuthorizationStart> {
   const { userId, connectorId, mcpUrl, returnPath } = params;
+  let scope = params.scope;
+  if (!scope) {
+    const ceiling = await ceilingScopeFor(connectorId, mcpUrl);
+    if (ceiling && 'error' in ceiling) {
+      return { status: 'error', reason: 'no-client-identity', message: ceiling.error };
+    }
+    if (ceiling) scope = ceiling.scope;
+  }
   const state = generateOAuthState();
   const provider = new McpOAuthClientProvider({ mcpUrl, state });
 
@@ -109,7 +160,7 @@ export async function beginMcpAuthorization(
   try {
     result = await auth(provider, {
       serverUrl: mcpUrl,
-      ...(params.scope ? { scope: params.scope } : {}),
+      ...(scope ? { scope } : {}),
     });
   } catch (error) {
     const described = describeFailure(error);
@@ -151,7 +202,7 @@ export async function beginMcpAuthorization(
     codeVerifier: draft.codeVerifier,
     codeChallengeMethod: 'S256',
     redirectUri: String(redirectUri),
-    requestedScopes: [],
+    requestedScopes: scope ? scope.split(/\s+/).filter(Boolean) : [],
     returnPath,
     issuer: draft.issuer,
     authorizationEndpoint: draft.authorizationEndpoint,
