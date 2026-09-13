@@ -38,6 +38,7 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const openConversationId = useChatStore((s) => s.currentConversationId);
   const selectedModel = useModelStore((s) => s.selectedModel);
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export default function CameraScreen() {
 
     setIsSending(true);
     try {
-      const conversationId = await createConversation('Vision Analysis');
+      const conversationId = openConversationId ?? (await createConversation('Vision Analysis'));
 
       const attachment: Attachment = {
         id: `img_${Date.now()}`,
@@ -98,13 +99,26 @@ export default function CameraScreen() {
       const messageContent = promptText.trim() || 'What do you see in this image?';
       await sendMessage(conversationId, messageContent, selectedModel, [attachment]);
 
+      if (conversationId === openConversationId && router.canGoBack()) {
+        router.back();
+        return;
+      }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The image could not be sent.';
       Alert.alert('Send failed', message);
       setIsSending(false);
     }
-  }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);
+  }, [
+    capturedUri,
+    isSending,
+    openConversationId,
+    createConversation,
+    sendMessage,
+    selectedModel,
+    promptText,
+    router,
+  ]);
 
   const toggleFlash = useCallback(() => {
     setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'));
