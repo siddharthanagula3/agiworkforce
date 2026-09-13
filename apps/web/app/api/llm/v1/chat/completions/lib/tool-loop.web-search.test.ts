@@ -578,6 +578,104 @@ describe('tool-loop web_search integration', () => {
     }
   });
 
+  /**
+   * A turn that stops for an approval finishes in a second request, and every
+   * counter in the loop is a local of the request. Measured live on
+   * 2026-09-13: one ordinary question ran five requests, delivered thirty
+   * sources against a three-search budget, and each `[n]` the model wrote
+   * counted from that request's own first result rather than from the list the
+   * reader was looking at.
+   */
+  function completedSearchTurn(query: string, url: string, title: string) {
+    return [
+      { role: 'user' as const, content: 'What happened in the news today?' },
+      {
+        role: 'assistant' as const,
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_earlier_search',
+            type: 'function',
+            function: { name: 'web_search', arguments: JSON.stringify({ query }) },
+          },
+        ],
+      },
+      {
+        role: 'tool' as const,
+        tool_call_id: 'call_earlier_search',
+        content: `Search results for "${query}"\n\n1. ${title}\n   ${url}\n   An earlier result.`,
+      },
+    ];
+  }
+
+  it('numbers a resumed turn from what the turn already delivered, not from one', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(toolCallStream('web_search', { query: 'later' }, 'call_later'))
+      .mockResolvedValueOnce(finalAnswerStream('Done. [2]'));
+
+    const fetchMock = vi.fn(async () => perplexitySearchResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const processed = makeProcessed([webSearchToolDef()]);
+      processed.llmRequest.messages = completedSearchTurn(
+        'earlier',
+        'https://news.example/earlier',
+        'Earlier page',
+      ) as never;
+
+      const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+
+      // The page this request found is the SECOND source of the turn, and both
+      // the number handed to the model and the number sent to the browser say so.
+      expect(output).toContain('2. Today in the news');
+      expect(output).toContain('"url":"https://news.example/today"');
+      expect(output).toContain('"position":2');
+      expect(output).not.toContain('"position":1');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('spends the turn search budget once, not once per request of the turn', async () => {
+    const streams = [
+      toolCallStream('web_search', { query: 'a' }, 'call_a'),
+      toolCallStream('web_search', { query: 'b' }, 'call_b'),
+      toolCallStream('web_search', { query: 'c' }, 'call_c'),
+      finalAnswerStream('Done.'),
+    ];
+    for (const stream of streams) factoryMocks.streamRequest.mockResolvedValueOnce(stream);
+
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      perplexitySearchResponse(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const processed = makeProcessed([webSearchToolDef()]);
+      // Two searches of this turn already ran before it paused for approval.
+      processed.llmRequest.messages = [
+        ...completedSearchTurn('earlier one', 'https://news.example/one', 'One'),
+        ...completedSearchTurn('earlier two', 'https://news.example/two', 'Two').slice(1),
+      ] as never;
+
+      const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+
+      // Budget is three per turn, two are spent, so exactly one more search runs.
+      const searchRequests = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('api.perplexity.ai'),
+      );
+      expect(searchRequests).toHaveLength(1);
+      expect(output).toContain(`this turn has already run its ${WEB_SEARCH_MAX_CALLS_PER_TURN}`);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('continues the citation numbering across searches so [n] names one page for the whole turn', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(toolCallStream('web_search', { query: 'first' }, 'call_number_1'))
