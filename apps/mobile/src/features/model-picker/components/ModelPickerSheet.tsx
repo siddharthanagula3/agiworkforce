@@ -171,6 +171,7 @@ export function ModelPickerSheet({
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const favorites = useModelStore((s) => s.favorites);
+  const recentModels = useModelStore((s) => s.recentModels);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const subscriptionTier = useTierStore((s) => s.tier);
@@ -261,16 +262,25 @@ export function ModelPickerSheet({
     );
   }, [modelList, query]);
 
+  // Recency order comes from the store, not from the catalogue, so the row is
+  // built by walking `recentModels` rather than filtering the model list.
+  const recentModelDefs = useMemo(() => {
+    const byId = new Map(filteredModels.map((model) => [model.id, model]));
+    return recentModels
+      .map((id) => byId.get(id))
+      .filter((model): model is ModelDef => model !== undefined);
+  }, [filteredModels, recentModels]);
+
   const favoriteModels = useMemo(
     () => filteredModels.filter((model) => favorites.includes(model.id)),
     [favorites, filteredModels],
   );
 
   const nonFavoriteModels = useMemo(() => {
-    if (favoriteModels.length === 0) return filteredModels;
-    const favoriteIds = new Set(favorites);
-    return filteredModels.filter((model) => !favoriteIds.has(model.id));
-  }, [favoriteModels, favorites, filteredModels]);
+    const pinnedIds = new Set([...favorites, ...recentModelDefs.map((model) => model.id)]);
+    if (pinnedIds.size === 0) return filteredModels;
+    return filteredModels.filter((model) => !pinnedIds.has(model.id));
+  }, [favorites, filteredModels, recentModelDefs]);
 
   const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
 
@@ -632,6 +642,23 @@ export function ModelPickerSheet({
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
+            </View>
+          ) : null}
+
+          {!query && recentModelDefs.length > 0 ? (
+            <View style={{ marginBottom: 6 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 12,
+                  fontWeight: '700',
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                }}
+              >
+                Recent
+              </Text>
+              {recentModelDefs.map((model) => renderModelRow(model, 'recent'))}
             </View>
           ) : null}
 
