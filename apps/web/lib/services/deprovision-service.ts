@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityProvider } from '@agiworkforce/identity';
 
 import { logger } from '@/lib/logger';
+import { readRecordedActiveWorkspaceId } from '@/lib/services/active-workspace-service';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 
@@ -23,6 +24,15 @@ import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
  * personal scope with no access to what the workspace owns. Deleting the account
  * would be a different, far more destructive act, and is not what an
  * administrator asked for when they removed a member.
+ *
+ * NOR is it a way to reach outside the workspace that asked for it. Every step
+ * is scoped to credentials this workspace issued, because the authorization
+ * proved before the call is admin of THIS organization and nothing more. What
+ * actually cuts the member off is the membership row: every route resolves the
+ * active workspace by joining `organization_members`, so once that row is gone
+ * and the cached selection is dropped, no credential of theirs can name this
+ * workspace again. These revocations exist to kill what the workspace itself
+ * minted, not to disable an account an admin has no authority over.
  */
 
 export interface DeprovisionResult {
@@ -90,7 +100,35 @@ async function revokeProviderSessions(
 }
 
 /**
- * Revokes every credential a departing member holds.
+ * Whether the member's browser sessions were operating in this workspace.
+ *
+ * A provider session carries no workspace of its own, so revoking on a removal
+ * from one organization would sign the member out of their personal account and
+ * every other tenant they belong to. The recorded selection is the one signal
+ * that says those sessions were in THIS workspace; a member whose selection is
+ * elsewhere is cut off by the membership delete alone. A read that fails
+ * revokes, because the workspace's own cut-off is the side to fail on.
+ */
+async function sessionsBelongToWorkspace(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+  errors: string[],
+): Promise<boolean> {
+  try {
+    return (await readRecordedActiveWorkspaceId(db, userId)) === organizationId;
+  } catch (error) {
+    errors.push(
+      `Sessions were revoked without confirming the member's active workspace: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return true;
+  }
+}
+
+/**
+ * Revokes every credential this workspace issued to a departing member.
  *
  * Each step is independent and a failure in one does not abandon the rest: a
  * provider outage must not leave the member's developer keys live as well. What
@@ -98,11 +136,12 @@ async function revokeProviderSessions(
  * deprovision that silently half-succeeded is worse than one that failed
  * loudly.
  *
- * Device tokens and API keys are revoked for the USER, not scoped to the
- * organization: neither carries an organization column, and a credential that
- * can still reach the workspace's data through a stale scope is exactly what
- * this exists to prevent. The member re-issues them from their personal account
- * if they still need them.
+ * Device tokens and API keys are revoked for the (user, organization) pair, not
+ * for the user. Both tables record the workspace the credential was issued in
+ * (`api_keys` since 0073, `device_refresh_tokens` since 0187) and a NULL there
+ * means personal scope, which no workspace admin may touch. The counts below
+ * therefore report what this workspace revoked, not what the member still
+ * holds.
  */
 export async function deprovisionMember(
   db: DatabaseAdapter,
@@ -112,7 +151,9 @@ export async function deprovisionMember(
   const { userId, organizationId } = input;
   const errors: string[] = [];
 
-  const sessions = await revokeProviderSessions(identity, userId);
+  const sessions = (await sessionsBelongToWorkspace(db, userId, organizationId, errors))
+    ? await revokeProviderSessions(identity, userId)
+    : { revoked: 0, failed: 0, errors: [] };
   errors.push(...sessions.errors);
 
   let deviceTokensRevoked = 0;
@@ -120,9 +161,9 @@ export async function deprovisionMember(
     const rows = await db.query<{ id: string }>(
       `update public.device_refresh_tokens
           set revoked_at = now()
-        where user_id = $1 and revoked_at is null
+        where user_id = $1 and organization_id = $2 and revoked_at is null
         returning id`,
-      [userId],
+      [userId, organizationId],
     );
     deviceTokensRevoked = rows.length;
   } catch (error) {
@@ -136,9 +177,9 @@ export async function deprovisionMember(
     const rows = await db.query<{ id: string }>(
       `update public.api_keys
           set revoked_at = now()
-        where user_id = $1 and revoked_at is null
+        where user_id = $1 and organization_id = $2 and revoked_at is null
         returning id`,
-      [userId],
+      [userId, organizationId],
     );
     apiKeysRevoked = rows.length;
   } catch (error) {

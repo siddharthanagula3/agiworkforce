@@ -13,6 +13,7 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { issueDeveloperToken } from '@/lib/server/developer-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 /**
  * The stored fingerprint is the only authenticator this unauthenticated route
@@ -243,10 +244,12 @@ async function handleDevicePoll(request: NextRequest) {
         throw createError.internal('Token signing is not configured');
       }
 
+      const organizationId = await resolveActiveOrganizationId(db, consumed.user_id);
       await db.execute(
         `INSERT INTO device_refresh_tokens
-           (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name,
+            organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           familyId,
           consumed.user_id,
@@ -255,6 +258,7 @@ async function handleDevicePoll(request: NextRequest) {
           refreshCredential.expiresAt,
           device_id,
           consumed.user_name,
+          organizationId,
         ],
       );
 

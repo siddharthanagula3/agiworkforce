@@ -104,11 +104,33 @@ function boundValue(text: string, column: string, params: unknown[]): { value: u
   return match ? { value: params[Number(match[1]) - 1] } : null;
 }
 
+/**
+ * A credential row and the workspace it was issued in. `null` is personal
+ * scope, which no workspace admin may revoke.
+ */
+interface CredentialFixture {
+  id: string;
+  organizationId: string | null;
+}
+
+const DEVICE_TOKENS: CredentialFixture[] = [
+  { id: 'd-this-org', organizationId: ORG },
+  { id: 'd-other-org', organizationId: OTHER_ORG },
+  { id: 'd-personal', organizationId: null },
+];
+
+const API_KEYS: CredentialFixture[] = [
+  { id: 'k-this-org', organizationId: ORG },
+  { id: 'k-personal', organizationId: null },
+];
+
 function dbStub({
-  deviceRows = [{ id: 'd1' }, { id: 'd2' }],
-  keyRows = [{ id: 'k1' }],
+  deviceRows = DEVICE_TOKENS,
+  keyRows = API_KEYS,
   deviceThrows = false,
   keyThrows = false,
+  activeWorkspace = ORG as string | null,
+  settingsThrows = false,
   connectors = [] as ConnectorFixture[],
   shares = [] as ShareFixture[],
   discoveryThrows = false,
@@ -119,16 +141,32 @@ function dbStub({
   const live: ShareFixture[] = [...shares];
   const ownerOf = (rowId: string) => connectors.find((c) => c.id === rowId)?.ownerUserId;
 
+  /**
+   * Applies the statement's own organization bound the way Postgres would, so
+   * a revocation that drops or widens it revokes the extra rows here too
+   * instead of the stub answering with the rows the test hoped for.
+   */
+  const revoked = (rows: CredentialFixture[], text: string, params: unknown[]) => {
+    const bound = boundValue(text, 'organization_id', params);
+    return rows
+      .filter((row) => (bound ? row.organizationId === bound.value : true))
+      .map((row) => ({ id: row.id }));
+  };
+
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
     const text = String(sql);
     statements.push(text);
+    if (/user_settings/.test(text)) {
+      if (settingsThrows) throw new Error('settings table unavailable');
+      return [{ organization_id: activeWorkspace }];
+    }
     if (/device_refresh_tokens/.test(text)) {
       if (deviceThrows) throw new Error('device table unavailable');
-      return deviceRows;
+      return revoked(deviceRows, text, params);
     }
     if (/api_keys/.test(text)) {
       if (keyThrows) throw new Error('api key table unavailable');
-      return keyRows;
+      return revoked(keyRows, text, params);
     }
     if (/^\s*select/i.test(text) && /organization_shared_connectors/.test(text)) {
       if (discoveryThrows) throw new Error('share table unavailable');
@@ -165,7 +203,7 @@ function dbStub({
 beforeEach(() => vi.clearAllMocks());
 
 describe('deprovisionMember', () => {
-  it('revokes every live session, device token, and API key', async () => {
+  it('revokes the live session, device token, and API key this workspace issued', async () => {
     const identity = identityStub();
     const db = dbStub();
 
@@ -175,10 +213,80 @@ describe('deprovisionMember', () => {
     });
 
     expect(result.sessionsRevoked).toBe(2);
-    expect(result.deviceTokensRevoked).toBe(2);
+    expect(result.deviceTokensRevoked).toBe(1);
     expect(result.apiKeysRevoked).toBe(1);
     expect(result.errors).toEqual([]);
     expect(identity.revoked).toEqual(['sess_1', 'sess_2']);
+  });
+
+  describe('credentials outside the workspace being left', () => {
+    /**
+     * WEB-SEC-SCAN-2026-09-09-F21. The authorization proved before this call is
+     * owner or admin of ONE organization. Revoking every credential on the
+     * account reached past it: an admin of any workspace the member had joined
+     * could permanently revoke the developer keys and device credentials that
+     * member uses for their personal account and for unrelated tenants. Without
+     * the organization bound in each statement, every row below is revoked.
+     */
+    it('leaves the member’s personal and other-tenant credentials live', async () => {
+      const identity = identityStub();
+      const db = dbStub();
+
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+
+      expect(result.deviceTokensRevoked).toBe(1);
+      expect(result.apiKeysRevoked).toBe(1);
+      for (const sql of db.statements.filter((text) => /^\s*update/i.test(text))) {
+        expect(sql, 'a revocation with no organization bound revokes the whole account').toMatch(
+          /organization_id = \$2/,
+        );
+      }
+    });
+
+    it('does not sign the member out when they were working in another workspace', async () => {
+      // A browser session carries no workspace, so revoking one on a removal
+      // from an organization the member was not in signs them out of their own
+      // account. The membership delete is what cuts this workspace off.
+      const identity = identityStub();
+      const db = dbStub({ activeWorkspace: OTHER_ORG });
+
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+
+      expect(result.sessionsRevoked).toBe(0);
+      expect(identity.revoked).toEqual([]);
+      expect(identity.identity.listUserSessions).not.toHaveBeenCalled();
+    });
+
+    it('signs the member out when this workspace is the one they were working in', async () => {
+      const identity = identityStub();
+      const db = dbStub({ activeWorkspace: ORG });
+
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+
+      expect(result.sessionsRevoked).toBe(2);
+    });
+
+    it('revokes sessions and says so when the active workspace cannot be read', async () => {
+      const identity = identityStub();
+      const db = dbStub({ settingsThrows: true });
+
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+
+      expect(result.sessionsRevoked).toBe(2);
+      expect(result.errors.join(' ')).toMatch(/without confirming/i);
+    });
   });
 
   it('does not report zero sessions when it could not list them', async () => {
@@ -207,7 +315,7 @@ describe('deprovisionMember', () => {
       organizationId: ORG,
     });
 
-    expect(result.deviceTokensRevoked).toBe(2);
+    expect(result.deviceTokensRevoked).toBe(1);
     expect(result.apiKeysRevoked).toBe(1);
   });
 
@@ -253,6 +361,7 @@ describe('deprovisionMember', () => {
     for (const sql of revocations) {
       expect(sql).toMatch(/revoked_at is null/);
       expect(sql).toMatch(/user_id = \$1/);
+      expect(sql).toMatch(/organization_id = \$2/);
     }
   });
 
@@ -346,7 +455,7 @@ describe('deprovisionMember', () => {
       const settled = await result;
 
       expect(settled.sessionsRevoked).toBe(2);
-      expect(settled.deviceTokensRevoked).toBe(2);
+      expect(settled.deviceTokensRevoked).toBe(1);
       expect(settled.apiKeysRevoked).toBe(1);
       expect(settled.sharedConnectorsUnshared).toBe(0);
       expect(settled.errors.join(' ')).toMatch(/were not unshared/i);
@@ -357,7 +466,7 @@ describe('deprovisionMember', () => {
       const settled = await result;
 
       expect(settled.sessionsRevoked).toBe(2);
-      expect(settled.deviceTokensRevoked).toBe(2);
+      expect(settled.deviceTokensRevoked).toBe(1);
       expect(settled.apiKeysRevoked).toBe(1);
       expect(settled.errors.join(' ')).toMatch(/were not unshared/i);
     });

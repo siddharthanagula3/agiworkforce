@@ -16,6 +16,7 @@ import {
   DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { devicePairingFlow } from '@/lib/validations/device';
 
@@ -126,6 +127,8 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Token signing is not configured');
   }
 
+  const organizationId = await resolveActiveOrganizationId(db, record.user_id);
+
   const consumed = await db.transaction(async (tx) => {
     const consumedRows = await tx.query<{ status: string }>(
       `UPDATE device_authorization_codes
@@ -138,8 +141,9 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
     await tx.execute(
       `INSERT INTO device_refresh_tokens
-         (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name,
+          organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         familyId,
         record.user_id,
@@ -148,6 +152,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
         refreshCredential.expiresAt,
         record.device_id,
         record.device_name,
+        organizationId,
       ],
     );
     return true;
