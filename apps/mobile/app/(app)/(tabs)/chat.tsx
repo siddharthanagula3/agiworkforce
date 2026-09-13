@@ -31,6 +31,7 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
+import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -96,6 +97,7 @@ export default function ChatTabScreen() {
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
+  const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
@@ -622,14 +624,36 @@ export default function ChatTabScreen() {
     [],
   );
 
+  const startVoiceMode = useCallback(() => {
+    const reason = liveVoiceModeUnavailableReason({
+      executionMode: activeMode === 'cloud' ? 'cloud' : 'local',
+      signedIn: isClerkSignedIn,
+    });
+    setVoiceFallbackReason(reason);
+    if (reason) {
+      setVoiceInlineVisible(true);
+      return;
+    }
+    createConversation('Voice chat')
+      .then((conversationId) => {
+        router.push(
+          `/(app)/chat/${conversationId}?voice=live` as Parameters<typeof router.push>[0],
+        );
+      })
+      .catch(() => {
+        setVoiceFallbackReason('The chat could not be started, so voice stays turn based.');
+        setVoiceInlineVisible(true);
+      });
+  }, [activeMode, createConversation, isClerkSignedIn, router]);
+
   const handleOpenVoiceMode = useCallback(() => {
     Keyboard.dismiss();
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
-    setVoiceInlineVisible(true);
-  }, []);
+    startVoiceMode();
+  }, [startVoiceMode]);
 
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
@@ -638,8 +662,8 @@ export default function ChatTabScreen() {
 
   const handleVoicePickerStart = useCallback(() => {
     setVoicePickerVisible(false);
-    setVoiceInlineVisible(true);
-  }, []);
+    startVoiceMode();
+  }, [startVoiceMode]);
 
   const handleVoicePickerDismiss = useCallback(() => {
     setVoicePickerVisible(false);
@@ -886,6 +910,7 @@ export default function ChatTabScreen() {
         phase={inlineVoicePhase}
         audioLevel={inlineVoiceLevel}
         muted={inlineVoiceMuted}
+        notice={voiceFallbackReason}
         onAttach={handleVoiceAttach}
         onOpenKeyboard={handleExitInlineVoice}
         onToggleMic={inlineToggleMute}
