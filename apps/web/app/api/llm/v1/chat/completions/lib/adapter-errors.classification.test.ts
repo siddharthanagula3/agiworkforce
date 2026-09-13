@@ -127,6 +127,23 @@ describe('the routing decision the filename was able to move', () => {
     },
   );
 
+  it('rotates an Auto turn off a model the account is not entitled to', () => {
+    // The gateway answers a free-tier key with a bare 403 whose only signal is
+    // the sentence. Read as a credential failure it ended the turn on "the
+    // selected model is not available" while the reader was on Auto, which is
+    // exactly the case rotation exists for: the tier will not change, another
+    // route is the answer.
+    const refusal = Object.assign(
+      new Error(
+        'Vercel AI Gateway API error (403): 403 Free tier users do not have access to this model. Upgrade to paid credits for unrestricted access.',
+      ),
+      { status: 403 },
+    );
+
+    expect(classifyError(refusal).code).toBe('model_tier_restricted');
+    expect(isFailoverEligibleError(refusal)).toBe(true);
+  });
+
   it('would otherwise have been ended by a filename that reads as a safety stop', () => {
     // `safety` sits in NEVER_ROTATE_CATEGORIES, so naming the file
     // `content_filter.pdf` used to end the turn on the first route rather than

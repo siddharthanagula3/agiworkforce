@@ -118,6 +118,21 @@ describe('a tier entitlement refusal is not a credential failure', () => {
     expect(classifyError(error).code).toBe('model_tier_restricted');
   });
 
+  it('recognises the restriction from the gateway sentence when no code is carried', () => {
+    const error = Object.assign(
+      new Error(
+        'Vercel AI Gateway API error (403): 403 Free tier users do not have access to this model. Upgrade to paid credits for unrestricted access.',
+      ),
+      { status: 403 },
+    );
+
+    const classified = classifyError(error);
+
+    expect(classified.code).toBe('model_tier_restricted');
+    expect(classified.category).toBe('invalid_model');
+    expect(isCredentialFailureCategory(classified.category)).toBe(false);
+  });
+
   it('leaves an ordinary 403 classified as auth', () => {
     const classified = classifyError(anthropicError('Forbidden', 403));
     expect(classified.category).toBe('auth');

@@ -200,10 +200,19 @@ function isRotatableRequestRejection(
   return isGatewayBackedHarness(servingHarnessId);
 }
 
+/**
+ * The account is not entitled to this model, so waiting and retrying it can
+ * never work, and a route the account can reach is the only answer. Matched by
+ * code rather than by category: `invalid_model` also covers a typo'd model id,
+ * where rotating away would hide the user's mistake.
+ */
+const TIER_RESTRICTED_CODE = 'model_tier_restricted';
+
 export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return false;
   const classified = classifyError(error);
   if (NEVER_ROTATE_CATEGORIES.has(classified.category)) return false;
+  if (classified.code === TIER_RESTRICTED_CODE) return true;
   // Deliberately does NOT consult `classified.fallbackable`. That flag answers
   // "should the caller swap models?" and is computed as `status >= 502 && <= 504`
   // for server errors, so honouring it here stopped rotation on a plain 500, on
