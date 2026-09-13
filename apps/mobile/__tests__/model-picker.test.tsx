@@ -780,4 +780,30 @@ describe('ModelPickerSheet', () => {
     );
     expect(unavailableRow.props.accessibilityHint).not.toContain('Tap to select');
   });
+
+  it('surfaces the recently used models the store already tracks, newest first', () => {
+    useModelStore.setState({ recentModels: [LITE_MODEL_ID, DEFAULT_LOCAL_MODEL_ID] });
+
+    const { getByText, getAllByText } = renderPicker();
+
+    expect(getByText('Recent')).toBeTruthy();
+    // The recents row is the only place each model appears, so a single node
+    // per name proves the grouped section below no longer repeats it.
+    expect(getAllByText(LITE_MODEL.name)).toHaveLength(1);
+  });
+
+  it('hides the recents row while a search is active', () => {
+    useModelStore.setState({ recentModels: [LITE_MODEL_ID] });
+
+    const { getByLabelText, queryByText } = renderPicker();
+    fireEvent.changeText(getByLabelText('Search models'), LITE_MODEL.name);
+
+    expect(queryByText('Recent')).toBeNull();
+  });
+
+  it('renders no recents row before a model has been used', () => {
+    const { queryByText } = renderPicker();
+
+    expect(queryByText('Recent')).toBeNull();
+  });
 });
