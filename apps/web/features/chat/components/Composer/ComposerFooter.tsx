@@ -22,11 +22,13 @@ import {
   Image as ImageIcon,
   ImagePlus,
   Lock,
+  Monitor,
   Plug,
   Video,
   type Icon,
 } from '@agiworkforce/icons';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import {
   Drawer,
   DrawerContent,
@@ -35,8 +37,12 @@ import {
   PopoverTrigger,
   PopoverContent,
   Slider,
+  useConfirmAction,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
+import type { LocalModel } from '@agiworkforce/local-runtime-contract';
+import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
+import { conversationHoldsLocalTurns } from '@features/chat/lib/local-turn';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
@@ -143,6 +149,17 @@ const CAPABILITY_GLYPHS: Readonly<
   imageGen: { label: 'Image output', Glyph: ImagePlus },
   videoGen: { label: 'Video output', Glyph: Video },
 };
+
+const LOCAL_SECTION_LABEL = 'On this device';
+const LOCAL_BADGE_LABEL = 'Local';
+const LOCAL_GRANT_LABEL = 'Use models on this device';
+const LOCAL_GRANT_GUIDANCE = 'Asks once, then lists what Ollama and LM Studio have loaded';
+const LOCAL_EMPTY_TEXT = 'No models loaded on this device yet.';
+const LOCAL_FORK_TITLE = 'Start a new chat for a cloud model?';
+const LOCAL_FORK_DESCRIPTION =
+  'This chat holds answers from a model on this device. They stay on this Mac and are never uploaded. Continuing on a cloud model opens a new chat, so nothing local is sent to AGI Cloud.';
+const LOCAL_FORK_CONFIRM_LABEL = 'Start a new chat';
+const NEW_CHAT_HREF = '/chat';
 
 const PLAN_PAGE_HREF = '/pricing';
 const PLAN_PAGE_LINK_TEXT = 'What each plan includes';
@@ -446,6 +463,83 @@ function AutoRow({
       </span>
       {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />}
     </button>
+  );
+}
+
+function LocalModelSection({
+  state,
+  selectedId,
+  onSelect,
+}: {
+  state: ReturnType<typeof useLocalModels>;
+  selectedId: string | null;
+  onSelect: (model: LocalModel) => void;
+}) {
+  if (!state.available) return null;
+
+  return (
+    <>
+      <p className={PICKER_SECTION_LABEL_CLASS}>{LOCAL_SECTION_LABEL}</p>
+      {!state.granted ? (
+        <button
+          type="button"
+          {...{ [PICKER_ROW_ATTR]: '' }}
+          className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+          onClick={() => void state.grant()}
+        >
+          <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>{LOCAL_GRANT_LABEL}</span>
+            <span className={PICKER_ROW_GUIDANCE_CLASS}>{LOCAL_GRANT_GUIDANCE}</span>
+          </span>
+        </button>
+      ) : state.models.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-muted-foreground">{LOCAL_EMPTY_TEXT}</p>
+      ) : (
+        state.models.map((model) => {
+          const isSelected = model.id === selectedId;
+          return (
+            <button
+              key={model.id}
+              type="button"
+              {...{ [PICKER_ROW_ATTR]: '' }}
+              className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+              onClick={() => onSelect(model)}
+              aria-pressed={isSelected}
+              aria-label={`${model.name} - ${model.serverLabel}, runs on this device`}
+            >
+              <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={[
+                    PICKER_ROW_NAME_CLASS,
+                    isSelected ? 'font-medium text-foreground' : 'font-normal text-foreground',
+                  ].join(' ')}
+                >
+                  {model.name}
+                </span>
+                <span className={PICKER_ROW_GUIDANCE_CLASS}>
+                  {model.sizeBillion === undefined
+                    ? model.serverLabel
+                    : `${model.serverLabel} · ${model.sizeBillion}B`}
+                </span>
+              </span>
+              <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
+                {LOCAL_BADGE_LABEL}
+              </span>
+              {isSelected && (
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              )}
+            </button>
+          );
+        })
+      )}
+      {state.error ? (
+        <p role="alert" className="px-3 py-1 text-xs text-danger">
+          {state.error}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -799,6 +893,50 @@ export function ComposerFooter({
     [],
   );
 
+  const localModels = useLocalModels(open);
+  const localSelection = useLocalModelSelection((state) => state.selected);
+  const selectLocalModel = useLocalModelSelection((state) => state.select);
+  const chatHoldsLocalTurns = useChatStore((state) => conversationHoldsLocalTurns(state.messages));
+  const { confirm, dialog: localForkDialog } = useConfirmAction();
+  const router = useRouter();
+
+  const handleSelectLocalModel = useCallback(
+    (model: LocalModel) => {
+      selectLocalModel(model);
+      closeModelPopover();
+    },
+    [closeModelPopover, selectLocalModel],
+  );
+
+  /**
+   * Leaving a local model is a boundary change, not a preference change.
+   *
+   * Once this chat holds an answer computed on this Mac, continuing it on a
+   * cloud model would upload that answer as context. The fork is the consent
+   * the trust rules require, and it is a new chat rather than a silent send.
+   */
+  const leaveLocalModel = useCallback(
+    (apply: () => void) => {
+      if (!chatHoldsLocalTurns) {
+        selectLocalModel(null);
+        apply();
+        return;
+      }
+      closeModelPopover();
+      confirm({
+        title: LOCAL_FORK_TITLE,
+        description: LOCAL_FORK_DESCRIPTION,
+        confirmLabel: LOCAL_FORK_CONFIRM_LABEL,
+        onConfirm: () => {
+          selectLocalModel(null);
+          apply();
+          router.push(NEW_CHAT_HREF);
+        },
+      });
+    },
+    [chatHoldsLocalTurns, closeModelPopover, confirm, router, selectLocalModel],
+  );
+
   const recentModelIds = useChatModelStore((state) => state.recentModelIds);
   const recordRecentModel = useChatModelStore((state) => state.selectModel);
   const commitModel = useCallback(
@@ -831,6 +969,10 @@ export function ComposerFooter({
 
   const handleSelectModel = useCallback(
     (model: AIModel) => {
+      if (localSelection) {
+        leaveLocalModel(() => void commitModel(model.id));
+        return;
+      }
       if (model.id === selectedModelId) {
         closeModelPopover();
         return;
@@ -852,7 +994,15 @@ export function ComposerFooter({
       }
       void commitModel(model.id);
     },
-    [selectedModelId, assistantTurnCount, selectedModel, commitModel, closeModelPopover],
+    [
+      selectedModelId,
+      assistantTurnCount,
+      selectedModel,
+      commitModel,
+      closeModelPopover,
+      localSelection,
+      leaveLocalModel,
+    ],
   );
 
   const lockedDisplayModel =
@@ -919,8 +1069,9 @@ export function ComposerFooter({
     );
   }, [searchQuery]);
 
-  const triggerReceipt =
-    selectedModelId === shortList.auto?.id
+  const triggerReceipt = localSelection
+    ? `${localSelection.serverLabel} on this device · nothing leaves this Mac`
+    : selectedModelId === shortList.auto?.id
       ? (shortList.auto.continuity ?? shortList.auto.guidance)
       : `${selectedModel.provider} · ${selectedModel.description}`;
 
@@ -1036,6 +1187,7 @@ export function ComposerFooter({
         .filter(Boolean)
         .join(' ')}
     >
+      {localForkDialog}
       <div
         className={
           inline ? 'flex min-w-0 items-center gap-2' : 'flex items-center justify-end gap-2 px-1'
@@ -1082,7 +1234,17 @@ export function ComposerFooter({
                   aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
                   title={triggerReceipt ?? undefined}
                 >
-                  <ProviderLogo providerKey={selectedProviderKey} size={PICKER_TRIGGER_ICON_SIZE} />
+                  {localSelection ? (
+                    <Monitor
+                      className="h-3 w-3 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ProviderLogo
+                      providerKey={selectedProviderKey}
+                      size={PICKER_TRIGGER_ICON_SIZE}
+                    />
+                  )}
                   {/* truncate lets the model name shrink so the composer bottom row
                       stays a single line at narrow widths, while min-w-[3.5rem] gives it
                       a GUARANTEED floor (~56px) so the label can never collapse to 0px
@@ -1092,8 +1254,13 @@ export function ComposerFooter({
                       keep this selector visible, tappable, and clear of Send down to
                       ~320px. */}
                   <span className="min-w-[3.5rem] max-w-[6rem] shrink truncate font-medium sm:max-w-[140px]">
-                    {modelChangePending ? 'Saving…' : selectedModel.name}
+                    {modelChangePending ? 'Saving…' : (localSelection?.name ?? selectedModel.name)}
                   </span>
+                  {localSelection && (
+                    <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
+                      {LOCAL_BADGE_LABEL}
+                    </span>
+                  )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               );
@@ -1193,6 +1360,12 @@ export function ComposerFooter({
                               })}
                             </>
                           )}
+
+                          <LocalModelSection
+                            state={localModels}
+                            selectedId={localSelection?.id ?? null}
+                            onSelect={handleSelectLocalModel}
+                          />
 
                           <div className="my-1 border-t border-[var(--chat-border)]" />
                           <button

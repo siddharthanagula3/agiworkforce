@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { ComposerFooter } from './ComposerFooter';
 import { useModelStore, AVAILABLE_MODELS } from '@shared/stores/model-store';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const longestModel = [...AVAILABLE_MODELS].sort((a, b) => b.name.length - a.name.length)[0]!;
 
