@@ -342,7 +342,6 @@
           "apps/extension-vscode/src/features/model-picker/index.ts",
           "apps/extension-vscode/src/integrations/index.ts",
           "apps/extension-vscode/src/platform/index.ts",
-          "apps/extension-vscode/src/platform/surface.ts",
           "apps/extension-vscode/src/ui/index.ts",
           "apps/extension-vscode/src/webview/render.ts"
         ]
