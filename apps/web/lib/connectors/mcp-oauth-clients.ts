@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
+import { logger } from '@/lib/logger';
 
 const PG_UNDEFINED_TABLE = '42P01';
 
@@ -57,12 +58,31 @@ export async function getMcpOAuthClient(issuer: string): Promise<McpOAuthClientR
 
     if (expiresAt !== null && expiresAt.getTime() <= Date.now()) return null;
 
+    /*
+     * A secret the current key ring cannot open is a secret this deployment no
+     * longer has, which is the expired case above, not a reason to fail every
+     * future authorization for this issuer. Throwing here left the provider
+     * permanently unconnectable behind an envelope error; dropping the row lets
+     * registration run again.
+     */
+    let clientSecret: string | null = null;
+    if (row.client_secret_enc) {
+      try {
+        clientSecret = decryptConnectorToken(row.client_secret_enc, 'oauth-client-secret');
+      } catch {
+        logger.warn(
+          { issuer: row.issuer },
+          '[mcp-oauth-clients] stored client secret could not be decrypted; re-registering',
+        );
+        await deleteMcpOAuthClient(row.issuer);
+        return null;
+      }
+    }
+
     return {
       issuer: row.issuer,
       clientId: row.client_id,
-      clientSecret: row.client_secret_enc
-        ? decryptConnectorToken(row.client_secret_enc, 'oauth-client-secret')
-        : null,
+      clientSecret,
       registrationMethod: row.registration_method as McpClientRegistrationMethod,
       clientMetadataUrl: row.client_metadata_url,
       clientSecretExpiresAt: expiresAt,
