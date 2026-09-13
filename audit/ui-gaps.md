@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 3d166ff43a8e5896e6c2356d4ab7ad56023a763a158cb80dcbfd26b28b8799b2 -->
+<!-- ui-gaps-csv-sha256: 897361302e41fe498619da067e9c50fe66b537ca3b8dc961a4d852c3b33bd72e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -5953,7 +5953,7 @@ Closed 2026-08-21. The rail carries nine destinations, so this matters more here
 
 **Evidence**
 
-grep for 'Customize sidebar', 'Choose which items appear' in apps/web/features/chat/v3/WebSidebar.tsx, no match; the 'customize' id maps to route '/chat/customize' per WebShellV3.tsx line 34 area, which is a settings/instructions page, not a nav-visibility modal.
+grep for 'Customize sidebar', 'Choose which items appear' in packages/ui/ui/src/sidebar/Sidebar.tsx, the actual web sidebar apps/web renders (apps/web/features/chat/v3/WebSidebar.tsx does not exist), no match; the 'customize' id maps to route '/chat/customize' per WebShellV3.tsx line 34 area, which is a settings/instructions page, not a nav-visibility modal. Since closed 2026-08-21, Settings > General carries a real 'Sidebar items' row of per-destination switches instead (see detail).
 
 **Suggested fix**
 
@@ -6446,7 +6446,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 - `chatgpt_reference/138-chatgpt-web-settings-storage-files-images-storage-used.png`
 
-### GAP-280, No self-serve credit purchase / automatic recharge flow
+### GAP-280, No automatic recharge (low-balance auto top-up) for credits
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6455,7 +6455,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 **Gap**
 
-Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart, recorded in docs/work/founder-assistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
+Self-serve one-time credit purchase ships via startTopUpCheckout, wired to BillingSection.tsx and a real Stripe Checkout session (WEB-05/WEB-06, apps/web/features/billing/services/stripe-payments.ts:240-258). The remaining gap is narrower: automatic recharge, charging a saved card on its own once the balance runs low. That has no server-side counterpart and is recorded in docs/work/founder-assistance.md as needing a product decision, since it is a standing authorisation to charge a card while the user is absent.
 
 **Evidence**
 
