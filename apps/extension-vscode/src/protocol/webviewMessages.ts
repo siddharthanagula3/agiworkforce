@@ -63,6 +63,21 @@ const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
 const openWebTasks = z.object({ type: z.literal('openWebTasks') });
+export const CONTEXT_ATTACHMENT_KINDS = [
+  'selection',
+  'open-files',
+  'problems',
+  'git-diff',
+] as const;
+export const ContextAttachmentKindSchema = z.enum(CONTEXT_ATTACHMENT_KINDS);
+export type ContextAttachmentKind = z.infer<typeof ContextAttachmentKindSchema>;
+
+const requestContextMenuState = z.object({ type: z.literal('requestContextMenuState') });
+const attachContext = z.object({
+  type: z.literal('attachContext'),
+  payload: z.object({ kind: ContextAttachmentKindSchema }),
+});
+
 const openPathReference = z.object({
   type: z.literal('openPathReference'),
   payload: z.object({
@@ -169,6 +184,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openPrivacySettings,
   openWebTasks,
   openPathReference,
+  requestContextMenuState,
+  attachContext,
   attachFiles,
   removePendingAttachment,
 ]);
