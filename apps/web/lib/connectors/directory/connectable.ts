@@ -8,7 +8,9 @@ import type { DirectoryAuthMode, DirectoryConnectableMode } from '@/lib/connecto
 
 export function connectableForInternalId(id: string): DirectoryConnectableMode {
   if (isDeviceLocalConnector(id)) return 'desktop-and-cli';
-  return describeConnectorSetup(id) === null ? 'connect' : 'needs-setup';
+  const requirement = describeConnectorSetup(id);
+  if (requirement === null) return 'connect';
+  return requirement.kind === 'no-remote' ? 'unavailable' : 'needs-setup';
 }
 
 export function connectableFromAuthMode(

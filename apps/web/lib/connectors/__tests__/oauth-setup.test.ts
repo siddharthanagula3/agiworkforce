@@ -124,8 +124,13 @@ describe('describeConnectorSetup', () => {
     });
   });
 
-  it('treats device-local connectors as needing no cloud setup', () => {
-    expect(describeConnectorSetup('local-filesystem')).toBeNull();
+  it('names a device-local connector as a desktop surface, not a missing credential', () => {
+    expect(describeConnectorSetup('local-filesystem', 'Local Filesystem')).toMatchObject({
+      kind: 'device-local',
+      missingEnv: [],
+      message:
+        'Local Filesystem runs on your own machine, so it is connected from Desktop or the CLI rather than from the browser.',
+    });
   });
 
   it('names the secret store key when production has none', () => {

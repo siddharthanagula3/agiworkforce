@@ -281,12 +281,14 @@ export const CONNECTOR_CARD_ACTION_LABELS: Record<DirectoryConnectableMode, stri
   'api-key-form': 'Add API key',
   'desktop-and-cli': 'Available on desktop and CLI',
   'needs-setup': 'Needs setup',
+  unavailable: 'Not available yet',
 };
 export const CONNECTOR_DESKTOP_ONLY_LABEL = 'Available on desktop and CLI';
 export const CONNECTOR_DESKTOP_ONLY_COPY =
   'This connector runs on your own computer, so it connects from the desktop app or the CLI rather than from the browser.';
 export const CONNECTOR_DESKTOP_DOWNLOAD_LABEL = 'Get the desktop app';
 export const CONNECTOR_NEEDS_SETUP_LABEL = 'Needs setup';
+export const CONNECTOR_UNAVAILABLE_LABEL = 'Not available yet';
 export const CONNECTOR_REPOSITORY_LABEL = 'Repository';
 
 export const DIRECTORY_LOAD_MORE_LABEL = 'Load more';

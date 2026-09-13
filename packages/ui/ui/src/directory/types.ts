@@ -10,7 +10,8 @@ export type DirectoryConnectableMode =
   | 'connect'
   | 'api-key-form'
   | 'desktop-and-cli'
-  | 'needs-setup';
+  | 'needs-setup'
+  | 'unavailable';
 
 export interface DirectoryToggle {
   id: string;

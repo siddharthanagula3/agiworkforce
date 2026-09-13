@@ -20,6 +20,7 @@ const CONNECTABLE_MODE_RANK: Readonly<Record<DirectoryConnectableMode, number>> 
   'api-key-form': 1,
   'desktop-and-cli': 2,
   'needs-setup': 3,
+  unavailable: 4,
 };
 
 const AUTH_MODE_RANK: Readonly<Record<DirectoryAuthMode, number>> = {

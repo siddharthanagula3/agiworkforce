@@ -6,7 +6,8 @@ export type DirectoryConnectableMode =
   | 'connect'
   | 'api-key-form'
   | 'desktop-and-cli'
-  | 'needs-setup';
+  | 'needs-setup'
+  | 'unavailable';
 
 export type DirectorySource = 'internal' | 'mcp-registry';
 
