@@ -23,7 +23,7 @@ agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path
 multimap = "0.10.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-shlex = "1.3.0"
+shlex = "2.0.1"
 starlark = "0.13.0"
 thiserror = "2.0.17"
 
@@ -31,8 +31,8 @@ thiserror = "2.0.17"
 pretty_assertions = "1.4.1"
 tempfile = "3.23.0"
 dirs = "6"
-path-absolutize = "3.1.1"
+path-absolutize = "4.0.1"
 dunce = "1.0.4"
-schemars = "0.8.22"
-ts-rs = { version = "11", features = ["uuid-impl"] }
+schemars = "1.2.0"
+ts-rs = { version = "12", features = ["uuid-impl"] }
 regex-lite = "0.1.8"
