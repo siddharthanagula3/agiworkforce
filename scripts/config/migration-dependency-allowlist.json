@@ -445,6 +445,11 @@
       "file": "apps/web/app/api/github/repositories/route.ts",
       "migration": 188,
       "reason": "0188 stores the repository set the linking GitHub account proved it can reach, so the connector cannot widen to the whole installation; the deploy runbook applies it before this code reaches production, and until it does the connect flow and the repository listing name a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/user-connector-tools.ts",
+      "migration": 188,
+      "reason": "0188 stores the repository set the linking GitHub account proved it can reach, which the Code session clone and push credentials are narrowed to; the deploy runbook applies it before this code reaches production, and until it does the installation read names a column that does not exist."
     }
   ]
 }
