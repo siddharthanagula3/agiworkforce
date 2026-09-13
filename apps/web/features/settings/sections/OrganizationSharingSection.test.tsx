@@ -201,6 +201,54 @@ describe('OrganizationSharingSection', () => {
     expect(mockUnshareProject).not.toHaveBeenCalled();
   });
 
+  it('asks before un-sharing a project, naming the members who lose access', async () => {
+    const user = userEvent.setup();
+    mockOverview.mockReturnValue(overview());
+    renderSection();
+
+    const [stopProject] = screen.getAllByRole('button', { name: /stop sharing/i });
+    await user.click(stopProject!);
+
+    expect(mockUnshareProject).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Stop sharing Roadmap?');
+    expect(dialog).toHaveTextContent('All 2 members of this organization lose access');
+
+    await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+    await waitFor(() => expect(mockUnshareProject).toHaveBeenCalledWith(PROJECT));
+  });
+
+  it('asks before un-sharing a connector, naming what stops working', async () => {
+    const user = userEvent.setup();
+    mockOverview.mockReturnValue(overview());
+    renderSection();
+
+    const stopConnector = screen.getAllByRole('button', { name: /stop sharing/i }).at(-1);
+    await user.click(stopConnector!);
+
+    expect(mockUnshareConnector).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Stop sharing Jira?');
+    expect(dialog).toHaveTextContent('lose orgmcp-a1b2c3d4e5 in chat');
+
+    await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+    await waitFor(() =>
+      expect(mockUnshareConnector).toHaveBeenCalledWith('44444444-4444-4444-8444-444444444444'),
+    );
+  });
+
+  it('leaves the sharing untouched when the confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    mockOverview.mockReturnValue(overview());
+    renderSection();
+
+    const [stopProject] = screen.getAllByRole('button', { name: /stop sharing/i });
+    await user.click(stopProject!);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(mockUnshareProject).not.toHaveBeenCalled();
+  });
+
   it('never renders a stored connector credential', () => {
     mockOverview.mockReturnValue(overview());
     const { container } = renderSection();
