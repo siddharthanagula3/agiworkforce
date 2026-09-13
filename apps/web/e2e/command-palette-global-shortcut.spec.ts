@@ -31,6 +31,33 @@ test.describe('global command palette shortcut', () => {
     await expect(palette).toBeHidden();
   });
 
+  test('hands focus back to the opener when either dialog closes', async ({ page }) => {
+    // React applies a field's `autoFocus` during commit, before DialogContent
+    // records what to restore, so both of these recorded their own input as the
+    // opener; that node is gone on close and focus fell to <body>. jsdom cannot
+    // see it: the palette's unit test replaces Dialog with a plain div.
+    await signIn(page);
+    await page.goto('/chat');
+    const composer = page.getByRole('textbox', { name: 'Message input' });
+    await composer.waitFor({ state: 'visible' });
+    await composer.click();
+
+    await page.keyboard.press('Meta+k');
+    await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible({
+      timeout: 5000,
+    });
+    await page.keyboard.press('Escape');
+    await expect(composer).toBeFocused();
+
+    const searchTrigger = page.getByRole('button', { name: /^Search/ }).first();
+    await searchTrigger.click();
+    await expect(page.getByRole('dialog', { name: 'Search Conversations' })).toBeVisible({
+      timeout: 5000,
+    });
+    await page.keyboard.press('Escape');
+    await expect(searchTrigger).toBeFocused();
+  });
+
   test('opens the command palette on a non-chat route too', async ({ page }) => {
     await signIn(page);
     await page.goto('/chat/projects');

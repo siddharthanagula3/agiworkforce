@@ -317,7 +317,17 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-2xl max-w-xl [&>button]:hidden">
+      <DialogContent
+        className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-2xl max-w-xl [&>button]:hidden"
+        onOpenAutoFocus={(event) => {
+          // React applies `autoFocus` during commit, before DialogContent reads
+          // what to restore on close, so the field autofocused itself and the
+          // dialog recorded its own input as the opener. That node is gone by
+          // the time Escape lands, and focus fell to <body>.
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">
           Search commands, navigate the app, change preferences, and switch AI models.
@@ -346,7 +356,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           )}
           <input
             ref={inputRef}
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}

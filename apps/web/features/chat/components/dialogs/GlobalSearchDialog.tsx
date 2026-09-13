@@ -91,6 +91,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -332,7 +333,17 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
       }
     >
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[80vh] max-w-3xl p-0">
+        <DialogContent
+          className="max-h-[80vh] max-w-3xl p-0"
+          onOpenAutoFocus={(event) => {
+            // React applies `autoFocus` during commit, before DialogContent
+            // reads what to restore on close, so the field autofocused itself
+            // and the dialog recorded its own input as the opener. That node is
+            // gone by the time Escape lands, and focus fell to <body>.
+            event.preventDefault();
+            searchInputRef.current?.focus();
+          }}
+        >
           <DialogHeader className="border-b px-6 pb-4 pt-6">
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
@@ -352,6 +363,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   aria-label="Search messages and conversations"
                   placeholder="Search messages and conversations..."
                   value={query}
@@ -363,7 +375,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     }
                   }}
                   className="pl-9 pr-9"
-                  autoFocus
                 />
                 {query && (
                   <Button
