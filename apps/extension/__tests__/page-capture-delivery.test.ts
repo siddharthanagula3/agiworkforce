@@ -81,8 +81,8 @@ describe('page context is never silently missing', () => {
   const sidePanel = readFileSync(resolve(here, '..', 'src/side_panel.ts'), 'utf8');
 
   it('resolves a reason instead of null so a caller can say what went wrong', () => {
-    expect(sidePanel).toContain(
-      'export type PageContextCapture = { ok: true; text: string } | { ok: false; reason: string }',
+    expect(sidePanel).toMatch(
+      /export type PageContextCapture =\s*\|?\s*\{ ok: true; text: string;[\s\S]{0,80}?\}\s*\|\s*\{ ok: false; reason: string \}/,
     );
     const capture = sidePanel.slice(
       sidePanel.indexOf('async function capturePageContext()'),
