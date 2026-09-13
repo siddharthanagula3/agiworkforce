@@ -106,7 +106,7 @@ export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifac
               />
               <span
                 style={{
-                  color: 'hsl(var(--foreground))',
+                  color: 'var(--text-1)',
                   fontSize: 13,
                   fontWeight: 500,
                   overflow: 'hidden',

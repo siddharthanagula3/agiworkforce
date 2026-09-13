@@ -181,7 +181,7 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
               <Bot size={14} aria-hidden style={{ flexShrink: 0, color: 'var(--agi-ink-2)' }} />
               <span
                 style={{
-                  color: 'hsl(var(--foreground))',
+                  color: 'var(--text-1)',
                   fontSize: 13,
                   fontWeight: 500,
                   overflow: 'hidden',

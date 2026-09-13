@@ -69,7 +69,7 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
               minHeight: 32,
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--settings-border)',
-              background: 'var(--chat-accent-primary, #1a1a1a)',
+              background: 'var(--chat-accent-primary)',
               color: 'var(--chat-accent-on-primary)',
               padding: '8px 16px',
               fontSize: 14,
