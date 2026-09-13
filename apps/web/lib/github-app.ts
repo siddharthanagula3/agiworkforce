@@ -34,6 +34,9 @@ const GITHUB_API_VERSION = '2022-11-28';
 const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
 const GITHUB_INSTALLATIONS_PER_PAGE = 100;
 const MAX_GITHUB_INSTALLATION_PAGES = 100;
+const GITHUB_REPOSITORIES_PER_PAGE = 100;
+const MAX_GITHUB_VERIFIED_REPOSITORY_PAGES = 50;
+const MAX_VERIFIED_REPOSITORIES = 5000;
 
 const gitHubOAuthTokenResponseSchema = z.object({
   access_token: z.string().min(1),
@@ -59,10 +62,22 @@ const gitHubUserInstallationsResponseSchema = z.object({
   installations: z.array(gitHubUserInstallationSchema),
 });
 
+const gitHubUserInstallationRepositoriesResponseSchema = z.object({
+  total_count: z.number().int().nonnegative(),
+  repositories: z.array(z.object({ full_name: z.string().min(1).max(512) })),
+});
+
 export interface VerifiedGitHubInstallation {
   installationId: number;
   accountLogin: string;
   accountType: 'User' | 'Organization';
+  /**
+   * The `owner/name` repositories the OAuth'd account itself can reach through
+   * this installation, lowercased. `GET /user/installations` lists an
+   * installation to anyone who can see ONE of its repositories, so this set,
+   * not the installation, is the caller's authorization.
+   */
+  verifiedRepositories: string[];
 }
 
 export function isGitHubAppConfigured(): boolean {
@@ -216,13 +231,77 @@ export async function findGitHubInstallationForUser(
     },
   });
 
-  return match
-    ? {
-        installationId: match.id,
-        accountLogin: match.account.login,
-        accountType: match.account.type,
+  if (!match) return null;
+
+  return {
+    installationId: match.id,
+    accountLogin: match.account.login,
+    accountType: match.account.type,
+    verifiedRepositories: await listUserAccessibleInstallationRepositories(
+      userAccessToken,
+      match.id,
+    ),
+  };
+}
+
+/**
+ * The repositories the OAuth'd account can reach through one installation.
+ *
+ * This is the narrowing `/user/installations` does not do: that endpoint lists
+ * an installation to anyone who can see a single repository under it, while the
+ * installation credential the link grants covers every repository the
+ * installation covers. Truncation is an error rather than a shorter set,
+ * because a silently short list would be written as the caller's proved
+ * authorization and quietly lock them out of their own repositories.
+ */
+async function listUserAccessibleInstallationRepositories(
+  userAccessToken: string,
+  installationId: number,
+): Promise<string[]> {
+  const collected = await collectGitHubRestPages({
+    perPage: GITHUB_REPOSITORIES_PER_PAGE,
+    maxPages: MAX_GITHUB_VERIFIED_REPOSITORY_PAGES,
+    maxItems: MAX_VERIFIED_REPOSITORIES,
+    loadPage: async (page) => {
+      const response = await fetch(
+        buildGitHubApiUrl(
+          `/user/installations/${encodeURIComponent(String(installationId))}/repositories` +
+            `?per_page=${GITHUB_REPOSITORIES_PER_PAGE}&page=${page}`,
+        ),
+        {
+          headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          },
+          signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Failed to read your repositories for this installation: ${response.status}`,
+        );
       }
-    : null;
+      const parsed = gitHubUserInstallationRepositoriesResponseSchema.safeParse(
+        await response.json(),
+      );
+      if (!parsed.success) {
+        throw new Error('GitHub accessible-repository response was invalid');
+      }
+      return {
+        items: parsed.data.repositories,
+        totalCount: parsed.data.total_count,
+        linkHeader: response.headers.get('link'),
+      };
+    },
+  });
+
+  if (collected.truncated) {
+    throw new Error(
+      `This account reaches more than ${MAX_VERIFIED_REPOSITORIES} repositories through that installation`,
+    );
+  }
+  return [...new Set(collected.items.map((repository) => repository.full_name.toLowerCase()))];
 }
 
 export function verifyGitHubWebhookSignature(
@@ -452,17 +531,50 @@ export interface ListInstallationRepositoriesResult {
 }
 
 /**
- * The repositories one installation grants this app, as the picker lists them.
+ * Raised when an installation row carries no proved repository set, which is
+ * every row linked before 0188. Listing or cloning on such a row would hand the
+ * caller the whole installation on the strength of one repository, so it is
+ * refused until the owner reconnects.
+ */
+export class GitHubInstallationUnverifiedError extends Error {
+  constructor(readonly installationId: number) {
+    super(
+      'This GitHub connection was made before repository access was checked. Reconnect it to list its repositories.',
+    );
+    this.name = 'GitHubInstallationUnverifiedError';
+  }
+}
+
+export function assertRepositoryIsVerified(
+  installationId: number,
+  verifiedRepositories: readonly string[] | null,
+  fullName: string,
+): void {
+  if (verifiedRepositories === null) throw new GitHubInstallationUnverifiedError(installationId);
+  if (!verifiedRepositories.includes(fullName.toLowerCase())) {
+    throw new Error('That repository is not one this GitHub connection proved access to');
+  }
+}
+
+/**
+ * The repositories one installation grants this app, narrowed to the ones the
+ * linking account proved it can reach, as the picker lists them.
  *
  * The caller must have already proved the installation belongs to the signed-in
  * account: {@link getInstallationAccessToken} checks only that the row is
  * ownership-verified, so an unchecked id from a request body would mint a token
- * for someone else's installation.
+ * for someone else's installation. `/installation/repositories` then answers at
+ * full installation scope, which is wider than the caller's own GitHub access,
+ * so `verifiedRepositories` from the same row is the bound applied here. A null
+ * set is refused rather than treated as "everything".
  */
 export async function listInstallationRepositories(
   installationId: number,
   limits: { maxItems: number; maxPages: number; perPage: number },
+  verifiedRepositories: readonly string[] | null,
 ): Promise<ListInstallationRepositoriesResult> {
+  if (verifiedRepositories === null) throw new GitHubInstallationUnverifiedError(installationId);
+  const allowed = new Set(verifiedRepositories);
   const token = await getInstallationAccessToken(installationId);
   const collected = await collectGitHubRestPages({
     perPage: limits.perPage,
@@ -497,14 +609,16 @@ export async function listInstallationRepositories(
 
   return {
     truncated: collected.truncated,
-    repositories: collected.items.map((repository) => ({
-      installationId,
-      owner: repository.owner.login,
-      name: repository.name,
-      fullName: repository.full_name,
-      defaultBranch: repository.default_branch ?? null,
-      isPrivate: repository.private,
-    })),
+    repositories: collected.items
+      .filter((repository) => allowed.has(repository.full_name.toLowerCase()))
+      .map((repository) => ({
+        installationId,
+        owner: repository.owner.login,
+        name: repository.name,
+        fullName: repository.full_name,
+        defaultBranch: repository.default_branch ?? null,
+        isPrivate: repository.private,
+      })),
   };
 }
 

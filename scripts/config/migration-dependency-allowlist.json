@@ -435,6 +435,16 @@
       "file": "apps/web/lib/services/deprovision-service.ts",
       "migration": 187,
       "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/app/api/github/oauth/callback/route.ts",
+      "migration": 188,
+      "reason": "0188 stores the repository set the linking GitHub account proved it can reach, so the connector cannot widen to the whole installation; the deploy runbook applies it before this code reaches production, and until it does the connect flow and the repository listing name a column that does not exist."
+    },
+    {
+      "file": "apps/web/app/api/github/repositories/route.ts",
+      "migration": 188,
+      "reason": "0188 stores the repository set the linking GitHub account proved it can reach, so the connector cannot widen to the whole installation; the deploy runbook applies it before this code reaches production, and until it does the connect flow and the repository listing name a column that does not exist."
     }
   ]
 }
