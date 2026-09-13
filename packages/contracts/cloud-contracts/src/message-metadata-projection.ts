@@ -212,6 +212,32 @@ function boundThinkingSegments(value: unknown): unknown {
   });
 }
 
+/** Attachments kept on one stored message. */
+export const PERSISTED_METADATA_MAX_ATTACHMENTS = 20;
+
+/**
+ * The descriptor, never the bytes.
+ *
+ * An attachment can carry a base64 data URL in `content` for the send that
+ * created it; the bytes are already in object storage and the row only needs
+ * the reference. Left in, it is the single largest thing a user message can
+ * carry, and a generic shrink would store a data URL cut in half, which renders
+ * as a broken image rather than as a missing one.
+ */
+function boundAttachments(value: unknown): unknown {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, PERSISTED_METADATA_MAX_ATTACHMENTS).flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const { content: _content, ...rest } = entry;
+    const bounded: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(rest)) {
+      const value = boundArgValue(raw);
+      if (value !== undefined) bounded[key] = value;
+    }
+    return [bounded];
+  });
+}
+
 function boundCodeExecutionResult(value: unknown): unknown {
   if (!isRecord(value)) return value;
   const out: Record<string, unknown> = { ...value };
@@ -236,6 +262,7 @@ const KEY_BOUNDERS: Record<string, (value: unknown) => unknown> = {
   tools: boundTools,
   thinkingSegments: boundThinkingSegments,
   codeExecutionResult: boundCodeExecutionResult,
+  attachments: boundAttachments,
   thinkingContent: (value) => clip(value, PERSISTED_METADATA_MAX_THINKING_CHARS),
   thinkingSteps: (value) =>
     Array.isArray(value)
@@ -271,7 +298,7 @@ const KEY_BUDGET_CHARS: Record<string, number> = {
   generatedFiles: 2_000,
   research: 2_500,
   agiWorkPlan: 1_500,
-  attachments: 2_000,
+  attachments: 6_000,
   collaborationMessages: 2_000,
   workStreamData: 2_000,
   comparisonOptions: 2_000,

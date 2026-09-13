@@ -148,6 +148,33 @@ describe('projectPersistedMessageMetadata', () => {
     expect(dropped?.[METADATA_TRUNCATED_KEY]).toBe(true);
   });
 
+  it('keeps an attachment descriptor and never stores half of its inline bytes', () => {
+    const projected = projectPersistedMessageMetadata({
+      attachments: [
+        {
+          id: 'att-1',
+          assetId: 'asset-1',
+          type: 'image',
+          name: 'chart.png',
+          size: 41_233,
+          mimeType: 'image/png',
+          url: 'https://storage.example/asset-1',
+          content: `data:image/png;base64,${'A'.repeat(400_000)}`,
+        },
+      ],
+    });
+    const attachments = projected?.['attachments'] as Record<string, unknown>[];
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]).toMatchObject({
+      id: 'att-1',
+      assetId: 'asset-1',
+      name: 'chart.png',
+      url: 'https://storage.example/asset-1',
+    });
+    expect(attachments[0]?.['content']).toBeUndefined();
+    expect(projected?.[METADATA_TRUNCATED_KEY]).toBeUndefined();
+  });
+
   it('leaves an ordinary turn untouched and unflagged', () => {
     const metadata = {
       model: 'a-model',
