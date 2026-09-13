@@ -108,3 +108,29 @@ describe('Chrome side-panel interaction accessibility', () => {
     );
   });
 });
+
+describe('Chrome side-panel composer at side-panel widths', () => {
+  it('truncates the reasoning-effort label instead of cutting the word in half', () => {
+    // text-overflow has no effect on the anonymous flex item a bare text node
+    // becomes inside an inline-flex button, so the label owns a box of its own.
+    expect(source).toContain("const effortButtonLabel = el('span', { id: 'sp-effort-btn-label' })");
+    expect(source).toContain('effortButtonLabel.textContent = t(');
+    expect(source).toMatch(
+      /#sp-effort-btn-label \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;/,
+    );
+  });
+
+  it('gives the autonomy chip a 24px pointer target without resizing the chip', () => {
+    expect(source).toMatch(/\.sp-autonomy-chip \{[\s\S]*?height: 20px;/);
+    expect(source).toMatch(/\.sp-autonomy-chip::after \{[^}]*inset: -4px 0 0;/);
+  });
+
+  it('drops attached page text once its source page is no longer the active one', () => {
+    expect(source).toContain('function dropPageContextOnNavigation(');
+    expect(source).toContain('pageContextStillDescribes(_ctx.pendingPageContextSource');
+    expect(source).toContain("composerContextNotice = t('spContextChipDropped')");
+    expect(source).toMatch(
+      /function updateActivePage\(url: string, tabId\?: number\): void \{\n\s*dropPageContextOnNavigation\(tabId, url\);/,
+    );
+  });
+});

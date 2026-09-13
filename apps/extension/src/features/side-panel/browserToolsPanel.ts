@@ -367,11 +367,22 @@ export function buildBrowserToolsPanel(send: Send = sendMessage): BrowserToolsPa
     });
     if (consoleResponse?.success) {
       renderConsole(consoleResponse.console ?? []);
+      const wasWatching = watching;
       setWatching(consoleResponse.watching === true);
       consoleParts.empty.textContent = 'No console messages captured for this page yet.';
-      watchStatus.textContent = consoleResponse.origin
-        ? `${consoleResponse.watching ? 'Capturing' : 'Reporting'} on ${consoleResponse.origin}. ${CAPTURE_EXPLAINER}`
-        : CAPTURE_EXPLAINER;
+      const origin = consoleResponse.origin;
+      if (!origin) {
+        watchStatus.textContent = CAPTURE_EXPLAINER;
+      } else if (watching) {
+        watchStatus.textContent = `Capturing console and network on ${origin}. ${CAPTURE_EXPLAINER}`;
+      } else if (wasWatching) {
+        // The watch ends by itself when the tab leaves the page it was
+        // approved for. Saying nothing left the toggle off with no reason and
+        // an empty list that looked like a page with nothing to report.
+        watchStatus.textContent = `Capture stopped because this tab left the page it was watching. Turn Watch page back on to record ${origin}.`;
+      } else {
+        watchStatus.textContent = `Not capturing on ${origin}. ${CAPTURE_EXPLAINER}`;
+      }
     } else if (consoleResponse?.error) {
       // The toggle and the banner name a live origin. Leaving them as they were
       // while the read is being refused told the user capture was running on a
