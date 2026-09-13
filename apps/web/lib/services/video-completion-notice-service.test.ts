@@ -79,7 +79,7 @@ describe('video completion notice', () => {
 
     await expect(deliverVideoCompletionNotice(db, job())).resolves.toBe(true);
 
-    expect(mocks.claim).toHaveBeenCalledWith({ db, jobId: JOB_ID });
+    expect(mocks.claim).toHaveBeenCalledWith({ db, jobId: JOB_ID, userId: 'user-1' });
     expect(mocks.push).toHaveBeenCalledWith('user-1', {
       title: 'Your video is ready',
       body: 'Open the chat to watch it.',

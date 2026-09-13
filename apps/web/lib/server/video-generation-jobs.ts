@@ -997,6 +997,7 @@ export function claimVideoIncidentAlert(input: {
 export function claimVideoCompletionNotice(input: {
   db: DatabaseAdapter;
   jobId: string;
+  userId: string;
 }): Promise<boolean> {
   return input.db
     .query<{ id: string }>(
@@ -1004,10 +1005,11 @@ export function claimVideoCompletionNotice(input: {
           set completion_notified_at = now(),
               updated_at = now()
         where id = $1
+          and user_id = $2
           and completion_notified_at is null
           and status in ('completed', 'failed', 'outcome_unknown')
         returning id`,
-      [input.jobId],
+      [input.jobId, input.userId],
     )
     .then((rows) => rows.length > 0);
 }
