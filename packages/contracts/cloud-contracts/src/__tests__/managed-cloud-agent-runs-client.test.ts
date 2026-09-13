@@ -26,6 +26,7 @@ function run(state = 'running', lastEventSequence = 1) {
     completedAt: state === 'completed' ? '2026-07-17T20:00:00.000Z' : null,
     createdAt: '2026-07-17T19:00:00.000Z',
     updatedAt: '2026-07-17T20:00:00.000Z',
+    staleForMs: 0,
   };
 }
 
@@ -104,7 +105,28 @@ describe('managed Cloud agent-run client', () => {
     expect(readManagedCloudAgentRunHandle(response)).toEqual({
       runId: RUN_ID,
       runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+      detachable: false,
     });
+  });
+
+  // The run row is identical on both transports, so this header is the only
+  // thing that separates a task which outlives the tab from one that does not.
+  it('calls the turn detachable only on the durable transport', () => {
+    const withLoop = (toolLoop?: string) =>
+      readManagedCloudAgentRunHandle(
+        new Response(null, {
+          headers: {
+            'X-AGI-Agent-Run-Id': RUN_ID,
+            'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+            ...(toolLoop ? { 'X-AGI-Tool-Loop': toolLoop } : {}),
+          },
+        }),
+      )?.detachable;
+
+    expect(withLoop('durable')).toBe(true);
+    expect(withLoop('active')).toBe(false);
+    expect(withLoop('resume')).toBe(false);
+    expect(withLoop()).toBe(false);
   });
 
   it('rejects a foreign or mismatched run URL instead of following an untrusted header', () => {

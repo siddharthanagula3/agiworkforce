@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Message } from '@shared/stores/web-chat-store';
-import { askWhetherTurnIsRunning, shouldAskWhetherTurnIsRunning } from './inFlightTurnRecovery';
+import {
+  IN_FLIGHT_TURN_STALL_DEADLINE_MS,
+  askWhetherTurnIsRunning,
+  readInFlightTurnVerdict,
+  shouldAskWhetherTurnIsRunning,
+} from './inFlightTurnRecovery';
 
 const CONVERSATION_ID = '8f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77';
 
@@ -79,14 +84,36 @@ describe('asking the server', () => {
     );
   });
 
-  it('reports a turn in flight when the server has one', async () => {
+  it('reports a turn in flight when the server has a fresh one', async () => {
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ runs: [{ id: 'run-1', state: 'running' }] }), { status: 200 }),
+      new Response(
+        JSON.stringify({ runs: [{ id: 'run-1', state: 'running', staleForMs: 1_200 }] }),
+        {
+          status: 200,
+        },
+      ),
     );
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe(true);
+    ).resolves.toBe('running');
+  });
+
+  it('reports a stall when the only run has sat past the silence deadline', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          runs: [
+            { id: 'run-1', state: 'running', staleForMs: IN_FLIGHT_TURN_STALL_DEADLINE_MS + 1 },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toBe('stalled');
   });
 
   it('reports none when the server has none', async () => {
@@ -94,7 +121,7 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe(false);
+    ).resolves.toBe('idle');
   });
 
   it('claims nothing when the server will not answer', async () => {
@@ -102,6 +129,55 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe(false);
+    ).resolves.toBe('idle');
+  });
+
+  it('keeps waiting rather than inventing a stall when the rows are unreadable', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ runs: [{ id: 'run-1', state: 'running' }] }), { status: 200 }),
+    );
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toBe('running');
+  });
+});
+
+/**
+ * AGI-34: the row's state alone said `running` for as long as the row survived,
+ * so a turn whose function had died looked exactly like one still working.
+ */
+describe('reading liveness off the run rows', () => {
+  const stale = IN_FLIGHT_TURN_STALL_DEADLINE_MS + 1;
+
+  it('calls no rows idle', () => {
+    expect(readInFlightTurnVerdict([])).toBe('idle');
+  });
+
+  it('calls a row touched inside the deadline running', () => {
+    expect(
+      readInFlightTurnVerdict([
+        { state: 'running', staleForMs: IN_FLIGHT_TURN_STALL_DEADLINE_MS - 1 },
+      ]),
+    ).toBe('running');
+  });
+
+  it('calls a row quieter than the deadline stalled', () => {
+    expect(readInFlightTurnVerdict([{ state: 'running', staleForMs: stale }])).toBe('stalled');
+  });
+
+  it('never calls a deliberate pause a stall, however long it waits', () => {
+    for (const state of ['paused', 'awaiting_input', 'ready_for_review']) {
+      expect(readInFlightTurnVerdict([{ state, staleForMs: stale * 100 }])).toBe('running');
+    }
+  });
+
+  it('keeps the conversation loading while any one row is still alive', () => {
+    expect(
+      readInFlightTurnVerdict([
+        { state: 'running', staleForMs: stale },
+        { state: 'running', staleForMs: 10 },
+      ]),
+    ).toBe('running');
   });
 });

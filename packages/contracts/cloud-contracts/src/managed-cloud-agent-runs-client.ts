@@ -8,6 +8,8 @@ import {
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
   MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
   MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
+  MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+  MANAGED_CLOUD_TOOL_LOOP_HEADER,
   isCloudAgentRunFollowBoundary,
   managedCloudAgentRunPath,
   type CloudAgentRun,
@@ -259,7 +261,13 @@ export function readManagedCloudAgentRunHandle(
   if (rawRunPath !== expectedPath) {
     throw new ManagedCloudAgentRunContractError('Managed Cloud agent-run URL header is invalid');
   }
-  return { runId: parsedRunId.data, runPath: expectedPath };
+  // Only the durable transport detaches. Every other value, and an absent
+  // header, describes a turn that dies with this request, so the safe reading
+  // of an unknown value is the one that promises the user less.
+  const detachable =
+    response.headers.get(MANAGED_CLOUD_TOOL_LOOP_HEADER)?.trim() ===
+    MANAGED_CLOUD_TOOL_LOOP_DURABLE;
+  return { runId: parsedRunId.data, runPath: expectedPath, detachable };
 }
 
 export function createManagedCloudAgentRunClient(
