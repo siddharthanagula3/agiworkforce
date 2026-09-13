@@ -107,14 +107,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
          installation_id,
          account_login,
          account_type,
+         verified_repositories,
          ownership_verified_at
        )
-       values ($1, $2, $3, $4, now())
+       values ($1, $2, $3, $4, $5, now())
        on conflict (installation_id)
        do update set
          user_id = excluded.user_id,
          account_login = excluded.account_login,
          account_type = excluded.account_type,
+         verified_repositories = excluded.verified_repositories,
          ownership_verified_at = now(),
          access_token_enc = null,
          access_token_expires_at = null
@@ -126,6 +128,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         verifiedInstallation.installationId,
         verifiedInstallation.accountLogin,
         verifiedInstallation.accountType,
+        verifiedInstallation.verifiedRepositories,
       ],
     );
 

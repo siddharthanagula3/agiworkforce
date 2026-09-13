@@ -77,6 +77,7 @@ describe('GitHub OAuth callback ownership proof', () => {
       installationId: 987654,
       accountLogin: 'verified-org',
       accountType: 'Organization',
+      verifiedRepositories: ['verified-org/app'],
     });
     mocks.query.mockResolvedValue([{ id: 'row-1' }]);
   });
@@ -131,7 +132,25 @@ describe('GitHub OAuth callback ownership proof', () => {
     expect(sql).toMatch(
       /ownership_verified_at is null[\s\S]*github_installations\.user_id = excluded\.user_id/i,
     );
-    expect(params).toEqual(['user-1', 987654, 'verified-org', 'Organization']);
+    expect(params).toEqual([
+      'user-1',
+      987654,
+      'verified-org',
+      'Organization',
+      ['verified-org/app'],
+    ]);
+  });
+
+  it('records the repository set the account proved, and refreshes it on a relink', async () => {
+    // WEB-SEC-SCAN-2026-09-09-F38: without this set on the row, every consumer
+    // works at full installation scope, which is wider than the access the
+    // linking account proved.
+    await GET(callbackRequest());
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/verified_repositories/);
+    expect(sql).toMatch(/verified_repositories = excluded\.verified_repositories/);
+    expect(params).toContainEqual(['verified-org/app']);
   });
 
   it('consumes the OAuth state and pending id so a successful callback cannot replay', async () => {

@@ -36,6 +36,7 @@ const PLAN_UNAVAILABLE_MESSAGE =
 interface InstallationRow extends Record<string, unknown> {
   installation_id: string | number;
   account_login: string;
+  verified_repositories: string[] | null;
 }
 
 interface LinkedInstallation {
@@ -91,18 +92,24 @@ function byFullName(first: GitHubInstallationRepository, second: GitHubInstallat
   return first.fullName.localeCompare(second.fullName);
 }
 
-async function loadCatalogue(installations: LinkedInstallation[]): Promise<RepositoryCatalogue> {
+async function loadCatalogue(
+  installations: (LinkedInstallation & { verifiedRepositories: string[] | null })[],
+): Promise<RepositoryCatalogue> {
   const repositories: GitHubInstallationRepository[] = [];
   const unreachable: LinkedInstallation[] = [];
   let truncated = false;
 
   for (const installation of installations) {
     try {
-      const listed = await listInstallationRepositories(installation.installationId, {
-        perPage: REPOSITORIES_PER_PAGE,
-        maxPages: REPOSITORIES_MAX_PAGES,
-        maxItems: REPOSITORIES_MAX_ITEMS,
-      });
+      const listed = await listInstallationRepositories(
+        installation.installationId,
+        {
+          perPage: REPOSITORIES_PER_PAGE,
+          maxPages: REPOSITORIES_MAX_PAGES,
+          maxItems: REPOSITORIES_MAX_ITEMS,
+        },
+        installation.verifiedRepositories,
+      );
       repositories.push(...listed.repositories);
       truncated ||= listed.truncated;
     } catch (err) {
@@ -110,7 +117,10 @@ async function loadCatalogue(installations: LinkedInstallation[]): Promise<Repos
         { err, installationId: installation.installationId },
         '[github] repositories could not be listed for an installation',
       );
-      unreachable.push(installation);
+      unreachable.push({
+        installationId: installation.installationId,
+        accountLogin: installation.accountLogin,
+      });
     }
   }
 
@@ -143,7 +153,7 @@ async function handleList(request: NextRequest) {
   }
 
   const rows = await db.query<InstallationRow>(
-    `select installation_id, account_login
+    `select installation_id, account_login, verified_repositories
        from github_installations
       where user_id = $1
         and ownership_verified_at is not null
@@ -154,6 +164,7 @@ async function handleList(request: NextRequest) {
     .map((row) => ({
       installationId: Number(row.installation_id),
       accountLogin: row.account_login,
+      verifiedRepositories: row.verified_repositories,
     }))
     .filter((installation) => Number.isSafeInteger(installation.installationId));
 
