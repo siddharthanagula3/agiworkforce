@@ -167,7 +167,17 @@ const config = {
       {
         action: 'SEND',
         category: ['DEFAULT'],
-        data: [{ mimeType: 'text/plain' }],
+        data: [
+          { mimeType: 'text/plain' },
+          { mimeType: 'text/*' },
+          { mimeType: 'image/*' },
+          { mimeType: 'application/pdf' },
+        ],
+      },
+      {
+        action: 'SEND_MULTIPLE',
+        category: ['DEFAULT'],
+        data: [{ mimeType: 'text/*' }, { mimeType: 'image/*' }, { mimeType: 'application/pdf' }],
       },
       {
         action: 'PROCESS_TEXT',
