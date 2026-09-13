@@ -42,6 +42,7 @@ import {
   LIVE_VOICE_INSTRUCTIONS,
 } from '@/lib/voice/live-voice-prompts';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import { resolveLiveVoiceDelegationTools } from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
   LIVE_SESSION_BLOCK_MINUTES,
@@ -274,7 +275,7 @@ async function handleCreateLiveSession(request: NextRequest) {
             responses: {
               model: backendModel.apiModelId ?? backendModel.id,
               instructions: LIVE_VOICE_BACKEND_INSTRUCTIONS,
-              tools: [{ type: 'web_search' }],
+              tools: resolveLiveVoiceDelegationTools(backendModel),
               tool_choice: 'auto',
             },
           },
