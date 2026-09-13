@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DesktopRuntimeError,
   type FileEntry,
@@ -174,9 +175,14 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  /**
+   * Portaled to the body, because the composer sits inside a transformed
+   * ancestor that becomes the containing block for `fixed` and clips the panel
+   * against the composer rather than the window.
+   */
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -292,6 +298,7 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
           </ul>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
