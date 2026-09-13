@@ -16,6 +16,7 @@ export interface VoiceInlineBarProps {
   phase: VoiceInlinePhase;
   audioLevel?: number;
   muted?: boolean;
+  notice?: string | null;
   onAttach?: () => void;
   onOpenKeyboard?: () => void;
   onToggleMic: () => void;
@@ -27,6 +28,7 @@ export function VoiceInlineBar({
   phase,
   audioLevel = 0,
   muted = false,
+  notice = null,
   onAttach,
   onOpenKeyboard,
   onToggleMic,
@@ -77,6 +79,20 @@ export function VoiceInlineBar({
       style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
+      {notice ? (
+        <Text
+          testID="voice-inline-notice"
+          style={{
+            color: colors.textMuted,
+            fontSize: 13,
+            textAlign: 'center',
+            marginBottom: 10,
+          }}
+        >
+          {notice}
+        </Text>
+      ) : null}
+
       <View style={{ alignItems: 'center', marginBottom: 14 }}>
         <VoiceOrb phase={phase} audioLevel={audioLevel} />
       </View>

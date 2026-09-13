@@ -38,6 +38,8 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
+import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComposer';
+import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -115,9 +117,10 @@ interface ConversationUiActionScope {
 
 export default function ChatScreen() {
   const colors = useThemeColors();
-  const params = useLocalSearchParams<{ id: string; prompt?: string }>();
+  const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
+  const requestedVoiceMode = Array.isArray(params.voice) ? params.voice[0] : params.voice;
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const activeProject = useProjectStore((s) =>
     s.activeProjectId ? s.projects.find((p) => p.id === s.activeProjectId) : undefined,
@@ -745,6 +748,8 @@ export default function ChatScreen() {
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
+  const [liveVoiceVisible, setLiveVoiceVisible] = useState(false);
+  const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
     if (!DEFAULT_CLOUD_MODEL_ID) {
@@ -809,14 +814,27 @@ export default function ChatScreen() {
     setRefreshing(false);
   }, [id, loadMessages]);
 
+  const startVoiceMode = useCallback(() => {
+    const reason = liveVoiceModeUnavailableReason({
+      executionMode: conversationExecutionMode,
+      signedIn: isClerkSignedIn,
+    });
+    setVoiceFallbackReason(reason);
+    if (reason) {
+      setVoiceInlineVisible(true);
+      return;
+    }
+    setLiveVoiceVisible(true);
+  }, [conversationExecutionMode, isClerkSignedIn]);
+
   const handleOpenVoiceMode = useCallback(() => {
     Keyboard.dismiss();
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
-    setVoiceInlineVisible(true);
-  }, []);
+    startVoiceMode();
+  }, [startVoiceMode]);
 
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
@@ -829,8 +847,8 @@ export default function ChatScreen() {
 
   const handleVoicePickerStart = useCallback(() => {
     setVoicePickerVisible(false);
-    setVoiceInlineVisible(true);
-  }, []);
+    startVoiceMode();
+  }, [startVoiceMode]);
 
   const handleVoicePickerDismiss = useCallback(() => {
     setVoicePickerVisible(false);
@@ -838,6 +856,23 @@ export default function ChatScreen() {
 
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
+    requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
+  }, []);
+
+  const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
+
+  useEffect(() => {
+    if (requestedVoiceMode !== 'live') return;
+    startVoiceMode();
+  }, [requestedVoiceMode, startVoiceMode]);
+
+  const handleLiveVoiceEnded = useCallback((message: string | null) => {
+    setLiveVoiceVisible(false);
+    if (message) setVoiceFallbackReason(message);
+  }, []);
+
+  const handleSwitchLiveVoiceToText = useCallback(() => {
+    setLiveVoiceVisible(false);
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
   }, []);
 
@@ -1299,7 +1334,7 @@ export default function ChatScreen() {
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
             promises ("the only thing that changes is the composer"). */}
-        {voiceInlineVisible ? null : (
+        {voiceInlineVisible || liveVoiceVisible ? null : (
           <Composer
             onSend={handleSend}
             isStreaming={isStreaming}
@@ -1377,10 +1412,22 @@ export default function ChatScreen() {
           phase={inlineVoicePhase}
           audioLevel={inlineVoiceLevel}
           muted={inlineVoiceMuted}
+          notice={voiceFallbackReason}
           onAttach={handleVoiceAttach}
           onOpenKeyboard={handleExitInlineVoice}
           onToggleMic={inlineToggleMute}
           onExit={handleExitInlineVoice}
+        />
+
+        {/* Full-duplex voice for a cloud conversation: the same live session the
+            web app runs, sharing this conversation's thread. */}
+        <LiveVoiceComposer
+          visible={liveVoiceVisible}
+          conversationId={id ?? null}
+          model={selectedModel}
+          ensureConversation={handleEnsureVoiceConversation}
+          onSwitchToText={handleSwitchLiveVoiceToText}
+          onEnded={handleLiveVoiceEnded}
         />
 
         {/* Conversation export bottom sheet */}
