@@ -54,7 +54,7 @@ export async function deliverVideoCompletionNotice(
 ): Promise<boolean> {
   let claimed: boolean;
   try {
-    claimed = await claimVideoCompletionNotice({ db, jobId: job.id });
+    claimed = await claimVideoCompletionNotice({ db, jobId: job.id, userId: job.userId });
   } catch (error) {
     logger.warn({ error, jobId: job.id }, '[notifications] video completion notice claim failed');
     return false;
