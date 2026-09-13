@@ -129,6 +129,21 @@ registration and require a business application.
 **Impact** EXTERNAL-APPROVAL (six connectors; the directory already shows them as not yet available)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Connectors] OAuth client pairs for the twenty-seven remaining first-party connectors
+
+**Why founder assistance is required**
+Each of these is a developer-console registration under the company identity,
+and the client secret is a credential only the account owner can issue. The two
+entries above own a different set of vendors; none of these twenty-seven is
+listed there.
+**Exact action** Register one production OAuth app per vendor with redirect URI `https://agiworkforce.com/api/connectors/oauth/callback` and read scopes only, then hand over the client id and secret for each. The env names follow one rule: the connector id upper-cased with hyphens as underscores, prefixed `CONNECTOR_OAUTH_` and suffixed `_CLIENT_ID` or `_CLIENT_SECRET`, for example `CONNECTOR_OAUTH_GOOGLE_SHEETS_CLIENT_ID` and `CONNECTOR_OAUTH_GOOGLE_SHEETS_CLIENT_SECRET`. The twenty-seven connector ids are google-sheets, zoom, salesforce, calendly, google-analytics, mailchimp, shopify, linkedin, twitter, discord, basecamp, evernote, pagerduty, gitlab, bitbucket, gcp, azure, bigquery, pipedrive, adobe, quickbooks, xero, instagram, facebook, youtube, epic-fhir and cerner. Several share one console (Google covers google-sheets, google-analytics, bigquery, gcp and youtube; Meta covers instagram and facebook), so the app count is lower than the connector count.
+**Where** Each vendor's developer or admin console, then the Vercel Production environment.
+**Needed input** One registration per vendor console, plus the decision of which vendors are worth registering at all.
+**How to verify completion** `GET /api/connectors` names each id in `available`, and its Settings and Connectors card offers Connect instead of Needs setup.
+**What remains after founder action** The descriptor entry in `CONNECTOR_OAUTH_PROVIDERS_JSON` and a live connect test, both engineering.
+**Impact** FEATURE-BLOCKING (twenty-seven connectors; each is honestly shown as Needs setup until then)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Connectors] One live OAuth consent on a real account (LIVE-3)
 
 **Why founder assistance is required**
