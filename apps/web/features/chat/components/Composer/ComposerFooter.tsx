@@ -799,6 +799,8 @@ export function ComposerFooter({
     [],
   );
 
+  const recentModelIds = useChatModelStore((state) => state.recentModelIds);
+  const recordRecentModel = useChatModelStore((state) => state.selectModel);
   const commitModel = useCallback(
     async (id: string) => {
       closeModelPopover();
@@ -864,8 +866,6 @@ export function ComposerFooter({
 
   const catalogue = useModelCatalogue(open);
   const { favouriteModelIds, toggleFavourite } = useModelFavourites();
-  const recentModelIds = useChatModelStore((state) => state.recentModelIds);
-  const recordRecentModel = useChatModelStore((state) => state.selectModel);
 
   const lockOverrides = useMemo(() => {
     const overrides = new Map<string, ModelPickerLock>();
