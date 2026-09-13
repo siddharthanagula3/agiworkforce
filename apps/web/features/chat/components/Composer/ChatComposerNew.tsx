@@ -129,7 +129,9 @@ import {
   IMAGE_MODEL_DEFAULT,
   IMAGE_MODELS,
   isImageAspectRatioSupported,
+  readImageFileAsBase64,
   type ImageAspectRatio,
+  type ImageEditRequest,
 } from '../../lib/imageGenerationOptions';
 import {
   formatUsageResetIn,
@@ -143,6 +145,20 @@ import {
 } from '@/features/connectors/lib/mcp-context-selection';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+
+/**
+ * The operations a composer offers for an attached image. `outpaint` is not
+ * here: it needs a canvas larger than the source and a mask describing the new
+ * area, which this composer has no way to author, and offering a control that
+ * cannot produce a valid request is worse than not offering it.
+ */
+const IMAGE_EDIT_OPERATIONS = [
+  { id: 'edit', label: 'Edit', hint: 'Change the attached image with your prompt' },
+  { id: 'variation', label: 'Variation', hint: 'A new take on the attached image' },
+  { id: 'inpaint', label: 'Mask edit', hint: 'Redraw only where the second image is masked' },
+] as const;
+
+type ImageEditOperation = (typeof IMAGE_EDIT_OPERATIONS)[number]['id'];
 
 export {
   getImageAspectOptionsForModel,
@@ -347,7 +363,7 @@ interface ChatComposerProps {
    */
   onGenerateImage?: (
     prompt: string,
-    options: { aspectRatio: ImageAspectRatio; modelId: string },
+    options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
   ) => void;
   /**
    * Called when the user submits in video-generation mode. Same contract as
@@ -898,6 +914,14 @@ const ChatComposerNewComponent = ({
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
+  /**
+   * What an attached image means in image mode. The media route already serves
+   * every one of these; the composer refused the attachment outright, so the
+   * whole family was unreachable from the web.
+   */
+  const [imageOperation, setImageOperation] = useState<ImageEditOperation>('edit');
+  const [showImageOperationMenu, setShowImageOperationMenu] = useState(false);
+  const [imageTransparentBackground, setImageTransparentBackground] = useState(false);
   const [showCompatibleModels, setShowCompatibleModels] = useState(false);
   const {
     status: mediaAvailabilityStatus,
@@ -923,6 +947,26 @@ const ChatComposerNewComponent = ({
     () => getImageAspectOptionsForModel(imageModelId),
     [imageModelId],
   );
+  /**
+   * Edit support is the catalogue's answer, published per model by the media
+   * availability endpoint, so a second model on the same image API lights these
+   * controls up without a line changing here.
+   */
+  const imageModelSupportsEdit = mediaAdmissionFor(imageModelId)?.supports_edit === true;
+  const imageSourceFile = imageMode ? attachments[0] : undefined;
+  const imageMaskFile = imageMode ? attachments[1] : undefined;
+  const imageOperationOptions = useMemo(
+    () =>
+      IMAGE_EDIT_OPERATIONS.filter(
+        (option) => option.id !== 'inpaint' || imageMaskFile !== undefined,
+      ),
+    [imageMaskFile],
+  );
+  const effectiveImageOperation: ImageEditOperation = imageOperationOptions.some(
+    (option) => option.id === imageOperation,
+  )
+    ? imageOperation
+    : 'edit';
   // A model switch can invalidate the previous ratio. Derive the safe value
   // during render (no state-setting effect or transient unsupported send), and
   // also reset it in the model-selection event below for a truthful label.
@@ -1005,7 +1049,9 @@ const ChatComposerNewComponent = ({
   );
   const hasImageAttachments = binaryAttachments.some((file) => isChatImageMimeType(file.type));
   const hasDocumentAttachments = binaryAttachments.some((file) => file.type === 'application/pdf');
-  const hasAttachmentConflict = binaryAttachments.length > 0 && !modelCanAcceptImages;
+  // Image mode answers to the image model's edit support, not to the chat
+  // model's vision flag, so an attached picture there is never a conflict here.
+  const hasAttachmentConflict = !imageMode && binaryAttachments.length > 0 && !modelCanAcceptImages;
   const attachmentConflictKind: 'image' | 'document' | 'mixed' =
     hasImageAttachments && hasDocumentAttachments
       ? 'mixed'
@@ -1014,7 +1060,11 @@ const ChatComposerNewComponent = ({
         : 'image';
   const mediaModeActive = imageMode || videoMode;
   const mediaModeNoun = imageMode ? 'Image' : 'Video';
-  const mediaAttachmentConflict = mediaModeActive && attachments.length > 0;
+  // Image mode takes an attachment now, as the picture an edit works from, so
+  // the attach rows close only for video and for an image model that cannot
+  // read a source image.
+  const attachmentsUnavailable = videoMode || (imageMode && !imageModelSupportsEdit);
+  const mediaAttachmentConflict = videoMode && attachments.length > 0;
   const compatibleModels = getSelectableModels().filter(
     (model) => model.capabilities.vision && isModelAllowedForTier(model.id, entitlementTier),
   );
@@ -1222,6 +1272,7 @@ const ChatComposerNewComponent = ({
   const projectPickerMenuRef = useRef<HTMLDivElement>(null);
   const imageAspectTriggerRef = useRef<HTMLButtonElement>(null);
   const imageModelTriggerRef = useRef<HTMLButtonElement>(null);
+  const imageOperationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoAspectTriggerRef = useRef<HTMLButtonElement>(null);
   const videoQualityTriggerRef = useRef<HTMLButtonElement>(null);
   const videoModelTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1440,11 +1491,26 @@ const ChatComposerNewComponent = ({
   const addChatAttachments = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
-      if (imageMode || videoMode) {
-        const noun = imageMode ? 'Image' : 'Video';
+      if (videoMode) {
         setLocalNotice(
-          `${noun} generation works from your prompt only. Attached files are not sent to the ${noun.toLowerCase()} model. Leave ${noun.toLowerCase()} mode first if you want to send ${files.length === 1 ? 'this file' : 'these files'} to the chat model.`,
+          `Video generation works from your prompt only. Attached files are not sent to the video model. Leave video mode first if you want to send ${files.length === 1 ? 'this file' : 'these files'} to the chat model.`,
         );
+        return;
+      }
+      if (imageMode) {
+        const images = files.filter((file) => isChatImageMimeType(file.type));
+        if (images.length === 0) {
+          setLocalNotice(
+            'Image mode takes images only. Attach a picture to edit it, or leave image mode to send this file to the chat model.',
+          );
+          return;
+        }
+        setLocalNotice(
+          images.length < files.length
+            ? 'Only the images were attached. Image mode edits pictures, so the other files were left out.'
+            : null,
+        );
+        addFiles(images);
         return;
       }
       setLocalNotice(null);
@@ -2314,12 +2380,6 @@ const ChatComposerNewComponent = ({
 
     if (sendImageMode) {
       if (isTurnActive) return;
-      if (attachments.length > 0) {
-        setLocalNotice(
-          'Image generation works from your prompt only. Remove the attached files, or leave image mode to send them to the chat model.',
-        );
-        return;
-      }
       const prompt = outgoingContent.trim();
       if (!prompt) return;
       if (!onGenerateImage) {
@@ -2338,11 +2398,50 @@ const ChatComposerNewComponent = ({
         );
         return;
       }
-      onGenerateImage(prompt, {
-        aspectRatio: effectiveImageAspectRatio,
-        modelId: imageModelId,
-      });
+      const sourceFile = attachments[0];
+      if (sourceFile && !imageModelSupportsEdit) {
+        setLocalNotice(
+          'This image model cannot edit an attached picture. Choose a model that supports editing, or remove the attachment.',
+        );
+        return;
+      }
+      if (!sourceFile) {
+        onGenerateImage(prompt, {
+          aspectRatio: effectiveImageAspectRatio,
+          modelId: imageModelId,
+        });
+        clearComposerState();
+        return;
+      }
+      // The files are read after the composer clears: a `File` handle stays
+      // valid once the state holding it is gone, and holding the composer open
+      // through a multi-megabyte read would make the send feel stuck.
+      const maskFile = effectiveImageOperation === 'inpaint' ? attachments[1] : undefined;
+      const operation = effectiveImageOperation;
+      const transparentBackground = imageTransparentBackground;
+      const aspectRatio = effectiveImageAspectRatio;
+      const modelId = imageModelId;
       clearComposerState();
+      void (async () => {
+        try {
+          const [sourceImageBase64, maskImageBase64] = await Promise.all([
+            readImageFileAsBase64(sourceFile),
+            maskFile ? readImageFileAsBase64(maskFile) : Promise.resolve(undefined),
+          ]);
+          onGenerateImage(prompt, {
+            aspectRatio,
+            modelId,
+            edit: {
+              operation,
+              sourceImageBase64,
+              ...(maskImageBase64 ? { maskImageBase64 } : {}),
+              ...(transparentBackground ? { transparentBackground: true } : {}),
+            },
+          });
+        } catch {
+          setLocalNotice('That image could not be read. Attach it again and retry.');
+        }
+      })();
       return;
     }
 
@@ -2483,6 +2582,9 @@ const ChatComposerNewComponent = ({
     message,
     attachments,
     refusedAttachments,
+    effectiveImageOperation,
+    imageModelSupportsEdit,
+    imageTransparentBackground,
     selectedSkillName,
     selectedMcpContext,
     disabledConnectorIds,
@@ -3573,6 +3675,7 @@ const ChatComposerNewComponent = ({
                       closeMenu();
                     }}
                     mediaModeActive={mediaModeActive}
+                    attachmentsUnavailable={attachmentsUnavailable}
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
                     billingPolicyError={Boolean(billingPolicyError)}
@@ -3817,6 +3920,90 @@ const ChatComposerNewComponent = ({
                       ))}
                     </AnchoredComposerMenu>
                   </div>
+
+                  {imageSourceFile && imageModelSupportsEdit && (
+                    <div className="relative">
+                      <button
+                        ref={imageOperationTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowImageOperationMenu((p) => !p);
+                          setShowImageAspectMenu(false);
+                          setShowImageModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="What to do with the attached image"
+                      >
+                        {
+                          IMAGE_EDIT_OPERATIONS.find(
+                            (option) => option.id === effectiveImageOperation,
+                          )?.label
+                        }
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={imageOperationTriggerRef}
+                        open={showImageOperationMenu}
+                        label="Attached image action"
+                        onRequestClose={() => setShowImageOperationMenu(false)}
+                        className="w-64 p-1"
+                      >
+                        {imageOperationOptions.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setImageOperation(option.id);
+                              setShowImageOperationMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-start gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveImageOperation === option.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">
+                              <span className="block font-medium">{option.label}</span>
+                              <span className="block text-muted-foreground">{option.hint}</span>
+                            </span>
+                            {effectiveImageOperation === option.id && (
+                              <Check className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                        {imageMaskFile === undefined && (
+                          <p className="px-3 py-1.5 text-[11px] text-muted-foreground">
+                            Attach a second image, black where the model should redraw, to mask an
+                            edit.
+                          </p>
+                        )}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+
+                  {imageSourceFile && imageModelSupportsEdit && (
+                    <button
+                      type="button"
+                      aria-pressed={imageTransparentBackground}
+                      onClick={() => setImageTransparentBackground((current) => !current)}
+                      className={cn(
+                        'flex h-8 items-center rounded-full border px-2.5 text-xs font-medium transition-all',
+                        imageTransparentBackground
+                          ? 'border-primary/30 bg-primary/15 text-primary'
+                          : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                      )}
+                      title="Return the edit on a transparent background"
+                    >
+                      Transparent
+                    </button>
+                  )}
+
+                  {imageSourceFile && !imageModelSupportsEdit && (
+                    <span className="text-xs text-muted-foreground">
+                      This model cannot edit an attached image
+                    </span>
+                  )}
                 </div>
               )}
 

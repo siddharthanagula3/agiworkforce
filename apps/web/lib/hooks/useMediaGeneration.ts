@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/types';
 import type {
   ManagedMediaImageAspectRatio,
+  ManagedMediaImageOperation,
   ManagedMediaVideoAspectRatio,
   ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
@@ -90,6 +91,16 @@ export interface GenerateImageOptions {
   provider?: 'google' | 'openai';
   model?: string;
   conversationId?: string;
+  /**
+   * An edit of an image the caller already holds. The route validates the
+   * combination (a mask belongs to inpaint and outpaint only, every operation
+   * but `generate` needs a source), so this carries the caller's choice through
+   * rather than re-deciding it here.
+   */
+  operation?: ManagedMediaImageOperation;
+  sourceImageBase64?: string;
+  maskImageBase64?: string;
+  transparentBackground?: boolean;
 }
 
 export interface GeneratedImageResult {
@@ -253,6 +264,14 @@ export function useMediaGeneration() {
             ...(options.size ? { size: options.size } : {}),
             ...(options.provider ? { provider: options.provider } : {}),
             ...(options.model ? { model: options.model } : {}),
+            ...(options.operation ? { operation: options.operation } : {}),
+            ...(options.sourceImageBase64
+              ? { source_image: { b64_json: options.sourceImageBase64 } }
+              : {}),
+            ...(options.maskImageBase64
+              ? { mask_image: { b64_json: options.maskImageBase64 } }
+              : {}),
+            ...(options.transparentBackground ? { transparent_background: true } : {}),
           }),
           signal: deadline.signal,
         });

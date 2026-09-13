@@ -1383,6 +1383,27 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     };
   }
 
+  // Refused before the reservation rather than inside the provider call, so a
+  // model that cannot take a source image costs the caller nothing. The catalog
+  // entry's image API decides it, which is the same evidence the availability
+  // endpoint publishes as `supports_edit`.
+  if (editContext && !supportsManagedMediaImageEdit(catalogModel.imageApi)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `${catalogModel.name} cannot take a source image. Choose an image model that supports editing.`,
+        images: [],
+        provider,
+        model: catalogModel.id,
+        latency_ms: Date.now() - startTime,
+      } satisfies ImageGenerationResponse,
+      {
+        status: 422,
+        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+      },
+    );
+  }
+
   const estimatedCostMicrousd = estimateImageCostMicrousd(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: 'web' | 'mobile' | 'desktop';
@@ -1459,12 +1480,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Starting image generation',
     );
     await markManagedUsageProviderStarted(reservation);
-
-    if (editContext && !supportsManagedMediaImageEdit(provider)) {
-      throw new Error(
-        `Image ${operation} is not supported by the ${provider} provider yet. Use the OpenAI image model for edits.`,
-      );
-    }
 
     switch (provider) {
       case 'openai':
