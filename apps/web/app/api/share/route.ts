@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -16,6 +17,11 @@ import {
   SecretRedactionIncompleteError,
 } from '@/lib/security/secrets-audit';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  isConversationSharingSchemaUnavailable,
+  toSharedSessionVisibility,
+  type SharedSessionVisibility,
+} from '@/lib/services/org-shared-session-service';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -97,7 +103,28 @@ type SharedSessionRow = {
   token: string;
   expires_at: string;
   total_messages: number;
+  visibility: string;
 };
+
+/**
+ * The workspace this share could be aimed at, or null when the owner belongs to
+ * none. The dialog renders its audience control from this rather than offering
+ * a workspace option that would answer 403.
+ */
+async function describeWorkspaceAudience(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+): Promise<{ memberCount: number } | null> {
+  if (!organizationId) return null;
+  const [row] = await db.query<{ member_count: number | string | null }>(
+    `select count(*) as member_count
+       from public.organization_members
+      where organization_id = $1`,
+    [organizationId],
+  );
+  const parsed = Number(row?.member_count ?? 0);
+  return { memberCount: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0 };
+}
 
 async function handleCreateShare(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
@@ -150,7 +177,7 @@ async function handleCreateShare(request: NextRequest) {
     `insert into shared_sessions
        (token, owner_id, title, model_id, provider, messages, total_messages, expires_at)
      values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
-     returning token, expires_at, total_messages`,
+     returning token, expires_at, total_messages, visibility`,
     [
       token,
       userId,
@@ -168,8 +195,9 @@ async function handleCreateShare(request: NextRequest) {
     throw createError.internal('Failed to create share');
   }
 
+  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
+
   if (secretMatchCount > 0) {
-    const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
     await recordAuditEvent({
       userId,
       organizationId,
@@ -198,6 +226,8 @@ async function handleCreateShare(request: NextRequest) {
       token: data.token,
       expiresAt: data.expires_at,
       messageCount: data.total_messages,
+      visibility: toSharedSessionVisibility(data.visibility),
+      workspace: await describeWorkspaceAudience(db, organizationId),
     },
     { status: 201 },
   );
@@ -209,6 +239,7 @@ type SharedSessionListRow = {
   model_id: string | null;
   provider: string | null;
   total_messages: number;
+  visibility: string;
   expires_at: string;
   created_at: string;
 };
@@ -220,14 +251,27 @@ async function handleListShares(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const rows = await db.query<SharedSessionListRow>(
-    `select token, title, model_id, provider, total_messages, expires_at, created_at
+  let rows: SharedSessionListRow[];
+  try {
+    rows = await db.query<SharedSessionListRow>(
+      `select token, title, model_id, provider, total_messages, visibility, expires_at, created_at
      from shared_sessions
      where owner_id = $1
      order by created_at desc
      limit 200`,
-    [userId],
-  );
+      [userId],
+    );
+  } catch (error) {
+    if (!isConversationSharingSchemaUnavailable(error)) throw error;
+    rows = await db.query<SharedSessionListRow>(
+      `select token, title, model_id, provider, total_messages, expires_at, created_at
+     from shared_sessions
+     where owner_id = $1
+     order by created_at desc
+     limit 200`,
+      [userId],
+    );
+  }
 
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const now = Date.now();
@@ -240,6 +284,7 @@ async function handleListShares(request: NextRequest) {
       modelId: row.model_id,
       provider: row.provider,
       messageCount: row.total_messages,
+      visibility: toSharedSessionVisibility(row.visibility) satisfies SharedSessionVisibility,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
       expired: new Date(row.expires_at).getTime() <= now,

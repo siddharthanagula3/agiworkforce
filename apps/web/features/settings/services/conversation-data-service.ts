@@ -24,6 +24,7 @@ const SharedLinkSchema = z.object({
   modelId: z.string().nullable(),
   provider: z.string().nullable(),
   messageCount: z.number().int().nonnegative(),
+  visibility: z.enum(['public', 'organization']).default('public'),
   createdAt: z.string(),
   expiresAt: z.string(),
   expired: z.boolean(),

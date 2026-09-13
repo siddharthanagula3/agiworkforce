@@ -202,7 +202,10 @@ export function SharedLinksSection() {
                   </div>
                   <div style={{ marginTop: 3, color: 'var(--text-3)', fontSize: 12 }}>
                     {share.messageCount} {share.messageCount === 1 ? 'message' : 'messages'} ·{' '}
-                    {share.expired ? 'Expired' : `Expires ${formatDate(share.expiresAt)}`}
+                    {share.visibility === 'organization'
+                      ? 'Workspace only'
+                      : 'Anyone with the link'}{' '}
+                    · {share.expired ? 'Expired' : `Expires ${formatDate(share.expiresAt)}`}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

@@ -169,6 +169,12 @@ const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   // public: it is absent from `isProtectedAppRoute`, so a signed-out visitor
   // still reaches it and is refused by the read, not by a redirect.
   '/shared-artifact(.*)',
+  // Same reason for a conversation share aimed at a workspace: the page
+  // resolves the member read through the request's session, and without this
+  // the route carries no identity context and a member sees the same 404 as a
+  // stranger. The route stays public, so a signed-out visitor still reaches it
+  // and is refused by the read rather than by a redirect.
+  '/share/(.*)',
   AGI_WORK_PATH,
   AGI_CODE_PATH,
   '/api/(.*)',

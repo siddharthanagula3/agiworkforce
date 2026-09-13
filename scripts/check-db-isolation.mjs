@@ -491,12 +491,13 @@ const ALLOWLIST = [
       '(api/settings/organization/audit) is additionally gated by isOrgAdminRole',
   },
   {
-    match: /app\/share\/\[token\]\/page\.tsx$/,
+    match: /lib\/services\/org-shared-session-service\.ts$/,
     tables: ['shared_sessions'],
     reason:
-      'reading a share by its unguessable token is the feature, same as the ' +
-      "api/share/[token]/route.ts entry above; the token is randomBytes(18).toString('base64url') " +
-      '(144 bits) minted in api/share/route.ts',
+      'two token reads with no owner predicate, each by design: the anonymous one already ' +
+      "constrains visibility = 'public' and is the public-link feature, and the member one runs " +
+      'only on the RLS-scoped adapter, where 0186 decides the answer, so repeating an owner ' +
+      'clause here would hide whether the database is enforcing the share',
   },
   {
     match: /chat\/conversations\/\[id\]\/messages\/lib\/index-artifacts\.ts$/,

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileCode2, FolderGit2, Plug, Share2, Users } from 'lucide-react';
+import { FileCode2, FolderGit2, MessagesSquare, Plug, Share2, Users } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
@@ -12,6 +12,7 @@ import {
   useShareProjectWithOrganization,
   useUnshareConnectorFromOrganization,
   useUnshareArtifactFromOrganization,
+  useUnshareConversationFromOrganization,
   useUnshareProjectFromOrganization,
   type OrgSharedOverview,
 } from '../hooks/use-settings-queries';
@@ -358,6 +359,86 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
   );
 }
 
+function formatExpiry(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'an unknown date';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
+  const unshareConversation = useUnshareConversationFromOrganization();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const conversations = overview.sharedConversations ?? [];
+
+  return (
+    <SectionCard
+      icon={<MessagesSquare size={14} aria-hidden />}
+      title="Shared conversations"
+      description="A conversation shared here opens for every member without a public link. It is a read-only snapshot that still expires on its own clock, and only the person who shared it can change or withdraw it."
+    >
+      {conversations.length === 0 ? (
+        <Empty>
+          No conversations are shared yet. Share one from a chat and choose your workspace.
+        </Empty>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+          {conversations.map((conversation) => {
+            const name = conversation.title || 'Untitled conversation';
+            const canWithdraw =
+              overview.canManageSharing || conversation.ownerUserId === overview.currentUserId;
+            const expired = new Date(conversation.expiresAt).getTime() <= Date.now();
+            return (
+              <li
+                key={conversation.sharedSessionId}
+                style={{
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {conversation.messageCount}{' '}
+                    {conversation.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                    {conversation.visibility === 'organization'
+                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      : 'Also reachable by public link'}{' '}
+                    · {expired ? 'Expired' : `Expires ${formatExpiry(conversation.expiresAt)}`}
+                  </div>
+                </div>
+                {canWithdraw ? (
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    disabled={unshareConversation.isPending}
+                    onClick={() =>
+                      confirm({
+                        title: `Stop sharing ${name}?`,
+                        description: `${everyoneHere(overview.members.length)} loses access to this transcript, and any workspace link to it stops opening. It is not reopened to the public in its place: it stays yours until you choose an audience again from the share dialog.`,
+                        confirmLabel: 'Stop sharing',
+                        onConfirm: () => unshareConversation.mutate(conversation.sharedSessionId),
+                      })
+                    }
+                  >
+                    Stop sharing
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {confirmDialog}
+    </SectionCard>
+  );
+}
+
 function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
   const shareConnector = useShareConnectorWithOrganization();
@@ -506,8 +587,8 @@ export function OrganizationSharingSection() {
             Shared with your organization
           </div>
           <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
-            You are not in an organization yet. Create one from the Team section to share projects
-            and connectors with your members.
+            You are not in an organization yet. Create one from the Team section to share projects,
+            conversations, artifacts and connectors with your members.
           </div>
         </div>
       </section>
@@ -532,6 +613,7 @@ export function OrganizationSharingSection() {
       </SectionCard>
 
       <SharedProjects overview={overview} />
+      <SharedConversations overview={overview} />
       <SharedArtifacts overview={overview} />
       <SharedConnectors overview={overview} />
     </div>

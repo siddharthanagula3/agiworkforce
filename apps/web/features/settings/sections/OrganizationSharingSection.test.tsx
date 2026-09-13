@@ -11,6 +11,7 @@ const {
   mockShareConnector,
   mockUnshareConnector,
   mockUnshareArtifact,
+  mockUnshareConversation,
 } = vi.hoisted(() => ({
   mockOverview: vi.fn(),
   mockShareProject: vi.fn(),
@@ -19,6 +20,7 @@ const {
   mockShareConnector: vi.fn(),
   mockUnshareConnector: vi.fn(),
   mockUnshareArtifact: vi.fn(),
+  mockUnshareConversation: vi.fn(),
 }));
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'token') }));
@@ -31,6 +33,10 @@ vi.mock('../hooks/use-settings-queries', () => ({
   useShareConnectorWithOrganization: () => ({ mutate: mockShareConnector, isPending: false }),
   useUnshareConnectorFromOrganization: () => ({ mutate: mockUnshareConnector, isPending: false }),
   useUnshareArtifactFromOrganization: () => ({ mutate: mockUnshareArtifact, isPending: false }),
+  useUnshareConversationFromOrganization: () => ({
+    mutate: mockUnshareConversation,
+    isPending: false,
+  }),
 }));
 
 import { OrganizationSharingSection } from './OrganizationSharingSection';
@@ -38,6 +44,8 @@ import { OrganizationSharingSection } from './OrganizationSharingSection';
 const ORG = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 const ARTIFACT = '55555555-5555-4555-8555-555555555555';
+const CONVERSATION = '66666666-6666-4666-8666-666666666666';
+const FAR_FUTURE = '2099-01-03T00:00:00.000Z';
 
 function renderSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -84,6 +92,20 @@ function overview(overrides: Record<string, unknown> = {}) {
           transport: 'sse',
           ownerUserId: 'user-owner',
           sharedByUserId: 'user-owner',
+          createdAt: '2026-01-03T00:00:00.000Z',
+        },
+      ],
+      sharedConversations: [
+        {
+          organizationId: ORG,
+          sharedSessionId: CONVERSATION,
+          token: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+          title: 'Pricing review',
+          messageCount: 12,
+          visibility: 'organization',
+          ownerUserId: 'user-owner',
+          sharedByUserId: 'user-owner',
+          expiresAt: FAR_FUTURE,
           createdAt: '2026-01-03T00:00:00.000Z',
         },
       ],
@@ -287,8 +309,8 @@ describe('shared artifacts', () => {
 
     renderSection();
 
-    expect(await screen.findByText('Quarterly plan')).toBeInTheDocument();
-    expect(screen.getByText(/Workspace only/)).toBeInTheDocument();
+    const card = (await screen.findByText('Quarterly plan')).closest('li') as HTMLElement;
+    expect(card.textContent).toContain('Workspace only');
   });
 
   it('names who loses access before it stops sharing, and does not promise a public link', async () => {
@@ -342,5 +364,84 @@ describe('shared artifacts', () => {
     renderSection();
 
     expect(await screen.findByText(/No artifacts are shared yet/)).toBeInTheDocument();
+  });
+});
+
+describe('shared conversations', () => {
+  it('lists what the workspace can open, with the snapshot size and its expiry', async () => {
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    expect(await screen.findByText('Pricing review')).toBeInTheDocument();
+    const card = (await screen.findByText('Pricing review')).closest('li') as HTMLElement;
+    expect(card.textContent).toContain('12 messages');
+    expect(card.textContent).toContain('Workspace only');
+    expect(card.textContent).toContain('Expires');
+  });
+
+  it('names who loses access before it stops sharing, and does not reopen the link', async () => {
+    mockOverview.mockReturnValue(overview());
+    const user = userEvent.setup();
+
+    renderSection();
+
+    const card = (await screen.findByText('Pricing review')).closest('li') as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Stop sharing' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Stop sharing Pricing review?');
+    expect(dialog).toHaveTextContent('loses access to this transcript');
+    expect(dialog).toHaveTextContent('not reopened to the public in its place');
+    expect(mockUnshareConversation).not.toHaveBeenCalled();
+  });
+
+  it('withdraws the share only after the confirmation is accepted', async () => {
+    mockOverview.mockReturnValue(overview());
+    const user = userEvent.setup();
+
+    renderSection();
+
+    const card = (await screen.findByText('Pricing review')).closest('li') as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Stop sharing' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Stop sharing' }));
+
+    await waitFor(() => expect(mockUnshareConversation).toHaveBeenCalledWith(CONVERSATION));
+  });
+
+  it('says an expired share is expired rather than showing a date that has passed', async () => {
+    mockOverview.mockReturnValue(
+      overview({
+        sharedConversations: [
+          {
+            organizationId: ORG,
+            sharedSessionId: CONVERSATION,
+            token: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+            title: 'Pricing review',
+            messageCount: 12,
+            visibility: 'organization',
+            ownerUserId: 'user-owner',
+            sharedByUserId: 'user-owner',
+            expiresAt: '2020-01-03T00:00:00.000Z',
+            createdAt: '2020-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+
+    renderSection();
+
+    const card = (await screen.findByText('Pricing review')).closest('li') as HTMLElement;
+    expect(card.textContent).toContain('Expired');
+  });
+
+  it('tells a workspace with nothing shared where conversations come from', async () => {
+    mockOverview.mockReturnValue(overview({ sharedConversations: [] }));
+
+    renderSection();
+
+    expect(await screen.findByText(/No conversations are shared yet/)).toBeInTheDocument();
   });
 });

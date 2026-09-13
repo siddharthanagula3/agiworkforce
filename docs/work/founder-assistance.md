@@ -537,7 +537,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0185 in production before the next deploy
+## [Database] Apply migrations 0183 to 0186 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -548,18 +548,25 @@ refuses to promote while a draft migration is unapplied.
    0175 to 0182 batch used: `pnpm db:migrate -- apply --target branch`, then
    `pnpm db:migrate -- apply --target production --confirm-production`, with
    the production URL exported for the command.
-2. The three drafts: `0183_video_generation_completion_notice.sql` (a claim
+2. The four drafts: `0183_video_generation_completion_notice.sql` (a claim
    column so a finished video job is announced once), `0184_organization_shared_artifacts.sql`
-   (artifact visibility plus the workspace grant table) and
+   (artifact visibility plus the workspace grant table),
    `0185_org_shared_artifact_policy_recursion.sql` (splits the grant policy per
-   command; without it every publish raises 42P17). Apply all three together.
+   command; without it every publish raises 42P17) and
+   `0186_organization_shared_sessions.sql` (the same two-part shape for
+   conversation shares: a `visibility` column on `shared_sessions`, the
+   `organization_shared_sessions` grant table, and row level security on
+   `shared_sessions` itself with SELECT and UPDATE granted to `app_rls`, so a
+   member read is decided by a policy rather than by a route). Apply all four
+   together.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0185 as applied; the deploy job's migration verify step passes; a video
-job completion produces one notice; an artifact can be shared with the
-workspace and read by a member.
+lists 0186 as applied; the deploy job's migration verify step passes; a video
+job completion produces one notice; an artifact and a conversation can each be
+shared with the workspace, read by a member, and refused to a signed-out
+visitor holding the link.
 **What remains after founder action** Nothing in code.
 **Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
