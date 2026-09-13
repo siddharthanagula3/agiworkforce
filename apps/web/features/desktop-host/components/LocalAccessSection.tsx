@@ -5,6 +5,9 @@ import {
   ALWAYS_REFUSED_PROGRAMS,
   DesktopRuntimeError,
   EMPTY_SHELL_POLICY,
+  LOCAL_MODEL_SERVERS,
+  type LocalModelServerId,
+  type LocalModelSettings,
   type ShellPolicy,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
@@ -14,10 +17,13 @@ import {
   listWorkspaceRoots,
   pickWorkspaceRoot,
   readLocalCommandPolicy,
+  readLocalModelSettings,
   revealWorkspaceRoot,
   revokeWorkspaceRoot,
   writeLocalCommandPolicy,
+  writeLocalModelSettings,
 } from '../lib/runtime-client';
+import { useLocalModels } from '../hooks/use-local-models';
 
 const HEADING = 'Local access';
 const FOLDERS_HEADING = 'Folders';
@@ -49,11 +55,125 @@ const FIELD_CLASS =
   'min-h-[32px] w-40 rounded-md border border-border/60 bg-background px-3 py-1 font-mono text-xs text-foreground outline-none focus-visible:border-[var(--chat-accent-primary)]';
 const SUB_HEADING_CLASS = 'text-xs font-medium uppercase tracking-wider text-muted-foreground';
 
+const MODELS_HEADING = 'Local models';
+const MODELS_INTRO =
+  'Models already running on this Mac through Ollama or LM Studio. A chat on one of them is answered here: nothing in it reaches AGI Cloud or any provider, and it uses none of your plan.';
+const MODELS_ALLOW_LABEL = 'Allow local models';
+const MODELS_ALLOWED_TEXT = 'Allowed. The composer lists them under "On this device".';
+const MODELS_NOT_RUNNING = 'Not running';
+const MODELS_RUNNING = 'Running';
+const MODELS_URL_LABEL = 'Address';
+const MODELS_URL_FOOTNOTE =
+  'Only a localhost address is accepted. A model reached over the network would not be local, so the Local label would be untrue.';
+const MODELS_URL_SAVE_FAILED = 'That address was not saved.';
+const MODEL_URL_FIELD_CLASS =
+  'min-h-[32px] w-56 rounded-md border border-border/60 bg-background px-3 py-1 font-mono text-xs text-foreground outline-none focus-visible:border-[var(--chat-accent-primary)]';
+
 function messageFor(error: unknown, fallback: string): string | null {
   if (error instanceof DesktopRuntimeError) {
     return error.code === 'cancelled' ? null : `${fallback} ${error.message}`;
   }
   return fallback;
+}
+
+function LocalModelsPanel() {
+  const models = useLocalModels(true);
+  const [settings, setSettings] = useState<LocalModelSettings | null>(null);
+  const [drafts, setDrafts] = useState<Partial<Record<LocalModelServerId, string>>>({});
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  useEffect(() => {
+    readLocalModelSettings()
+      .then(setSettings)
+      .catch(() => setSettings(null));
+  }, []);
+
+  const saveBaseUrl = useCallback(
+    async (serverId: LocalModelServerId, value: string) => {
+      try {
+        const next = await writeLocalModelSettings({
+          baseUrls: { [serverId]: value } as LocalModelSettings['baseUrls'],
+        });
+        setSettings(next);
+        setDrafts((current) => ({ ...current, [serverId]: undefined }));
+        setUrlError(null);
+        await models.refresh();
+      } catch (cause) {
+        setUrlError(messageFor(cause, MODELS_URL_SAVE_FAILED));
+      }
+    },
+    [models],
+  );
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border/40 pt-4">
+      <div>
+        <h4 className={SUB_HEADING_CLASS}>{MODELS_HEADING}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">{MODELS_INTRO}</p>
+      </div>
+
+      {models.granted ? (
+        <p className="text-xs text-muted-foreground">{MODELS_ALLOWED_TEXT}</p>
+      ) : (
+        <div>
+          <button type="button" className={BUTTON_CLASS} onClick={() => void models.grant()}>
+            {MODELS_ALLOW_LABEL}
+          </button>
+        </div>
+      )}
+
+      {models.error ? (
+        <p role="alert" className="text-xs text-danger">
+          {models.error}
+        </p>
+      ) : null}
+
+      <ul className="flex list-none flex-col gap-2 p-0">
+        {LOCAL_MODEL_SERVERS.map((serverId) => {
+          const server = models.servers.find((candidate) => candidate.id === serverId);
+          const baseUrl = settings?.baseUrls[serverId] ?? server?.baseUrl ?? '';
+          const draft = drafts[serverId];
+          return (
+            <li
+              key={serverId}
+              className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border/40 p-4"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{server?.label ?? serverId}</p>
+                <p className="text-xs text-muted-foreground">
+                  {server?.reachable
+                    ? `${MODELS_RUNNING} · ${server.modelCount} model${server.modelCount === 1 ? '' : 's'}`
+                    : MODELS_NOT_RUNNING}
+                </p>
+              </div>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {MODELS_URL_LABEL}
+                <input
+                  className={MODEL_URL_FIELD_CLASS}
+                  value={draft ?? baseUrl}
+                  onChange={(event) =>
+                    setDrafts((current) => ({ ...current, [serverId]: event.target.value }))
+                  }
+                  onBlur={(event) => {
+                    if (event.target.value === baseUrl) return;
+                    void saveBaseUrl(serverId, event.target.value);
+                  }}
+                />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+
+      {urlError ? (
+        <p role="alert" className="text-xs text-danger">
+          {urlError}
+        </p>
+      ) : null}
+
+      <p className="text-xs text-muted-foreground">{MODELS_URL_FOOTNOTE}</p>
+    </div>
+  );
 }
 
 export function LocalAccessSection() {
@@ -298,6 +418,8 @@ export function LocalAccessSection() {
 
         <p className="text-xs text-muted-foreground">{COMMANDS_FOOTNOTE}</p>
       </div>
+
+      <LocalModelsPanel />
     </section>
   );
 }

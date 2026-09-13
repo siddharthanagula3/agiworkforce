@@ -3,6 +3,7 @@ export { conversationDeepLink, deepLinkDestination } from './lib/deep-links';
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
+  cancelLocalChat,
   cancelLocalCommand,
   capturePairedBrowser,
   clickInPairedBrowser,
@@ -17,22 +18,31 @@ export {
   typeInPairedBrowser,
   unpairBrowser,
   clipboardAttachments,
+  listLocalModels,
   listWorkspaceFiles,
   listWorkspaceRoots,
   openWorkspacePath,
   pickWorkspaceRoot,
   readHostClipboard,
   readLocalCommandPolicy,
+  readLocalModelSettings,
+  readLocalModelSnapshot,
   readWorkspaceFile,
   readWorkspaceFileBytes,
   revealWorkspacePath,
   revealWorkspaceRoot,
   revokeWorkspaceRoot,
+  startLocalChat,
   startLocalCommand,
   writeLocalCommandPolicy,
+  writeLocalModelSettings,
+  type LocalChatDelta,
+  type LocalChatRun,
   type LocalCommandOutput,
   type LocalCommandRun,
 } from './lib/runtime-client';
+export { readSelectedLocalModel, useLocalModelSelection } from './lib/local-model-selection';
+export { useLocalModels, type LocalModelsState } from './hooks/use-local-models';
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
