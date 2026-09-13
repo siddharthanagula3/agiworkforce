@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import { resolveLiveVoiceDelegationTools } from '@/lib/voice/live-voice-tools';
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -144,7 +145,13 @@ describe('POST /api/voice/live/sessions', () => {
     expect(sent.session.delegation.responses.model).toBe(
       BACKEND_MODEL.apiModelId ?? BACKEND_MODEL.id,
     );
-    expect(sent.session.delegation.responses.tools).toEqual([{ type: 'web_search' }]);
+    // Tied to the resolver, not to a copy of its answer: the delegated turn runs
+    // inside the provider, so a tool shape written out here would drift from the
+    // one the chat path sends and take the whole session down with it.
+    expect(sent.session.delegation.responses.tools).toEqual(
+      resolveLiveVoiceDelegationTools(BACKEND_MODEL),
+    );
+    expect(sent.session.delegation.responses.tools.length).toBeGreaterThan(0);
     expect(sent.transport).toEqual({ type: 'webrtc', sdp: OFFER });
     expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
       expect.objectContaining({
