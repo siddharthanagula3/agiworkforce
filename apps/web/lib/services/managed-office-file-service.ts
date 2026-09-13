@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   Footer,
   HeadingLevel,
@@ -12,10 +13,17 @@ import {
   PageNumber,
   PageOrientation,
   Paragraph,
+  Table,
+  TableCell,
+  TableRow,
   TextRun,
+  WidthType,
 } from 'docx';
+import { jsPDF } from 'jspdf';
 import PptxGenJS from 'pptxgenjs';
 import { z } from 'zod';
+
+import { buildWorkbook, type WorkbookSheet } from './managed-workbook-builder';
 
 import { MANAGED_OFFICE_FILE_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 
@@ -27,6 +35,9 @@ export function isManagedOfficeFileTool(name: string): boolean {
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const PDF_MIME_TYPE = 'application/pdf';
+const CSV_MIME_TYPE = 'text/csv';
 
 const FileNameSchema = z
   .string()
@@ -51,6 +62,34 @@ const SlideSchema = z.object({
   speaker_notes: z.string().trim().max(5_000).optional(),
 });
 
+const CellSchema = z.union([z.string().max(2_000), z.number().finite()]);
+
+const ChartSchema = z.object({
+  type: z.enum(['bar', 'line', 'pie']),
+  title: z.string().trim().min(1).max(200),
+  category_column: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{1,3}$/),
+  value_column: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{1,3}$/),
+  first_row: z.number().int().min(1).max(100_000),
+  last_row: z.number().int().min(1).max(100_000),
+});
+
+const SheetSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(31)
+    .refine((name) => !/[\\/?*[\]:]/.test(name)),
+  rows: z.array(z.array(CellSchema).max(200)).min(1).max(20_000),
+  chart: ChartSchema.optional(),
+});
+
 const ManagedOfficeFileInputSchema = z.discriminatedUnion('format', [
   z.object({
     format: z.literal('docx'),
@@ -64,6 +103,24 @@ const ManagedOfficeFileInputSchema = z.discriminatedUnion('format', [
     title: z.string().trim().min(1).max(200),
     slides: z.array(SlideSchema).min(1).max(40),
   }),
+  z.object({
+    format: z.literal('xlsx'),
+    filename: FileNameSchema,
+    title: z.string().trim().min(1).max(200),
+    sheets: z.array(SheetSchema).min(1).max(20),
+  }),
+  z.object({
+    format: z.literal('pdf'),
+    filename: FileNameSchema,
+    title: z.string().trim().min(1).max(200),
+    content: z.string().min(1).max(100_000),
+  }),
+  z.object({
+    format: z.literal('csv'),
+    filename: FileNameSchema,
+    title: z.string().trim().min(1).max(200),
+    rows: z.array(z.array(CellSchema).max(200)).min(1).max(20_000),
+  }),
 ]);
 
 type ManagedOfficeFileInput = z.infer<typeof ManagedOfficeFileInputSchema>;
@@ -72,7 +129,12 @@ export type GeneratedManagedOfficeFile = {
   ok: true;
   data: Buffer;
   filename: string;
-  mimeType: typeof DOCX_MIME_TYPE | typeof PPTX_MIME_TYPE;
+  mimeType:
+    | typeof DOCX_MIME_TYPE
+    | typeof PPTX_MIME_TYPE
+    | typeof XLSX_MIME_TYPE
+    | typeof PDF_MIME_TYPE
+    | typeof CSV_MIME_TYPE;
 };
 
 export type ManagedOfficeFileGenerationFailure = {
@@ -91,19 +153,19 @@ export function createManagedOfficeFileToolDefinition() {
     function: {
       name: MANAGED_OFFICE_FILE_TOOL_NAME,
       description:
-        'Create and attach an editable Microsoft Word (.docx) document or PowerPoint (.pptx) presentation. Use this when the user asks for an Office file. For DOCX provide markdown-like content; for PPTX provide an ordered slide outline.',
+        'Create and attach a real document file: Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDF (.pdf) or CSV (.csv). Use this whenever the user asks for a file of one of those kinds, instead of printing the content in the reply. DOCX and PDF take markdown-like content, including pipe tables; PPTX takes an ordered slide outline; XLSX takes named sheets of rows where a cell beginning with = is a real formula, and a sheet may carry a chart; CSV takes rows.',
       parameters: {
         type: 'object',
         properties: {
           format: {
             type: 'string',
-            enum: ['docx', 'pptx'],
-            description: 'The Office file format to create.',
+            enum: ['docx', 'pptx', 'xlsx', 'pdf', 'csv'],
+            description: 'The file format to create.',
           },
           filename: {
             type: 'string',
             maxLength: 120,
-            description: 'Download name only, such as report.docx or launch-plan.pptx.',
+            description: 'Download name only, such as report.docx or quarterly.xlsx.',
           },
           title: {
             type: 'string',
@@ -113,7 +175,8 @@ export function createManagedOfficeFileToolDefinition() {
           content: {
             type: 'string',
             maxLength: 100_000,
-            description: 'DOCX only: document content with optional # headings and - bullet lines.',
+            description:
+              'DOCX and PDF only: document content with optional # headings, - bullet lines, and | pipe | tables |.',
           },
           slides: {
             type: 'array',
@@ -135,6 +198,60 @@ export function createManagedOfficeFileToolDefinition() {
               required: ['title', 'bullets'],
               additionalProperties: false,
             },
+          },
+          sheets: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 20,
+            description: 'XLSX only: one entry per worksheet, in tab order.',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', maxLength: 31, description: 'Worksheet tab name.' },
+                rows: {
+                  type: 'array',
+                  minItems: 1,
+                  description:
+                    'Rows of cells from row 1. A string starting with = is written as a real formula, such as =SUM(B2:B5).',
+                  items: {
+                    type: 'array',
+                    items: { type: ['string', 'number'] },
+                  },
+                },
+                chart: {
+                  type: 'object',
+                  description: 'Optional chart drawn on this worksheet from its own cells.',
+                  properties: {
+                    type: { type: 'string', enum: ['bar', 'line', 'pie'] },
+                    title: { type: 'string', maxLength: 200 },
+                    category_column: {
+                      type: 'string',
+                      description: 'Column letter of the labels.',
+                    },
+                    value_column: { type: 'string', description: 'Column letter of the values.' },
+                    first_row: { type: 'integer', description: 'First data row number.' },
+                    last_row: { type: 'integer', description: 'Last data row number.' },
+                  },
+                  required: [
+                    'type',
+                    'title',
+                    'category_column',
+                    'value_column',
+                    'first_row',
+                    'last_row',
+                  ],
+                  additionalProperties: false,
+                },
+              },
+              required: ['name', 'rows'],
+              additionalProperties: false,
+            },
+          },
+          rows: {
+            type: 'array',
+            minItems: 1,
+            description: 'CSV only: rows of cells, the first row being the header.',
+            items: { type: 'array', items: { type: ['string', 'number'] } },
           },
         },
         required: ['format', 'filename', 'title'],
@@ -167,8 +284,59 @@ function stripInlineMarkdown(value: string): string {
     .trim();
 }
 
-function documentParagraphs(title: string, content: string): Paragraph[] {
-  const paragraphs: Paragraph[] = [
+function isTableRow(line: string): boolean {
+  return line.startsWith('|') && line.endsWith('|') && line.length > 2;
+}
+
+function isTableDivider(line: string): boolean {
+  return isTableRow(line) && /^\|[\s:|-]+\|$/.test(line);
+}
+
+function tableCells(line: string): string[] {
+  return line
+    .slice(1, -1)
+    .split('|')
+    .map((cell) => stripInlineMarkdown(cell));
+}
+
+const TABLE_BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' } as const;
+
+function documentTable(rows: string[][]): Table {
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: TABLE_BORDER,
+      bottom: TABLE_BORDER,
+      left: TABLE_BORDER,
+      right: TABLE_BORDER,
+      insideHorizontal: TABLE_BORDER,
+      insideVertical: TABLE_BORDER,
+    },
+    rows: rows.map(
+      (cells, rowIndex) =>
+        new TableRow({
+          tableHeader: rowIndex === 0,
+          children: Array.from({ length: columnCount }, (_, columnIndex) => {
+            const text = cells[columnIndex] ?? '';
+            return new TableCell({
+              margins: { top: 60, bottom: 60, left: 120, right: 120 },
+              ...(rowIndex === 0 ? { shading: { fill: 'EDF2F9' } } : {}),
+              children: [
+                new Paragraph({
+                  spacing: { after: 0 },
+                  children: [new TextRun({ text, bold: rowIndex === 0 })],
+                }),
+              ],
+            });
+          }),
+        }),
+    ),
+  });
+}
+
+function documentParagraphs(title: string, content: string): (Paragraph | Table)[] {
+  const paragraphs: (Paragraph | Table)[] = [
     new Paragraph({
       text: title,
       heading: HeadingLevel.TITLE,
@@ -176,8 +344,25 @@ function documentParagraphs(title: string, content: string): Paragraph[] {
     }),
   ];
 
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
+  const lines = content.split(/\r?\n/).map((line) => line.trim());
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+
+    if (isTableRow(line)) {
+      const rows: string[][] = [];
+      while (index < lines.length && isTableRow(lines[index] ?? '')) {
+        const row = lines[index] ?? '';
+        if (!isTableDivider(row)) rows.push(tableCells(row));
+        index += 1;
+      }
+      index -= 1;
+      if (rows.length > 0) {
+        paragraphs.push(documentTable(rows));
+        paragraphs.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+      }
+      continue;
+    }
+
     if (!line) {
       paragraphs.push(new Paragraph({ text: '', spacing: { after: 100 } }));
       continue;
@@ -423,6 +608,88 @@ async function generatePptx(input: Extract<ManagedOfficeFileInput, { format: 'pp
   return Buffer.from(output);
 }
 
+function csvField(value: string | number): string {
+  const text = typeof value === 'number' ? String(value) : value;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function generateCsv(rows: (string | number)[][]): Buffer {
+  return Buffer.from(`${rows.map((row) => row.map(csvField).join(',')).join('\r\n')}\r\n`, 'utf8');
+}
+
+function generateXlsx(input: Extract<ManagedOfficeFileInput, { format: 'xlsx' }>): Promise<Buffer> {
+  const sheets: WorkbookSheet[] = input.sheets.map((sheet) => ({
+    name: sheet.name,
+    rows: sheet.rows,
+    ...(sheet.chart
+      ? {
+          chart: {
+            type: sheet.chart.type,
+            title: sheet.chart.title,
+            categoryColumn: sheet.chart.category_column.toUpperCase(),
+            valueColumn: sheet.chart.value_column.toUpperCase(),
+            firstRow: Math.min(sheet.chart.first_row, sheet.chart.last_row),
+            lastRow: Math.max(sheet.chart.first_row, sheet.chart.last_row),
+          },
+        }
+      : {}),
+  }));
+  return buildWorkbook(sheets);
+}
+
+const PDF_MARGIN_MM = 20;
+const PDF_LINE_MM = 6;
+const PDF_PAGE_HEIGHT_MM = 297;
+
+function generatePdf(input: Extract<ManagedOfficeFileInput, { format: 'pdf' }>): Buffer {
+  const document = new jsPDF({ unit: 'mm', format: 'a4' });
+  const width = document.internal.pageSize.getWidth() - PDF_MARGIN_MM * 2;
+  let cursor = PDF_MARGIN_MM + 4;
+
+  const write = (text: string, size: number, bold: boolean): void => {
+    document.setFont('helvetica', bold ? 'bold' : 'normal');
+    document.setFontSize(size);
+    for (const line of document.splitTextToSize(text, width) as string[]) {
+      if (cursor > PDF_PAGE_HEIGHT_MM - PDF_MARGIN_MM) {
+        document.addPage();
+        cursor = PDF_MARGIN_MM;
+      }
+      document.text(line, PDF_MARGIN_MM, cursor);
+      cursor += size >= 18 ? PDF_LINE_MM + 4 : PDF_LINE_MM;
+    }
+  };
+
+  write(input.title, 20, true);
+  cursor += 2;
+
+  for (const rawLine of input.content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) {
+      cursor += PDF_LINE_MM / 2;
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      cursor += 2;
+      write(stripInlineMarkdown(heading[2] ?? ''), 15 - (heading[1]?.length ?? 1), true);
+      continue;
+    }
+    const bullet = /^(?:[-*+]\s+|\d+[.)]\s+)(.+)$/.exec(line);
+    if (bullet) {
+      write(`\u2022 ${stripInlineMarkdown(bullet[1] ?? '')}`, 11, false);
+      continue;
+    }
+    if (isTableRow(line)) {
+      if (isTableDivider(line)) continue;
+      write(tableCells(line).join('   |   '), 11, false);
+      continue;
+    }
+    write(stripInlineMarkdown(line), 11, false);
+  }
+
+  return Buffer.from(document.output('arraybuffer'));
+}
+
 export async function generateManagedOfficeFile(
   value: unknown,
 ): Promise<ManagedOfficeFileGenerationResult> {
@@ -445,25 +712,48 @@ export async function generateManagedOfficeFile(
   }
 
   try {
-    if (parsed.data.format === 'docx') {
-      return {
-        ok: true,
-        data: await generateDocx(parsed.data),
-        filename,
-        mimeType: DOCX_MIME_TYPE,
-      };
+    switch (parsed.data.format) {
+      case 'docx':
+        return {
+          ok: true,
+          data: await generateDocx(parsed.data),
+          filename,
+          mimeType: DOCX_MIME_TYPE,
+        };
+      case 'pptx':
+        return {
+          ok: true,
+          data: await generatePptx(parsed.data),
+          filename,
+          mimeType: PPTX_MIME_TYPE,
+        };
+      case 'xlsx':
+        return {
+          ok: true,
+          data: await generateXlsx(parsed.data),
+          filename,
+          mimeType: XLSX_MIME_TYPE,
+        };
+      case 'pdf':
+        return {
+          ok: true,
+          data: generatePdf(parsed.data),
+          filename,
+          mimeType: PDF_MIME_TYPE,
+        };
+      case 'csv':
+        return {
+          ok: true,
+          data: generateCsv(parsed.data.rows),
+          filename,
+          mimeType: CSV_MIME_TYPE,
+        };
     }
-    return {
-      ok: true,
-      data: await generatePptx(parsed.data),
-      filename,
-      mimeType: PPTX_MIME_TYPE,
-    };
   } catch {
     return {
       ok: false,
       code: 'office_file_generation_failed',
-      message: 'The Office file could not be created.',
+      message: 'The file could not be created.',
     };
   }
 }

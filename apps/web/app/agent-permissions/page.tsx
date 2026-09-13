@@ -51,8 +51,8 @@ const NO_ASK: { k: string; v: string }[] = [
     v: "Writes inside the conversation's own sandbox workspace. Not your filesystem, not your cloud storage. A file write is classified as irreversible; a folder create is reversible.",
   },
   {
-    k: 'Create an Office file',
-    v: 'Generates a Word document (.docx) or a PowerPoint deck (.pptx) on our servers and attaches it to the conversation for you to download. Those two formats are the whole of it: no other Office format, and no editing of a file you already have. Reversible, no egress path.',
+    k: 'Create a document file',
+    v: 'Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path.',
   },
   {
     k: 'Run a skill',

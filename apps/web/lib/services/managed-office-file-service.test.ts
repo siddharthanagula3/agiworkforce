@@ -17,6 +17,8 @@ describe('managed Office file service', () => {
     expect(definition.function.name).toBe('create_office_file');
     expect(serialized).toContain('docx');
     expect(serialized).toContain('pptx');
+    expect(serialized).toContain('xlsx');
+    expect(serialized).toContain('csv');
     expect(serialized).not.toMatch(/file[_ ]?path|directory|host path/i);
   });
 
@@ -80,6 +82,133 @@ describe('managed Office file service', () => {
     expect(numberingXml).toMatch(/<w:numFmt w:val="bullet"/);
     expect(numberingXml).toMatch(/<w:ind w:left="720" w:hanging="360"/);
     expect(numberingXml).toMatch(/<w:spacing w:after="160" w:line="280"/);
+  });
+
+  it('turns a pipe table in DOCX content into a real Word table', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'docx',
+      filename: 'cost-report',
+      title: 'Cost report',
+      content: [
+        '# Vendors',
+        '',
+        '| Vendor | Region | Annual cost |',
+        '| --- | --- | --- |',
+        '| Halcyon Supply | EMEA | 88400 |',
+        '| Ridgeway Labs | APAC | 13975 |',
+        '',
+        'Totals exclude tax.',
+      ].join('\n'),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const archive = await JSZip.loadAsync(result.data);
+    const documentXml = (await archive.file('word/document.xml')?.async('string')) ?? '';
+    const table = /<w:tbl>[\s\S]*?<\/w:tbl>/.exec(documentXml)?.[0] ?? '';
+
+    expect(table).not.toBe('');
+    expect(table.match(/<w:tr\b/g)).toHaveLength(3);
+    expect(table).toContain('Annual cost');
+    expect(table).toContain('Ridgeway Labs');
+    expect(table).not.toContain('---');
+    expect(documentXml).toContain('Totals exclude tax.');
+  });
+
+  it('creates an XLSX workbook with named sheets, real formulas and a chart part', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'quarterly',
+      title: 'Quarterly numbers',
+      sheets: [
+        {
+          name: 'Sales',
+          rows: [
+            ['Month', 'Units', 'Price', 'Total'],
+            ['Jan', 120, 12.5, '=B2*C2'],
+            ['Feb', 140, 12.5, '=B3*C3'],
+            ['Grand total', '', '', '=SUM(D2:D3)'],
+          ],
+        },
+        {
+          name: 'Regions',
+          rows: [
+            ['Region', 'Revenue'],
+            ['North', 4100],
+            ['South', 5200],
+          ],
+          chart: {
+            type: 'bar',
+            title: 'Revenue by region',
+            category_column: 'A',
+            value_column: 'B',
+            first_row: 2,
+            last_row: 3,
+          },
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.filename).toBe('quarterly.xlsx');
+    expect(result.mimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+
+    const archive = await JSZip.loadAsync(result.data);
+    const workbook = (await archive.file('xl/workbook.xml')?.async('string')) ?? '';
+    expect(workbook).toContain('name="Sales"');
+    expect(workbook).toContain('name="Regions"');
+
+    const sales = (await archive.file('xl/worksheets/sheet1.xml')?.async('string')) ?? '';
+    expect(sales).toContain('<f>B2*C2</f>');
+    expect(sales).toContain('<f>SUM(D2:D3)</f>');
+    expect(sales).toContain('<t xml:space="preserve">Month</t>');
+
+    const chart = (await archive.file('xl/charts/chart1.xml')?.async('string')) ?? null;
+    expect(chart).toBeNull();
+    const regionsChart = (await archive.file('xl/charts/chart2.xml')?.async('string')) ?? '';
+    expect(regionsChart).toContain('<c:barChart>');
+    expect(regionsChart).toContain('Revenue by region');
+    expect(regionsChart).toContain('&apos;Regions&apos;!$A$2:$A$3');
+    expect(await archive.file('xl/drawings/drawing2.xml')?.async('string')).toContain(
+      'graphicFrame',
+    );
+    const regions = (await archive.file('xl/worksheets/sheet2.xml')?.async('string')) ?? '';
+    expect(regions).toContain('<drawing r:id="rId1"/>');
+  });
+
+  it('creates a real PDF and a real CSV', async () => {
+    const pdf = await generateManagedOfficeFile({
+      format: 'pdf',
+      filename: 'summary',
+      title: 'Q3 summary',
+      content: '# Results\n\nRevenue grew.\n\n- Retention held\n',
+    });
+
+    expect(pdf.ok).toBe(true);
+    if (!pdf.ok) return;
+    expect(pdf.filename).toBe('summary.pdf');
+    expect(pdf.mimeType).toBe('application/pdf');
+    expect(pdf.data.subarray(0, 5).toString()).toBe('%PDF-');
+
+    const csv = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'regions',
+      title: 'Regions',
+      rows: [
+        ['region', 'revenue'],
+        ['north, upper', 4100],
+      ],
+    });
+
+    expect(csv.ok).toBe(true);
+    if (!csv.ok) return;
+    expect(csv.filename).toBe('regions.csv');
+    expect(csv.mimeType).toBe('text/csv');
+    expect(csv.data.toString('utf8')).toBe('region,revenue\r\n"north, upper",4100\r\n');
   });
 
   it('creates a real PPTX package with editable slide text', async () => {
