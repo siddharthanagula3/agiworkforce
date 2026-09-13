@@ -20,33 +20,54 @@ vi.mock('@/lib/server/media-storage', () => ({
 type TestPart = {
   type: string;
   text?: string;
-  file?: { asset_id?: string; filename?: string; file_data?: string };
+  file?: { asset_id?: string; filename?: string; mime_type?: string; file_data?: string };
 };
 
 function partsOf(message: { content: string | TestPart[] } | undefined): TestPart[] {
   return message?.content as TestPart[];
 }
 
+function textPdf(body: string): Buffer {
+  const stream = `BT /F1 14 Tf 72 700 Td (${body}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const startxref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF`;
+  return Buffer.from(pdf, 'latin1');
+}
+
 describe('hydrateChatAttachments', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('loads an owned PDF and replaces the opaque reference with provider wire content', async () => {
+  it('gives a PDF to the model as text, so a route without a document channel can read it', async () => {
     const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f137';
+    const pdf = textPdf('PLUM-VECTOR-9182');
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
       kind: 'file',
       mimeType: 'application/pdf',
-      byteSize: 4,
+      byteSize: pdf.byteLength,
       storageUrl: 'https://files.example.test/key',
       storagePathname: 'chat-attachments/user-1/key.pdf',
       metadata: { filename: 'brief.pdf' },
       deletedAt: null,
     });
-    mocks.readStoredMedia.mockResolvedValue({
-      data: Buffer.from('%PDF'),
-      contentType: 'application/pdf',
-    });
+    mocks.readStoredMedia.mockResolvedValue({ data: pdf, contentType: 'application/pdf' });
     const messages = [
       {
         role: 'user',
@@ -63,14 +84,14 @@ describe('hydrateChatAttachments', () => {
       type: 'text',
       text: '[attached file: brief.pdf (application/pdf)]',
     });
-    expect(messages[0]?.content[2]).toEqual({
-      type: 'file',
-      file: {
-        filename: 'brief.pdf',
-        mime_type: 'application/pdf',
-        file_data: `data:application/pdf;base64,${Buffer.from('%PDF').toString('base64')}`,
-      },
-    });
+    const filePart = partsOf(messages[0])[2];
+    expect(filePart?.file?.filename).toBe('brief.pdf');
+    expect(filePart?.file?.mime_type).toBe('text/plain');
+    const decoded = Buffer.from(
+      (filePart?.file?.file_data ?? '').split(',')[1] ?? '',
+      'base64',
+    ).toString('utf8');
+    expect(decoded).toContain('PLUM-VECTOR-9182');
   });
 
   it('degrades a soft-deleted owned attachment to a placeholder instead of failing the turn', async () => {

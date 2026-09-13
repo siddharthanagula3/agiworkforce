@@ -8,6 +8,15 @@ import {
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
 } from '@/lib/chat-attachment-policy';
+import {
+  extractOfficeDocumentText,
+  officeDocumentKind,
+  OfficeDocumentUnreadableError,
+} from '@/lib/server/office-document-text';
+import {
+  extractPdfAttachmentContent,
+  PdfAttachmentUnreadableError,
+} from '@/lib/server/pdf-attachment-content';
 import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { mapWithConcurrency } from './tool-loop';
@@ -95,6 +104,24 @@ function filenameFromMetadata(metadata: Record<string, unknown>, fallback: strin
  */
 function attachmentContextHeader(filename: string, mimeType: string): AttachmentReferencePart {
   return { type: 'text', text: `[attached file: ${filename} (${mimeType})]` };
+}
+
+/**
+ * Text pulled out of a package the provider cannot open itself - a notebook's
+ * cells, an Office document's paragraphs, rows and slides - travels as a file
+ * part so every route that has a document channel keeps the filename with it.
+ */
+function textDocumentParts(filename: string, text: string): AttachmentReferencePart[] {
+  return [
+    {
+      type: 'file',
+      file: {
+        filename,
+        mime_type: 'text/plain',
+        file_data: `data:text/plain;base64,${Buffer.from(text, 'utf8').toString('base64')}`,
+      },
+    },
+  ];
 }
 
 function isNotebookAttachment(filename: string, mimeType: string): boolean {
@@ -424,6 +451,69 @@ export async function hydrateChatAttachments(
       continue;
     }
 
+    if (asset.mimeType.trim().toLowerCase() === 'application/pdf') {
+      let content: Awaited<ReturnType<typeof extractPdfAttachmentContent>>;
+      try {
+        content = await extractPdfAttachmentContent(object.data, filename);
+      } catch (error) {
+        if (!(error instanceof PdfAttachmentUnreadableError)) throw error;
+        if (live) {
+          throw new ChatAttachmentHydrationError(
+            400,
+            'unreadable_attachment',
+            `${filename} could not be read as a PDF.`,
+          );
+        }
+        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+        continue;
+      }
+      stageForSandbox();
+      if (content.text) {
+        slot.resolved = [header, ...textDocumentParts(filename, content.text)];
+        continue;
+      }
+      if (content.pageImages.length > 0) {
+        slot.resolved = [
+          header,
+          {
+            type: 'text',
+            text: `[${filename} has no text layer; its ${content.pageImages.length === 1 ? 'page is' : `${content.pageImages.length} pages are`} attached as images]`,
+          },
+          ...content.pageImages.map((image) => ({
+            type: 'image_url' as const,
+            image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
+          })),
+        ];
+        continue;
+      }
+      slot.resolved = [header, { type: 'text', text: `[${filename} contains no readable text]` }];
+      continue;
+    }
+
+    const officeKind = officeDocumentKind(filename, asset.mimeType);
+    if (officeKind) {
+      let officeText: string;
+      try {
+        officeText = await extractOfficeDocumentText(object.data, filename, officeKind);
+      } catch (error) {
+        if (!(error instanceof OfficeDocumentUnreadableError)) throw error;
+        if (live) {
+          throw new ChatAttachmentHydrationError(
+            400,
+            'unreadable_attachment',
+            `${filename} could not be read as an Office document.`,
+          );
+        }
+        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+        continue;
+      }
+      stageForSandbox();
+      slot.resolved = officeText
+        ? [header, ...textDocumentParts(filename, officeText)]
+        : [header, { type: 'text', text: `[${filename} contains no readable text]` }];
+      continue;
+    }
+
     if (isNotebookAttachment(filename, asset.mimeType)) {
       const notebookText = extractNotebookText(object.data);
       if (notebookText === null) {
@@ -445,17 +535,7 @@ export async function hydrateChatAttachments(
         ];
         continue;
       }
-      slot.resolved = [
-        header,
-        {
-          type: 'file',
-          file: {
-            filename,
-            mime_type: 'text/plain',
-            file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
-          },
-        },
-      ];
+      slot.resolved = [header, ...textDocumentParts(filename, notebookText)];
       continue;
     }
 
