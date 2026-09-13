@@ -593,6 +593,7 @@ describe('cloud agent run service', () => {
         '0190a000-0000-7000-8000-000000000099',
         2,
         null,
+        null,
       ],
     );
   });
@@ -619,6 +620,7 @@ describe('cloud agent run service', () => {
       null,
       null,
       2,
+      null,
       null,
     ]);
   });
