@@ -17,6 +17,13 @@ const RGBA_32BPP = 3;
 export interface PdfAttachmentContent {
   text: string | null;
   pageImages: { mimeType: 'image/png'; base64: string }[];
+  /**
+   * The document has more pages than `MAX_TEXT_PAGES`, so `text` covers only
+   * the first of them. A chat turn lives with that; a store that keeps the
+   * document as its only record of the file refuses instead of holding a
+   * silently partial copy.
+   */
+  pagesOmitted: boolean;
 }
 
 export class PdfAttachmentUnreadableError extends Error {
@@ -138,6 +145,7 @@ export async function extractPdfAttachmentContent(
 
   try {
     const document = await loadingTask.promise;
+    const pagesOmitted = document.numPages > MAX_TEXT_PAGES;
     const pageCount = Math.min(document.numPages, MAX_TEXT_PAGES);
     const pages: string[] = [];
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
@@ -152,7 +160,7 @@ export async function extractPdfAttachmentContent(
     }
 
     const text = boundText(pages.join('\n\n'));
-    if (text) return { text, pageImages: [] };
+    if (text) return { text, pageImages: [], pagesOmitted };
 
     const pageImages: PdfAttachmentContent['pageImages'] = [];
     let imageBytes = 0;
@@ -196,7 +204,7 @@ export async function extractPdfAttachmentContent(
       }
     }
 
-    return { text: null, pageImages };
+    return { text: null, pageImages, pagesOmitted };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
     logger.warn({ err: error, filename }, '[pdf] attachment content extraction failed');
