@@ -146,6 +146,8 @@ describe('POST /api/settings/team seat ceiling', () => {
     mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
       const text = String(sql);
       if (text.includes('pg_advisory_xact_lock')) return [];
+      // The organization has verified example.com, so a direct add is authorized.
+      if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
       if (text.includes('insert into public.organization_members')) {
         insertsAttempted += 1;
         if (insertsAttempted === 1) return [createdRow];

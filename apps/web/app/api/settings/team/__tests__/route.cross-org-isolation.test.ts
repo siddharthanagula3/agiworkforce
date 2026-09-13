@@ -122,6 +122,8 @@ function installDatabase() {
     const profileResult = rlsScopedProfileLookup(PROFILES, 'org-a-admin', text, params);
     if (profileResult !== undefined) return profileResult;
     if (text.includes('pg_advisory_xact_lock')) return [];
+    // The organization has verified example.com, so a direct add is authorized.
+    if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
     if (text.includes('from public.organization_members')) return membershipLookup(text, params);
     if (text.includes('insert into public.organization_members')) {
       return [
