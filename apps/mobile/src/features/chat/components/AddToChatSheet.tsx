@@ -112,7 +112,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  const showToolSection = showResearchToggle || FEATURES.computerUse;
+  const showToolSection = showResearchToggle;
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
   const imageModelSupportsReference = supportsManagedMediaImageEdit(
@@ -719,18 +719,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 description="Multi-step research with cited sources"
                 enabled={features.research}
                 onToggle={handleResearchToggle}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ) : null}
-            {FEATURES.computerUse ? (
-              <CapabilityRow
-                icon={<Lock size={18} color={themeColors.textMuted} />}
-                label="Computer use"
-                description="Use a connected desktop environment"
-                enabled={false}
-                status="Desktop"
-                statusTone="desktop"
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />

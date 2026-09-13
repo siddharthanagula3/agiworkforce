@@ -1114,7 +1114,7 @@ export const useChatMessageStore = create<MessageState>()(
 );
 
 function isCloudChatEnabled(): boolean {
-  return FEATURES.cloudChat && !FEATURES.v1LocalOnly;
+  return FEATURES.cloudChat;
 }
 
 function generateMessageId(): string {

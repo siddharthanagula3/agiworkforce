@@ -70,6 +70,7 @@ jest.mock('../src/features/memory/store', () => {
   return { useMemoryStore };
 });
 
+import { TOOL_APPROVAL_POLICY_OPTIONS } from '@agiworkforce/types';
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -100,7 +101,7 @@ describe('Capabilities settings screen', () => {
       },
     }));
     useChatAppModeStore.setState({ appMode: 'local' });
-    useSettingsStore.setState({ autoApproveMode: 'ask' });
+    useSettingsStore.setState({ toolApprovalPolicy: 'ask_every_time' });
     mockMemoryEntries.length = 0;
   });
 
@@ -162,15 +163,13 @@ describe('Capabilities settings screen', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/continuity');
   });
 
-  it('tracks the stored approval mode across all three values', () => {
-    const expected: Array<['ask' | 'smart' | 'full', string]> = [
-      ['ask', 'Ask'],
-      ['smart', 'Low-risk'],
-      ['full', 'All actions'],
-    ];
+  it('tracks the stored approval policy across every policy the server accepts', () => {
+    const expected = TOOL_APPROVAL_POLICY_OPTIONS.map(
+      (option) => [option.policy, option.shortLabel] as const,
+    );
 
-    for (const [mode, label] of expected) {
-      useSettingsStore.setState({ autoApproveMode: mode });
+    for (const [policy, label] of expected) {
+      useSettingsStore.setState({ toolApprovalPolicy: policy });
       const { getByLabelText, unmount } = render(<CapabilitiesScreen />);
       expect(
         getByLabelText(`Action approvals. Choose how AGI asks before tool actions. ${label}`),

@@ -1,9 +1,13 @@
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export interface RemoteChatFeatureFlags {
-  v1LocalOnly: boolean;
   cloudChat: boolean;
-  byokKeys: boolean;
+  /** Local-only build shape. No released build sets it; the branch stays so a
+   * build that does cannot reach Cloud without an explicit unlock. */
+  v1LocalOnly?: boolean;
+  /** Accepted and never consulted: a direct-provider build must not be able to
+   * widen this gate by declaring keys. */
+  byokKeys?: boolean;
 }
 
 export interface RemoteChatAccessState {
