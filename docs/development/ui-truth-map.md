@@ -80,9 +80,10 @@ route receipts).
 
 ## Development routes
 
-| Route                                                            | Status    | Evidence or gap                           |
-| ---------------------------------------------------------------- | --------- | ----------------------------------------- |
-| /dev/inline-toolcall-demo, /dev/renderer-probe, /dev/token-probe | to verify | gated in page code; confirm in production |
+| Route                                                            | Status    | Evidence or gap                                    |
+| ---------------------------------------------------------------- | --------- | -------------------------------------------------- |
+| /dev/inline-toolcall-demo, /dev/renderer-probe, /dev/token-probe | to verify | gated in page code; confirm in production          |
+| /dev/landing-preview                                             | to verify | no gate found in the page; confirm the layout gate |
 
 ## Controls verified inside routes (2026-09-05)
 

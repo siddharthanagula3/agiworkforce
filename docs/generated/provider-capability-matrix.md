@@ -5,7 +5,7 @@
 
 # Provider capability matrix
 
-Rendered from `packages/ai/model-registry/catalog/harnesses.json`, 33 harnesses in 4 groups.
+Rendered from `packages/ai/model-registry/catalog/harnesses.json`, 36 harnesses in 4 groups.
 
 Each row is one provider route. The feature columns report what the catalog
 says is **implemented** on that route, not what the provider is capable of.
@@ -23,6 +23,8 @@ Legend: ✅ implemented · ◐ partial · - unwired · · planned
 | `deepinfra/chat-completions` | deepinfra | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `deepseek-anthropic/messages` | deepseek_anthropic | messages | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `deepseek/chat-completions` | deepseek | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `experientiallabs-anthropic/messages` | experientiallabs_anthropic | messages | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `experientiallabs/chat-completions` | experientiallabs | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `google/embeddings` | google | embed_content | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `google/generate-content` | google | generate_content | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ | ✅ | ,  |
 | `google/media` | google | media | managed_cloud, byok | managed-media | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
@@ -46,7 +48,8 @@ Legend: ✅ implemented · ◐ partial · - unwired · · planned
 | `qwen/chat-completions` | qwen | chat_completions | managed_cloud, byok | byok-text | ,  | - | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | - | ,  | ,  |
 | `runway/media` | runway | media | managed_cloud | managed-media | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `together/chat-completions` | together | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
-| `vercel_gateway/chat-completions` | vercel_gateway | chat_completions | byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `vercel_gateway/chat-completions` | vercel_gateway | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ |
+| `workers-ai/chat-completions` | workers_ai | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `xai/chat-completions` | xai | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `zhipu-anthropic/messages` | zhipu_anthropic | messages | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `zhipu/chat-completions` | zhipu | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
