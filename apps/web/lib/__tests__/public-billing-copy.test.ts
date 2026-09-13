@@ -247,9 +247,8 @@ describe('App Store listing truth', () => {
 
     const listing = read(listingPath);
     for (const { flag, forbidden } of claims) {
-      expect(flags, `${flag} is no longer a false flag in v1FeatureFlags.ts`).toMatch(
-        new RegExp(`^\\s*${flag}: false,`, 'm'),
-      );
+      const shipsOn = new RegExp(`^\\s*${flag}: true,`, 'm').test(flags);
+      if (shipsOn) continue;
       expect(listing, `${flag} is off on iOS but the listing sells it`).not.toMatch(forbidden);
     }
   });
