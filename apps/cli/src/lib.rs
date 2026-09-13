@@ -121,6 +121,7 @@ pub mod terminal_text;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
+pub mod update_check;
 pub mod usage_summary;
 
 // Phase-2 candidates, implementations exist but the user-facing surface is
@@ -258,8 +259,9 @@ pub struct Cli {
     #[arg(short, long)]
     quiet: bool,
 
-    /// Output format for structured commands. Canonical name `--output-format`;
-    /// `--output` is kept as an alias for backward compatibility.
+    /// Output format for the one-shot response and for `agi models`. Canonical
+    /// name `--output-format`; `--output` is kept as an alias for backward
+    /// compatibility.
     #[arg(
         long = "output-format",
         alias = "output",
@@ -469,6 +471,16 @@ enum EffortLevel {
     High,
     /// Exhaustive, use all available context (max_turns=100, max_tokens=32768)
     Max,
+}
+
+/// Coding CLI whose settings `agi migrate` can import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum MigrationSource {
+    /// Claude Code settings, MCP servers, and instructions.
+    Claude,
+    /// Same as claude.
+    #[value(alias = "claude_code")]
+    ClaudeCode,
 }
 
 /// Output format for structured data.
@@ -709,6 +721,19 @@ enum Command {
         full_auto: bool,
         command: Vec<String>,
     },
+    /// Compare this build against the newest published CLI release.
+    ///
+    /// Reads the release feed only, it never downloads or installs anything.
+    Update {
+        /// Exit non-zero when a newer release is published, for scripts.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Manage the global MCP server registry (~/.agiworkforce/mcp.json).
+    Mcp {
+        #[command(subcommand)]
+        action: McpSubcommand,
+    },
     /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
     ///
     /// The handler speaks the protocol and answers initialize/tools/list, but
@@ -778,9 +803,9 @@ enum Command {
     },
     /// Migrate settings from another coding CLI. Defaults to Claude Code.
     Migrate {
-        /// Source to migrate from: claude or claude-code.
-        #[arg(default_value = "claude")]
-        source: String,
+        /// Source to migrate from.
+        #[arg(value_enum, default_value_t = MigrationSource::Claude)]
+        source: MigrationSource,
         /// Show what would be imported without writing files.
         #[arg(long)]
         dry_run: bool,
@@ -991,6 +1016,49 @@ enum EcosystemSubcommand {
 }
 
 #[derive(Subcommand, Debug)]
+enum McpSubcommand {
+    /// Register an MCP server.
+    Add {
+        /// Registry name for the server.
+        name: String,
+        /// Executable for a stdio server.
+        #[arg(long, value_name = "COMMAND", conflicts_with = "url")]
+        command: Option<String>,
+        /// Argument for the stdio command, repeat for each argument.
+        #[arg(
+            long = "arg",
+            value_name = "ARG",
+            requires = "command",
+            allow_hyphen_values = true
+        )]
+        args: Vec<String>,
+        /// URL for a remote server.
+        #[arg(long, value_name = "URL")]
+        url: Option<String>,
+        /// Transport for a remote server.
+        #[arg(long, value_enum, default_value_t = RemoteMcpTransport::Http, requires = "url")]
+        transport: RemoteMcpTransport,
+        /// Replace an existing entry with the same name.
+        #[arg(long)]
+        force: bool,
+    },
+    /// List registered MCP servers.
+    List,
+    /// Remove a registered MCP server.
+    Remove {
+        /// Registry name of the server to remove.
+        name: String,
+    },
+}
+
+/// Transport for a remote MCP server registered with `agi mcp add --url`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum RemoteMcpTransport {
+    Http,
+    Sse,
+}
+
+#[derive(Subcommand, Debug)]
 enum SyncSubcommand {
     /// Show which synced files have changed since last sync.
     Status,
@@ -1118,33 +1186,68 @@ fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
     Ok(None)
 }
 
+/// How a structured command renders, resolved from its own `--json` flag and
+/// the global `--output-format`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuredOutput {
+    Text,
+    Json,
+    Ndjson,
+}
+
+pub fn structured_output(json_flag: bool, output: Option<OutputFormat>) -> StructuredOutput {
+    match output {
+        Some(OutputFormat::Json) => StructuredOutput::Json,
+        Some(OutputFormat::StreamJson) => StructuredOutput::Ndjson,
+        Some(OutputFormat::Text) => StructuredOutput::Text,
+        None if json_flag => StructuredOutput::Json,
+        None => StructuredOutput::Text,
+    }
+}
+
+fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result<()> {
+    match (mode, value.as_array()) {
+        (StructuredOutput::Ndjson, Some(rows)) => {
+            for row in rows {
+                println!("{}", serde_json::to_string(row)?);
+            }
+        }
+        (StructuredOutput::Ndjson, None) => println!("{}", serde_json::to_string(value)?),
+        _ => println!("{}", serde_json::to_string_pretty(value)?),
+    }
+    Ok(())
+}
+
 async fn handle_models_command(
     action: &ModelsSubcommand,
     config: &config::CliConfig,
+    output: Option<OutputFormat>,
 ) -> Result<()> {
     match action {
         ModelsSubcommand::List { json } => {
-            if *json {
-                let value = models_json_with_discovery(config).await;
-                println!("{}", serde_json::to_string_pretty(&value)?);
-            } else {
-                println!(
+            match structured_output(*json, output) {
+                StructuredOutput::Text => println!(
                     "{}",
                     provider::format_model_list_with_discovery(config).await
-                );
+                ),
+                mode => {
+                    let value = models_json_with_discovery(config).await;
+                    print_structured(&value, mode)?;
+                }
             }
             Ok(())
         }
         ModelsSubcommand::Status { json } | ModelsSubcommand::Scan { json } => {
             let probes = local_models::discover_all(config).await;
-            if *json {
-                println!("{}", serde_json::to_string_pretty(&probes)?);
-            } else {
-                println!("{}", local_models::format_probe_report(&probes));
-                if matches!(action, ModelsSubcommand::Scan { .. }) {
-                    let models = local_models::discovered_models(&probes);
-                    println!("\n{}", local_models::format_discovered_models(&models));
+            match structured_output(*json, output) {
+                StructuredOutput::Text => {
+                    println!("{}", local_models::format_probe_report(&probes));
+                    if matches!(action, ModelsSubcommand::Scan { .. }) {
+                        let models = local_models::discovered_models(&probes);
+                        println!("\n{}", local_models::format_discovered_models(&models));
+                    }
                 }
+                mode => print_structured(&serde_json::to_value(&probes)?, mode)?,
             }
             Ok(())
         }
@@ -1266,6 +1369,89 @@ async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::V
         }));
     }
     serde_json::Value::Array(models)
+}
+
+fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
+    use crate::mcp::registry::{self, McpRegistry, TransportKind};
+
+    let mut registry_file = McpRegistry::load()?;
+    match action {
+        McpSubcommand::Add {
+            name,
+            command,
+            args,
+            url,
+            transport,
+            force,
+        } => {
+            let entry = match (command, url) {
+                (Some(command), None) => {
+                    registry::build_server_entry(TransportKind::Stdio, command, args)?
+                }
+                (None, Some(url)) => {
+                    let kind = match transport {
+                        RemoteMcpTransport::Http => TransportKind::Http,
+                        RemoteMcpTransport::Sse => TransportKind::Sse,
+                    };
+                    registry::build_server_entry(kind, url, &[])?
+                }
+                _ => anyhow::bail!(
+                    "pass either --command <executable> for a stdio server or --url <url> for a remote one"
+                ),
+            };
+            registry_file.add(name, entry, *force)?;
+            registry_file.save()?;
+            println!(
+                "Registered MCP server '{}' in {}.",
+                terminal_text::sanitize_terminal_text(name),
+                McpRegistry::default_path()?.display()
+            );
+            Ok(())
+        }
+        McpSubcommand::List => {
+            let rows = registry_file.list();
+            if rows.is_empty() {
+                println!(
+                    "No MCP servers registered in {}.",
+                    McpRegistry::default_path()?.display()
+                );
+                return Ok(());
+            }
+            for row in rows {
+                println!(
+                    "{:<24} {:<8} {:<6} {}",
+                    terminal_text::sanitize_terminal_text(&row.name),
+                    if row.enabled { "enabled" } else { "disabled" },
+                    terminal_text::sanitize_terminal_text(&row.kind),
+                    terminal_text::sanitize_terminal_text(&row.target)
+                );
+            }
+            Ok(())
+        }
+        McpSubcommand::Remove { name } => {
+            let removed = registry_file
+                .list()
+                .into_iter()
+                .find(|row| &row.name == name);
+            let Some(removed) = removed else {
+                anyhow::bail!("no MCP server named '{name}' in the registry")
+            };
+            registry_file.remove(name);
+            registry_file.save()?;
+            println!(
+                "Removed MCP server '{}'. Re-add it with: agi mcp add {} {} {}",
+                terminal_text::sanitize_terminal_text(name),
+                terminal_text::sanitize_terminal_text(name),
+                if removed.kind == "stdio" {
+                    "--command"
+                } else {
+                    "--url"
+                },
+                terminal_text::sanitize_terminal_text(&removed.target)
+            );
+            Ok(())
+        }
+    }
 }
 
 fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
@@ -1401,7 +1587,13 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     Ok(resolved) => {
                         runtime::session::ManagedSession::load_from_path(resolved.path)?.messages
                     }
-                    Err(_) => load_legacy_session_messages(&session_id)?,
+                    Err(managed_error) => {
+                        load_legacy_session_messages(&session_id).map_err(|legacy_error| {
+                            managed_error.context(format!(
+                                "Legacy JSON conversation fallback also failed: {legacy_error:#}"
+                            ))
+                        })?
+                    }
                 };
             println!(
                 "{}: {} messages",
@@ -1946,6 +2138,15 @@ pub async fn run_main() -> Result<()> {
                             };
                             agent_events::AgentEvent::from_error(session_id.clone(), &cli_err)
                                 .emit_stdout();
+                        } else if *json {
+                            eprintln!(
+                                "{}",
+                                serde_json::to_string_pretty(&serde_json::json!({
+                                    "type": "result",
+                                    "is_error": true,
+                                    "error": format!("{e:#}"),
+                                }))?
+                            );
                         } else {
                             eprintln!("{}", e);
                         }
@@ -2091,6 +2292,25 @@ pub async fn run_main() -> Result<()> {
                 io::Write::write_all(&mut io::stderr(), &out.stderr)?;
                 std::process::exit(out.status.code().unwrap_or(1));
             }
+            Command::Update { check } => {
+                let release = update_check::fetch_latest_release().await?;
+                let running = update_check::running_version();
+                for line in update_check::render_verdict(
+                    running,
+                    &release,
+                    &update_check::install_command(),
+                ) {
+                    println!("{line}");
+                }
+                if *check
+                    && update_check::compare_versions(running, &release.version)
+                        == update_check::UpdateVerdict::Available
+                {
+                    std::process::exit(1);
+                }
+                Ok(())
+            }
+            Command::Mcp { action } => run_mcp_registry_command(action),
             Command::McpServer => app_server::run_mcp_server().await,
             Command::Completion { shell } => {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
@@ -2152,7 +2372,9 @@ pub async fn run_main() -> Result<()> {
                 )
                 .await
             }
-            Command::Models { action } => handle_models_command(action, &app_config).await,
+            Command::Models { action } => {
+                handle_models_command(action, &app_config, cli.output).await
+            }
             Command::Plugin { action } => {
                 let mut mgr = plugins::PluginsManager::new();
                 match action {
@@ -2346,17 +2568,11 @@ pub async fn run_main() -> Result<()> {
             },
 
             Command::Migrate { source, dry_run } => {
-                let normalized = source.to_ascii_lowercase();
-                if !matches!(
-                    normalized.as_str(),
-                    "claude" | "claude-code" | "claude_code"
-                ) {
-                    anyhow::bail!(
-                        "Unsupported migration source '{}'. Supported sources: claude, claude-code",
-                        source
-                    );
-                }
-                let report = ecosystem::migrate_claude_code(*dry_run)?;
+                let report = match source {
+                    MigrationSource::Claude | MigrationSource::ClaudeCode => {
+                        ecosystem::migrate_claude_code(*dry_run)?
+                    }
+                };
                 print!("{}", ecosystem::format_claude_migration_report(&report));
                 Ok(())
             }
@@ -3854,6 +4070,128 @@ mod tests {
             resolve_destructive_decision(true, true),
             DestructiveDecision::Proceed
         );
+    }
+
+    #[test]
+    fn a_command_json_flag_and_the_global_output_format_agree() {
+        assert_eq!(structured_output(true, None), StructuredOutput::Json);
+        assert_eq!(
+            structured_output(false, Some(OutputFormat::Json)),
+            StructuredOutput::Json
+        );
+        assert_eq!(
+            structured_output(false, Some(OutputFormat::StreamJson)),
+            StructuredOutput::Ndjson
+        );
+        assert_eq!(structured_output(false, None), StructuredOutput::Text);
+    }
+
+    #[test]
+    fn an_explicit_text_format_wins_over_a_bare_json_flag() {
+        assert_eq!(
+            structured_output(true, Some(OutputFormat::Text)),
+            StructuredOutput::Text
+        );
+    }
+
+    #[test]
+    fn migrate_rejects_an_unsupported_source_and_names_the_accepted_values() {
+        let error = Cli::try_parse_from(["agi", "migrate", "cursor"])
+            .expect_err("an unsupported migration source must not parse");
+        let rendered = error.to_string();
+        assert!(rendered.contains("claude"), "{rendered}");
+        assert!(rendered.contains("claude-code"), "{rendered}");
+    }
+
+    #[test]
+    fn migrate_defaults_to_claude_and_accepts_every_spelling() {
+        for (args, expected) in [
+            (vec!["agi", "migrate"], MigrationSource::Claude),
+            (vec!["agi", "migrate", "claude"], MigrationSource::Claude),
+            (
+                vec!["agi", "migrate", "claude-code"],
+                MigrationSource::ClaudeCode,
+            ),
+            (
+                vec!["agi", "migrate", "claude_code"],
+                MigrationSource::ClaudeCode,
+            ),
+        ] {
+            let cli = Cli::try_parse_from(&args).expect("migration source should parse");
+            match cli.command {
+                Some(Command::Migrate { source, .. }) => assert_eq!(source, expected),
+                other => panic!("expected migrate, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn mcp_add_refuses_a_command_and_a_url_together() {
+        Cli::try_parse_from([
+            "agi",
+            "mcp",
+            "add",
+            "srv",
+            "--command",
+            "node",
+            "--url",
+            "https://example.test",
+        ])
+        .expect_err("--command and --url are mutually exclusive");
+    }
+
+    #[test]
+    fn mcp_add_parses_a_stdio_server_with_repeated_arguments() {
+        let cli = Cli::try_parse_from([
+            "agi",
+            "mcp",
+            "add",
+            "srv",
+            "--command",
+            "node",
+            "--arg",
+            "server.js",
+            "--arg",
+            "--port=1",
+        ])
+        .expect("stdio registration should parse");
+        match cli.command {
+            Some(Command::Mcp {
+                action:
+                    McpSubcommand::Add {
+                        name,
+                        command,
+                        args,
+                        url,
+                        ..
+                    },
+            }) => {
+                assert_eq!(name, "srv");
+                assert_eq!(command.as_deref(), Some("node"));
+                assert_eq!(args, vec!["server.js", "--port=1"]);
+                assert!(url.is_none());
+            }
+            other => panic!("expected mcp add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mcp_add_defaults_a_url_server_to_http() {
+        let cli =
+            Cli::try_parse_from(["agi", "mcp", "add", "srv", "--url", "https://example.test"])
+                .expect("remote registration should parse");
+        match cli.command {
+            Some(Command::Mcp {
+                action: McpSubcommand::Add { transport, .. },
+            }) => assert_eq!(transport, RemoteMcpTransport::Http),
+            other => panic!("expected mcp add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mcp_transport_flag_requires_a_url() {
+        Cli::try_parse_from(["agi", "mcp", "add", "srv", "--transport", "sse"])
+            .expect_err("--transport without --url must not parse");
     }
 
     #[test]
