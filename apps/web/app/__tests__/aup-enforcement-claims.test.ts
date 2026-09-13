@@ -209,9 +209,50 @@ describe('Q-8 · the Chrome debugger sentence matches the extension permissions 
 
   it('claims debugger control because the extension requests that permission', () => {
     expect(MANIFEST.permissions).toContain('debugger');
-    expect(readExtension('src/features/computer-use/cdpDriver.ts')).toContain(
+    // The attach moved behind a refcount so a per-action attach and a console
+    // or network watch can share one attachment. The claim is about the call,
+    // so the assertion follows the call rather than the file it used to be in.
+    expect(readExtension('src/features/computer-use/debuggerSession.ts')).toContain(
       'chrome.debugger.attach',
     );
+  });
+
+  it('claims the same two grants cover reading the page, because one gate serves all of them', () => {
+    const GATE = readExtension('src/features/browser-tools/tabAuthority.ts');
+    expect(GATE).toContain('allowlist.has(origin)');
+    expect(GATE).toContain('hasBrowserControlConsent(origin)');
+    for (const caller of [
+      'src/features/browser-tools/pageWatch.ts',
+      'src/features/browser-tools/downloads.ts',
+    ]) {
+      expect(readExtension(caller), `${caller} must pass the same gate`).toContain(
+        'authorizeBrowserToolTab',
+      );
+    }
+    expect(AUP_PROSE).toContain(
+      "reads that page's console messages and the requests it makes, and downloads a file when you ask for one, under those same two grants",
+    );
+  });
+
+  it('claims a download because the extension requests that permission', () => {
+    expect(MANIFEST.permissions).toContain('downloads');
+    const DOWNLOADS = readExtension('src/features/browser-tools/downloads.ts');
+    expect(DOWNLOADS).toContain('chrome.downloads.download');
+    // "Chrome picks the filename" on the permissions page: a caller-supplied
+    // name is what would let page text choose a path, so no filename is passed.
+    expect(DOWNLOADS).toContain("chrome.downloads.download({ url, conflictAction: 'uniquify' })");
+    expect(AGENT_PERMISSIONS).toContain('Chrome picks the filename');
+  });
+
+  it('promises no request body or header reaches us, because neither is ever recorded', () => {
+    const NETWORK = readExtension('src/features/browser-tools/networkCapture.ts');
+    expect(NETWORK).toContain('export interface NetworkEntry');
+    for (const field of ['body', 'headers', 'postData', 'cookies']) {
+      expect(NETWORK, `networkCapture must not record ${field}`).not.toMatch(
+        new RegExp(`^\\s*(readonly )?${field}[?]?:`, 'm'),
+      );
+    }
+    expect(AGENT_PERMISSIONS).toContain('never reads a request body or a header');
   });
 
   it('does not let the allowlist alone read as the grant, because a second consent gates the run', () => {

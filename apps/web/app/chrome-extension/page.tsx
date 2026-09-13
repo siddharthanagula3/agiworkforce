@@ -10,7 +10,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata = buildMetadata({
   title: 'AGI in Chrome | Browser Context, Desktop Bridge',
   description:
-    'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from AGI Managed Cloud, a paired HMAC-signed bridge passes selections and captures to AGI Desktop, and computer use posts the conversation with its screenshots to the Managed Cloud gateway directly from the extension.',
+    'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from AGI Managed Cloud, a paired HMAC-signed bridge passes selections and captures to AGI Desktop, and computer use posts the conversation with its screenshots, and any console messages and request records it read, to the Managed Cloud gateway directly from the extension.',
   path: '/chrome-extension',
 });
 
@@ -229,7 +229,7 @@ export default function ChromeExtensionPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Put AGI beside the page."
-          body="The panel answers from AGI Managed Cloud, and computer use posts the conversation and its screenshots to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
+          body="The panel answers from AGI Managed Cloud, and computer use posts the conversation, its screenshots, and any console messages and request records it read to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
           ctas={[
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/get-started', label: 'Get Started' },
