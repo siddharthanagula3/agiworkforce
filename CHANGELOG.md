@@ -10,6 +10,18 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Added
 
+- **Experiential Labs as a gateway**, in both its OpenAI-compatible and
+  Anthropic Messages dialects, with sourced governance and twenty routes priced
+  at the ceiling of each model's platform-funded waterfall; four more Cheaper
+  Inference routes. Every route stays `experimental_only` until the founder
+  funds the account and confirms terms.
+- **Vercel AI Gateway and Cloudflare Workers AI as managed providers.** The
+  Vercel harness serves managed traffic, its twenty routes are
+  `authorized_marketplace`, every managed request sorts providers by cost, and
+  a zero-retention workspace sets `zeroDataRetention` so only providers Vercel
+  holds agreements with may serve. Workers AI enters as a gateway definition on
+  its direct account endpoint with eight `agi_direct` routes at Cloudflare's
+  published per-token rates and a zero-retention record.
 - **Cheapest-host dispatch on OpenRouter.** Managed requests ask OpenRouter to
   sort providers by price and carry the registry route's price as `max_price`,
   so a dearer host is refused rather than billed; a zero-retention workspace
