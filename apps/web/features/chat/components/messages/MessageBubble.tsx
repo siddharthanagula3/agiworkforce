@@ -138,7 +138,8 @@ import {
   type MessageMetadata as StoreMessageMetadata,
 } from '@shared/stores/web-chat-store';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
-import { AGI_WORK_FEEDBACK_LABEL } from '../../lib/agi-work';
+import { AGI_WORK_FEEDBACK_LABEL, DELIVERABLES_LABEL } from '../../lib/agi-work';
+import { DeliverableCard } from './DeliverableCard';
 import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
@@ -1233,22 +1234,33 @@ const MessageBubbleComponent = function MessageBubble({
   // Generated files rendered through the EXISTING attachment grid: images get
   // the thumbnail + ImageLightbox path; descriptors without a successfully
   // constructed workbench artifact remain honest download chips.
-  const generatedFileAttachments = useMemo<Attachment[]>(() => {
+  const unprojectedGeneratedFiles = useMemo<GeneratedFileMetadataEntry[]>(() => {
     const artifactFileIds = new Set(
       generatedFileArtifacts
         .map((artifact) => artifact.generatedFile?.id)
         .filter((id): id is string => Boolean(id)),
     );
-    return generatedFiles
-      .filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id))
-      .map((f) => ({
-        id: generatedFileArtifactId(f.id),
-        name: f.fileName,
-        type: f.mimeType,
-        size: f.byteCount,
-        url: f.uri,
-      }));
+    return generatedFiles.filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id));
   }, [generatedFiles, generatedFileArtifacts]);
+
+  const generatedFileAttachments = useMemo<Attachment[]>(
+    () =>
+      unprojectedGeneratedFiles
+        .filter((file) => file.kind === 'image')
+        .map((f) => ({
+          id: generatedFileArtifactId(f.id),
+          name: f.fileName,
+          type: f.mimeType,
+          size: f.byteCount,
+          url: f.uri,
+        })),
+    [unprojectedGeneratedFiles],
+  );
+
+  const deliverables = useMemo<GeneratedFileMetadataEntry[]>(
+    () => unprojectedGeneratedFiles.filter((file) => file.kind !== 'image'),
+    [unprojectedGeneratedFiles],
+  );
 
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
@@ -1415,7 +1427,8 @@ const MessageBubbleComponent = function MessageBubble({
     // as escapes: the literal characters are invisible in review and in a diff,
     // so a stray edit could silently delete one and quietly break the check.
     if (cleanedContent.replace(/[\u200B\uFEFF]/g, '').trim().length > 0) return false;
-    if (displayAttachments.length > 0 || artifacts.length > 0) return false;
+    if (displayAttachments.length > 0 || deliverables.length > 0 || artifacts.length > 0)
+      return false;
     if (streamingBlock) return false;
     const meta = message.metadata;
     if (!meta) return true;
@@ -1445,6 +1458,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata,
     cleanedContent,
     displayAttachments.length,
+    deliverables.length,
     artifacts.length,
     streamingBlock,
   ]);
@@ -2089,6 +2103,27 @@ const MessageBubbleComponent = function MessageBubble({
                   </a>
                 );
               })}
+            </div>
+          )}
+
+          {deliverables.length > 0 && (
+            <div
+              data-testid="deliverable-cards"
+              aria-label={DELIVERABLES_LABEL}
+              role="list"
+              className="mt-2 flex flex-col gap-2"
+            >
+              {deliverables.map((file) => (
+                <span role="listitem" key={file.id} className="contents">
+                  <DeliverableCard
+                    name={file.fileName}
+                    uri={file.uri}
+                    kind={file.kind}
+                    mimeType={file.mimeType}
+                    byteCount={file.byteCount}
+                  />
+                </span>
+              ))}
             </div>
           )}
 
