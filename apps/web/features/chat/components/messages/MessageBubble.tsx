@@ -21,7 +21,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  useConfirm,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
@@ -74,6 +74,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
   getModelMetadataById,
+  isAutoModeModelId,
   providerModeToPrivacyMode,
   type ArtifactManifest,
   type ComputeSession,
@@ -396,6 +397,10 @@ interface Message {
     movedReason?: string;
     /** `X-AGI-Route-Lane` value naming the lane that served this turn. */
     routeLane?: string;
+    /** False when an AGI Work turn did not get the durable transport. */
+    turnDetachable?: boolean;
+    /** The model id the composer asked for, which Auto may have routed away from. */
+    requestedModel?: string;
     secretRedactionCount?: number;
     provider?: string;
     cost?: number;
@@ -698,30 +703,19 @@ const MessageBubbleComponent = function MessageBubble({
   const [userContentOverflows, setUserContentOverflows] = useState(false);
   const [userContentExpanded, setUserContentExpanded] = useState(false);
 
-  /**
-   * Delete confirmation (shell-nav-ia-gap-01). This used to be a native
-   * `window.confirm()`, an OS alert with a browser-chrome "OK", in the middle
-   * of a transcript, for the one action here that destroys content. `useConfirm`
-   * is the shared wrapper around the AlertDialog primitive already used for
-   * delete-schedule and delete-project, so the message delete now reads the same
-   * as every other destructive confirm and its confirm button is red.
-   */
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
   const handleDeleteWithConfirm = useCallback(() => {
     if (!onDelete) return;
-    void (async () => {
-      const confirmed = await confirmDestructive({
-        title: 'Delete message?',
-        // Only this one message is removed (deletePersistedMessages([id])), the
-        // rest of the turn stays, so the copy must not imply a cascade.
-        description: isUser
-          ? 'This message is removed from the conversation. The reply it produced stays. This cannot be undone.'
-          : 'This response is removed from the conversation. The message that prompted it stays. This cannot be undone.',
-        confirmText: 'Delete message',
-        variant: 'destructive',
-      });
-      if (confirmed) onDelete(message.id);
-    })();
+    confirmDestructive({
+      title: 'Delete message?',
+      // Only this one message is removed (deletePersistedMessages([id])), the
+      // rest of the turn stays, so the copy must not imply a cascade.
+      description: isUser
+        ? 'This message is removed from the conversation. The reply it produced stays. This cannot be undone.'
+        : 'This response is removed from the conversation. The message that prompted it stays. This cannot be undone.',
+      confirmLabel: 'Delete message',
+      onConfirm: () => onDelete(message.id),
+    });
   }, [confirmDestructive, isUser, message.id, onDelete]);
 
   /**
@@ -737,15 +731,13 @@ const MessageBubbleComponent = function MessageBubble({
     Boolean(onDeleteVariant && countVariantFollowers) && !isUser && (variantInfo?.total ?? 0) > 1;
   const handleDeleteVariantWithConfirm = useCallback(() => {
     if (!onDeleteVariant || !countVariantFollowers || !variantInfo) return;
-    void (async () => {
-      const confirmed = await confirmDestructive(
-        variantDeleteConfirm({
-          followerCount: countVariantFollowers(message.id),
-          siblingCount: variantInfo.total - 1,
-        }),
-      );
-      if (confirmed) onDeleteVariant(message.id);
-    })();
+    confirmDestructive({
+      ...variantDeleteConfirm({
+        followerCount: countVariantFollowers(message.id),
+        siblingCount: variantInfo.total - 1,
+      }),
+      onConfirm: () => onDeleteVariant(message.id),
+    });
   }, [confirmDestructive, countVariantFollowers, message.id, onDeleteVariant, variantInfo]);
 
   // ---- Inline edit (CLR-05) -------------------------------------------------
@@ -1473,10 +1465,16 @@ const MessageBubbleComponent = function MessageBubble({
     Boolean(message.metadata?.generatedFiles?.length) ||
     Boolean(message.metadata?.documentData);
   const answeredByModelId = !isUser ? (message.model ?? message.metadata?.model) : undefined;
-  const answeredByLabel = answeredByModelId
-    ? getManagedModelPresentationLabel(answeredByModelId, {
-        freePool: isFreeRouteLane(message.metadata?.routeLane),
-      })
+  const answeredByLabel =
+    answeredByModelId && !isAutoModeModelId(answeredByModelId)
+      ? getManagedModelPresentationLabel(answeredByModelId, {
+          freePool: isFreeRouteLane(message.metadata?.routeLane),
+        })
+      : undefined;
+  const answeredByChipLabel = answeredByLabel
+    ? isAutoModeModelId(message.metadata?.requestedModel)
+      ? `Auto chose ${answeredByLabel}`
+      : answeredByLabel
     : undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
@@ -2448,6 +2446,20 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {!isUser && message.metadata?.turnDetachable === false && (
+            <div
+              role="status"
+              data-testid="inline-transport-notice"
+              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+            >
+              <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="flex-1">
+                This task is running in this tab, not in the background. Closing or reloading the
+                page stops it.
+              </span>
+            </div>
+          )}
+
           {!isUser &&
             !message.isStreaming &&
             !secretRedactionNoticeDismissed &&
@@ -2520,346 +2532,361 @@ const MessageBubbleComponent = function MessageBubble({
 
           {!isEditing && (
             <div
-              data-testid="message-action-row"
               className={cn(
-                'flex flex-nowrap items-center gap-1 transition-opacity',
-                ACTION_ROW_MIN_HEIGHT,
+                'flex flex-wrap items-center gap-x-2',
                 isUser ? 'mt-1 justify-end' : 'mt-2',
-                isUser || !isLatestTurn
-                  ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100'
-                  : 'opacity-100',
               )}
             >
-              {!message.isStreaming && (
-                <TooltipProvider delayDuration={300}>
-                  {isUser && onEdit && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                          onClick={handleBeginEdit}
-                          aria-label="Edit message"
-                        >
-                          <Pencil className={ACTION_ICON_SIZE} aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Edit</TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  {hasReadableTurn && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                          onClick={handleCopy}
-                          aria-label={copied ? 'Message copied' : 'Copy message'}
-                        >
-                          {copied ? (
-                            <Check className={ACTION_ICON_SIZE} aria-hidden="true" />
-                          ) : (
-                            <Copy className={ACTION_ICON_SIZE} aria-hidden="true" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Copy</TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  {!isUser && hasReadableTurn && (
-                    <>
+              <div
+                data-testid="message-action-row"
+                className={cn(
+                  'flex flex-nowrap items-center gap-1 transition-opacity',
+                  ACTION_ROW_MIN_HEIGHT,
+                  isUser || !isLatestTurn
+                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100'
+                    : 'opacity-100',
+                )}
+              >
+                {!message.isStreaming && (
+                  <TooltipProvider delayDuration={300}>
+                    {isUser && onEdit && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={cn(
-                              ACTION_BUTTON_SIZE,
-                              ACTION_BUTTON_TONE,
-                              responseRating === 'up' && 'text-[var(--chat-accent-primary-text)]',
-                            )}
-                            onClick={() => rateResponse('up')}
-                            aria-label="Good response"
-                            aria-pressed={responseRating === 'up'}
+                            className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                            onClick={handleBeginEdit}
+                            aria-label="Edit message"
                           >
-                            <ThumbsUp
-                              className={cn(
-                                ACTION_ICON_SIZE,
-                                responseRating === 'up' && 'fill-current',
-                              )}
-                              aria-hidden="true"
-                            />
+                            <Pencil className={ACTION_ICON_SIZE} aria-hidden="true" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          {responseRating === 'up' ? 'Remove rating' : 'Good response'}
-                        </TooltipContent>
+                        <TooltipContent>Edit</TooltipContent>
                       </Tooltip>
+                    )}
+
+                    {hasReadableTurn && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={cn(
-                              ACTION_BUTTON_SIZE,
-                              ACTION_BUTTON_TONE,
-                              responseRating === 'down' && 'text-[var(--chat-accent-primary-text)]',
-                            )}
-                            onClick={() => rateResponse('down')}
-                            aria-label="Bad response"
-                            aria-pressed={responseRating === 'down'}
+                            className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                            onClick={handleCopy}
+                            aria-label={copied ? 'Message copied' : 'Copy message'}
                           >
-                            <ThumbsDown
-                              className={cn(
-                                ACTION_ICON_SIZE,
-                                responseRating === 'down' && 'fill-current',
-                              )}
-                              aria-hidden="true"
-                            />
+                            {copied ? (
+                              <Check className={ACTION_ICON_SIZE} aria-hidden="true" />
+                            ) : (
+                              <Copy className={ACTION_ICON_SIZE} aria-hidden="true" />
+                            )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
-                        </TooltipContent>
+                        <TooltipContent>Copy</TooltipContent>
                       </Tooltip>
-                      {isAgiWorkTurn && taskRunId && (
+                    )}
+
+                    {!isUser && hasReadableTurn && (
+                      <>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span>
-                              <ComposerFeedbackDialog
-                                variant="task"
-                                runId={taskRunId}
-                                messageId={message.id}
-                                conversationId={message.sessionId ?? activeConversationId}
-                                triggerClassName={cn(
-                                  ACTION_BUTTON_SIZE,
-                                  ACTION_BUTTON_TONE,
-                                  'inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
-                                  ACTION_ICON_SIZE_DESCENDANT,
-                                )}
-                              />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{AGI_WORK_FEEDBACK_LABEL}</TooltipContent>
-                        </Tooltip>
-                      )}
-                    </>
-                  )}
-
-                  {variantPager}
-
-                  {!isUser &&
-                    !voiceModeActive &&
-                    onRegenerate &&
-                    message.metadata?.toolType !== 'image-generation' &&
-                    message.metadata?.toolType !== 'video-generation' &&
-                    (onRegenerateWithModel && regenerateModelOptions?.length ? (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                            aria-label="Regenerate response"
-                          >
-                            <RefreshCw className={ACTION_ICON_SIZE} aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-                          <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
-                            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-                            Try again
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
-                            Try again with
-                          </DropdownMenuLabel>
-                          {regenerateModelOptions.map((option) => (
-                            <DropdownMenuItem
-                              key={option.id}
-                              onClick={() => onRegenerateWithModel(message.id, option.id)}
-                            >
-                              <span className="min-w-0 flex-1 truncate">{option.name}</span>
-                              {option.id === (message.model ?? message.metadata?.model) && (
-                                <Check className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                ACTION_BUTTON_SIZE,
+                                ACTION_BUTTON_TONE,
+                                responseRating === 'up' && 'text-[var(--chat-accent-primary-text)]',
                               )}
+                              onClick={() => rateResponse('up')}
+                              aria-label="Good response"
+                              aria-pressed={responseRating === 'up'}
+                            >
+                              <ThumbsUp
+                                className={cn(
+                                  ACTION_ICON_SIZE,
+                                  responseRating === 'up' && 'fill-current',
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {responseRating === 'up' ? 'Remove rating' : 'Good response'}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                ACTION_BUTTON_SIZE,
+                                ACTION_BUTTON_TONE,
+                                responseRating === 'down' &&
+                                  'text-[var(--chat-accent-primary-text)]',
+                              )}
+                              onClick={() => rateResponse('down')}
+                              aria-label="Bad response"
+                              aria-pressed={responseRating === 'down'}
+                            >
+                              <ThumbsDown
+                                className={cn(
+                                  ACTION_ICON_SIZE,
+                                  responseRating === 'down' && 'fill-current',
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
+                          </TooltipContent>
+                        </Tooltip>
+                        {isAgiWorkTurn && taskRunId && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <ComposerFeedbackDialog
+                                  variant="task"
+                                  runId={taskRunId}
+                                  messageId={message.id}
+                                  conversationId={message.sessionId ?? activeConversationId}
+                                  triggerClassName={cn(
+                                    ACTION_BUTTON_SIZE,
+                                    ACTION_BUTTON_TONE,
+                                    'inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+                                    ACTION_ICON_SIZE_DESCENDANT,
+                                  )}
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{AGI_WORK_FEEDBACK_LABEL}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </>
+                    )}
+
+                    {variantPager}
+
+                    {!isUser &&
+                      !voiceModeActive &&
+                      onRegenerate &&
+                      message.metadata?.toolType !== 'image-generation' &&
+                      message.metadata?.toolType !== 'video-generation' &&
+                      (onRegenerateWithModel && regenerateModelOptions?.length ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                              aria-label="Regenerate response"
+                            >
+                              <RefreshCw className={ACTION_ICON_SIZE} aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                            <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
+                              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Try again
                             </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : (
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
+                              Try again with
+                            </DropdownMenuLabel>
+                            {regenerateModelOptions.map((option) => (
+                              <DropdownMenuItem
+                                key={option.id}
+                                onClick={() => onRegenerateWithModel(message.id, option.id)}
+                              >
+                                <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                                {option.id === (message.model ?? message.metadata?.model) && (
+                                  <Check className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                                )}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                              onClick={() => onRegenerate(message.id)}
+                              aria-label="Regenerate response"
+                            >
+                              <RefreshCw className={ACTION_ICON_SIZE} aria-hidden="true" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Regenerate</TooltipContent>
+                        </Tooltip>
+                      ))}
+
+                    {!isUser && !voiceModeActive && onBranch && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
                             className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                            onClick={() => onRegenerate(message.id)}
-                            aria-label="Regenerate response"
+                            disabled={isBranching}
+                            onClick={() => onBranch(message.id)}
+                            aria-label={
+                              isBranching ? 'Creating branch…' : 'Branch conversation from here'
+                            }
                           >
-                            <RefreshCw className={ACTION_ICON_SIZE} aria-hidden="true" />
+                            <GitFork className={ACTION_ICON_SIZE} aria-hidden="true" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Regenerate</TooltipContent>
+                        <TooltipContent>
+                          {isBranching
+                            ? 'Creating branch…'
+                            : 'Branch conversation: this chat stays unchanged'}
+                        </TooltipContent>
                       </Tooltip>
-                    ))}
+                    )}
 
-                  {!isUser && !voiceModeActive && onBranch && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                          disabled={isBranching}
-                          onClick={() => onBranch(message.id)}
-                          aria-label={
-                            isBranching ? 'Creating branch…' : 'Branch conversation from here'
-                          }
+                          aria-label="More message actions"
                         >
-                          <GitFork className={ACTION_ICON_SIZE} aria-hidden="true" />
+                          <MoreHorizontal className={ACTION_ICON_SIZE} aria-hidden="true" />
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {isBranching
-                          ? 'Creating branch…'
-                          : 'Branch conversation: this chat stays unchanged'}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
-                        aria-label="More message actions"
-                      >
-                        <MoreHorizontal className={ACTION_ICON_SIZE} aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                      <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
-                        <span className="block">
-                          Sent at{' '}
-                          <time
-                            data-testid="message-timestamp"
-                            dateTime={message.timestamp.toISOString()}
-                            title={message.timestamp.toLocaleString()}
-                            className="tabular-nums"
-                          >
-                            {message.timestamp.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </time>
-                        </span>
-                        {answeredByLabel && (
-                          <span className="block truncate">{answeredByLabel}</span>
-                        )}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
-                        <DropdownMenuCheckboxItem
-                          checked={isReadingAloud}
-                          onCheckedChange={() => onReadAloud(message.id, message.content)}
-                        >
-                          {isReadingAloud ? (
-                            <Square className="mr-2 h-4 w-4 fill-current" aria-hidden="true" />
-                          ) : (
-                            <Volume2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align={isUser ? 'end' : 'start'}>
+                        <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
+                          <span className="block">
+                            Sent at{' '}
+                            <time
+                              data-testid="message-timestamp"
+                              dateTime={message.timestamp.toISOString()}
+                              title={message.timestamp.toLocaleString()}
+                              className="tabular-nums"
+                            >
+                              {message.timestamp.toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </time>
+                          </span>
+                          {answeredByLabel && (
+                            <span className="block truncate">{answeredByLabel}</span>
                           )}
-                          {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
-                        </DropdownMenuCheckboxItem>
-                      )}
-                      {onPin && (
-                        <DropdownMenuCheckboxItem
-                          checked={Boolean(message.metadata?.isPinned)}
-                          onCheckedChange={() => onPin(message.id)}
-                        >
-                          <Pin
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              message.metadata?.isPinned && 'fill-current',
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
+                          <DropdownMenuCheckboxItem
+                            checked={isReadingAloud}
+                            onCheckedChange={() => onReadAloud(message.id, message.content)}
+                          >
+                            {isReadingAloud ? (
+                              <Square className="mr-2 h-4 w-4 fill-current" aria-hidden="true" />
+                            ) : (
+                              <Volume2 className="mr-2 h-4 w-4" aria-hidden="true" />
                             )}
-                            aria-hidden="true"
-                          />
-                          {message.metadata?.isPinned ? 'Unpin message' : 'Pin message'}
-                        </DropdownMenuCheckboxItem>
-                      )}
-                      {isUser && onBranch && (
-                        <DropdownMenuItem
-                          disabled={isBranching}
-                          onClick={() => onBranch(message.id)}
-                        >
-                          <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
-                          {isBranching ? 'Creating branch…' : 'Branch conversation from here'}
-                        </DropdownMenuItem>
-                      )}
-                      {!isUser && (
-                        <DropdownMenuItem
-                          disabled={reportState !== 'idle'}
-                          onClick={() => void reportMessage()}
-                        >
-                          <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
-                          {reportState === 'sent'
-                            ? 'Reported'
-                            : reportState === 'sending'
-                              ? 'Reporting…'
-                              : 'Report this response'}
-                        </DropdownMenuItem>
-                      )}
-                      {message.metadata?.tokensUsed ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <div className="px-2 py-1.5">
-                            <TokenUsageDisplay
-                              variant="detailed"
-                              tokensUsed={message.metadata.tokensUsed}
-                              inputTokens={message.metadata.inputTokens}
-                              outputTokens={message.metadata.outputTokens}
-                              model={message.metadata.model}
-                              cost={
-                                typeof message.metadata.cost === 'number'
-                                  ? message.metadata.cost / 100
-                                  : undefined
-                              }
+                            {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
+                          </DropdownMenuCheckboxItem>
+                        )}
+                        {onPin && (
+                          <DropdownMenuCheckboxItem
+                            checked={Boolean(message.metadata?.isPinned)}
+                            onCheckedChange={() => onPin(message.id)}
+                          >
+                            <Pin
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                message.metadata?.isPinned && 'fill-current',
+                              )}
+                              aria-hidden="true"
                             />
-                            {typeof message.metadata.totalDurationMs === 'number' && (
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {(message.metadata.totalDurationMs / 1000).toFixed(1)}s
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : null}
-                      {(onDelete || canDeleteVariant) && <DropdownMenuSeparator />}
-                      {canDeleteVariant && (
-                        <DropdownMenuItem
-                          onClick={handleDeleteVariantWithConfirm}
-                          className="text-danger focus:text-danger"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Delete this response and what follows
-                        </DropdownMenuItem>
-                      )}
-                      {onDelete && (
-                        <DropdownMenuItem
-                          onClick={handleDeleteWithConfirm}
-                          className="text-danger focus:text-danger"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Delete
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TooltipProvider>
+                            {message.metadata?.isPinned ? 'Unpin message' : 'Pin message'}
+                          </DropdownMenuCheckboxItem>
+                        )}
+                        {isUser && onBranch && (
+                          <DropdownMenuItem
+                            disabled={isBranching}
+                            onClick={() => onBranch(message.id)}
+                          >
+                            <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {isBranching ? 'Creating branch…' : 'Branch conversation from here'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && (
+                          <DropdownMenuItem
+                            disabled={reportState !== 'idle'}
+                            onClick={() => void reportMessage()}
+                          >
+                            <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {reportState === 'sent'
+                              ? 'Reported'
+                              : reportState === 'sending'
+                                ? 'Reporting…'
+                                : 'Report this response'}
+                          </DropdownMenuItem>
+                        )}
+                        {message.metadata?.tokensUsed ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <div className="px-2 py-1.5">
+                              <TokenUsageDisplay
+                                variant="detailed"
+                                tokensUsed={message.metadata.tokensUsed}
+                                inputTokens={message.metadata.inputTokens}
+                                outputTokens={message.metadata.outputTokens}
+                                model={message.metadata.model}
+                                cost={
+                                  typeof message.metadata.cost === 'number'
+                                    ? message.metadata.cost / 100
+                                    : undefined
+                                }
+                              />
+                              {typeof message.metadata.totalDurationMs === 'number' && (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {(message.metadata.totalDurationMs / 1000).toFixed(1)}s
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        ) : null}
+                        {(onDelete || canDeleteVariant) && <DropdownMenuSeparator />}
+                        {canDeleteVariant && (
+                          <DropdownMenuItem
+                            onClick={handleDeleteVariantWithConfirm}
+                            className="text-danger focus:text-danger"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete this response and what follows
+                          </DropdownMenuItem>
+                        )}
+                        {onDelete && (
+                          <DropdownMenuItem
+                            onClick={handleDeleteWithConfirm}
+                            className="text-danger focus:text-danger"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TooltipProvider>
+                )}
+              </div>
+              {!isUser && answeredByChipLabel && (
+                <span
+                  data-testid="message-answered-by"
+                  className="max-w-full truncate text-[12px] leading-tight text-[var(--chat-text-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+                >
+                  {answeredByChipLabel}
+                </span>
               )}
             </div>
           )}
@@ -2958,6 +2985,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.isPasted === next?.isPasted &&
     prev?.reaction === next?.reaction &&
     prev?.model === next?.model &&
+    prev?.requestedModel === next?.requestedModel &&
     prev?.tokensUsed === next?.tokensUsed &&
     prev?.inputTokens === next?.inputTokens &&
     prev?.outputTokens === next?.outputTokens &&

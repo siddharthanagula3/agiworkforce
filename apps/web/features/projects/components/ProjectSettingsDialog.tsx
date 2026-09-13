@@ -2,14 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,6 +10,7 @@ import {
   Button,
   Input,
   Textarea,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Copy, Download, Smile, Trash2 } from 'lucide-react';
@@ -53,9 +46,8 @@ export function ProjectSettingsDialog({
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions ?? '');
   const [usesGlobalMemory, setUsesGlobalMemory] = useState(project.usesGlobalMemory !== false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   useEffect(() => {
     setName(project.name);
@@ -120,20 +112,24 @@ export function ProjectSettingsDialog({
   };
 
   const handleDelete = async () => {
-    setIsDeleting(true);
     try {
       await webManagedCloudProjects.deleteProject(project.id);
 
       onDelete(project.id);
-      setDeleteConfirmOpen(false);
       onOpenChange(false);
       toast.success('Project deleted');
     } catch (error) {
       toast.error(toUserMessage(error, 'Failed to delete project'));
-    } finally {
-      setIsDeleting(false);
     }
   };
+
+  const requestDelete = () =>
+    confirm({
+      title: 'Delete project?',
+      description: `“${project.name}” and its knowledge files will be permanently deleted, including the uploaded file contents. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      onConfirm: handleDelete,
+    });
 
   return (
     <>
@@ -264,7 +260,7 @@ export function ProjectSettingsDialog({
               variant="ghost"
               size="sm"
               className="order-3 col-span-2 w-full justify-center text-danger hover:bg-destructive/10 hover:text-danger sm:order-none sm:w-auto"
-              onClick={() => setDeleteConfirmOpen(true)}
+              onClick={requestDelete}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
               Delete project
@@ -313,32 +309,7 @@ export function ProjectSettingsDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete project?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{project.name}&rdquo; and its knowledge files will be permanently deleted,
-              including the uploaded file contents. Conversations in this project will be moved to
-              &ldquo;All Chats&rdquo;. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleDelete();
-              }}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? 'Deleting…' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {confirmDialog}
     </>
   );
 }

@@ -9,8 +9,7 @@ describe('variantDeleteConfirm', () => {
     expect(copy.description).toBe(
       'This response is deleted. The other answer to this message stays, and you are moved to it. This cannot be undone.',
     );
-    expect(copy.confirmText).toBe('Delete response');
-    expect(copy.variant).toBe('destructive');
+    expect(copy.confirmLabel).toBe('Delete response');
   });
 
   it('counts what goes with the response, because the subtree mode takes it too', () => {
