@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-10
+Last updated: 2026-09-13
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
@@ -40,9 +40,13 @@ issue turned out to be is in the commit that closed it.
   and removed), the local security-scan directories (reconciled and removed,
   one surviving finding carried in as `AGI-22`), `known-flaws.md`,
   `capability-gaps.csv` and `ui-gaps.csv`.
-- 19 unresolved issues: 0 P0, 0 P1, 12 P2, 7 P3, plus 5 items needing
-  validation this session could not perform. Three of them, `AGI-3`, `AGI-16`
-  and `AGI-23`, are partly fixed and say which part.
+- As of the 2026-09-13 reconciliation: 18 open `AGI-*` root causes (10 P2, 8
+  P3) plus the P1 security entry, which is largely mitigated and names what is
+  still blocked, and a handful of "Needs live validation" notes that are not
+  confirmed defects. `AGI-10` and `AGI-28` closed this pass; see "Closed in
+  this pass" below. Several of the rest, including `AGI-3`, `AGI-16`, `AGI-20`,
+  `AGI-23`, `AGI-27`, `AGI-30`, `AGI-31` and `AGI-32`, are code-fixed and only
+  waiting on a live confirmation their own section names.
 - Pass of 2026-09-12, code and tests only, no browser and no deployment. Fixed:
   the two unblocked rows of the P1 security entry (F31, F39), `AGI-23`,
   `AGI-27`, `AGI-28` in the main, `AGI-30`, `AGI-31`, `AGI-32`, and the
@@ -99,6 +103,27 @@ issue turned out to be is in the commit that closed it.
   only the current deployment receives invocations, and the remaining
   daily 500 is the credit reconciliation cron meeting Stripe subscription ids
   the live account does not know (founder file, Billing entry).
+- Reconciliation pass 2026-09-13, ledgers only: every commit on `origin/main`
+  since 2026-09-13 00:00 (about 123) plus the unpushed commits this checkout
+  carries on top of it (22, tip `24c5c9feb`) checked against this file and
+  `known-flaws.md`. `origin/main` is green at `9ab4a616b`. The production
+  deploy is not blocked on code: it is waiting on a founder approval, and on
+  migrations `0183` to `0186` being applied in production first, because the
+  deploy job refuses to promote while a draft migration is unapplied. Both are
+  tracked as founder-assistance items in `docs/work/founder-assistance.md`
+  ("[Database] Apply migrations 0183 to 0186 in production before the next
+  deploy", "[QA] Somewhere to exercise this work before it ships"). `AGI-10`
+  closed on 2026-09-13 for both artifacts and conversations (0184-0186 are its
+  migrations); the citation and research-reload half of `AGI-28` closed the
+  same day. `AGI-3`'s remainder was narrowed: code-execution results and
+  generated files closed 2026-09-12 in `e3d8bbebe` and had been left in this
+  file's remainder list by mistake, corrected in this pass, and a 2026-09-13
+  fix (`ad013685f`) bounds oversized turn metadata so a save no longer fails
+  validation outright. Fixed the format of four rows (`AGI-20`, `AGI-27`,
+  `AGI-30`, `AGI-31`) carrying two contradictory `Status:` lines each from the
+  2026-09-12 pass. No row in this file's P1-P3 sections closed outright from a
+  2026-09-13 commit beyond what is named above; the rest are unchanged because
+  no commit in the range touches their evidence.
 - Five are blocked on a decision rather than on code, and each says whose and
   what it costs: `AGI-5` (CI budget), `AGI-11` (default expiry), `AGI-14` (a
   second speech-to-text vendor), `AGI-17` (conform to CommonMark or forgive it),
@@ -106,28 +131,30 @@ issue turned out to be is in the commit that closed it.
 
 ### Closed in this pass
 
-Seven issues were fixed and verified, and their sections are gone from this
+These issues were fixed and verified, and their sections are gone from this
 file. Named here only so a reader coming from an older copy knows where they
 went, and so nobody re-files them:
 
-| Was      | What it was                                                        | Verified by                                                                              |
-| -------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `AGI-15` | Local development ran against the shared database                  | dev server on `:3100` now writes `agiworkforce_dev`                                      |
-| `AGI-1`  | Managed usage leases clamped to one hour, never renewed            | `pnpm db:lease-probe` against real Postgres                                              |
-| `AGI-2`  | Stranded reservations waited up to a day for recovery              | cron scope test, `/api/cron/recover-reservations`                                        |
-| browser  | Non-image chat attachments failed on every route                   | `apps/web/e2e/chat-document-attachment.spec.ts`                                          |
-| browser  | Starting a conversation inside a project failed every time         | `apps/web/e2e/project-first-conversation.spec.ts`                                        |
-| browser  | Tool Approvals did not gate web search in either mode              | `apps/web/e2e/tool-approval-web-search.spec.ts`                                          |
-| latent   | Approval checkpoints 500'd on a jsonb parameter                    | found by the first turn to reach that path                                               |
-| `AGI-13` | Unimplemented native commands answered with mock success           | the guard was unreachable; rule extracted and tested                                     |
-| `AGI-19` | Marketing nav panels stayed open while the page scrolled           | `NavGroup.scroll.test.tsx`                                                               |
-| `AGI-21` | A cancelled settings query logged at error level                   | `use-settings-queries.abort.test.tsx`                                                    |
-| `AGI-8`  | The US-only preference never reached the web resolver              | `request-processor.us-only.test.ts`                                                      |
-| `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander | driven in a browser on `:3100`                                                           |
-| `AGI-9`  | A forbidden connector could be connected and its credential stored | `connector-policy-gate.test.ts`                                                          |
-| `AGI-24` | Any function tool blocked cross-provider failover for a whole turn | `managed-failover.test.ts`, red on the old predicate                                     |
-| `AGI-25` | A turn holding an approval said it had finished with no response   | live on `:3100`; the line is gone, the row remains                                       |
-| `AGI-6`  | Web voice could not speak until the whole reply was written        | live session on `:3100`, audio about a second after the user stops, interruptions native |
+| Was      | What it was                                                                                  | Verified by                                                                                                                                                       |
+| -------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGI-15` | Local development ran against the shared database                                            | dev server on `:3100` now writes `agiworkforce_dev`                                                                                                               |
+| `AGI-1`  | Managed usage leases clamped to one hour, never renewed                                      | `pnpm db:lease-probe` against real Postgres                                                                                                                       |
+| `AGI-2`  | Stranded reservations waited up to a day for recovery                                        | cron scope test, `/api/cron/recover-reservations`                                                                                                                 |
+| browser  | Non-image chat attachments failed on every route                                             | `apps/web/e2e/chat-document-attachment.spec.ts`                                                                                                                   |
+| browser  | Starting a conversation inside a project failed every time                                   | `apps/web/e2e/project-first-conversation.spec.ts`                                                                                                                 |
+| browser  | Tool Approvals did not gate web search in either mode                                        | `apps/web/e2e/tool-approval-web-search.spec.ts`                                                                                                                   |
+| latent   | Approval checkpoints 500'd on a jsonb parameter                                              | found by the first turn to reach that path                                                                                                                        |
+| `AGI-13` | Unimplemented native commands answered with mock success                                     | the guard was unreachable; rule extracted and tested                                                                                                              |
+| `AGI-19` | Marketing nav panels stayed open while the page scrolled                                     | `NavGroup.scroll.test.tsx`                                                                                                                                        |
+| `AGI-21` | A cancelled settings query logged at error level                                             | `use-settings-queries.abort.test.tsx`                                                                                                                             |
+| `AGI-8`  | The US-only preference never reached the web resolver                                        | `request-processor.us-only.test.ts`                                                                                                                               |
+| `AGI-18` | Not reproducible: the sidebar row is a correctly labelled expander                           | driven in a browser on `:3100`                                                                                                                                    |
+| `AGI-9`  | A forbidden connector could be connected and its credential stored                           | `connector-policy-gate.test.ts`                                                                                                                                   |
+| `AGI-24` | Any function tool blocked cross-provider failover for a whole turn                           | `managed-failover.test.ts`, red on the old predicate                                                                                                              |
+| `AGI-25` | A turn holding an approval said it had finished with no response                             | live on `:3100`; the line is gone, the row remains                                                                                                                |
+| `AGI-6`  | Web voice could not speak until the whole reply was written                                  | live session on `:3100`, audio about a second after the user stops, interruptions native                                                                          |
+| `AGI-10` | Artifacts and conversations could only be shared publicly, never with an organization        | `3503cc009`, `6ff12dc2c`, `efff70c8a`; two live runs against the local stack 2026-09-13, both surfaces, share/withdraw/re-check                                   |
+| `AGI-28` | Citations were prose with no markers, and a research reload lost sources and kept "thinking" | `55345a421` (citation markers), `0b732672c` (reload rebuilds from the stored report); live on `:3100` 2026-09-13, reloaded run reads 5 sources, 0 thinking blocks |
 
 ## 2. P0, critical
 
@@ -221,17 +248,26 @@ snapshot that carries the text, so citations survive a failed client save. A
 client metadata save that fails after its retries now stamps the turn and the
 transcript says what will not survive a reload, instead of a `console.error`
 nobody reads.
-**What remains:** the tool-call timeline, reasoning blocks, code-execution
-results and the generated-file list are still written only by the client's
-`saveMessageToDb`. A non-retryable failure still loses them; the difference is
-that the reader is now told.
-**Root cause of the remainder:** those four are derived by the client from the
-stream, with merging and per-tool status the server does not reproduce.
-Reproducing that derivation server-side is the work, and it must not become a
-second implementation of it.
+**What remains:** the tool-call timeline and reasoning blocks are still written
+only by the client's `saveMessageToDb`. A non-retryable failure still loses
+them; the difference is that the reader is now told. Code-execution results and
+the generated-file list closed 2026-09-12 in `e3d8bbebe`, collected server side
+in `assistant-turn-sources.ts` beside sources and citations; they are no longer
+in this remainder.
+**Root cause of the remainder:** the timeline and reasoning are derived by the
+client from the stream, with merging and per-tool status the server does not
+reproduce. Reproducing that derivation server-side is the work, and it must not
+become a second implementation of it.
+**2026-09-13, a related but distinct fix:** `ad013685f` bounds the size of
+whatever metadata the client does send (`message-metadata-projection.ts` caps
+sources, citations, tool entries and thinking length before the save request is
+validated), so an oversized payload from a long tool-using turn no longer fails
+Zod validation and loses the entire save. That closes one failure mode of the
+remainder (size-triggered validation refusal) without changing which side owns
+the timeline and reasoning derivation.
 **Evidence:** `apps/web/lib/hooks/useChatStream.ts` `persistAssistant`, which
 builds the metadata object; `assistant-turn-sources.ts`, which shows the shape
-the rest would follow.
+the rest would follow; `packages/contracts/cloud-contracts/src/message-metadata-projection.ts`.
 **User impact:** Bounded. Sources, the part a reader needs to trust an answer,
 now survive. Losing the tool timeline degrades the record of how the answer was
 reached.
@@ -319,62 +355,6 @@ the ledger as the acceptance record.
 **Acceptance criteria:** Every gate in the ledger is met, or the entry point is
 removed from shipped builds.
 **Validation:** The spec's gate ledger, exercised on a signed build.
-
-### `AGI-10` Artifacts and conversations can only be shared publicly, never with an organization
-
-**Severity:** P2
-**Status:** Resolved on web, 2026-09-13, for artifacts and conversations alike.
-**Area:** Artifacts, enterprise
-**Root cause:** `published_artifacts` had no audience model. Publication minted
-a 144-bit token and the read path was deliberately anonymous.
-**Resolution:** Migration `apps/web/db/neon/0184_organization_shared_artifacts.sql`
-follows 0086's shape exactly: a `visibility` column on the publication answering
-"is the anonymous token path open", and a separate grant row in
-`organization_shared_artifacts` answering "which organization may read it".
-`0185_org_shared_artifact_policy_recursion.sql` splits that table's write policy
-per command; the FOR ALL policy 0184 shipped also governed SELECT and recursed
-through `published_artifacts_org_shared_read`, raising 42P17 on every publish.
-The anonymous read in `published-artifact-service.ts` now demands
-`visibility = 'public'`; members read through
-`org-shared-artifact-service.ts` on an RLS-scoped adapter, so the grant, not the
-route, decides. `/shared-artifact` was added to the identity-session routes in
-`apps/web/proxy.ts`, without which the page carried no session and a member saw
-the same "unavailable" as a stranger.
-**Surfaces:** the artifact panel's published bar carries the audience control,
-confirmed in both directions; the workspace sharing console lists what is shared
-with a confirm before withdrawing, and withdrawing never republishes.
-**Conversations, the same shape:** migration
-`apps/web/db/neon/0186_organization_shared_sessions.sql` gives `shared_sessions`
-the same `visibility` column and adds the `organization_shared_sessions` grant
-table, with per-command write policies from the start rather than the FOR ALL
-0185 had to retrofit. `shared_sessions` had row level security disabled and no
-grants at all for `app_rls`, because every reader of it was the anonymous token
-path; the member read is the first statement with a subject, so the table now
-carries owner and org-shared policies and the two grants those statements need.
-The audience control lives in `ShareConversationDialog`, the console lists
-shared conversations, and `/share` joined the identity-session routes in
-`apps/web/proxy.ts` for the same reason `/shared-artifact` did. A withdrawal
-never reopens the link, on either surface.
-**Acceptance criteria:** A member can open an organization-shared artifact, a
-non-member cannot, and removing a member revokes access. All three are verified
-for conversations against the local stack, with a second account added to the QA
-workspace: a member read the transcript, a signed-out visitor holding the link
-got the unavailable page, and after the withdrawal neither could. Removing a
-member is enforced by the policy's `app_has_org_role` lookup and by the
-composite membership FK.
-**Validation:** `apps/web/db/neon/organization-shared-artifacts-migration.test.ts`,
-`apps/web/db/neon/organization-shared-sessions-migration.test.ts`,
-`apps/web/lib/services/__tests__/org-shared-artifact-service.test.ts`,
-`apps/web/lib/services/__tests__/org-shared-session-service.test.ts`,
-`apps/web/lib/services/__tests__/published-artifact-service.visibility.test.ts`,
-the visibility route test, the share dialog's audience tests and the sharing
-console's conversation tests. Two live runs against the local stack on
-2026-09-13, one per surface: shared public, switched to workspace, confirmed the
-token page refuses a signed-out visitor and serves a member, then withdrew the
-share behind the confirm and confirmed it stayed closed for both. 0186's
-policies were also exercised directly in Postgres as `app_rls`, where a member
-reads the row but cannot change its audience or delete the grant, a
-non-member reads neither, and the owner can do both.
 
 ### `AGI-14` There is no second speech-to-text vendor to fail over to
 
@@ -536,13 +516,12 @@ health assertion.
 
 ### `AGI-27` Attachments are not in the sandbox the model runs code in
 
+**Severity:** P2
 **Status:** Fixed 2026-09-12, not yet confirmed live. The turn's attachments are
 staged into the sandbox workspace before the baseline snapshot and only when an
 execution tool was actually called, so no sandbox is provisioned for a turn that
 runs no code. Remaining: the acceptance criterion's live CSV total, which needs
 a real sandbox.
-**Severity:** P2
-**Status:** Open.
 **Area:** Code execution, files
 **What is wrong:** a file attached to the turn is never staged into the
 execution sandbox, so the model's first action is `write_file` with the whole
@@ -559,40 +538,6 @@ the sandbox before the first `execute_code`, the model is told where, and no
 `write_file` copy is needed.
 **Validation:** tool-loop code-execution tests, a live CSV total on a
 non-gateway model.
-
-### `AGI-28` Citations are prose, and a research reload keeps thinking and loses sources
-
-**Severity:** P2
-**Status:** Closed 2026-09-13, confirmed live on `:3100`. The citation half
-closed on 2026-09-12. The reload half closed with 0b732672c: the turn's own
-write now projects the run's activity from the report the loop already stored,
-so the state the header renders is on the message row and does not depend on
-the client save, which is the save a research turn's metadata size is most
-likely to sink. No migration was needed. The `<thinking>` prose did not
-reproduce: both persistence paths strip it, and the live run's stored content
-opened on its executive summary.
-**Area:** Web search, research, persistence
-**What was wrong:** on a native-search turn the model wrote outlet names as
-italic prose with no `[n]` markers, and the Sources control counted one source
-for two outlets. After a reload of a completed deep-research run the row's
-metadata held no research state, so the activity header was gone and the report
-and its citations sat in `research_reports` with no link from the message.
-**Evidence:** live 2026-09-13, a Deep Research run on `:3100` reloaded to
-"Research complete, 1 search, 5 sources, 0:12", its five plan steps all done,
-the Sources control reading 5 and no `<thinking>` anywhere in the page;
-the conversation read back through `/api/chat/conversations/{id}` carried
-`metadata.research.phase = "complete"` on the assistant row. Screenshots under
-the session scratchpad `qa/web-research/`.
-**User impact:** medium, now resolved. A saved research run reads the same as
-the live one. Related: `AGI-16` (the href is still the provider's redirect).
-**Dependencies:** None.
-**Acceptance criteria:** met. Numbered markers open the right source on native
-and runtime search turns; a reloaded research run shows the same citations and
-Sources count as the live session and no thinking prose.
-**Validation:** `managed-agent-stream.test.ts` (the stored report reaches the
-row, an interrupted run is not recorded as complete), `research-loop.test.ts`
-(the report is stored before the terminal event), `MessageBubble.test.tsx` (the
-turn rebuilds from the stored state alone), and the live reload above.
 
 ### `AGI-32` A live voice session's backend responses model and web search are never metered
 
@@ -652,7 +597,6 @@ state on `stalled` and sets the error the existing retry banner already offers
 to resend. Verified on `:3100`: the conversation shows "This turn stopped
 running on the server and will not finish. Send it again to retry." with a
 Retry button, and no "Generating response".
-**Status:** Fixed, pending the deploy that carries it.
 
 ## 5. P3, lower priority
 
@@ -738,6 +682,7 @@ line.
 
 ### `AGI-20` Retry can move the viewport to an unrelated message
 
+**Severity:** P3
 **Status:** Fixed 2026-09-12, not observed in a browser. The transcript caches
 row heights by index, and the guard asked whether ANY index on the visible path
 now held a different message. A retry makes that true by construction, so one
@@ -746,8 +691,6 @@ layout moved under the reader with no scroll call at all. Short threads fit in
 the viewport, which is why it was only ever seen in long ones. Only the rewritten
 suffix is forgotten now. The fix is about real layout and jsdom has none, so the
 tests assert which rows are invalidated, not the resulting pixel position.
-**Severity:** P3
-**Status:** Open
 **Area:** Chat transcript
 **Root cause:** Not diagnosed. Retry replaces a message in a virtualised list;
 the scroll anchor appears to be resolved against the pre-retry layout.
@@ -790,16 +733,15 @@ eligible turn, tracked in `docs/work/founder-assistance.md`.
 
 ### `AGI-30` The conversation list is fetched ten times during one turn
 
-**Status:** Fixed 2026-09-12. It was not a render storm: within one mount the
-effect fires once. It was mount count, because the first send routes /chat to
-/chat/[sessionId], a different route segment, so the page remounts mid-turn and
-asks again, and on shell routes a second copy of the hook races the page's in
-the same tick. Concurrent mounts now coalesce onto one request and a remount
-inside a short freshness window reuses what is loaded. The four /api/usage calls
-per turn are the same defect class in `useManagedUsageSummary` and are still
-open.
 **Severity:** P3
-**Status:** Open.
+**Status:** Partly fixed 2026-09-12, and still open for the residual. It was
+not a render storm: within one mount the effect fires once. It was mount
+count, because the first send routes /chat to /chat/[sessionId], a different
+route segment, so the page remounts mid-turn and asks again, and on shell
+routes a second copy of the hook races the page's in the same tick. Concurrent
+mounts now coalesce onto one request and a remount inside a short freshness
+window reuses what is loaded. The four /api/usage calls per turn are the same
+defect class in `useManagedUsageSummary` and are still open.
 **Area:** Chat performance
 **What is wrong:** one send produces about ten `GET /api/chat/conversations`
 and four `GET /api/usage`; the list hook refetches on every message update.
@@ -812,6 +754,7 @@ and four `GET /api/usage`; the list hook refetches on every message update.
 
 ### `AGI-31` A chat turn logs a MaxListenersExceededWarning
 
+**Severity:** P3
 **Status:** Fixed 2026-09-12, no live proof yet. The leak was in the database
 layer, not in a model adapter, which is why it was never found where the warning
 appeared: each per-request scoped adapter kept its own record of which pooled
@@ -820,8 +763,6 @@ removed it. The same bookkeeping made one socket failure log once per leaked
 listener. The guard now belongs to the checkout and is removed on release.
 Remaining: a fresh stack from a running server to confirm the warning is gone
 across many turns.
-**Severity:** P3
-**Status:** Open.
 **Area:** Server hygiene
 **What is wrong:** "Possible EventEmitter memory leak detected. 11 error
 listeners added" appears during a chat turn; the registration site was not
@@ -993,86 +934,23 @@ mechanic in the scenarios traces to real CLI code. Nothing needed replacing.
 yield from the first 18, the rest should be read the same way before launch:
 extract each checkable claim, find the code that decides it, and cite it.
 
-### The migration reconciliation is not a renumber, 2026-09-12
+### Migration numbering reconciled with origin/main, closed 2026-09-13
 
-`pnpm check:neon-migrations` fails on this branch, so **CI cannot pass as it
-stands**: the local inventory jumps 0179 to 0183, because the branch carries
-`0183`/`0184`/`0185` while `origin/main` carries the same three names as
-`0180`/`0181`/`0182`, which memory records as applied in production 09-07 to
-09-11.
-
-**The obvious reconciliation is a trap, and the master plan states the premise
-that leads into it.** The plan says the local files "are the content of
-production's 0180-0182". Two of them nearly are, differing only in the migration
-number inside their own comments. The third is not:
-
-| file                        | `create trigger sync_*` |
-| --------------------------- | ----------------------- |
-| `origin/main` 0182, applied | 5                       |
-| local 0185, this branch     | 0                       |
-
-`origin/main`'s 0182 is a superset of local 0185 by about 188 lines: five unit
-sync triggers on `token_credits`, `credit_transactions`,
-`credit_settlement_jobs`, `managed_usage_requests` and
-`managed_usage_request_extensions`. Local 0185 is an earlier draft written
-before they were added.
-
-**So renumbering local 0185 to 0182 would silently drop them**, and the dropped
-thing is load bearing. Its own comment says why: writers that still speak cents,
-`operator-metrics.ts` at six call sites and the lease probe, leave the microUSD
-twin at its zero default. The functions the same migration installs read
-microUSD, so such an account holds no spendable balance, every reservation
-against it is declined, and such a transaction sums as zero spend in the rolling
-windows that bound a plan.
-
-**The correct direction is to take `origin/main`'s three and drop the local
-drafts, never the reverse**, and the files must be taken **byte for byte**
-rather than renumbered. `planMigrations` in `scripts/lib/neon-migrations.mjs`
-checksums each file and compares it against the applied ledger, and the local
-drafts differ from production's in the migration number inside their own first
-comment line. Renaming `0183` to `0180` therefore produces a file whose checksum
-does not match the `0180` production already applied, and the check reports
-drift. Copying `origin/main`'s bytes matches, because those are the bytes that
-were applied.
-
-Sequence contiguity is strict: the loop requires file `i` to carry sequence
-`i + 1` from `0001`, so the inventory has to read `0001` through `0182` with no
-gap.
-
-**The remediation, rehearsed in an isolated worktree on 2026-09-12 and verified
-to clear the check.** It was rehearsed, measured, then reverted; nothing was
-committed, because applying it for real belongs after FA-1 confirms what
-production holds.
-
-1. Take `origin/main`'s `0180`, `0181` and `0182` verbatim
-   (`git show origin/main:<path> > <path>`), never a renamed local copy.
-2. `git rm` local `0183`, `0184` and `0185`. Their content is superseded: two
-   are the same but for a comment, and `0182` is a superset of `0185`.
-3. Repoint the **five allowlist entries** in
-   `scripts/config/migration-dependency-allowlist.json` whose parsed
-   `"migration"` field reads `185` to `182`. This field is read, not prose, so
-   it is part of the fix rather than tidying. The entries are
-   `api/billing/overage/route.ts`, `api/stripe-webhook/lib/db.ts`,
-   `lib/server/spendable-credits.ts`, `lib/services/credit-service.ts` and
-   `lib/services/managed-usage-request-service.ts`.
-4. Renumber the prose in **13 files** that name the old migrations in comments
-   and reason strings, `0185` to `0182`, `0184` to `0181`, `0183` to `0180`.
-
-**Measured result of steps 1 and 2:** the inventory loads, 182 migrations,
-contiguous from `0001`, ending at `0182_managed_usage_microusd_ledger.sql`,
-which is exactly the last migration production holds.
-
-**An earlier note here said step 2 loses three `.down.sql` files the branch
-added. That was wrong and is withdrawn.** No `.down.sql` exists for `0183`,
-`0184` or `0185` in any commit: they appear in `git ls-files`, which reads the
-index, and not in `git ls-tree HEAD`. They are another session's uncommitted
-work, so the reconciliation costs nothing here, and whoever owns them should
-know they are down files for migrations that are being withdrawn.
-
-**Worth knowing before choosing a path:** the older
-`fix/provider-outage-health-2026-09-12` branch already carries
-`0180`/`0181`/`0182`, because it was built on `origin/main`. The divergence
-belongs to local `main`'s lineage alone, not to every branch in the repository.
+**Resolved.** This entry described a real divergence, measured 2026-09-12:
+this branch's local `0183`/`0184`/`0185` carried the same content as
+`origin/main`'s already-applied `0180`/`0181`/`0182`, byte-different only in
+the migration number inside each file's own header comment, which
+`planMigrations` in `scripts/lib/neon-migrations.mjs` checksums. The
+remediation this entry specified, taking `origin/main`'s three files verbatim
+and dropping the local drafts, landed in `c64694f1a`, and the migrations that
+actually needed the `0183` to `0185` numbers (video completion notice,
+organization-shared artifacts and its policy fix) were renumbered `0183` to
+`0185` on top of the correct `0182`, with `0186` added for organization-shared
+conversations (`AGI-10`). `pnpm check:neon-migrations` passes on the current
+tree: 186 migrations, contiguous from `0001`, ending at
+`0186_organization_shared_sessions.sql`. What is still outstanding is not the
+file reconciliation but applying `0183` to `0186` to the production database,
+tracked in `docs/work/founder-assistance.md`.
 
 ### Retracted: the origin/main comparison, 2026-09-12
 
@@ -1304,31 +1182,38 @@ Dependency-aware, not severity-ordered.
    the same provenance story project retrieval closed.
 6. `AGI-7`, desktop voice. Web voice is now a live session; the desktop
    gates are its own ledger.
-7. `AGI-10` is closed: artifacts and conversations both carry the two-part
-   audience model. `AGI-14` needs a vendor decision before it needs an
-   implementer.
-8. `AGI-11`, `AGI-20`, `AGI-29`, `AGI-30`, `AGI-31`. Background and polish.
-   `AGI-17` needs a decision before it needs an implementer.
+7. `AGI-14` needs a vendor decision before it needs an implementer. `AGI-10`
+   is closed, artifacts and conversations both carry the two-part audience
+   model, so nothing sequences behind it.
+8. `AGI-32` and `AGI-34` need only the live confirmation their own sections
+   name; both are code-complete on main. `AGI-11`, `AGI-20`, `AGI-29`,
+   `AGI-30`, `AGI-31`, `AGI-33`. Background and polish. `AGI-17` needs a
+   decision before it needs an implementer.
 
 `AGI-12` belongs to whoever is next in `apps/desktop`.
 
 ## 8. Acceptance matrix
 
-| Issue    | Automated                                           | Manual or live                            | Gate                                      |
-| -------- | --------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
-| `AGI-3`  | per-class snapshot tests, e2e reload                | reload after a tool-using answer          | nothing the transcript rendered is lost   |
-| `AGI-5`  | the four native lanes are pinned together           | a PR with a deliberate native break       | required check fails on the PR            |
-| `AGI-7`  | spec gate ledger                                    | signed build                              | 12 of 12 gates, or surface removed        |
-| `AGI-10` | 0184/0185/0186 migration and service tests          | signed-out refusal, member open, withdraw | closed for artifacts and conversations    |
-| `AGI-11` | service and cron tests                              | none                                      | expired token stops resolving             |
-| `AGI-12` | `check:boundaries`, desktop tests                   | none                                      | zero `task-1.3` markers                   |
-| `AGI-14` | per-provider route tests, registry contract         | none                                      | a second STT vendor exists and fails over |
-| `AGI-16` | resolve-on-ingest tests, no provider host in a href | a grounded research turn                  | a citation survives redirect expiry       |
-| `AGI-17` | none until the decision is taken                    | none                                      | founder decides conform or forgive        |
-| `AGI-20` | e2e retry in a long thread                          | none                                      | retried message stays in view             |
-| `AGI-22` | conformance fixtures, consent record migration      | none                                      | no Chinese-HQ route without consent       |
-| `AGI-23` | classification test over the observed 404           | none                                      | excluded route is not offered             |
-| `AGI-27` | tool-loop staging cases                             | a CSV total on a non-gateway model        | no write_file copy before execute_code    |
+| Issue    | Automated                                            | Manual or live                           | Gate                                      |
+| -------- | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `AGI-3`  | per-class snapshot tests, e2e reload                 | reload after a tool-using answer         | nothing the transcript rendered is lost   |
+| `AGI-5`  | the four native lanes are pinned together            | a PR with a deliberate native break      | required check fails on the PR            |
+| `AGI-7`  | spec gate ledger                                     | signed build                             | 12 of 12 gates, or surface removed        |
+| `AGI-11` | service and cron tests                               | none                                     | expired token stops resolving             |
+| `AGI-12` | `check:boundaries`, desktop tests                    | none                                     | zero `task-1.3` markers                   |
+| `AGI-14` | per-provider route tests, registry contract          | none                                     | a second STT vendor exists and fails over |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href  | a grounded research turn                 | a citation survives redirect expiry       |
+| `AGI-17` | none until the decision is taken                     | none                                     | founder decides conform or forgive        |
+| `AGI-20` | e2e case invalidating only the retried row           | none, real layout needs a browser        | retried message stays in view             |
+| `AGI-22` | conformance fixtures, consent record migration       | none                                     | no Chinese-HQ route without consent       |
+| `AGI-23` | classification test over the observed 404            | none                                     | excluded route is not offered             |
+| `AGI-27` | tool-loop staging cases                              | a CSV total on a non-gateway model       | no write_file copy before execute_code    |
+| `AGI-29` | memory service tests                                 | a live two-chat recall                   | a fact without a trigger phrase is kept   |
+| `AGI-30` | hook test with a request counter                     | one live turn                            | one list refetch per completed turn       |
+| `AGI-31` | targeted test once the stack is captured             | a hundred turns with no warning          | no MaxListenersExceededWarning            |
+| `AGI-32` | test on the close route                              | a live session with a backend web search | second `provider_cost_events` row lands   |
+| `AGI-33` | the two pinning tests flip to asserting preservation | none                                     | classification survives the envelope      |
+| `AGI-34` | run-age contract, stalled-state unit tests           | a stalled run on the deployed build      | Retry banner, not Generating response     |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -1341,10 +1226,11 @@ AGI-23                     routing, independent now that the pin is narrowed
 AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-7          desktop voice, measure before building
-AGI-10                     done, artifacts and conversations
 AGI-14                     blocked on a second STT vendor, not on code
-AGI-11, AGI-12             background
-AGI-17, AGI-20             polish, independent of everything
+AGI-32, AGI-34             code-complete, waiting on a live confirmation
+AGI-11, AGI-12, AGI-33     background
+AGI-17, AGI-20, AGI-29,
+AGI-30, AGI-31             polish, independent of everything
 ```
 
 Two tracks can run at once without touching the same files: web chat
