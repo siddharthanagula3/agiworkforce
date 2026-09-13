@@ -104,6 +104,8 @@ export function getWebviewContent(
       --error: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground, var(--agi-vscode-danger)));
       --error-bg: var(--vscode-inputValidation-errorBackground, var(--agi-vscode-danger-bg));
       --error-border: var(--vscode-inputValidation-errorBorder, var(--agi-vscode-danger-border));
+      --link: var(--vscode-textLink-foreground, var(--accent-teal));
+      --link-active: var(--vscode-textLink-activeForeground, var(--link));
       --radius-md: 8px;
       --radius-lg: 12px;
       --transition: cubic-bezier(0.16, 1, 0.3, 1);
@@ -1085,6 +1087,16 @@ export function getWebviewContent(
     }
 
     .usage-bucket-row.binding { color: var(--text-primary); font-weight: 600; }
+
+    .path-link {
+      color: var(--link);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .path-link:hover,
+    .path-link:focus-visible { color: var(--link-active); }
 
     .usage-credit-row {
       border-top: 1px solid var(--border);
@@ -3045,6 +3057,37 @@ export function getWebviewContent(
         .replace(/"/g, '&quot;')
         .replace(/\\n/g, '<br>');
     }
+
+    // Path references inside rendered output are spans, not anchors, because
+    // the sanitizer only allows http/mailto hrefs. One delegated listener
+    // covers every message without rebinding as transcripts grow.
+    function postPathReference(el) {
+      var path = el.getAttribute('data-path');
+      if (!path) return;
+      var payload = { path: path };
+      var line = parseInt(el.getAttribute('data-line') || '', 10);
+      if (line > 0) payload.line = line;
+      var column = parseInt(el.getAttribute('data-column') || '', 10);
+      if (column > 0) payload.column = column;
+      vscode.postMessage({ type: 'openPathReference', payload: payload });
+    }
+
+    document.addEventListener('click', function(ev) {
+      var target = ev.target;
+      var link = target && target.closest ? target.closest('.path-link') : null;
+      if (!link) return;
+      ev.preventDefault();
+      postPathReference(link);
+    });
+
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      var target = ev.target;
+      var link = target && target.closest ? target.closest('.path-link') : null;
+      if (!link) return;
+      ev.preventDefault();
+      postPathReference(link);
+    });
 
     // Attach code-action handlers after sanitized HTML is in the DOM. A
     // WeakSet prevents duplicate listeners without adding data attributes to

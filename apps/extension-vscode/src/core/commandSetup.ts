@@ -27,6 +27,7 @@ import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
+import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 import {
   clearAccountTierCache,
@@ -962,6 +963,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.modelDashboard', () => {
       ModelMetricsPanel.createOrShow(context.extensionUri, context);
+    }),
+
+    register(OPEN_PATH_REFERENCE_COMMAND, async (target?: unknown) => {
+      await openPathReference(target);
     }),
 
     register('agi-workforce.openActionSheet', async (scope?: unknown) => {

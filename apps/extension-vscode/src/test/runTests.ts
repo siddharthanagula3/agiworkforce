@@ -1,4 +1,3 @@
-
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -254,7 +253,10 @@ async function main(): Promise<void> {
   const packaged = requestedVsix !== undefined;
   const cliPath = resolveCliPath(packaged);
   const testGrep = resolveTestGrep();
-  const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-vsc-'));
+  // Canonical, because on macOS os.tmpdir() is reached through the /var ->
+  // /private/var symlink and every workspace-containment check in the product
+  // compares a realpath against the folder it was handed.
+  const runRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-vsc-')));
   const testRunnerDir = path.join(
     extensionRoot,
     '.vscode-test',
@@ -429,7 +431,7 @@ async function main(): Promise<void> {
       extensionDevelopmentPath,
       extensionTestsPath,
       launchArgs: [
-        ...(artifact === undefined ? [] : [workspaceDir]),
+        workspaceDir,
         ...(artifact === undefined ? ['--disable-extensions'] : []),
         '--disable-workspace-trust',
         ...(artifact === undefined ? [] : ['--force-disable-user-env']),
