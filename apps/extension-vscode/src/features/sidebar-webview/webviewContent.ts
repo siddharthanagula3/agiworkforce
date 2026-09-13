@@ -1104,6 +1104,20 @@ export function getWebviewContent(
       padding-top: 4px;
     }
 
+    .usage-credit-topup {
+      background: none;
+      border: none;
+      color: var(--link);
+      cursor: pointer;
+      font: inherit;
+      padding: 0 0 0 6px;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .usage-credit-topup:hover,
+    .usage-credit-topup:focus-visible { color: var(--link-active); }
+
     .usage-bucket-label {
       flex: 1;
       min-width: 0;
@@ -2503,9 +2517,17 @@ export function getWebviewContent(
         var creditSpendability = document.createElement('span');
         creditSpendability.className = 'usage-bucket-reset';
         creditSpendability.textContent = credits.spendabilityLabel;
+        var creditTopUp = document.createElement('button');
+        creditTopUp.type = 'button';
+        creditTopUp.className = 'usage-credit-topup';
+        creditTopUp.textContent = credits.topUpLabel;
+        creditTopUp.addEventListener('click', function() {
+          vscode.postMessage({ type: 'manageBilling' });
+        });
         creditItem.appendChild(creditLabel);
         creditItem.appendChild(creditBalance);
         creditItem.appendChild(creditSpendability);
+        creditItem.appendChild(creditTopUp);
         meterBuckets.appendChild(creditItem);
       }
       meterBuckets.style.display = meterCollapsed ? 'none' : 'block';

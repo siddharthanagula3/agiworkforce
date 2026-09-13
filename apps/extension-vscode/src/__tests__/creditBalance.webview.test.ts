@@ -72,14 +72,21 @@ function renderWebview(): string {
   );
 }
 
+let postedMessages: unknown[] = [];
+
 function executeWebviewScript(): void {
   const parsed = new DOMParser().parseFromString(renderWebview(), 'text/html');
   document.head.innerHTML = parsed.head.innerHTML;
   document.body.innerHTML = parsed.body.innerHTML;
 
+  postedMessages = [];
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage: vi.fn() }),
+    value: () => ({
+      postMessage: (message: unknown) => {
+        postedMessages.push(message);
+      },
+    }),
   });
 
   const inlineScript = Array.from(parsed.querySelectorAll('script')).find((script) =>
@@ -118,8 +125,9 @@ describe('credit balance in the VS Code meter', () => {
     expect(meter.overageEnabled).toBe(true);
     expect(payload.credits).toEqual({
       label: 'Credits',
-      balanceLabel: '$12.34',
+      balanceLabel: '617 credits',
       spendabilityLabel: 'Spent when a limit stops you',
+      topUpLabel: 'Add credits',
     });
   });
 
@@ -132,7 +140,8 @@ describe('credit balance in the VS Code meter', () => {
     const row = creditRow();
     expect(row).not.toBeNull();
     expect(row?.textContent).toContain('Credits');
-    expect(row?.textContent).toContain('$12.34');
+    expect(row?.textContent).toContain('617 credits');
+    expect(row?.textContent).toContain('Add credits');
     expect(row?.textContent).toContain('Spent when a limit stops you');
     expect(document.getElementById('meterBuckets')?.style.display).toBe('block');
   });
@@ -160,14 +169,45 @@ describe('credit balance in the VS Code meter', () => {
 
     expect(payload.credits).toEqual({
       label: 'Credits',
-      balanceLabel: '$0.00',
+      balanceLabel: '0 credits',
       spendabilityLabel: 'Buy credits to work past a limit',
+      topUpLabel: 'Add credits',
     });
 
     executeWebviewScript();
     postUsageMeter(payload);
 
     expect(creditRow()?.textContent).toContain('Buy credits to work past a limit');
+  });
+
+  it('sends the reader to billing when they ask to add credits', async () => {
+    const { payload } = await payloadFromServerSummary(RAW_USAGE_SUMMARY);
+
+    executeWebviewScript();
+    postUsageMeter(payload);
+
+    const topUp = creditRow()?.querySelector<HTMLButtonElement>('.usage-credit-topup');
+    expect(topUp?.textContent).toBe('Add credits');
+    topUp?.click();
+
+    expect(postedMessages).toContainEqual({ type: 'manageBilling' });
+  });
+
+  it('publishes neither a balance nor an allowance figure on Free', async () => {
+    const { meter, payload } = await payloadFromServerSummary({
+      ...RAW_USAGE_SUMMARY,
+      plan_tier: 'free',
+    });
+
+    expect(meter.source).toBe('user-api-key');
+    expect(meter.creditBalanceCents).toBeUndefined();
+    expect(payload.credits).toBeNull();
+    expect(payload.usageLabel).not.toMatch(/credit|token|%/iu);
+
+    executeWebviewScript();
+    postUsageMeter(payload);
+
+    expect(creditRow()).toBeNull();
   });
 
   it('claims no balance when the server publishes none', async () => {

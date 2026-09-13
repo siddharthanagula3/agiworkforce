@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import {
   canUseBillingPlanCapability,
+  creditsFromCents,
+  formatCredits,
   formatPrivacyModeLabel,
   MANAGED_USAGE_BUCKET_ORDER,
   type ManagedUsageBucket,
@@ -212,13 +214,15 @@ export function formatManagedUsageLabel(
 export const CREDIT_BALANCE_LABEL = 'Credits';
 
 export function formatCreditBalance(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatCredits(creditsFromCents(cents));
 }
 
 export function formatCreditSpendability(cents: number, overageEnabled: boolean): string {
   if (cents <= 0) return 'Buy credits to work past a limit';
   return overageEnabled ? 'Spent when a limit stops you' : 'Off - enable in billing to spend';
 }
+
+export const CREDIT_TOP_UP_LABEL = 'Add credits';
 
 export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string {
   switch (source) {
