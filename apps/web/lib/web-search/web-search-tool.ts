@@ -601,9 +601,7 @@ export async function enrichWebSearchResultTitles<
 >(results: T[], overrides: TitleEnrichmentOverrides = {}): Promise<T[]> {
   const candidates = results
     .map((result, index) => ({ result, index }))
-    .filter(
-      ({ result }) => isHttpUrl(result.url) && (!result.title || !result.snippet || !result.date),
-    );
+    .filter(({ result }) => isHttpUrl(result.url) && !result.title);
   if (candidates.length === 0) return results;
 
   const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
