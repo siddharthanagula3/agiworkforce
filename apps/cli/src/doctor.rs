@@ -345,29 +345,13 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
         )]
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        let available = crate::platform::policy::windows_sandbox::is_available();
-        vec![check(
-            "sandbox.os",
-            "OS sandbox",
-            if available {
-                DoctorStatus::Pass
-            } else {
-                DoctorStatus::Warn
-            },
-            "Windows AppContainer probe completed",
-            details,
-        )]
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         vec![check(
             "sandbox.os",
             "OS sandbox",
-            DoctorStatus::Unknown,
-            "no OS sandbox probe is implemented for this platform",
+            DoctorStatus::Warn,
+            crate::sandbox::missing_sandbox_message(std::env::consts::OS),
             details,
         )]
     }

@@ -1678,7 +1678,6 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", ui_success()),
         Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", ui_success()),
         Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", ui_success()),
-        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", ui_success()),
         Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", ui_danger()),
     };
 

@@ -15,7 +15,6 @@ pub enum SandboxType {
     MacosSeatbelt,
     LinuxBubblewrap,
     LinuxLandlock,
-    WindowsRestrictedToken,
 }
 
 impl SandboxType {
@@ -40,7 +39,6 @@ impl SandboxType {
             Self::MacosSeatbelt => "seatbelt",
             Self::LinuxBubblewrap => "bubblewrap",
             Self::LinuxLandlock => "landlock",
-            Self::WindowsRestrictedToken => "windows_restricted_token",
         }
     }
 }
@@ -62,10 +60,16 @@ pub fn missing_sandbox_message(os: &str) -> String {
              not found. Restore it from the base macOS install, or re-run with --no-sandbox \
              and accept unrestricted command execution."
             .to_string(),
+        "windows" => "Sandboxed exec is unsupported on Windows, so every command a tool call \
+             runs executes with your full user rights: it can read, change, and delete any \
+             file you can, and reach the network. OS sandboxing is available only on Linux \
+             (bubblewrap) and macOS (Seatbelt). Approve each command, or run the CLI inside \
+             WSL or a container."
+            .to_string(),
         other => format!(
-            "Sandboxed exec is unsupported on {other}. It is available only on Linux \
-             (bubblewrap) and macOS (Seatbelt). Re-run with --no-sandbox to accept \
-             unrestricted command execution."
+            "Sandboxed exec is unsupported on {other}, so every command a tool call runs \
+             executes with your full user rights. It is available only on Linux \
+             (bubblewrap) and macOS (Seatbelt)."
         ),
     }
 }
