@@ -160,3 +160,66 @@ describe('runToolLoop AGI Work planning turn', () => {
     expect(deltas(output).some((d) => 'x_agiwork_plan' in d)).toBe(false);
   });
 });
+
+describe('runToolLoop AGI Work failover', () => {
+  function overloaded(): Error {
+    return Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 });
+  }
+
+  it('offers the planning turn to the failover ladder as the first dispatch', async () => {
+    const contexts: Array<{ step: number } | undefined> = [];
+    const rotated = makeAgiWorkProcessed({ goal: 'Summarise the topic' });
+    rotated.provider = 'anthropic';
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(overloaded())
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: '["A","B","C"]' }), chunk({}, 'stop')]),
+      )
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]));
+
+    const output = await drain(
+      runToolLoop(makeAgiWorkProcessed({ goal: 'Summarise the topic' }), {
+        approvalMode: 'auto',
+        failover: {
+          next: (_error, context) => {
+            contexts.push(context);
+            return contexts.length === 1 ? { provider: 'anthropic', processed: rotated } : null;
+          },
+        },
+      }),
+    );
+
+    expect(contexts).toEqual([{ step: 0 }]);
+    expect(mockBuildToolLoopStream.mock.calls[1]?.[0]).toBe('anthropic');
+    expect(deltas(output).some((d) => 'x_agiwork_plan' in d)).toBe(true);
+    expect(output).toContain('Done.');
+  });
+
+  it('fails the work step over when the primary is overloaded', async () => {
+    const rotated = makeAgiWorkProcessed();
+    rotated.provider = 'anthropic';
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: '["A","B","C"]' }), chunk({}, 'stop')]),
+      )
+      .mockRejectedValueOnce(overloaded())
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]));
+
+    let rotations = 0;
+    const output = await drain(
+      runToolLoop(makeAgiWorkProcessed({ goal: 'Summarise the topic' }), {
+        approvalMode: 'auto',
+        failover: {
+          next: () => {
+            rotations += 1;
+            return rotations === 1 ? { provider: 'anthropic', processed: rotated } : null;
+          },
+        },
+      }),
+    );
+
+    expect(rotations).toBe(1);
+    expect(output).toContain('Done.');
+    expect(output).not.toContain('provider_overloaded');
+  });
+});

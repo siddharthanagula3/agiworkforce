@@ -5,6 +5,7 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
   markProviderDegraded: vi.fn(),
 }));
 
+import { modelRegistry } from '@agiworkforce/model-registry';
 import { upstreamFailureCopy } from './upstream-error-copy';
 import { logger } from '@/lib/logger';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
@@ -121,5 +122,45 @@ describe('a provider refusal is diagnosable from the log', () => {
 
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('a request that is already on Auto', () => {
+  const AUTO = modelRegistry.policies.auto.defaultAlias;
+
+  function overloaded(): Error {
+    return Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 });
+  }
+
+  it('never tells the reader to choose Auto', () => {
+    const copy = upstreamFailureCopy(overloaded(), PROVIDER, { requestedModel: AUTO });
+
+    expect(copy.message).not.toMatch(/Auto to use another available model/);
+    expect(copy.message).toContain('pick a specific model from the model picker');
+    expect(copy.code).toBe('provider_overloaded');
+  });
+
+  it.each([
+    ['rate limit', Object.assign(new Error('rate limit exceeded'), { status: 429 })],
+    ['unreachable', new Error('fetch failed: ECONNRESET')],
+    ['empty answer', Object.assign(new Error('server error'), { status: 500 })],
+    ['unknown model', Object.assign(new Error('model not found: nope'), { status: 404 })],
+  ])('names the one move left for %s', (_label, error) => {
+    const copy = upstreamFailureCopy(error, PROVIDER, { requestedModel: AUTO });
+
+    expect(copy.message).not.toMatch(/choose Auto|switch to Auto/);
+    expect(copy.message).toContain('model picker');
+  });
+
+  it('keeps the Auto suggestion for a caller who pinned a model', () => {
+    const copy = upstreamFailureCopy(overloaded(), PROVIDER, {
+      requestedModel: 'some-pinned-model',
+    });
+
+    expect(copy.message).toContain('choose Auto to use another available model');
+  });
+
+  it('keeps the Auto suggestion for a caller that reports no selection', () => {
+    expect(upstreamFailureCopy(overloaded(), PROVIDER).message).toContain('choose Auto');
   });
 });

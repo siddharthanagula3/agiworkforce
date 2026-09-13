@@ -786,3 +786,53 @@ describe('shared breakers consulted before dispatch', () => {
     expect(observations).toEqual([]);
   });
 });
+
+describe('the AGI Work planning turn', () => {
+  const PLANNING_STEP = FIRST_PROVIDER_STEP - 1;
+
+  function agiWorkProcessed(): ProcessedRequest {
+    const processed = makeProcessed();
+    (processed.chatRequest as { work_mode?: string }).work_mode = 'agiwork';
+    (processed.llmRequest as { tools?: unknown[] }).tools = [
+      { type: 'function', function: { name: 'run_code', parameters: {} } },
+    ];
+    return processed;
+  }
+
+  it('rotates across providers, because nothing has been dispatched before it', () => {
+    // The planning turn runs ahead of step one and offers no tools at all, so
+    // no provider has minted a tool-call id the next route would have to own.
+    // Reading it as a later step pinned it to its primary provider.
+    const attempt = makePlan(agiWorkProcessed()).next(
+      httpError(529, '{"type":"overloaded_error"}'),
+      {
+        step: PLANNING_STEP,
+      },
+    );
+
+    expect(attempt?.model).toBe('candidate-a');
+    expect(attempt?.provider).toBe('openai');
+  });
+
+  it('leaves the work step the ladder chat gets when it fails on its own provider', () => {
+    // The regression: an inadmissible candidate is dropped from the plan, not
+    // deferred, so a pinned planning turn spent both candidates on skips and
+    // the work step that followed had nothing to rotate onto.
+    const plan = makePlan(agiWorkProcessed());
+    mockResolveProviderFromModel.mockImplementation(() => 'anthropic');
+
+    expect(
+      plan.next(httpError(400, 'planning prompt rejected'), { step: PLANNING_STEP })?.model,
+    ).toBe('candidate-a');
+    expect(
+      plan.next(httpError(529, '{"type":"overloaded_error"}'), { step: FIRST_PROVIDER_STEP })
+        ?.model,
+    ).toBe('candidate-b');
+  });
+
+  it('still pins the provider once a tool call has been made', () => {
+    const plan = makePlan(agiWorkProcessed());
+
+    expect(plan.next(httpError(503), { step: FIRST_PROVIDER_STEP + 1 })).toBeNull();
+  });
+});

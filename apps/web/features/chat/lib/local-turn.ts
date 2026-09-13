@@ -1,6 +1,11 @@
 'use client';
 
-import type { LocalChatMessage, LocalModel } from '@agiworkforce/local-runtime-contract';
+import {
+  LOCAL_MODEL_SERVER_LABELS,
+  parseLocalModelId,
+  type LocalChatMessage,
+  type LocalModel,
+} from '@agiworkforce/local-runtime-contract';
 import { cancelLocalChat, startLocalChat } from '@features/desktop-host';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
@@ -9,6 +14,30 @@ export const LOCAL_ATTACHMENTS_UNSUPPORTED =
   'Files are not sent to a model on this device yet. Remove the attachment, or pick a cloud model.';
 export const LOCAL_TURN_IN_CLOUD_CHAT =
   'This chat already holds answers from a model on this device. Start a new chat to continue with a cloud model, so nothing local is uploaded.';
+
+/**
+ * The local model a turn runs on, decided from the model id alone.
+ *
+ * The id is what every call site carries, the composer's send and a regenerate
+ * of an older turn alike, so reading the boundary off the id is what keeps a
+ * turn that was answered on this machine from being replayed to the cloud.
+ * The current selection is preferred only because it carries the server's
+ * label; an id with no selection behind it still resolves.
+ */
+export function resolveLocalModel(
+  modelId: string,
+  selection: LocalModel | null,
+): LocalModel | null {
+  const ref = parseLocalModelId(modelId);
+  if (!ref) return null;
+  if (selection && selection.id === modelId) return selection;
+  return {
+    id: modelId,
+    serverId: ref.serverId,
+    serverLabel: LOCAL_MODEL_SERVER_LABELS[ref.serverId],
+    name: ref.name,
+  };
+}
 
 export function conversationHoldsLocalTurns(messages: readonly Message[]): boolean {
   return messages.some((message) => message.metadata?.privacyMode === 'local');

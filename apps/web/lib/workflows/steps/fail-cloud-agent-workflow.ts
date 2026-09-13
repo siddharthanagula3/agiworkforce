@@ -22,7 +22,9 @@ export async function failCloudAgentWorkflow(
   'use step';
 
   const input = parseCloudAgentWorkflowInput(rawInput);
-  const failure = upstreamFailureCopy(error, input.processed.provider);
+  const failure = upstreamFailureCopy(error, input.processed.provider, {
+    requestedModel: input.processed.requestedModel,
+  });
   const db = getNeonDb();
   const snapshot = await getCloudAgentRun(db, {
     userId: input.userId,

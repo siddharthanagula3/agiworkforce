@@ -61,6 +61,7 @@ import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
 import { ComposerFilesMenu } from './ComposerFilesMenu';
 import { ComposerPluginsMenu } from './ComposerPluginsMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
+import { unavailableChatAttachmentNotes } from '@/lib/chat-attachment-policy';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
@@ -661,6 +662,7 @@ const ChatComposerNewComponent = ({
   const {
     attachments,
     previews,
+    refused: refusedAttachments,
     addFiles,
     removeFile,
     clearAll: clearAttachments,
@@ -2395,6 +2397,17 @@ const ChatComposerNewComponent = ({
       return;
     }
 
+    /**
+     * A file this draft refused never reached the request, but the sentence
+     * that asked about it still does. Naming the refusal in the turn is what
+     * stops the model inventing contents for a file it was never sent, and it
+     * is the record the reader keeps once the composer notice is cleared. Added
+     * here rather than at the top so an image or video prompt, which refuses
+     * attachments outright and returns above, never carries one.
+     */
+    const refusalNotes = unavailableChatAttachmentNotes(refusedAttachments);
+    if (refusalNotes.length > 0) outgoingContent = [outgoingContent, ...refusalNotes].join('\n\n');
+
     const sendArgs: Parameters<typeof onSend> = [
       outgoingContent,
       attachments.length > 0 ? attachments : undefined,
@@ -2469,6 +2482,7 @@ const ChatComposerNewComponent = ({
   }, [
     message,
     attachments,
+    refusedAttachments,
     selectedSkillName,
     selectedMcpContext,
     disabledConnectorIds,
