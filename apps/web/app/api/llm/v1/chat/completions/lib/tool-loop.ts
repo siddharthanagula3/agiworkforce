@@ -181,6 +181,7 @@ import {
   WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
   resolveRoutingRedirectUrls,
+  isBareDomainTitle,
 } from '@/lib/web-search/web-search-tool';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import { readTurnToolHistory } from './turn-tool-history';
@@ -1191,8 +1192,6 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
  * is forwarded exactly as it arrived: a redirect is dead only when it expires,
  * while an emptied href is dead immediately.
  */
-const BARE_DOMAIN_TITLE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)+$/i;
-
 export interface ServerSearchResultsEnrichment {
   resolveRedirects?: typeof resolveRoutingRedirectUrls;
   enrichTitles?: typeof enrichWebSearchResultTitles;
@@ -1232,7 +1231,7 @@ export async function enrichServerSearchResultsLine(
         // A grounded "title" is often the publisher's bare domain, which the
         // card already shows beneath the headline. Treated as absent so the
         // page's real title fills the line instead of repeating the host.
-        title: BARE_DOMAIN_TITLE.test(reported.trim()) ? '' : reported,
+        title: isBareDomainTitle(reported) ? '' : reported,
         snippet: typeof record['encrypted_content'] === 'string' ? record['encrypted_content'] : '',
         date: typeof record['page_age'] === 'string' ? record['page_age'] : '',
       },
@@ -1246,6 +1245,8 @@ export async function enrichServerSearchResultsLine(
   for (const row of enriched) {
     const target = content[row.index] as Record<string, unknown>;
     target['url'] = row.url;
+    // A blanked domain title is restored when the page gave none of its own: a
+    // card headed by its publisher reads better than one headed by nothing.
     if (row.title) target['title'] = row.title;
     if (row.snippet) target['encrypted_content'] = row.snippet;
     if (row.date) target['page_age'] = row.date;
