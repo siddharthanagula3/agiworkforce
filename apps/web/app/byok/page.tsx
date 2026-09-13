@@ -13,7 +13,7 @@ import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'BYOK: bring your own keys to Desktop and the CLI',
-  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. Desktop and the CLI have published releases; the VS Code extension is coming soon. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible.`,
+  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. Desktop and the CLI have published releases. The VS Code extension is coming soon. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible.`,
   path: '/byok',
 });
 
@@ -56,7 +56,7 @@ export default function ByokPage() {
                 Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime keeps the key on
                 the machine you typed it into, encrypted at rest or in that platform&rsquo;s own
                 credential store, then calls the provider&rsquo;s endpoint directly, so the usage
-                lands on your provider account. Desktop and the CLI have published releases; the VS
+                lands on your provider account. Desktop and the CLI have published releases. The VS
                 Code extension is coming soon.
               </Prose>
               <ButtonRow>
