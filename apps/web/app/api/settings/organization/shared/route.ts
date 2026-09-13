@@ -15,6 +15,10 @@ import {
   type SharedArtifactSummary,
 } from '@/lib/services/org-shared-artifact-service';
 import {
+  listSharedSessions,
+  type SharedSessionSummary,
+} from '@/lib/services/org-shared-session-service';
+import {
   listSharedProjects,
   requireOrgMember,
   resolveOrgMembership,
@@ -39,6 +43,7 @@ export interface OrganizationSharedOverview {
   sharedProjects: SharedProjectSummary[];
   sharedConnectors: SharedConnectorSummary[];
   sharedArtifacts: SharedArtifactSummary[];
+  sharedConversations: SharedSessionSummary[];
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -48,18 +53,20 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
 
-  const [members, sharedProjects, sharedConnectors, sharedArtifacts] = await Promise.all([
-    db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
-      `select user_id, role, joined_at
+  const [members, sharedProjects, sharedConnectors, sharedArtifacts, sharedConversations] =
+    await Promise.all([
+      db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
+        `select user_id, role, joined_at
          from public.organization_members
         where organization_id = $1
         order by joined_at asc`,
-      [membership.organizationId],
-    ),
-    listSharedProjects(db, membership.organizationId),
-    listSharedConnectors(db, membership.organizationId),
-    listSharedArtifacts(db, membership.organizationId),
-  ]);
+        [membership.organizationId],
+      ),
+      listSharedProjects(db, membership.organizationId),
+      listSharedConnectors(db, membership.organizationId),
+      listSharedArtifacts(db, membership.organizationId),
+      listSharedSessions(db, membership.organizationId),
+    ]);
 
   const payload: OrganizationSharedOverview = {
     organizationId: membership.organizationId,
@@ -74,6 +81,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     sharedProjects,
     sharedConnectors,
     sharedArtifacts,
+    sharedConversations,
   };
 
   return NextResponse.json(payload);

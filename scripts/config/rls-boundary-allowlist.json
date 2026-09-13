@@ -122,10 +122,6 @@
       "reason": "the push endpoint the browser mints is a globally unique key, and the row holding it may belong to another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the delete are caller-scoped"
     },
     {
-      "path": "apps/web/app/share/[token]/page.tsx",
-      "reason": "reading a share by its unguessable token is the feature, same as the api/share/[token] route it renders"
-    },
-    {
       "path": "apps/web/features/admin/services/economics-summary.ts",
       "reason": "reached only from the platform-admin economics route gated by requirePlatformAdmin, the subscription and credit_transactions reads are deliberately cross-tenant aggregates that return counts and summed cents per plan, never a row or a user id"
     },

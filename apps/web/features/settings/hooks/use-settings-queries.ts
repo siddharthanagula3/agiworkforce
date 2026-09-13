@@ -1824,6 +1824,20 @@ export interface OrgSharedArtifact {
   createdAt: string;
 }
 
+export interface OrgSharedConversation {
+  organizationId: string;
+  sharedSessionId: string;
+  token: string;
+  title: string;
+  messageCount: number;
+  /** `organization` means the public link is closed and only members can open it. */
+  visibility: 'public' | 'organization';
+  ownerUserId: string;
+  sharedByUserId: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface OrgSharedOverview {
   organizationId: string;
   currentUserId: string;
@@ -1833,6 +1847,7 @@ export interface OrgSharedOverview {
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];
   sharedArtifacts: OrgSharedArtifact[];
+  sharedConversations: OrgSharedConversation[];
 }
 
 const ORG_SHARED_QUERY_KEY = ['settings', 'organization', 'shared'] as const;
@@ -1972,6 +1987,31 @@ export function useUnshareArtifactFromOrganization(): UseMutationResult<unknown,
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['settings', 'published-artifacts'] });
       toast.success('Artifact is no longer shared');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+/**
+ * Withdraw one conversation from the workspace. The share is not reopened to
+ * the public in its place: it returns to being its owner's alone until they
+ * pick an audience again from the share dialog.
+ */
+export function useUnshareConversationFromOrganization(): UseMutationResult<
+  unknown,
+  Error,
+  string
+> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (sharedSessionId: string) =>
+      sharingRequest(
+        `/api/settings/organization/shared/conversations/${sharedSessionId}`,
+        'DELETE',
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      toast.success('Conversation is no longer shared');
     },
     onError: (error: Error) => toast.error(error.message),
   });
