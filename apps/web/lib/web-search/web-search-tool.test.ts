@@ -28,6 +28,7 @@ import {
   type WebSearchOutcome,
   type WebSearchResultItem,
 } from './web-search-tool';
+import { normalizeSourceUrlKey } from './source-url-key';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -665,5 +666,42 @@ describe('resolveRoutingRedirectUrls', () => {
     expect(first[0]?.url).toBe('https://apnews.com/article/cached');
     expect(second[0]?.url).toBe('https://apnews.com/article/cached');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('one identity for a source URL', () => {
+  /**
+   * Three copies of this question gave three answers: the tool loop kept the
+   * scheme and `www.`, the research loop kept tracking parameters, and the
+   * transcript reader stripped a shorter list than either. A page therefore
+   * deduplicated in one place and not in another, and the citation numbers the
+   * two sides computed could disagree about which row `[2]` was.
+   */
+  it('treats scheme, www, trailing slash, fragment and tracking parameters as the same page', () => {
+    const canonical = normalizeSourceUrlKey('https://example.com/report');
+    for (const variant of [
+      'http://example.com/report',
+      'https://www.example.com/report/',
+      'https://example.com/report#results',
+      'https://example.com/report?utm_source=newsletter&utm_medium=email',
+      'https://example.com/report?fbclid=abc',
+      'https://example.com/report?ref=hn',
+      '  https://example.com/report  ',
+    ]) {
+      expect(normalizeSourceUrlKey(variant), variant).toBe(canonical);
+    }
+  });
+
+  it('keeps a query that selects different content apart, whatever its order', () => {
+    expect(normalizeSourceUrlKey('https://example.com/list?page=2')).not.toBe(
+      normalizeSourceUrlKey('https://example.com/list?page=3'),
+    );
+    expect(normalizeSourceUrlKey('https://example.com/list?page=2&sort=new')).toBe(
+      normalizeSourceUrlKey('https://example.com/list?sort=new&page=2'),
+    );
+  });
+
+  it('falls back to the lowercased text when the value is not a URL', () => {
+    expect(normalizeSourceUrlKey('Not A URL')).toBe('not a url');
   });
 });
