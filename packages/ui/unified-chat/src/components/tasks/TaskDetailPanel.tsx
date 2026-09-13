@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { formatDeliverableTypeLine } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
   AGIWORK_GOAL_PROGRESS_ID,
@@ -251,7 +252,7 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
     <li className="rounded-md border border-border/70 p-2">
       <div className="truncate text-xs font-medium text-foreground">{output.name}</div>
       <div className="mt-0.5 text-[12px] text-muted-foreground">
-        {output.mimeType}
+        {formatDeliverableTypeLine({ fileName: output.name, mimeType: output.mimeType })}
         {size ? ` · ${size}` : ''}
       </div>
       {safePath ? (
