@@ -4,14 +4,14 @@ import { OrganizationSharingSection } from '@/features/settings/sections/Organiz
 
 export const metadata: Metadata = {
   title: 'Sharing',
-  description: 'Projects, artifacts and connectors shared across this workspace.',
+  description: 'Projects, conversations, artifacts and connectors shared across this workspace.',
 };
 
 export default function WorkspaceSharingPage() {
   return (
     <ConsolePage
       title="Sharing"
-      description="Projects, artifacts and connectors this workspace shares, and the access level each grant carries."
+      description="Projects, conversations, artifacts and connectors this workspace shares, and the access level each grant carries."
     >
       <OrganizationSharingSection />
     </ConsolePage>
