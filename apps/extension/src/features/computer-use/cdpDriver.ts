@@ -3,12 +3,19 @@ import {
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
 } from './browserControlConsent';
+import {
+  dropDebuggerHolds,
+  ensureDebuggerSessionListeners,
+  onDebuggerUserDetach,
+  sendDebuggerCommand as sendCommand,
+  throwIfCdpCancelled,
+  withDebugger,
+} from './debuggerSession';
 
 export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
 
 const DOM_SUMMARY_MAX_CHARS = 8_000;
 const ELEMENT_LABEL_MAX_CHARS = 60;
-const DETACH_REASON_USER_CANCELED = 'canceled_by_user';
 
 export interface IndexedElement {
   readonly selector: string;
@@ -78,109 +85,21 @@ export function registerActiveTab(
 export function unregisterActiveTab(tabId: number): void {
   activeDebuggerTabs.delete(tabId);
   elementIndexMaps.delete(tabId);
+  dropDebuggerHolds(tabId);
 }
 
 let _onDetachInstalled = false;
 
 export function ensureOnDetachListener(): void {
+  ensureDebuggerSessionListeners();
   if (_onDetachInstalled) return;
   _onDetachInstalled = true;
-  try {
-    if (typeof chrome === 'undefined' || !chrome.debugger?.onDetach) return;
-    chrome.debugger.onDetach.addListener((source, reason) => {
-      const tabId = source.tabId;
-      if (tabId === undefined) return;
-      if (!activeDebuggerTabs.has(tabId)) return;
-      if (reason === DETACH_REASON_USER_CANCELED) {
-        const onDetachedByUser = activeDebuggerTabs.get(tabId) ?? null;
-        unregisterActiveTab(tabId);
-        onDetachedByUser?.(tabId);
-        return;
-      }
-      chrome.debugger.attach({ tabId }, '1.3', () => {
-        void chrome.runtime.lastError;
-      });
-    });
-  } catch {
-    // In test / non-extension environments chrome.debugger may be absent.
-  }
-}
-
-function debuggee(tabId: number): chrome.debugger.Debuggee {
-  return { tabId };
-}
-
-function throwIfCdpCancelled(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  if (signal.reason instanceof Error) throw signal.reason;
-  throw new DOMException('Computer-use CDP operation was cancelled', 'AbortError');
-}
-
-async function attach(tabId: number, signal?: AbortSignal): Promise<void> {
-  throwIfCdpCancelled(signal);
-  return new Promise((resolve, reject) => {
-    chrome.debugger.attach(debuggee(tabId), '1.3', () => {
-      if (chrome.runtime.lastError) {
-        const msg = chrome.runtime.lastError.message ?? '';
-        if (msg.includes('Another debugger is already attached')) {
-          resolve();
-        } else {
-          reject(new Error(`CDP attach failed: ${msg}`));
-        }
-      } else {
-        resolve();
-      }
-    });
+  onDebuggerUserDetach((tabId) => {
+    if (!activeDebuggerTabs.has(tabId)) return;
+    const onDetachedByUser = activeDebuggerTabs.get(tabId) ?? null;
+    unregisterActiveTab(tabId);
+    onDetachedByUser?.(tabId);
   });
-}
-
-async function detach(tabId: number): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.debugger.detach(debuggee(tabId), () => {
-      void chrome.runtime.lastError;
-      resolve();
-    });
-  });
-}
-
-async function sendCommand<T = unknown>(
-  tabId: number,
-  method: string,
-  params?: Record<string, unknown>,
-  signal?: AbortSignal,
-): Promise<T> {
-  throwIfCdpCancelled(signal);
-  return new Promise((resolve, reject) => {
-    chrome.debugger.sendCommand(debuggee(tabId), method, params ?? {}, (result) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(`CDP ${method} failed: ${chrome.runtime.lastError.message ?? 'unknown'}`));
-      } else if (signal?.aborted) {
-        reject(
-          signal.reason instanceof Error
-            ? signal.reason
-            : new DOMException('Computer-use CDP operation was cancelled', 'AbortError'),
-        );
-      } else {
-        resolve(result as T);
-      }
-    });
-  });
-}
-
-async function withDebugger<T>(
-  tabId: number,
-  fn: () => Promise<T>,
-  signal?: AbortSignal,
-): Promise<T> {
-  await attach(tabId, signal);
-  try {
-    throwIfCdpCancelled(signal);
-    const result = await fn();
-    throwIfCdpCancelled(signal);
-    return result;
-  } finally {
-    await detach(tabId);
-  }
 }
 
 export interface WaitForStableOptions {
