@@ -84,6 +84,10 @@ function SectionCard({
   );
 }
 
+function everyoneHere(total: number): string {
+  return `Everyone in this organization (${total} ${total === 1 ? 'member' : 'members'})`;
+}
+
 function Empty({ children }: { children: React.ReactNode }) {
   return <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>{children}</p>;
 }
@@ -223,7 +227,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                       onClick={() =>
                         confirm({
                           title: `Stop sharing ${project.name}?`,
-                          description: `All ${overview.members.length} members of this organization lose access to the project's instructions and knowledge files. You keep the project and can share it again.`,
+                          description: `${everyoneHere(overview.members.length)} loses access to the project's instructions and knowledge files. You keep the project and can share it again.`,
                           confirmLabel: 'Stop sharing',
                           onConfirm: () => unshareProject.mutate(project.projectId),
                         })
@@ -378,7 +382,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
                   onClick={() =>
                     confirm({
                       title: `Stop sharing ${connector.name}?`,
-                      description: `All ${overview.members.length} members of this organization lose orgmcp-${connector.orgShortId} in chat, and any tool call already relying on it stops working. Your stored credential is untouched and you can share it again.`,
+                      description: `${everyoneHere(overview.members.length)} loses orgmcp-${connector.orgShortId} in chat, and any tool call already relying on it stops working. Your stored credential is untouched and you can share it again.`,
                       confirmLabel: 'Stop sharing',
                       onConfirm: () => unshareConnector.mutate(connector.connectorRowId),
                     })
