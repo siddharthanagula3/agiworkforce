@@ -462,6 +462,49 @@ describe('useMediaGeneration', () => {
       }
     });
 
+    it('reports provider progress on every poll, not only at the client deadline', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.spyOn(globalThis, 'fetch')
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              success: true,
+              task_id: VIDEO_TASK_ID,
+              status: 'queued',
+              provider: VIDEO_PROVIDER,
+              model: VIDEO_MODEL.id,
+              estimated_duration_secs: 90,
+            }),
+          } as Response)
+          .mockResolvedValue({
+            ok: true,
+            json: async () => ({
+              success: true,
+              task_id: VIDEO_TASK_ID,
+              status: 'processing',
+              progress: 42,
+            }),
+          } as Response);
+        const onProgress = vi.fn();
+        const { result } = renderHook(() => useMediaGeneration());
+        const started = await result.current.startVideoGeneration('fixture prompt');
+        const watched = result.current.watchVideoGeneration(started.taskId, {
+          timeoutMs: 30_000,
+          onProgress,
+        });
+        await vi.advanceTimersByTimeAsync(11_000);
+
+        expect(onProgress).toHaveBeenCalledWith({ taskStatus: 'processing', progress: 42 });
+        expect(onProgress.mock.calls.length).toBeGreaterThan(1);
+
+        await vi.advanceTimersByTimeAsync(30_000);
+        await watched;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('classifies the route 403 as a paywall so the caller can render the upgrade card', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: false,
