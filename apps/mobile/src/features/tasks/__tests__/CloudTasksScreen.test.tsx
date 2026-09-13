@@ -37,7 +37,9 @@ jest.mock('lucide-react-native', () => {
     Bot: icon,
     ChevronRight: icon,
     Clock3: icon,
+    Check: icon,
     Cloud: icon,
+    Plus: icon,
     RefreshCw: icon,
     X: icon,
   };
