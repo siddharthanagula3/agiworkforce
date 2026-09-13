@@ -21,6 +21,7 @@ import {
   type McpAuthorizationStart,
 } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
@@ -64,6 +65,10 @@ const FAILURE_STATUS: Record<McpAuthorizationFailure, string> = {
   'discovery-failed': OAUTH_START_STATUS_ERROR,
   unexpected: OAUTH_START_STATUS_ERROR,
 };
+
+function connectorDisplayName(connectorId: string): string {
+  return CONNECTORS.find((connector) => connector.id === connectorId)?.name ?? connectorId;
+}
 
 const NOT_CONFIGURED_MESSAGE =
   'This connector has no OAuth application configured in this deployment.';
@@ -236,7 +241,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return fail(
       OAUTH_START_STATUS_NOT_CONFIGURED,
       501,
-      describeConnectorSetup(connectorId)?.message ?? NOT_CONFIGURED_MESSAGE,
+      describeConnectorSetup(connectorId, connectorDisplayName(connectorId))?.message ??
+        NOT_CONFIGURED_MESSAGE,
     );
   }
 
