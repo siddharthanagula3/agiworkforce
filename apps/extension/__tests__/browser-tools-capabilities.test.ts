@@ -20,6 +20,8 @@ const tabs = new Map<number, { id: number; url: string }>();
 
 const debuggerCalls = { attach: 0, detach: 0 };
 const sentCommands: Array<{ tabId: number | undefined; method: string }> = [];
+type DebuggerEventListener = (source: { tabId?: number }, method: string, params: unknown) => void;
+const debuggerEventHandlers: DebuggerEventListener[] = [];
 
 function areaFor(backing: Record<string, unknown>) {
   return {
@@ -80,7 +82,11 @@ vi.stubGlobal('chrome', {
       },
     ),
     onDetach: { addListener: vi.fn() },
-    onEvent: { addListener: vi.fn() },
+    onEvent: {
+      addListener: vi.fn((handler: DebuggerEventListener) => {
+        debuggerEventHandlers.push(handler);
+      }),
+    },
   },
 });
 
@@ -91,8 +97,15 @@ const { recordConsoleEvent, readConsoleEntries, clearConsoleEntries } =
   await import('../src/features/browser-tools/consoleCapture');
 const { recordNetworkEvent, readNetworkEntries, clearNetworkEntries, summarizeRequestUrl } =
   await import('../src/features/browser-tools/networkCapture');
-const { startPageWatch, stopPageWatch, isPageWatchActive, forgetPageWatchTab } =
-  await import('../src/features/browser-tools/pageWatch');
+const {
+  startPageWatch,
+  stopPageWatch,
+  isPageWatchActive,
+  forgetPageWatchTab,
+  getPageWatch,
+  suspendPageWatchForNavigation,
+  resumePageWatchAfterNavigation,
+} = await import('../src/features/browser-tools/pageWatch');
 const { acquireDebugger, releaseDebugger } =
   await import('../src/features/computer-use/debuggerSession');
 const { MESSAGE_POLICY } = await import('../src/background/policy');
@@ -397,5 +410,76 @@ describe('page watch lifecycle', () => {
     expect(isPageWatchActive(TAB_ID)).toBe(true);
     await stopPageWatch(TAB_ID, 'user');
     expect(isPageWatchActive(TAB_ID)).toBe(false);
+  });
+});
+
+describe('page watch across a navigation', () => {
+  const emitEvents = (): void => {
+    for (const handler of debuggerEventHandlers) {
+      handler({ tabId: TAB_ID }, 'Runtime.consoleAPICalled', {
+        type: 'error',
+        args: [{ type: 'string', value: 'line from the page the tab moved to' }],
+      });
+      handler({ tabId: TAB_ID }, 'Network.responseReceived', {
+        requestId: 'nav-1',
+        response: { url: `${OTHER}/private/balance`, status: 200 },
+        type: 'Fetch',
+      });
+    }
+  };
+
+  it('drops what the previous page left behind so no row outlives its page', async () => {
+    approveSite();
+    await startPageWatch(TAB_ID, 'user');
+    emitEvents();
+    expect(readConsoleEntries(TAB_ID).length).toBeGreaterThan(0);
+
+    suspendPageWatchForNavigation(TAB_ID);
+    expect(readConsoleEntries(TAB_ID)).toHaveLength(0);
+    expect(readNetworkEntries(TAB_ID)).toHaveLength(0);
+    await stopPageWatch(TAB_ID, 'user');
+  });
+
+  it('records nothing between the navigation and the re-check of the new origin', async () => {
+    approveSite();
+    await startPageWatch(TAB_ID, 'user');
+    suspendPageWatchForNavigation(TAB_ID);
+    emitEvents();
+    expect(readConsoleEntries(TAB_ID)).toHaveLength(0);
+    expect(readNetworkEntries(TAB_ID)).toHaveLength(0);
+    await stopPageWatch(TAB_ID, 'user');
+  });
+
+  it('ends the watch when the tab lands on an origin the user never approved', async () => {
+    approveSite();
+    await startPageWatch(TAB_ID, 'user');
+    const detachesBefore = debuggerCalls.detach;
+
+    tabs.set(TAB_ID, { id: TAB_ID, url: `${OTHER}/somewhere-else` });
+    suspendPageWatchForNavigation(TAB_ID);
+    await resumePageWatchAfterNavigation(TAB_ID);
+
+    expect(isPageWatchActive(TAB_ID)).toBe(false);
+    expect(debuggerCalls.detach).toBe(detachesBefore + 1);
+    emitEvents();
+    expect(readConsoleEntries(TAB_ID)).toHaveLength(0);
+    expect(readNetworkEntries(TAB_ID)).toHaveLength(0);
+  });
+
+  it('resumes on the new origin once the tab lands somewhere still approved', async () => {
+    store['agi_site_allowlist'] = [SITE, OTHER];
+    store['agi_cu_browser_control_consent'] = [SITE, OTHER];
+    grantedOrigins.add(`${SITE}/*`);
+    grantedOrigins.add(`${OTHER}/*`);
+    await startPageWatch(TAB_ID, 'user');
+
+    tabs.set(TAB_ID, { id: TAB_ID, url: `${OTHER}/next` });
+    suspendPageWatchForNavigation(TAB_ID);
+    await resumePageWatchAfterNavigation(TAB_ID);
+
+    expect(getPageWatch(TAB_ID)).toMatchObject({ origin: OTHER, suspended: false });
+    emitEvents();
+    expect(readConsoleEntries(TAB_ID).length).toBeGreaterThan(0);
+    await stopPageWatch(TAB_ID, 'user');
   });
 });
