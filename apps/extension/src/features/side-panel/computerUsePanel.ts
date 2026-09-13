@@ -452,6 +452,9 @@ const TOOL_ICONS: Record<string, string> = {
   read_dom: 'document_icon',
   navigate: 'globe_icon',
   find: 'search_icon',
+  download_file: 'folder_icon',
+  read_console: 'terminal_icon',
+  read_network: 'plug_icon',
 };
 
 const TOOL_EMOJI: Record<string, string> = {
@@ -462,6 +465,9 @@ const TOOL_EMOJI: Record<string, string> = {
   read_dom: '\u{1F4C4}', // document
   navigate: '\u{1F310}', // globe
   find: '\u{1F50D}', // magnifier
+  download_file: '\u{2B07}', // down arrow
+  read_console: '\u{1F5A5}', // desktop computer
+  read_network: '\u{1F517}', // link
 };
 
 const KIND_EMOJI: Record<string, string> = {
@@ -1028,6 +1034,12 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         return 'Read page DOM';
       case 'find':
         return `Find: "${String(args?.['description'] ?? '').slice(0, 50)}"`;
+      case 'download_file':
+        return `Download: ${String(args?.['url'] ?? '').slice(0, 60)}`;
+      case 'read_console':
+        return 'Read page console';
+      case 'read_network':
+        return 'Read page network';
       default:
         return toolName || 'Tool call';
     }
