@@ -133,6 +133,9 @@ export async function reclaimAbandonedE2BSandboxes(
           ...(session.computeMicrousdPerSecond === undefined
             ? {}
             : { snapshotMicrousdPerSecond: session.computeMicrousdPerSecond }),
+          ...(session.computeReservation === undefined
+            ? {}
+            : { reservation: session.computeReservation }),
           startedAtMs: session.activeSinceMs,
           endedAtMs: nowMs,
           reason: 'reclaim',

@@ -1,13 +1,34 @@
 import 'server-only';
 
-import { getProviderComputePricing } from '@agiworkforce/types';
+import { randomUUID } from 'node:crypto';
+
+import { getProviderComputePricing, normalizeBillingPlanTier } from '@agiworkforce/types';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { CreditService } from '@/lib/services/credit-service';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import {
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  ManagedUsageRequestError,
+  estimateMicrousdOf,
+  reserveManagedUsageRequest,
+} from '@/lib/services/managed-usage-request-service';
 
 export const E2B_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 const E2B_COMPUTE_PROVIDER_ID = 'e2b';
+
+export const SANDBOX_COMPUTE_QUOTA_FEATURE = 'sandbox_compute';
+const SANDBOX_COMPUTE_OPERATION = 'e2b_sandbox_compute';
+
+/**
+ * The sandbox pauses at its plan TTL, but the interval is only closed when the
+ * pause is observed, which the reclaim sweep may do well after the fact. The
+ * lease outlives that gap so an ordinary teardown settles its own reservation
+ * rather than the recovery sweep refunding it first.
+ */
+const RESERVATION_LEASE_SLACK_SECONDS = 900;
 
 const MICROUSD_PER_CENT = 10_000;
 const USD_TO_MICROUSD = 1_000_000;
@@ -102,6 +123,146 @@ export function sandboxComputeCostCents(elapsedMs: number, microusdPerSecond: nu
   return Math.round(sandboxComputeCostMicrousd(elapsedMs, microusdPerSecond) / MICROUSD_PER_CENT);
 }
 
+/**
+ * What a reserved sandbox interval carries between provisioning and teardown.
+ * It survives in the session record, so it holds only serialisable fields and
+ * the scoped connection is rebuilt at settlement.
+ */
+export interface SandboxComputeReservationRecord {
+  idempotencyKey: string;
+  requestHash: string;
+  leaseToken: string;
+  estimatedCostMicrousd: number;
+  provider: string;
+  model: string;
+}
+
+export type SandboxComputeReservationOutcome =
+  | { outcome: 'reserved'; reservation: SandboxComputeReservationRecord }
+  | { outcome: 'refused'; error: ManagedUsageRequestError };
+
+export interface SandboxComputeReservationInput {
+  userId: string;
+  planTier: string | null | undefined;
+  templateId?: string | null;
+  conversationId?: string | undefined;
+  codeSessionId?: string | undefined;
+  microusdPerSecond: number;
+  ttlMs: number;
+}
+
+function sandboxScopedDb(userId: string): DatabaseAdapter {
+  return createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+}
+
+function reservationFailure(error: unknown): ManagedUsageRequestError {
+  return error instanceof ManagedUsageRequestError
+    ? error
+    : new ManagedUsageRequestError(
+        'Managed usage billing is temporarily unavailable.',
+        503,
+        'billing_unavailable',
+      );
+}
+
+/**
+ * Holds the sandbox's whole admitted lifetime against the account's credit and
+ * usage caps BEFORE the sandbox exists. Provisioning is fail-closed here for
+ * the same reason it is fail-closed on an unresolvable rate: seconds that
+ * could not be reserved are seconds nobody agreed to pay for.
+ */
+export async function reserveSandboxComputeInterval(
+  input: SandboxComputeReservationInput,
+): Promise<SandboxComputeReservationOutcome> {
+  const ttlSeconds = Math.max(1, Math.ceil(input.ttlMs / MILLISECONDS_PER_SECOND));
+  const estimatedCostMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
+  const model = input.templateId?.trim() || E2B_COMPUTE_PROVIDER_ID;
+  try {
+    const reservation = await reserveManagedUsageRequest({
+      db: sandboxScopedDb(input.userId),
+      userId: input.userId,
+      idempotencyKey: `agi.e2b.compute.${randomUUID()}`,
+      requestHash: fingerprintManagedUsageRequest({
+        operation: SANDBOX_COMPUTE_OPERATION,
+        template: model,
+        conversationId: input.conversationId ?? null,
+        codeSessionId: input.codeSessionId ?? null,
+        ttlSeconds,
+      }),
+      provider: E2B_COMPUTE_PROVIDER_ID,
+      model,
+      estimatedCostMicrousd,
+      leaseSeconds: ttlSeconds + RESERVATION_LEASE_SLACK_SECONDS,
+      planTier: normalizeBillingPlanTier(input.planTier),
+      isFlagship: false,
+      quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
+    });
+    return {
+      outcome: 'reserved',
+      reservation: {
+        idempotencyKey: reservation.idempotencyKey,
+        requestHash: reservation.requestHash,
+        leaseToken: reservation.leaseToken,
+        estimatedCostMicrousd: estimateMicrousdOf(reservation),
+        provider: E2B_COMPUTE_PROVIDER_ID,
+        model,
+      },
+    };
+  } catch (error) {
+    const refusal = reservationFailure(error);
+    logger.warn(
+      {
+        event: 'sandbox_compute_reservation_refused',
+        userId: input.userId,
+        code: refusal.code,
+        status: refusal.status,
+        estimatedCostMicrousd,
+      },
+      '[e2b] sandbox compute reservation refused; no sandbox is provisioned',
+    );
+    return { outcome: 'refused', error: refusal };
+  }
+}
+
+/**
+ * Gives back a reservation whose sandbox never ran. The ledger releases the
+ * whole hold, so an account that was refused a sandbox by provisioning keeps
+ * the credit the reservation was holding.
+ */
+export async function releaseSandboxComputeReservation(input: {
+  userId: string;
+  reservation: SandboxComputeReservationRecord;
+  reason: string;
+}): Promise<void> {
+  try {
+    await finalizeManagedUsageRequest({
+      db: sandboxScopedDb(input.userId),
+      userId: input.userId,
+      idempotencyKey: input.reservation.idempotencyKey,
+      requestHash: input.reservation.requestHash,
+      leaseToken: input.reservation.leaseToken,
+      estimatedCostMicrousd: input.reservation.estimatedCostMicrousd,
+      estimatedCostCents: ledgerCentsFromMicrousd(input.reservation.estimatedCostMicrousd),
+      quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
+      provider: input.reservation.provider,
+      model: input.reservation.model,
+      outcome: 'failed',
+      actualCostMicrousd: 0,
+      usage: { operation: SANDBOX_COMPUTE_OPERATION, reason: input.reason },
+    });
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        userId: input.userId,
+        idempotencyKey: input.reservation.idempotencyKey,
+        reason: input.reason,
+      },
+      '[e2b] sandbox compute reservation could not be released; the lease recovery sweep will reclaim it',
+    );
+  }
+}
+
 export interface SandboxComputeInterval {
   userId: string;
   sandboxId: string;
@@ -115,6 +276,12 @@ export interface SandboxComputeInterval {
    * later catalog or override change from repricing seconds already run.
    */
   snapshotMicrousdPerSecond?: number | undefined;
+  /**
+   * The reservation this interval was admitted under. Without it the seconds
+   * ran outside the reserve-then-settle contract and there is nothing to settle
+   * against, which is a defect rather than a licence to bill unreserved.
+   */
+  reservation?: SandboxComputeReservationRecord | undefined;
   startedAtMs: number;
   endedAtMs: number;
   reason: 'pause' | 'kill' | 'reclaim';
@@ -132,8 +299,8 @@ export async function meterSandboxComputeInterval(
       ? { ok: true, microusdPerSecond: snapshot }
       : resolveRate({ vcpuCount: interval.vcpuCount, memoryGib: interval.memoryGib });
   const rate = resolved.ok ? resolved.microusdPerSecond : 0;
-  const costMicrousd = sandboxComputeCostMicrousd(elapsedMs, rate);
-  if (costMicrousd <= 0) {
+  const metered = sandboxComputeCostMicrousd(elapsedMs, rate);
+  if (metered <= 0) {
     unbilledMs += elapsedMs;
     const base = {
       env: E2B_COMPUTE_RATE_ENV,
@@ -156,32 +323,54 @@ export async function meterSandboxComputeInterval(
     return 0;
   }
 
+  const reservation = interval.reservation;
+  if (!reservation) {
+    unbilledMs += elapsedMs;
+    logger.error(
+      {
+        userId: interval.userId,
+        sandboxId: interval.sandboxId,
+        elapsedMs,
+        meteredMicrousd: metered,
+        unbilledMs,
+      },
+      '[e2b] sandbox interval carries no credit reservation; its seconds are unbilled',
+    );
+    return 0;
+  }
+
+  // Settlement never exceeds what the account agreed to hold: the ledger
+  // released nothing beyond the reservation, so charging past it would bill
+  // credit that was never reserved.
+  const costMicrousd = Math.min(metered, reservation.estimatedCostMicrousd);
   try {
     // Metering runs from sandbox teardown and from the reclaim sweep, neither of
     // which carries a request connection, so the scope comes from the interval's
     // own owner.
-    const db = createClaimedUserScopedDb(getNeonDb(), {
+    await finalizeManagedUsageRequest({
+      db: sandboxScopedDb(interval.userId),
       userId: interval.userId,
-      organizationId: null,
-    });
-    await CreditService.settleCreditsDurably(
-      {
-        userId: interval.userId,
-        amountMicrousd: costMicrousd,
-        description: 'Managed sandbox compute',
-        idempotencyKey: `e2b-compute:${interval.sandboxId}:${interval.startedAtMs}`,
-        metadata: {
-          type: 'e2b_sandbox_compute',
-          sandbox_id: interval.sandboxId,
-          ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
-          ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),
-          elapsed_ms: elapsedMs,
-          microusd_per_second: rate,
-          close_reason: interval.reason,
-        },
+      idempotencyKey: reservation.idempotencyKey,
+      requestHash: reservation.requestHash,
+      leaseToken: reservation.leaseToken,
+      estimatedCostMicrousd: reservation.estimatedCostMicrousd,
+      estimatedCostCents: ledgerCentsFromMicrousd(reservation.estimatedCostMicrousd),
+      quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
+      provider: reservation.provider,
+      model: reservation.model,
+      outcome: 'completed',
+      actualCostMicrousd: costMicrousd,
+      usage: {
+        operation: SANDBOX_COMPUTE_OPERATION,
+        sandbox_id: interval.sandboxId,
+        ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
+        ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),
+        elapsed_ms: elapsedMs,
+        microusd_per_second: rate,
+        close_reason: interval.reason,
+        ...(metered > costMicrousd ? { metered_microusd: metered } : {}),
       },
-      db,
-    );
+    });
     logger.info(
       {
         userId: interval.userId,
@@ -190,7 +379,7 @@ export async function meterSandboxComputeInterval(
         costMicrousd,
         reason: interval.reason,
       },
-      '[e2b] sandbox compute metered to the usage ledger',
+      '[e2b] sandbox compute settled against its reservation',
     );
     return costMicrousd;
   } catch (err) {

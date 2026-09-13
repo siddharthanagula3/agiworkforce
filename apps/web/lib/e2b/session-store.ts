@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SandboxComputeReservationRecord } from '@/lib/e2b/compute-metering';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
@@ -19,6 +20,8 @@ export interface E2BSession {
   templateId?: string;
   /** Rate this sandbox was admitted at, in microUSD per second, settled from at teardown. */
   computeMicrousdPerSecond?: number;
+  /** The credit reservation this sandbox's seconds are settled against. */
+  computeReservation?: SandboxComputeReservationRecord;
 }
 
 export interface E2BSessionScope {

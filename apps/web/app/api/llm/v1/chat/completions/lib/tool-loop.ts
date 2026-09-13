@@ -110,13 +110,17 @@ import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
 import { recordGoogleGroundingCost } from '@/lib/web-search/grounding-cost';
 import {
   includedMonthlySearchCalls,
+  reserveSearchCharge,
   resolveSearchBudget,
   resolveSearchCallerKind,
   SEARCH_BOUND_WINDOW_DAYS,
   searchChargeCents,
+  searchChargeMicrousd,
   settleSearchCharge,
   type SearchBudgetDecision,
+  type SearchChargeReservation,
 } from '@/lib/web-search/search-budget';
+import { PERPLEXITY_SEARCH_PROVIDER_ID } from '@/lib/web-search/perplexity-search-cost';
 import {
   createToolTurnGovernor,
   emptyToolCapabilityEvidence,
@@ -2694,15 +2698,18 @@ export async function* runToolLoop(
   /**
    * Search is bought per call. This decides, BEFORE the call runs, whether the
    * account's plan includes it, whether it is charged, or whether it is refused,
-   * and settles the charge when there is one. A refusal is returned to the model
-   * as an ordinary unavailable-tool result so the turn still answers.
+   * and reserves the charge when there is one, so an account that cannot pay
+   * never reaches the provider. A refusal is returned to the model as an
+   * ordinary unavailable-tool result so the turn still answers.
    */
-  async function enforceSearchEconomics(callOrdinal: number): Promise<ToolLoopToolResult | null> {
+  async function admitSearchCall(
+    callOrdinal: number,
+  ): Promise<{ refusal: ToolLoopToolResult } | { reservation: SearchChargeReservation | null }> {
     const userId = options.userId;
-    if (!userId) return null;
+    if (!userId) return { reservation: null };
 
     let decision: SearchBudgetDecision;
-    let settled: boolean;
+    let reserved: Awaited<ReturnType<typeof reserveSearchCharge>>;
     try {
       decision = await resolveSearchBudget({
         userId,
@@ -2710,38 +2717,57 @@ export async function* runToolLoop(
         feature: 'web_search_perplexity',
         callerKind: searchCallerKind,
       });
-      if (decision.outcome === 'included') return null;
+      if (decision.outcome === 'included') return { reservation: null };
       if (decision.outcome === 'blocked') {
         return {
-          content:
-            decision.reason === 'plan_bound'
-              ? searchPlanBoundExhaustedMessage(
-                  includedSearchCallsForTurn,
-                  SEARCH_BOUND_WINDOW_DAYS,
-                )
-              : searchUnaffordableMessage(),
-          isError: false,
+          refusal: {
+            content:
+              decision.reason === 'plan_bound'
+                ? searchPlanBoundExhaustedMessage(
+                    includedSearchCallsForTurn,
+                    SEARCH_BOUND_WINDOW_DAYS,
+                  )
+                : searchUnaffordableMessage(),
+            isError: false,
+          },
         };
       }
-      settled = await settleSearchCharge({
+      reserved = await reserveSearchCharge({
         userId,
+        organizationId: processed.organizationId ?? null,
+        planTier: processed.subscriptionTier ?? null,
         requestId: processed.requestId,
         callOrdinal,
         feature: decision.feature,
+        provider: PERPLEXITY_SEARCH_PROVIDER_ID,
         chargeMicrousd: decision.chargeMicrousd,
-        surface: processed.chatSurface,
         db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
       });
     } catch (error) {
       logger.warn({ error }, '[tool-loop] search budget not resolved; treating call as included');
-      return null;
+      return { reservation: null };
     }
 
-    if (settled) {
-      searchChargeCentsByOrdinal.set(callOrdinal, decision.chargeCents);
-      return null;
+    if (reserved.outcome === 'refused') {
+      return { refusal: { content: searchUnaffordableMessage(), isError: false } };
     }
-    return { content: searchUnaffordableMessage(), isError: false };
+    searchChargeCentsByOrdinal.set(callOrdinal, decision.chargeCents);
+    return { reservation: reserved.outcome === 'reserved' ? reserved.reservation : null };
+  }
+
+  /**
+   * The provider bills every call it accepted, so the hold is settled whatever
+   * the tool result said.
+   */
+  async function settleSearchCall(reservation: SearchChargeReservation): Promise<void> {
+    const userId = options.userId;
+    if (!userId) return;
+    await settleSearchCharge({
+      userId,
+      reservation,
+      surface: processed.chatSurface,
+      db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
+    });
   }
 
   /**
@@ -2766,22 +2792,37 @@ export async function* runToolLoop(
         feature: 'web_search_grounding',
         callerKind: searchCallerKind,
       });
-      const groundingChargeCents =
+      const groundingScopedDb = callerScopedDb(
+        { organizationId: processed.organizationId ?? null },
+        options.userId,
+      );
+      const groundingHold =
         groundingDecision.outcome === 'charge'
-          ? searchChargeCents('web_search_grounding') * nativeSearchUses
-          : 0;
-      if (groundingChargeCents > 0) {
+          ? await reserveSearchCharge({
+              userId: options.userId,
+              organizationId: processed.organizationId ?? null,
+              planTier: processed.subscriptionTier ?? null,
+              requestId: processed.requestId,
+              callOrdinal: 0,
+              feature: 'web_search_grounding',
+              provider: GOOGLE_GROUNDING_PROVIDER,
+              chargeMicrousd: searchChargeMicrousd('web_search_grounding') * nativeSearchUses,
+              scope: 'grounding',
+              db: groundingScopedDb,
+            })
+          : null;
+      if (groundingHold?.outcome === 'reserved') {
         await settleSearchCharge({
           userId: options.userId,
-          requestId: processed.requestId,
-          callOrdinal: 0,
-          feature: 'web_search_grounding',
-          chargeCents: groundingChargeCents,
-          scope: 'grounding',
+          reservation: groundingHold.reservation,
           surface: processed.chatSurface,
-          db: callerScopedDb({ organizationId: processed.organizationId ?? null }, options.userId),
+          db: groundingScopedDb,
         });
       }
+      const groundingChargeCents =
+        groundingHold?.outcome === 'reserved'
+          ? searchChargeCents('web_search_grounding') * nativeSearchUses
+          : 0;
       await recordGoogleGroundingCost({
         userId: options.userId,
         organizationId: processed.organizationId ?? null,
@@ -2987,31 +3028,43 @@ export async function* runToolLoop(
       }
       const searchCallOrdinal = webSearchCallsUsed;
       const execute = async () => {
+        let searchReservation: SearchChargeReservation | null = null;
         if (isWebSearchTool(tc.qualifiedName)) {
-          const refusal = await enforceSearchEconomics(searchCallOrdinal);
-          if (refusal) {
+          const admission = await admitSearchCall(searchCallOrdinal);
+          if ('refusal' in admission) {
             toolGovernor.withdraw(tc.qualifiedName, 'budget');
-            return refusal;
+            return admission.refusal;
           }
+          searchReservation = admission.reservation;
         }
-        return runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
-          userId: options.userId,
-          organizationId: processed.organizationId ?? null,
-          model: responseModel,
-          turnRef: turnId,
-          webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
-          surface: processed.chatSurface,
-          searchChargeCents: searchChargeCentsByOrdinal.get(searchCallOrdinal) ?? null,
-          citationNumberFor,
-          loadSkillInstallOverrides,
-          ...(processed.chatRequest?.client_timezone
-            ? { clientTimeZone: processed.chatRequest.client_timezone }
-            : {}),
-          ...(options.signal ? { signal: options.signal } : {}),
-          ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
-          ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
-          ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
-        });
+        try {
+          return await runMcpTool(
+            tc,
+            resolveE2BExecutor,
+            availableTools,
+            options.connectorExecutor,
+            {
+              userId: options.userId,
+              organizationId: processed.organizationId ?? null,
+              model: responseModel,
+              turnRef: turnId,
+              webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+              surface: processed.chatSurface,
+              searchChargeCents: searchChargeCentsByOrdinal.get(searchCallOrdinal) ?? null,
+              citationNumberFor,
+              loadSkillInstallOverrides,
+              ...(processed.chatRequest?.client_timezone
+                ? { clientTimeZone: processed.chatRequest.client_timezone }
+                : {}),
+              ...(options.signal ? { signal: options.signal } : {}),
+              ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
+              ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
+              ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
+            },
+          );
+        } finally {
+          if (searchReservation) await settleSearchCall(searchReservation);
+        }
       };
       // Each MRTR round is a distinct durable operation: re-running the same
       // paused call must not return the cached input_required receipt, so the

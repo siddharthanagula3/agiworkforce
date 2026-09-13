@@ -12,7 +12,7 @@ import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 export const PERPLEXITY_SEARCH_FEATURE = 'web_search_perplexity';
 export const PERPLEXITY_SEARCH_UNIT_PRICE_ENV = RATE_CARD_PROVIDER_COGS_ENV.web_search_perplexity;
 const PERPLEXITY_SEARCH_TOOL_NAME = 'perplexity_search';
-const PERPLEXITY_SEARCH_PROVIDER_ID = 'perplexity';
+export const PERPLEXITY_SEARCH_PROVIDER_ID = 'perplexity';
 const PERPLEXITY_COST_SOURCE_PREFIX = 'perplexity_search';
 
 /** The rate card's per-request provider rate: one billing unit per successful call. */
