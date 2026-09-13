@@ -63,7 +63,12 @@ function context(
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>,
   navigate = vi.fn(() => Promise.resolve()),
 ) {
-  return { resolveTabId: () => Promise.resolve(TAB_ID), send, navigate };
+  return {
+    resolveTabId: () => Promise.resolve(TAB_ID),
+    send,
+    navigate,
+    capture: () => Promise.resolve('iVBORw0KGgo='),
+  };
 }
 
 function approveSite(): void {
@@ -105,6 +110,7 @@ describe('desktop-issued browser commands', () => {
       resolveTabId: () => Promise.resolve(null),
       send: vi.fn(),
       navigate: vi.fn(),
+      capture: vi.fn(),
     });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/No web page/);
@@ -137,6 +143,45 @@ describe('desktop-issued browser commands', () => {
     const value = result.value as { text: string };
     expect(value.text).not.toContain(secret);
     expect(value.text).toContain('before');
+  });
+
+  it('captures the tab through the debugger rather than an activeTab click', async () => {
+    approveSite();
+    const capture = vi.fn(() => Promise.resolve('iVBORw0KGgo='));
+    const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
+      resolveTabId: () => Promise.resolve(TAB_ID),
+      send: vi.fn(),
+      navigate: vi.fn(),
+      capture,
+    });
+    expect(capture).toHaveBeenCalledWith(TAB_ID);
+    expect((result.value as { dataUrl: string }).dataUrl).toBe(
+      'data:image/png;base64,iVBORw0KGgo=',
+    );
+  });
+
+  it('falls back to the tab capture when the debugger is refused', async () => {
+    approveSite();
+    const send = vi.fn(async () => ({ success: true, data: 'data:image/png;base64,zzz' }));
+    const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
+      resolveTabId: () => Promise.resolve(TAB_ID),
+      send,
+      navigate: vi.fn(),
+      capture: () => Promise.reject(new Error('activeTab required')),
+    });
+    expect((result.value as { dataUrl: string }).dataUrl).toBe('data:image/png;base64,zzz');
+  });
+
+  it('says what to approve when neither capture path is allowed', async () => {
+    approveSite();
+    const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
+      resolveTabId: () => Promise.resolve(TAB_ID),
+      send: vi.fn(async () => ({ success: false, error: 'activeTab required' })),
+      navigate: vi.fn(),
+      capture: () => Promise.reject(new Error('activeTab required')),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/approve browser control/);
   });
 
   it('carries a click failure back as the page reported it', async () => {

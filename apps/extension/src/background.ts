@@ -125,7 +125,10 @@ import {
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
 } from '@agiworkforce/types';
-import { runDesktopBrowserCommand } from './features/native-bridge/desktopCommands';
+import {
+  captureThroughDebugger,
+  runDesktopBrowserCommand,
+} from './features/native-bridge/desktopCommands';
 import {
   cancelChromeManagedRun,
   findChromeManagedRunByRequestId,
@@ -2922,6 +2925,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         navigate: async (tabId, url) => {
           await chrome.tabs.update(tabId, { url });
         },
+        capture: (tabId) => captureThroughDebugger(tabId),
       });
 
       try {

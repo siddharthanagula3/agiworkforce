@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/types';
 import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab } from '../browser-tools/tabAuthority';
+import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
 
@@ -21,6 +22,11 @@ export interface DesktopCommandContext {
   resolveTabId: () => Promise<number | null>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
+  capture: (tabId: number) => Promise<string>;
+}
+
+export function captureThroughDebugger(tabId: number): Promise<string> {
+  return captureTabThroughDebugger(tabId);
 }
 
 function failed(id: string, error: string): BrowserCommandResult {
@@ -99,10 +105,23 @@ async function execute(
       return { url };
     }
     case 'browser_screenshot': {
-      const response = requireSuccess(
-        await context.send(tabId, { type: 'CAPTURE_SCREENSHOT', format: 'png' }),
-      );
-      return { dataUrl: response['data'] };
+      // Two ways to photograph a tab, and Chrome gates both: the debugger
+      // wants <all_urls> or activeTab, and captureVisibleTab wants the same,
+      // while a desktop-issued capture has no click behind it to grant
+      // activeTab. Try the debugger, fall back, and say what is missing.
+      try {
+        return { dataUrl: `data:image/png;base64,${await context.capture(tabId)}` };
+      } catch (debuggerError) {
+        const response = await context.send(tabId, { type: 'CAPTURE_SCREENSHOT', format: 'png' });
+        if (response['success'] === true && typeof response['data'] === 'string') {
+          return { dataUrl: response['data'] };
+        }
+        throw new Error(
+          `Chrome would not let the extension photograph this tab. ${
+            debuggerError instanceof Error ? debuggerError.message : ''
+          } Open the AGI Workforce side panel on this tab and approve browser control for this site, then try again.`.trim(),
+        );
+      }
     }
     case 'browser_console': {
       const response = requireSuccess(
