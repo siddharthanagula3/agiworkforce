@@ -8,6 +8,8 @@ import { ProviderLogo } from './ProviderLogo';
 
 const FAVOURITES_RAIL_KEY = 'favourites';
 const FAVOURITES_RAIL_LABEL = 'Favourites';
+const RECENTS_RAIL_KEY = 'recents';
+const RECENTS_RAIL_LABEL = 'Recent';
 const NEW_TAG_WINDOW_DAYS = 30;
 const NEW_TAG_LABEL = 'New';
 const ROUTER_TAG_LABEL = 'Router';
@@ -42,7 +44,15 @@ const CHIP_CLASS =
 const CARD_LABEL_CLASS = 'text-xs text-muted-foreground';
 const CARD_VALUE_CLASS = 'text-sm text-foreground';
 
-type CapabilityChipKey = 'vision' | 'reasoning' | 'tools' | 'imageOut' | 'videoOut' | 'audio';
+type CapabilityChipKey =
+  | 'vision'
+  | 'reasoning'
+  | 'tools'
+  | 'search'
+  | 'codeExecution'
+  | 'imageOut'
+  | 'videoOut'
+  | 'audio';
 
 const CAPABILITY_CHIPS: readonly {
   key: CapabilityChipKey;
@@ -56,6 +66,12 @@ const CAPABILITY_CHIPS: readonly {
     matches: (entry) => entry.capabilities.reasoning === true,
   },
   { key: 'tools', label: 'Tools', matches: (entry) => entry.capabilities.functionCalling === true },
+  { key: 'search', label: 'Search', matches: (entry) => entry.capabilities.webSearch === true },
+  {
+    key: 'codeExecution',
+    label: 'Code execution',
+    matches: (entry) => entry.capabilities.codeExecution === true,
+  },
   {
     key: 'imageOut',
     label: 'Image out',
@@ -219,6 +235,7 @@ export interface ModelCatalogueProps {
   status?: 'idle' | 'loading' | 'ready' | 'error';
   onRetry?: () => void;
   favouriteModelIds: readonly string[];
+  recentModelIds: readonly string[];
   selectedModelId: string;
   query: string;
   onQueryChange: (query: string) => void;
@@ -236,6 +253,7 @@ export function ModelCatalogue({
   status = 'ready',
   onRetry,
   favouriteModelIds,
+  recentModelIds,
   selectedModelId,
   query,
   onQueryChange,
@@ -247,6 +265,10 @@ export function ModelCatalogue({
   isEnvironmentLocked,
 }: ModelCatalogueProps) {
   const favourites = useMemo(() => new Set(favouriteModelIds), [favouriteModelIds]);
+  const recentRank = useMemo(
+    () => new Map(recentModelIds.map((id, index) => [id, index])),
+    [recentModelIds],
+  );
   const [chosenRailKey, setChosenRailKey] = useState<string | null>(initialDeveloperKey ?? null);
   const railKey = chosenRailKey ?? developers[0]?.key ?? FAVOURITES_RAIL_KEY;
   const [activeChips, setActiveChips] = useState<ReadonlySet<CapabilityChipKey>>(new Set());
@@ -256,9 +278,11 @@ export function ModelCatalogue({
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return entries.filter((entry) => {
+    const matched = entries.filter((entry) => {
       if (railKey === FAVOURITES_RAIL_KEY) {
         if (!favourites.has(entry.id)) return false;
+      } else if (railKey === RECENTS_RAIL_KEY) {
+        if (!recentRank.has(entry.id)) return false;
       } else if (!needle && entry.developer !== railKey) return false;
       if (needle) {
         const haystack = [entry.displayName, entry.developerLabel, entry.family ?? ''].join(' ');
@@ -271,7 +295,11 @@ export function ModelCatalogue({
       }
       return true;
     });
-  }, [activeChips, entries, favourites, openWeightOnly, query, railKey]);
+    if (railKey !== RECENTS_RAIL_KEY) return matched;
+    return [...matched].sort(
+      (left, right) => (recentRank.get(left.id) ?? 0) - (recentRank.get(right.id) ?? 0),
+    );
+  }, [activeChips, entries, favourites, openWeightOnly, query, railKey, recentRank]);
 
   const cardEntry = cardModelId ? entries.find((entry) => entry.id === cardModelId) : undefined;
 
@@ -286,6 +314,7 @@ export function ModelCatalogue({
 
   const railEntries = [
     { key: FAVOURITES_RAIL_KEY, label: FAVOURITES_RAIL_LABEL, count: favourites.size },
+    { key: RECENTS_RAIL_KEY, label: RECENTS_RAIL_LABEL, count: recentRank.size },
     ...developers.map((developer) => ({
       key: developer.key,
       label: developer.label,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  COMPAT_CAPABILITY_SOURCES,
   MODEL_FAMILY_REGISTRY,
   PLAN_LABEL,
   getDefaultAutoRoutingProfile,
@@ -9,7 +10,9 @@ import {
   listPickerRecommendedModelIds,
 } from '@agiworkforce/types';
 import {
+  MODEL_PICKER_CAPABILITY_KEYS,
   MODEL_PICKER_FAVOURITES_LIMIT,
+  MODEL_PICKER_FILTER_CAPABILITIES,
   MODEL_PICKER_GUIDANCE,
   MODEL_PICKER_RECOMMENDED_LIMIT,
   buildModelPickerShortList,
@@ -239,5 +242,13 @@ describe('resolvePlanLockLabel', () => {
 
   it('answers null for a model no plan tier names', () => {
     expect(resolvePlanLockLabel('')).toBeNull();
+  });
+});
+
+describe('model picker capability vocabularies', () => {
+  it('offers a catalogue filter for every capability a short-list row chips', () => {
+    for (const key of MODEL_PICKER_CAPABILITY_KEYS) {
+      expect(MODEL_PICKER_FILTER_CAPABILITIES).toContain(COMPAT_CAPABILITY_SOURCES[key]);
+    }
   });
 });
