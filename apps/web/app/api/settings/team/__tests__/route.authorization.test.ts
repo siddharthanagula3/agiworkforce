@@ -189,6 +189,8 @@ describe('POST /api/settings/team authorization invariants', () => {
       const profileResult = rlsScopedProfileLookup(profiles, 'admin-user', text, params);
       if (profileResult !== undefined) return profileResult;
       if (text.includes('pg_advisory_xact_lock')) return [];
+      // The organization has verified example.com, so a direct add is authorized.
+      if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
       if (text.includes('insert into public.organization_members')) return [insertedMembership];
       if (text.includes('from public.organization_members')) {
         return (params as unknown[] | undefined)?.[1] === 'admin-user' ? [adminMembership] : [];
