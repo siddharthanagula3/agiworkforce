@@ -55,6 +55,10 @@ export type UrlFetchOutcome =
       title: string;
       content: string;
       truncated: boolean;
+      /** The page's own description, so a fetched source card reads like a searched one. */
+      snippet?: string;
+      /** When the page says it was published. */
+      date?: string;
     }
   | { ok: false; errorCode: UrlFetchErrorCode; error: string };
 
@@ -343,6 +347,79 @@ export function extractPageTitle(html: string): string | undefined {
     : decoded;
 }
 
+export const PAGE_DESCRIPTION_MAX_CHARS = 400;
+
+/**
+ * The page's own one-line description, from the metadata every publisher
+ * already ships for link previews. It is what fills a source card's second
+ * line when the search backend returned no snippet, which is every
+ * provider-grounded source and every url_fetch source.
+ */
+export function extractPageDescription(html: string): string | undefined {
+  const bounded = bound(html);
+  const raw =
+    metaTagContent(bounded, ['og:description']) ??
+    metaTagContent(bounded, ['twitter:description']) ??
+    metaTagContent(bounded, ['description']);
+  if (!raw) return undefined;
+  const decoded = decodeHtmlEntities(raw).replace(/\s+/g, ' ').trim();
+  if (!decoded) return undefined;
+  return decoded.length > PAGE_DESCRIPTION_MAX_CHARS
+    ? `${decoded.slice(0, PAGE_DESCRIPTION_MAX_CHARS).trim()}…`
+    : decoded;
+}
+
+const JSON_LD_DATE_KEYS = ['datePublished', 'dateCreated', 'uploadDate'] as const;
+const JSON_LD_BLOCK = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+/**
+ * When the page says it was published, taken from the metadata it publishes
+ * for the same reason: article metadata first, then JSON-LD. Returned verbatim
+ * so the reader sees the publisher's own claim, not a reformatting of it; a
+ * value that is not a date is discarded rather than shown.
+ */
+export function extractPagePublishedDate(html: string): string | undefined {
+  const bounded = bound(html);
+  const meta =
+    metaTagContent(bounded, ['article:published_time']) ??
+    metaTagContent(bounded, ['og:article:published_time']) ??
+    metaTagContent(bounded, ['datepublished']) ??
+    metaTagContent(bounded, ['publish_date']) ??
+    metaTagContent(bounded, ['date']);
+  const candidate = meta ? decodeHtmlEntities(meta).trim() : jsonLdPublishedDate(bounded);
+  if (!candidate || !Number.isFinite(Date.parse(candidate))) return undefined;
+  return candidate.slice(0, 40);
+}
+
+function jsonLdPublishedDate(html: string): string | undefined {
+  JSON_LD_BLOCK.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = JSON_LD_BLOCK.exec(html)) !== null) {
+    const body = match[1];
+    if (!body) continue;
+    for (const key of JSON_LD_DATE_KEYS) {
+      const found = new RegExp(`"${key}"\\s*:\\s*"([^"]{4,40})"`).exec(body);
+      if (found?.[1]) return found[1];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether the page declares machine-readable metadata about itself. A page that
+ * does is a record someone maintains; one that does not may still be, which is
+ * why this is a ranking signal and never a filter.
+ */
+export function hasStructuredPageData(html: string): boolean {
+  const bounded = bound(html).toLowerCase();
+  return (
+    bounded.includes('application/ld+json') ||
+    bounded.includes('itemscope') ||
+    bounded.includes('property="og:type"') ||
+    bounded.includes("property='og:type'")
+  );
+}
+
 export function extractHtmlText(html: string): string {
   const bounded = bound(html);
   let doc = stripComments(bounded);
@@ -598,7 +675,20 @@ export async function executeUrlFetch(
         `${extracted.length.toLocaleString('en-US')} extracted characters.]`;
     }
 
-    return { ok: true, url: current.href, title, content, truncated };
+    // The bytes are already in hand, so a fetched source costs nothing extra to
+    // describe and date. Without this its card was a bare title while a searched
+    // source beside it carried a snippet and a date.
+    const snippet = isHtml ? extractPageDescription(raw) : undefined;
+    const date = isHtml ? extractPagePublishedDate(raw) : undefined;
+    return {
+      ok: true,
+      url: current.href,
+      title,
+      content,
+      truncated,
+      ...(snippet ? { snippet } : {}),
+      ...(date ? { date } : {}),
+    };
   } finally {
     clearTimeout(deadline);
     callerSignal?.removeEventListener('abort', cancel);
