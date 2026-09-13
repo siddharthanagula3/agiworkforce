@@ -111,9 +111,54 @@ describe('ComposerPluginsMenu populated', () => {
 
   it('opens the connectors directory from the Add connectors row', async () => {
     renderMenu();
-    fireEvent.click(screen.getByRole('button', { name: COMPOSER_CONNECTORS_CONNECT_LABEL }));
+    fireEvent.click(screen.getByRole('menuitem', { name: COMPOSER_CONNECTORS_CONNECT_LABEL }));
     await waitFor(() => expect(openSettings).toHaveBeenCalledWith('connectors'));
     expect(window.location.hash).toBe('#settings/customize-connectors');
+  });
+});
+
+describe('ComposerPluginsMenu keyboard', () => {
+  it('walks the rows with the arrow keys and wraps onto the Add row', async () => {
+    renderMenu();
+
+    const gmail = screen.getByRole('menuitemcheckbox', { name: 'Gmail' });
+    const add = screen.getByRole('menuitem', { name: COMPOSER_CONNECTORS_CONNECT_LABEL });
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    await waitFor(() => expect(gmail).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'End' });
+    await waitFor(() => expect(add).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    await waitFor(() => expect(gmail).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'ArrowUp' });
+    await waitFor(() => expect(add).toHaveFocus());
+  });
+
+  it('leaves the search field holding focus when the panel opens', async () => {
+    renderMenu();
+
+    const search = screen.getByLabelText(COMPOSER_CONNECTORS_SEARCH_LABEL);
+    await waitFor(() =>
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Gmail' })).not.toHaveFocus(),
+    );
+    search.focus();
+    fireEvent.change(search, { target: { value: 'not' } });
+    expect(search).toHaveFocus();
+  });
+
+  it('closes on Escape and on Tab', () => {
+    const onOpenChange = vi.fn();
+    renderMenu({ onOpenChange });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+
+    onOpenChange.mockClear();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
 
@@ -122,7 +167,7 @@ describe('ComposerPluginsMenu empty', () => {
     renderMenu({ connectors: [] });
     expect(screen.getByText(COMPOSER_CONNECTORS_EMPTY_COPY)).toBeTruthy();
     expect(screen.queryByLabelText(COMPOSER_CONNECTORS_SEARCH_LABEL)).toBeNull();
-    expect(screen.getByRole('button', { name: COMPOSER_CONNECTORS_CONNECT_LABEL })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: COMPOSER_CONNECTORS_CONNECT_LABEL })).toBeTruthy();
   });
 
   it('shows a loading state before the connected list arrives', () => {

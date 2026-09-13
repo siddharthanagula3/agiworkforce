@@ -19,12 +19,15 @@ export function useMenuKeyboard({
   panelRef,
   triggerRef,
   itemSelector = '[role="menuitem"]',
+  autoFocusFirstItem = true,
 }: {
   open: boolean;
   onClose: () => void;
   panelRef: RefObject<HTMLElement | null>;
   triggerRef?: RefObject<HTMLElement | null>;
   itemSelector?: string;
+  /** Off when the panel opens onto its own search field, which owns the keystrokes that follow. */
+  autoFocusFirstItem?: boolean;
 }): void {
   const items = useCallback((): HTMLElement[] => {
     const panel = panelRef.current;
@@ -45,10 +48,10 @@ export function useMenuKeyboard({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !autoFocusFirstItem) return;
     const id = window.setTimeout(() => focusItem(0), 0);
     return () => window.clearTimeout(id);
-  }, [open, focusItem]);
+  }, [open, autoFocusFirstItem, focusItem]);
 
   useEffect(() => {
     if (!open) return;
