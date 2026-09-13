@@ -371,6 +371,20 @@ const ALLOWLIST = [
       "single user's data",
   },
   {
+    match: /features\/admin\/services\/economics-summary\.ts$/,
+    tables: ['subscriptions', 'credit_transactions'],
+    reason:
+      'only imported by app/api/admin/economics/route.ts, which calls requirePlatformAdmin() ' +
+      'before the read, the same gate the operator-metrics entry above stands on. Both ' +
+      'statements are deliberately platform-wide aggregates: the plan counts price the whole ' +
+      'subscription base for a period, and the purchase sum is top-up revenue across every ' +
+      'account. Constraining either by owner would report an operator their own spending ' +
+      'instead of the business. No row leaves the aggregate: the response carries counts and ' +
+      'summed cents per plan, never a user id. The credit_transactions read passes the owner ' +
+      'check today only because it joins subscriptions on user_id, which is a join, not a ' +
+      'scope, so it is declared here rather than left to that accident',
+  },
+  {
     match: /api\/settings\/organization\/route\.ts$/,
     tables: ['organizations'],
     functions: ['handleCreate', 'handlePatch'],

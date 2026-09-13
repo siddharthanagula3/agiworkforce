@@ -1,8 +1,8 @@
--- Reversal of 0185 : take the microUSD unit back off the credit ledger.
+-- Reversal of 0182 : take the microUSD unit back off the credit ledger.
 --
--- WHAT THIS COSTS: every sub-cent balance recorded since 0185 applied is lost,
+-- WHAT THIS COSTS: every sub-cent balance recorded since 0182 applied is lost,
 -- and the loss is silent rather than an error. The cents columns survive
--- because 0185 kept them written on every path, but they are round-half-up
+-- because 0182 kept them written on every path, but they are round-half-up
 -- mirrors: an account that spent 900 microUSD forty times carries 36,000
 -- microUSD of real spend against a cents mirror of 4, and after this reversal
 -- the 4 is all that is left. Balances are therefore correct to within half a
@@ -11,15 +11,19 @@
 -- The rolling 5-hour, weekly and flagship-weekly windows go back to summing
 -- credit_transactions.amount_cents, where every sub-cent deduction rounded to
 -- zero. A user whose entire week was sub-cent traffic reads as having spent
--- nothing, so those ceilings stop binding for that traffic until 0185 is
+-- nothing, so those ceilings stop binding for that traffic until 0182 is
 -- reapplied.
+--
+-- The unit-sync triggers go first: they reference microusd_to_cents_mirror and
+-- the columns this file drops, and a trigger left behind would fail every
+-- write to the table it guards.
 --
 -- ROLLBACK ORDER. Deploy the cents-shaped application code FIRST, then run
 -- this file. The reverse order leaves running code calling
 -- reserve_managed_usage_request_with_limits_microusd, which this file drops,
 -- and every managed turn fails closed with a 503.
 --
--- SELF-CONTAINED. Every cents-shaped function 0185 turned into a wrapper is
+-- SELF-CONTAINED. Every cents-shaped function 0182 turned into a wrapper is
 -- restored here verbatim from the migration that last defined it, so the
 -- reversal is one file and one transaction. No earlier migration needs
 -- re-running.
@@ -2066,6 +2070,19 @@ begin
 end;
 $$;
 
+drop trigger if exists sync_token_credits_units on public.token_credits;
+drop trigger if exists sync_zz_credit_transactions_units on public.credit_transactions;
+drop trigger if exists sync_credit_settlement_jobs_units on public.credit_settlement_jobs;
+drop trigger if exists sync_managed_usage_request_units on public.managed_usage_requests;
+drop trigger if exists sync_managed_usage_extension_units
+  on public.managed_usage_request_extensions;
+
+drop function if exists public.sync_token_credits_units();
+drop function if exists public.sync_credit_transactions_units();
+drop function if exists public.sync_credit_settlement_jobs_units();
+drop function if exists public.sync_managed_usage_request_units();
+drop function if exists public.sync_managed_usage_extension_units();
+
 drop function if exists public.reserve_managed_usage_request_with_limits_microusd(
   text, text, text, text, text, bigint, text, integer, bigint, bigint, bigint, boolean, bigint
 );
@@ -2129,6 +2146,6 @@ alter table public.credit_settlement_jobs
 drop function if exists public.microusd_to_cents_mirror(bigint);
 
 delete from public.schema_migrations
-  where filename = '0185_managed_usage_microusd_ledger.sql';
+  where filename = '0182_managed_usage_microusd_ledger.sql';
 
 commit;
