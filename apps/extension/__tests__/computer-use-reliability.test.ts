@@ -227,6 +227,11 @@ import {
   REDACTED_FIELD_PLACEHOLDER,
 } from '../src/features/computer-use/cdpDriver';
 import {
+  acquireDebugger,
+  debuggerHoldCount,
+  releaseDebugger,
+} from '../src/features/computer-use/debuggerSession';
+import {
   runAgentLoop,
   InjectionDetectedError,
   type AgentLoopUsage,
@@ -604,9 +609,10 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     expect(callsAfter - callsBefore).toBeLessThanOrEqual(1);
   });
 
-  it('onDetach for a registered tab triggers re-attach (eviction scenario)', () => {
+  it('onDetach while a caller holds the tab triggers re-attach (eviction scenario)', async () => {
     registerActiveTab(77);
     ensureOnDetachListener();
+    await acquireDebugger(77);
     const attachCallsBefore = chromeMock.debugger.attach.mock.calls.length;
 
     (
@@ -616,7 +622,40 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     )._fireDetach(77, 'target_closed');
 
     expect(chromeMock.debugger.attach.mock.calls.length).toBeGreaterThan(attachCallsBefore);
+    await releaseDebugger(77);
     unregisterActiveTab(77);
+  });
+
+  it('does not re-attach a tab nobody holds, so no run leaves the debugging bar up', () => {
+    registerActiveTab(78);
+    ensureOnDetachListener();
+    expect(debuggerHoldCount(78)).toBe(0);
+    const attachCallsBefore = chromeMock.debugger.attach.mock.calls.length;
+
+    (
+      chromeMock.debugger as typeof chromeMock.debugger & {
+        _fireDetach: (id: number, r: string) => void;
+      }
+    )._fireDetach(78, 'target_closed');
+
+    expect(chromeMock.debugger.attach.mock.calls.length).toBe(attachCallsBefore);
+    unregisterActiveTab(78);
+  });
+
+  it('keeps one attachment for nested holders and detaches only when the last releases', async () => {
+    await acquireDebugger(79);
+    const attachCallsAfterFirst = chromeMock.debugger.attach.mock.calls.length;
+    await acquireDebugger(79);
+    expect(debuggerHoldCount(79)).toBe(2);
+
+    const detachCallsBefore = chromeMock.debugger.detach.mock.calls.length;
+    await releaseDebugger(79);
+    expect(chromeMock.debugger.detach.mock.calls.length).toBe(detachCallsBefore);
+
+    await releaseDebugger(79);
+    expect(chromeMock.debugger.detach.mock.calls.length).toBeGreaterThan(detachCallsBefore);
+    expect(debuggerHoldCount(79)).toBe(0);
+    expect(chromeMock.debugger.attach.mock.calls.length).toBeGreaterThan(attachCallsAfterFirst - 1);
   });
 
   it('onDetach with reason=canceled_by_user does NOT re-attach', () => {
