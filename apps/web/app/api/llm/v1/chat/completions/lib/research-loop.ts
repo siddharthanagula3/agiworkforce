@@ -74,6 +74,7 @@ import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import {
   enrichWebSearchResultTitles,
   executeWebSearch,
+  isBareDomainTitle,
   formatWebSearchResultForModel,
   isWebSearchTool,
   resolveRoutingRedirectUrls,
@@ -565,7 +566,20 @@ export class SourceAggregator {
     // under the ORIGINAL key: positions are already visible to the model, and
     // re-keying could merge two entries and renumber markers already written.
     const publisherUrls = await resolveRoutingRedirectUrls(entries.map(([, value]) => value));
-    const enriched = await enrichWebSearchResultTitles(publisherUrls);
+    // A grounded entry's title is its publisher's domain, which the card shows
+    // anyway; blanking it is what lets the page's own title, description and
+    // date fill the three fields a searched source already has.
+    const enriched = (
+      await enrichWebSearchResultTitles(
+        publisherUrls.map((entry) =>
+          isBareDomainTitle(entry.title) ? { ...entry, title: '' } : entry,
+        ),
+      )
+    ).map((entry, index) =>
+      // The domain comes back when the page gave no title of its own: a card
+      // headed by its publisher reads better than one headed by nothing.
+      entry.title ? entry : { ...entry, title: publisherUrls[index]?.title ?? '' },
+    );
     entries.forEach(([key], i) => {
       const value = enriched[i];
       if (value) this.byUrl.set(key, value);

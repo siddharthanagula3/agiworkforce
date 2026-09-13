@@ -596,6 +596,18 @@ async function fetchPageMetadata(
  * fetched, results are capped by the caller, the fetch is bounded by timeout
  * and byte count, and every answer is cached for a day.
  */
+const BARE_DOMAIN_TITLE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)+$/i;
+
+/**
+ * True when a result's "title" is really just its publisher's domain, which is
+ * what a grounded result carries. The card already shows the host beneath the
+ * headline, so a domain in the headline line is a repeat, not a title: treated
+ * as absent, the page's own title fills the line instead.
+ */
+export function isBareDomainTitle(title: string | undefined): boolean {
+  return Boolean(title) && BARE_DOMAIN_TITLE.test(title!.trim());
+}
+
 export async function enrichWebSearchResultTitles<
   T extends { url: string; title: string; snippet?: string; date?: string },
 >(results: T[], overrides: TitleEnrichmentOverrides = {}): Promise<T[]> {
