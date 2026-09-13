@@ -146,8 +146,6 @@ export interface ConversationSummary {
   activeLeafMessageId?: string | null;
 }
 
-export type AutoApproveMode = 'ask' | 'smart' | 'full';
-
 export type ConversationGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older';
 
 export interface StreamChunk {

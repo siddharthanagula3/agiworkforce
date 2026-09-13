@@ -1,49 +1,22 @@
-import { useMemo } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Shield, ShieldCheck, SlidersHorizontal, type LucideIcon } from 'lucide-react-native';
 import {
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  SlidersHorizontal,
-  type LucideIcon,
-} from 'lucide-react-native';
+  TOOL_APPROVAL_POLICY_OPTIONS,
+  toolApprovalPolicyOption,
+  type ToolApprovalPolicy,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useSettingsStore } from '@/stores/settingsStore';
-import type { AutoApproveMode } from '@/types/chat';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { useThemeColors } from '@/src/ui/theme';
 
-interface ApprovalOption {
-  mode: AutoApproveMode;
-  icon: LucideIcon;
-  label: string;
-  description: string;
-  tag?: string;
-}
+const POLICY_ICONS: Record<ToolApprovalPolicy, LucideIcon> = {
+  ask_every_time: Shield,
+  auto_approve_read_only: ShieldCheck,
+};
 
-const OPTIONS: ApprovalOption[] = [
-  {
-    mode: 'ask',
-    icon: Shield,
-    label: 'Ask every time',
-    description: 'AGI asks before running actions that can change files, send data, or use tools.',
-    tag: 'Recommended',
-  },
-  {
-    mode: 'smart',
-    icon: ShieldCheck,
-    label: 'Low-risk actions',
-    description: 'AGI can continue routine read-only actions and still asks before sensitive work.',
-  },
-  {
-    mode: 'full',
-    icon: ShieldAlert,
-    label: 'Approve all actions',
-    description: 'AGI runs actions without stopping for review. Use only for trusted workflows.',
-  },
-];
+const RECOMMENDED_POLICY: ToolApprovalPolicy = 'ask_every_time';
 
 function trimSentence(value: string): string {
   return value.replace(/[.。]+$/, '');
@@ -51,13 +24,8 @@ function trimSentence(value: string): string {
 
 export default function AutoApproveScreen() {
   const colors = useThemeColors();
-  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
-  const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
-  const agentsEnabled = FEATURES.agents;
-  const selectedLabel = useMemo(
-    () => OPTIONS.find((option) => option.mode === autoApproveMode)?.label ?? 'Ask every time',
-    [autoApproveMode],
-  );
+  const { policy, status, error, select } = useToolApprovalPolicySync();
+  const selectedLabel = toolApprovalPolicyOption(policy).label;
 
   return (
     <SettingsScreenShell title="Action approvals">
@@ -67,148 +35,73 @@ export default function AutoApproveScreen() {
         icon={SlidersHorizontal}
       />
 
-      {!agentsEnabled ? (
-        <SettingsGroup>
-          <StatusRow
-            icon={Shield}
-            label="Current behavior"
-            description="AGI asks before tool actions. Advanced agent automation is not active on this device."
-            value="Ask"
-            isLast
+      <SettingsGroup>
+        {TOOL_APPROVAL_POLICY_OPTIONS.map((option, index) => (
+          <ApprovalChoiceRow
+            key={option.policy}
+            icon={POLICY_ICONS[option.policy]}
+            label={option.label}
+            description={option.description}
+            tag={option.policy === RECOMMENDED_POLICY ? 'Recommended' : undefined}
+            selected={policy === option.policy}
+            disabled={status === 'loading' || status === 'saving'}
+            onPress={() => select(option.policy)}
+            isLast={index === TOOL_APPROVAL_POLICY_OPTIONS.length - 1}
           />
-        </SettingsGroup>
-      ) : (
-        <SettingsGroup>
-          {OPTIONS.map((option, index) => (
-            <ApprovalChoiceRow
-              key={option.mode}
-              option={option}
-              selected={autoApproveMode === option.mode}
-              onPress={() => setAutoApproveMode(option.mode)}
-              isLast={index === OPTIONS.length - 1}
-            />
-          ))}
-        </SettingsGroup>
-      )}
+        ))}
+      </SettingsGroup>
 
       <View
         style={{
           borderRadius: 16,
           borderWidth: 1,
-          borderColor: colors.warningBorder,
-          backgroundColor: colors.warningSurface,
+          borderColor: error ? colors.dangerBorder : colors.warningBorder,
+          backgroundColor: error ? colors.dangerSurface : colors.warningSurface,
           padding: 14,
           marginBottom: 18,
         }}
       >
         <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
-          Safety default
+          {error ? 'Approval default not in sync' : 'Safety default'}
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
-          Current setting: {selectedLabel}. AGI should never perform destructive, external, or
-          expensive actions without a clear review step.
+          {error
+            ? error
+            : `Current setting: ${selectedLabel}. AGI should never perform destructive, external, or expensive actions without a clear review step.`}
         </Text>
       </View>
     </SettingsScreenShell>
   );
 }
 
-function StatusRow({
+function ApprovalChoiceRow({
   icon: Icon,
   label,
   description,
-  value,
+  tag,
+  selected,
+  disabled,
+  onPress,
   isLast,
 }: {
   icon: LucideIcon;
   label: string;
   description: string;
-  value: string;
-  isLast?: boolean;
-}) {
-  const colors = useThemeColors();
-
-  return (
-    <View
-      accessibilityRole="text"
-      accessibilityLabel={`${label}. ${trimSentence(description)}. ${value}`}
-      style={{
-        minHeight: 94,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        borderBottomWidth: isLast ? 0 : 1,
-        borderBottomColor: colors.border,
-      }}
-    >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.neutralSurface,
-          borderWidth: 1,
-          borderColor: colors.neutralBorder,
-        }}
-      >
-        <Icon size={18} color={colors.textSecondary} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
-        >
-          {label}
-        </Text>
-        <Text
-          numberOfLines={3}
-          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}
-        >
-          {description}
-        </Text>
-      </View>
-      <View
-        style={{
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: colors.neutralBorder,
-          backgroundColor: colors.neutralSurface,
-          paddingHorizontal: 9,
-          paddingVertical: 4,
-        }}
-      >
-        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function ApprovalChoiceRow({
-  option,
-  selected,
-  onPress,
-  isLast,
-}: {
-  option: ApprovalOption;
+  tag?: string;
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
   isLast?: boolean;
 }) {
   const colors = useThemeColors();
-  const Icon = option.icon;
 
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={`${option.label}. ${trimSentence(option.description)}`}
-      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}. ${trimSentence(description)}`}
+      accessibilityState={{ selected, disabled }}
       style={({ pressed }) => ({
         minHeight: 82,
         paddingHorizontal: 14,
@@ -216,6 +109,7 @@ function ApprovalChoiceRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        opacity: disabled ? 0.6 : 1,
         borderBottomWidth: isLast ? 0 : 1,
         borderBottomColor: colors.border,
         backgroundColor: selected
@@ -245,9 +139,9 @@ function ApprovalChoiceRow({
             numberOfLines={1}
             style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', flexShrink: 1 }}
           >
-            {option.label}
+            {label}
           </Text>
-          {option.tag ? (
+          {tag ? (
             <View
               style={{
                 borderRadius: 999,
@@ -260,16 +154,16 @@ function ApprovalChoiceRow({
               }}
             >
               <Text style={{ color: colors.agentSuccess, fontSize: 10, fontWeight: '700' }}>
-                {option.tag}
+                {tag}
               </Text>
             </View>
           ) : null}
         </View>
         <Text
-          numberOfLines={2}
+          numberOfLines={3}
           style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}
         >
-          {option.description}
+          {description}
         </Text>
       </View>
       <View

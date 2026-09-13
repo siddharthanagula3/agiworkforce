@@ -74,12 +74,14 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   const reducedMotion = useReducedMotion();
   const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
+  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
 
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [countdown, setCountdown] = useState<number | null>(
-    autoApproveMode === 'smart' && approval.countdown != null ? approval.countdown : null,
+    toolApprovalPolicy === 'auto_approve_read_only' && approval.countdown != null
+      ? approval.countdown
+      : null,
   );
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);

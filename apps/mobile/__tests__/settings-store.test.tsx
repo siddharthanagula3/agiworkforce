@@ -25,6 +25,7 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
+import { DEFAULT_TOOL_APPROVAL_POLICY, TOOL_APPROVAL_POLICIES } from '@agiworkforce/types';
 import { useSettingsStore, migratePersistedSettings } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
@@ -43,7 +44,7 @@ const defaultPersonalization = {
 
 function resetDeviceStore() {
   useSettingsStore.setState({
-    autoApproveMode: 'ask',
+    toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
     hapticsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
@@ -139,20 +140,31 @@ describe('settingsStore (device-global)', () => {
     });
   });
 
-  describe('autoApproveMode', () => {
-    it('defaults to "ask"', () => {
-      expect(useSettingsStore.getState().autoApproveMode).toBe('ask');
+  describe('toolApprovalPolicy', () => {
+    it('defaults to the policy the server defaults to', () => {
+      expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
     });
 
-    it('can be set to "smart"', () => {
-      useSettingsStore.getState().setAutoApproveMode('smart');
-      expect(useSettingsStore.getState().autoApproveMode).toBe('smart');
+    it('can be set to every policy the server accepts', () => {
+      for (const policy of TOOL_APPROVAL_POLICIES) {
+        useSettingsStore.getState().setToolApprovalPolicy(policy);
+        expect(useSettingsStore.getState().toolApprovalPolicy).toBe(policy);
+      }
     });
 
-    it('can be set back to "ask"', () => {
-      useSettingsStore.getState().setAutoApproveMode('full');
-      useSettingsStore.getState().setAutoApproveMode('ask');
-      expect(useSettingsStore.getState().autoApproveMode).toBe('ask');
+    it('migrates the retired approval modes onto a policy the server honours', () => {
+      expect(migratePersistedSettings({ autoApproveMode: 'smart' }, 1)).toMatchObject({
+        toolApprovalPolicy: 'auto_approve_read_only',
+      });
+      expect(migratePersistedSettings({ autoApproveMode: 'ask' }, 1)).toMatchObject({
+        toolApprovalPolicy: 'ask_every_time',
+      });
+    });
+
+    it('fails an "approve all actions" default closed, since no server policy backs it', () => {
+      const migrated = migratePersistedSettings({ autoApproveMode: 'full' }, 1);
+      expect(migrated).toMatchObject({ toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY });
+      expect(migrated).not.toHaveProperty('autoApproveMode');
     });
   });
 

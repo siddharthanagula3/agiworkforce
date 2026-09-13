@@ -112,7 +112,7 @@ const mockSettingsState = {
     occupation: '',
   },
   isTemporaryChat: false,
-  autoApproveMode: 'ask',
+  toolApprovalPolicy: 'ask_every_time',
   setHapticsEnabled: jest.fn(),
   setThemeMode: jest.fn(),
   setAccentColor: jest.fn(),

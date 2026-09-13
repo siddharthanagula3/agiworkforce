@@ -45,8 +45,8 @@ describe('PA-2 cloud gate, public-alpha copy', () => {
   it('ships open by default: cloudChat on, no local-only invite gate', () => {
     expect(FEATURES.cloudChat).toBe(true);
     expect(FEATURES.schedules).toBe(true);
-    expect(FEATURES.v1LocalOnly).toBe(false);
-    expect(FEATURES.byokKeys).toBe(false);
+    expect(FEATURES).not.toHaveProperty('v1LocalOnly');
+    expect(FEATURES).not.toHaveProperty('byokKeys');
   });
 });
 

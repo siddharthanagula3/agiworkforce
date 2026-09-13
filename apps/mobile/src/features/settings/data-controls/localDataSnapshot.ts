@@ -1,3 +1,4 @@
+import { DEFAULT_TOOL_APPROVAL_POLICY } from '@agiworkforce/types';
 import { clearBiometricFlag } from '@/lib/biometricFlagStore';
 import { clearDeviceId } from '@/lib/deviceId';
 import {
@@ -190,7 +191,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     },
   });
   useSettingsStore.setState({
-    autoApproveMode: 'ask',
+    toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
     hapticsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
