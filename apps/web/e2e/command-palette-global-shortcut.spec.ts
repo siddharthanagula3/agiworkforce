@@ -58,6 +58,29 @@ test.describe('global command palette shortcut', () => {
     await expect(searchTrigger).toBeFocused();
   });
 
+  test('returns focus to a conversation row trigger when its confirm is cancelled', async ({
+    page,
+  }) => {
+    // Same root shape as the two above, from the other direction: the row menu
+    // panel unmounts with focus inside it before the confirm dialog mounts, so
+    // reading document.activeElement at mount time recorded <body>. jsdom has
+    // no portal-unmount race to reproduce it with.
+    await signIn(page);
+    await page.goto('/chat');
+    await page.getByRole('textbox', { name: 'Message input' }).waitFor({ state: 'visible' });
+
+    const trigger = page.getByRole('button', { name: /^More options for / }).first();
+    await trigger.waitFor({ state: 'attached', timeout: 30000 });
+    await trigger.click({ force: true });
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+
+    const cancel = page.getByRole('button', { name: 'Cancel' });
+    await expect(cancel).toBeVisible({ timeout: 5000 });
+    await cancel.click();
+
+    await expect(trigger).toBeFocused({ timeout: 5000 });
+  });
+
   test('opens the command palette on a non-chat route too', async ({ page }) => {
     await signIn(page);
     await page.goto('/chat/projects');
