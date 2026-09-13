@@ -1109,6 +1109,41 @@ describe('durable report persistence', () => {
     expect(JSON.parse(params[9] as string)).toEqual(['Prices rose']);
   });
 
+  /**
+   * The turn's own row is written when the stream reaches its terminal event,
+   * and it reads the report the loop stored. If the sink were still in flight
+   * at that point the message would be written without the research activity
+   * and the reload would be back where it started, so the ordering is the
+   * contract, not an implementation detail.
+   */
+  it('stores the report before it emits the terminal event', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStream([contentEvent('# Findings\n\nPrices rose [1].'), finishEvent()]),
+      );
+
+    const order: string[] = [];
+    const decoder = new TextDecoder();
+    for await (const chunk of runResearchLoop(makeProcessed(), BILLING, {
+      persistReport: async () => {
+        order.push('report-stored');
+        return { id: 'report-1' };
+      },
+    })) {
+      if (decoder.decode(chunk).includes('[DONE]')) order.push('done');
+    }
+
+    expect(order).toEqual(['report-stored', 'done']);
+  });
+
   it('persists a failed run with its gathered sources so a retry can resume', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream(['alpha query']))

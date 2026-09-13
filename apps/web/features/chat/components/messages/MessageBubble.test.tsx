@@ -1798,6 +1798,53 @@ describe('MessageBubble', () => {
       expect(noOutputNotice()).not.toBeInTheDocument();
     });
 
+    /**
+     * `AGI-28`: a finished run's report is durable, but the row that renders it
+     * was not. When the client save of a research turn fails -- and its
+     * metadata is the largest any turn produces, so it is the save most likely
+     * to -- the server's own write is the only record, and a reload showed the
+     * answer with no header, no phase and no plan. This is that reload: the
+     * only research state present is the one the server projected from the
+     * stored report.
+     */
+    it('rebuilds a finished research turn from the state the server stored', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Solid-state pilot lines reached 2 GWh in 2026. [1]',
+            metadata: {
+              research: {
+                phase: 'complete',
+                sources: 2,
+                elapsedMs: 94_000,
+                steps: [
+                  {
+                    id: 'plan-1',
+                    type: 'search',
+                    description: 'solid-state battery pilot lines 2026',
+                    status: 'completed',
+                  },
+                ],
+              },
+              searchResults: [
+                { url: 'https://example.com/a', title: 'Pilot lines', snippet: '' },
+                { url: 'https://example.com/b', title: 'Capacity', snippet: '' },
+              ],
+            },
+          })}
+        />,
+      );
+
+      const activity = screen.getByTestId('research-activity');
+      expect(activity).toHaveAttribute('aria-label', 'Deep research: Research complete');
+      expect(activity).toHaveTextContent('2 sources');
+      expect(activity).toHaveTextContent('1:34');
+      expect(screen.getByTestId('research-plan-step')).toHaveAttribute('data-status', 'completed');
+      expect(screen.getByRole('button', { name: /view 2 sources/i })).toBeInTheDocument();
+      expect(screen.queryByText(/<thinking>/)).toBeNull();
+    });
+
     it('stays quiet on an empty turn the provider rejected, which has its own notice', () => {
       render(
         <MessageBubble

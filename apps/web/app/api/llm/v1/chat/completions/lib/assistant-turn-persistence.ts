@@ -23,6 +23,7 @@ import type {
   PersistedTurnGeneratedFile,
   PersistedTurnSource,
 } from './assistant-turn-sources';
+import type { PersistedTurnResearch } from './assistant-turn-research';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
@@ -105,6 +106,13 @@ export interface AssistantTurnSnapshot {
    */
   generatedFiles?: readonly PersistedTurnGeneratedFile[];
   interactiveCards?: readonly InteractiveCard[];
+  /**
+   * The Deep Research run's activity, under the same `research` key the client
+   * uses, projected from the report the loop already stored. Without it a
+   * reloaded research turn rendered as plain prose: no phase, no elapsed time,
+   * no plan steps, and no way to tell a completed run from an interrupted one.
+   */
+  research?: PersistedTurnResearch;
   runReference?: {
     runId: string;
     runPath: string;
@@ -158,6 +166,7 @@ export async function persistAssistantTurn(params: {
     !snapshot.citations?.length &&
     !snapshot.codeExecutionResult &&
     !snapshot.generatedFiles?.length &&
+    !snapshot.research &&
     interactiveCards.length === 0
   ) {
     return;
@@ -178,6 +187,7 @@ export async function persistAssistantTurn(params: {
     ...(snapshot.citations?.length ? { citations: snapshot.citations } : {}),
     ...(snapshot.codeExecutionResult ? { codeExecutionResult: snapshot.codeExecutionResult } : {}),
     ...(snapshot.generatedFiles?.length ? { generatedFiles: snapshot.generatedFiles } : {}),
+    ...(snapshot.research ? { research: snapshot.research } : {}),
   };
   if (interactiveCards.length > 0) {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;

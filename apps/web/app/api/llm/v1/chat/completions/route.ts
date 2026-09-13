@@ -42,7 +42,10 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
-import { saveResearchReport } from '@/lib/services/research-report-service';
+import {
+  saveResearchReport,
+  type PersistedResearchReport,
+} from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
@@ -502,6 +505,10 @@ async function dispatchChatCompletions(
         onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
+      // The report is the turn's durable half; holding the row the loop just
+      // stored lets the assistant message carry the same activity rather than
+      // depending on a client save that a research turn's metadata can fail.
+      let storedResearchReport: PersistedResearchReport | null = null;
       const researchGen = runResearchLoop(
         processed,
         { userId, token },
@@ -512,15 +519,17 @@ async function dispatchChatCompletions(
           // isolated in the database. Persistence failures are swallowed by the
           // loop (logged, never fatal) -- a storage outage must not destroy a
           // report the user is already reading.
-          persistReport: (report) =>
-            saveResearchReport(runDb, {
+          persistReport: async (report) => {
+            storedResearchReport = await saveResearchReport(runDb, {
               userId,
               requestId: processed.requestId,
               conversationId: processed.conversationId ?? null,
               model: processed.chatRequest.model,
               provider: processed.provider,
               ...report,
-            }),
+            });
+            return storedResearchReport;
+          },
           // CAP-045 slice 4: retry carries the previous attempt's material.
           // It arrives on the NORMAL request path, so this run reserved and
           // metered exactly like a first attempt -- there is no bypass here.
@@ -560,6 +569,7 @@ async function dispatchChatCompletions(
         getServingRequest: () => researchServing,
         completionReason: 'research_loop_completed',
         cancellationReason: 'client_cancelled_research_loop',
+        getResearchReport: () => storedResearchReport,
         runJournal: {
           db: runDb,
           userId,
