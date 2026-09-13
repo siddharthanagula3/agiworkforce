@@ -243,7 +243,7 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
   { prefix: '/(app)/settings', flag: null },
   { prefix: '/(app)/notifications', flag: 'cloudChat' },
   { prefix: '/(app)/schedules', flag: 'schedules' },
-  { prefix: '/(app)/agents', flag: 'cloudTasks' },
+  { prefix: '/(app)/tasks', flag: 'cloudTasks' },
 ];
 
 function isAllowedRoute(route: string): boolean {
@@ -305,7 +305,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'agent_failed':
     case 'emergency_stop_triggered':
     case 'agent_paused':
-      safeNavigate({ pathname: '/(app)/agents' as const });
+      safeNavigate('/(app)/tasks' as Parameters<typeof router.push>[0]);
       break;
 
     case 'agent_approval_needed':

@@ -183,7 +183,7 @@ export default function NotificationCenterScreen() {
         case 'agent_failed':
         case 'emergency_stop_triggered':
         case 'agent_paused':
-          router.push({ pathname: '/(app)/agents' as const });
+          router.push('/(app)/tasks' as Parameters<typeof router.push>[0]);
           break;
         case 'agent_approval_needed':
         case 'approval_pending_escalation':
