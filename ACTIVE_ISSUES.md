@@ -768,14 +768,23 @@ visible.
 ### `AGI-29` Memory facts come from a regular-expression extractor
 
 **Severity:** P3
-**Status:** Open.
+**Status:** Open, waiting on a founder cost decision, not on engineering.
 **Area:** Memory
 **What is wrong:** auto-memory candidates are the sentences that match a fixed
 list of patterns ("my name is", "I prefer", "remember that"); the leaders
 extract with a model and keep facts the patterns never see.
 **Evidence:** `packages/ai/agent-core/src/memory.ts` `extractCandidateMemoryFacts`.
-**User impact:** low. Memory works for the phrasings it knows.
-**Dependencies:** a cheap extraction call on the serving route's own adapter.
+The model-backed replacement is already built and wired into the post-turn
+recorder, on the cheapest managed utility route, falling back to the patterns on
+every failure; it is dark because the flag that enables it is unset. Read
+`apps/web/lib/services/model-memory-extraction.ts` and
+`apps/web/lib/services/managed-auto-memory-service.ts` before writing any more
+extraction code.
+**User impact:** low. Memory works for the phrasings it knows. Verified live on
+2026-09-13 against the running web app: a fact stated in one conversation was
+stored and answered correctly in a second, separate conversation.
+**Dependencies:** the founder decision to spend one utility completion per
+eligible turn, tracked in `docs/work/founder-assistance.md`.
 **Acceptance criteria:** a fact stated without a trigger phrase is remembered.
 **Validation:** memory service tests, a live two-chat recall.
 
