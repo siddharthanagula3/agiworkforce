@@ -7,14 +7,17 @@ import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
-import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import {
+  ANONYMOUS_PLAN_TIER,
+  buildCatalogueEntries,
+  type CatalogueEntry,
+} from '@/lib/server/model-catalogue';
 import {
   effectivePlanTier,
   getMinimumRequiredTier,
-  getModelsForTierAndSurface,
   getPickerModelsForRuntimeProfile,
   normalizeSubscriptionAccessTier,
-  type PickerModelView,
+  resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
@@ -41,11 +44,11 @@ type OpenAiCompatibleModel = {
 
 const CREATED_AT_TIMESTAMP = 1_704_067_200;
 const MODEL_TYPES = ['chat', 'code', 'reasoning', 'multimodal', 'search'] as const;
-const FREE_MODEL_IDS = new Set(FREE_TRIAL_MODELS);
+const SURFACE_RUNTIME_PROFILE = 'web/cloud-chat';
 
-function toModelRecord(model: PickerModelView): OpenAiCompatibleModel | null {
+function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
   const tier = getMinimumRequiredTier(model.id);
-  const contextWindow = model.contextWindow;
+  const contextWindow = model.contextTokens;
   if (
     !tier ||
     typeof contextWindow !== 'number' ||
@@ -65,27 +68,26 @@ function toModelRecord(model: PickerModelView): OpenAiCompatibleModel | null {
     parent: null,
     tier,
     context_window: contextWindow,
-    max_output: model.maxOutput,
+    max_output: resolveMaxOutputTokens(model.id),
   };
 }
 
-function getVisibleModelsForTier(userTier: string): OpenAiCompatibleModel[] {
-  const normalizedTier = normalizeSubscriptionAccessTier(userTier);
-  const pickerOptions = { modelTypes: [...MODEL_TYPES] };
-  const models =
-    normalizedTier === 'free'
-      ? getPickerModelsForRuntimeProfile('web/cloud-chat', pickerOptions).filter((model) =>
-          FREE_MODEL_IDS.has(model.id),
-        )
-      : getModelsForTierAndSurface(normalizedTier, 'web/cloud-chat', pickerOptions);
+async function getVisibleModelsForTier(userTier: string): Promise<OpenAiCompatibleModel[]> {
+  const surfaceModelIds = new Set(
+    getPickerModelsForRuntimeProfile(SURFACE_RUNTIME_PROFILE, {
+      modelTypes: [...MODEL_TYPES],
+    }).map((model) => model.id),
+  );
+  const entries = await buildCatalogueEntries(userTier);
 
-  return models
+  return entries
+    .filter((entry) => entry.admitted && surfaceModelIds.has(entry.id))
     .map(toModelRecord)
     .filter((model): model is OpenAiCompatibleModel => Boolean(model));
 }
 
 async function listModelsForRequest(request: NextRequest, userTier: string) {
-  const visibleModels = getVisibleModelsForTier(userTier);
+  const visibleModels = await getVisibleModelsForTier(userTier);
 
   return NextResponse.json(
     {
@@ -148,7 +150,7 @@ async function handleListModels(request: NextRequest) {
         { status: insufficientScope ? 403 : 401, headers: getCorsHeaders(request) },
       );
     }
-    return listModelsForRequest(request, 'free');
+    return listModelsForRequest(request, ANONYMOUS_PLAN_TIER);
   }
 
   const subscription = await SubscriptionService.getSubscription(scoped.db, scoped.userId);
