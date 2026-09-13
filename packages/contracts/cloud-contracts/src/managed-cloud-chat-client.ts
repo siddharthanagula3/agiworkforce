@@ -28,6 +28,7 @@ import {
   type ManagedCloudMessage,
   type ManagedCloudUpdateConversationRequest,
 } from './conversations';
+import { projectPersistedMessageMetadata } from './message-metadata-projection';
 
 export type ManagedCloudChatHeaders = Record<string, string>;
 export type ManagedCloudChatFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -361,7 +362,13 @@ export function createManagedCloudChatClient(
     },
 
     async saveMessage(conversationId, input, options = {}) {
-      const body = ManagedCloudCreateMessageRequestSchema.parse({ ...input, skipLlm: true });
+      // Bounded before validation, not after a refusal: the cap is a property
+      // of the stored row, and an unbounded turn used to lose its whole save.
+      const body = ManagedCloudCreateMessageRequestSchema.parse({
+        ...input,
+        metadata: projectPersistedMessageMetadata(input.metadata),
+        skipLlm: true,
+      });
       const attempts = options.maxAttempts ?? DEFAULT_SAVE_ATTEMPTS;
       const retryDelayMs = options.retryDelayMs ?? DEFAULT_SAVE_RETRY_DELAY_MS;
       const retryRateLimited = options.retryRateLimited ?? true;
