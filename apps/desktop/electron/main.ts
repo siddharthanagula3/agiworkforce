@@ -23,7 +23,13 @@ import {
   type ElectronNotifyRequest,
   type ElectronWindowControlRequest,
 } from '../src/lib/tauri-electron/bridgeContract';
-import { DESKTOP_RUNTIME_CHANNEL } from '@agiworkforce/local-runtime-contract';
+import {
+  DESKTOP_RUNTIME_CHANNEL,
+  DESKTOP_RUNTIME_EVENT_CHANNEL,
+  type BrowserPairRequestPrompt,
+  type BrowserPairingState,
+} from '@agiworkforce/local-runtime-contract';
+import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
 import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
@@ -162,6 +168,42 @@ function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
     return new URL(frame.url).origin === new URL(CLOUD_APP_ORIGIN).origin;
   } catch {
     return false;
+  }
+}
+
+function sendRuntimeEvent(event: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
+}
+
+/**
+ * The pairing code never crosses the loopback bridge: the extension asks, and
+ * the code is shown here, so only someone looking at this Mac can finish the
+ * handshake.
+ */
+async function startPairingBridge(): Promise<void> {
+  const extraDirectories = (process.env['AGI_CLOUD_EXTRA_NATIVE_HOST_DIRS'] ?? '')
+    .split(':')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  try {
+    await startBrowserBridge({
+      onStateChanged: (state: BrowserPairingState) =>
+        sendRuntimeEvent({ kind: 'browser-pairing-changed', state }),
+      onPairRequest: (prompt: BrowserPairRequestPrompt) => {
+        showMainWindow();
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'Pair Chrome with AGI Cloud',
+            body: `Pairing code ${prompt.code}. Type it in the extension within two minutes.`,
+          }).show();
+        }
+      },
+      ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),
+    });
+  } catch (error) {
+    console.warn('[browser-bridge] could not start the pairing bridge:', error);
   }
 }
 
@@ -663,6 +705,7 @@ if (!hasSingleInstanceLock) {
     });
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
+    void startPairingBridge();
 
     app.on('activate', () => {
       showMainWindow();
@@ -672,6 +715,7 @@ if (!hasSingleInstanceLock) {
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
+    void stopBrowserBridge();
   });
 
   app.on('window-all-closed', () => {
