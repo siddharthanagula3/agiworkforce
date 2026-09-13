@@ -607,6 +607,17 @@ describe('POST /api/media/image/generate', () => {
       expect(data.error.type).toBe('invalid_request_error');
     });
 
+    it('refuses an unsupported aspect ratio with a readable reason, not a serialized issue list', async () => {
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', aspect_ratio: '7:3' }));
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error.type).toBe('invalid_request_error');
+      expect(data.error.message).toContain('aspect_ratio');
+      expect(data.error.message).not.toContain('"code"');
+      expect(data.error.message.trimStart().startsWith('[')).toBe(false);
+    });
+
     it('should return 400 when n is greater than 4', async () => {
       const response = await POST(makeAuthedRequest({ prompt: 'a cat', n: 5 }));
       const data = await response.json();

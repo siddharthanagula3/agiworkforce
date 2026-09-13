@@ -980,7 +980,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     return NextResponse.json(
       {
         error: {
-          message: validationResult.error.message,
+          // `error.message` is the serialized issue array, and this string is
+          // what every media client renders to the user, so an unsupported
+          // aspect ratio printed a JSON blob into the chat. The video route's
+          // wording is the house format.
+          message: `Invalid request: ${validationResult.error.issues
+            .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+            .join('; ')}`,
           type: 'invalid_request_error',
           param: validationResult.error.issues[0]?.path.join('.'),
         },
