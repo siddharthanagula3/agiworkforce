@@ -6,7 +6,12 @@ import {
   pinnedPublicFetch,
 } from '@/lib/egress-policy';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
-import { extractPageTitle } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  extractPageDescription,
+  extractPagePublishedDate,
+  extractPageTitle,
+  hasStructuredPageData,
+} from '@/lib/url-fetch/url-fetch-tool';
 import { recordPerplexitySearchCost } from '@/lib/web-search/perplexity-search-cost';
 
 export const WEB_SEARCH_TOOL = 'web_search';
@@ -79,13 +84,20 @@ export interface WebSearchResultItem {
 export type WebSearchErrorCode =
   | 'invalid_tool_input'
   | 'not_configured'
+  | 'rate_limited'
   | 'upstream_error'
   | 'cancelled'
   | 'timeout';
 
 export type WebSearchOutcome =
   | { ok: true; query: string; results: WebSearchResultItem[]; queryTruncated?: boolean }
-  | { ok: false; errorCode: WebSearchErrorCode; error: string };
+  | {
+      ok: false;
+      errorCode: WebSearchErrorCode;
+      error: string;
+      status?: number;
+      retryable?: boolean;
+    };
 
 export interface WebSearchOverrides {
   fetchImpl?: typeof fetch;
@@ -110,8 +122,73 @@ export interface WebSearchOverrides {
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
 
-function err(errorCode: WebSearchErrorCode, error: string): WebSearchOutcome {
-  return { ok: false, errorCode, error };
+/** One transient failure is a blip; a second in a row is the backend. */
+export const WEB_SEARCH_TRANSIENT_RETRIES = 1;
+export const WEB_SEARCH_TRANSIENT_RETRY_DELAY_MS = 400;
+const RATE_LIMITED_STATUS = 429;
+const SERVER_ERROR_FLOOR = 500;
+
+function err(
+  errorCode: WebSearchErrorCode,
+  error: string,
+  extra: { status?: number; retryable?: boolean } = {},
+): WebSearchOutcome {
+  return {
+    ok: false,
+    errorCode,
+    error,
+    ...(extra.status !== undefined ? { status: extra.status } : {}),
+    ...(extra.retryable ? { retryable: true } : {}),
+  };
+}
+
+/**
+ * What the model is told when a search did not run, and through it what the
+ * reader is told. "Search failed (upstream_error)" named a code nobody outside
+ * this file can read; a failed search is one of four things, and the sentence
+ * says which, so the answer can say it too instead of going quiet.
+ */
+export function webSearchFailureForModel(
+  outcome: Extract<WebSearchOutcome, { ok: false }>,
+): string {
+  const retry =
+    'Tell the user plainly that the search did not run and why, answer from what you already know, ' +
+    'and say which parts you could not confirm.';
+  switch (outcome.errorCode) {
+    case 'rate_limited':
+      return (
+        'The web search backend is rate limiting this account right now, so this search did not run. ' +
+        `You may try this search once more; if it is refused again, do not keep retrying. ${retry}`
+      );
+    case 'timeout':
+      return `The web search backend did not answer in time, so this search did not run. You may try it once more. ${retry}`;
+    case 'upstream_error':
+      return (
+        `The web search backend returned an error, so this search did not run (${outcome.error}). ` +
+        `You may try it once more. ${retry}`
+      );
+    case 'not_configured':
+      return `Web search is not configured on this server, so no search can run at all. Do not retry. ${retry}`;
+    case 'invalid_tool_input':
+      return `That web_search call carried no usable query. Call it again with a plain text query.`;
+    case 'cancelled':
+      return 'The search was cancelled.';
+  }
+}
+
+function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function isHttpUrl(url: string): boolean {
@@ -169,24 +246,48 @@ export async function executeWebSearch(
   callerSignal?.addEventListener('abort', cancel, { once: true });
 
   try {
-    let response: Response;
-    try {
-      response = await fetchImpl(PERPLEXITY_SEARCH_URL, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query, max_results: maxResults }),
-      });
-    } catch (fetchErr) {
-      if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
-      if (controller.signal.aborted) {
-        return err('timeout', `Web search timed out after ${timeoutMs}ms.`);
+    let response: Response | null = null;
+    // A rate limit or a 5xx clears on its own far more often than not, and a
+    // turn that gives up on the first one loses the whole search. One retry,
+    // then the failure is the backend's answer and is reported as such.
+    for (let attempt = 0; attempt <= WEB_SEARCH_TRANSIENT_RETRIES; attempt += 1) {
+      if (attempt > 0) {
+        await delayUnlessAborted(WEB_SEARCH_TRANSIENT_RETRY_DELAY_MS, controller.signal);
+        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+        if (controller.signal.aborted) {
+          return err('timeout', `Web search timed out after ${timeoutMs}ms.`, { retryable: true });
+        }
       }
-      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-      return err('upstream_error', `Web search request failed: ${msg}`);
+      try {
+        response = await fetchImpl(PERPLEXITY_SEARCH_URL, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, max_results: maxResults }),
+        });
+      } catch (fetchErr) {
+        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+        if (controller.signal.aborted) {
+          return err('timeout', `Web search timed out after ${timeoutMs}ms.`, { retryable: true });
+        }
+        if (attempt < WEB_SEARCH_TRANSIENT_RETRIES) continue;
+        const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        return err('upstream_error', `Web search request failed: ${msg}`, { retryable: true });
+      }
+      if (
+        response.ok ||
+        !(response.status === RATE_LIMITED_STATUS || response.status >= SERVER_ERROR_FLOOR) ||
+        attempt >= WEB_SEARCH_TRANSIENT_RETRIES
+      ) {
+        break;
+      }
+    }
+
+    if (!response) {
+      return err('upstream_error', 'Web search produced no response.', { retryable: true });
     }
 
     if (!response.ok) {
@@ -196,9 +297,12 @@ export async function executeWebSearch(
       } catch {
         // best-effort diagnostic only
       }
+      const retryable =
+        response.status === RATE_LIMITED_STATUS || response.status >= SERVER_ERROR_FLOOR;
       return err(
-        'upstream_error',
-        `Perplexity Search API returned HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}.`,
+        response.status === RATE_LIMITED_STATUS ? 'rate_limited' : 'upstream_error',
+        `the search backend answered HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
+        { status: response.status, retryable },
       );
     }
 
@@ -260,7 +364,7 @@ export function formatWebSearchResultForModel(
   citationNumberFor?: (url: string) => number | undefined,
 ): string {
   if (!outcome.ok) {
-    return `Search failed (${outcome.errorCode}): ${outcome.error}`;
+    return webSearchFailureForModel(outcome);
   }
   const truncationNote = outcome.queryTruncated
     ? `\n(Note: the query was truncated to ${MAX_QUERY_LENGTH} characters before searching.)`
@@ -268,10 +372,24 @@ export function formatWebSearchResultForModel(
   if (outcome.results.length === 0) {
     return `No results found for "${outcome.query}".${truncationNote}`;
   }
-  const lines = outcome.results.map((r, i) => {
+  // A result the turn's source budget cannot carry is not shown at all: showing
+  // it unnumbered invites a citation the reader's list does not contain, and
+  // numbering it anyway spends a position on a source nobody will see.
+  const numbered = outcome.results.flatMap((r, i) => {
+    const position = citationNumberFor ? citationNumberFor(r.url) : i + 1;
+    return position === undefined ? [] : [{ result: r, position }];
+  });
+  if (numbered.length === 0) {
+    return `Search ran for "${outcome.query}", but this turn has already collected as many sources as it can cite, so no new results were added.${truncationNote}`;
+  }
+  const droppedNote =
+    numbered.length < outcome.results.length
+      ? `\n(Note: ${outcome.results.length - numbered.length} further result(s) were not added; this turn has reached its source limit.)`
+      : '';
+  const lines = numbered.map(({ result: r, position }) => {
     const datePart = r.date ? ` (${r.date})` : '';
     const snippetPart = r.snippet ? `\n   ${r.snippet}` : '';
-    return `${citationNumberFor?.(r.url) ?? i + 1}. ${r.title || r.url}${datePart}\n   ${r.url}${snippetPart}`;
+    return `${position}. ${r.title || r.url}${datePart}\n   ${r.url}${snippetPart}`;
   });
 
   // Titles and snippets are whatever the indexed page says. fenceUntrustedContent
@@ -284,7 +402,7 @@ export function formatWebSearchResultForModel(
     UNTRUSTED_WEB_RESULTS_SENTINEL,
   );
 
-  return `Search results for "${outcome.query.replaceAll('<', '&lt;')}"${truncationNote}\n\n${fenced}`;
+  return `Search results for "${outcome.query.replaceAll('<', '&lt;')}"${truncationNote}${droppedNote}\n\n${fenced}`;
 }
 
 export function searchPlanBoundExhaustedMessage(limit: number, windowDays: number): string {
@@ -338,27 +456,39 @@ export const TITLE_ENRICHMENT_MAX_RESPONSE_BYTES = 65_536;
 export const TITLE_ENRICHMENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const TITLE_ENRICHMENT_MAX_CONCURRENCY = WEB_SEARCH_MAX_RESULTS;
 
-interface TitleCacheEntry {
-  title: string | null;
+/**
+ * What one page fetch yields, in the three fields a source card renders plus
+ * the ranking signal the same bytes already answer. Every field is optional:
+ * a page that declares none is cached as an empty record so it is not refetched.
+ */
+export interface PageMetadata {
+  title?: string;
+  description?: string;
+  publishedDate?: string;
+  hasStructuredData?: boolean;
+}
+
+interface MetadataCacheEntry {
+  metadata: PageMetadata;
   expiresAt: number;
 }
 
-const titleCache = new Map<string, TitleCacheEntry>();
+const metadataCache = new Map<string, MetadataCacheEntry>();
 
-function cachedTitle(url: string): string | null | undefined {
-  const entry = titleCache.get(url);
+function cachedPageMetadata(url: string): PageMetadata | undefined {
+  const entry = metadataCache.get(url);
   if (!entry || entry.expiresAt <= Date.now()) return undefined;
-  return entry.title;
+  return entry.metadata;
 }
 
-function setCachedTitle(url: string, title: string | null): void {
-  if (titleCache.size > 5_000) {
+function setCachedPageMetadata(url: string, metadata: PageMetadata): void {
+  if (metadataCache.size > 5_000) {
     const now = Date.now();
-    for (const [key, entry] of titleCache) {
-      if (entry.expiresAt <= now) titleCache.delete(key);
+    for (const [key, entry] of metadataCache) {
+      if (entry.expiresAt <= now) metadataCache.delete(key);
     }
   }
-  titleCache.set(url, { title, expiresAt: Date.now() + TITLE_ENRICHMENT_CACHE_TTL_MS });
+  metadataCache.set(url, { metadata, expiresAt: Date.now() + TITLE_ENRICHMENT_CACHE_TTL_MS });
 }
 
 async function readBodyTruncated(response: Response, maxBytes: number): Promise<Uint8Array> {
@@ -396,16 +526,16 @@ export interface TitleEnrichmentOverrides {
   maxConcurrency?: number;
 }
 
-async function fetchPageTitle(
+async function fetchPageMetadata(
   url: string,
   fetchImpl: typeof fetch,
   timeoutMs: number,
   maxResponseBytes: number,
-): Promise<string | null> {
+): Promise<PageMetadata> {
   try {
     await assertResolvedPublicHostname(url);
   } catch (guardErr) {
-    if (guardErr instanceof EgressPolicyError) return null;
+    if (guardErr instanceof EgressPolicyError) return {};
     throw guardErr;
   }
 
@@ -424,34 +554,56 @@ async function fetchPageTitle(
         },
       });
     } catch {
-      return null;
+      return {};
     }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
-      return null;
+      return {};
     }
     const mime = (response.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
     if (mime && mime !== 'text/html' && mime !== 'application/xhtml+xml') {
       await response.body?.cancel().catch(() => undefined);
-      return null;
+      return {};
     }
     const bytes = await readBodyTruncated(response, maxResponseBytes);
     const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    return extractPageTitle(html) ?? null;
+    const title = extractPageTitle(html);
+    const description = extractPageDescription(html);
+    const publishedDate = extractPagePublishedDate(html);
+    return {
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+      ...(publishedDate ? { publishedDate } : {}),
+      ...(hasStructuredPageData(html) ? { hasStructuredData: true } : {}),
+    };
   } catch {
-    return null;
+    return {};
   } finally {
     clearTimeout(deadline);
   }
 }
 
-export async function enrichWebSearchResultTitles<T extends { url: string; title: string }>(
-  results: T[],
-  overrides: TitleEnrichmentOverrides = {},
-): Promise<T[]> {
+/**
+ * Fill in whatever a result is missing of the three fields a source card shows.
+ *
+ * A provider-grounded result arrives as a URL and a title, and a url_fetch
+ * source as a URL and a title, so both rendered a card with an empty second
+ * line and no date while a searched result beside them had both. One page
+ * fetch answers all three, from the metadata the publisher already ships, so
+ * every card is filled the same way regardless of how its source was found.
+ *
+ * A result that already has all three costs nothing: only what is missing is
+ * fetched, results are capped by the caller, the fetch is bounded by timeout
+ * and byte count, and every answer is cached for a day.
+ */
+export async function enrichWebSearchResultTitles<
+  T extends { url: string; title: string; snippet?: string; date?: string },
+>(results: T[], overrides: TitleEnrichmentOverrides = {}): Promise<T[]> {
   const candidates = results
     .map((result, index) => ({ result, index }))
-    .filter(({ result }) => !result.title && isHttpUrl(result.url));
+    .filter(
+      ({ result }) => isHttpUrl(result.url) && (!result.title || !result.snippet || !result.date),
+    );
   if (candidates.length === 0) return results;
 
   const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
@@ -465,12 +617,20 @@ export async function enrichWebSearchResultTitles<T extends { url: string; title
     while (cursor < candidates.length) {
       const next = candidates[cursor++]!;
       const { result, index } = next;
-      let title = cachedTitle(result.url);
-      if (title === undefined) {
-        title = await fetchPageTitle(result.url, fetchImpl, timeoutMs, maxResponseBytes);
-        setCachedTitle(result.url, title);
+      let metadata = cachedPageMetadata(result.url);
+      if (metadata === undefined) {
+        metadata = await fetchPageMetadata(result.url, fetchImpl, timeoutMs, maxResponseBytes);
+        setCachedPageMetadata(result.url, metadata);
       }
-      if (title) enriched[index] = { ...result, title };
+      const filled: T = { ...result };
+      if (!filled.title && metadata.title) filled.title = metadata.title;
+      if (!filled.snippet && metadata.description) {
+        (filled as { snippet?: string }).snippet = metadata.description;
+      }
+      if (!filled.date && metadata.publishedDate) {
+        (filled as { date?: string }).date = metadata.publishedDate;
+      }
+      enriched[index] = filled;
     }
   };
 

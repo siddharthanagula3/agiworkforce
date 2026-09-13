@@ -72,6 +72,7 @@ import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { RouteOutcomeClass } from '@agiworkforce/routing';
+import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
 import { runToolCallOnce } from './tool-idempotency';
@@ -918,6 +919,25 @@ export function toolResultEvent(
   });
 }
 
+/**
+ * Order one search call's results by the evidence they carry, using the shared
+ * ranking in `@agiworkforce/search`. Nothing is dropped: a result the ranking
+ * puts last is still a result, and filtering here would hide a page the model
+ * may be the better judge of.
+ */
+export function rankWebSearchResults<
+  T extends { url: string; title?: string; snippet?: string; date?: string },
+>(results: readonly T[], queryText: string): T[] {
+  return rankSources(
+    results.map((result) => ({
+      ...result,
+      ...(result.date ? { publishedDate: result.date } : {}),
+      ...(publisherFromTitle(result.title) ? { publisher: publisherFromTitle(result.title) } : {}),
+    })),
+    { queryText },
+  ).map((ranked) => results[ranked.originalIndex] as T);
+}
+
 export interface FetchedSource {
   url: string;
   title: string;
@@ -948,7 +968,7 @@ export interface FetchedSource {
 export function fetchSourcesEvent(
   sources: FetchedSource[],
   responseModel: string,
-  positionFor?: (url: string) => number,
+  positionFor?: (url: string) => number | undefined,
 ): SseLine {
   return sseData({
     choices: [
@@ -960,6 +980,8 @@ export function fetchSourcesEvent(
               type: 'web_search_result',
               url: source.url,
               title: source.title,
+              encrypted_content: source.snippet ?? '',
+              ...(source.date ? { page_age: source.date } : {}),
               position: positionFor?.(source.url) ?? index + 1,
             })),
           },
@@ -990,7 +1012,7 @@ export function fetchSourcesEvent(
 export function searchResultsEvent(
   sources: FetchedSource[],
   responseModel: string,
-  positionFor?: (url: string) => number,
+  positionFor?: (url: string) => number | undefined,
 ): SseLine {
   return sseData({
     choices: [
@@ -1454,7 +1476,7 @@ async function runMcpTool(
     webSearchMaxResults?: number;
     surface?: string | null;
     searchChargeCents?: number | null;
-    sourcePositionFor?: (url: string) => number;
+    sourcePositionFor?: (url: string) => number | undefined;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -1591,7 +1613,12 @@ async function runMcpTool(
     return {
       content: fenceFetchedPage(outcome.url, outcome.title, outcome.content),
       isError: false,
-      source: { url: outcome.url, title: outcome.title },
+      source: {
+        url: outcome.url,
+        title: outcome.title,
+        ...(outcome.snippet ? { snippet: outcome.snippet } : {}),
+        ...(outcome.date ? { date: outcome.date } : {}),
+      },
     };
   }
 
@@ -1610,8 +1637,17 @@ async function runMcpTool(
       surface: executionContext?.surface ?? null,
       customerChargeCents: executionContext?.searchChargeCents ?? null,
     });
+    // Ranked before anything is numbered, because the number a source gets is
+    // the order the reader sees: the primary, dated account has to be [1], not
+    // whatever the backend happened to return first.
     const enrichedAfterCap = outcome.ok
-      ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
+      ? {
+          ...outcome,
+          results: rankWebSearchResults(
+            await enrichWebSearchResultTitles(outcome.results),
+            outcome.query,
+          ),
+        }
       : outcome;
     return {
       content: formatWebSearchResultForModel(enrichedAfterCap, executionContext?.sourcePositionFor),
@@ -2476,20 +2512,6 @@ export async function* runToolLoop(
   // the reader sees one list: a number handed to the model has to name the same
   // row the browser will render at that position.
   const turnHistory = readTurnToolHistory(messages, isWebSearchTool, isUrlFetchTool);
-  const sourcePositions = new Map<string, number>();
-  const deliveredSourceKeys = new Set<string>();
-  const sourcePositionFor = (url: string): number => {
-    const key = normalizeSourceUrlKey(url);
-    const known = sourcePositions.get(key);
-    if (known !== undefined) return known;
-    const next = sourcePositions.size + 1;
-    sourcePositions.set(key, next);
-    return next;
-  };
-  for (const url of turnHistory.deliveredUrls) {
-    sourcePositionFor(url);
-    deliveredSourceKeys.add(normalizeSourceUrlKey(url));
-  }
   const agiWorkTurn = processed.chatRequest?.work_mode === 'agiwork';
   let webSearchCallsUsed = turnHistory.searchCalls;
   const webSearchCallBudget = agiWorkTurn
@@ -2504,6 +2526,27 @@ export async function* runToolLoop(
     ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
     : URL_FETCH_MAX_CALLS_PER_TURN;
   const turnSourceBudget = webSearchCallBudget * WEB_SEARCH_MAX_RESULTS + urlFetchCallBudget;
+  const sourcePositions = new Map<string, number>();
+  const deliveredSourceKeys = new Set<string>();
+  /**
+   * Numbering a source IS admitting it: a result the turn's source budget will
+   * not carry must never take a citation number, or the model cites an `[n]`
+   * the reader's list stops short of. Returns undefined once the budget is
+   * spent, and the caller drops that result rather than showing it numbered.
+   */
+  const sourcePositionFor = (url: string): number | undefined => {
+    const key = normalizeSourceUrlKey(url);
+    const known = sourcePositions.get(key);
+    if (known !== undefined) return known;
+    if (sourcePositions.size >= turnSourceBudget) return undefined;
+    const next = sourcePositions.size + 1;
+    sourcePositions.set(key, next);
+    return next;
+  };
+  for (const url of turnHistory.deliveredUrls) {
+    sourcePositionFor(url);
+    deliveredSourceKeys.add(normalizeSourceUrlKey(url));
+  }
   const toolGovernor = createToolTurnGovernor(resolveTurnToolCallCap(agiWorkTurn));
   // Provider-native grounding is the model's own decision, so it is counted per
   // step from what the stream reports rather than from a tool call we made.
@@ -3265,28 +3308,23 @@ export async function* runToolLoop(
         );
       }
 
-      const turnSourceCount = () => deliveredSourceKeys.size;
-
       // Searched before fetched, and the two events below go out in that same
       // order, because the browser lists sources in the order they arrive. A
       // ledger position the model was handed has to be the position the reader
       // sees, so the order a source is numbered in and the order it is sent in
       // are one order, not two.
       for (const s of sources ?? []) {
-        if (turnSourceCount() >= turnSourceBudget) break;
         const key = normalizeSourceUrlKey(s.url);
         if (deliveredSourceKeys.has(key)) continue;
+        if (sourcePositionFor(s.url) === undefined) break;
         deliveredSourceKeys.add(key);
-        sourcePositionFor(s.url);
         searchedSources.push(s);
         searchSourcesAdded = true;
       }
 
-      if (source && turnSourceCount() < turnSourceBudget) {
-        const key = normalizeSourceUrlKey(source.url);
-        if (!deliveredSourceKeys.has(key)) {
-          deliveredSourceKeys.add(key);
-          sourcePositionFor(source.url);
+      if (source && !deliveredSourceKeys.has(normalizeSourceUrlKey(source.url))) {
+        if (sourcePositionFor(source.url) !== undefined) {
+          deliveredSourceKeys.add(normalizeSourceUrlKey(source.url));
           fetchedSources.push(source);
           sourcesAdded = true;
         }
