@@ -138,6 +138,21 @@ import {
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
 import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
+import {
+  initDownloadLedger,
+  listSessionDownloads,
+  revealDownload,
+  startBrowserToolDownload,
+} from './features/browser-tools/downloads';
+import {
+  forgetPageWatchTab,
+  getPageWatch,
+  startPageWatch,
+  stopPageWatch,
+} from './features/browser-tools/pageWatch';
+import { readConsoleEntries } from './features/browser-tools/consoleCapture';
+import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
+import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
   isCurrentManagedCloudOperation,
@@ -229,6 +244,10 @@ function sendComputerUseLifecycle(message: Record<string, unknown>): void {
     // The owning panel may have closed; cancellation still remains authoritative.
   });
 }
+
+initDownloadLedger((download) => {
+  sendComputerUseLifecycle({ type: 'AGI_DOWNLOAD_CHANGED', download });
+});
 
 function broadcastComputerUseForCurrentRun(
   lease: ComputerUseRunLease,
@@ -2806,6 +2825,43 @@ function dispatchAuthorizedMessage(
   return true;
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
+function isWebTab(tab: chrome.tabs.Tab): boolean {
+  return (
+    typeof tab.id === 'number' &&
+    typeof tab.url === 'string' &&
+    (tab.url.startsWith('http://') || tab.url.startsWith('https://'))
+  );
+}
+
+/**
+ * The tab a page tool acts on.
+ *
+ * A page tool can never act on a chrome-extension: page, and an extension page
+ * that sends a message carries its own tab id whether or not it meant to name a
+ * target. Taking that id literally pointed every page tool from the options
+ * page at the extension itself. An id that is not a web tab is therefore read
+ * as "no target given" and the nearest active web tab is used; the origin is
+ * re-authorized afterwards either way.
+ */
+async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promise<number | null> {
+  try {
+    if (typeof explicitTabId === 'number') {
+      const explicitTab = await chrome.tabs.get(explicitTabId).catch(() => undefined);
+      if (explicitTab && isWebTab(explicitTab)) return explicitTabId;
+    }
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab && isWebTab(activeTab)) return activeTab.id ?? null;
+    const activeTabs = await chrome.tabs.query({ active: true });
+    return activeTabs.find(isWebTab)?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleMessageAsync(
   message: ExtensionMessage,
   sender: chrome.runtime.MessageSender,
@@ -4059,6 +4115,108 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
+    case 'START_DOWNLOAD' as ExtensionMessage['type']: {
+      const downloadMsg = message as import('./types').StartDownloadMessage;
+      const downloadTabId = await resolveBrowserToolTabId(tabId);
+      if (downloadTabId === null) {
+        return { success: false, error: 'No tab to download from' } as ExtensionResponse;
+      }
+      if (typeof downloadMsg.url !== 'string' || downloadMsg.url.length === 0) {
+        return { success: false, error: 'START_DOWNLOAD: url is required' } as ExtensionResponse;
+      }
+      try {
+        const record = await startBrowserToolDownload(downloadTabId, downloadMsg.url);
+        return { success: true, download: record } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
+    case 'LIST_DOWNLOADS' as ExtensionMessage['type']: {
+      return { success: true, downloads: await listSessionDownloads() } as ExtensionResponse;
+    }
+
+    case 'REVEAL_DOWNLOAD' as ExtensionMessage['type']: {
+      const revealMsg = message as import('./types').RevealDownloadMessage;
+      if (typeof revealMsg.downloadId !== 'number') {
+        return {
+          success: false,
+          error: 'REVEAL_DOWNLOAD: downloadId is required',
+        } as ExtensionResponse;
+      }
+      try {
+        await revealDownload(revealMsg.downloadId);
+        return { success: true } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
+    case 'SET_PAGE_WATCH' as ExtensionMessage['type']: {
+      const watchMsg = message as import('./types').SetPageWatchMessage;
+      const watchTabId = await resolveBrowserToolTabId(tabId);
+      if (watchTabId === null) {
+        return { success: false, error: 'No tab to watch' } as ExtensionResponse;
+      }
+      try {
+        if (watchMsg.watching === true) {
+          const watch = await startPageWatch(watchTabId, 'user');
+          return { success: true, watching: true, origin: watch.origin } as ExtensionResponse;
+        }
+        await stopPageWatch(watchTabId, 'user');
+        return { success: true, watching: false } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, watching: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
+    case 'READ_PAGE_CONSOLE' as ExtensionMessage['type']: {
+      const consoleMsg = message as import('./types').ReadPageConsoleMessage;
+      const consoleTabId = await resolveBrowserToolTabId(tabId);
+      if (consoleTabId === null) {
+        return { success: false, error: 'No tab to read the console of' } as ExtensionResponse;
+      }
+      try {
+        const consoleTab = await authorizeBrowserToolTab(consoleTabId);
+        return {
+          success: true,
+          watching: getPageWatch(consoleTabId) !== null,
+          origin: consoleTab.origin,
+          console: readConsoleEntries(consoleTabId, {
+            ...(consoleMsg.pattern ? { pattern: consoleMsg.pattern } : {}),
+            ...(consoleMsg.level ? { level: consoleMsg.level } : {}),
+            ...(typeof consoleMsg.limit === 'number' ? { limit: consoleMsg.limit } : {}),
+          }),
+        } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
+    case 'READ_PAGE_NETWORK' as ExtensionMessage['type']: {
+      const networkMsg = message as import('./types').ReadPageNetworkMessage;
+      const networkTabId = await resolveBrowserToolTabId(tabId);
+      if (networkTabId === null) {
+        return { success: false, error: 'No tab to read requests for' } as ExtensionResponse;
+      }
+      try {
+        const networkTab = await authorizeBrowserToolTab(networkTabId);
+        return {
+          success: true,
+          watching: getPageWatch(networkTabId) !== null,
+          origin: networkTab.origin,
+          network: readNetworkEntries(networkTabId, {
+            ...(networkMsg.pattern ? { pattern: networkMsg.pattern } : {}),
+            ...(networkMsg.resourceType ? { resourceType: networkMsg.resourceType } : {}),
+            ...(networkMsg.failedOnly === true ? { failedOnly: true } : {}),
+            ...(typeof networkMsg.limit === 'number' ? { limit: networkMsg.limit } : {}),
+          }),
+        } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
     case 'GET_COMPUTER_USE_STATE' as ExtensionMessage['type']: {
       const activeLease = computerUseRuns.getActive();
       if (!activeLease) {
@@ -4648,6 +4806,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     cancelActiveComputerUseRun('tab_removed', lease.runId);
   }
   state.rateLimiter.reset(tabId);
+  forgetPageWatchTab(tabId);
   webmcpToolsByTab.delete(tabId);
   webmcpNavigationGenerationByTab.delete(tabId);
   nlwebByTab.delete(tabId);

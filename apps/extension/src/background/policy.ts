@@ -51,6 +51,12 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_COMPUTER_USE_STATE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  START_DOWNLOAD: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  LIST_DOWNLOADS: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  REVEAL_DOWNLOAD: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SET_PAGE_WATCH: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  READ_PAGE_CONSOLE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  READ_PAGE_NETWORK: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   CHAT_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   WEBMCP_DISCOVER_TOOLS: { senderClass: 'extension-page-only', allowsCrossTab: true },

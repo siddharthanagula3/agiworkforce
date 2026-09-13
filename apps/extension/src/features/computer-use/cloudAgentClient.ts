@@ -161,6 +161,84 @@ export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'download_file',
+      description:
+        "Download a file to the user's computer from the page you are on. The URL must be on " +
+        "the page's own origin or on the user's approved-site list. Chrome chooses the filename.",
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description:
+              'The file URL to download. May be relative to the current page. http or https only.',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_console',
+      description:
+        'Read the console messages and uncaught errors the page has produced while this run has ' +
+        'been attached. Use it to find out why an action had no visible effect.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: {
+            type: 'string',
+            description: 'Case-insensitive regular expression the message text must match.',
+          },
+          level: {
+            type: 'string',
+            description: 'Return only messages at this level.',
+            enum: ['error', 'warning', 'info', 'log', 'debug'],
+          },
+          limit: {
+            type: 'number',
+            description: 'Return at most this many of the most recent messages.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_network',
+      description:
+        'Read the requests the page has made while this run has been attached: URL, method, ' +
+        'status, resource type, timing and size. Bodies and headers are never captured.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: {
+            type: 'string',
+            description: 'Case-insensitive regular expression the request URL must match.',
+          },
+          resourceType: {
+            type: 'string',
+            description:
+              'Return only requests of this CDP resource type, for example XHR or Fetch.',
+          },
+          failedOnly: {
+            type: 'string',
+            description: 'Pass "true" to return only requests that failed or returned status 400+.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Return at most this many of the most recent requests.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'find',
       description:
         'Find an element on the page by describing what it looks like or does. Returns a CSS selector or coordinate pair. Use read_dom first if possible.',
