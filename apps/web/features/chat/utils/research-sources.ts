@@ -1,7 +1,7 @@
+import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
+
 import type { ResearchSource } from '../stores/research-panel-store';
 import type { WebSearchResults } from '../types/message-metadata';
-
-const TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|mc_[ce]id)$/i;
 
 const WWW_PREFIX_PATTERN = /^www\./;
 const FAVICON_SERVICE_ORIGIN = 'https://www.google.com/s2/favicons';
@@ -17,18 +17,7 @@ function splitInlineCode(segment: string): string[] {
 function normalizeUrlKey(url: string | undefined): string | null {
   const trimmed = url?.trim();
   if (!trimmed) return null;
-  try {
-    const u = new URL(trimmed);
-    const host = u.hostname.toLowerCase().replace(/^www\./, '');
-    const path = u.pathname.replace(/\/+$/, '');
-    const params = Array.from(u.searchParams.entries())
-      .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    const query = params.map(([key, value]) => `${key}=${value}`).join('&');
-    return `${host}${path}${query ? `?${query}` : ''}`;
-  } catch {
-    return trimmed.toLowerCase();
-  }
+  return normalizeSourceUrlKey(trimmed);
 }
 
 export function sourceDisplayHost(url: string): string {
