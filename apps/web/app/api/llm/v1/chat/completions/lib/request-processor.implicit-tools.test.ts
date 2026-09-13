@@ -136,7 +136,11 @@ describe('implicit managed-tool intent', () => {
     'Generate a PowerPoint presentation for the launch plan.',
     'Make a downloadable .docx report from these notes.',
     'Prepare a slide deck and attach the .pptx file.',
-  ])('offers Office file creation for explicit deliverable intent: %s', (prompt) => {
+    'Create an Excel workbook with two sheets and a SUM formula.',
+    'Build a spreadsheet of the regional totals and attach the .xlsx file.',
+    'Generate a PDF of the quarterly summary.',
+    'Make a CSV of these rows.',
+  ])('offers file creation for explicit deliverable intent: %s', (prompt) => {
     const chatRequest = request();
 
     applyImplicitManagedToolIntent()(chatRequest, {

@@ -14,7 +14,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     'run code in a sandboxed Linux environment with a real file system and a network connection',
   write_file: 'write a file into that sandbox',
   create_folder: 'create a folder in that sandbox',
-  create_office_file: 'produce .docx and .pptx files',
+  create_office_file: 'produce .docx, .pptx, .xlsx, .pdf and .csv files',
   skill: 'load a skill: a packaged set of instructions for a specific kind of task',
   code_execution: 'run code in a hosted sandbox and read back its real output',
   code_interpreter: 'run code in a hosted sandbox and read back its real output',
