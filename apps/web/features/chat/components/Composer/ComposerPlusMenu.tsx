@@ -65,6 +65,7 @@ const ROW_LABEL_VIDEO = 'Create video';
 const ROW_LABEL_SCREENSHOT = 'Take a screenshot';
 const ROW_LABEL_SCREENSHOT_BUSY = 'Capturing…';
 const ROW_LABEL_FOLDER = 'Add working folder';
+const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
@@ -427,6 +428,9 @@ export interface ComposerPlusMenuProps {
   isCapturingScreenshot: boolean;
   onTakeScreenshot: () => void;
 
+  showLocalFolderRow: boolean;
+  onAttachFromLocalFolder: () => void;
+
   showWorkingFolderRow: boolean;
   canPickFolder: boolean;
   folderName: string | null;
@@ -596,6 +600,22 @@ function ScreenshotRow({ props, role }: { props: ComposerPlusMenuProps; role?: s
   );
 }
 
+function LocalFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
+  return (
+    <button
+      type="button"
+      role={role}
+      onClick={props.onAttachFromLocalFolder}
+      disabled={props.mediaModeActive}
+      className={cn(ROW_CLASS, props.mediaModeActive ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
+    >
+      <FolderOpen className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-left">{ROW_LABEL_LOCAL_FOLDER}</span>
+      {props.mediaModeActive && <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />}
+    </button>
+  );
+}
+
 function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   const { folderName, canPickFolder } = props;
   return (
@@ -686,6 +706,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   return (
     <>
       <AttachRow props={props} />
+      {props.showLocalFolderRow && <LocalFolderRow props={props} />}
 
       {props.hostCanGenerateImage && <ImageRow props={props} />}
       {props.hostCanGenerateVideo && <VideoRow props={props} />}
@@ -1045,6 +1066,9 @@ function WorkPalette(props: ComposerPlusMenuProps) {
 
   const actionRows = [
     matches(ROW_LABEL_ATTACH) && <AttachRow key="attach" props={props} role="menuitem" />,
+    props.showLocalFolderRow && matches(ROW_LABEL_LOCAL_FOLDER) && (
+      <LocalFolderRow key="local-folder" props={props} role="menuitem" />
+    ),
     props.hostCanGenerateImage && matches(ROW_LABEL_IMAGE) && (
       <ImageRow key="image" props={props} role="menuitem" />
     ),
