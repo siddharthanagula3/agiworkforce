@@ -99,7 +99,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     }
     if (!isSupportedChatAttachment(fileName, mimeType)) {
       throw createError.validation(
-        'Chat supports images, PDFs, and text/code files. Convert Office files to PDF first.',
+        'Chat supports images, PDFs, Word, Excel, PowerPoint, and text or code files.',
       );
     }
   } else if (kind === 'avatar') {

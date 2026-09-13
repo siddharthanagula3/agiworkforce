@@ -23,6 +23,9 @@ export const CHAT_ATTACHMENT_MIME_TYPES = [
   'application/json',
   'application/x-ipynb+json',
   'application/xml',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ] as const;
 
 const CHAT_ATTACHMENT_EXTENSIONS = [
@@ -46,6 +49,9 @@ const CHAT_ATTACHMENT_EXTENSIONS = [
   '.yml',
   '.yaml',
   '.toml',
+  '.docx',
+  '.xlsx',
+  '.pptx',
 ] as const;
 
 export function chatAttachmentAcceptAttribute(): string {
@@ -72,6 +78,15 @@ export function resolveChatAttachmentMimeType(fileName: string, mimeType: string
   if (lowerName.endsWith('.ipynb')) return 'application/x-ipynb+json';
   if (lowerName.endsWith('.json')) return 'application/json';
   if (lowerName.endsWith('.xml')) return 'application/xml';
+  if (lowerName.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (lowerName.endsWith('.xlsx')) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+  if (lowerName.endsWith('.pptx')) {
+    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  }
   return CHAT_ATTACHMENT_EXTENSIONS.some((extension) => lowerName.endsWith(extension))
     ? 'text/plain'
     : null;
@@ -93,9 +108,9 @@ export function isChatImageMimeType(mimeType: string): boolean {
  *
  * The fallback is still `text/plain`, and it is reachable: an extension on the
  * accept list with no recognised media type (`.rs`, `.toml`) arrives labelled
- * that way already. What must never reach it is opaque bytes, and nothing can:
- * `isSupportedChatAttachment` admits images, PDF and text only, so an Office
- * file is refused at upload rather than mislabelled as text here.
+ * that way already. What must never reach it is opaque bytes: an Office
+ * package is read into text before this point and arrives as that text, so
+ * nothing that fails to decode is ever labelled as though it would.
  */
 export function normalizeChatDocumentMimeType(mimeType: string): string {
   const mime = mimeType.trim().toLowerCase();
