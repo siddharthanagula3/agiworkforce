@@ -108,10 +108,10 @@ issue turned out to be is in the commit that closed it.
   carries on top of it (22, tip `24c5c9feb`) checked against this file and
   `known-flaws.md`. `origin/main` is green at `9ab4a616b`. The production
   deploy is not blocked on code: it is waiting on a founder approval, and on
-  migrations `0183` to `0186` being applied in production first, because the
+  migrations `0183` to `0188` being applied in production first, because the
   deploy job refuses to promote while a draft migration is unapplied. Both are
   tracked as founder-assistance items in `docs/work/founder-assistance.md`
-  ("[Database] Apply migrations 0183 to 0186 in production before the next
+  ("[Database] Apply migrations 0183 to 0188 in production before the next
   deploy", "[QA] Somewhere to exercise this work before it ships"). `AGI-10`
   closed on 2026-09-13 for both artifacts and conversations (0184-0186 are its
   migrations); the citation and research-reload half of `AGI-28` closed the
@@ -167,13 +167,14 @@ settlement is idempotent and concurrency-safe.
 ### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
 
 **Severity:** P1
-**Status:** 49 of 57 findings fixed; 8 registered in
-`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F31 and F39
-were closed on 2026-09-12 and their rows deleted: compaction now routes under
-the turn's own admission, and a scheduled run declares the project context it
-carries. Closing F39 also found that the gate's attachment leg could never fire,
-because `buildLlmRequest` moves array content into `multimodal_content` and the
-check read `content`.
+**Status:** 53 of 57 findings fixed; 4 registered in
+`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F21, F23,
+F35 and F38 closed on 2026-09-13 and their rows were deleted; what is left is
+F88, F91, F93 and F94. F31 and F39 closed on 2026-09-12: compaction now routes
+under the turn's own admission, and a scheduled run declares the project context
+it carries. Closing F39 also found that the gate's attachment leg could never
+fire, because `buildLlmRequest` moves array content into `multimodal_content`
+and the check read `content`.
 **Area:** `apps/web/app/api` and the code it reaches
 
 **What the scan was.** A panel-verified read of the 744 files under
@@ -205,17 +206,38 @@ personal` switched off require-MFA, the IP allow list, zero-data-retention,
    persisted on the conversation row.
 6. Four controls existed on one handler and not on its siblings.
 
-**What is left and why.** Each remaining row names its own blocker: three need a
-migration or a deployment secret, three change a shipped contract other code
-already ships against, and one (F88) has no fix that closes the hole without
-degrading legitimate copy, because the real answer is pinning surface into the
-credential at issuance.
+**What is left and why.** Four rows, each naming its own blocker. F88 is a
+founder decision, not an engineering one, and the founder file states the three
+options and how to verify whichever is chosen. F91 changes the presign contract
+the client already ships against. F93 is a primary-key change and wants its own
+migration. F94's registered fix wants a deployment secret that does not exist;
+its other option, a random UUID with a per-user unique index, would fold F93
+into the same migration and needs no secret, so the two should be retriaged
+together rather than separately.
 
-**Next step.** F21 and F23 are the two that want a migration; they are the
-natural next pass. F8, F35 and F38 are contained refactors that need their own
-verification rather than riding a security batch. Nothing unblocked is left in
-this entry: every remaining row names a migration, a deployment secret, a
-shipped contract, or a founder call.
+**Next step.** F93 and F94 as one pass, because they are the same row identity
+problem seen from two ends. Nothing unblocked is left in this entry.
+
+**Closed 2026-09-13.** F21: removing a member from one workspace revoked every
+device credential and API key on that account, because neither revocation had a
+workspace to filter on. Migration `0187` adds `organization_id` to
+`device_refresh_tokens` (`api_keys` has carried it since `0073` and the query
+ignored it), device pairing and rotation bind it, and the provider sessions are
+revoked only when the member's recorded active workspace is the one being left.
+F23: a team add resolved any email to a `profiles` row over the privileged
+connection and inserted the membership, so knowing an address was enough to bind
+that account into a tenant and then reach the removal path against it; a direct
+add now requires a domain the organization has verified, the same evidence SCIM
+provisioning demands, and everything else goes through the invitation the
+invitee redeems. F38: installation ownership was proved by reaching any one
+repository while the row it wrote granted a full-installation credential;
+migration `0188` stores the repository set the linking account itself proved,
+and the listing, clone and push all filter to it. F35: the token handed into the
+sandbox carried every permission on every repository the installation covers;
+it is now minted per operation, narrowed to the one repository and to `contents`
+read for a clone, `contents` write for a push, and never cached. Narrowing the
+clone token also found that the pull-request path reuses the same credential
+server side, which is why that one is scoped to `pull_requests` write instead.
 
 F8 closed 2026-09-12, and it was worse than its one-line summary. The router
 decided retry, failover and user-facing copy by re-parsing a free-text message
