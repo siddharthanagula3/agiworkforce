@@ -27,6 +27,8 @@ import {
 } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectConversations } from '@/lib/hooks/useConversations';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
+import { ProjectArtifactsPanel } from '@/features/projects/components/ProjectArtifactsPanel';
+import { ProjectWorkPanel } from '@/features/projects/components/ProjectWorkPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
@@ -35,7 +37,17 @@ import { SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toUserMessage } from '@/lib/user-error-message';
 
-type Tab = 'chats' | 'sources' | 'scheduled';
+type Tab = 'chats' | 'artifacts' | 'work' | 'sources' | 'scheduled';
+
+const TAB_ORDER: readonly Tab[] = ['chats', 'artifacts', 'work', 'sources', 'scheduled'];
+
+const TAB_LABEL: Record<Tab, string> = {
+  chats: 'Chats',
+  artifacts: 'Artifacts',
+  work: 'Work',
+  sources: 'Sources',
+  scheduled: 'Scheduled',
+};
 
 const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
   'emerald',
@@ -900,11 +912,12 @@ export default function ProjectDetailPage() {
               borderBottom: '1px solid var(--agi-rule)',
               flexShrink: 0,
               marginBottom: 0,
+              overflowX: 'auto',
             }}
             role="tablist"
             aria-label="Project tabs"
           >
-            {(['chats', 'sources', 'scheduled'] as const).map((t) => (
+            {TAB_ORDER.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -916,6 +929,7 @@ export default function ProjectDetailPage() {
                 data-testid={`project-detail-tab-${t}`}
                 style={{
                   padding: '10px 16px',
+                  flexShrink: 0,
                   background: 'transparent',
                   border: 'none',
                   borderBottom:
@@ -929,7 +943,7 @@ export default function ProjectDetailPage() {
                   transition: 'color 0.15s, border-color 0.15s',
                 }}
               >
-                {t === 'chats' ? 'Chats' : t === 'sources' ? 'Sources' : 'Scheduled'}
+                {TAB_LABEL[t]}
               </button>
             ))}
           </div>
@@ -1083,6 +1097,10 @@ export default function ProjectDetailPage() {
                   )}
                 </>
               )
+            ) : tab === 'artifacts' ? (
+              <ProjectArtifactsPanel projectId={project.id} projectName={project.name} />
+            ) : tab === 'work' ? (
+              <ProjectWorkPanel projectId={project.id} projectName={project.name} />
             ) : tab === 'sources' ? (
               <SourcesPanel projectId={project.id} readOnly={isSharedProject} />
             ) : (
