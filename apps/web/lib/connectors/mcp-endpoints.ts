@@ -77,8 +77,8 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
   },
   monday: {
     connectorId: 'monday',
-    url: 'https://mcp.monday.com/sse',
-    transport: 'sse',
+    url: 'https://mcp.monday.com/mcp',
+    transport: 'streamable-http',
     clientRegistration: 'dynamic',
   },
   paypal: {
