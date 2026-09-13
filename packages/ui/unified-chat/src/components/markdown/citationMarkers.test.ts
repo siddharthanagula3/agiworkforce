@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   CITATION_GROUP_HREF_PATTERN,
   CITATION_HREF_PATTERN,
@@ -23,16 +23,24 @@ describe('linkifyCitationMarkers', () => {
     );
   });
 
-  it('splits a run around a marker outside the delivered source count', () => {
+  it('clamps a marker past the delivered source count onto the last source', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const out = linkifyCitationMarkers('Mixed [1][9][2].', 3);
-    expect(out).toBe(
-      `Mixed [&#91;1&#93;](${citationHref(1)})[9][&#91;2&#93;](${citationHref(2)}).`,
-    );
+    expect(out).toBe(`Mixed [&#91;1&#93;&#91;3&#93;&#91;2&#93;](${citationGroupHref([1, 3, 2])}).`);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[9]'));
+    warn.mockRestore();
   });
 
-  it('leaves an out-of-range marker as plain text', () => {
+  it('resolves a lone overshooting marker to the last source and logs it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const out = linkifyCitationMarkers('No source for this [9].', 3);
-    expect(out).toBe('No source for this [9].');
+    expect(out).toBe(`No source for this [&#91;3&#93;](${citationHref(3)}).`);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('leaves a zero marker alone; it names nothing and clamping it would invent a source', () => {
+    expect(linkifyCitationMarkers('Not a citation [0].', 3)).toBe('Not a citation [0].');
   });
 
   it('does not touch a reference-style link that happens to end in digits', () => {

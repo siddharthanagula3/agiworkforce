@@ -231,6 +231,13 @@ function markerMarkdown(indices: readonly number[]): string {
   return `[${label}](${citationGroupHref(indices)})`;
 }
 
+/**
+ * A model that numbered past the end of the list it was given used to leave a
+ * dead `[9]` in the prose: not a link, and pointing at nothing. The source the
+ * reader wants is the last one delivered, so the marker resolves there and the
+ * overshoot is logged, because a run that produces them is a numbering bug
+ * upstream and the transcript is where it becomes visible.
+ */
 function linkifyRun(run: string, citationCount: number): string {
   const tokens = (run.match(/\d{1,3}/g) ?? []).map(Number);
   const out: string[] = [];
@@ -244,6 +251,11 @@ function linkifyRun(run: string, citationCount: number): string {
   for (const n of tokens) {
     if (n >= 1 && n <= citationCount) {
       group.push(n);
+    } else if (n > citationCount) {
+      console.warn(
+        `[citations] marker [${n}] is past the ${citationCount} delivered source(s); clamped to [${citationCount}]`,
+      );
+      if (!group.includes(citationCount)) group.push(citationCount);
     } else {
       flushGroup();
       out.push(`[${n}]`);
