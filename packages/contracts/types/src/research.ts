@@ -91,7 +91,12 @@ export interface ResearchStep {
 
   description: string;
 
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  /**
+   * `dropped` is a planned query the run decided not to run, with the reason in
+   * {@link ResearchStep.note}. A plan step left `pending` says only that nobody
+   * got to it; a report that finishes owes the reader the difference.
+   */
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'dropped';
 
   durationMs?: number;
 
@@ -100,6 +105,9 @@ export interface ResearchStep {
   startedAt?: string;
 
   completedAt?: string;
+
+  /** Why a step was dropped. Present only on a `dropped` step. */
+  note?: string;
 }
 
 export type ResearchReportStatus =
@@ -132,6 +140,7 @@ export const RESEARCH_STEP_STATUSES: readonly ResearchStep['status'][] = [
   'running',
   'completed',
   'failed',
+  'dropped',
 ] as const;
 
 /** Every valid {@link ResearchStep} `type`. */

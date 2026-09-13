@@ -51,6 +51,8 @@ import {
   extractUserQuery,
   SourceAggregator,
   READY_MARKER,
+  DROP_MARKER,
+  parseDroppedPlanSteps,
   type ResearchRunReport,
 } from './research-loop';
 import { saveResearchReport } from '@/lib/services/research-report-service';
@@ -461,7 +463,7 @@ describe('runResearchLoop', () => {
 
   it('runs plan -> gather -> synthesis, suppresses notes, forwards the report, and emits cumulative deduped sources', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream(['one query']))
       .mockResolvedValueOnce(
         sseStream([
           contentEvent(`secret gathering notes\n${READY_MARKER}`),
@@ -523,7 +525,7 @@ describe('runResearchLoop', () => {
 
   it('ends the run with a terminal stop envelope so the activity spine stops spinning', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream([]))
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
@@ -546,7 +548,7 @@ describe('runResearchLoop', () => {
 
   it('emits web_search tool running/completed status events per gathering round', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream([]))
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
@@ -876,12 +878,13 @@ describe('parsePlanQueries', () => {
 });
 
 describe('research plan emission', () => {
-  it('emits the plan before any gathering and drives each step to completed', async () => {
+  it('emits the plan before any gathering and drives each planned step to completed', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          searchResultsEvent([{ url: 'https://b.com', title: 'B' }]),
           contentEvent(`notes\n${READY_MARKER}`),
           finishEvent(),
         ]),
@@ -958,7 +961,7 @@ describe('research plan emission', () => {
 
   it('stays additive: the pre-existing event shapes are untouched', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream(['one query']))
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
@@ -1195,7 +1198,7 @@ describe('durable report persistence', () => {
 
   it('never lets a persistence failure break the stream', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream([]))
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report body'), finishEvent()]));
 
@@ -1365,6 +1368,7 @@ describe('plan approval gate', () => {
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          searchResultsEvent([{ url: 'https://b.com', title: 'B' }]),
           contentEvent(`notes\n${READY_MARKER}`),
           finishEvent(),
         ]),
@@ -1463,7 +1467,7 @@ describe('empty synthesis, attributing the cause honestly', () => {
 
   it('still blames the model when sources WERE gathered and no upstream error was captured', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(planStream(['one query']))
       .mockResolvedValueOnce(
         sseStream([
           contentEvent(`gathered fine\n${READY_MARKER}`),
@@ -1479,5 +1483,178 @@ describe('empty synthesis, attributing the cause honestly', () => {
     expect(content).toContain('the model returned an empty report');
     expect(content).toContain('Try running the research again');
     expect(content).not.toContain('every provider call failed');
+  });
+});
+
+/**
+ * The gathering phase used to end on whatever the model said: one family
+ * emitted READY_TO_REPORT after a single round while another ran three, so how
+ * much of a plan was executed depended on the provider rather than on the
+ * question. The rule below is the plan's, and these cases pin it.
+ */
+describe('plan-driven stop rule', () => {
+  it('keeps gathering when READY arrives with planned queries still unsearched', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://b.com', title: 'B' }]),
+          contentEvent(`more notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('# Report\n\nBody [1]'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    // plan + two gathering rounds + synthesis: the marker did not end it.
+    expect(streamRequestMock).toHaveBeenCalledTimes(4);
+    const last = planSteps(researchPlans(run).at(-1));
+    const searchSteps = last.filter((step) => step['type'] === 'search');
+    expect(searchSteps.every((step) => step['status'] === 'completed')).toBe(true);
+  });
+
+  it('names the still-unsearched planned queries in the next round directive', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(READY_MARKER),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://b.com', title: 'B' }]),
+          contentEvent(READY_MARKER),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const secondRound = streamRequestMock.mock.calls[2]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const directive = secondRound.messages[secondRound.messages.length - 1]?.content ?? '';
+    expect(directive).toContain('- beta query');
+    expect(directive).toContain(DROP_MARKER);
+  });
+
+  it('lets an explicit drop end the phase, and records the reason on the step', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(
+            `notes\n${DROP_MARKER} beta query: the alpha results already answered it\n${READY_MARKER}`,
+          ),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('# Report\n\nBody [1]'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    expect(streamRequestMock).toHaveBeenCalledTimes(3);
+    const last = planSteps(researchPlans(run).at(-1));
+    const beta = last.find((step) => step['description'] === 'beta query');
+    expect(beta?.['status']).toBe('dropped');
+    expect(beta?.['note']).toContain('already answered it');
+  });
+
+  it('drops what the plan still owes when the last gathering round is spent', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent('notes'),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('# Report'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { maxIterations: 3, maxSearches: 3 }),
+    );
+
+    const last = planSteps(researchPlans(run).at(-1));
+    const beta = last.find((step) => step['description'] === 'beta query');
+    expect(beta?.['status']).toBe('dropped');
+    expect(String(beta?.['note'])).toContain('not searched');
+  });
+
+  it('tells the synthesis turn which planned searches never ran', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${DROP_MARKER} beta query: the source is paywalled`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    await collectRun(runResearchLoop(makeProcessed(), BILLING, { maxIterations: 3 }));
+
+    const synthesis = streamRequestMock.mock.calls.at(-1)?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const directive = synthesis.messages[synthesis.messages.length - 1]?.content ?? '';
+    expect(directive).toContain('beta query');
+    expect(directive).toContain('paywalled');
+  });
+});
+
+describe('parseDroppedPlanSteps', () => {
+  const pending = [
+    {
+      id: 'plan-1',
+      type: 'search' as const,
+      description: 'inflation rate spain',
+      status: 'pending' as const,
+    },
+    {
+      id: 'plan-2',
+      type: 'search' as const,
+      description: 'unemployment rate germany',
+      status: 'pending' as const,
+    },
+  ];
+
+  it('matches a drop line to the planned query it names', () => {
+    expect(parseDroppedPlanSteps('DROP unemployment rate germany: out of scope', pending)).toEqual([
+      { id: 'plan-2', reason: 'out of scope' },
+    ]);
+  });
+
+  it('ignores a drop line that names no planned query', () => {
+    expect(parseDroppedPlanSteps('DROP something unrelated entirely: because', pending)).toEqual(
+      [],
+    );
+  });
+
+  it('ignores a line with no reason, which would record a gap nobody explained', () => {
+    expect(parseDroppedPlanSteps('DROP unemployment rate germany:', pending)).toEqual([]);
+  });
+
+  it('never drops the same planned step twice', () => {
+    const parsed = parseDroppedPlanSteps(
+      'DROP inflation rate spain: one\nDROP inflation rate spain: two',
+      pending,
+    );
+    expect(parsed).toHaveLength(1);
   });
 });

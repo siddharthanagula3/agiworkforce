@@ -147,8 +147,27 @@ beforeEach(() => {
   dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 });
 
+/**
+ * These cases are about url_fetch, not about plan coverage, so they run with no
+ * planned queries: the gathering phase then ends on the model's own marker, and
+ * the plan-driven stop rule is pinned in research-loop.test.ts instead.
+ */
 function planStream() {
-  return sseStream([contentEvent('["fetch the page", "check the docs"]'), finishEvent()]);
+  return sseStream([contentEvent('[]'), finishEvent()]);
+}
+
+/**
+ * Fetches the loop made to the search backend, as opposed to the page fetches
+ * source enrichment makes to fill in a card's snippet and date. Counting raw
+ * `fetch` calls would now conflate the two.
+ */
+function searchBackendCalls(fetchMock: { mock: { calls: unknown[][] } }): unknown[][] {
+  return fetchMock.mock.calls.filter((call) => call[0] === PERPLEXITY_URL);
+}
+
+/** Distinct pages the run reached, so an enrichment refetch is not counted twice. */
+function distinctPagesFetched(fetchMock: { mock: { calls: unknown[][] } }): string[] {
+  return [...new Set(fetchMock.mock.calls.map((call) => String(call[0])))];
 }
 
 describe('research loop url_fetch integration', () => {
@@ -193,7 +212,6 @@ describe('research loop url_fetch integration', () => {
       expect(raw).toContain('"phase":"complete"');
       expect(raw).toContain('data: [DONE]');
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
       expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe('https://example.com/');
 
       expect(streamRequestMock).toHaveBeenCalledTimes(4);
@@ -287,7 +305,7 @@ describe('research loop url_fetch integration', () => {
         runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
       );
 
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(distinctPagesFetched(fetchMock)).toHaveLength(3);
       expect(raw).toContain('Fetch budget for this research run is exhausted');
 
       const continuation = streamRequestMock.mock.calls[2]?.[2] as {
@@ -384,7 +402,7 @@ describe('research loop runtime web_search', () => {
         }),
       );
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(searchBackendCalls(fetchMock)).toHaveLength(1);
       expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe(PERPLEXITY_URL);
       const requestInit = (fetchMock.mock.calls[0] as unknown[] | undefined)?.[1] as {
         body?: string;
@@ -469,7 +487,7 @@ describe('research loop runtime web_search', () => {
         }),
       );
 
-      expect(fetchMock).toHaveBeenCalledTimes(WEB_SEARCH_MAX_CALLS_PER_TURN);
+      expect(searchBackendCalls(fetchMock)).toHaveLength(WEB_SEARCH_MAX_CALLS_PER_TURN);
       expect(raw).toContain(
         `this turn has already run its ${WEB_SEARCH_MAX_CALLS_PER_TURN} allowed web searches`,
       );
