@@ -538,37 +538,36 @@ non-gateway model.
 ### `AGI-28` Citations are prose, and a research reload keeps thinking and loses sources
 
 **Severity:** P2
-**Status:** Mostly fixed 2026-09-12, not confirmed live. Native-search citations
-now reach the client and the stored turn: the provider-neutral envelope is
-emitted in legacy-web mode, which is what Anthropic and Google both use, the
-client unions cited outlets into the source pool instead of counting them only
-when the searched list is empty, and the server collects citations in marker
-order alongside sources. Two parts remain. The `<thinking>` prose on reload has
-no writer that either persistence path can produce, since both strip it before
-writing, so reproducing it needs the actual row or a live run and was not
-guessed at. And a message still has no link to its research report, so a reload
-cannot rehydrate the activity header; that is a migration.
+**Status:** Closed 2026-09-13, confirmed live on `:3100`. The citation half
+closed on 2026-09-12. The reload half closed with 0b732672c: the turn's own
+write now projects the run's activity from the report the loop already stored,
+so the state the header renders is on the message row and does not depend on
+the client save, which is the save a research turn's metadata size is most
+likely to sink. No migration was needed. The `<thinking>` prose did not
+reproduce: both persistence paths strip it, and the live run's stored content
+opened on its executive summary.
 **Area:** Web search, research, persistence
-**What is wrong:** on a native-search turn the model writes outlet names as
-italic prose with no `[n]` markers, and the Sources control counts one source
-for two outlets. After a reload of a completed deep-research run the stored
-content opens with the model's `<thinking>` prose and the row's metadata holds
-no research sources, so the `[n]` markers render with nothing behind them and
-the activity header is gone; the report and its citations sit in
-`research_reports` with no link from the message.
-**Evidence:** live 2026-09-10, conversations 3ea3a37e and 38afe47d on `:3100`;
-`apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts` persistence,
-`research-loop.ts` `canonicalText` and `sources.toCitations()`,
-`apps/web/features/chat/utils/research-sources.ts`.
-**User impact:** medium. Answers cite less than the leaders and a saved research
-run reads worse than the live one. Related: `AGI-16` (the href is still the
-provider's redirect).
+**What was wrong:** on a native-search turn the model wrote outlet names as
+italic prose with no `[n]` markers, and the Sources control counted one source
+for two outlets. After a reload of a completed deep-research run the row's
+metadata held no research state, so the activity header was gone and the report
+and its citations sat in `research_reports` with no link from the message.
+**Evidence:** live 2026-09-13, a Deep Research run on `:3100` reloaded to
+"Research complete, 1 search, 5 sources, 0:12", its five plan steps all done,
+the Sources control reading 5 and no `<thinking>` anywhere in the page;
+the conversation read back through `/api/chat/conversations/{id}` carried
+`metadata.research.phase = "complete"` on the assistant row. Screenshots under
+the session scratchpad `qa/web-research/`.
+**User impact:** medium, now resolved. A saved research run reads the same as
+the live one. Related: `AGI-16` (the href is still the provider's redirect).
 **Dependencies:** None.
-**Acceptance criteria:** numbered markers open the right source on native and
-runtime search turns; a reloaded research run shows the same citations and
+**Acceptance criteria:** met. Numbered markers open the right source on native
+and runtime search turns; a reloaded research run shows the same citations and
 Sources count as the live session and no thinking prose.
-**Validation:** stream-transform and research-loop wire tests, MessageBubble
-citation cases, a live headline search and a reloaded research run.
+**Validation:** `managed-agent-stream.test.ts` (the stored report reaches the
+row, an interrupted run is not recorded as complete), `research-loop.test.ts`
+(the report is stored before the terminal event), `MessageBubble.test.tsx` (the
+turn rebuilds from the stored state alone), and the live reload above.
 
 ### `AGI-32` A live voice session's backend responses model and web search are never metered
 
@@ -1255,8 +1254,8 @@ to measure it again.
 
 Dependency-aware, not severity-ordered.
 
-1. `AGI-28` then `AGI-27`, citations and research persistence, then sandbox
-   staging. Both touch the tool loop's terminal path, so one at a time.
+1. `AGI-27`, sandbox staging. `AGI-28` closed on 2026-09-13 and it was the
+   other holder of the tool loop's terminal path, so this one now runs alone.
 2. `AGI-3`, the rest of the assistant metadata. Its silent half is closed, so
    what is left is bounded and visible.
 3. `AGI-5`, native CI. Needs a budget decision before an implementer; the
@@ -1295,14 +1294,12 @@ Dependency-aware, not severity-ordered.
 | `AGI-22` | conformance fixtures, consent record migration      | none                                | no Chinese-HQ route without consent       |
 | `AGI-23` | classification test over the observed 404           | none                                | excluded route is not offered             |
 | `AGI-27` | tool-loop staging cases                             | a CSV total on a non-gateway model  | no write_file copy before execute_code    |
-| `AGI-28` | wire, persistence and citation cases                | a headline search, a reloaded run   | markers open sources; reload equals live  |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
 ## 9. Dependencies and parallel work
 
 ```
-AGI-28 ──> AGI-27          both touch the tool loop's terminal path
 AGI-3                      web persistence, independent, narrowed
 AGI-5                      CI, independent, do early
 AGI-23                     routing, independent now that the pin is narrowed
