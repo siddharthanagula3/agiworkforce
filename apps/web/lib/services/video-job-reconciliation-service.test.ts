@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   beginCancellation: vi.fn(),
   recordCancellation: vi.fn(),
   transcriptSync: vi.fn(),
+  claimNotice: vi.fn(),
+  notify: vi.fn(),
   cleanup: vi.fn(),
 }));
 
@@ -33,6 +35,7 @@ vi.mock('@/lib/compliance/ai-act', () => ({
 }));
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   beginVideoProviderCancellationAttempt: (...args: unknown[]) => mocks.beginCancellation(...args),
+  claimVideoCompletionNotice: (...args: unknown[]) => mocks.claimNotice(...args),
   claimVideoGenerationJob: (...args: unknown[]) => mocks.claim(...args),
   deferVideoGenerationJob: (...args: unknown[]) => mocks.defer(...args),
   deferVideoGenerationJobFailure: (...args: unknown[]) => mocks.deferFailure(...args),
@@ -66,6 +69,9 @@ vi.mock('@/lib/server/media-assets', () => ({
 }));
 vi.mock('@/lib/server/video-generation-transcript', () => ({
   syncVideoGenerationTranscript: (...args: unknown[]) => mocks.transcriptSync(...args),
+}));
+vi.mock('./video-completion-notice-service', () => ({
+  deliverVideoCompletionNotice: (...args: unknown[]) => mocks.notify(...args),
 }));
 
 import {
@@ -197,6 +203,7 @@ describe('video job reconciliation', () => {
     mocks.deferFailure.mockResolvedValue(job({ reconcileFailures: 1 }));
     mocks.cleanup.mockResolvedValue(undefined);
     mocks.transcriptSync.mockResolvedValue('updated');
+    mocks.notify.mockResolvedValue(true);
   });
 
   it('rehosts a completed provider output under the stable job/asset identity before billing', async () => {
@@ -224,6 +231,49 @@ describe('video job reconciliation', () => {
     expect(mocks.cleanup).toHaveBeenCalledTimes(1);
     expect(publicVideoJobStatus(result).video_url).toBe(`/api/files/${JOB_ID}`);
     expect(mocks.transcriptSync).toHaveBeenCalledWith(db, result);
+  });
+
+  /**
+   * The job is driven by its own Workflow, so it finishes whether or not the
+   * tab that started it is open. Before this, the only delivery was the status
+   * poll that a closed tab had stopped making, so the result was durable and
+   * completely silent.
+   */
+  it('tells the owner when a job reaches a terminal state', async () => {
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+
+    const result = await reconcileVideoGenerationJobWithRequiredTranscript(db, job());
+
+    expect(result.status).toBe('completed');
+    expect(mocks.notify).toHaveBeenCalledWith(db, result);
+    // The transcript is what the reopened chat renders, so it is written before
+    // the notice that tells the user to go and look at it.
+    expect(mocks.transcriptSync.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.notify.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('says nothing about a job that is still running', async () => {
+    mocks.poll.mockResolvedValue({ status: 'processing', progress: 60 });
+
+    await reconcileVideoGenerationJob(db, job());
+
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it('returns the reconciled job even when the notice cannot be delivered', async () => {
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+    mocks.notify.mockRejectedValue(new Error('push transport unreachable'));
+
+    await expect(reconcileVideoGenerationJob(db, job())).resolves.toMatchObject({
+      status: 'completed',
+    });
   });
 
   it('retries a failed terminal transcript projection without replaying provider or billing work', async () => {
