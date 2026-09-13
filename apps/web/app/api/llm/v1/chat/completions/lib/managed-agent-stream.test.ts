@@ -596,6 +596,123 @@ describe('managed agent stream', () => {
     ]);
   });
 
+  it('carries the stored research report onto the turn a reload renders', async () => {
+    persistenceMocks.execute.mockClear();
+    const persistable = {
+      ...processed,
+      requestId: 'request-research-report-fixture',
+      conversationId: '0190a000-0000-7000-8000-000000000007',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000008',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: researchGenerator(),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'research_loop_completed',
+        cancellationReason: 'client_cancelled_research_loop',
+        userId: 'user-fixture',
+        getResearchReport: () => ({
+          id: '0190a000-0000-7000-8000-00000000000a',
+          queryId: 'request-research-report-fixture',
+          userId: 'user-fixture',
+          requestId: 'request-research-report-fixture',
+          query: 'Which pilot lines shipped in 2026?',
+          title: 'Report',
+          summary: 'Headline one.',
+          content: '# Report',
+          citations: [],
+          steps: [
+            {
+              id: 'plan-1',
+              type: 'search',
+              description: 'pilot lines 2026',
+              status: 'completed',
+            },
+          ],
+          status: 'completed',
+          sourcesConsulted: 2,
+          totalDurationMs: 94_000,
+          createdAt: '2026-09-13T00:00:00.000Z',
+          updatedAt: '2026-09-13T00:01:34.000Z',
+        }),
+      }),
+    );
+
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    const metadata = JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7])) as Record<
+      string,
+      unknown
+    >;
+    expect(metadata['research']).toEqual({
+      phase: 'complete',
+      sources: 2,
+      steps: [
+        { id: 'plan-1', type: 'search', description: 'pilot lines 2026', status: 'completed' },
+      ],
+      elapsedMs: 94_000,
+    });
+    // The deterministic link back to `research_reports`: same request id, same
+    // user, which is exactly what `/api/research/reports?requestId=` reads by.
+    expect(metadata['requestId']).toBe('request-research-report-fixture');
+  });
+
+  it('records a run that stopped before its report as interrupted, not complete', async () => {
+    persistenceMocks.execute.mockClear();
+    const persistable = {
+      ...processed,
+      requestId: 'request-research-interrupted-fixture',
+      conversationId: '0190a000-0000-7000-8000-00000000000b',
+      assistantMessageId: '0190a000-0000-7000-8000-00000000000c',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: researchGenerator(),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'research_loop_completed',
+        cancellationReason: 'client_cancelled_research_loop',
+        userId: 'user-fixture',
+        getResearchReport: () => ({
+          id: '0190a000-0000-7000-8000-00000000000d',
+          queryId: 'request-research-interrupted-fixture',
+          userId: 'user-fixture',
+          requestId: 'request-research-interrupted-fixture',
+          query: 'Which pilot lines shipped in 2026?',
+          title: '',
+          summary: '',
+          content: '',
+          citations: [],
+          steps: [],
+          status: 'interrupted',
+          sourcesConsulted: 2,
+          error: 'Research stopped before the report was written.',
+          createdAt: '2026-09-13T00:00:00.000Z',
+          updatedAt: '2026-09-13T00:00:20.000Z',
+        }),
+      }),
+    );
+
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    const metadata = JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7])) as Record<
+      string,
+      unknown
+    >;
+    expect(metadata['research']).toEqual({
+      phase: 'interrupted',
+      sources: 2,
+      error: 'Research stopped before the report was written.',
+    });
+  });
+
   it('preserves awaiting-input when disconnect follows a durable approval checkpoint', async () => {
     transitionCloudAgentRun.mockClear();
     const stream = buildManagedAgentStream({

@@ -32,6 +32,8 @@ import {
   type PersistedTurnCitation,
   type PersistedTurnSource,
 } from './assistant-turn-sources';
+import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
+import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -100,6 +102,13 @@ export interface ManagedAgentStreamInput {
   onTerminal?: (outcome: 'completed' | 'failed' | 'cancelled') => Promise<void>;
   preserveAwaitingInputOnCancel?: () => boolean;
   getServingRequest?: () => ProcessedRequest;
+  /**
+   * The Deep Research report this run stored, read at the moment the turn is
+   * persisted. The loop writes the report before the terminal event, so the
+   * turn's own row can carry the activity the header renders instead of
+   * leaving it to a client save that a research turn's metadata size can sink.
+   */
+  getResearchReport?: () => PersistedResearchReport | null;
   userId?: string;
 }
 
@@ -138,6 +147,10 @@ export function buildManagedAgentStream(
     citedSourceUrls = { sources, citations };
     const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
+    const researchReport = input.getResearchReport?.() ?? null;
+    const research: PersistedTurnResearch | null = researchReport
+      ? buildPersistedTurnResearch(researchReport)
+      : null;
     await persistAssistantTurn({
       processed: input.processed,
       userId: input.userId,
@@ -153,6 +166,7 @@ export function buildManagedAgentStream(
         ...(citations ? { citations } : {}),
         ...(codeExecutionResult ? { codeExecutionResult } : {}),
         ...(generatedFiles ? { generatedFiles } : {}),
+        ...(research ? { research } : {}),
       },
     });
   };
