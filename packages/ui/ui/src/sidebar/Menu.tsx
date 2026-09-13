@@ -12,6 +12,16 @@ import {
 import { createPortal } from 'react-dom';
 import { ChevronRight } from '@agiworkforce/icons';
 import { cn } from '../cn';
+import { MENU_PANEL_ATTRIBUTE } from './escape-guard';
+
+export {
+  isInlineEditActive,
+  isMenuPanelOpen,
+  isTransientSidebarLayerOpen,
+  keepOpenForMenuEscape,
+  INLINE_EDIT_ATTRIBUTE,
+  MENU_PANEL_ATTRIBUTE,
+} from './escape-guard';
 
 export interface MenuProps {
   trigger: (args: { open: boolean; toggle: () => void }) => ReactNode;
@@ -22,25 +32,6 @@ export interface MenuProps {
   menuClassName?: string;
   portalled?: boolean;
   onOpenChange?: (open: boolean) => void;
-}
-
-const MENU_PANEL_ATTRIBUTE = 'data-ui-menu-panel';
-
-export function isMenuPanelOpen(): boolean {
-  if (typeof document === 'undefined') return false;
-  return document.querySelector(`[${MENU_PANEL_ATTRIBUTE}]`) !== null;
-}
-
-/**
- * Radix's dismissable layer listens for Escape on `document` in the CAPTURE
- * phase, and the drawer's layer mounts before this menu's own capture listener.
- * Same node, same phase, earlier registration, so the menu cannot suppress it
- * from its own handler, and Escape tore the whole drawer down under an open row
- * menu. Declining the dismissal here leaves the menu's later listener to close
- * just the menu; the next Escape finds no panel and closes the drawer.
- */
-export function keepOpenForMenuEscape(event: Pick<KeyboardEvent, 'preventDefault'>): void {
-  if (isMenuPanelOpen()) event.preventDefault();
 }
 
 const VIEWPORT_MARGIN = 8;
