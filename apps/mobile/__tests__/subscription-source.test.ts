@@ -1,4 +1,5 @@
 import {
+  billingManagementTarget,
   getSubscriptionOwnerGuard,
   subscriptionManagementUrl,
   subscriptionSourceLabel,
@@ -67,5 +68,42 @@ describe('subscription owner guard', () => {
     expect(storeSubscriptionManagementUrlOf(registryApple)).toBe(
       'https://apps.apple.com/account/subscriptions',
     );
+  });
+});
+
+describe('billing management target', () => {
+  it('uses the hosted portal only for a web-billed account on a build that ships it', () => {
+    expect(billingManagementTarget({ source: 'stripe', portalEnabled: true })).toEqual({
+      kind: 'portal',
+    });
+    expect(billingManagementTarget({ source: 'manual', portalEnabled: true })).toEqual({
+      kind: 'portal',
+    });
+  });
+
+  it('sends a web-billed account to the web without the portal', () => {
+    expect(billingManagementTarget({ source: 'stripe', portalEnabled: false })).toEqual({
+      kind: 'external',
+      url: 'https://agiworkforce.com/settings/billing',
+      label: 'Manage billing on the web',
+    });
+  });
+
+  it('never sends a store-billed subscription to the portal', () => {
+    for (const source of ['apple', 'google'] as const) {
+      const target = billingManagementTarget({ source, portalEnabled: true });
+      expect(target?.kind).not.toBe('portal');
+      const url = subscriptionManagementUrl(source);
+      if (url === null) {
+        expect(target).toBeNull();
+      } else {
+        expect(target).toMatchObject({ kind: 'external', url });
+      }
+    }
+  });
+
+  it('offers nothing when no owner is recorded', () => {
+    expect(billingManagementTarget({ source: 'none', portalEnabled: true })).toBeNull();
+    expect(billingManagementTarget({ source: 'unknown', portalEnabled: true })).toBeNull();
   });
 });

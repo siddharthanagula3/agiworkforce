@@ -39,7 +39,10 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
-import { getSubscriptionOwnerGuard } from '@/src/features/billing/subscriptionSource';
+import {
+  billingManagementTarget,
+  getSubscriptionOwnerGuard,
+} from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
 
 const FREE_FEATURES = [
@@ -119,6 +122,14 @@ export default function CloudBillingScreen() {
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
   const subscriptionGuard = getSubscriptionOwnerGuard(billingSource, billingStatus);
+  const managementTarget = billingManagementTarget({
+    source: billingSource,
+    portalEnabled: FEATURES.billing,
+  });
+  // The row needs somewhere real to go. Recovery from the paywall may instead
+  // name the platform that owns the subscription, which is an answer even when
+  // this app cannot act on it.
+  const canRecoverBilling = managementTarget !== null || subscriptionGuard.blocked;
   const isActiveStripePlan = billingSource === 'stripe' && !isFreeTier && isEntitled;
   const nativeSubscriptionSource =
     nativeIap.catalog?.platform === 'ios'
@@ -178,24 +189,24 @@ export default function CloudBillingScreen() {
   }, [canBuyNativeSubscription, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
   const handleManageBilling = useCallback(async () => {
-    if (subscriptionGuard.blocked && billingSource !== 'stripe') {
+    if (!managementTarget) {
       showSubscriptionOwnerGuard();
       return;
     }
-    if (FEATURES.billing) {
-      setPortalLoading(true);
-      try {
-        const url = await fetchPortalSessionUrl();
-        await openExternalUrl(url);
-      } catch {
-        Alert.alert('Billing portal unavailable', 'Please try again later.');
-      } finally {
-        setPortalLoading(false);
-      }
+    if (managementTarget.kind === 'external') {
+      await openExternalUrl(managementTarget.url);
       return;
     }
-    paywallSheetRef.current?.expand();
-  }, [billingSource, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
+    setPortalLoading(true);
+    try {
+      const url = await fetchPortalSessionUrl();
+      await openExternalUrl(url);
+    } catch {
+      Alert.alert('Billing portal unavailable', 'Please try again later.');
+    } finally {
+      setPortalLoading(false);
+    }
+  }, [managementTarget, showSubscriptionOwnerGuard]);
 
   const handleSignIn = useCallback(() => {
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
@@ -333,17 +344,23 @@ export default function CloudBillingScreen() {
               label="Workspace administration"
               icon={ExternalLink}
               onPress={() => void openExternalUrl('https://agiworkforce.com/settings/team')}
-              isLast={!FEATURES.billing}
+              isLast={isFreeTier || !managementTarget}
             />
           ) : null}
-          {!isFreeTier && FEATURES.billing && (
+          {!isFreeTier && managementTarget ? (
             <SettingsRow
-              label={portalLoading ? 'Opening portal…' : 'Manage billing'}
-              icon={CreditCard}
+              label={
+                managementTarget.kind === 'external'
+                  ? managementTarget.label
+                  : portalLoading
+                    ? 'Opening portal…'
+                    : 'Manage billing'
+              }
+              icon={managementTarget.kind === 'external' ? ExternalLink : CreditCard}
               onPress={portalLoading ? undefined : () => void handleManageBilling()}
               isLast
             />
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -507,7 +524,7 @@ export default function CloudBillingScreen() {
           requiredTier={nextUpgradeTier}
           recoveryAction={paywallRecoveryAction}
           onPrimaryAction={
-            paywallRecoveryAction === 'manage_billing' && FEATURES.billing
+            paywallRecoveryAction === 'manage_billing' && canRecoverBilling
               ? handleManageBilling
               : undefined
           }
