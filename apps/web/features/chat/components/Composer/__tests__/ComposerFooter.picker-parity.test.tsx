@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: () => undefined, replace: () => undefined }),
+  usePathname: () => '/chat',
+  useSearchParams: () => new URLSearchParams(),
+}));
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React from 'react';
 

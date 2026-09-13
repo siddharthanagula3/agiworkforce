@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: () => undefined, replace: () => undefined }),
+  usePathname: () => '/chat',
+  useSearchParams: () => new URLSearchParams(),
+}));
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
@@ -133,6 +139,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
+  useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
