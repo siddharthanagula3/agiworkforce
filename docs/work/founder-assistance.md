@@ -537,6 +537,56 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Database] Apply migrations 0183 to 0185 in production before the next deploy
+
+**Why founder assistance is required**
+Production database credentials exist only with the founder, and the deploy job
+refuses to promote while a draft migration is unapplied.
+**Exact action**
+
+1. Rehearse on a Neon branch, then apply to production, with the procedure the
+   0175 to 0182 batch used: `pnpm db:migrate -- apply --target branch`, then
+   `pnpm db:migrate -- apply --target production --confirm-production`, with
+   the production URL exported for the command.
+2. The three drafts: `0183_video_generation_completion_notice.sql` (a claim
+   column so a finished video job is announced once), `0184_organization_shared_artifacts.sql`
+   (artifact visibility plus the workspace grant table) and
+   `0185_org_shared_artifact_policy_recursion.sql` (splits the grant policy per
+   command; without it every publish raises 42P17). Apply all three together.
+
+**Where** A terminal with the production database URL, as for the 0175 batch.
+**Needed input** The production database URL and the confirm flag.
+**How to verify completion** `pnpm db:migrate -- status` against production
+lists 0185 as applied; the deploy job's migration verify step passes; a video
+job completion produces one notice; an artifact can be shared with the
+workspace and read by a member.
+**What remains after founder action** Nothing in code.
+**Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [QA] A QA credential the native SDKs can use
+
+**Why founder assistance is required**
+Creating a sign-in method on the QA account is an account action.
+**Exact action**
+Give the QA account a password (or a second QA account with one) and put it in
+the local env files under the `E2E_` names the web harness reads. The web
+harness signs in with a Clerk backend ticket, which the mobile app, the Chrome
+extension and the Electron shell cannot consume, so every cloud-gated flow on
+those three surfaces (share into the app, start Work from the phone, ask a
+question about a page, approvals, cancel) was verified only at unit level today.
+Also set `CHROME_EXTENSION_PUBLIC_KEY` for local builds so the extension id is
+stable enough for Clerk to accept the sync.
+
+**Where** Clerk dashboard for the QA account; the local env files.
+**Needed input** A password or a second account, and the extension public key.
+**How to verify completion** A native sign-in on the simulator and in the loaded
+extension completes without a browser step; the deferred simulator and
+extension flows above run end to end.
+**What remains after founder action** Re-run those flows and record the captures.
+**Impact** FEATURE-BLOCKING (native surfaces cannot be exercised end to end)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Durability] Ship the world transport fix and end the two stranded runs
 
 **Why founder assistance is required**
