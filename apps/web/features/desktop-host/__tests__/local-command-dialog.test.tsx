@@ -197,6 +197,41 @@ describe('LocalCommandDialog', () => {
     await waitFor(() => expect(cancelLocalCommand).toHaveBeenCalledWith('run-7'));
   });
 
+  it('shows the whole output even when no chunk was streamed', async () => {
+    const user = userEvent.setup();
+    startLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      result: Promise.resolve(finished({ stdout: 'on branch main\n', stderr: 'a warning\n' })),
+    });
+
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await screen.findByRole('button', { name: 'project' });
+    await user.type(screen.getByLabelText(/Command/), 'git status');
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    const pane = await screen.findByLabelText('Command output');
+    expect(pane.textContent).toContain('on branch main');
+    expect(pane.textContent).toContain('a warning');
+  });
+
+  it('builds the transcript from the result, not from what was streamed', async () => {
+    const user = userEvent.setup();
+    const onAttach = vi.fn();
+    startLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      result: Promise.resolve(finished({ stdout: 'complete output\n' })),
+    });
+
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={onAttach} />);
+    await screen.findByRole('button', { name: 'project' });
+    await user.type(screen.getByLabelText(/Command/), 'git status');
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+    await user.click(await screen.findByRole('button', { name: 'Add output to chat' }));
+
+    const [file] = onAttach.mock.calls[0]?.[0] as File[];
+    await expect(readText(file as File)).resolves.toContain('complete output');
+  });
+
   it('sends the subfolder only when the user typed one', async () => {
     const user = userEvent.setup();
     startLocalCommand.mockReturnValue({

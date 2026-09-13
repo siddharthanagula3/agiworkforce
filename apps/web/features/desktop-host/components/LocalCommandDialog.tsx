@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DesktopRuntimeError,
   type ShellRunResult,
@@ -52,18 +53,26 @@ function describeOutcome(result: ShellRunResult): string {
   return `Exited with code ${result.exitCode}.`;
 }
 
-function transcriptFile(
-  result: ShellRunResult,
-  root: WorkspaceRoot,
-  lines: OutputLine[],
-  nowMs: number,
-): File {
+/**
+ * Everything the command printed.
+ *
+ * Read from the finished result rather than from the streamed chunks: the
+ * stream is a live preview and can start after the run does, which is what
+ * happens on the first command of a session, where the native permission sheet
+ * stands between the request and the first chunk. The result always carries the
+ * whole thing.
+ */
+function completedOutput(result: ShellRunResult): string {
+  return `${result.stdout}${result.stderr}`;
+}
+
+function transcriptFile(result: ShellRunResult, root: WorkspaceRoot, nowMs: number): File {
   const location = result.cwd === '' ? root.name : `${root.name}/${result.cwd}`;
   const body = [
     `$ ${result.command}`,
     `# in ${location}`,
     '',
-    lines.map((line) => line.text).join(''),
+    completedOutput(result),
     '',
     describeOutcome(result),
     result.truncated ? 'Output was cut off at the size limit.' : '',
@@ -182,16 +191,21 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
 
   const onAddToChat = useCallback(() => {
     if (!result || !activeRoot) return;
-    onAttach([transcriptFile(result, activeRoot, lines, Date.now())]);
+    onAttach([transcriptFile(result, activeRoot, Date.now())]);
     close();
-  }, [result, activeRoot, lines, onAttach, close]);
+  }, [result, activeRoot, onAttach, close]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  const output = lines.map((line) => line.text).join('');
-  const hasStderr = lines.some((line) => line.stream === 'stderr');
+  const output = result ? completedOutput(result) : lines.map((line) => line.text).join('');
+  const hasStderr = result ? result.stderr !== '' : lines.some((line) => line.stream === 'stderr');
 
-  return (
+  /**
+   * Portaled to the body: the composer sits inside a transformed ancestor,
+   * which becomes the containing block for `fixed` and clips a panel this tall
+   * against the bottom of the composer rather than the window.
+   */
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -200,7 +214,7 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
       onClick={close}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-xl flex-col gap-3 rounded-xl border border-border/60 bg-popover p-4 shadow-lg"
+        className="flex max-h-[85vh] w-full max-w-xl flex-col gap-3 overflow-y-auto rounded-xl border border-border/60 bg-popover p-4 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
@@ -312,6 +326,7 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
           {result?.truncated ? ' Output was cut off at the size limit.' : ''}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
