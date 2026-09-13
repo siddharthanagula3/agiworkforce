@@ -96,6 +96,29 @@ export async function resolveOrganizationMembershipId(
   return membership?.organization_id ?? null;
 }
 
+/**
+ * The workspace the member last selected, read from the settings row alone.
+ *
+ * `resolveActiveOrganizationId` joins `organization_members`, so it answers
+ * null the moment a membership is deleted. Offboarding needs the answer AFTER
+ * that delete, to tell a member who was working in this workspace from one who
+ * was not, so it reads the recorded selection rather than the resolved one.
+ */
+export async function readRecordedActiveWorkspaceId(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ organization_id: string | null }>(
+    `select s.settings #>> '{workspace,activeOrganizationId}' as organization_id
+       from public.user_settings s
+      where s.user_id = $1
+      limit 1`,
+    [userId],
+  );
+  const value = row?.organization_id ?? null;
+  return value && value !== PERSONAL_WORKSPACE_KEY && UUID_RE.test(value) ? value : null;
+}
+
 export async function listWorkspaceMemberships(
   db: DatabaseAdapter,
   userId: string,
