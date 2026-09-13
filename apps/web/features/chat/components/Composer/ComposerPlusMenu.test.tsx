@@ -35,6 +35,8 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     canTakeScreenshot: false,
     isCapturingScreenshot: false,
     onTakeScreenshot: vi.fn(),
+    showLocalFolderRow: false,
+    onAttachFromLocalFolder: vi.fn(),
     showWorkingFolderRow: false,
     canPickFolder: false,
     folderName: null,
@@ -139,6 +141,9 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.getByRole('button', { name: 'Plugins' })).toBeInTheDocument();
     expect(screen.queryByRole('menu', { name: 'AGI Work tools' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Search the AGI Work palette')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Attach from local folder' }),
+    ).not.toBeInTheDocument();
   });
 
   it('toggles per-chat memory from its own row', () => {
@@ -464,5 +469,15 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
 
     expect(props.onRequestClose).toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: TRIGGER_LABEL }));
+  });
+});
+
+describe('ComposerPlusMenu, desktop host', () => {
+  it('offers the local folder row on desktop and reports the choice', () => {
+    const { props } = renderMenu({ showLocalFolderRow: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Attach from local folder' }));
+
+    expect(props.onAttachFromLocalFolder).toHaveBeenCalledTimes(1);
   });
 });
