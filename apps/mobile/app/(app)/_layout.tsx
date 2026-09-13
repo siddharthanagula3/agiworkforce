@@ -53,7 +53,6 @@ export default function AppLayout() {
 
         {/* Agent routes */}
         <Drawer.Screen name="tasks" options={HIDDEN} />
-        <Drawer.Screen name="agents/index" options={HIDDEN} />
 
         {/* Companion */}
         <Drawer.Screen name="companion/index" options={HIDDEN} />
