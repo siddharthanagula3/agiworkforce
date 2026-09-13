@@ -1834,15 +1834,15 @@ export function getWebviewContent(
       <article class="onboarding-step" data-onboarding-step="1" hidden>
         <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
         <p class="onboarding-eyebrow">Task handoff</p>
-        <h2 tabindex="-1">Foreground here. Background work on Web.</h2>
+        <h2 tabindex="-1">Foreground here. Background work follows you.</h2>
         <p class="onboarding-lede">
-          VS Code developer sessions run while the editor is open. Hosted background task creation,
-          status, history, and results remain on the Web Tasks surface.
+          VS Code developer sessions run while the editor is open. Cloud AGI Work runs started on any
+          device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
         </p>
         <div class="onboarding-card">
           <strong>No pretend cloud handoff</strong>
-          <span>Opening Web Tasks is explicit. A local prompt is never relabeled as a background run.</span>
-          <button type="button" class="onboarding-link" id="onboardingTasks">Open Web Tasks</button>
+          <span>Starting a background run stays explicit. A local prompt is never relabeled as one.</span>
+          <button type="button" class="onboarding-link" id="onboardingTasks">Show Cloud Tasks</button>
         </div>
       </article>
 
@@ -2325,7 +2325,7 @@ export function getWebviewContent(
     if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
     if (onboardingTasks) {
       onboardingTasks.addEventListener('click', function() {
-        vscode.postMessage({ type: 'openWebTasks' });
+        vscode.postMessage({ type: 'openCloudTasks' });
       });
     }
     if (onboardingPermissionDocs) {

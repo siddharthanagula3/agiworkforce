@@ -15,6 +15,12 @@ import {
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import {
+  CLOUD_TASKS_VIEW_ID,
+  CloudTasksTreeProvider,
+  resolveCloudAgentRunClient,
+  showCloudRunDetail,
+} from '../features/cloud-tasks';
+import {
   loadFacts,
   addFact,
   updateFact,
@@ -43,6 +49,7 @@ import {
   clearApiKey,
   fetchTierInfo,
   fetchAccountIdentity,
+  getCloudWebOrigin,
 } from '../utils/api';
 import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import {
@@ -291,6 +298,7 @@ function sessionHistoryRelativeTime(timestamp: number): string {
 export interface CommandDeps {
   sidebarProvider: SidebarProvider;
   conversationTreeProvider: ConversationTreeProvider;
+  cloudTasksTreeProvider: CloudTasksTreeProvider;
   localRuntimes: LocalRuntimePool;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -303,6 +311,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   const {
     sidebarProvider,
     conversationTreeProvider,
+    cloudTasksTreeProvider,
     localRuntimes,
     contextPanelProvider,
     memoryTreeProvider,
@@ -1632,10 +1641,30 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.reveal();
       sidebarProvider.showOnboarding();
     }),
-    register('agi-workforce.openWebTasks', async () => {
+    register('agi-workforce.showCloudTasks', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      await vscode.commands.executeCommand(`${CLOUD_TASKS_VIEW_ID}.focus`);
+      cloudTasksTreeProvider.refresh();
+    }),
+    register('agi-workforce.refreshCloudTasks', () => {
+      cloudTasksTreeProvider.refresh();
+    }),
+    register('agi-workforce.openCloudTasksOnWeb', async () => {
       await vscode.env.openExternal(
-        vscode.Uri.parse('https://agiworkforce.com/tasks?from=vscode-extension'),
+        vscode.Uri.parse(`${getCloudWebOrigin()}/tasks?from=vscode-extension`),
       );
+    }),
+    register('agi-workforce.openCloudTask', async (runId: unknown) => {
+      if (typeof runId !== 'string' || runId === '') return;
+      const resolution = await resolveCloudAgentRunClient(context.secrets);
+      if (resolution.status === 'signed-out') {
+        await vscode.commands.executeCommand('agi-workforce.signIn');
+        return;
+      }
+      await showCloudRunDetail(resolution.client, runId, {
+        webOrigin: getCloudWebOrigin(),
+        onChanged: () => cloudTasksTreeProvider.refresh(),
+      });
     }),
   );
 

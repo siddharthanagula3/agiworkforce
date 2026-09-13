@@ -415,9 +415,23 @@
         "icon": "$(getting-started)"
       },
       {
-        "command": "agi-workforce.openWebTasks",
-        "title": "AGI Workforce: Open Web Tasks",
-        "icon": "$(server-process)"
+        "command": "agi-workforce.showCloudTasks",
+        "title": "AGI Workforce: Show Cloud Tasks",
+        "icon": "$(cloud)"
+      },
+      {
+        "command": "agi-workforce.refreshCloudTasks",
+        "title": "AGI Workforce: Refresh Cloud Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.openCloudTasksOnWeb",
+        "title": "AGI Workforce: Open Cloud Tasks on Web",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agi-workforce.openCloudTask",
+        "title": "AGI Workforce: Open Cloud Task"
       },
       {
         "command": "agi-workforce.mentionFileFromProject",
@@ -448,13 +462,13 @@
           },
           {
             "id": "understandTaskHandoff",
-            "title": "Choose foreground or background work",
-            "description": "The IDE runs foreground developer sessions. Hosted background task history remains on Web. [Open Web Tasks](command:agi-workforce.openWebTasks)",
+            "title": "Follow background work from the IDE",
+            "description": "Cloud AGI Work runs started on any device show their state, age and pending approvals in the Cloud Tasks view. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
             "media": {
               "markdown": "media/walkthrough/02-tasks.md"
             },
             "completionEvents": [
-              "onCommand:agi-workforce.openWebTasks"
+              "onCommand:agi-workforce.showCloudTasks"
             ]
           },
           {
@@ -569,6 +583,12 @@
         },
         {
           "type": "tree",
+          "id": "agi-workforce.cloudTasks",
+          "name": "Cloud Tasks",
+          "contextualTitle": "Cloud Tasks"
+        },
+        {
+          "type": "tree",
           "id": "agi-workforce.contextPanel",
           "name": "Context",
           "contextualTitle": "AI Context",
@@ -595,6 +615,10 @@
       {
         "view": "agi-workforce.memory",
         "contents": "Memory facts apply only to this workspace and are never added to consumer chat history.\n[Add a workspace memory](command:agi-workforce.memory.create)"
+      },
+      {
+        "view": "agi-workforce.cloudTasks",
+        "contents": "Background AGI Work runs started on any device appear here.\n[Open the task list on web](command:agi-workforce.openCloudTasksOnWeb)"
       }
     ],
     "menus": {
@@ -669,6 +693,16 @@
         {
           "command": "agi-workforce.memory.create",
           "when": "view == agi-workforce.memory",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.refreshCloudTasks",
+          "when": "view == agi-workforce.cloudTasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.openCloudTasksOnWeb",
+          "when": "view == agi-workforce.cloudTasks",
           "group": "navigation@2"
         }
       ],
@@ -779,6 +813,10 @@
         },
         {
           "command": "agi-workforce.openPathReference",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openCloudTask",
           "when": "false"
         }
       ]

@@ -179,11 +179,13 @@ class Selection extends Range {
 }
 
 class TreeItem {
+  id?: string;
   description?: string;
   tooltip?: string;
   iconPath?: unknown;
   contextValue?: string;
   command?: unknown;
+  accessibilityInformation?: { label: string; role?: string };
 
   constructor(
     public label: string,
@@ -428,7 +430,9 @@ export const window = {
   registerTreeDataProvider: vi.fn(() => new Disposable()),
   createTreeView: vi.fn(() => ({
     reveal: vi.fn(),
+    visible: false,
     onDidChangeSelection: vi.fn(() => new Disposable()),
+    onDidChangeVisibility: vi.fn(() => new Disposable()),
     dispose: vi.fn(),
   })),
   createOutputChannel: vi.fn(() => ({

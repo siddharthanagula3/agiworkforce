@@ -84,15 +84,15 @@ describe('VS Code first-run onboarding', () => {
     expect(document.querySelector('[data-onboarding-step="1"]')?.hasAttribute('hidden')).toBe(true);
   });
 
-  it('explains task availability honestly and provides an explicit Web handoff', () => {
+  it('explains task availability honestly and opens the in-IDE cloud task list', () => {
     const { postMessage } = executeOnboarding();
     click('onboardingNext');
 
     expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 2 of 4');
-    expect(document.body.textContent).toContain('Hosted background task creation');
-    expect(document.body.textContent).toContain('remain on the Web Tasks surface');
+    expect(document.body.textContent).toContain('Cloud AGI Work runs started on any');
+    expect(document.body.textContent).toContain('appear in the Cloud Tasks view');
     click('onboardingTasks');
-    expect(postMessage).toHaveBeenCalledWith({ type: 'openWebTasks' });
+    expect(postMessage).toHaveBeenCalledWith({ type: 'openCloudTasks' });
   });
 
   it('places autonomy, fallibility, active boundary, and privacy links before completion', () => {
