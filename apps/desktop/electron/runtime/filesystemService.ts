@@ -1,9 +1,11 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
+  MAX_BINARY_READ_BYTES,
   MAX_GREP_MATCHES,
   MAX_LIST_ENTRIES,
   MAX_TEXT_READ_BYTES,
+  type FileBinaryContent,
   type FileEntry,
   type FileSearchMatch,
   type FileStat,
@@ -156,6 +158,30 @@ export async function readTextFile(
   } finally {
     await handle.close();
   }
+}
+
+export async function readBinaryFile(
+  root: WorkspaceRoot,
+  relativePath: string,
+): Promise<FileBinaryContent> {
+  const resolved = await resolveWithinRoot(root, relativePath);
+  assertNotDeniedFile(resolved.absolute);
+
+  const stat = await fs.stat(resolved.absolute);
+  if (stat.isDirectory()) {
+    throw new PathRefused('io-error', `${resolved.relative} is a directory.`);
+  }
+  if (stat.size > MAX_BINARY_READ_BYTES) {
+    throw new PathRefused('io-error', `${resolved.relative} is too large to read.`);
+  }
+
+  const buffer = await fs.readFile(resolved.absolute);
+  return {
+    path: toPosix(resolved.relative),
+    base64: buffer.toString('base64'),
+    sizeBytes: stat.size,
+    modifiedAtMs: stat.mtimeMs,
+  };
 }
 
 export async function writeTextFile(

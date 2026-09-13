@@ -304,12 +304,13 @@ function registerIpcHandlers(): void {
       title: req.title,
       ...(typeof req.body === 'string' ? { body: req.body } : {}),
     });
+    const target =
+      typeof req.deepLink === 'string' && req.deepLink.startsWith(`${DEEP_LINK_SCHEME}://`)
+        ? req.deepLink
+        : null;
     notification.on('click', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      focusMainWindow();
+      if (target) mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, target);
     });
     notification.show();
   });

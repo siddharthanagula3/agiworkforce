@@ -14,6 +14,7 @@ import {
   globFiles,
   grepFiles,
   listDirectory,
+  readBinaryFile,
   readTextFile,
   statPath,
   writeTextFile,
@@ -79,6 +80,10 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   file_read_text: {
     capability: 'filesystem.read',
     reason: 'The agent wants to read the contents of files in this folder.',
+  },
+  file_read_bytes: {
+    capability: 'filesystem.read',
+    reason: 'The agent wants to read a file in this folder so you can attach it.',
   },
   file_glob: { capability: 'filesystem.read', reason: 'The agent wants to search for files here.' },
   file_grep: {
@@ -154,6 +159,8 @@ async function execute(
       return statPath(resolveRoot(args), requireString(args, 'path'));
     case 'file_read_text':
       return readTextFile(resolveRoot(args), requireString(args, 'path'));
+    case 'file_read_bytes':
+      return readBinaryFile(resolveRoot(args), requireString(args, 'path'));
     case 'file_write_text':
       return writeTextFile(
         resolveRoot(args),

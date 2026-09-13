@@ -1,5 +1,21 @@
-import type { DesktopRuntimeResponse } from '@agiworkforce/local-runtime-contract';
+import type { HostBridge, HostNotifyRequest } from '@agiworkforce/local-runtime-contract';
 import type { DesktopCloudUpdateAvailability } from '../desktopCloudUpdate';
+
+export type {
+  DesktopDeepLink,
+  DesktopDeepLinkTarget,
+  HostBridge,
+  HostNotifyRequest,
+} from '@agiworkforce/local-runtime-contract';
+export {
+  DESKTOP_DEEP_LINK_SCHEME,
+  DESKTOP_DEEP_LINK_TARGETS,
+  desktopDeepLink,
+  getHostBridge,
+  parseDesktopDeepLink,
+} from '@agiworkforce/local-runtime-contract';
+
+export type ElectronNotifyRequest = HostNotifyRequest;
 
 export const ELECTRON_BRIDGE_COMMANDS = [
   'account_clerk_native_request',
@@ -60,43 +76,22 @@ export type ElectronDialogRequest =
   | { kind: 'open'; title?: string; directory?: boolean; multiple?: boolean }
   | { kind: 'save'; title?: string; defaultPath?: string };
 
-export interface ElectronNotifyRequest {
-  title: string;
-  body?: string;
-}
-
-export interface ElectronHostBridge {
-  readonly platform: string;
-  readonly appVersion: string;
+/**
+ * The desktop-only half of the bridge. A page the shell merely hosts sees
+ * `HostBridge`; only the renderer AGI Cloud ships drives the window, the
+ * account bridge and the updater.
+ */
+export interface ElectronHostBridge extends HostBridge {
   handles(command: string): boolean;
   invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown>;
-  /**
-   * Dispatches to the privileged local runtime. Resolves with a result
-   * envelope rather than throwing, so a refusal carries the capability the
-   * caller would need to request.
-   */
-  invokeRuntime(
-    command: string,
-    args?: Record<string, unknown>,
-  ): Promise<DesktopRuntimeResponse<unknown>>;
-  onDeepLink(callback: (url: string) => void): () => void;
-  onVoiceHotkey(callback: () => void): () => void;
-  openExternal(url: string): Promise<void>;
   windowControl(request: ElectronWindowControlRequest): Promise<boolean>;
   dialog(request: ElectronDialogRequest): Promise<string | boolean | null>;
-  notify(request: ElectronNotifyRequest): Promise<void>;
   relaunch(): Promise<void>;
   checkForUpdate(): Promise<DesktopCloudUpdateAvailability>;
   openUpdateInstaller(): Promise<void>;
 }
 
-declare global {
-  interface Window {
-    agiHost?: ElectronHostBridge;
-  }
-}
-
 export function getElectronHostBridge(): ElectronHostBridge | undefined {
   if (typeof window === 'undefined') return undefined;
-  return window.agiHost;
+  return window.agiHost as ElectronHostBridge | undefined;
 }

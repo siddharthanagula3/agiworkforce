@@ -39,12 +39,12 @@ const agiHost: ElectronHostBridge = {
     return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.invokeBridge, command, args);
   },
 
-  async invokeRuntime(command: string, args?: Record<string, unknown>) {
+  async invokeRuntime<T>(command: string, args?: Record<string, unknown>) {
     return (await ipcRenderer.invoke(
       ELECTRON_IPC_CHANNELS.invokeRuntime,
       command,
       args,
-    )) as DesktopRuntimeResponse<unknown>;
+    )) as DesktopRuntimeResponse<T>;
   },
 
   onDeepLink(callback: (url: string) => void): () => void {
