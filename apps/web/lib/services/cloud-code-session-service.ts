@@ -48,6 +48,7 @@ import {
   createGitHubPullRequest,
   findOpenGitHubPullRequest,
   getGitHubRepositoryDefaultBranch,
+  assertRepositoryIsVerified,
   getInstallationAccessToken,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
@@ -63,6 +64,15 @@ const MAX_COMMIT_MESSAGE_LENGTH = 2_000;
 const MAX_NOTEBOOK_CELL_CODE_LENGTH = 50_000;
 const MAX_NOTEBOOK_UPLOAD_BYTES = 10 * 1024 * 1024;
 const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
+/**
+ * Least privilege per operation. The clone and push credentials are written
+ * inside the sandbox, so they carry the one permission that operation needs and
+ * nothing else; the pull-request credential never leaves this process but is
+ * narrowed on the same rule.
+ */
+const GITHUB_CLONE_PERMISSIONS = { contents: 'read' } as const;
+const GITHUB_PUSH_PERMISSIONS = { contents: 'write' } as const;
+const GITHUB_PULL_REQUEST_PERMISSIONS = { contents: 'read', pull_requests: 'write' } as const;
 const GIT_DEFAULT_REMOTE = 'origin';
 const DETACHED_HEAD_BRANCH = 'HEAD';
 const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
@@ -885,12 +895,28 @@ function parseGithubRepositoryUrl(url: string): { owner: string; repo: string } 
  * when it is one of this user's own verified installations. Passing it straight
  * to {@link getInstallationAccessToken}, which checks ownership verification but
  * not ownership, would mint a token for another account's installation.
+ *
+ * The credential this returns is materialised INSIDE the sandbox: the git
+ * helper writes it into the workspace `.git/config` for the length of an
+ * operation, in a filesystem that by design runs repository code and
+ * model-directed commands. An unscoped installation token there carries every
+ * permission on every repository the installation covers, and `github.com` is
+ * on the sandbox's own egress allowlist, so reading it is the whole attack.
+ * It is therefore narrowed to this one repository and to `contents: write`,
+ * and to a repository the linking account proved it can reach.
  */
-async function resolveGithubCloneCredential(
+interface GithubRepositoryInstallation {
+  installationId: number;
+  repo: string;
+  fullName: string;
+  verifiedRepositories: string[] | null;
+}
+
+async function resolveGithubInstallationForRepository(
   userId: string,
   repositoryUrl: string,
   preferredInstallationId?: number | null,
-): Promise<GitHubCloneCredential | null> {
+): Promise<GithubRepositoryInstallation | null> {
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return null;
   const parsed = parseGithubRepositoryUrl(repositoryUrl);
   if (!parsed) return null;
@@ -907,7 +933,56 @@ async function resolveGithubCloneCredential(
     ) ??
     (installations.length === 1 ? installations[0] : undefined);
   if (!match) return null;
-  const password = await getInstallationAccessToken(match.installationId);
+  return {
+    installationId: match.installationId,
+    repo: parsed.repo,
+    fullName: `${parsed.owner}/${parsed.repo}`,
+    verifiedRepositories: match.verifiedRepositories,
+  };
+}
+
+/**
+ * Refuses a repository the linking GitHub account never proved it can reach,
+ * before a sandbox exists to clone it into.
+ */
+async function assertRepositoryIsClonable(
+  userId: string,
+  repositoryUrl: string | null,
+  preferredInstallationId?: number | null,
+): Promise<void> {
+  if (!repositoryUrl) return;
+  const match = await resolveGithubInstallationForRepository(
+    userId,
+    repositoryUrl,
+    preferredInstallationId,
+  );
+  if (!match) return;
+  try {
+    assertRepositoryIsVerified(match.installationId, match.verifiedRepositories, match.fullName);
+  } catch (error) {
+    throw new CloudCodeValidationError(
+      error instanceof Error ? error.message : 'That repository is not one this account proved',
+    );
+  }
+}
+
+async function resolveGithubCloneCredential(
+  userId: string,
+  repositoryUrl: string,
+  permissions: Readonly<Record<string, 'read' | 'write'>>,
+  preferredInstallationId?: number | null,
+): Promise<GitHubCloneCredential | null> {
+  const match = await resolveGithubInstallationForRepository(
+    userId,
+    repositoryUrl,
+    preferredInstallationId,
+  );
+  if (!match) return null;
+  assertRepositoryIsVerified(match.installationId, match.verifiedRepositories, match.fullName);
+  const password = await getInstallationAccessToken(match.installationId, {
+    repositories: [match.repo],
+    permissions,
+  });
   return { username: GITHUB_INSTALLATION_TOKEN_USERNAME, password };
 }
 
@@ -984,6 +1059,7 @@ export async function createCloudCodeSession(
   }
   await assertRuntimeIsAvailable(validated.runtimeId);
   await assertInstallationBelongsToUser(owner.userId, validated.installationId);
+  await assertRepositoryIsClonable(owner.userId, validated.repositoryUrl, validated.installationId);
 
   let claimed: { row: SessionRow; reused: boolean };
   try {
@@ -1112,6 +1188,7 @@ export async function createCloudCodeSession(
       const credential = await resolveGithubCloneCredential(
         owner.userId,
         validated.repositoryUrl,
+        GITHUB_CLONE_PERMISSIONS,
         validated.installationId,
       );
       if (validated.installationId && !credential) {
@@ -1709,7 +1786,11 @@ export async function commitAndPushCloudCodeSession(
     throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
   }
 
-  const credential = await resolveGithubCloneCredential(owner.userId, session.repositoryUrl);
+  const credential = await resolveGithubCloneCredential(
+    owner.userId,
+    session.repositoryUrl,
+    GITHUB_PUSH_PERMISSIONS,
+  );
   if (!credential) {
     throw new CloudCodeValidationError(
       'No connected GitHub installation can push to this repository',
@@ -2054,7 +2135,11 @@ export async function openCloudCodeSessionPullRequest(
   if (!parsed) {
     throw new CloudCodeValidationError('Code session repository is not a GitHub repository');
   }
-  const credential = await resolveGithubCloneCredential(owner.userId, session.repositoryUrl);
+  const credential = await resolveGithubCloneCredential(
+    owner.userId,
+    session.repositoryUrl,
+    GITHUB_PULL_REQUEST_PERMISSIONS,
+  );
   if (!credential) {
     throw new CloudCodeValidationError(
       'No connected GitHub installation can open a pull request on this repository',

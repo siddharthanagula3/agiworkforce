@@ -126,7 +126,9 @@ const gitExecutor = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUserInstallations.mockResolvedValue([{ installationId: 11, login: 'acme' }]);
+  mockUserInstallations.mockResolvedValue([
+    { installationId: 11, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+  ]);
   mockInstallationToken.mockResolvedValue('installation-token');
   mockDefaultBranch.mockResolvedValue('main');
 });
