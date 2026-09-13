@@ -18,13 +18,17 @@ import {
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { agiWorkPlanSentence, buildAgentActivitySummary } from '@agiworkforce/unified-chat';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import { formatDeliverableTypeLine, type CloudWorkMode } from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useProjectStore } from '@features/projects';
 import { useArtifactsStore } from '../../stores/artifacts-store';
-import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
+import {
+  SHEET_OVERLAY_QUERY,
+  useOverlayDialog,
+  useOverlayLayout,
+} from '../../hooks/use-overlay-dialog';
 import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -44,6 +48,8 @@ import {
   TASK_DOCK_OUTPUTS_EMPTY,
   TASK_DOCK_OUTPUTS_LABEL,
   TASK_DOCK_PANEL_LABEL,
+  TASK_DOCK_PROGRESS_EMPTY,
+  TASK_DOCK_PROGRESS_LABEL,
   TASK_DOCK_SOURCES_EMPTY,
   TASK_DOCK_SOURCES_LABEL,
   TASK_DOCK_STEPS_LABEL,
@@ -247,14 +253,13 @@ export function WorkSessionToggleButton({
   );
 }
 
-function TaskDockProgressHeader({
+function TaskDockProgressSection({
   summary,
   agiWork,
 }: {
   summary: TaskDockSummary;
   agiWork: boolean;
 }) {
-  const [stepsOpen, setStepsOpen] = useState(false);
   const activity = summary.activity;
   const isRunning = summary.status === 'running';
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -273,60 +278,62 @@ function TaskDockProgressHeader({
   const completed = summary.steps.filter((step) => step.status === 'completed').length;
 
   return (
-    <div className="border-b border-border/30 px-4 py-3">
-      <button
-        type="button"
-        onClick={() => setStepsOpen((value) => !value)}
-        aria-expanded={stepsOpen}
-        disabled={summary.steps.length === 0}
-        className="flex w-full min-w-0 items-center gap-2 rounded-md text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:text-muted-foreground motion-reduce:transition-none"
-      >
+    <details className="group border-b border-border/20" open>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
         <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
-        <span className="min-w-0 flex-1 truncate" role="status" aria-live="polite">
-          {progressLine}
-        </span>
+        <span>{TASK_DOCK_PROGRESS_LABEL}</span>
         {summary.steps.length > 0 && (
-          <>
-            <span className="shrink-0 text-[12px]">
-              {completed}/{summary.steps.length}
-            </span>
-            <ChevronRight
-              className={cn(
-                'h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none',
-                stepsOpen && 'rotate-90',
-              )}
-              aria-hidden="true"
-            />
-          </>
+          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
+            {completed}/{summary.steps.length}
+          </span>
         )}
-      </button>
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none',
+            summary.steps.length === 0 && 'ml-auto',
+          )}
+          aria-hidden="true"
+        />
+      </summary>
 
-      {planSentence && (
-        <p data-testid="task-dock-plan-sentence" className="mt-1 text-xs text-foreground">
-          {planSentence}
+      <div className="px-4 pb-4">
+        <p
+          className="min-w-0 truncate text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          {progressLine}
         </p>
-      )}
 
-      {stepsOpen && summary.steps.length > 0 && (
-        <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2 space-y-2">
-          {summary.steps.map((step) => (
-            <li key={step.id} className="flex items-start gap-2">
-              <span className="mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-                <StatusIcon status={step.status} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs leading-relaxed text-foreground">{step.label}</p>
-                {step.detail && (
-                  <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
-                    {step.detail}
-                  </p>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
+        {planSentence && (
+          <p data-testid="task-dock-plan-sentence" className="mt-1 text-xs text-foreground">
+            {planSentence}
+          </p>
+        )}
+
+        {summary.steps.length > 0 ? (
+          <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2 space-y-2">
+            {summary.steps.map((step) => (
+              <li key={step.id} className="flex items-start gap-2">
+                <span className="mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                  <StatusIcon status={step.status} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs leading-relaxed text-foreground">{step.label}</p>
+                  {step.detail && (
+                    <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                      {step.detail}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -375,7 +382,7 @@ export function WorkSessionPanel({
   );
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const layout = useOverlayLayout();
+  const layout = useOverlayLayout(SHEET_OVERLAY_QUERY);
   const isModalOverlay = layout === 'mobile' && open;
 
   useOverlayDialog(panelRef, isModalOverlay, onClose);
@@ -506,9 +513,18 @@ export function WorkSessionPanel({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-foreground">{output.name}</p>
                 <p className="truncate text-[12px] text-muted-foreground">
-                  {[output.mimeType, byteLabel(output.byteCount)]
-                    .filter(Boolean)
-                    .join(DETAIL_SEPARATOR) || ARTIFACT_OUTPUT_DETAIL}
+                  {output.mimeType || output.kind
+                    ? [
+                        formatDeliverableTypeLine({
+                          kind: output.kind,
+                          fileName: output.name,
+                          mimeType: output.mimeType,
+                        }),
+                        byteLabel(output.byteCount),
+                      ]
+                        .filter(Boolean)
+                        .join(DETAIL_SEPARATOR)
+                    : ARTIFACT_OUTPUT_DETAIL}
                 </p>
               </div>
             </div>
@@ -573,7 +589,7 @@ export function WorkSessionPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm sm:hidden"
+        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -583,9 +599,10 @@ export function WorkSessionPanel({
         aria-modal={isModalOverlay ? true : undefined}
         tabIndex={isModalOverlay ? -1 : undefined}
         className={cn(
-          'fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-border/30 bg-card/95 outline-none backdrop-blur-xl',
-          'animate-in slide-in-from-right duration-300 motion-reduce:animate-none',
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[380px] sm:min-w-[280px] sm:shrink',
+          'fixed inset-x-0 bottom-0 z-40 flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
+          'animate-in slide-in-from-bottom duration-300 motion-reduce:animate-none',
+          'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-l md:border-t-0',
+          'md:animate-in md:slide-in-from-right',
         )}
         aria-label={panelLabel}
       >
@@ -611,14 +628,13 @@ export function WorkSessionPanel({
 
         {conversationArtifacts.length > 0 && <SlotTabs onShowArtifacts={showArtifacts} />}
 
-        <TaskDockProgressHeader summary={summary} agiWork={agiWork} />
-
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+          <TaskDockProgressSection summary={summary} agiWork={agiWork} />
           {agiWork ? (
             <>
-              {sourcesSection}
               {filesSection}
               {contextSection}
+              {sourcesSection}
             </>
           ) : (
             <>
