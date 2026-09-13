@@ -54,13 +54,22 @@ export const MANAGED_MEDIA_IMAGE_OPERATIONS = [
 ] as const;
 export const ManagedMediaImageOperationSchema = z.enum(MANAGED_MEDIA_IMAGE_OPERATIONS);
 
-export const MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS = [
-  'openai',
-] as const satisfies readonly (typeof MANAGED_MEDIA_IMAGE_PROVIDERS)[number][];
+/**
+ * Which image API shape an edit can be put to, which is a property of the
+ * request format, not of a vendor's name.
+ *
+ * This used to be a list of provider ids, so the gate answered "is this
+ * OpenAI?" and the refusal told the reader to pick the OpenAI model. A catalog
+ * entry names its image API (`ModelMetadata.imageApi`), and a second model on
+ * the same API is served by the same code, so the catalog is what decides
+ * whether a model can take an edit, and the caller asks about a model rather
+ * than about a company.
+ */
+export const MANAGED_MEDIA_IMAGE_EDIT_APIS = ['openai'] as const;
 
-export function supportsManagedMediaImageEdit(provider: string | null | undefined): boolean {
-  return MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS.includes(
-    provider as (typeof MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS)[number],
+export function supportsManagedMediaImageEdit(imageApi: string | null | undefined): boolean {
+  return MANAGED_MEDIA_IMAGE_EDIT_APIS.includes(
+    imageApi as (typeof MANAGED_MEDIA_IMAGE_EDIT_APIS)[number],
   );
 }
 
@@ -151,6 +160,12 @@ export const ManagedMediaModelAdmissionSchema = z
     kind: z.enum(['image', 'video']),
     provider: z.string().trim().min(1).max(80),
     state: ManagedMediaModelAdmissionStateSchema,
+    /**
+     * Whether this model can take a source image, so a composer can offer edit,
+     * variation and mask actions on evidence rather than on a provider name it
+     * recognises. Absent for video.
+     */
+    supports_edit: z.boolean().optional(),
   })
   .strict();
 

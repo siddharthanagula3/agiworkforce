@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ManagedMediaModelAvailabilityResponseSchema } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedMediaModelAvailabilityResponseSchema,
+  supportsManagedMediaImageEdit,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getModelMetadataById, isModelLive } from '@agiworkforce/types';
 import {
@@ -253,5 +256,41 @@ describe('resolveMediaModelAvailability', () => {
     await expect(
       resolveDeploymentMediaModelAvailability({ query } as unknown as DatabaseAdapter),
     ).rejects.toMatchObject({ statusCode: 503 });
+  });
+});
+
+describe('image edit support', () => {
+  it('publishes it per image model, so a composer asks the catalog and not a provider name', () => {
+    const result = resolveMediaModelAvailability({
+      checkedAt: CHECKED_AT,
+      imageStorageConfigured: true,
+      videoStorageConfigured: true,
+      imageSchemaConfigured: true,
+      videoSchemaConfigured: true,
+      getEnv: envWith({ GEMINI_API_KEY: 'google-test-key', OPENAI_API_KEY: 'openai-test-key' }),
+    });
+
+    const images = result.models.filter((model) => model.kind === 'image');
+    expect(images.length).toBeGreaterThan(0);
+    for (const model of images) {
+      const metadata = getModelMetadataById(model.model_id);
+      expect(model.supports_edit).toBe(supportsManagedMediaImageEdit(metadata?.imageApi));
+    }
+    expect(images.some((model) => model.supports_edit === true)).toBe(true);
+  });
+
+  it('says nothing about editing for a video model', () => {
+    const result = resolveMediaModelAvailability({
+      checkedAt: CHECKED_AT,
+      imageStorageConfigured: true,
+      videoStorageConfigured: true,
+      imageSchemaConfigured: true,
+      videoSchemaConfigured: true,
+      getEnv: envWith({ GEMINI_API_KEY: 'google-test-key' }),
+    });
+
+    for (const model of result.models.filter((entry) => entry.kind === 'video')) {
+      expect(model.supports_edit).toBeUndefined();
+    }
   });
 });

@@ -414,6 +414,12 @@ export interface ComposerPlusMenuProps {
   onAddFiles: () => void;
   mediaModeActive: boolean;
   mediaModeNoun: string;
+  /**
+   * Whether attaching a file does nothing in the current mode. Image mode now
+   * edits an attached picture, so it is no longer the same answer as
+   * `mediaModeActive`, which still governs the rows that only chat can use.
+   */
+  attachmentsUnavailable: boolean;
 
   billingPolicyReady: boolean;
   billingPolicyError: boolean;
@@ -581,17 +587,19 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       type="button"
       role={role}
       onClick={props.onAddFiles}
-      disabled={props.mediaModeActive}
+      disabled={props.attachmentsUnavailable}
       title={
-        props.mediaModeActive
+        props.attachmentsUnavailable
           ? `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`
           : undefined
       }
-      className={cn(ROW_CLASS, props.mediaModeActive ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
+      className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <Paperclip className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
       <span className="flex-1 text-left">{ROW_LABEL_ATTACH}</span>
-      {props.mediaModeActive && <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />}
+      {props.attachmentsUnavailable && (
+        <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />
+      )}
     </button>
   );
 }
@@ -619,18 +627,20 @@ function LocalFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: 
       type="button"
       role={role}
       onClick={props.onAttachFromLocalFolder}
-      disabled={props.mediaModeActive}
-      className={cn(ROW_CLASS, props.mediaModeActive ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
+      disabled={props.attachmentsUnavailable}
+      className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <FolderOpen className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
       <span className="flex-1 text-left">{ROW_LABEL_LOCAL_FOLDER}</span>
-      {props.mediaModeActive && <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />}
+      {props.attachmentsUnavailable && (
+        <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />
+      )}
     </button>
   );
 }
 
 function ClipboardRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
-  const unavailable = props.mediaModeActive;
+  const unavailable = props.attachmentsUnavailable;
   return (
     <button
       type="button"

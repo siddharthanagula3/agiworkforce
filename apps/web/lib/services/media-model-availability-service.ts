@@ -1,9 +1,10 @@
 import 'server-only';
 
-import type {
-  ManagedMediaModelAdmission,
-  ManagedMediaModelAdmissionState,
-  ManagedMediaModelAvailabilityResponse,
+import {
+  supportsManagedMediaImageEdit,
+  type ManagedMediaModelAdmission,
+  type ManagedMediaModelAdmissionState,
+  type ManagedMediaModelAvailabilityResponse,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -126,6 +127,9 @@ export function resolveMediaModelAvailability(
         kind,
         provider: provider ?? model.provider,
         state: admissionState({ provider, storageConfigured, schemaConfigured, getEnv }),
+        ...(kind === 'image'
+          ? { supports_edit: supportsManagedMediaImageEdit(model.imageApi) }
+          : {}),
       });
     }
   }
