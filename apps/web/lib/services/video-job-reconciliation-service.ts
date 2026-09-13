@@ -32,6 +32,7 @@ import {
 } from '@/lib/services/video-provider-output-service';
 import { VIDEO_PROVIDER_TASK_ATTACHMENT_GRACE_MS } from '@/lib/workflows/video-generation-timing';
 import { syncVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
+import { deliverVideoCompletionNotice } from './video-completion-notice-service';
 
 const PROVIDER_POLL_SECONDS = 10;
 const MAX_RECONCILIATION_FAILURES = 5;
@@ -543,6 +544,25 @@ async function projectVideoGenerationTranscript(
   }
 }
 
+/**
+ * Announce a job that has just reached a terminal state.
+ *
+ * Every reconciler runs this, and the notice claims the right to send inside
+ * the job row, so the Workflow that finishes a job while its tab is closed and
+ * the status poll that arrives later cannot both announce it. A failure here
+ * never changes the reconciled job: the result is already durable and the next
+ * load renders it either way.
+ */
+async function announceTerminalVideoGenerationJob(
+  db: DatabaseAdapter,
+  job: VideoGenerationJob,
+): Promise<void> {
+  if (!isTerminal(job)) return;
+  await deliverVideoCompletionNotice(db, job).catch((error: unknown) => {
+    logger.warn({ error, jobId: job.id }, 'Video completion notice could not be delivered');
+  });
+}
+
 export async function reconcileVideoGenerationJob(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -553,6 +573,7 @@ export async function reconcileVideoGenerationJob(
     reconciled,
     'Video transcript projection remains pending',
   );
+  await announceTerminalVideoGenerationJob(db, reconciled);
   return reconciled;
 }
 
@@ -562,6 +583,7 @@ export async function reconcileVideoGenerationJobWithRequiredTranscript(
 ): Promise<VideoGenerationJob> {
   const reconciled = await reconcileVideoGenerationJobCore(db, snapshot);
   await syncVideoGenerationTranscript(db, reconciled);
+  await announceTerminalVideoGenerationJob(db, reconciled);
   return reconciled;
 }
 

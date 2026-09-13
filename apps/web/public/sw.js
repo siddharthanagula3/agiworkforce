@@ -9,6 +9,8 @@
 
 const RUNS_PATH = '/tasks';
 const RUN_QUERY_PARAM = 'run';
+const CHAT_PATH = '/chat';
+const HIGHLIGHT_QUERY_PARAM = 'highlightMessage';
 const ICON_URL = '/logo-192.png';
 const BADGE_URL = '/logo-192.png';
 const FALLBACK_TITLE = 'AGI';
@@ -31,12 +33,24 @@ function readPayload(event) {
 
 /*
  * `data.route` in the payload is the Expo route for the mobile client, so it is
- * ignored here and the web target is rebuilt from the run id. `/tasks` does not
- * read the query parameter yet; until it does, the click still lands on the
- * page that lists the run.
+ * ignored here and the web target is rebuilt from the ids the notice carries.
+ *
+ * A conversation id wins over a run id: a notice about work that landed in a
+ * chat (a video that finished after the tab was closed) has to open that chat,
+ * and `highlightMessage` is the parameter the chat page already reads to scroll
+ * to and mark the message. `/tasks` does not read its query parameter yet;
+ * until it does, the click still lands on the page that lists the run.
  */
 function targetUrl(payload) {
-  const runId = payload && payload.data && payload.data.runId;
+  const data = (payload && payload.data) || {};
+  const conversationId = data.conversationId;
+  if (typeof conversationId === 'string' && conversationId.length > 0) {
+    const chatUrl = `${CHAT_PATH}/${encodeURIComponent(conversationId)}`;
+    const messageId = data.messageId;
+    if (typeof messageId !== 'string' || messageId.length === 0) return chatUrl;
+    return `${chatUrl}?${HIGHLIGHT_QUERY_PARAM}=${encodeURIComponent(messageId)}`;
+  }
+  const runId = data.runId;
   if (typeof runId !== 'string' || runId.length === 0) return RUNS_PATH;
   return `${RUNS_PATH}?${RUN_QUERY_PARAM}=${encodeURIComponent(runId)}`;
 }

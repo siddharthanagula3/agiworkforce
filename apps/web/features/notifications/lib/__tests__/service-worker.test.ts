@@ -10,6 +10,8 @@ const WORKER_SOURCE = readFileSync(
 
 const ORIGIN = 'https://app.example.test';
 const RUN_ID = 'run-42';
+const CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
+const MESSAGE_ID = '33333333-3333-4333-8333-333333333333';
 
 type Listener = (event: Record<string, unknown>) => void;
 
@@ -46,6 +48,9 @@ function loadWorker(): Worker {
     },
   };
 
+  // The worker is plain JS served to browsers, not a module, so evaluating its
+  // real source against a fake scope is the only way to test the file that
+  // ships rather than a copy of it. llm-guardrail-allow: worker source under test
   new Function('self', WORKER_SOURCE)(scope);
   return worker;
 }
@@ -82,6 +87,41 @@ describe('push', () => {
     expect(options.body).toBe('Sign off');
     expect(options.data.url).toBe(`/tasks?run=${RUN_ID}`);
     expect(options.tag).toBe(`/tasks?run=${RUN_ID}`);
+  });
+
+  /**
+   * A video that finished after its tab closed is announced from the server,
+   * and the thing the user wants is the message the video landed in, not the
+   * run list. `highlightMessage` is the parameter the chat page already reads.
+   */
+  it('opens the chat message a notice names instead of the run list', async () => {
+    const worker = loadWorker();
+
+    await dispatch(worker, 'push', {
+      data: {
+        json: () => ({
+          title: 'Your video is ready',
+          body: 'Open the chat to watch it.',
+          data: { conversationId: CONVERSATION_ID, messageId: MESSAGE_ID, runId: RUN_ID },
+        }),
+      },
+    });
+
+    const [, options] = worker.showNotification.mock.calls[0]!;
+    expect(options.data.url).toBe(`/chat/${CONVERSATION_ID}?highlightMessage=${MESSAGE_ID}`);
+  });
+
+  it('opens the conversation when a notice names no message in it', async () => {
+    const worker = loadWorker();
+
+    await dispatch(worker, 'push', {
+      data: {
+        json: () => ({ title: 'Your video is ready', data: { conversationId: CONVERSATION_ID } }),
+      },
+    });
+
+    const [, options] = worker.showNotification.mock.calls[0]!;
+    expect(options.data.url).toBe(`/chat/${CONVERSATION_ID}`);
   });
 
   it('still renders something when the payload is not JSON', async () => {

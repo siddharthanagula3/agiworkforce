@@ -753,5 +753,27 @@ export default [
     },
   },
 
+  {
+    // The push service worker runs in a ServiceWorkerGlobalScope, where `self`
+    // is the scope itself and there is no `window`. Without its own globals it
+    // read as seventeen undefined identifiers.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        clients: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        Headers: 'readonly',
+        URL: 'readonly',
+        btoa: 'readonly',
+        atob: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   prettierConfig,
 ];
