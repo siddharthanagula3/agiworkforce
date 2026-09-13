@@ -1495,12 +1495,19 @@ const ChatComposerNewComponent = ({
       }
       addChatAttachments([new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })]);
     } catch {
-      // noop
+      // A refusal and a cancel arrive as the same error, so the copy has to
+      // read correctly for both. On the desktop the usual refusal is the
+      // operating system's, which the page cannot see and cannot fix.
+      setLocalNotice(
+        desktopHost
+          ? 'No screenshot was attached. If you did not cancel, allow AGI Cloud under Screen & System Audio Recording in System Settings and reopen the app.'
+          : 'No screenshot was attached.',
+      );
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
       setIsCapturingScreenshot(false);
     }
-  }, [addChatAttachments]);
+  }, [addChatAttachments, desktopHost]);
 
   /**
    * The host reads the clipboard only on this click. A page cannot ask the
@@ -3560,7 +3567,11 @@ const ChatComposerNewComponent = ({
                     canUseVideoGeneration={canUseVideoGeneration}
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
-                    canTakeScreenshot={canTakeScreenshotCap}
+                    /* The capability table answers for the web surface, which
+                       cannot capture a screen. Inside the desktop shell the
+                       same page can: the shell answers getDisplayMedia with its
+                       own screen and window picker. */
+                    canTakeScreenshot={canTakeScreenshotCap || desktopHost !== null}
                     isCapturingScreenshot={isCapturingScreenshot}
                     onTakeScreenshot={() => {
                       void handleTakeScreenshot();
