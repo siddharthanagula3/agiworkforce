@@ -48,6 +48,7 @@ import {
   setAgentModeWithConsent,
 } from '../permissions/agentModeConsent';
 import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
+import { openPathReference, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import {
   buildWorkspaceReferenceInputs,
@@ -122,6 +123,7 @@ export type WebviewToExtMessage =
   | { type: 'openPermissionDocs' }
   | { type: 'openPrivacySettings' }
   | { type: 'openWebTasks' }
+  | { type: 'openPathReference'; payload: PathReferenceTarget }
   | {
       type: 'attachFiles';
       payload: {
@@ -757,6 +759,11 @@ export class ChatStateManager {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/tasks?from=vscode-extension'),
         );
+        break;
+      }
+
+      case 'openPathReference': {
+        await openPathReference(msg.payload);
         break;
       }
 

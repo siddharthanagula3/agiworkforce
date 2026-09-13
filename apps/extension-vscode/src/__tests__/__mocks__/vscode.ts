@@ -416,6 +416,7 @@ export const window = {
   createStatusBarItem: vi.fn(() => new MockStatusBarItem()),
   createTextEditorDecorationType: vi.fn(() => ({ dispose: vi.fn() })),
   createTerminal: vi.fn(() => ({ show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() })),
+  registerTerminalLinkProvider: vi.fn(() => new Disposable()),
   withProgress: vi.fn(
     async (_options: unknown, task: (progress: unknown, token: unknown) => Promise<void>) => {
       const progress = { report: vi.fn() };
@@ -505,6 +506,7 @@ export const workspace = {
 export const languages = {
   registerCodeActionsProvider: vi.fn(() => new Disposable()),
   registerHoverProvider: vi.fn(() => new Disposable()),
+  registerDocumentLinkProvider: vi.fn(() => new Disposable()),
   registerInlineCompletionItemProvider: vi.fn(() => new Disposable()),
   registerCodeLensProvider: vi.fn(() => new Disposable()),
   createDiagnosticCollection: vi.fn(() => ({
@@ -600,6 +602,21 @@ export const OverviewRulerLane = {
   Center: 2,
   Right: 4,
   Full: 7,
+} as const;
+
+export class DocumentLink {
+  tooltip?: string;
+  constructor(
+    public range: Range,
+    public target?: Uri,
+  ) {}
+}
+
+export const TextEditorRevealType = {
+  Default: 0,
+  InCenter: 1,
+  InCenterIfOutsideViewport: 2,
+  AtTop: 3,
 } as const;
 
 export const FileType = {

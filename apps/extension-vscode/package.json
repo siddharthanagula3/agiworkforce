@@ -423,6 +423,10 @@
         "command": "agi-workforce.mentionFileFromProject",
         "title": "AGI Workforce: Mention File from Project",
         "icon": "$(mention)"
+      },
+      {
+        "command": "agi-workforce.openPathReference",
+        "title": "AGI Workforce: Open File Reference"
       }
     ],
     "walkthroughs": [
@@ -772,6 +776,10 @@
         {
           "command": "agi-workforce.rejectAllDiffsGlobal",
           "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.openPathReference",
+          "when": "false"
         }
       ]
     },

@@ -1,5 +1,6 @@
 import markdownit from 'markdown-it';
 import DOMPurify from 'dompurify';
+import { findPathReferences } from '../utils/pathReferences';
 
 const md = markdownit({
   html: false,
@@ -67,10 +68,55 @@ declare global {
   }
 }
 
+export const PATH_LINK_CLASS = 'path-link';
+
+/**
+ * Turn `src/app.ts:12:4` in already-sanitized model output into a span the
+ * sidebar script can hand back to the extension host. The pass runs after
+ * DOMPurify so nothing here widens what the sanitizer allowed, and it skips
+ * text already inside an anchor.
+ */
+function linkifyPathReferences(root: DocumentFragment): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    textNodes.push(node as Text);
+  }
+  for (const textNode of textNodes) {
+    const parent = textNode.parentElement;
+    if (parent === null || parent.closest('a') !== null) continue;
+    const references = findPathReferences(textNode.data);
+    if (references.length === 0) continue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const reference of references) {
+      if (reference.start < cursor) continue;
+      fragment.appendChild(document.createTextNode(textNode.data.slice(cursor, reference.start)));
+      const span = document.createElement('span');
+      span.className = PATH_LINK_CLASS;
+      span.setAttribute('role', 'link');
+      span.setAttribute('tabindex', '0');
+      span.dataset['path'] = reference.path;
+      if (reference.line !== undefined) span.dataset['line'] = String(reference.line);
+      if (reference.column !== undefined) span.dataset['column'] = String(reference.column);
+      const end = reference.start + reference.length;
+      span.textContent = textNode.data.slice(reference.start, end);
+      fragment.appendChild(span);
+      cursor = end;
+    }
+    fragment.appendChild(document.createTextNode(textNode.data.slice(cursor)));
+    textNode.replaceWith(fragment);
+  }
+}
+
 function render(markdown: string): string {
   if (typeof markdown !== 'string') return '';
   const html = md.render(markdown);
-  return DOMPurify.sanitize(html, PURIFY_CONFIG) as string;
+  const sanitized = DOMPurify.sanitize(html, PURIFY_CONFIG) as string;
+  const template = document.createElement('template');
+  template.innerHTML = sanitized;
+  linkifyPathReferences(template.content);
+  return template.innerHTML;
 }
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
