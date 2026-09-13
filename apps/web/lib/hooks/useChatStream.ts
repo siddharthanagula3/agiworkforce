@@ -32,6 +32,14 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { readSelectedLocalModel } from '@features/desktop-host';
+import {
+  LOCAL_ATTACHMENTS_UNSUPPORTED,
+  LOCAL_TURN_IN_CLOUD_CHAT,
+  conversationHoldsLocalTurns,
+  runLocalTurn,
+  toLocalChatMessages,
+} from '@features/chat/lib/local-turn';
 import { logger } from '@shared/lib/logger';
 import {
   getModelMetadataById,
@@ -2701,7 +2709,20 @@ export function useChatStream(): UseChatStreamReturn {
         return false;
       }
 
-      const model = options.model || selectedModel;
+      // Local is a trust boundary, not a routing preference: the answer is
+      // produced on this machine, so this turn never reaches the completions
+      // route, the managed ledger, or the conversation's cloud rows.
+      const localModel = options.model ? null : readSelectedLocalModel();
+      const model = options.model || localModel?.id || selectedModel;
+
+      if (localModel && options.attachments?.length) {
+        setError(LOCAL_ATTACHMENTS_UNSUPPORTED, conversationId);
+        return false;
+      }
+      if (!localModel && conversationHoldsLocalTurns(readConversationMessages(conversationId))) {
+        setError(LOCAL_TURN_IN_CLOUD_CHAT, conversationId);
+        return false;
+      }
       const sendReplay = createSendReplayMetadata({
         webSearchEnabled: options.webSearch,
         thinkingEnabled: options.thinkingEnabled,
@@ -2872,15 +2893,19 @@ export function useChatStream(): UseChatStreamReturn {
         }
       }
 
-      try {
-        await getAuthToken();
-      } catch {
-        abandonTurn();
-        setError('Your session has expired. Please sign in again.', conversationId);
-        return false;
+      if (!localModel) {
+        try {
+          await getAuthToken();
+        } catch {
+          abandonTurn();
+          setError('Your session has expired. Please sign in again.', conversationId);
+          return false;
+        }
       }
 
-      if (regenerateParentId) {
+      if (localModel) {
+        reportTurnCommitted();
+      } else if (regenerateParentId) {
         reportTurnCommitted();
       } else if (!isTemporaryConversation) {
         try {
@@ -2934,6 +2959,24 @@ export function useChatStream(): UseChatStreamReturn {
 
       let retriedEmptyTurn = false;
       try {
+        if (localModel) {
+          connectingTicker.stop();
+          const outcome = await runLocalTurn({
+            conversationId,
+            assistantMessageId,
+            model: localModel,
+            messages: toLocalChatMessages(
+              readConversationMessages(conversationId),
+              assistantMessageId,
+            ),
+            signal: abortController.signal,
+          });
+          if (outcome.error) setError(outcome.error, conversationId);
+          stopStreaming(conversationId);
+          setLoading(false, conversationId);
+          return outcome.error === null;
+        }
+
         for (;;) {
           const currentMessages = readConversationMessages(conversationId);
 

@@ -1,4 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import {
+  LocalInferenceRefused,
+  isLocalModelId,
+  isLoopbackBaseUrl,
+  normalizeLocalBaseUrl,
+  parseLocalModelId,
+} from '@agiworkforce/local-runtime-contract';
+import { conversationHoldsLocalTurns, toLocalChatMessages } from '@features/chat/lib/local-turn';
+import type { Message } from '@shared/stores/web-chat-store';
 
 const TIER_ORDER: Record<string, number> = {
   free: 0,
@@ -162,5 +171,52 @@ describe('stripe webhook event filtering', () => {
     expect(HANDLED_EVENTS.has('payment_intent.created')).toBe(false);
     expect(HANDLED_EVENTS.has('radar.early_fraud_warning.created')).toBe(false);
     expect(HANDLED_EVENTS.has('account.updated')).toBe(false);
+  });
+});
+
+describe('local models on the desktop shell', () => {
+  const localTurn = {
+    id: 'm2',
+    role: 'assistant',
+    content: 'answered here',
+    createdAt: '2026-09-13T00:00:01.000Z',
+    metadata: { privacyMode: 'local' as const, providerMode: 'Local' as const },
+  } as Message;
+  const cloudTurn = {
+    id: 'm1',
+    role: 'assistant',
+    content: 'answered in the cloud',
+    createdAt: '2026-09-13T00:00:00.000Z',
+    metadata: { privacyMode: 'managed' as const },
+  } as Message;
+
+  it('CRITICAL: a model on this device is never a managed catalogue id', () => {
+    expect(isLocalModelId('local:ollama/tiny-chat:1b')).toBe(true);
+    expect(isLocalModelId('managed-catalogue-model')).toBe(false);
+    expect(parseLocalModelId('local:ollama/tiny-chat:1b')).toEqual({
+      serverId: 'ollama',
+      name: 'tiny-chat:1b',
+    });
+  });
+
+  it('CRITICAL: the Local label only ever covers a server on this machine', () => {
+    expect(isLoopbackBaseUrl('http://127.0.0.1:11434')).toBe(true);
+    expect(isLoopbackBaseUrl('http://models.internal:11434')).toBe(false);
+    expect(() =>
+      normalizeLocalBaseUrl('http://models.internal:11434', 'http://localhost:11434'),
+    ).toThrow(LocalInferenceRefused);
+  });
+
+  it('CRITICAL: a chat holding a local answer is recognised before a cloud turn is built', () => {
+    expect(conversationHoldsLocalTurns([cloudTurn])).toBe(false);
+    expect(conversationHoldsLocalTurns([cloudTurn, localTurn])).toBe(true);
+  });
+
+  it('sends a local model only the text of the turns, never the placeholder it is filling', () => {
+    const placeholder = { ...localTurn, id: 'pending', content: '' } as Message;
+    expect(toLocalChatMessages([cloudTurn, localTurn, placeholder], 'pending')).toEqual([
+      { role: 'assistant', content: 'answered in the cloud' },
+      { role: 'assistant', content: 'answered here' },
+    ]);
   });
 });
