@@ -162,7 +162,10 @@ export const domUtils = {
 
   getText(element: Element | null): string {
     if (!element) return '';
-    return element.textContent ?? '';
+    // innerText, not textContent: textContent hands back the source of every
+    // inline <script> and <style> in the subtree as if it were page copy.
+    const rendered = (element as HTMLElement).innerText;
+    return typeof rendered === 'string' && rendered !== '' ? rendered : (element.textContent ?? '');
   },
 
   getElementRect(element: Element | null): DOMRect | null {
