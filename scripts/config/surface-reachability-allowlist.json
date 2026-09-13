@@ -337,7 +337,6 @@
         "trackedBy": "SIX-32",
         "paths": [
           "apps/extension-vscode/src/core/index.ts",
-          "apps/extension-vscode/src/data/contextBuilder.ts",
           "apps/extension-vscode/src/data/index.ts",
           "apps/extension-vscode/src/data/sendQueue.ts",
           "apps/extension-vscode/src/features/model-picker/index.ts",
