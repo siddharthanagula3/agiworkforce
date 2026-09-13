@@ -138,12 +138,47 @@ pub fn load_conversation(id: &str) -> Result<SavedConversation> {
     load_conversation_in_dir(id, &conversations_dir()?)
 }
 
-fn load_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<SavedConversation> {
-    let path = dir.join(format!("{}.json", id));
-
-    if !path.exists() {
+/// Resolve a conversation reference to a stored id. `agi history` and
+/// `agi session list` print shortened ids, so an exact miss falls back to a
+/// unique id prefix rather than rejecting what the CLI just displayed.
+fn resolve_conversation_id_in_dir(id: &str, dir: &std::path::Path) -> Result<String> {
+    if id.is_empty() || id.contains(std::path::MAIN_SEPARATOR) || id.contains('/') {
         bail!("Conversation '{}' not found", id);
     }
+    if dir.join(format!("{id}.json")).exists() {
+        return Ok(id.to_string());
+    }
+
+    let mut matches: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if stem.starts_with(id) {
+                    matches.push(stem.to_string());
+                }
+            }
+        }
+    }
+    matches.sort();
+
+    match matches.len() {
+        0 => bail!("Conversation '{}' not found", id),
+        1 => Ok(matches.remove(0)),
+        _ => bail!(
+            "Conversation id '{}' is ambiguous, it matches: {}",
+            id,
+            matches.join(", ")
+        ),
+    }
+}
+
+fn load_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<SavedConversation> {
+    let id = resolve_conversation_id_in_dir(id, dir)?;
+    let path = dir.join(format!("{}.json", id));
 
     let contents = std::fs::read_to_string(&path).context("Failed to read conversation file")?;
     let conversation: SavedConversation =
@@ -202,11 +237,8 @@ pub fn delete_conversation(id: &str) -> Result<()> {
 }
 
 fn delete_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<()> {
+    let id = resolve_conversation_id_in_dir(id, dir)?;
     let path = dir.join(format!("{}.json", id));
-
-    if !path.exists() {
-        bail!("Conversation '{}' not found", id);
-    }
 
     std::fs::remove_file(&path).context("Failed to delete conversation file")?;
     Ok(())
@@ -470,6 +502,50 @@ mod tests {
 
     fn catalog_cloud_model() -> String {
         crate::model_catalog::default_model().to_string()
+    }
+
+    fn seed_conversation(dir: &std::path::Path, id: &str) {
+        std::fs::write(dir.join(format!("{id}.json")), "{}").unwrap();
+    }
+
+    #[test]
+    fn a_short_id_the_listing_printed_resolves_to_its_conversation() {
+        let dir = tempfile::tempdir().unwrap();
+        seed_conversation(dir.path(), "a83b2058-c508-446a-bbd8-a192fd7463c5");
+        assert_eq!(
+            resolve_conversation_id_in_dir("a83b2058", dir.path()).unwrap(),
+            "a83b2058-c508-446a-bbd8-a192fd7463c5"
+        );
+    }
+
+    #[test]
+    fn an_exact_id_still_wins_without_a_directory_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        seed_conversation(dir.path(), "abc");
+        seed_conversation(dir.path(), "abcdef");
+        assert_eq!(
+            resolve_conversation_id_in_dir("abc", dir.path()).unwrap(),
+            "abc"
+        );
+    }
+
+    #[test]
+    fn an_ambiguous_prefix_names_every_candidate() {
+        let dir = tempfile::tempdir().unwrap();
+        seed_conversation(dir.path(), "abcd");
+        seed_conversation(dir.path(), "abce");
+        let error = resolve_conversation_id_in_dir("abc", dir.path()).unwrap_err();
+        let rendered = error.to_string();
+        assert!(rendered.contains("abcd"), "{rendered}");
+        assert!(rendered.contains("abce"), "{rendered}");
+    }
+
+    #[test]
+    fn a_path_traversal_reference_is_never_resolved() {
+        let dir = tempfile::tempdir().unwrap();
+        seed_conversation(dir.path(), "abcd");
+        assert!(resolve_conversation_id_in_dir("../abcd", dir.path()).is_err());
+        assert!(resolve_conversation_id_in_dir("", dir.path()).is_err());
     }
 
     #[test]

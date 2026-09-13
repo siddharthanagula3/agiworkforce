@@ -247,6 +247,29 @@ fn find_session_path_in(base_dir: &Path, session_id: &str) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
+/// Session listings print shortened ids, so an exact miss falls back to every
+/// stored session whose id starts with the reference. The caller decides what a
+/// non-unique match means.
+fn session_paths_with_prefix_in(base_dir: &Path, prefix: &str) -> Vec<PathBuf> {
+    if validate_managed_session_id(prefix).is_err() {
+        return Vec::new();
+    }
+    let mut matches: Vec<PathBuf> = match std::fs::read_dir(managed_session_dir_in(base_dir)) {
+        Ok(entries) => entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .is_some_and(|stem| stem.starts_with(prefix))
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    matches.sort();
+    matches
+}
+
 fn load_session_from_path(path: &Path) -> Result<ManagedSession> {
     ManagedSession::load_from_path(path)
 }
@@ -352,13 +375,25 @@ fn resolve_managed_session_reference_in(
             .ok_or_else(|| anyhow::anyhow!("No managed sessions are available")),
         ManagedSessionReference::SessionId(session_id) => {
             validate_managed_session_id(&session_id)?;
-            let path = find_session_path_in(base_dir, &session_id).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Managed session '{}' was not found in {}",
-                    session_id,
-                    managed_session_dir_in(base_dir).display()
-                )
-            })?;
+            let path = match find_session_path_in(base_dir, &session_id) {
+                Some(path) => path,
+                None => {
+                    let mut matches = session_paths_with_prefix_in(base_dir, &session_id);
+                    match matches.len() {
+                        1 => matches.remove(0),
+                        0 => bail!(
+                            "Managed session '{}' was not found in {}",
+                            session_id,
+                            managed_session_dir_in(base_dir).display()
+                        ),
+                        _ => bail!(
+                            "Managed session id '{}' is ambiguous, it matches {} sessions; pass more of the id",
+                            session_id,
+                            matches.len()
+                        ),
+                    }
+                }
+            };
             let summary = summary_from_path(path.clone())?;
             Ok(ResolvedManagedSessionReference {
                 reference: ManagedSessionReference::SessionId(session_id),
@@ -555,6 +590,56 @@ mod tests {
 
     fn message(text: &str) -> Message {
         Message::text("user", text)
+    }
+
+    fn seed_session(base: &std::path::Path, id: &str) {
+        let session = ManagedSession::with_messages(
+            id.to_string(),
+            Utc.with_ymd_and_hms(2026, 9, 13, 8, 0, 0).unwrap(),
+            vec![message("hi")],
+        );
+        save_session_in(base, &session).unwrap();
+    }
+
+    #[test]
+    fn the_short_id_a_listing_prints_resolves_to_its_session() {
+        let temp_dir = tempdir().unwrap();
+        seed_session(temp_dir.path(), "a83b2058-c508-446a-bbd8-a192fd7463c5");
+        let resolved = resolve_managed_session_reference_in(
+            temp_dir.path(),
+            ManagedSessionReference::SessionId("a83b2058".to_string()),
+        )
+        .expect("a printed short id must resolve");
+        assert!(resolved
+            .path
+            .to_string_lossy()
+            .contains("a83b2058-c508-446a-bbd8-a192fd7463c5"));
+    }
+
+    #[test]
+    fn an_ambiguous_short_id_says_so_instead_of_picking_one() {
+        let temp_dir = tempdir().unwrap();
+        seed_session(temp_dir.path(), "abcd-one");
+        seed_session(temp_dir.path(), "abcd-two");
+        let error = resolve_managed_session_reference_in(
+            temp_dir.path(),
+            ManagedSessionReference::SessionId("abcd".to_string()),
+        )
+        .expect_err("an ambiguous prefix must not resolve");
+        assert!(error.to_string().contains("ambiguous"), "{error}");
+    }
+
+    #[test]
+    fn an_exact_id_is_preferred_over_a_longer_session_sharing_its_prefix() {
+        let temp_dir = tempdir().unwrap();
+        seed_session(temp_dir.path(), "abcd");
+        seed_session(temp_dir.path(), "abcdef");
+        let resolved = resolve_managed_session_reference_in(
+            temp_dir.path(),
+            ManagedSessionReference::SessionId("abcd".to_string()),
+        )
+        .expect("an exact id must resolve");
+        assert!(resolved.path.to_string_lossy().contains("abcd."));
     }
 
     #[test]
