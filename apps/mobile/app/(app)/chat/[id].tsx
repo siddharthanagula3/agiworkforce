@@ -29,6 +29,7 @@ import { ContextWarningChip } from '@/src/features/chat/components/ContextWarnin
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
+import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
@@ -132,6 +133,7 @@ export default function ChatScreen() {
   const chatInputAttachRef = useRef<
     import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
   >(null);
+  useComposerAttachmentHandoff(id, chatInputAttachRef);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);

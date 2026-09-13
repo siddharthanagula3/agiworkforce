@@ -1,42 +1,94 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { X, Send, AlertTriangle } from 'lucide-react-native';
+import { X, Send, AlertTriangle, FileText, Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { setDraft, type DraftProvenance } from '@/src/features/chat/draftStore';
+import {
+  stageComposerAttachments,
+  takeComposerAttachments,
+} from '@/src/features/chat/composerHandoff';
+import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 const MAX_SHARED_BYTES = 100 * 1024;
+const NEW_CHAT_DRAFT_KEY = 'new-chat';
 
-function sanitiseSharedText(raw: string): { text: string; truncated: boolean } {
+function boundSharedText(raw: string): { text: string; truncated: boolean } {
   const cleaned = raw.replace(/<\/?shared_via_intent>/gi, '').replace(/<\/?system>/gi, '');
+  const bytes = new TextEncoder().encode(cleaned);
+  if (bytes.length <= MAX_SHARED_BYTES) return { text: cleaned, truncated: false };
+  return { text: new TextDecoder().decode(bytes.slice(0, MAX_SHARED_BYTES)), truncated: true };
+}
 
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(cleaned);
-
-  if (bytes.length <= MAX_SHARED_BYTES) {
-    return { text: `<shared_via_intent>\n${cleaned}\n</shared_via_intent>`, truncated: false };
-  }
-
-  const truncated = new TextDecoder().decode(bytes.slice(0, MAX_SHARED_BYTES));
+export function sanitiseSharedText(raw: string): { text: string; truncated: boolean } {
+  const bounded = boundSharedText(raw);
   return {
-    text: `<shared_via_intent>\n${truncated}\n</shared_via_intent>`,
-    truncated: true,
+    text: `<shared_via_intent>\n${bounded.text}\n</shared_via_intent>`,
+    truncated: bounded.truncated,
   };
 }
 
 export default function SharePreviewScreen() {
   const { colors: themeColors } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ text?: string; nativeTruncated?: string }>();
+  const params = useLocalSearchParams<{
+    text?: string;
+    nativeTruncated?: string;
+    handoff?: string;
+  }>();
   const rawText = typeof params.text === 'string' ? params.text : '';
+  const handoffKey = typeof params.handoff === 'string' ? params.handoff : '';
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
   const [sending, setSending] = useState(false);
+  const [attachments] = useState<Attachment[]>(() => takeComposerAttachments(handoffKey));
 
   const { text: sanitised, truncated: truncatedInApp } = sanitiseSharedText(rawText);
+  const draftText = useMemo(() => boundSharedText(rawText).text, [rawText]);
   const truncated = truncatedInApp || params.nativeTruncated === '1';
+
+  const provenance: DraftProvenance | undefined =
+    appMode === 'local'
+      ? { scope: 'local' }
+      : clerkUserId
+        ? { scope: 'cloud', ownerId: clerkUserId }
+        : undefined;
+
+  const handleAttachToComposer = () => {
+    if (sending) return;
+    const { accepted, rejected } = validateAttachments(attachments, appMode);
+    if (rejected.length > 0) {
+      Alert.alert(
+        rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
+        rejected.map((item) => item.reason).join('\n'),
+      );
+    }
+    if (accepted.length === 0) return;
+
+    setSending(true);
+    const openConversationId = useChatStore.getState().currentConversationId;
+    const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
+    stageComposerAttachments(draftKey, accepted);
+    if (draftText.trim() && provenance) setDraft(draftKey, draftText, provenance);
+
+    if (openConversationId) {
+      router.replace({
+        pathname: '/(app)/chat/[id]' as const,
+        params: { id: openConversationId },
+      });
+      return;
+    }
+    router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+  };
 
   const handleSend = async () => {
     if (sending) return;
@@ -62,6 +114,15 @@ export default function SharePreviewScreen() {
       router.replace({ pathname: '/(app)' as const });
     }
   };
+
+  const hasAttachments = attachments.length > 0;
+  const primaryLabel = hasAttachments
+    ? sending
+      ? 'Opening chat…'
+      : 'Add to chat'
+    : sending
+      ? 'Opening chat…'
+      : 'Send to Chat';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
@@ -105,32 +166,86 @@ export default function SharePreviewScreen() {
           </View>
         )}
 
+        {hasAttachments && (
+          <View style={{ gap: 8 }}>
+            {attachments.map((attachment) => (
+              <View
+                key={attachment.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  backgroundColor: themeColors.surfaceElevated,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                  padding: 10,
+                }}
+              >
+                {attachment.mimeType.startsWith('image/') ? (
+                  <Image
+                    source={{ uri: attachment.uri }}
+                    style={{ width: 48, height: 48, borderRadius: 8 }}
+                    contentFit="cover"
+                    accessibilityLabel={attachment.fileName}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: themeColors.background,
+                    }}
+                  >
+                    <FileText size={20} color={themeColors.textMuted} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ color: themeColors.textPrimary, fontSize: 14 }}>
+                    {attachment.fileName}
+                  </Text>
+                  <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
+                    {attachment.mimeType}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Preview box */}
-        <View
-          style={{
-            backgroundColor: themeColors.surfaceElevated,
-            borderRadius: 12,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: themeColors.border,
-          }}
-        >
-          <Text
+        {rawText.trim().length > 0 && (
+          <View
             style={{
-              color: themeColors.textSecondary,
-              fontSize: 13,
-              lineHeight: 20,
-              fontFamily: 'monospace',
+              backgroundColor: themeColors.surfaceElevated,
+              borderRadius: 12,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: themeColors.border,
             }}
-            selectable
           >
-            {rawText.slice(0, 2000)}
-            {rawText.length > 2000 ? `\n\n… (${rawText.length - 2000} more chars)` : ''}
-          </Text>
-        </View>
+            <Text
+              style={{
+                color: themeColors.textSecondary,
+                fontSize: 13,
+                lineHeight: 20,
+                fontFamily: 'monospace',
+              }}
+              selectable
+            >
+              {rawText.slice(0, 2000)}
+              {rawText.length > 2000 ? `\n\n… (${rawText.length - 2000} more chars)` : ''}
+            </Text>
+          </View>
+        )}
 
         <Text style={{ color: themeColors.textMuted, fontSize: 12, textAlign: 'center' }}>
-          Review the shared content above before sending to your AI chat.
+          {hasAttachments
+            ? 'Review what was shared. It is attached to your next message, which you send yourself.'
+            : 'Review the shared content above before sending to your AI chat.'}
         </Text>
       </ScrollView>
 
@@ -159,8 +274,10 @@ export default function SharePreviewScreen() {
         </Pressable>
 
         <Pressable
-          onPress={handleSend}
-          disabled={sending || !rawText.trim()}
+          onPress={hasAttachments ? handleAttachToComposer : handleSend}
+          disabled={sending || (!hasAttachments && !rawText.trim())}
+          accessibilityRole="button"
+          accessibilityLabel={hasAttachments ? 'Add shared files to chat' : 'Send shared text'}
           style={{
             flex: 2,
             paddingVertical: 14,
@@ -172,10 +289,8 @@ export default function SharePreviewScreen() {
             gap: 8,
           }}
         >
-          <Send size={16} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '600' }}>
-            {sending ? 'Opening chat…' : 'Send to Chat'}
-          </Text>
+          {hasAttachments ? <Paperclip size={16} color="#fff" /> : <Send size={16} color="#fff" />}
+          <Text style={{ color: '#fff', fontWeight: '600' }}>{primaryLabel}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
