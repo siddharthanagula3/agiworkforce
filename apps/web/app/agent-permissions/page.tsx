@@ -284,8 +284,10 @@ export default function AgentPermissionsPage() {
                       Computer use in Chrome.
                     </h2>
                     <Prose>
-                      The Chrome extension can drive a tab through the Chrome debugger. Starting a
-                      session is always an explicit action: you type a goal and click. Once running:
+                      The Chrome extension can drive a tab through the Chrome debugger, and read
+                      that tab&rsquo;s console and network activity over the same attachment.
+                      Starting a session is always an explicit action: you type a goal and click.
+                      Once running:
                     </Prose>
                   </div>
                   <Ledger
@@ -323,6 +325,16 @@ export default function AgentPermissionsPage() {
                             residual, accepted risk, bounded by the allowlist and the approval gate.
                           </>
                         ),
+                      },
+                      {
+                        label: 'Console and network capture',
+                        value:
+                          "The extension reads a page's console messages and the requests it makes, but only while a run is active or you turn the watch on yourself, and only on a site carrying both grants. Message text passes the same redaction as page text. A request line keeps the URL, method, status, type and timing; it drops credentials in the URL and never reads a request body or a header.",
+                      },
+                      {
+                        label: 'Downloads',
+                        value:
+                          'A download starts only when you ask for one, saves to your own downloads folder, and must come from the page\u2019s own origin or another origin already on your allowlist. Chrome picks the filename.',
                       },
                       {
                         label: 'Where inference happens',

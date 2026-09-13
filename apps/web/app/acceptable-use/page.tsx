@@ -137,7 +137,7 @@ const ENFORCEMENT: readonly LedgerRow[] = [
 const PROHIBITED = [
   {
     title: '(a) Browser control: systems you are not authorized to use',
-    body: "The Chrome extension can drive a browser tab through the Chrome debugger on sites you both add to your allowlist and separately grant browser control to. Do not use it to access accounts or systems you are not authorized to access; to bypass authentication, access controls, paywalls, CAPTCHAs, or bot detection; to scrape a site at a rate or in a manner the site prohibits; or to take actions in another person's account. Adding a site to your own allowlist is a statement about what you want the agent to reach. It is not permission from that site.",
+    body: "The Chrome extension can drive a browser tab through the Chrome debugger on sites you both add to your allowlist and separately grant browser control to. The same attachment reads that page's console messages and the requests it makes, and downloads a file when you ask for one, under those same two grants and no others. Do not use it to access accounts or systems you are not authorized to access; to bypass authentication, access controls, paywalls, CAPTCHAs, or bot detection; to scrape a site at a rate or in a manner the site prohibits; or to take actions in another person's account. Adding a site to your own allowlist is a statement about what you want the agent to reach. It is not permission from that site.",
   },
   {
     title: '(b) The code sandbox',
