@@ -447,7 +447,7 @@ const RE_DATA_EXECUTION_SUBJECT = /\b(data|dataset|csv|spreadsheet|table|statist
 
 const RE_OFFICE_CREATION_ACTION = /\b(create|generate|make|prepare|produce|export|build)\b/i;
 const RE_OFFICE_CREATION_ARTIFACT =
-  /\.(docx|pptx)\b|\b(word document|powerpoint|slide deck|presentation|office file)\b/i;
+  /\.(docx|pptx|xlsx|pdf|csv)\b|\b(word document|powerpoint|slide deck|presentation|office file|excel|spreadsheet|workbook|pdf|csv)\b/i;
 
 const RE_HTTP_URL = /https?:\/\/[^\s<>"']+/i;
 const RE_URL_FETCH_ACTION = /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
