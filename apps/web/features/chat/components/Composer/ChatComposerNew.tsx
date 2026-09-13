@@ -45,6 +45,11 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
+import {
+  LocalFolderAttachDialog,
+  useDesktopHost,
+  useDesktopVoiceHotkey,
+} from '@/features/desktop-host';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
@@ -301,6 +306,8 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
   onStop?: () => void;
+  /** ArrowUp on an empty composer opens the last user message for editing, as both leaders do. */
+  onEditLastMessage?: () => void;
   /**
    * Enters conversational voice mode. When supplied, the trailing round button
    * carries voice entry while the field is empty and hands the slot back to
@@ -566,6 +573,7 @@ const ChatComposerNewComponent = ({
   onDroppedFilesConsumed,
   onTypingChange,
   onStop,
+  onEditLastMessage,
   onEnterVoiceMode,
   clearSignal,
   emptyState = false,
@@ -1336,6 +1344,13 @@ const ChatComposerNewComponent = ({
   const dictation = useDictation({
     onInsert: handleDictationInsert,
     onSend: handleDictationSend,
+  });
+
+  const desktopHost = useDesktopHost();
+  const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
+  useDesktopVoiceHotkey(() => {
+    if (dictation.isActive) dictation.stop();
+    else dictation.start();
   });
 
   const takeIdleFocus = useCallback(() => {
@@ -2773,6 +2788,20 @@ const ChatComposerNewComponent = ({
         }
       }
 
+      if (
+        e.key === 'ArrowUp' &&
+        onEditLastMessage &&
+        !message &&
+        attachments.length === 0 &&
+        !showMentions &&
+        !showSlashMenu &&
+        !e.nativeEvent.isComposing
+      ) {
+        e.preventDefault();
+        onEditLastMessage();
+        return;
+      }
+
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
       // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
@@ -2797,6 +2826,9 @@ const ChatComposerNewComponent = ({
       handleSubmit,
       handleStop,
       isTurnActive,
+      message,
+      attachments.length,
+      onEditLastMessage,
       showMentions,
       showOverflowMenu,
       showSlashMenu,
@@ -3466,6 +3498,11 @@ const ChatComposerNewComponent = ({
                       fileInputRef.current?.click();
                       closeMenu();
                     }}
+                    showLocalFolderRow={desktopHost !== null}
+                    onAttachFromLocalFolder={() => {
+                      setLocalFolderPickerOpen(true);
+                      closeMenu();
+                    }}
                     mediaModeActive={mediaModeActive}
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
@@ -4087,6 +4124,12 @@ const ChatComposerNewComponent = ({
             e.target.value = '';
           }}
           aria-label="File upload"
+        />
+
+        <LocalFolderAttachDialog
+          open={localFolderPickerOpen}
+          onClose={() => setLocalFolderPickerOpen(false)}
+          onAttach={addChatAttachments}
         />
       </div>
 
