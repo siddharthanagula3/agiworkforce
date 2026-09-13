@@ -908,6 +908,44 @@ describe('ChatComposerNew', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it('stops an active stream when Escape reaches the composer with no menu open', () => {
+    const onStop = vi.fn();
+    render(<ChatComposerNew onSend={vi.fn()} onStop={onStop} isGenerating />);
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /message input/i }), { key: 'Escape' });
+
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an idle composer alone on Escape', () => {
+    const onStop = vi.fn();
+    render(<ChatComposerNew onSend={vi.fn()} onStop={onStop} />);
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /message input/i }), { key: 'Escape' });
+
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it('asks the surface to edit the last message on ArrowUp in an empty composer', () => {
+    const onEditLastMessage = vi.fn();
+    render(<ChatComposerNew onSend={vi.fn()} onEditLastMessage={onEditLastMessage} />);
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /message input/i }), { key: 'ArrowUp' });
+
+    expect(onEditLastMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves ArrowUp to the caret once the composer has text', () => {
+    const onEditLastMessage = vi.fn();
+    render(<ChatComposerNew onSend={vi.fn()} onEditLastMessage={onEditLastMessage} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'a draft' } });
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+
+    expect(onEditLastMessage).not.toHaveBeenCalled();
+  });
+
   it('disables textarea when disabled prop is set', () => {
     render(<ChatComposerNew onSend={vi.fn()} disabled />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();
