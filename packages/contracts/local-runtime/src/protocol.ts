@@ -81,4 +81,5 @@ export type DesktopRuntimeEvent =
     }
   | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope }
   | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string }
-  | { kind: 'browser-pairing-changed'; state: BrowserPairingState };
+  | { kind: 'browser-pairing-changed'; state: BrowserPairingState }
+  | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string };
