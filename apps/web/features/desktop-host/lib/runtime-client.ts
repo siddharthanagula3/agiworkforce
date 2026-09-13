@@ -8,6 +8,11 @@ import {
   type ClipboardSnapshot,
   type FileEntry,
   type FileBinaryContent,
+  type LocalChatMessage,
+  type LocalChatResult,
+  type LocalModel,
+  type LocalModelSettings,
+  type LocalModelSnapshot,
   type ShellPolicy,
   type ShellRunResult,
   type WorkspaceRoot,
@@ -259,4 +264,73 @@ export function screenshotAttachment(dataUrl: string, nowMs: number): File {
     type: 'image/png',
     lastModified: nowMs,
   });
+}
+
+export function readLocalModelSnapshot(): Promise<LocalModelSnapshot> {
+  return invoke<LocalModelSnapshot>('local_model_servers');
+}
+
+export function listLocalModels(): Promise<LocalModel[]> {
+  return invoke<LocalModel[]>('local_model_list');
+}
+
+export function readLocalModelSettings(): Promise<LocalModelSettings> {
+  return invoke<LocalModelSettings>('local_model_settings_read');
+}
+
+export function writeLocalModelSettings(
+  settings: Partial<LocalModelSettings>,
+): Promise<LocalModelSettings> {
+  return invoke<LocalModelSettings>('local_model_settings_write', { settings });
+}
+
+export function cancelLocalChat(runId: string): Promise<boolean> {
+  return invoke<boolean>('local_chat_cancel', { runId });
+}
+
+export interface LocalChatDelta {
+  channel: 'text' | 'thinking';
+  delta: string;
+}
+
+export interface LocalChatRun {
+  runId: string;
+  result: Promise<LocalChatResult>;
+}
+
+/**
+ * Runs one turn on a model installed on this machine.
+ *
+ * The run id is chosen here rather than returned with the result because the
+ * answer arrives delta by delta while the turn is still open, and Stop needs
+ * something to name before there is anything to stop.
+ */
+export function startLocalChat(
+  input: { modelId: string; messages: LocalChatMessage[]; timeoutMs?: number },
+  onDelta: (delta: LocalChatDelta) => void,
+): LocalChatRun {
+  const host = getHostBridge();
+  if (!host) throw new DesktopHostUnavailable();
+
+  const runId = crypto.randomUUID();
+  const unsubscribe = host.onRuntimeEvent((event) => {
+    if (event.kind === 'local-chat-delta' && event.runId === runId) {
+      onDelta({ channel: event.channel, delta: event.delta });
+    }
+  });
+
+  const result = (async () => {
+    try {
+      return await invoke<LocalChatResult>('local_chat_start', {
+        runId,
+        modelId: input.modelId,
+        messages: input.messages,
+        ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
+      });
+    } finally {
+      unsubscribe();
+    }
+  })();
+
+  return { runId, result };
 }

@@ -9,6 +9,10 @@ const revealWorkspaceRoot = vi.fn();
 const revokeWorkspaceRoot = vi.fn();
 const readLocalCommandPolicy = vi.fn();
 const writeLocalCommandPolicy = vi.fn();
+const readLocalModelSettings = vi.fn();
+const writeLocalModelSettings = vi.fn();
+const readLocalModelSnapshot = vi.fn();
+const listLocalModels = vi.fn();
 
 vi.mock('../lib/runtime-client', () => ({
   listWorkspaceRoots,
@@ -17,6 +21,10 @@ vi.mock('../lib/runtime-client', () => ({
   revokeWorkspaceRoot,
   readLocalCommandPolicy,
   writeLocalCommandPolicy,
+  readLocalModelSettings,
+  writeLocalModelSettings,
+  readLocalModelSnapshot,
+  listLocalModels,
 }));
 
 const { LocalAccessSection } = await import('../components/LocalAccessSection');
@@ -50,6 +58,12 @@ beforeEach(() => {
   listWorkspaceRoots.mockResolvedValue([root]);
   readLocalCommandPolicy.mockResolvedValue({ allow: ['git'], deny: ['rm'] });
   writeLocalCommandPolicy.mockImplementation(async (policy: ShellPolicy) => policy);
+  readLocalModelSettings.mockResolvedValue({
+    baseUrls: { ollama: 'http://localhost:11434', lmstudio: 'http://localhost:1234/v1' },
+  });
+  writeLocalModelSettings.mockImplementation(async (settings: unknown) => settings);
+  readLocalModelSnapshot.mockResolvedValue({ granted: false, servers: [] });
+  listLocalModels.mockResolvedValue([]);
   installHost();
 });
 
