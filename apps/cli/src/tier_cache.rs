@@ -1,4 +1,4 @@
-//! Tier cache, async managed-account tier query with 1-hour on-disk TTL.
+//! Tier cache, async managed-account tier query with a short on-disk TTL.
 //!
 //! The CLI calls `resolve_user_tier()` at startup to determine which model pool
 //! to default to.  It writes the result to
@@ -14,7 +14,8 @@
 //! what the customer purchased.
 //!
 //! ## Flow
-//! 1. Check `~/.agiworkforce/cache/tier.toml`, if present and < 1 h old, return cached tier.
+//! 1. Check `~/.agiworkforce/cache/tier.toml`, if present and younger than
+//!    `TIER_CACHE_TTL`, return cached tier.
 //! 2. Query `AGIWORKFORCE_API_BASE/api/me` with `Authorization: Bearer <AGIWORKFORCE_JWT>`.
 //! 3. Write result to cache.  On any error, return `None` (caller uses config default).
 //!
@@ -36,8 +37,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Time-to-live for the on-disk tier cache before we re-query.
-const TIER_CACHE_TTL: Duration = Duration::from_secs(3_600); // 1 hour
+/// Time-to-live for the on-disk tier cache before we re-query. Owned here and
+/// nowhere else: a plan change must surface within this window.
+const TIER_CACHE_TTL: Duration = Duration::from_secs(300);
 
 /// Maximum time to wait for the tier API call.  If the server doesn't respond
 /// within this window we return `None` and let the caller use a sensible default.
@@ -49,6 +51,10 @@ const TIER_CACHE_FILE: &str = "cache/tier.toml";
 /// Default API base used when `AGIWORKFORCE_API_BASE` is not set.
 /// `/api/me` lives on the root host (verified: apps/web/app/api/me/route.ts).
 const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
+
+pub fn default_api_base() -> &'static str {
+    DEFAULT_API_BASE
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -163,15 +169,17 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+fn cache_is_fresh(cached_at: u64, now: u64) -> bool {
+    now.saturating_sub(cached_at) <= TIER_CACHE_TTL.as_secs()
+}
+
 /// Read the cached tier from disk, returning `None` if absent or expired.
 pub fn read_tier_cache() -> Option<CachedTier> {
     let path = tier_cache_path();
     let content = std::fs::read_to_string(&path).ok()?;
     let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
 
-    // Expire after TTL
-    let age = now_secs().saturating_sub(envelope.cached_at);
-    if age > TIER_CACHE_TTL.as_secs() {
+    if !cache_is_fresh(envelope.cached_at, now_secs()) {
         return None;
     }
 
@@ -197,6 +205,41 @@ pub fn write_tier_cache(tier: &UserTier) {
             let _ = std::fs::rename(&tmp, &path);
         }
     }
+}
+
+/// Drop the cached tier so the next resolve re-reads it from the server.
+pub fn invalidate_tier_cache() {
+    let _ = std::fs::remove_file(tier_cache_path());
+}
+
+/// Adopt the plan the authoritative usage summary reports. `/api/usage` reads
+/// the subscription itself rather than failing open to `free`, so a differing
+/// plan here is a real upgrade or downgrade and replaces the cached tier.
+pub fn adopt_server_plan(plan_tier: &str) -> bool {
+    let cached = read_tier_cache().map(|cached| cached.tier);
+    match tier_to_adopt(plan_tier, cached.as_ref()) {
+        Some(server_tier) => {
+            invalidate_tier_cache();
+            write_tier_cache(&server_tier);
+            true
+        }
+        None => false,
+    }
+}
+
+/// The tier the cache should hold once the server states `plan_tier`, or `None`
+/// when the cache already agrees and nothing needs rewriting.
+pub fn tier_to_adopt(plan_tier: &str, cached: Option<&UserTier>) -> Option<UserTier> {
+    let server_tier = parse_tier_str(plan_tier)?;
+    if cached == Some(&server_tier) {
+        return None;
+    }
+    Some(server_tier)
+}
+
+/// HTTP answers that prove the cached tier no longer describes the account.
+pub fn status_invalidates_tier(status: u16) -> bool {
+    matches!(status, 401..=403)
 }
 
 // ---------------------------------------------------------------------------
@@ -501,6 +544,10 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, Fetc
 /// FAIL-CLOSED: an unrecognized server string returns `None` so it is never
 /// silently promoted to a higher tier.  Callers default unresolved strings to
 /// `UserTier::Free`.
+pub fn parse_tier(s: &str) -> Option<UserTier> {
+    parse_tier_str(s)
+}
+
 fn parse_tier_str(s: &str) -> Option<UserTier> {
     match s.to_lowercase().as_str() {
         "free" => Some(UserTier::Free),
@@ -819,6 +866,51 @@ mod tests {
             jwt_from_legacy_auth_toml(content).as_deref(),
             Some("legacy-token")
         );
+    }
+
+    // -- cache freshness and invalidation tests ------------------------------
+
+    #[test]
+    fn tier_cache_ttl_is_five_minutes() {
+        assert_eq!(TIER_CACHE_TTL.as_secs(), 300);
+    }
+
+    #[test]
+    fn cache_expires_once_past_the_ttl() {
+        let now = 1_746_000_000;
+        assert!(cache_is_fresh(now, now));
+        assert!(cache_is_fresh(now - TIER_CACHE_TTL.as_secs(), now));
+        assert!(!cache_is_fresh(now - TIER_CACHE_TTL.as_secs() - 1, now));
+    }
+
+    #[test]
+    fn a_changed_server_plan_replaces_the_cached_tier() {
+        assert_eq!(
+            tier_to_adopt("max_15x", Some(&UserTier::Pro)),
+            Some(UserTier::Max15x)
+        );
+        assert_eq!(
+            tier_to_adopt("free", Some(&UserTier::Max)),
+            Some(UserTier::Free),
+            "a downgrade must not be held back by the cached higher tier"
+        );
+        assert_eq!(tier_to_adopt("pro", None), Some(UserTier::Pro));
+    }
+
+    #[test]
+    fn an_unchanged_or_unknown_plan_leaves_the_cache_alone() {
+        assert_eq!(tier_to_adopt("pro", Some(&UserTier::Pro)), None);
+        assert_eq!(tier_to_adopt("hobby", Some(&UserTier::Pro)), None);
+    }
+
+    #[test]
+    fn only_auth_and_payment_answers_invalidate_the_tier() {
+        for status in [401, 402, 403] {
+            assert!(status_invalidates_tier(status), "HTTP {status}");
+        }
+        for status in [200, 404, 429, 500, 503] {
+            assert!(!status_invalidates_tier(status), "HTTP {status}");
+        }
     }
 
     // -- TOML round-trip test -----------------------------------------------

@@ -34,7 +34,8 @@ const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5); // never block startup
 const MODELS_DEV_URL: &str = "https://models.dev/api.json";
 const CACHE_FILE: &str = "cache/models.json";
-const SHARED_MODELS_JSON: &str = include_str!("../../../packages/contracts/types/src/models.json");
+pub const SHARED_MODELS_JSON: &str =
+    include_str!("../../../packages/contracts/types/src/models.json");
 const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "anthropic",
     "openai",

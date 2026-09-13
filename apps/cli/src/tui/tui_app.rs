@@ -3221,6 +3221,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 estimated_cost_usd: app.session.cost_ledger.total_usd,
                 turn_count: app.session.turn_count,
                 model: app.session.model.clone(),
+                account_lines: crate::usage_summary::account_lines_blocking(),
             };
             SlashResult::SystemMessage(render_usage(&usage))
         }

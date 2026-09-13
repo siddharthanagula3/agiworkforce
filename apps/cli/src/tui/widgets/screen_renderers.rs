@@ -633,10 +633,20 @@ pub struct UsageSummary {
     pub estimated_cost_usd: f64,
     pub turn_count: u32,
     pub model: String,
+    pub account_lines: Vec<String>,
 }
 
 pub fn render_usage(usage: &UsageSummary) -> String {
-    let body = vec![
+    let mut body: Vec<String> = usage
+        .account_lines
+        .iter()
+        .map(|line| format!("  {line}"))
+        .collect();
+    if !body.is_empty() {
+        body.push(String::new());
+    }
+    body.push("  Session estimate (priced locally, not the billed figure)".to_string());
+    body.extend(vec![
         format!(
             "    Input tokens:        {:>9}",
             fmt_number(usage.input_tokens as u64)
@@ -661,7 +671,7 @@ pub fn render_usage(usage: &UsageSummary) -> String {
         format!("    Model:               {}", usage.model),
         String::new(),
         "  Tip: see https://agiworkforce.com/pricing for plan details.".to_string(),
-    ];
+    ]);
     frame("Usage".to_string(), &body, "Esc to close")
 }
 
@@ -1183,9 +1193,18 @@ mod tests {
             estimated_cost_usd: 0.2347,
             turn_count: 15,
             model: "fixture-render-model".into(),
+            account_lines: vec![
+                "Account usage".into(),
+                "  plan: Max 15x".into(),
+                "  weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
+            ],
         };
         let s = render_usage(&usage);
         assert!(s.contains("Usage"));
+        assert!(s.contains("Account usage"));
+        assert!(s.contains("plan: Max 15x"));
+        assert!(s.contains("2050 left"));
+        assert!(s.contains("Session estimate"));
         assert!(s.contains("Input tokens:"));
         assert!(s.contains("12,345"));
         assert!(s.contains("Output tokens:"));
