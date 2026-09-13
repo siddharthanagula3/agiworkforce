@@ -9,4 +9,5 @@
 
 export * from './explicit-search-intent';
 export * from './place-intent';
+export * from './source-ranking';
 export * from './web-search-support';
