@@ -10,14 +10,11 @@
 //!   * `70%-89%` uses the warning palette.
 //!   * `>=90%` uses the danger palette.
 
-use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::output::format_tokens;
 use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success, ui_warning};
@@ -64,24 +61,12 @@ impl CostHud {
     }
 }
 
-/// Render the HUD anchored to the top-right of `screen`. Always one row tall.
-pub fn render(frame: &mut Frame, screen: Rect, hud: &CostHud, model_id: &str) {
-    if screen.width < 30 || screen.height == 0 {
-        return;
-    }
-
-    let line = build_line(hud, model_id);
-    let line_width = line.width() as u16;
-    let width = line_width.min(screen.width.saturating_sub(2));
-
-    let area = Rect {
-        x: screen.x + screen.width.saturating_sub(width + 1),
-        y: screen.y,
-        width,
-        height: 1,
-    };
-
-    frame.render_widget(Paragraph::new(line), area);
+/// The HUD as a right-aligned block title, padded so it reads as part of the
+/// border rather than a paragraph painted over it.
+pub fn title_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
+    let mut line = build_line(hud, model_id);
+    line.spans.insert(0, Span::raw(" "));
+    line.right_aligned()
 }
 
 fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {

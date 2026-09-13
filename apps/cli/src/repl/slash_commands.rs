@@ -129,6 +129,7 @@ pub(super) async fn handle_slash_command(
                 session.total_output_tokens,
                 session.turn_count,
                 session.cost_ledger.total_usd,
+                crate::design_system::AccessMode::for_provider(&session.provider),
             );
         }
         "/save" => {
