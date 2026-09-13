@@ -1075,7 +1075,7 @@ describe('MessageBubble', () => {
       );
 
       await user.click(screen.getByLabelText('More message actions'));
-      expect(screen.getByText(modelName!)).toBeInTheDocument();
+      expect(screen.getAllByText(modelName!).length).toBeGreaterThan(0);
       if (modelName !== CHAT_MODEL_ID) {
         expect(screen.queryByText(CHAT_MODEL_ID)).not.toBeInTheDocument();
       }
@@ -1105,7 +1105,7 @@ describe('MessageBubble', () => {
       );
 
       await user.click(screen.getByLabelText('More message actions'));
-      expect(screen.getByText('Unavailable model')).toBeInTheDocument();
+      expect(screen.getAllByText('Unavailable model').length).toBeGreaterThan(0);
       expect(screen.queryByText(retiredFixtureId)).not.toBeInTheDocument();
     });
   });

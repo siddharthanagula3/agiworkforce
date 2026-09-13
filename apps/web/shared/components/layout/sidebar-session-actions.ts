@@ -11,8 +11,7 @@
 export interface DestructiveConfirmCopy {
   title: string;
   description: string;
-  confirmText: string;
-  variant: 'destructive';
+  confirmLabel: string;
 }
 
 function quoted(label: string | null | undefined, fallback: string): string {
@@ -35,8 +34,7 @@ export function conversationDeleteConfirm(title: string | null | undefined) {
   return {
     title: 'Delete conversation?',
     description: `${quoted(title, 'This conversation')} and every message in it will be removed from your chats. This cannot be undone. Images and videos generated here stay in your library.`,
-    confirmText: 'Delete conversation',
-    variant: 'destructive',
+    confirmLabel: 'Delete conversation',
   } satisfies DestructiveConfirmCopy;
 }
 
@@ -50,7 +48,6 @@ export function projectDeleteConfirm(name: string | null | undefined) {
   return {
     title: 'Delete project?',
     description: `${quoted(name, 'This project')} and its instructions will be removed from your workspace, and the files you added as project sources will be deleted. Conversations in this project will be moved to “All Chats”. This cannot be undone.`,
-    confirmText: 'Delete project',
-    variant: 'destructive',
+    confirmLabel: 'Delete project',
   } satisfies DestructiveConfirmCopy;
 }

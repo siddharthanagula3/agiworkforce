@@ -452,6 +452,18 @@ export interface Message {
    * to make" rather than "managed".
    */
   routeLane?: string;
+  /**
+   * The model id the composer asked for, kept beside the served `model` so a
+   * turn can say Auto picked its answer. Per-turn and not persisted.
+   */
+  requestedModel?: string;
+  /**
+   * Whether this AGI Work turn is running on the durable transport, from
+   * `X-AGI-Tool-Loop`. Set only for AGI Work, where the run is presented as work
+   * that continues without the tab; false means it does not, and the reader is
+   * owed that correction. Per-turn and not persisted.
+   */
+  turnDetachable?: boolean;
   secretRedactionCount?: number;
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
