@@ -312,6 +312,10 @@ export function applyManagedMemoryContext(
   chatRequest.messages.unshift({ role: 'system', content: prompt });
 }
 
+// Idempotency only, and only within one account: migration 0189 made the row
+// key (user_id, id), so this value collides with nothing another tenant holds.
+// It exists so two concurrent turns extracting the same fact insert one row,
+// which the not-exists check below cannot guarantee on its own.
 function deterministicAutoMemoryId(userId: string, normalizedKey: string): string {
   const hex = createHash('sha256')
     .update(`agi-managed-auto-memory-v1\0${userId}\0${normalizedKey}`)
@@ -408,7 +412,7 @@ export async function persistManagedAutoMemoryFacts(
            and lower(regexp_replace(btrim(existing.content), '\\s+', ' ', 'g')) =
                incoming.normalized_key
       )
-     on conflict (id) do nothing
+     on conflict (user_id, id) do nothing
      returning id::text`,
     [params.userId, JSON.stringify(batch), params.projectId ?? null, params.organizationId ?? null],
   );

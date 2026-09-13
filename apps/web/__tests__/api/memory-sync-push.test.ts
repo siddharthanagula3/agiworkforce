@@ -66,6 +66,29 @@ describe('POST /api/memory/sync, delta push', () => {
     expect(params[0]).toBe('u1');
   });
 
+  it("scopes the insert conflict target to the owner, so one account cannot squat another's row id", async () => {
+    await POST(
+      postReq({
+        protocolVersion: 2,
+        memories: [
+          {
+            id: '0190a000-0000-7000-8000-000000000abc',
+            content: 'User prefers terse answers',
+            source: 'mobile',
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+
+    const call = queryMock.mock.calls.find((c) =>
+      String(c[0]).includes('insert into user_memories'),
+    );
+    const sql = String(call![0]);
+    expect(sql).toContain('on conflict (user_id, id) do nothing');
+    expect(sql).not.toContain('on conflict (id) do nothing');
+  });
+
   it('falls back to the legacy { synced, conflicts } trigger when no memories are sent', async () => {
     queryMock.mockResolvedValueOnce([{ count: 3 }]);
     const res = await POST(postReq({}));

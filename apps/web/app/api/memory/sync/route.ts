@@ -176,7 +176,7 @@ async function handlePost(request: NextRequest) {
                    incoming.pinned, incoming.should_delete, now(), now()
               from input as incoming
              where incoming.base_version = 0
-            on conflict (id) do nothing
+            on conflict (user_id, id) do nothing
             returning id, server_version
           ), applied_rows as materialized (
             select id, server_version from updated union all select id, server_version from inserted

@@ -450,6 +450,11 @@
       "file": "apps/web/lib/user-connector-tools.ts",
       "migration": 188,
       "reason": "0188 stores the repository set the linking GitHub account proved it can reach, which the Code session clone and push credentials are narrowed to; the deploy runbook applies it before this code reaches production, and until it does the installation read names a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/memory/import-store.ts",
+      "migration": 189,
+      "reason": "0189 scopes a memory row key to its owner and adds import_key, the per-owner dedupe key that replaces the derived global row id; the deploy runbook applies it before this code reaches production, and until it does the import insert names a column that does not exist."
     }
   ]
 }
