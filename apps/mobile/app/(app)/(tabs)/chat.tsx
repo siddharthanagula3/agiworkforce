@@ -24,6 +24,7 @@ import {
   type TaskSuggestionType,
 } from '@/src/features/chat/components/TaskChips';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
+import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -129,6 +130,7 @@ export default function ChatTabScreen() {
       clearError();
     }, [clearError]),
   );
+  useComposerAttachmentHandoff('new-chat', chatInputAttachRef);
   const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const setModel = useModelStore((s) => s.setModel);
