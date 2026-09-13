@@ -15,6 +15,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+const { isIncompleteTurn, resolveTurnErrorNotice } =
+  await import('@/features/chat/lib/turn-error-notice');
+
 import { listCanonicalModels } from '@agiworkforce/types';
 import { recordFailedTurn } from './failed-turn-record';
 import type { ProcessedRequest } from './request-processor';
@@ -118,7 +121,6 @@ describe('recording a turn that produced nothing', () => {
  */
 describe('the recorded outcome is the one the transcript reads', () => {
   it('is treated as a turn that did not complete, not as a healthy answer', async () => {
-    const { isIncompleteTurn } = await import('@/features/chat/lib/turn-error-notice');
     const recorded = {
       id: ASSISTANT_MESSAGE_ID,
       role: 'assistant' as const,
@@ -130,8 +132,6 @@ describe('the recorded outcome is the one the transcript reads', () => {
   });
 
   it('stops the transcript inferring the outcome from a trailing user message', async () => {
-    const { resolveTurnErrorNotice } = await import('@/features/chat/lib/turn-error-notice');
-
     const fromTheRecord = resolveTurnErrorNotice({
       lastMessage: {
         id: ASSISTANT_MESSAGE_ID,
