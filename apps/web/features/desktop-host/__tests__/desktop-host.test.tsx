@@ -15,6 +15,7 @@ function installHost(overrides: Partial<HostBridge> = {}): HostBridge {
     }),
     onDeepLink: () => () => undefined,
     onVoiceHotkey: () => () => undefined,
+    onRuntimeEvent: () => () => undefined,
     openExternal: async () => undefined,
     notify: async () => undefined,
     ...overrides,

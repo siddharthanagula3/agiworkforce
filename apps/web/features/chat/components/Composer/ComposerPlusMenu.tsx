@@ -17,6 +17,7 @@ import {
   Camera,
   Check,
   ChevronRight,
+  Copy,
   EyeOff,
   FileText,
   Folder,
@@ -27,6 +28,7 @@ import {
   Search,
   Sparkles,
   Telescope,
+  Terminal,
   Video,
   X,
 } from '@agiworkforce/icons';
@@ -66,6 +68,9 @@ const ROW_LABEL_SCREENSHOT = 'Take a screenshot';
 const ROW_LABEL_SCREENSHOT_BUSY = 'Capturing…';
 const ROW_LABEL_FOLDER = 'Add working folder';
 const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
+const ROW_LABEL_CLIPBOARD = 'Attach clipboard';
+const ROW_LABEL_CLIPBOARD_BUSY = 'Reading clipboard…';
+const ROW_LABEL_LOCAL_COMMAND = 'Run a local command';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
@@ -431,6 +436,11 @@ export interface ComposerPlusMenuProps {
   showLocalFolderRow: boolean;
   onAttachFromLocalFolder: () => void;
 
+  showDesktopActionRows: boolean;
+  isReadingClipboard: boolean;
+  onAttachClipboard: () => void;
+  onRunLocalCommand: () => void;
+
   showWorkingFolderRow: boolean;
   canPickFolder: boolean;
   folderName: string | null;
@@ -616,6 +626,42 @@ function LocalFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: 
   );
 }
 
+function ClipboardRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
+  const unavailable = props.mediaModeActive;
+  return (
+    <button
+      type="button"
+      role={role}
+      onClick={props.onAttachClipboard}
+      disabled={unavailable || props.isReadingClipboard}
+      className={cn(
+        ROW_CLASS,
+        unavailable || props.isReadingClipboard ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS,
+      )}
+    >
+      <Copy className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-left">
+        {props.isReadingClipboard ? ROW_LABEL_CLIPBOARD_BUSY : ROW_LABEL_CLIPBOARD}
+      </span>
+      {unavailable && <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />}
+    </button>
+  );
+}
+
+function LocalCommandRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
+  return (
+    <button
+      type="button"
+      role={role}
+      onClick={props.onRunLocalCommand}
+      className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
+    >
+      <Terminal className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-left">{ROW_LABEL_LOCAL_COMMAND}</span>
+    </button>
+  );
+}
+
 function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   const { folderName, canPickFolder } = props;
   return (
@@ -707,6 +753,8 @@ function ChatMenu(props: ComposerPlusMenuProps) {
     <>
       <AttachRow props={props} />
       {props.showLocalFolderRow && <LocalFolderRow props={props} />}
+      {props.showDesktopActionRows && <ClipboardRow props={props} />}
+      {props.showDesktopActionRows && <LocalCommandRow props={props} />}
 
       {props.hostCanGenerateImage && <ImageRow props={props} />}
       {props.hostCanGenerateVideo && <VideoRow props={props} />}
@@ -1068,6 +1116,12 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     matches(ROW_LABEL_ATTACH) && <AttachRow key="attach" props={props} role="menuitem" />,
     props.showLocalFolderRow && matches(ROW_LABEL_LOCAL_FOLDER) && (
       <LocalFolderRow key="local-folder" props={props} role="menuitem" />
+    ),
+    props.showDesktopActionRows && matches(ROW_LABEL_CLIPBOARD) && (
+      <ClipboardRow key="clipboard" props={props} role="menuitem" />
+    ),
+    props.showDesktopActionRows && matches(ROW_LABEL_LOCAL_COMMAND) && (
+      <LocalCommandRow key="local-command" props={props} role="menuitem" />
     ),
     props.hostCanGenerateImage && matches(ROW_LABEL_IMAGE) && (
       <ImageRow key="image" props={props} role="menuitem" />

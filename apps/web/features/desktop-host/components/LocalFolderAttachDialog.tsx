@@ -11,8 +11,10 @@ import { resolveChatAttachmentMimeType } from '@/lib/chat-attachment-policy';
 import {
   listWorkspaceFiles,
   listWorkspaceRoots,
+  openWorkspacePath,
   pickWorkspaceRoot,
   readWorkspaceFile,
+  revealWorkspacePath,
 } from '../lib/runtime-client';
 
 const TITLE = 'Attach from a local folder';
@@ -21,6 +23,8 @@ const NO_ROOTS_COPY =
 const EMPTY_FOLDER_COPY = 'Nothing here that can be attached.';
 const LOAD_FAILED = 'That folder could not be read.';
 const READ_FAILED = 'That file could not be read.';
+const OPEN_FAILED = 'That file could not be opened.';
+const REVEAL_FAILED = 'That file could not be shown in Finder.';
 const PARENT_LABEL = 'Back';
 const ROOT_SEGMENT = '';
 
@@ -28,6 +32,8 @@ const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
 const ENTRY_CLASS =
   'flex w-full min-h-[36px] items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
+const ROW_ACTION_CLASS =
+  'min-h-[32px] shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60';
 
 export interface LocalFolderAttachDialogProps {
   open: boolean;
@@ -133,6 +139,32 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
     [activeRoot, onAttach, onClose],
   );
 
+  const onOpenEntry = useCallback(
+    async (entry: FileEntry) => {
+      if (!activeRoot) return;
+      try {
+        await openWorkspacePath(activeRoot.id, entry.path);
+        setError(null);
+      } catch (cause) {
+        setError(messageFor(cause, OPEN_FAILED));
+      }
+    },
+    [activeRoot],
+  );
+
+  const onRevealEntry = useCallback(
+    async (entry: FileEntry) => {
+      if (!activeRoot) return;
+      try {
+        await revealWorkspacePath(activeRoot.id, entry.path);
+        setError(null);
+      } catch (cause) {
+        setError(messageFor(cause, REVEAL_FAILED));
+      }
+    },
+    [activeRoot],
+  );
+
   useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -222,7 +254,7 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
               <li className="px-3 py-2 text-xs text-muted-foreground">{EMPTY_FOLDER_COPY}</li>
             ) : (
               visible.map((entry) => (
-                <li key={entry.path}>
+                <li key={entry.path} className="flex items-center gap-1">
                   <button
                     type="button"
                     disabled={reading !== null}
@@ -237,6 +269,22 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
                     ) : reading === entry.path ? (
                       <Spinner aria-label={`Reading ${entry.name}`} />
                     ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    className={ROW_ACTION_CLASS}
+                    aria-label={`Open ${entry.name} with the default app`}
+                    onClick={() => void onOpenEntry(entry)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    className={ROW_ACTION_CLASS}
+                    aria-label={`Show ${entry.name} in Finder`}
+                    onClick={() => void onRevealEntry(entry)}
+                  >
+                    Reveal
                   </button>
                 </li>
               ))
