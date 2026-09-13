@@ -63,7 +63,7 @@ describe('GET /api/artifacts/index', () => {
     await call(`?projectId=${PROJECT}`);
 
     const [sql, params] = mocks.query.mock.calls[0]!;
-    expect(String(sql)).toContain('conversations.project_id = $3::uuid');
+    expect(String(sql)).toContain('conversations.project_id = $3::text');
     expect(params).toEqual(['user-1', 200, PROJECT]);
   });
 
