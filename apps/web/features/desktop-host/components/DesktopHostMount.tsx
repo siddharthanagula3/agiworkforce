@@ -1,13 +1,14 @@
 'use client';
 
 import { useDesktopDeepLinks } from '../hooks/use-desktop-deep-links';
+import { useDesktopHost } from '../lib/host';
 
-/**
- * Mounted once at the root so an `agiworkforce-cloud://` open reaches the
- * router from any page, not only from chat. Renders nothing, and in a browser
- * subscribes to nothing.
- */
-export function DesktopHostMount() {
+function DesktopDeepLinkRouter() {
   useDesktopDeepLinks();
   return null;
+}
+
+export function DesktopHostMount() {
+  const host = useDesktopHost();
+  return host ? <DesktopDeepLinkRouter /> : null;
 }
