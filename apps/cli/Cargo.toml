@@ -55,6 +55,7 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
+semver = "1"
 colored = "2"
 indicatif = "0.17"
 dialoguer = "0.11"
@@ -113,12 +114,6 @@ default = []
 # an audio stack is a safe assumption.
 voice = ["dep:cpal", "dep:hound"]
 linux-seccomp = ["dep:seccompiler", "dep:libc"]
-# Stub feature gate for the Windows AppContainer install path in
-# apps/cli/src/policy/windows_sandbox.rs. Declaring it here (even without a
-# dep payload) silences `unexpected_cfgs` warnings under rustc 1.91+ on
-# Windows. Real AppContainer integration is a v1.8 work item; without the
-# feature flag the gated `install_filter` falls through to the no-op stub.
-windows-appcontainer = []
 # Note: previous "full" feature aggregated 10 optional path-deps to codex-rs port crates.
 # Those crates were deleted on 2026-05-03 (preserved at ~/Desktop/reference/codex-cli/).
 # No source under apps/cli/src/ references those features (verified via grep). If a
