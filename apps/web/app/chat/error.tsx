@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
+import { networkErrorMessage } from '@/lib/user-error-message';
 
 export default function ChatError({
   error,
@@ -9,9 +11,33 @@ export default function ChatError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    const read = () => setOffline(navigator.onLine === false);
+    read();
+    window.addEventListener('online', read);
+    window.addEventListener('offline', read);
+    return () => {
+      window.removeEventListener('online', read);
+      window.removeEventListener('offline', read);
+    };
+  }, []);
+
   useEffect(() => {
     console.error('[chat] render error', error);
   }, [error]);
+
+  // The online check is not redundant with `networkErrorMessage`: in production
+  // Next redacts this boundary's error to a digest, so nothing about the
+  // original failure survives for the helper to read.
+  const network = networkErrorMessage(error);
+  const title = offline ? 'You are offline' : 'Chat could not be displayed';
+  const description = offline
+    ? 'This conversation cannot load while your connection is down. Your messages are saved, reconnect and try again.'
+    : network
+      ? `${network} Your messages are saved, try again, or open a different conversation.`
+      : 'Something went wrong while rendering this conversation. Your messages are saved, try again, or open a different conversation.';
 
   return (
     <div
@@ -26,12 +52,9 @@ export default function ChatError({
     >
       <div style={{ maxWidth: 440, textAlign: 'center' }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px', color: 'var(--text-1)' }}>
-          Chat could not be displayed
+          {title}
         </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 20px' }}>
-          Something went wrong while rendering this conversation. Your messages are saved, try
-          again, or open a different conversation.
-        </p>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 20px' }}>{description}</p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <button
             type="button"
