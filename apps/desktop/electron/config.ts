@@ -10,6 +10,8 @@
  * main process is its own egress chokepoint.
  */
 
+import { DESKTOP_DEEP_LINK_SCHEME } from '@agiworkforce/local-runtime-contract';
+
 const PRODUCTION_CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
 const CLOUD_APP_ORIGIN_ENV = 'AGI_CLOUD_APP_ORIGIN';
 
@@ -43,7 +45,7 @@ export const RENDERER_SCHEME = 'agi';
 export const RENDERER_HOST = 'cloud';
 export const RENDERER_ORIGIN = `${RENDERER_SCHEME}://${RENDERER_HOST}`;
 
-export const DEEP_LINK_SCHEME = 'agiworkforce-cloud';
+export const DEEP_LINK_SCHEME = DESKTOP_DEEP_LINK_SCHEME;
 
 export function isAllowedApiBaseUrl(rawUrl: string): boolean {
   let parsed: URL;

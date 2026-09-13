@@ -4,7 +4,7 @@ import { check } from '../tauri-electron/updater';
 import type { ElectronHostBridge } from '../tauri-electron/bridgeContract';
 
 function installHost(openExternal: ElectronHostBridge['openExternal']): void {
-  window.agiHost = {
+  const host: ElectronHostBridge = {
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     handles: () => false,
@@ -33,6 +33,7 @@ function installHost(openExternal: ElectronHostBridge['openExternal']): void {
       await openExternal(desktopCloudInstallerDownloadUrl('arm64'));
     },
   };
+  window.agiHost = host;
 }
 
 afterEach(() => {

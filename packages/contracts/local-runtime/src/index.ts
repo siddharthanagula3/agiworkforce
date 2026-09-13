@@ -55,17 +55,33 @@ export type {
 export {
   ALWAYS_DENIED_BASENAMES,
   FILESYSTEM_COMMANDS,
+  MAX_BINARY_READ_BYTES,
   MAX_GREP_MATCHES,
   MAX_LIST_ENTRIES,
   MAX_TEXT_READ_BYTES,
 } from './filesystem';
 export type {
+  FileBinaryContent,
   FileEntry,
   FileSearchMatch,
   FileStat,
   FileTextContent,
   FilesystemCommand,
 } from './filesystem';
+
+export {
+  DESKTOP_DEEP_LINK_SCHEME,
+  DESKTOP_DEEP_LINK_TARGETS,
+  desktopDeepLink,
+  getHostBridge,
+  parseDesktopDeepLink,
+} from './host-bridge';
+export type {
+  DesktopDeepLink,
+  DesktopDeepLinkTarget,
+  HostBridge,
+  HostNotifyRequest,
+} from './host-bridge';
 
 export {
   isAbsolutePath,
