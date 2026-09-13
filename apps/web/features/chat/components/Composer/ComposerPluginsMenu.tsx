@@ -1,8 +1,14 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronRight, Plug, Search } from '@agiworkforce/icons';
-import { Popover, PopoverContent, PopoverTrigger, Spinner } from '@agiworkforce/ui';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Spinner,
+  useMenuKeyboard,
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { buildSettingsBrowseHash } from '@/features/directory';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
@@ -18,6 +24,7 @@ const MENU_LABEL = 'Connectors';
 const NO_MATCH_COPY = 'No connected connector matches that search.';
 const LOADING_LABEL = 'Loading connectors';
 const SETTINGS_SECTION = 'connectors';
+const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"]';
 
 const PANEL_CLASS = 'w-[min(20rem,calc(100vw-1rem))] rounded-xl p-1.5';
 const SEARCH_WRAP_CLASS = 'relative px-1 pb-1.5 pt-1';
@@ -56,20 +63,33 @@ export function ComposerPluginsMenu({
   open,
   onOpenChange,
 }: ComposerPluginsMenuProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { openSettings } = useSettingsModal();
   const isOpen = open ?? internalOpen;
-  const setOpen = (next: boolean) => {
-    if (!next) setQuery('');
-    setInternalOpen(next);
-    onOpenChange?.(next);
-  };
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!next) setQuery('');
+      setInternalOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
+  const close = useCallback(() => setOpen(false), [setOpen]);
 
   const visible = useMemo(
     () => connectors.filter((connector) => matchesQuery(connector, query)),
     [connectors, query],
   );
+
+  useMenuKeyboard({
+    open: isOpen,
+    onClose: close,
+    panelRef,
+    itemSelector: MENU_ITEM_SELECTOR,
+    autoFocusFirstItem: connectors.length === 0,
+  });
 
   const browse = () => {
     setOpen(false);
@@ -87,6 +107,7 @@ export function ComposerPluginsMenu({
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
+        ref={panelRef}
         side="top"
         align="start"
         aria-label={MENU_LABEL}
@@ -119,32 +140,37 @@ export function ComposerPluginsMenu({
           <p className={NOTE_CLASS}>{COMPOSER_CONNECTORS_EMPTY_COPY}</p>
         ) : visible.length === 0 ? (
           <p className={NOTE_CLASS}>{NO_MATCH_COPY}</p>
-        ) : (
-          <div role="menu" aria-label={MENU_LABEL} className="flex flex-col">
-            {visible.map((connector) => {
-              const toggleId = connectorToggleId(connector);
-              const enabled = !disabledConnectorIds.includes(toggleId);
-              return (
-                <ConnectorToggleRow
-                  key={connector.id}
-                  connector={connector}
-                  label={connector.label}
-                  checked={enabled}
-                  onToggle={() => onSetConnectorEnabled(toggleId, !enabled)}
-                />
-              );
-            })}
-          </div>
-        )}
+        ) : null}
 
-        <div className={DIVIDER_CLASS} />
-        <button type="button" onClick={browse} className={cn(ROW_CLASS, ROW_BUTTON_CLASS)}>
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-            <Plug aria-hidden className="h-3.5 w-3.5" />
-          </span>
-          <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
-          <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
+        <div role="menu" aria-label={MENU_LABEL} className="flex flex-col">
+          {visible.map((connector) => {
+            const toggleId = connectorToggleId(connector);
+            const enabled = !disabledConnectorIds.includes(toggleId);
+            return (
+              <ConnectorToggleRow
+                key={connector.id}
+                connector={connector}
+                label={connector.label}
+                checked={enabled}
+                onToggle={() => onSetConnectorEnabled(toggleId, !enabled)}
+              />
+            );
+          })}
+
+          <div role="separator" className={DIVIDER_CLASS} />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={browse}
+            className={cn(ROW_CLASS, ROW_BUTTON_CLASS)}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+              <Plug aria-hidden className="h-3.5 w-3.5" />
+            </span>
+            <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
+            <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        </div>
       </PopoverContent>
     </Popover>
   );
