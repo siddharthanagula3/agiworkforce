@@ -93,7 +93,6 @@
     "managed-cloud-projects-client",
     "managed-cloud-settings-client",
     "managed-media",
-    "managed-media.image-edit.test",
     "me",
     "message-metadata-projection",
     "message-thread",
