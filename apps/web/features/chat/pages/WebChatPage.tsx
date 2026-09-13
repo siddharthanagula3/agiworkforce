@@ -2548,6 +2548,25 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       try {
         const result = await watchVideoGeneration(input.taskId, {
           ...(input.localJobId ? { localJobId: input.localJobId } : {}),
+          onProgress: (update) => {
+            const running = readMessageMetadata(input.conversationId, input.messageId);
+            updateMessage(
+              input.messageId,
+              {
+                isStreaming: true,
+                content: '',
+                metadata: {
+                  ...(running ?? {}),
+                  toolType: 'video-generation',
+                  videoTaskId: input.taskId,
+                  videoStatus: update.taskStatus,
+                  ...(update.progress === undefined ? {} : { videoProgress: update.progress }),
+                  videoError: undefined,
+                },
+              },
+              input.conversationId,
+            );
+          },
         });
         const current = readMessageMetadata(input.conversationId, input.messageId);
         if (result.status === 'completed') {
@@ -4904,6 +4923,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onRename: handleRenameSession,
     onTogglePin: handlePinSession,
     onArchive: handleArchiveSession,
+    onRestore: handleArchiveSession,
     onShare: handleShareSession,
     onMoveToProject: handleMoveToProjectSession,
     onProjectOpen: handleProjectOpen,
@@ -5033,6 +5053,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     onMoveToProject={(projectId) =>
                       handleMoveToProjectSession(displayedConversationId, projectId)
                     }
+                    archived={displayedConversation?.isArchived ?? false}
+                    onArchiveToggle={() => handleArchiveSession(displayedConversationId)}
                     onDelete={() => void handleDeleteSession(displayedConversationId)}
                     // Ctrl+P alone could never work here: the transcript is
                     // virtualized, so the browser would print only the rows in

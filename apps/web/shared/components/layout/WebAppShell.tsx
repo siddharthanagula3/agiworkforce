@@ -471,6 +471,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     onRename: handleRenameSession,
     onTogglePin: handlePinSession,
     onArchive: handleArchiveSession,
+    onRestore: handleArchiveSession,
     onMarkUnread: handleMarkUnreadSession,
     onMoveToProject: handleMoveToProjectSession,
     onProjectOpen: handleProjectOpen,
