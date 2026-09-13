@@ -850,6 +850,11 @@ export function getWebviewContent(
       font-family: inherit;
     }
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .plus-menu-item[disabled] {
+      cursor: default;
+      opacity: 0.5;
+    }
+    .plus-menu-item[disabled]:hover { background: transparent; color: var(--text-secondary); }
     .plus-menu-item[aria-checked="true"] {
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
@@ -1988,6 +1993,35 @@ export function getWebviewContent(
         <span class="plus-menu-copy">
           <span class="plus-menu-title">Plan mode</span>
           <span class="plus-menu-description">Review an approach before edits</span>
+        </span>
+      </button>
+      <div class="plus-menu-label">Attach from this window</div>
+      <button type="button" class="plus-menu-item" data-context-kind="selection" role="menuitem">
+        <span class="pm-icon codicon codicon-selection" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Selection</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
+      <button type="button" class="plus-menu-item" data-context-kind="open-files" role="menuitem">
+        <span class="pm-icon codicon codicon-files" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Open editors</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
+      <button type="button" class="plus-menu-item" data-context-kind="problems" role="menuitem">
+        <span class="pm-icon codicon codicon-warning" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Problems</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
+      <button type="button" class="plus-menu-item" data-context-kind="git-diff" role="menuitem">
+        <span class="pm-icon codicon codicon-git-compare" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Git changes</span>
+          <span class="plus-menu-description"></span>
         </span>
       </button>
     </div>
@@ -3379,7 +3413,12 @@ export function getWebviewContent(
         var isOpen = plusMenu.classList.contains('open');
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
-        if (!isOpen) focusMenuItem(plusMenu, 0);
+        if (!isOpen) {
+          // Availability is whatever the window holds right now, so it is read
+          // on every open rather than cached from the last one.
+          vscode.postMessage({ type: 'requestContextMenuState' });
+          focusMenuItem(plusMenu, 0);
+        }
       });
       plusBtn.addEventListener('keydown', function (e) {
         // Opening with the keyboard should land on the first item, which is
@@ -3409,6 +3448,20 @@ export function getWebviewContent(
           userInput.focus();
         });
       }
+      var contextItems = plusMenu.querySelectorAll('[data-context-kind]');
+      for (var ci = 0; ci < contextItems.length; ci++) {
+        contextItems[ci].addEventListener('click', function(ev) {
+          var item = ev.currentTarget;
+          if (item.disabled) return;
+          closePlusMenu();
+          vscode.postMessage({
+            type: 'attachContext',
+            payload: { kind: item.getAttribute('data-context-kind') }
+          });
+          userInput.focus();
+        });
+      }
+
       // The menu label and action both open the agent-mode picker.
       var plusMenuAgentMode = document.getElementById('plusMenuPlanMode');
       if (plusMenuAgentMode) {
@@ -4048,6 +4101,29 @@ export function getWebviewContent(
 
       else if (msg.type === 'diffProposalFailed') {
         settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
+      }
+
+      else if (msg.type === 'contextMenuState') {
+        var stateItems = (msg.payload && msg.payload.items) || [];
+        for (var si = 0; si < stateItems.length; si++) {
+          var state = stateItems[si] || {};
+          var button = document.querySelector('[data-context-kind="' + state.kind + '"]');
+          if (!button) continue;
+          button.disabled = !state.available;
+          button.setAttribute('aria-disabled', String(!state.available));
+          var description = button.querySelector('.plus-menu-description');
+          if (description) description.textContent = state.detail || '';
+        }
+      }
+
+      else if (msg.type === 'contextAttached') {
+        if (attachmentStrip) {
+          var contextChip = makeAttachmentChip(msg.payload.name, '');
+          contextChip.setAttribute('data-attachment-id', msg.payload.id);
+          attachmentStrip.appendChild(contextChip);
+          pendingAttachmentCount++;
+          renderAttachmentStrip();
+        }
       }
 
       else if (msg.type === 'attachFilesAck') {
