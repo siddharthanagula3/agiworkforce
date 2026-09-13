@@ -16,7 +16,12 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    // Off, as in tsconfig.base.json and the Chrome extension: the shared cloud
+    // contracts are Zod schemas typed against `@agiworkforce/types/protocol`,
+    // which ts-rs generates from Rust as `field?: T` with no `| undefined`. A
+    // consumer that turns this on cannot compile those sources at all, so
+    // turning it on here would mean hand-copying the contracts instead.
+    "exactOptionalPropertyTypes": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
