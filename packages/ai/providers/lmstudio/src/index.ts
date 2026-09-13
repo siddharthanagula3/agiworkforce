@@ -37,7 +37,7 @@ import {
   type OpenAIChatCompletionChunk,
 } from '@agiworkforce/providers-openai';
 
-const LMSTUDIO_DEFAULT_BASE_URL = 'http://localhost:1234/v1';
+export const LMSTUDIO_DEFAULT_BASE_URL = 'http://localhost:1234/v1';
 
 const LMSTUDIO_AUTH_METHODS: readonly AuthMethod[] = [
   {
@@ -124,5 +124,3 @@ export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): Provi
 
 export const lmstudioAdapterFactory: ProviderAdapterFactory = (config) =>
   createLMStudioAdapter(config as LMStudioAdapterConfig);
-
-export const LMSTUDIO_DEFAULT_BASE_URL_VALUE = LMSTUDIO_DEFAULT_BASE_URL;

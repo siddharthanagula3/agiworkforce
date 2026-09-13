@@ -142,6 +142,7 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'simulator.ios': 'control the iOS simulator',
   'emulator.android': 'control the Android emulator',
   'mcp.local': 'run the local tool server',
+  'local.inference': 'answer chats with a model running on this Mac',
   'host.remote': 'accept work from your other devices',
   'task.scheduled': 'run scheduled tasks',
 };
