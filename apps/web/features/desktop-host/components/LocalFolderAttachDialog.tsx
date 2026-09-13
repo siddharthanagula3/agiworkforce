@@ -7,10 +7,7 @@ import {
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
-import {
-  isSupportedChatAttachment,
-  resolveChatAttachmentMimeType,
-} from '@/lib/chat-attachment-policy';
+import { resolveChatAttachmentMimeType } from '@/lib/chat-attachment-policy';
 import {
   listWorkspaceFiles,
   listWorkspaceRoots,
@@ -97,7 +94,8 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
     () =>
       entries.filter(
         (entry) =>
-          entry.kind === 'directory' || isSupportedChatAttachment(entry.name, ROOT_SEGMENT),
+          entry.kind === 'directory' ||
+          resolveChatAttachmentMimeType(entry.name, ROOT_SEGMENT) !== null,
       ),
     [entries],
   );
