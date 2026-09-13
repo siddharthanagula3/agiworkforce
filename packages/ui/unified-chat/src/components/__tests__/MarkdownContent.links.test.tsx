@@ -52,10 +52,10 @@ describe('inline citation markers', () => {
     expect(link.textContent).toContain('+2');
   });
 
-  it('leaves an out-of-range marker as plain text', () => {
+  it('clamps a marker past the source list onto the last source rather than leaving it dead', () => {
     render(<MarkdownContent content="Unverified claim [9]." citations={sources} />);
-    expect(screen.queryByRole('link')).toBeNull();
-    expect(screen.getByText(/Unverified claim \[9\]\./)).not.toBeNull();
+    const link = screen.getByRole('link', { name: 'Source 3: x.ai releases an update' });
+    expect(link.getAttribute('href')).toBe('https://x.ai/news/three');
   });
 });
 
