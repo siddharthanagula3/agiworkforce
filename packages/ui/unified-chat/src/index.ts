@@ -252,8 +252,6 @@ export { SendButton } from './components/SendButton';
 export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
 
-export { Sidebar } from './components/Sidebar';
-export { ConversationItem } from './components/ConversationItem';
 export { UserProfile } from './components/UserProfile';
 
 export { MessageList } from './components/MessageList';
