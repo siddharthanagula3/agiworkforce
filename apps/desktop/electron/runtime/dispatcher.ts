@@ -13,6 +13,19 @@ import {
   type WorkspaceRoot,
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
+import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  BrowserBridgeError,
+  installHostForPairedExtension,
+  pairingState,
+  removeHostAndPairing,
+  sendBrowserCommand,
+} from '../browser/bridgeServer';
+import {
+  InvalidBrowserArguments,
+  planBrowserCommand,
+  type BrowserCommandPlan,
+} from '../browser/commandGate';
 import { openWithDefaultApplication, revealInFileManager } from './appsService';
 import { readClipboard } from './clipboardService';
 import { cancelShellRun, runShellCommand } from './shellService';
@@ -229,6 +242,70 @@ async function approveShellCommand(
   return result.response === 1;
 }
 
+/**
+ * The second gate on a browser command.
+ *
+ * The capability grant says the paired browser may be driven at all; this asks
+ * about the one action, naming what it does to the page in front of the user.
+ * The extension applies its own site allowlist after this, so a yes here is
+ * necessary and not sufficient.
+ */
+async function approveBrowserCommand(
+  window: BrowserWindow | null,
+  plan: BrowserCommandPlan,
+): Promise<boolean> {
+  const options = {
+    type: 'warning' as const,
+    buttons: ['Cancel', 'Allow once'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Use the paired browser?',
+    message: plan.summary,
+    detail: plan.detail,
+    noLink: true,
+  };
+  const result = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options);
+  return result.response === 1;
+}
+
+async function runBrowserCommand(
+  window: BrowserWindow | null,
+  command: string,
+  args: Args,
+): Promise<DesktopRuntimeResponse> {
+  const plan = planBrowserCommand(command, args);
+  const scope: PermissionScope = { kind: 'global' };
+  const state =
+    getPermissionState(plan.capability, scope) === 'prompt'
+      ? await requestPermission(
+          window,
+          plan.capability,
+          scope,
+          'The paired Chrome extension carries out the action, under its own approved-sites list.',
+        )
+      : getPermissionState(plan.capability, scope);
+
+  if (state !== 'granted') {
+    return runtimeFailure(
+      'permission-denied',
+      'Permission to use the paired browser was refused.',
+      {
+        capability: plan.capability,
+        scope,
+      },
+    );
+  }
+  if (!(await approveBrowserCommand(window, plan))) {
+    return runtimeFailure('cancelled', 'That browser action was not run.');
+  }
+
+  const value = await sendBrowserCommand(plan.command, plan.args);
+  consumeSingleUse(plan.capability, scope);
+  return runtimeSuccess(value);
+}
+
 async function execute(
   window: BrowserWindow | null,
   command: string,
@@ -302,6 +379,14 @@ async function execute(
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
     case 'clipboard_read':
       return readClipboard();
+    case 'browser_pairing_state':
+      return pairingState();
+    case 'browser_pairing_install_host':
+      return installHostForPairedExtension();
+    case 'browser_pairing_uninstall_host':
+    case 'browser_pairing_unpair':
+      removeHostAndPairing();
+      return pairingState();
     default:
       throw new UnknownCommand(command);
   }
@@ -321,6 +406,10 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(REFUSAL_CODES[error.reason] ?? 'io-error', error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof InvalidBrowserArguments) {
+    return runtimeFailure('invalid-arguments', error.message);
+  }
+  if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
   if (error instanceof WorkspaceGrantRefused) {
     return runtimeFailure('permission-denied', error.message);
@@ -367,6 +456,10 @@ export async function dispatch(
   const args: Args = rawArgs ?? {};
 
   try {
+    if (isBrowserCommand(command)) {
+      return await runBrowserCommand(window, command, args);
+    }
+
     const globalRequirement = GLOBAL_CAPABILITY_BY_COMMAND[command];
     if (globalRequirement) {
       const scope: PermissionScope = { kind: 'global' };

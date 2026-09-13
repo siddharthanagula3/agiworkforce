@@ -26,6 +26,17 @@ await build({
   entryPoints: [path.join(__dirname, 'main.ts'), path.join(__dirname, 'preload.ts')],
 });
 
+// The native messaging host runs as a plain Node program under
+// ELECTRON_RUN_AS_NODE, so it is bundled separately and must not pull in the
+// electron module.
+await build({
+  ...shared,
+  entryPoints: [path.join(__dirname, 'browser', 'nativeHostMain.ts')],
+  external: [],
+  outdir: path.join(__dirname, 'dist'),
+  entryNames: 'native-host',
+});
+
 const assetsSrc = path.join(__dirname, 'assets');
 if (existsSync(assetsSrc)) {
   const assetsOut = path.join(__dirname, 'dist', 'assets');
