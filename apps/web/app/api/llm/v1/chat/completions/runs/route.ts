@@ -35,6 +35,7 @@ const DEFAULT_ACTIVE_STATES = [
   'ready_for_review',
 ] as const;
 const ConversationIdSchema = z.string().uuid();
+const ProjectIdSchema = z.string().uuid();
 const CursorSchema = z.object({
   updatedAt: z.string().datetime(),
   id: z.string().uuid(),
@@ -100,6 +101,19 @@ async function handleGet(request: NextRequest) {
     );
   }
 
+  // A project page asks for its own work. The run carries no project; the
+  // conversation does, so the filter is applied through the join rather than by
+  // fetching every run and discarding most of them client side.
+  const rawProjectId = url.searchParams.get('projectId');
+  let projectId: string | undefined;
+  if (rawProjectId !== null) {
+    const parsedProjectId = ProjectIdSchema.safeParse(rawProjectId);
+    if (!parsedProjectId.success) {
+      throw createError.validation('Invalid Cloud task list parameters');
+    }
+    projectId = parsedProjectId.data;
+  }
+
   // Tasks is the AGI Work surface: it lists the runs that mode produced and
   // nothing else. An ordinary `chat` turn also writes a cloud_agent_runs row,
   // so without this filter every conversation showed up here as a "task".
@@ -110,6 +124,7 @@ async function handleGet(request: NextRequest) {
     before: decodeCursor(url.searchParams.get('cursor')),
     limit: parsedLimit.data,
     workModes: AGI_WORK_MODES,
+    ...(projectId ? { projectId } : {}),
   });
   return NextResponse.json(
     { runs: page.runs, nextCursor: encodeCursor(page.next) },
