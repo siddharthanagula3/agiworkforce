@@ -3,7 +3,7 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
+    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_\u2026`/`sk_test_\u2026`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
       "email": "contact@agiworkforce.com",
@@ -30,7 +30,7 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "AGI API key (`sk_live_…` / `sk_test_…`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       }
     },
     "schemas": {
@@ -150,12 +150,17 @@
           "error": {
             "type": "object",
             "properties": {
-              "message": { "type": "string" },
+              "message": {
+                "type": "string"
+              },
               "type": {
                 "type": "string",
                 "enum": ["invalid_request_error", "insufficient_quota", "api_error", "server_error"]
               },
-              "code": { "type": "string", "nullable": true }
+              "code": {
+                "type": "string",
+                "nullable": true
+              }
             }
           }
         }
@@ -167,20 +172,42 @@
           "error": {
             "type": "object",
             "properties": {
-              "code": { "type": "string", "enum": ["RATE_LIMIT_EXCEEDED"] },
-              "message": { "type": "string" },
-              "retry_after_seconds": { "type": "integer" },
-              "reset_at": { "type": "string", "format": "date-time" }
+              "code": {
+                "type": "string",
+                "enum": ["RATE_LIMIT_EXCEEDED"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "retry_after_seconds": {
+                "type": "integer"
+              },
+              "reset_at": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           },
           "rateLimit": {
             "type": "object",
             "properties": {
-              "limit": { "type": "integer" },
-              "remaining": { "type": "integer" },
-              "reset": { "type": "string", "format": "date-time" },
-              "reset_at": { "type": "string", "format": "date-time" },
-              "retry_after_seconds": { "type": "integer" }
+              "limit": {
+                "type": "integer"
+              },
+              "remaining": {
+                "type": "integer"
+              },
+              "reset": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reset_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "retry_after_seconds": {
+                "type": "integer"
+              }
             }
           }
         }
@@ -189,33 +216,72 @@
         "type": "object",
         "description": "OpenAI-compatible model record, extended with the catalog fields a router needs.",
         "properties": {
-          "id": { "type": "string" },
-          "object": { "type": "string", "enum": ["model"] },
-          "created": { "type": "integer" },
-          "owned_by": { "type": "string", "description": "Provider that serves the model." },
-          "permission": { "type": "array", "items": {} },
-          "root": { "type": "string" },
-          "parent": { "type": "string", "nullable": true },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["model"]
+          },
+          "created": {
+            "type": "integer"
+          },
+          "owned_by": {
+            "type": "string",
+            "description": "Provider that serves the model."
+          },
+          "permission": {
+            "type": "array",
+            "items": {}
+          },
+          "root": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string",
+            "nullable": true
+          },
           "tier": {
             "type": "string",
             "enum": ["basic", "pro", "max"],
             "description": "Lowest paid tier that may select this model."
           },
-          "context_window": { "type": "integer" },
-          "max_output": { "type": "integer" }
+          "context_window": {
+            "type": "integer"
+          },
+          "max_output": {
+            "type": "integer"
+          }
         }
       },
       "ModelList": {
         "type": "object",
         "properties": {
-          "object": { "type": "string", "enum": ["list"] },
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } },
+          "object": {
+            "type": "string",
+            "enum": ["list"]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            }
+          },
           "x_agi_workforce": {
             "type": "object",
             "properties": {
-              "user_tier": { "type": "string" },
-              "total_available": { "type": "integer" },
-              "allowed_auto_modes": { "type": "array", "items": { "type": "string" } }
+              "user_tier": {
+                "type": "string"
+              },
+              "total_available": {
+                "type": "integer"
+              },
+              "allowed_auto_modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
@@ -241,39 +307,114 @@
                 "content": {
                   "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`).",
                   "oneOf": [
-                    { "type": "string" },
-                    { "type": "array", "items": { "type": "object" } }
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
                   ]
                 },
-                "name": { "type": "string" },
-                "tool_calls": { "type": "array", "maxItems": 32, "items": { "type": "object" } },
-                "tool_call_id": { "type": "string", "maxLength": 256 }
+                "name": {
+                  "type": "string"
+                },
+                "tool_calls": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "tool_call_id": {
+                  "type": "string",
+                  "maxLength": 256
+                }
               }
             }
           },
-          "stream": { "type": "boolean", "default": false },
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
-          "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
-          "n": { "type": "integer", "minimum": 1 },
-          "stop": {
-            "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          "stream": {
+            "type": "boolean",
+            "default": false
           },
-          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 64000 },
-          "max_completion_tokens": { "type": "integer", "minimum": 1, "maximum": 64000 },
-          "presence_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
-          "frequency_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "top_p": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stop": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64000
+          },
+          "max_completion_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64000
+          },
+          "presence_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2
+          },
+          "frequency_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2
+          },
           "logit_bias": {
             "type": "object",
-            "additionalProperties": { "type": "number", "minimum": -100, "maximum": 100 }
+            "additionalProperties": {
+              "type": "number",
+              "minimum": -100,
+              "maximum": 100
+            }
           },
-          "user": { "type": "string" },
-          "tools": { "type": "array", "maxItems": 64, "items": { "type": "object" } },
-          "tool_choice": { "description": "`none`, `auto`, `required`, or a named function." },
+          "user": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "object"
+            }
+          },
+          "tool_choice": {
+            "description": "`none`, `auto`, `required`, or a named function."
+          },
           "response_format": {
             "type": "object",
             "description": "`text` and `json_object` are honoured. `json_schema` is refused rather than ignored.",
             "properties": {
-              "type": { "type": "string", "enum": ["text", "json_object"] }
+              "type": {
+                "type": "string",
+                "enum": ["text", "json_object"]
+              }
             }
           }
         }
@@ -282,36 +423,72 @@
         "type": "object",
         "description": "OpenAI-compatible completion. When `stream` is true the response is `text/event-stream` of `chat.completion.chunk` events terminated by `data: [DONE]` instead.",
         "properties": {
-          "id": { "type": "string" },
-          "object": { "type": "string", "enum": ["chat.completion"] },
-          "created": { "type": "integer" },
-          "model": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["chat.completion"]
+          },
+          "created": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
           "choices": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "index": { "type": "integer" },
+                "index": {
+                  "type": "integer"
+                },
                 "message": {
                   "type": "object",
                   "properties": {
-                    "role": { "type": "string", "enum": ["assistant"] },
-                    "content": { "type": "string", "nullable": true },
-                    "tool_calls": { "type": "array", "items": { "type": "object" } }
+                    "role": {
+                      "type": "string",
+                      "enum": ["assistant"]
+                    },
+                    "content": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "tool_calls": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
                   }
                 },
-                "finish_reason": { "type": "string" }
+                "finish_reason": {
+                  "type": "string"
+                }
               }
             }
           },
           "usage": {
             "type": "object",
             "properties": {
-              "prompt_tokens": { "type": "integer" },
-              "completion_tokens": { "type": "integer" },
-              "total_tokens": { "type": "integer" },
-              "cache_creation_input_tokens": { "type": "integer", "nullable": true },
-              "cache_read_input_tokens": { "type": "integer", "nullable": true }
+              "prompt_tokens": {
+                "type": "integer"
+              },
+              "completion_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              },
+              "cache_creation_input_tokens": {
+                "type": "integer",
+                "nullable": true
+              },
+              "cache_read_input_tokens": {
+                "type": "integer",
+                "nullable": true
+              }
             }
           },
           "x_agi_workforce": {
@@ -327,45 +504,78 @@
           "input": {
             "description": "One string, or a batch of at most 100, each at most 32000 characters.",
             "oneOf": [
-              { "type": "string", "minLength": 1, "maxLength": 32000 },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32000
+              },
               {
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 100,
-                "items": { "type": "string", "minLength": 1, "maxLength": 32000 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32000
+                }
               }
             ]
           },
-          "model": { "type": "string", "maxLength": 200 },
+          "model": {
+            "type": "string",
+            "maxLength": 200
+          },
           "encoding_format": {
             "type": "string",
             "enum": ["float"],
             "description": "`base64` is rejected, not ignored, a caller expecting base64 must not receive floats."
           },
-          "user": { "type": "string", "maxLength": 200 }
+          "user": {
+            "type": "string",
+            "maxLength": 200
+          }
         }
       },
       "EmbeddingsResponse": {
         "type": "object",
         "properties": {
-          "object": { "type": "string", "enum": ["list"] },
+          "object": {
+            "type": "string",
+            "enum": ["list"]
+          },
           "data": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "object": { "type": "string", "enum": ["embedding"] },
-                "index": { "type": "integer" },
-                "embedding": { "type": "array", "items": { "type": "number" } }
+                "object": {
+                  "type": "string",
+                  "enum": ["embedding"]
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "embedding": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
               }
             }
           },
-          "model": { "type": "string" },
+          "model": {
+            "type": "string"
+          },
           "usage": {
             "type": "object",
             "properties": {
-              "prompt_tokens": { "type": "integer" },
-              "total_tokens": { "type": "integer" }
+              "prompt_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              }
             }
           }
         }
@@ -392,7 +602,9 @@
           "capabilitiesInUse": {
             "type": "array",
             "maxItems": 16,
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Intrinsic capability names from the model registry the conversation relies on. A route observed failing one is excluded."
           }
         }
@@ -412,12 +624,28 @@
               "type": "object",
               "required": ["routeId", "modelKey", "providerId", "admitted", "score", "reasons"],
               "properties": {
-                "routeId": { "type": "string" },
-                "modelKey": { "type": "string" },
-                "providerId": { "type": "string" },
-                "admitted": { "type": "boolean" },
-                "score": { "type": "object", "additionalProperties": true },
-                "reasons": { "type": "array", "items": { "type": "string" } }
+                "routeId": {
+                  "type": "string"
+                },
+                "modelKey": {
+                  "type": "string"
+                },
+                "providerId": {
+                  "type": "string"
+                },
+                "admitted": {
+                  "type": "boolean"
+                },
+                "score": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
@@ -427,9 +655,15 @@
               "type": "object",
               "required": ["reason"],
               "properties": {
-                "slotId": { "type": "string" },
-                "modelKey": { "type": "string" },
-                "reason": { "type": "string" }
+                "slotId": {
+                  "type": "string"
+                },
+                "modelKey": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -443,22 +677,43 @@
         "type": "object",
         "description": "Percentage-only managed-usage status. Ledger units and allocations never cross this boundary.",
         "properties": {
-          "object": { "type": "string", "enum": ["credit_balance"] },
+          "object": {
+            "type": "string",
+            "enum": ["credit_balance"]
+          },
           "subscription": {
             "type": "object",
             "properties": {
-              "plan_tier": { "type": "string" },
-              "status": { "type": "string" },
-              "current_period_end": { "type": "string", "format": "date-time", "nullable": true }
+              "plan_tier": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "current_period_end": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
             }
           },
           "credits": {
             "type": "object",
             "properties": {
-              "usage_percentage": { "type": "number" },
-              "reset_at": { "type": "string", "format": "date-time", "nullable": true },
-              "seconds_until_reset": { "type": "integer" },
-              "has_usage_remaining": { "type": "boolean" }
+              "usage_percentage": {
+                "type": "number"
+              },
+              "reset_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "seconds_until_reset": {
+                "type": "integer"
+              },
+              "has_usage_remaining": {
+                "type": "boolean"
+              }
             }
           }
         }
@@ -482,21 +737,64 @@
           "flagship_weekly_reset_at"
         ],
         "properties": {
-          "plan_tier": { "type": "string" },
-          "subscription_status": { "type": "string" },
-          "usage_percentage": { "type": "number" },
-          "usage_reset_at": { "type": "string", "format": "date-time", "nullable": true },
-          "has_usage_remaining": { "type": "boolean" },
-          "period_start": { "type": "string", "format": "date-time", "nullable": true },
-          "period_end": { "type": "string", "format": "date-time", "nullable": true },
-          "session_usage_percentage": { "type": "number" },
-          "session_reset_at": { "type": "string", "format": "date-time", "nullable": true },
-          "weekly_usage_percentage": { "type": "number" },
-          "weekly_reset_at": { "type": "string", "format": "date-time", "nullable": true },
-          "flagship_weekly_usage_percentage": { "type": "number" },
-          "flagship_weekly_reset_at": { "type": "string", "format": "date-time", "nullable": true },
-          "credit_balance_cents": { "type": "integer", "nullable": true },
-          "overage_enabled": { "type": "boolean" }
+          "plan_tier": {
+            "type": "string"
+          },
+          "subscription_status": {
+            "type": "string"
+          },
+          "usage_percentage": {
+            "type": "number"
+          },
+          "usage_reset_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "has_usage_remaining": {
+            "type": "boolean"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "session_usage_percentage": {
+            "type": "number"
+          },
+          "session_reset_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "weekly_usage_percentage": {
+            "type": "number"
+          },
+          "weekly_reset_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "flagship_weekly_usage_percentage": {
+            "type": "number"
+          },
+          "flagship_weekly_reset_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "credit_balance_cents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "overage_enabled": {
+            "type": "boolean"
+          }
         }
       },
       "LiveVoiceSessionRequest": {
@@ -533,10 +831,18 @@
           "ceilingSeconds"
         ],
         "properties": {
-          "idempotencyKey": { "type": "string" },
-          "leaseToken": { "type": "string" },
-          "requestHash": { "type": "string" },
-          "estimatedCostCents": { "type": "integer" },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "leaseToken": {
+            "type": "string"
+          },
+          "requestHash": {
+            "type": "string"
+          },
+          "estimatedCostCents": {
+            "type": "integer"
+          },
           "ceilingSeconds": {
             "type": "integer",
             "description": "Seconds the reservation covers. A close report is billed at this ceiling at most."
@@ -547,9 +853,16 @@
         "type": "object",
         "required": ["sessionId", "sdp", "settlement"],
         "properties": {
-          "sessionId": { "type": "string" },
-          "sdp": { "type": "string", "description": "The WebRTC answer to apply." },
-          "settlement": { "$ref": "#/components/schemas/LiveVoiceSessionSettlement" }
+          "sessionId": {
+            "type": "string"
+          },
+          "sdp": {
+            "type": "string",
+            "description": "The WebRTC answer to apply."
+          },
+          "settlement": {
+            "$ref": "#/components/schemas/LiveVoiceSessionSettlement"
+          }
         }
       },
       "LiveVoiceSessionCloseRequest": {
@@ -562,27 +875,51 @@
             "maximum": 86400,
             "description": "Seconds the session ran. Billed seconds are this rounded up, capped at the reserved ceiling."
           },
-          "reason": { "type": "string", "maxLength": 64 },
+          "reason": {
+            "type": "string",
+            "maxLength": 64
+          },
           "backend": {
             "type": "object",
             "description": "What the delegated backend model spent during the session. Omit it when the session delegated nothing; the session itself still settles.",
             "properties": {
-              "model": { "type": "string", "maxLength": 128 },
-              "inputTokens": { "type": "integer", "minimum": 0 },
-              "outputTokens": { "type": "integer", "minimum": 0 },
-              "cachedTokens": { "type": "integer", "minimum": 0 },
-              "webSearchCalls": { "type": "integer", "minimum": 0 }
+              "model": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cachedTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "webSearchCalls": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           },
-          "settlement": { "$ref": "#/components/schemas/LiveVoiceSessionSettlement" }
+          "settlement": {
+            "$ref": "#/components/schemas/LiveVoiceSessionSettlement"
+          }
         }
       },
       "LiveVoiceSessionClose": {
         "type": "object",
         "required": ["billedSeconds", "actualCostCents"],
         "properties": {
-          "billedSeconds": { "type": "integer" },
-          "actualCostCents": { "type": "integer" }
+          "billedSeconds": {
+            "type": "integer"
+          },
+          "actualCostCents": {
+            "type": "integer"
+          }
         }
       }
     }
@@ -598,31 +935,55 @@
         "summary": "List available models",
         "description": "Models the caller may select, in OpenAI `/v1/models` shape. Callers with no `Authorization` header get the free catalog; a credential that fails to verify is rejected rather than downgraded to it, so a revoked key never looks like a lost entitlement.",
         "tags": ["Inference"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }, {}],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          },
+          {}
+        ],
         "x-agi-api-key-scope": "models:read",
         "responses": {
           "200": {
             "description": "Model list for the caller's tier",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ModelList" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
             }
           },
           "401": {
             "description": "Presented credential did not verify",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "403": {
             "description": "API key lacks the `models:read` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -633,13 +994,22 @@
         "summary": "Create a chat completion",
         "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.",
         "tags": ["Inference"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "inference:write",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChatCompletionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              }
             }
           }
         },
@@ -648,40 +1018,68 @@
             "description": "Completion, or an SSE stream when `stream` is true",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChatCompletionResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
               },
-              "text/event-stream": { "schema": { "type": "string" } }
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           },
           "400": {
             "description": "Invalid request body",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "402": {
             "description": "Managed usage exhausted",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "403": {
             "description": "API key lacks the `inference:write` scope, or the calling plan lacks the capability for the resolved client surface",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "422": {
             "description": "Refused by content policy",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -692,19 +1090,29 @@
         "summary": "Create embeddings",
         "description": "OpenAI-compatible embeddings. Takes a session bearer token only: the route declares no API-key scope, so a key is refused at the auth gate. `Idempotency-Key` is required so a retry settles the reservation once.",
         "tags": ["Inference"],
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/EmbeddingsRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingsRequest"
+              }
+            }
           }
         },
         "responses": {
@@ -712,22 +1120,36 @@
             "description": "Embedding vectors, indexed to the input batch",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmbeddingsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingsResponse"
+                }
               }
             }
           },
-          "400": { "description": "Invalid embeddings request" },
-          "401": { "description": "Not authenticated" },
+          "400": {
+            "description": "Invalid embeddings request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
           "402": {
             "description": "Managed usage exhausted",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -738,7 +1160,14 @@
         "summary": "Transcribe audio",
         "description": "OpenAI-compatible transcription. The upload is capped at 25 MB and its first bytes are sniffed, so a declared audio MIME type on non-audio content is rejected.",
         "tags": ["Inference"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "inference:write",
         "requestBody": {
           "required": true,
@@ -748,33 +1177,56 @@
                 "type": "object",
                 "required": ["file"],
                 "properties": {
-                  "file": { "type": "string", "format": "binary" },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
                   "model": {
                     "type": "string",
                     "description": "A live OpenAI speech-to-text model id. Anything else falls back to the default transcription model."
                   },
-                  "language": { "type": "string" }
+                  "language": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Transcription" },
+          "200": {
+            "description": "Transcription"
+          },
           "400": {
             "description": "Missing file or unparseable form data",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
-          "403": { "description": "API key lacks the `inference:write` scope" },
-          "413": { "description": "Audio file exceeds 25 MB" },
-          "415": { "description": "Unsupported audio type, or content that is not audio" },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope"
+          },
+          "413": {
+            "description": "Audio file exceeds 25 MB"
+          },
+          "415": {
+            "description": "Unsupported audio type, or content that is not audio"
+          },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -785,13 +1237,22 @@
         "summary": "Preview an Auto route",
         "description": "Resolves the route Auto would take for a selection and task type under the caller's plan, workspace policy, zero-data-retention posture and observed route health, without executing a request. The same auth gate and rate limits as `POST /chat/completions` apply.",
         "tags": ["Inference"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "inference:write",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RoutePreviewRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/RoutePreviewRequest"
+              }
             }
           }
         },
@@ -800,27 +1261,43 @@
             "description": "The selected route, the candidates considered and the routes excluded",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/RoutePreviewResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/RoutePreviewResponse"
+                }
               }
             }
           },
           "400": {
             "description": "Invalid request body or unknown routing task type",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "403": {
             "description": "Subscription inactive, workspace policy refused the caller, or the API key lacks the `inference:write` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -831,26 +1308,47 @@
         "summary": "Get managed-usage balance",
         "description": "Percentage-only managed-usage status for the calling account, plus when it resets.",
         "tags": ["Inference"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "usage:read",
         "responses": {
           "200": {
             "description": "Usage status",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/CreditBalance" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditBalance"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "403": {
             "description": "No subscription record, or the API key lacks the `usage:read` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -861,13 +1359,19 @@
         "summary": "Open a live voice session",
         "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the `voice_live_backend` slot. The session is reserved for a fixed block of minutes before any provider spend, and that reservation is released if the provider never answers. Close the session to settle it.",
         "tags": ["Voice"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "inference:write",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LiveVoiceSessionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/LiveVoiceSessionRequest"
+              }
             }
           }
         },
@@ -876,45 +1380,73 @@
             "description": "The WebRTC answer, the session id and the reservation handle to settle with",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/LiveVoiceSession" }
+                "schema": {
+                  "$ref": "#/components/schemas/LiveVoiceSession"
+                }
               }
             }
           },
           "400": {
             "description": "No WebRTC offer, or an offer the schema rejects",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "402": {
             "description": "Managed usage is exhausted for the plan window",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "403": {
             "description": "Workspace policy, spend limit or model policy refused the caller, the account is not entitled to managed compute, or the API key lacks the `inference:write` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited, or the voice-minute allowance for the plan is spent",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           },
           "502": {
             "description": "The live voice service answered without a session",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "503": {
             "description": "Live voice is not configured on the server, or managed usage billing is unavailable",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           }
         }
@@ -925,14 +1457,20 @@
         "summary": "Close and settle a live voice session",
         "description": "Reports how long the session ran and settles its reservation. Billed seconds are the reported seconds rounded up, capped at the ceiling the reservation covers, so a lost or exaggerated report never bills above the reserved block. Reported backend spend is recorded against cost of goods separately from the per-minute session rate.",
         "tags": ["Voice"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "inference:write",
         "parameters": [
           {
             "name": "sessionId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "The session id returned when the session was opened"
           }
         ],
@@ -940,7 +1478,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LiveVoiceSessionCloseRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/LiveVoiceSessionCloseRequest"
+              }
             }
           }
         },
@@ -949,27 +1489,43 @@
             "description": "What the session was billed",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/LiveVoiceSessionClose" }
+                "schema": {
+                  "$ref": "#/components/schemas/LiveVoiceSessionClose"
+                }
               }
             }
           },
           "400": {
             "description": "No usage report, or a report the schema rejects",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "403": {
             "description": "The credential resolves to a different account than the reservation, or the API key lacks the `inference:write` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }
@@ -980,28 +1536,47 @@
         "summary": "Get managed-usage summary",
         "description": "Percentage-only managed-usage summary for the calling account across every rolling window, plus the subscription state those windows are measured against. Ledger units and allocations never cross this boundary.",
         "tags": ["Billing"],
-        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "x-agi-api-key-scope": "usage:read",
         "responses": {
           "200": {
             "description": "Usage summary",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ManagedUsageSummary" }
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedUsageSummary"
+                }
               }
             }
           },
-          "401": { "description": "Not authenticated" },
+          "401": {
+            "description": "Not authenticated"
+          },
           "403": {
             "description": "API key lacks the `usage:read` scope",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
             }
           },
           "429": {
             "description": "Rate limited",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
             }
           }
         }

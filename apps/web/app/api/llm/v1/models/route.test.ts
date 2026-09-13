@@ -29,10 +29,31 @@ const subscriptionMocks = vi.hoisted(() => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: subscriptionMocks.getSubscription },
 }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  listAvailableManagedProviderIds: () => everyRoutedProvider(),
+}));
+vi.mock('@/lib/services/provider-availability-service', () => ({
+  getProviderAvailabilityMap: async () => ({}),
+}));
+vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
 import { GET } from './route';
+function everyRoutedProvider(): Set<string> {
+  const providers = new Set<string>();
+  for (const model of listChatModels()) {
+    for (const route of listManagedRoutesForModel(model.id)) providers.add(route.provider);
+  }
+  return providers;
+}
+
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { listCanonicalModels } from '@agiworkforce/types';
+import {
+  listCanonicalModels,
+  listChatModels,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 
 const CONTEXTLESS_MEDIA_MODEL = (() => {
   const model = listCanonicalModels().find(
