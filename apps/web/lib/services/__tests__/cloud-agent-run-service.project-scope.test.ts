@@ -31,6 +31,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * web_conversations.project_id is TEXT, not uuid. A `= $n::uuid` comparison
+ * type-errors at 42883 in Postgres and jsdom cannot see it, so the cast is
+ * asserted here rather than left to a live run to discover.
+ */
 describe('listCloudAgentRuns project scope', () => {
   it('filters through the conversation, because a run stores no project of its own', async () => {
     const { db, issued } = makeDb();
@@ -41,7 +46,7 @@ describe('listCloudAgentRuns project scope', () => {
       projectId: PROJECT,
     });
 
-    expect(issued[0]?.sql).toContain('conversations.project_id = $8::uuid');
+    expect(issued[0]?.sql).toContain('conversations.project_id = $8::text');
     expect(issued[0]?.params.at(-1)).toBe(PROJECT);
     expect(issued[0]?.sql).toContain('runs.user_id = $1');
   });
