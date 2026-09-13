@@ -230,3 +230,27 @@ export function shouldRebuildMessageDom(input: {
 export function shouldRenderTextBubble(input: { text: string; streaming: boolean }): boolean {
   return input.text.trim().length > 0 || input.streaming === true;
 }
+
+/** Which page the composer's attached text was read from. */
+export interface PageContextSource {
+  tabId: number;
+  url: string;
+}
+
+/**
+ * Whether attached page text still describes what the user is looking at.
+ *
+ * The attachment is a snapshot of one page in one tab. A tab switch, a reload
+ * that lands elsewhere, and an in-page navigation on a single-page app all end
+ * that page without the composer hearing anything, which is why the URL is
+ * compared and not just the tab.
+ */
+export function pageContextStillDescribes(
+  source: PageContextSource | null,
+  tabId: number | undefined,
+  url: string,
+): boolean {
+  if (!source) return true;
+  if (typeof tabId !== 'number') return false;
+  return source.tabId === tabId && source.url === url;
+}

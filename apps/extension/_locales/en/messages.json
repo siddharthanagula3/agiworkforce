@@ -454,6 +454,10 @@
     "message": "capturing…",
     "description": "Composer page-context chip while page content is being read"
   },
+  "spContextChipDropped": {
+    "message": "The attached page text was dropped because this tab moved to another page. Attach the page again to include it.",
+    "description": "Composer notice after the attached page context stopped matching the active page"
+  },
 
   "spAutonomyAskFirst": {
     "message": "Ask first",
