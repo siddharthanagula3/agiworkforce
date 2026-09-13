@@ -128,6 +128,7 @@ export const CURATED_CATEGORY_TO_DIRECTORY: Readonly<Record<string, string>> = {
 
 export const CONNECTOR_STATE_NEEDS_SETUP = 'Needs setup';
 export const CONNECTOR_STATE_DESKTOP_AND_CLI = 'Desktop and CLI';
+export const CONNECTOR_STATE_UNAVAILABLE = 'Not available yet';
 
 export const CONNECTOR_COUNT_SUFFIX = 'connectors';
 export const CONNECTOR_COUNT_INDEXING_SUFFIX = 'connectors indexed so far';
@@ -138,6 +139,8 @@ export const CONNECTOR_SETUP_NOTICE_REGISTRY =
 export const CONNECTOR_SETUP_NOTICE_CURATED_PREFIX = 'Connecting';
 export const CONNECTOR_SETUP_NOTICE_CURATED_SUFFIX =
   'needs credentials this deployment has not been given yet.';
+export const CONNECTOR_SETUP_KIND_NO_REMOTE = 'no-remote';
+export const CONNECTOR_SETUP_KIND_DEVICE_LOCAL = 'device-local';
 export const DESKTOP_DOWNLOAD_PATH = '/download';
 export const CONNECTOR_TERMS_PATH = '/terms';
 export const RELATED_CONNECTOR_LIMIT = 6;

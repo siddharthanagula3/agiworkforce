@@ -416,6 +416,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         records: page.records,
         connectedIds: connectedIds(),
         curated: curatedRef.current,
+        setup: connectorSetup.current,
         request: toDirectoryRequest(connectorQueryRef.current),
         connectionState: connectorConnectionState(connectorQueryRef.current),
         total: page.total,
@@ -913,12 +914,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         const curated = curatedRef.current.find((entry) => entry.id === id);
         if (curated) {
           return withRelatedConnectors(
-            toCuratedConnectorDetail(
-              curated,
-              connectedIds(),
-              connectorSetup.current[id]?.message,
-              extras,
-            ),
+            toCuratedConnectorDetail(curated, connectedIds(), connectorSetup.current[id], extras),
           );
         }
         const cached = connectorPageRef.current.records.find((record) => record.id === id);

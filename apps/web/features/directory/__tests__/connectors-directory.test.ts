@@ -570,11 +570,11 @@ describe('curated first party connectors', () => {
   });
 
   it('prefers the deployment setup sentence the server reports', () => {
-    const detail = toCuratedConnectorDetail(
-      curated({ canConnect: false }),
-      new Set(),
-      'Gmail needs GMAIL_CLIENT_ID before anyone can connect it.',
-    );
+    const detail = toCuratedConnectorDetail(curated({ canConnect: false }), new Set(), {
+      kind: 'oauth-client-pair',
+      missingEnv: ['GMAIL_CLIENT_ID'],
+      message: 'Gmail needs GMAIL_CLIENT_ID before anyone can connect it.',
+    });
     expect(detail.setupNotice).toBe('Gmail needs GMAIL_CLIENT_ID before anyone can connect it.');
   });
 

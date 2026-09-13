@@ -21,7 +21,8 @@ export type ConnectorSetupKind =
   | 'oauth-client-pair'
   | 'oauth-redirect-base'
   | 'token-storage'
-  | 'no-remote';
+  | 'no-remote'
+  | 'device-local';
 
 export interface ConnectorSetupRequirement {
   readonly connectorId: string;
@@ -139,6 +140,18 @@ function noRemoteRequirement(connectorId: string, displayName: string): Connecto
   );
 }
 
+function deviceLocalRequirement(
+  connectorId: string,
+  displayName: string,
+): ConnectorSetupRequirement {
+  return requirement(
+    connectorId,
+    'device-local',
+    [],
+    `${displayName} runs on your own machine, so it is connected from Desktop or the CLI rather than from the browser.`,
+  );
+}
+
 /**
  * A directory record authorizes through discovery, so the only deployment
  * inputs it can be missing are the secret store and a public callback origin.
@@ -154,7 +167,7 @@ export function describeConnectorSetup(
   connectorId: string,
   displayName: string = connectorId,
 ): ConnectorSetupRequirement | null {
-  if (isDeviceLocalConnector(connectorId)) return null;
+  if (isDeviceLocalConnector(connectorId)) return deviceLocalRequirement(connectorId, displayName);
   if (connectorId === GITHUB_CONNECTOR_ID) return githubRequirement(displayName);
   if (getMcpEndpoint(connectorId)) {
     return isSelfServiceConnector(connectorId)

@@ -143,6 +143,10 @@ function getAvailableConnectorIds(): string[] {
   return [...available];
 }
 
+function connectorDisplayName(connectorId: string): string {
+  return CONNECTORS.find((connector) => connector.id === connectorId)?.name ?? connectorId;
+}
+
 function describeCuratedSetup(available: ReadonlySet<string>): Record<string, ConnectorSetupEntry> {
   const setup: Record<string, ConnectorSetupEntry> = {};
   for (const connector of CONNECTORS) {
@@ -490,7 +494,7 @@ async function handleCreateConnector(request: NextRequest) {
           error:
             'GitHub installation ownership verification is not available in this deployment. The connector stays disabled until the GitHub user authorization flow is configured.',
           connectorId: body.connectorId,
-          setup: describeConnectorSetup(body.connectorId),
+          setup: describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId)),
         },
         { status: 501 },
       );
@@ -513,7 +517,7 @@ async function handleCreateConnector(request: NextRequest) {
         { status: 503 },
       );
     }
-    const setup = describeConnectorSetup(body.connectorId);
+    const setup = describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId));
     if (setup) {
       return NextResponse.json(
         { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
@@ -534,7 +538,7 @@ async function handleCreateConnector(request: NextRequest) {
 
   const isOperatorMapped = operatorMappedIds.has(body.connectorId);
   if (!isOperatorMapped) {
-    const setup = describeConnectorSetup(body.connectorId);
+    const setup = describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId));
     return NextResponse.json(
       {
         error:

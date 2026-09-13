@@ -85,9 +85,9 @@ describe('connectableForInternalId', () => {
     expect(connectableForInternalId('slack')).toBe('connect');
   });
 
-  it('never offers a credential form for a connector with no remote server', () => {
-    expect(connectableForInternalId('openai')).toBe('needs-setup');
-    expect(connectableForInternalId('trello')).toBe('needs-setup');
+  it('reports a connector with no remote server as unavailable, not as awaiting setup', () => {
+    expect(connectableForInternalId('openai')).toBe('unavailable');
+    expect(connectableForInternalId('trello')).toBe('unavailable');
   });
 
   it('gates generic oauth2 catalog connectors without an MCP endpoint on the client pair', () => {

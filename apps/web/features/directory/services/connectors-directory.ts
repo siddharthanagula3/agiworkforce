@@ -36,11 +36,14 @@ import {
   CONNECTOR_INCLUDE_LOCAL_TOGGLE_ID,
   CONNECTOR_INCLUDE_LOCAL_TOGGLE_LABEL,
   CONNECTOR_REAUTHORIZATION_COPY,
+  CONNECTOR_SETUP_KIND_DEVICE_LOCAL,
+  CONNECTOR_SETUP_KIND_NO_REMOTE,
   CONNECTOR_SETUP_NOTICE_CURATED_PREFIX,
   CONNECTOR_SETUP_NOTICE_CURATED_SUFFIX,
   CONNECTOR_SETUP_NOTICE_REGISTRY,
   CONNECTOR_STATE_DESKTOP_AND_CLI,
   CONNECTOR_STATE_NEEDS_SETUP,
+  CONNECTOR_STATE_UNAVAILABLE,
   CONNECTOR_TAB_COMMUNITY_BADGE,
   CONNECTOR_TAB_COMMUNITY_LABEL,
   CONNECTOR_TAB_HEADINGS,
@@ -122,10 +125,13 @@ function curatedPublisher(connector: SettingsConnector): string | undefined {
 const CONNECTABLE_BLOCKED: ReadonlySet<DirectoryConnectableMode> = new Set([
   'desktop-and-cli',
   'needs-setup',
+  'unavailable',
 ]);
 const FIRST_PARTY_BADGE: DirectoryBadge = 'first-party';
 const CONNECTABLE_MODE: DirectoryConnectableMode = 'connect';
 const NEEDS_SETUP_MODE: DirectoryConnectableMode = 'needs-setup';
+const DESKTOP_AND_CLI_MODE: DirectoryConnectableMode = 'desktop-and-cli';
+const UNAVAILABLE_MODE: DirectoryConnectableMode = 'unavailable';
 
 export const CONNECTOR_SORT_OPTIONS: readonly DirectorySortKey[] = [
   DIRECTORY_SORT_POPULAR,
@@ -205,8 +211,9 @@ export function connectorStateLabel(
   connected: boolean,
 ): string | undefined {
   if (connected) return undefined;
-  if (mode === 'desktop-and-cli') return CONNECTOR_STATE_DESKTOP_AND_CLI;
-  if (mode === 'needs-setup') return CONNECTOR_STATE_NEEDS_SETUP;
+  if (mode === DESKTOP_AND_CLI_MODE) return CONNECTOR_STATE_DESKTOP_AND_CLI;
+  if (mode === UNAVAILABLE_MODE) return CONNECTOR_STATE_UNAVAILABLE;
+  if (mode === NEEDS_SETUP_MODE) return CONNECTOR_STATE_NEEDS_SETUP;
   return undefined;
 }
 
@@ -253,8 +260,20 @@ export function connectorCategoryFilter(
   };
 }
 
-function curatedMode(connector: SettingsConnector): DirectoryConnectableMode {
-  return connector.canConnect === true ? CONNECTABLE_MODE : NEEDS_SETUP_MODE;
+/**
+ * `setup.kind` is the only thing that separates a connector an operator can
+ * still enable from one that has nowhere to connect to and one that belongs to
+ * Desktop. Without it every unconnectable connector reads as "Needs setup",
+ * which promises a fix that does not exist for two of the three.
+ */
+function curatedMode(
+  connector: SettingsConnector,
+  setup?: ConnectorSetupRequirement,
+): DirectoryConnectableMode {
+  if (connector.canConnect === true) return CONNECTABLE_MODE;
+  if (setup?.kind === CONNECTOR_SETUP_KIND_DEVICE_LOCAL) return DESKTOP_AND_CLI_MODE;
+  if (setup?.kind === CONNECTOR_SETUP_KIND_NO_REMOTE) return UNAVAILABLE_MODE;
+  return NEEDS_SETUP_MODE;
 }
 
 export function curatedDirectoryCategory(connector: SettingsConnector): DirectoryCategory {
@@ -266,9 +285,10 @@ export function curatedDirectoryCategory(connector: SettingsConnector): Director
 export function toCuratedConnectorEntry(
   connector: SettingsConnector,
   connectedIds: ReadonlySet<string>,
+  setup?: ConnectorSetupRequirement,
 ): DirectoryEntry {
   const connected = connectedIds.has(connector.id);
-  const mode = curatedMode(connector);
+  const mode = curatedMode(connector, setup);
   return {
     id: connector.id,
     name: connector.name,
@@ -442,6 +462,7 @@ export interface ConnectorSectionInput {
   records: readonly DirectoryRecord[];
   connectedIds: ReadonlySet<string>;
   curated: readonly SettingsConnector[];
+  setup?: Readonly<Record<string, ConnectorSetupRequirement>>;
   request: ConnectorDirectoryRequest;
   total: number;
   nextCursor: string | null;
@@ -455,6 +476,7 @@ export function toConnectorSection({
   records,
   connectedIds,
   curated,
+  setup = {},
   request,
   total,
   nextCursor,
@@ -470,7 +492,7 @@ export function toConnectorSection({
   );
   const curatedEntries = curated
     .filter((connector) => matchesCuratedConnector(connector, request))
-    .map((connector) => toCuratedConnectorEntry(connector, connectedIds))
+    .map((connector) => toCuratedConnectorEntry(connector, connectedIds, setup[connector.id]))
     .map((entry) => (allTab ? entry : { ...entry, popular: false }));
   const curatedIds = new Set(curated.map((connector) => connector.id));
   const registryEntries = records
@@ -642,13 +664,13 @@ function connectorDetailExtras(
 export function toCuratedConnectorDetail(
   connector: SettingsConnector,
   connectedIds: ReadonlySet<string>,
-  setupMessage?: string,
+  setup?: ConnectorSetupRequirement,
   extras: ConnectorDetailExtras = {},
 ): DirectoryConnectorDetail {
   const target = FIRST_PARTY_TARGETS_BY_ID.get(connector.id);
   const vendor = connector.publisher ?? connector.name;
   const websiteUrl = target ? originOf(target.documentationUrl) : null;
-  const mode = curatedMode(connector);
+  const mode = curatedMode(connector, setup);
   return {
     kind: 'connector',
     id: connector.id,
@@ -672,9 +694,10 @@ export function toCuratedConnectorDetail(
     ...connectorDetailExtras(connector.id, connectedIds, extras),
     connectable: connector.canConnect === true,
     connectableMode: mode,
-    ...(mode === NEEDS_SETUP_MODE
-      ? { setupNotice: setupMessage ?? curatedSetupNotice(connector) }
-      : {}),
+    ...(mode === DESKTOP_AND_CLI_MODE ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {}),
+    ...(mode === CONNECTABLE_MODE
+      ? {}
+      : { setupNotice: setup?.message ?? curatedSetupNotice(connector) }),
   };
 }
 
@@ -716,7 +739,8 @@ export function toConnectorDetail(
     connectable: !CONNECTABLE_BLOCKED.has(record.connectable),
     connectableMode: record.connectable,
     ...(record.connectable === 'desktop-and-cli' ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {}),
-    ...(record.connectable === NEEDS_SETUP_MODE && !record.listingNote
+    ...((record.connectable === NEEDS_SETUP_MODE || record.connectable === UNAVAILABLE_MODE) &&
+    !record.listingNote
       ? { setupNotice: CONNECTOR_SETUP_NOTICE_REGISTRY }
       : {}),
   };

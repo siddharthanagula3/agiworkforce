@@ -22,6 +22,7 @@ import {
   CONNECTOR_MADE_BY_LABEL,
   CONNECTOR_MORE_INFO_LABEL,
   CONNECTOR_NEEDS_SETUP_LABEL,
+  CONNECTOR_UNAVAILABLE_LABEL,
   CONNECTOR_PRIVACY_LABEL,
   CONNECTOR_RELATED_HEADING,
   CONNECTOR_REPOSITORY_LABEL,
@@ -176,6 +177,7 @@ const PRIMARY_LABEL_BY_MODE: Record<DirectoryConnectableMode, string> = {
   'api-key-form': CONNECTOR_ADD_API_KEY_LABEL,
   'desktop-and-cli': CONNECTOR_DESKTOP_ONLY_LABEL,
   'needs-setup': CONNECTOR_NEEDS_SETUP_LABEL,
+  unavailable: CONNECTOR_UNAVAILABLE_LABEL,
 };
 
 const ACTIONABLE_MODES: ReadonlySet<DirectoryConnectableMode> = new Set([
@@ -329,7 +331,10 @@ export function ConnectorDetailView({
         <DesktopAvailability href={detail.desktopHref} />
       ) : null}
 
-      {!connected && !listed && mode === 'needs-setup' && detail.setupNotice ? (
+      {!connected &&
+      !listed &&
+      (mode === 'needs-setup' || mode === 'unavailable') &&
+      detail.setupNotice ? (
         <Notice>
           <p>{detail.setupNotice}</p>
         </Notice>
