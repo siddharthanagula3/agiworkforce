@@ -16,13 +16,6 @@ vi.mock('electron', () => ({
   ),
 }));
 
-const rendererMode = { value: 'bundled' };
-vi.mock('../config', () => ({
-  get RENDERER_MODE() {
-    return rendererMode.value;
-  },
-}));
-
 const focusPageComposer = vi.fn(async () => true);
 vi.mock('../composerFocus', () => ({
   focusPageComposer: (win: unknown) => focusPageComposer(win),
@@ -79,7 +72,6 @@ function asWindow(win: FakeWindow): never {
 describe('global dictation press', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    rendererMode.value = 'bundled';
     quickAsk.visible = false;
     quickAsk.panel = null;
     quickAsk.surfaced = null;
@@ -139,15 +131,14 @@ describe('global dictation press', () => {
     expect(notifications[0]?.title).toBe('No AGI Cloud window');
   });
 
-  it('reports the press as unavailable when the shell has no IPC receiver', async () => {
-    rendererMode.value = 'remote';
+  it('reaches the page the remote shell loads, which owns the capture', async () => {
     const main = new FakeWindow(true);
 
     await toggleGlobalDictation(asWindow(main));
 
-    expect(main.sent).toEqual([]);
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]?.title).toBe('Dictation unavailable');
+    expect(focusPageComposer).toHaveBeenCalledWith(main);
+    expect(main.sent).toEqual([ELECTRON_IPC_CHANNELS.voiceHotkey]);
+    expect(notifications).toHaveLength(0);
   });
 
   it('never sends into a window destroyed while the composer was focusing', async () => {
