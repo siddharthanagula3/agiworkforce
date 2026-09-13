@@ -101,6 +101,23 @@ function saveViewMode(mode: LibraryViewMode): void {
   }
 }
 
+const DISPLAY_NAME_MAX_LENGTH = 120;
+
+/**
+ * Every generated image and video is stored as `image.jpg` or `video.mp4`, so a
+ * library of them reads as one repeated filename. The row carries the prompt
+ * that produced it and the list query already matches on it, so the prompt is
+ * the name a reader can tell apart. Downloads, icons and extensions keep using
+ * `file_name`, which is what the bytes are actually called.
+ */
+export function libraryItemDisplayName(item: LibraryItem): string {
+  const prompt = item.prompt?.trim();
+  if (!prompt) return item.file_name;
+  return prompt.length > DISPLAY_NAME_MAX_LENGTH
+    ? `${prompt.slice(0, DISPLAY_NAME_MAX_LENGTH - 1).trimEnd()}…`
+    : prompt;
+}
+
 export function iconKindFor(fileName: string, mimeType: string): GeneratedFileKind {
   const mime = mimeType.toLowerCase();
   const ext = fileName.includes('.')
@@ -479,7 +496,7 @@ export function LibraryView({
   const confirmDelete = useCallback(
     (item: LibraryItem) =>
       confirm({
-        title: `Delete ${item.file_name}?`,
+        title: `Delete ${libraryItemDisplayName(item)}?`,
         description:
           'It moves to Recently deleted, where it stays restorable for 30 days before it is removed for good.',
         confirmLabel: 'Delete',
@@ -492,7 +509,7 @@ export function LibraryView({
   const confirmPermanentDelete = useCallback(
     (item: LibraryItem) =>
       confirm({
-        title: `Permanently delete ${item.file_name}?`,
+        title: `Permanently delete ${libraryItemDisplayName(item)}?`,
         description:
           'The stored bytes are erased now. Nothing restores this file, and anything linking to it stops resolving.',
         confirmLabel: 'Delete permanently',
@@ -848,7 +865,7 @@ function FileViewerOverlay({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`${item.file_name} viewer`}
+      aria-label={`${libraryItemDisplayName(item)} viewer`}
       data-testid="library-file-viewer"
       className={
         container
@@ -864,7 +881,7 @@ function FileViewerOverlay({
           <span className="shrink-0">Library</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="truncate font-medium text-[var(--chat-text-primary)]">
-            {item.file_name}
+            {libraryItemDisplayName(item)}
           </span>
         </nav>
         <div className="flex shrink-0 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-base)]/90 p-1 backdrop-blur-sm">
@@ -1103,9 +1120,9 @@ function LibraryGrid(props: LibraryListProps) {
           <GridTile
             key={item.id}
             testId="library-tile"
-            name={item.file_name}
+            name={libraryItemDisplayName(item)}
             meta={formatModified(item.created_at)}
-            ariaLabel={`Open ${item.file_name}`}
+            ariaLabel={`Open ${libraryItemDisplayName(item)}`}
             onOpen={() => props.actions.onOpen(item)}
             menu={
               <ItemMenu
@@ -1245,7 +1262,7 @@ function LibraryList(props: LibraryListProps) {
                         className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
                       />
                       <span className="truncate text-[var(--chat-text-primary)]">
-                        {item.file_name}
+                        {libraryItemDisplayName(item)}
                       </span>
                     </button>
                     {unavailable ? (

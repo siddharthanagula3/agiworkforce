@@ -109,6 +109,28 @@ describe('shared LibraryView', () => {
     expect(signedIn.listPage).toHaveBeenCalledTimes(1);
   });
 
+  it('names a generated image by its prompt, not the repeated stored filename', async () => {
+    const generated = {
+      ...ITEM,
+      id: 'asset-img',
+      file_name: 'image.jpg',
+      mime_type: 'image/jpeg',
+      kind: 'image',
+      previewable: true,
+      prompt: 'one flat cobalt circle on white, no text',
+    };
+    render(<LibraryView transport={makeTransport({ listPage: pageOf([generated]) })} />);
+
+    expect(await screen.findByText('one flat cobalt circle on white, no text')).toBeTruthy();
+    expect(screen.queryByText('image.jpg')).toBeNull();
+  });
+
+  it('keeps the stored filename for an item that carries no prompt', async () => {
+    render(<LibraryView transport={makeTransport()} />);
+
+    expect(await screen.findByText('quarterly-report.pdf')).toBeTruthy();
+  });
+
   it('surfaces a load failure with a retry instead of an empty grid', async () => {
     const transport = makeTransport({ listPage: vi.fn(async () => jsonResponse({}, false)) });
     render(<LibraryView transport={transport} />);
