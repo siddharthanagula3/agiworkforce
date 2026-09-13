@@ -46,6 +46,40 @@ describe('ConversationTitleMenu', () => {
     expect(wrapper).not.toHaveClass('absolute');
   });
 
+  it('offers Archive, and Unarchive once the conversation is archived', async () => {
+    // The sidebar hides an archived row behind its archive filter, so without
+    // these the conversation's own header had no way to bring it back.
+    const user = userEvent.setup();
+    const onArchiveToggle = vi.fn();
+    const { unmount } = render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        onRename={vi.fn()}
+        onArchiveToggle={onArchiveToggle}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+    expect(onArchiveToggle).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        archived
+        projects={projects}
+        onRename={vi.fn()}
+        onArchiveToggle={onArchiveToggle}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    expect(await screen.findByRole('menuitem', { name: 'Unarchive' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+  });
+
   it('opens to Rename / Move to project / Delete when projects exist', async () => {
     const user = userEvent.setup();
     render(

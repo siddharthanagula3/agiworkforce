@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   Download,
   GitFork,
@@ -26,9 +28,11 @@ import { AGI_WORK_TITLE_SUFFIX } from '../lib/agi-work';
 export interface ConversationTitleMenuProps {
   title: string;
   agiWork?: boolean;
+  archived?: boolean;
   projects: ReadonlyArray<{ id: string; name: string }>;
   onRename: (title: string) => void;
   onMoveToProject?: (projectId: string) => void;
+  onArchiveToggle?: () => void;
   onDelete: () => void;
   onPrint?: () => void;
   onExport?: () => void;
@@ -39,9 +43,11 @@ export interface ConversationTitleMenuProps {
 export function ConversationTitleMenu({
   title,
   agiWork = false,
+  archived = false,
   projects,
   onRename,
   onMoveToProject,
+  onArchiveToggle,
   onDelete,
   onFork,
   onPrint,
@@ -146,6 +152,20 @@ export function ConversationTitleMenu({
               <DropdownMenuItem onSelect={() => onFork()}>
                 <GitFork className="mr-2 h-4 w-4" />
                 Duplicate as branch
+              </DropdownMenuItem>
+            )}
+            {/* Without these the archive is one-way from the conversation
+                itself: the sidebar hides an archived row behind its archive
+                filter, so the only surface still showing the conversation had
+                no way to bring it back. */}
+            {onArchiveToggle && (
+              <DropdownMenuItem onSelect={() => onArchiveToggle()}>
+                {archived ? (
+                  <ArchiveRestore className="mr-2 h-4 w-4" />
+                ) : (
+                  <Archive className="mr-2 h-4 w-4" />
+                )}
+                {archived ? 'Unarchive' : 'Archive'}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
