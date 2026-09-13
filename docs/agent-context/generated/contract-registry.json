@@ -58,6 +58,7 @@
     "suite-contracts",
     "tauri",
     "time-focus",
+    "tool-approval-policy",
     "tool-display",
     "tool-events",
     "tool-primitive",
