@@ -211,13 +211,20 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(json.file['id']).toBe('file-1');
     expect(json.file['fileName']).toBe('spec.pdf');
     expect(json.file['storageUri']).toBe('/api/projects/proj-1/knowledge-files/file-1');
-    expect(mockExtractProjectKnowledgeFile).toHaveBeenCalledWith({
-      projectId: 'proj-1',
-      storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
-      fileName: 'spec.pdf',
-      mimeType: 'application/pdf',
-      byteCount: 1024,
-      checksumSha256: CHECKSUM,
+    expect(mockExtractProjectKnowledgeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'proj-1',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+      }),
+    );
+    // A scan has no text layer, so the extractor is handed what a vision call
+    // needs: without this the file lands in the store with nothing in it.
+    expect(mockExtractProjectKnowledgeFile.mock.calls[0]?.[0]).toMatchObject({
+      transcribeScans: { userId: 'user-abc', documentId: `proj-1:${CHECKSUM}` },
     });
     const insertCall = mockNeonQuery.mock.calls.find((call) =>
       String(call?.[0] ?? '').includes('insert into project_knowledge_files'),

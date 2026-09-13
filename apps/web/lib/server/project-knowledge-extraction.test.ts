@@ -27,10 +27,20 @@ const storageMocks = vi.hoisted(() => {
     StoredObjectTooLargeError,
   };
 });
-const pdfMocks = vi.hoisted(() => ({ getDocument: vi.fn() }));
+const pdfMocks = vi.hoisted(() => ({
+  getDocument: vi.fn(),
+  OPS: { paintImageXObject: 85 },
+}));
+
+const transcribeMocks = vi.hoisted(() => ({ transcribeScannedPages: vi.fn() }));
 
 vi.mock('@/lib/server/object-storage', () => storageMocks);
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => pdfMocks);
+vi.mock('./scanned-document-text', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./scanned-document-text')>()),
+  transcribeScannedPages: (...args: unknown[]) =>
+    transcribeMocks.transcribeScannedPages(...args) as unknown,
+}));
 
 import { extractProjectKnowledgeFile } from './project-knowledge-extraction';
 
@@ -40,6 +50,7 @@ function checksum(data: Buffer): string {
 
 describe('extractProjectKnowledgeFile', () => {
   beforeEach(() => {
+    transcribeMocks.transcribeScannedPages.mockReset();
     storageMocks.objectKeyFromStorageUri.mockReturnValue(
       'knowledge-files/projects/project-1/object.txt',
     );
@@ -335,6 +346,105 @@ describe('extractProjectKnowledgeFile', () => {
     it('returns null for a notebook with nothing readable in it', async () => {
       const { extractedText } = await extract(notebook([{ cell_type: 'code', source: '' }]));
       expect(extractedText).toBeNull();
+    });
+  });
+
+  describe('a scanned PDF', () => {
+    const SCAN_PIXELS = new Uint8Array(4 * 3).fill(200);
+
+    function scannedDocument(): void {
+      const data = Buffer.from('%PDF-1.7\nscan');
+      storageMocks.objectKeyFromStorageUri.mockReturnValue(
+        'knowledge-files/projects/project-1/scan.pdf',
+      );
+      storageMocks.getBoundedPrivateObject.mockResolvedValue({
+        data,
+        contentType: 'application/pdf',
+      });
+      const page = {
+        getTextContent: vi.fn().mockResolvedValue({ items: [] }),
+        getOperatorList: vi.fn().mockResolvedValue({
+          fnArray: [pdfMocks.OPS.paintImageXObject],
+          argsArray: [['img0']],
+        }),
+        objs: {
+          get: (_name: string, resolve: (value: unknown) => void) =>
+            resolve({ width: 2, height: 2, kind: 2, data: SCAN_PIXELS }),
+        },
+      };
+      pdfMocks.getDocument.mockReturnValue({
+        destroy: vi.fn().mockResolvedValue(undefined),
+        promise: Promise.resolve({ numPages: 1, getPage: vi.fn().mockResolvedValue(page) }),
+      });
+    }
+
+    function scanInput(extra: Record<string, unknown> = {}) {
+      const data = Buffer.from('%PDF-1.7\nscan');
+      return {
+        projectId: 'project-1',
+        storageUri: 'https://files.example.test/knowledge-files/projects/project-1/scan.pdf',
+        fileName: 'invoice.pdf',
+        mimeType: 'application/pdf',
+        byteCount: data.byteLength,
+        checksumSha256: checksum(data),
+        ...extra,
+      };
+    }
+
+    it('stores the recognised text, marked as read from the scan', async () => {
+      scannedDocument();
+      transcribeMocks.transcribeScannedPages.mockResolvedValue(
+        'INVOICE 2026-09-13\nTotal: $412.00',
+      );
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+          },
+        }),
+      );
+
+      expect(result.extractedText).toContain('Recognised from page images');
+      expect(result.extractedText).toContain('Total: $412.00');
+      expect(transcribeMocks.transcribeScannedPages).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'project-1:scan',
+          pageImages: [expect.objectContaining({ mimeType: 'image/png' })],
+        }),
+      );
+    });
+
+    it('stores nothing rather than a note with no text behind it', async () => {
+      scannedDocument();
+      transcribeMocks.transcribeScannedPages.mockResolvedValue(null);
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+          },
+        }),
+      );
+
+      expect(result.extractedText).toBeNull();
+    });
+
+    it('does not read the pictures for a caller that cannot pay for it', async () => {
+      scannedDocument();
+
+      const result = await extractProjectKnowledgeFile(scanInput());
+
+      expect(result.extractedText).toBeNull();
+      expect(transcribeMocks.transcribeScannedPages).not.toHaveBeenCalled();
     });
   });
 });

@@ -9,10 +9,18 @@ import {
   officeDocumentKind,
   OfficeDocumentUnreadableError,
 } from './office-document-text';
+import {
+  extractPdfAttachmentContent,
+  PdfAttachmentUnreadableError,
+} from './pdf-attachment-content';
 import { getProjectKnowledgeObject } from './project-knowledge-object-storage';
+import {
+  SCANNED_DOCUMENT_OCR_NOTE,
+  transcribeScannedPages,
+  type TranscribeScannedPagesInput,
+} from './scanned-document-text';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
-const MAX_PDF_PAGES = 250;
 
 type ExtractionErrorCode =
   | 'invalid_storage_uri'
@@ -45,6 +53,16 @@ export class ProjectKnowledgeExtractionError extends Error {
 const KNOWLEDGE_FILE_REJECTION_MESSAGE =
   'This file could not be added because its contents failed a safety check.';
 
+/**
+ * What a transcription of a scan needs to be billed and routed. Optional on the
+ * input: a caller with no managed context (a test, a backfill) still gets the
+ * text layer, it simply cannot pay for a reading of the pictures.
+ */
+export type ScannedDocumentTranscription = Omit<
+  TranscribeScannedPagesInput,
+  'pageImages' | 'documentId'
+> & { documentId: string };
+
 interface ExtractProjectKnowledgeFileInput {
   projectId: string;
   storageUri: string;
@@ -52,6 +70,7 @@ interface ExtractProjectKnowledgeFileInput {
   mimeType: string;
   byteCount: number;
   checksumSha256: string;
+  transcribeScans?: ScannedDocumentTranscription;
 }
 
 function normalizeAndBoundText(value: string): string | null {
@@ -61,52 +80,40 @@ function normalizeAndBoundText(value: string): string | null {
   return `${normalized.slice(0, MAX_EXTRACTED_PROJECT_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
 }
 
-async function extractPdfText(data: Buffer): Promise<string | null> {
-  if (!data.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-    throw new ProjectKnowledgeExtractionError(
-      'document_unreadable',
-      'The uploaded PDF could not be read.',
-    );
-  }
-
+/**
+ * The store holds text, and a scan has none, so a scanned PDF used to land here
+ * as an empty row: the file was listed, its bytes were kept, and no question
+ * could ever be answered from it. The chat path already turns a text-free PDF
+ * into page images; this reads those images back as text and says, in the row
+ * itself, where the text came from.
+ */
+async function extractPdfText(
+  data: Buffer,
+  fileName: string,
+  ocr: ScannedDocumentTranscription | undefined,
+): Promise<string | null> {
+  let content: Awaited<ReturnType<typeof extractPdfAttachmentContent>>;
   try {
-    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const loadingTask = getDocument({
-      data: new Uint8Array(data),
-      useWorkerFetch: false,
-      verbosity: 0,
-    });
-    try {
-      const document = await loadingTask.promise;
-      if (document.numPages > MAX_PDF_PAGES) {
-        throw new ProjectKnowledgeExtractionError(
-          'document_too_complex',
-          `PDFs are limited to ${MAX_PDF_PAGES} pages for project knowledge extraction.`,
-        );
-      }
-
-      const pages: string[] = [];
-      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-        const page = await document.getPage(pageNumber);
-        const content = await page.getTextContent();
-        const text = content.items
-          .map((item) => ('str' in item && typeof item.str === 'string' ? item.str : ''))
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-        if (text) pages.push(text);
-      }
-      return normalizeAndBoundText(pages.join('\n\n'));
-    } finally {
-      await loadingTask.destroy();
-    }
+    content = await extractPdfAttachmentContent(data, fileName);
   } catch (error) {
-    if (error instanceof ProjectKnowledgeExtractionError) throw error;
+    if (!(error instanceof PdfAttachmentUnreadableError)) throw error;
     throw new ProjectKnowledgeExtractionError(
       'document_unreadable',
       'The uploaded PDF could not be read.',
     );
   }
+
+  if (content.pagesOmitted) {
+    throw new ProjectKnowledgeExtractionError(
+      'document_too_complex',
+      'This PDF has more pages than project knowledge extraction reads. Split it and upload the parts.',
+    );
+  }
+  if (content.text) return normalizeAndBoundText(content.text);
+  if (!ocr || content.pageImages.length === 0) return null;
+
+  const recognised = await transcribeScannedPages({ ...ocr, pageImages: content.pageImages });
+  return recognised ? normalizeAndBoundText(`${SCANNED_DOCUMENT_OCR_NOTE}\n\n${recognised}`) : null;
 }
 
 function extractNotebookText(bytes: Uint8Array, fileName: string): string | null {
@@ -260,7 +267,9 @@ export async function extractProjectKnowledgeFile(
   }
 
   if (declaredMimeType === 'application/pdf') {
-    return { extractedText: await extractPdfText(object.data) };
+    return {
+      extractedText: await extractPdfText(object.data, input.fileName, input.transcribeScans),
+    };
   }
   const officeKind = officeDocumentKind(input.fileName, declaredMimeType);
   if (officeKind) {

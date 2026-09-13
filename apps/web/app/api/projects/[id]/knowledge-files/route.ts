@@ -336,6 +336,16 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
       mimeType: body.mimeType.trim(),
       byteCount: body.byteCount,
       checksumSha256: body.checksumSha256.trim(),
+      // A scan has no text layer, so reading it costs a vision call. The
+      // document id is the checksum: the same file re-uploaded resolves to the
+      // reservation already taken for it rather than paying twice.
+      transcribeScans: {
+        db,
+        userId,
+        organizationId,
+        planTier: subscription?.plan_tier ?? '',
+        documentId: `${projectId}:${body.checksumSha256.trim()}`,
+      },
     });
     extractedText = extraction.extractedText;
   } catch (error) {
