@@ -64,6 +64,48 @@ describe('chatViewStore.searchConversations, mode routing', () => {
     const ids = useChatViewStore.getState().searchResults.map((r) => r.conversationId);
     expect(ids).toContain('c1');
     expect(useChatViewStore.getState().isSearching).toBe(false);
+    expect(useChatViewStore.getState().remoteSearchChats).toEqual([]);
+    expect(useChatViewStore.getState().remoteSearchProjects).toEqual([]);
+  });
+
+  it('cloud mode keeps the server chats and projects the device has not synced', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    mockApiGet.mockResolvedValue({
+      results: [
+        { type: 'session', sessionId: 'cloud-1', sessionTitle: 'Rust on the server' },
+        { type: 'message', sessionId: 'cloud-1', messageId: 'cm-1', matchedText: 'rust' },
+        { type: 'message', sessionId: 'cloud-2', messageId: 'cm-2', matchedText: 'rust' },
+      ],
+      projects: [{ projectId: 'p-1', projectName: 'Rustacean', content: 'Systems work' }],
+    });
+
+    useChatViewStore.getState().searchConversations('rust');
+    await flushDebounce();
+
+    expect(useChatViewStore.getState().remoteSearchChats).toEqual([
+      { id: 'cloud-1', title: 'Rust on the server', subtitle: 'Matched chat title' },
+      { id: 'cloud-2', title: 'Untitled chat', subtitle: 'Matched message content' },
+    ]);
+    expect(useChatViewStore.getState().remoteSearchProjects).toEqual([
+      { id: 'p-1', title: 'Rustacean', subtitle: 'Systems work' },
+    ]);
+  });
+
+  it('drops the server matches when a cloud search falls back to the device', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useChatViewStore.setState({
+      remoteSearchChats: [{ id: 'stale', title: 'Stale', subtitle: 'Stale' }],
+      remoteSearchProjects: [{ id: 'stale', title: 'Stale', subtitle: 'Stale' }],
+    });
+    mockApiGet.mockRejectedValue(new Error('network'));
+
+    useChatViewStore.getState().searchConversations('rust');
+    await flushDebounce();
+
+    expect(useChatViewStore.getState().remoteSearchChats).toEqual([]);
+    expect(useChatViewStore.getState().remoteSearchProjects).toEqual([]);
   });
 
   it('cloud mode (signed in) calls GET /api/search and maps the results', async () => {

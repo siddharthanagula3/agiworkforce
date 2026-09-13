@@ -1,5 +1,6 @@
 import type { MobileArtifact } from '@/src/features/artifacts/types';
 import type { LibraryImage } from '@/src/features/library/collectGeneratedImages';
+import type { RemoteSearchMatch } from '@/stores/chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 export interface SearchableMobileProject {
@@ -38,6 +39,18 @@ function includesQuery(query: string, ...values: Array<string | null | undefined
   return values.some((value) => value?.toLocaleLowerCase().includes(query));
 }
 
+/**
+ * Device rows win: a synced record carries the local title, pin state and
+ * provenance that the server row does not.
+ */
+function withRemoteMatches(
+  local: MobileGlobalSearchResult[],
+  remote: ReadonlyArray<RemoteSearchMatch>,
+): MobileGlobalSearchResult[] {
+  const seen = new Set(local.map((result) => result.id));
+  return [...local, ...remote.filter((match) => !seen.has(match.id))];
+}
+
 export function buildMobileGlobalSearchGroups(input: {
   query: string;
   conversations: ReadonlyArray<ConversationSummary>;
@@ -46,6 +59,8 @@ export function buildMobileGlobalSearchGroups(input: {
   files: ReadonlyArray<SearchableMobileFile>;
   libraryImages: ReadonlyArray<LibraryImage>;
   artifacts: ReadonlyArray<MobileArtifact>;
+  remoteChats?: ReadonlyArray<RemoteSearchMatch>;
+  remoteProjects?: ReadonlyArray<RemoteSearchMatch>;
 }): MobileGlobalSearchGroups {
   const query = input.query.trim().toLocaleLowerCase();
   if (!query) {
@@ -53,26 +68,32 @@ export function buildMobileGlobalSearchGroups(input: {
   }
 
   return {
-    chats: input.conversations
-      .filter(
-        (conversation) =>
-          includesQuery(query, conversation.title, conversation.lastMessage) ||
-          input.conversationContentMatchIds.has(conversation.id),
-      )
-      .map((conversation) => ({
-        id: conversation.id,
-        title: conversation.title || 'Untitled chat',
-        subtitle: input.conversationContentMatchIds.has(conversation.id)
-          ? 'Matched message content'
-          : (conversation.lastMessage ?? 'Chat'),
-      })),
-    projects: input.projects
-      .filter((project) => includesQuery(query, project.name, project.description))
-      .map((project) => ({
-        id: project.id,
-        title: project.name,
-        subtitle: project.description?.trim() || 'Project',
-      })),
+    chats: withRemoteMatches(
+      input.conversations
+        .filter(
+          (conversation) =>
+            includesQuery(query, conversation.title, conversation.lastMessage) ||
+            input.conversationContentMatchIds.has(conversation.id),
+        )
+        .map((conversation) => ({
+          id: conversation.id,
+          title: conversation.title || 'Untitled chat',
+          subtitle: input.conversationContentMatchIds.has(conversation.id)
+            ? 'Matched message content'
+            : (conversation.lastMessage ?? 'Chat'),
+        })),
+      input.remoteChats ?? [],
+    ),
+    projects: withRemoteMatches(
+      input.projects
+        .filter((project) => includesQuery(query, project.name, project.description))
+        .map((project) => ({
+          id: project.id,
+          title: project.name,
+          subtitle: project.description?.trim() || 'Project',
+        })),
+      input.remoteProjects ?? [],
+    ),
     files: input.files
       .filter((file) => includesQuery(query, file.fileName, file.mimeType, file.conversationTitle))
       .map((file) => ({

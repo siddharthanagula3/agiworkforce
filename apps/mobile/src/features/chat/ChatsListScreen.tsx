@@ -135,6 +135,8 @@ export function ChatsListScreen() {
   const searchConversations = useChatViewStore((state) => state.searchConversations);
   const searchResultQuery = useChatViewStore((state) => state.searchQuery);
   const searchResults = useChatViewStore((state) => state.searchResults);
+  const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
+  const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
   const localProjects = useProjectStore((state) => state.projects);
   const cloudProjects = useCloudProjectStore((state) => state.projects);
   const storedArtifacts = useArtifactStore((state) => state.artifacts);
@@ -218,6 +220,15 @@ export function ChatsListScreen() {
         : new Set<string>(),
     [query, searchResultQuery, searchResults],
   );
+  const searchIsCurrent = searchResultQuery === query.trim();
+  const remoteSearchChats = useMemo(
+    () => (searchIsCurrent ? serverChatMatches : []),
+    [searchIsCurrent, serverChatMatches],
+  );
+  const remoteSearchProjects = useMemo(
+    () => (searchIsCurrent ? serverProjectMatches : []),
+    [searchIsCurrent, serverProjectMatches],
+  );
   const globalResults = useMemo(
     () =>
       buildMobileGlobalSearchGroups({
@@ -228,8 +239,20 @@ export function ChatsListScreen() {
         files,
         libraryImages,
         artifacts,
+        remoteChats: remoteSearchChats,
+        remoteProjects: remoteSearchProjects,
       }),
-    [artifacts, contentMatchIds, files, filteredHistory, libraryImages, projects, query],
+    [
+      artifacts,
+      contentMatchIds,
+      files,
+      filteredHistory,
+      libraryImages,
+      projects,
+      query,
+      remoteSearchChats,
+      remoteSearchProjects,
+    ],
   );
 
   const isSearching = query.trim().length > 0;

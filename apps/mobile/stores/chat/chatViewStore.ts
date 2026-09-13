@@ -20,6 +20,18 @@ export interface ChatFeatures {
 
 export type MediaMode = 'text' | 'image' | 'video';
 
+/**
+ * A match the server found that the device has not synced. Only kinds with a
+ * working mobile destination are carried: a chat opens /(app)/chat/[id] and a
+ * project opens /(app)/projects/[id]. The route's file rows name no
+ * conversation, so there is nothing to open them with.
+ */
+export interface RemoteSearchMatch {
+  id: string;
+  title: string;
+  subtitle: string;
+}
+
 export interface ConversationSearchResult {
   conversationId: string;
   messageId: string;
@@ -31,6 +43,8 @@ export interface ConversationSearchResult {
 interface ViewState {
   searchQuery: string;
   searchResults: ConversationSearchResult[];
+  remoteSearchChats: RemoteSearchMatch[];
+  remoteSearchProjects: RemoteSearchMatch[];
   isSearching: boolean;
   chatMode: ChatMode;
   workMode: CloudWorkMode;
@@ -82,10 +96,43 @@ function buildSnippet(
 interface ServerSearchRow {
   type: 'session' | 'message';
   sessionId: string;
+  sessionTitle?: string;
   messageId?: string;
   matchedText?: string;
   contextBefore?: string;
   contextAfter?: string;
+}
+
+interface ServerProjectRow {
+  projectId: string;
+  projectName?: string;
+  content?: string;
+}
+
+const EMPTY_REMOTE_MATCHES = {
+  remoteSearchChats: [] as RemoteSearchMatch[],
+  remoteSearchProjects: [] as RemoteSearchMatch[],
+};
+
+function remoteChatMatches(rows: ServerSearchRow[]): RemoteSearchMatch[] {
+  const matches = new Map<string, RemoteSearchMatch>();
+  for (const row of rows) {
+    if (matches.has(row.sessionId)) continue;
+    matches.set(row.sessionId, {
+      id: row.sessionId,
+      title: row.sessionTitle?.trim() || 'Untitled chat',
+      subtitle: row.type === 'message' ? 'Matched message content' : 'Matched chat title',
+    });
+  }
+  return [...matches.values()];
+}
+
+function remoteProjectMatches(rows: ServerProjectRow[]): RemoteSearchMatch[] {
+  return rows.map((row) => ({
+    id: row.projectId,
+    title: row.projectName?.trim() || 'Untitled project',
+    subtitle: row.content?.trim() || 'Project',
+  }));
 }
 
 async function runSearch(
@@ -104,10 +151,11 @@ async function runSearch(
         require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
       if (useAuthStore.getState().isClerkSignedIn) {
         const { api } = require('@/services/api') as typeof import('@/services/api');
-        const data = await api.get<{ results: ServerSearchRow[] }>(
+        const data = await api.get<{ results: ServerSearchRow[]; projects?: ServerProjectRow[] }>(
           `/api/search?q=${encodeURIComponent(trimmed)}&limit=50`,
         );
-        const results: ConversationSearchResult[] = (data.results ?? []).map((r) => {
+        const rows = data.results ?? [];
+        const results: ConversationSearchResult[] = rows.map((r) => {
           const text = (r.contextBefore ?? '') + (r.matchedText ?? '') + (r.contextAfter ?? '');
           const prefix = r.contextBefore ? '...' : '';
           return {
@@ -118,7 +166,12 @@ async function runSearch(
             matchLength: r.matchedText?.length ?? trimmed.length,
           };
         });
-        set({ searchResults: results, isSearching: false });
+        set({
+          searchResults: results,
+          remoteSearchChats: remoteChatMatches(rows),
+          remoteSearchProjects: remoteProjectMatches(data.projects ?? []),
+          isSearching: false,
+        });
         return;
       }
     } catch {
@@ -162,7 +215,7 @@ async function runSearch(
     }
   }
 
-  set({ searchResults: results, isSearching: false });
+  set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
 }
 
 export const useChatViewStore = create<ViewState>()(
@@ -170,6 +223,7 @@ export const useChatViewStore = create<ViewState>()(
     (set, get) => ({
       searchQuery: '',
       searchResults: [],
+      ...EMPTY_REMOTE_MATCHES,
       isSearching: false,
       chatMode: 'chat',
       workMode: 'chat',
@@ -195,7 +249,12 @@ export const useChatViewStore = create<ViewState>()(
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = undefined;
           }
-          set({ searchQuery: '', searchResults: [], isSearching: false });
+          set({
+            searchQuery: '',
+            searchResults: [],
+            ...EMPTY_REMOTE_MATCHES,
+            isSearching: false,
+          });
           return;
         }
 
@@ -228,7 +287,7 @@ export const useChatViewStore = create<ViewState>()(
           clearTimeout(searchDebounceTimer);
           searchDebounceTimer = undefined;
         }
-        set({ searchQuery: '', searchResults: [], isSearching: false });
+        set({ searchQuery: '', searchResults: [], ...EMPTY_REMOTE_MATCHES, isSearching: false });
       },
     }),
     {
