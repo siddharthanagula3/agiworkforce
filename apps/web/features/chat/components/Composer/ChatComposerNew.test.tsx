@@ -1903,4 +1903,112 @@ describe('ChatComposerNew', () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  describe('editing an attached image from the composer', () => {
+    const openAiModel = IMAGE_MODELS.find((model) => model.provider === 'openai');
+
+    function admissionWith(supportsEdit: boolean) {
+      chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+        model_id: modelId,
+        name: modelId,
+        kind: 'image',
+        provider: 'fixture',
+        state: 'enabled',
+        supports_edit: supportsEdit,
+      }));
+    }
+
+    function pngFile(name: string): File {
+      return new File([new Uint8Array([1, 2, 3, 4])], name, { type: 'image/png' });
+    }
+
+    async function enterImageMode(): Promise<void> {
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      await waitFor(() =>
+        expect(screen.getByLabelText(/exit image generation mode/i)).toBeVisible(),
+      );
+    }
+
+    function attach(file: File): void {
+      fireEvent.change(screen.getByLabelText('File upload'), { target: { files: [file] } });
+    }
+
+    const operationTrigger = /what to do with the attached image/i;
+
+    it('keeps the image attached instead of refusing it', async () => {
+      admissionWith(true);
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      await enterImageMode();
+
+      attach(pngFile('portrait.png'));
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: operationTrigger })).toBeVisible(),
+      );
+      expect(screen.queryByTestId('media-attachment-conflict')).toBeNull();
+    });
+
+    it('sends the attached image as an edit the media route already serves', async () => {
+      admissionWith(true);
+      const onGenerateImage = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={onGenerateImage} />);
+      await enterImageMode();
+      attach(pngFile('portrait.png'));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: operationTrigger })).toBeVisible(),
+      );
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'put it on a beach');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => expect(onGenerateImage).toHaveBeenCalled());
+      const [prompt, options] = onGenerateImage.mock.calls[0] as [
+        string,
+        { edit?: { operation: string; sourceImageBase64: string } },
+      ];
+      expect(prompt).toBe('put it on a beach');
+      expect(options.edit?.operation).toBe('edit');
+      expect(options.edit?.sourceImageBase64.length).toBeGreaterThan(0);
+    });
+
+    it('offers the mask edit only once a second image is attached', async () => {
+      admissionWith(true);
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      await enterImageMode();
+      attach(pngFile('portrait.png'));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: operationTrigger })).toBeVisible(),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: operationTrigger }));
+      expect(screen.getByText('Variation')).toBeVisible();
+      expect(screen.queryByText('Mask edit')).toBeNull();
+
+      attach(pngFile('mask.png'));
+      await waitFor(() => expect(screen.getByText('Mask edit')).toBeVisible());
+    });
+
+    it('refuses the send when the chosen image model reports no edit support', async () => {
+      admissionWith(false);
+      const onGenerateImage = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={onGenerateImage} />);
+      await enterImageMode();
+      if (openAiModel) {
+        fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+        fireEvent.click(screen.getByRole('button', { name: openAiModel.label }));
+      }
+      attach(pngFile('portrait.png'));
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'put it on a beach');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() =>
+        expect(screen.getByText(/cannot edit an attached picture/i)).toBeVisible(),
+      );
+      expect(onGenerateImage).not.toHaveBeenCalled();
+    });
+  });
 });

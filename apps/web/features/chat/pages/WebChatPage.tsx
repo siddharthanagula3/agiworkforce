@@ -245,6 +245,7 @@ import {
   IMAGE_MODELS,
   resolveImageGenerationRequestOptions,
   type ImageAspectRatio,
+  type ImageEditRequest,
 } from '../lib/imageGenerationOptions';
 import { resolveMediaPaywallSlot, runMediaPaywallRecovery } from '../lib/mediaPaywallRecovery';
 import { normalizeRequiredTier, paywallRecoveryLabel } from '../components/InlinePaywallCard';
@@ -2132,7 +2133,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // handleGenerateImage – called by composer; injects user + assistant messages
   // ---------------------------------------------------------------------------
   const handleGenerateImage = useCallback(
-    (prompt: string, options: { aspectRatio: ImageAspectRatio; modelId: string }) => {
+    (
+      prompt: string,
+      options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+    ) => {
       // Same first-message send guard as sendContent: a lazy-created image
       // conversation has the identical createConversation → bareChatSessionId
       // gap that the stale-active reconciler would otherwise misread and clear.
@@ -2151,6 +2155,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           const imageRequest = resolveImageGenerationRequestOptions(
             options.aspectRatio,
             options.modelId,
+            options.edit,
           );
           const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
           const requestedModel = imageRequest.model;

@@ -1,4 +1,7 @@
-import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedMediaImageAspectRatio,
+  ManagedMediaImageOperation,
+} from '@agiworkforce/cloud-contracts';
 import { getModelMetadataById, getModels, isModelLive } from '@agiworkforce/types';
 
 export type ImageAspectRatio = 'auto' | ManagedMediaImageAspectRatio;
@@ -114,11 +117,28 @@ export interface ResolvedImageGenerationRequestOptions {
   aspectRatio?: ManagedMediaImageAspectRatio;
   provider?: ImageModelOption['provider'];
   model?: string;
+  /**
+   * Set when the turn edits an image the composer already holds. Carried with
+   * the rest of the request so a recovery replay reproduces the same edit and
+   * not a fresh generation from the same prompt.
+   */
+  operation?: ManagedMediaImageOperation;
+  sourceImageBase64?: string;
+  maskImageBase64?: string;
+  transparentBackground?: boolean;
+}
+
+export interface ImageEditRequest {
+  operation: ManagedMediaImageOperation;
+  sourceImageBase64: string;
+  maskImageBase64?: string;
+  transparentBackground?: boolean;
 }
 
 export function resolveImageGenerationRequestOptions(
   aspectRatio: ImageAspectRatio,
   modelId?: string,
+  edit?: ImageEditRequest,
 ): ResolvedImageGenerationRequestOptions {
   const model = resolveImageModel(modelId);
   if (!model) return {};
@@ -127,5 +147,37 @@ export function resolveImageGenerationRequestOptions(
     ...(normalizedAspect === 'auto' ? {} : { aspectRatio: normalizedAspect }),
     provider: model.provider,
     model: model.id,
+    ...(edit
+      ? {
+          operation: edit.operation,
+          sourceImageBase64: edit.sourceImageBase64,
+          ...(edit.maskImageBase64 ? { maskImageBase64: edit.maskImageBase64 } : {}),
+          ...(edit.transparentBackground ? { transparentBackground: true } : {}),
+        }
+      : {}),
   };
+}
+
+/**
+ * An attached image as the inline bytes the managed media route takes.
+ *
+ * `FileReader` rather than `File.arrayBuffer()` plus `btoa`: the reader is the
+ * one path every browser and jsdom implement, and it hands back base64 already
+ * encoded, so a multi-megapixel PNG never becomes a megabyte-long argument list.
+ */
+export function readImageFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('The image could not be read.'));
+    reader.onload = () => {
+      const result = reader.result;
+      const base64 = typeof result === 'string' ? result.slice(result.indexOf(',') + 1) : '';
+      if (!base64) {
+        reject(new Error('The image could not be read.'));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
 }
