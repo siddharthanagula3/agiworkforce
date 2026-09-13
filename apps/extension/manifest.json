@@ -19,7 +19,8 @@
     "cookies",
     "notifications",
     "tabGroups",
-    "debugger"
+    "debugger",
+    "downloads"
   ],
   "host_permissions": [
     "http://localhost/*",
