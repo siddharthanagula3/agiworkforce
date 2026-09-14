@@ -52,6 +52,108 @@ function createInspectablePanel() {
   return { controller, shadow };
 }
 
+function trackInnerText(): { reads: number; restore: () => void } {
+  const state = {
+    reads: 0,
+    restore: () => {
+      Reflect.deleteProperty(HTMLElement.prototype, 'innerText');
+    },
+  };
+  Object.defineProperty(HTMLElement.prototype, 'innerText', {
+    configurable: true,
+    get(this: HTMLElement) {
+      state.reads += 1;
+      return this.textContent ?? '';
+    },
+  });
+  return state;
+}
+
+describe('in-page panel page capture', () => {
+  it('reads nothing until the panel is opened', () => {
+    document.body.innerHTML = '<main>Main content here</main>';
+    const innerText = trackInnerText();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+
+      expect(innerText.reads).toBe(0);
+      expect(shadow.querySelectorAll('.agi-action-chip').length).toBeGreaterThan(0);
+      expect(shadow.querySelector('.agi-disclosure')?.textContent).toContain(
+        'up to 30,000 characters',
+      );
+
+      controller.open();
+      expect(innerText.reads).toBeGreaterThan(0);
+      expect(shadow.querySelector('.agi-disclosure')?.textContent).toContain(
+        '17 characters of visible text',
+      );
+    } finally {
+      innerText.restore();
+    }
+  });
+
+  it('sends the main region rather than the whole body', async () => {
+    document.body.innerHTML = '<main>Main content here</main><footer>Footer noise</footer>';
+    const innerText = trackInnerText();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+      controller.open();
+      const textarea = shadow.querySelector<HTMLTextAreaElement>('.agi-textarea')!;
+      textarea.value = 'What is here?';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      shadow.querySelector<HTMLButtonElement>('.agi-submit-btn')!.click();
+
+      await vi.waitFor(() => {
+        expect(
+          chromeHarness.sendMessage.mock.calls.some(
+            ([message]) => message.type === 'IN_PAGE_PROMPT',
+          ),
+        ).toBe(true);
+      });
+      const sent = chromeHarness.sendMessage.mock.calls.find(
+        ([message]) => message.type === 'IN_PAGE_PROMPT',
+      )?.[0] as { pageContext?: string };
+      expect(sent.pageContext).toContain('Main content here');
+      expect(sent.pageContext).not.toContain('Footer noise');
+    } finally {
+      innerText.restore();
+    }
+  });
+
+  it('truncates to the cap before redaction runs', () => {
+    document.body.innerHTML = '<main></main>';
+    document.querySelector('main')!.textContent = 'x'.repeat(40_000);
+    const innerText = trackInnerText();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+      controller.open();
+      expect(shadow.querySelector('.agi-disclosure')?.textContent).toContain(
+        '30,000 characters of visible text',
+      );
+    } finally {
+      innerText.restore();
+    }
+  });
+
+  it('never replaces a host global to learn about navigation', () => {
+    const originalPushState = history.pushState;
+    const navigation = new EventTarget();
+    (window as Window & { navigation?: EventTarget }).navigation = navigation;
+    try {
+      const { shadow } = createInspectablePanel();
+      const firstChip = shadow.querySelector('.agi-action-chip');
+
+      expect(history.pushState).toBe(originalPushState);
+
+      navigation.dispatchEvent(new Event('currententrychange'));
+      const rebuiltChip = shadow.querySelector('.agi-action-chip');
+      expect(rebuiltChip).not.toBe(firstChip);
+    } finally {
+      Reflect.deleteProperty(window as Window & { navigation?: EventTarget }, 'navigation');
+    }
+  });
+});
+
 describe('in-page panel host and closed state', () => {
   it('never joins the host page layout', () => {
     const { controller } = createInspectablePanel();
