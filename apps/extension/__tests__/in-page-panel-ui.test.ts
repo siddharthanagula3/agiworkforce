@@ -93,7 +93,8 @@ describe('in-page panel page capture', () => {
   });
 
   it('sends the main region rather than the whole body', async () => {
-    document.body.innerHTML = '<main>Main content here</main><footer>Footer noise</footer>';
+    const mainContent = `Main content here. ${'The article body continues at length. '.repeat(8)}`;
+    document.body.innerHTML = `<main>${mainContent}</main><footer>Footer noise</footer>`;
     const innerText = trackInnerText();
     try {
       const { controller, shadow } = createInspectablePanel();
@@ -115,6 +116,34 @@ describe('in-page panel page capture', () => {
       )?.[0] as { pageContext?: string };
       expect(sent.pageContext).toContain('Main content here');
       expect(sent.pageContext).not.toContain('Footer noise');
+    } finally {
+      innerText.restore();
+    }
+  });
+
+  it('falls back to the body when the main region is nearly empty', async () => {
+    document.body.innerHTML =
+      '<main></main><div>Body content that lives outside any main landmark.</div>';
+    const innerText = trackInnerText();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+      controller.open();
+      const textarea = shadow.querySelector<HTMLTextAreaElement>('.agi-textarea')!;
+      textarea.value = 'What is here?';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      shadow.querySelector<HTMLButtonElement>('.agi-submit-btn')!.click();
+
+      await vi.waitFor(() => {
+        expect(
+          chromeHarness.sendMessage.mock.calls.some(
+            ([message]) => message.type === 'IN_PAGE_PROMPT',
+          ),
+        ).toBe(true);
+      });
+      const sent = chromeHarness.sendMessage.mock.calls.find(
+        ([message]) => message.type === 'IN_PAGE_PROMPT',
+      )?.[0] as { pageContext?: string };
+      expect(sent.pageContext).toContain('Body content that lives outside any main landmark.');
     } finally {
       innerText.restore();
     }
