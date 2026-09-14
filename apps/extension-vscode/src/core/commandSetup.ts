@@ -26,6 +26,7 @@ import {
   type CloudRunApprovalDecision,
 } from '../features/cloud-tasks';
 import type {
+  ManagedCloudArtifactIndexEntry,
   ManagedCloudScheduleTask,
   ManagedCloudSchedulesClient,
 } from '@agiworkforce/cloud-contracts';
@@ -45,6 +46,50 @@ import {
   setScheduleEnabledInteractively,
   showScheduleRuns,
 } from '../features/schedules';
+import {
+  CREATE_PROJECT_COMMAND,
+  DELETE_PROJECT_COMMAND,
+  CLEAR_ACTIVE_PROJECT_COMMAND,
+  OPEN_PROJECT_COMMAND,
+  PROJECTS_VIEW_ID,
+  ProjectsTreeProvider,
+  REFRESH_PROJECTS_COMMAND,
+  USE_PROJECT_IN_CHAT_COMMAND,
+  clearActiveCloudProject,
+  createProjectInteractively,
+  deleteProjectInteractively,
+  getActiveCloudProject,
+  projectsWebUrl,
+  readProjectCommandArgument,
+  resolveProjectsWorkspace,
+  showProjectDetail,
+  applyProjectToChat,
+  type ProjectsWorkspace,
+} from '../features/projects';
+import {
+  ARTIFACTS_VIEW_ID,
+  ArtifactContentProvider,
+  ArtifactsTreeProvider,
+  OPEN_ARTIFACT_COMMAND,
+  OPEN_ARTIFACT_ON_WEB_COMMAND,
+  REFRESH_ARTIFACTS_COMMAND,
+  SAVE_ARTIFACT_COMMAND,
+  artifactsWebUrl,
+  describeArtifactFailure,
+  openArtifactReadOnly,
+  openPublishedArtifact,
+  readArtifactCommandArgument,
+  resolveArtifactsWorkspace,
+  saveArtifactToWorkspace,
+  type ArtifactsWorkspace,
+} from '../features/artifacts';
+import {
+  CONNECTORS_VIEW_ID,
+  ConnectorsTreeProvider,
+  MANAGE_CONNECTORS_COMMAND,
+  REFRESH_CONNECTORS_COMMAND,
+  connectorsWebUrl,
+} from '../features/connectors';
 import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
@@ -318,6 +363,10 @@ export interface CommandDeps {
   conversationTreeProvider: ConversationTreeProvider;
   cloudTasksTreeProvider: CloudTasksTreeProvider;
   schedulesTreeProvider: SchedulesTreeProvider;
+  projectsTreeProvider: ProjectsTreeProvider;
+  artifactsTreeProvider: ArtifactsTreeProvider;
+  artifactContentProvider: ArtifactContentProvider;
+  connectorsTreeProvider: ConnectorsTreeProvider;
   localRuntimes: LocalRuntimePool;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -332,6 +381,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     conversationTreeProvider,
     cloudTasksTreeProvider,
     schedulesTreeProvider,
+    projectsTreeProvider,
+    artifactsTreeProvider,
+    artifactContentProvider,
+    connectorsTreeProvider,
     localRuntimes,
     contextPanelProvider,
     memoryTreeProvider,
@@ -380,6 +433,56 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     await act(resolution.client, task);
   };
   const scheduleActionHost = { onChanged: () => schedulesTreeProvider.refresh() };
+  const projectDetailHost = {
+    webOrigin: getCloudWebOrigin(),
+    workspaceState: context.workspaceState,
+    onChanged: () => projectsTreeProvider.refresh(),
+  };
+  const withProjectsWorkspace = async (
+    act: (workspace: ProjectsWorkspace) => Promise<void>,
+  ): Promise<void> => {
+    const resolution = await resolveProjectsWorkspace(context.secrets);
+    if (resolution.status === 'signed-out') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    await act(resolution.workspace);
+  };
+  const withArtifactsWorkspace = async (
+    act: (workspace: ArtifactsWorkspace) => Promise<void>,
+  ): Promise<void> => {
+    const resolution = await resolveArtifactsWorkspace(context.secrets);
+    if (resolution.status === 'signed-out') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    await act(resolution.workspace);
+  };
+  const withArtifactFromId = async (
+    artifactId: unknown,
+    act: (workspace: ArtifactsWorkspace, artifact: ManagedCloudArtifactIndexEntry) => Promise<void>,
+  ): Promise<void> => {
+    if (typeof artifactId !== 'string' || artifactId === '') return;
+    await withArtifactsWorkspace(async (workspace) => {
+      let artifact: ManagedCloudArtifactIndexEntry | undefined;
+      try {
+        const artifacts = await workspace.index.listArtifacts();
+        artifact = artifacts.find((entry) => entry.id === artifactId);
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `AGI Workforce: the artifact index could not be read, ${describeArtifactFailure(error)}`,
+        );
+        return;
+      }
+      if (artifact === undefined) {
+        void vscode.window.showWarningMessage(
+          'AGI Workforce: this artifact is no longer in your account index.',
+        );
+        return;
+      }
+      await act(workspace, artifact);
+    });
+  };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
@@ -1805,6 +1908,91 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         showScheduleRuns(client, task, scheduleActionHost),
       ),
     ),
+    register('agi-workforce.showProjects', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      await vscode.commands.executeCommand(`${PROJECTS_VIEW_ID}.focus`);
+      projectsTreeProvider.refresh();
+    }),
+    register(REFRESH_PROJECTS_COMMAND, () => {
+      projectsTreeProvider.refresh();
+    }),
+    register('agi-workforce.openProjectsOnWeb', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(projectsWebUrl(getCloudWebOrigin())));
+    }),
+    register(OPEN_PROJECT_COMMAND, async (projectId: unknown) => {
+      if (typeof projectId !== 'string' || projectId === '') return;
+      await withProjectsWorkspace((workspace) =>
+        showProjectDetail(workspace, projectId, projectDetailHost),
+      );
+    }),
+    register(CREATE_PROJECT_COMMAND, async () => {
+      await withProjectsWorkspace(async (workspace) => {
+        await createProjectInteractively(workspace, projectDetailHost);
+      });
+    }),
+    register(DELETE_PROJECT_COMMAND, async (item: unknown) => {
+      const project = readProjectCommandArgument(item);
+      if (project === undefined) return;
+      await withProjectsWorkspace((workspace) =>
+        deleteProjectInteractively(workspace, project, projectDetailHost),
+      );
+    }),
+    register(USE_PROJECT_IN_CHAT_COMMAND, async (item: unknown) => {
+      const project = readProjectCommandArgument(item);
+      if (project === undefined) return;
+      await applyProjectToChat(project, projectDetailHost);
+    }),
+    register(CLEAR_ACTIVE_PROJECT_COMMAND, async () => {
+      const active = getActiveCloudProject(context.workspaceState);
+      if (active === undefined) {
+        vscode.window.showInformationMessage(
+          'AGI Workforce: no project is applied to turns in this workspace.',
+        );
+        return;
+      }
+      await clearActiveCloudProject(context.workspaceState);
+      vscode.window.showInformationMessage(
+        `AGI Workforce: turns in this workspace no longer use "${active.name}".`,
+      );
+      projectsTreeProvider.refresh();
+    }),
+    register('agi-workforce.showArtifacts', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      await vscode.commands.executeCommand(`${ARTIFACTS_VIEW_ID}.focus`);
+      artifactsTreeProvider.refresh();
+    }),
+    register(REFRESH_ARTIFACTS_COMMAND, () => {
+      artifactsTreeProvider.refresh();
+    }),
+    register('agi-workforce.openArtifactsOnWeb', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(artifactsWebUrl(getCloudWebOrigin())));
+    }),
+    register(OPEN_ARTIFACT_COMMAND, (artifactId: unknown) =>
+      withArtifactFromId(artifactId, (workspace, artifact) =>
+        openArtifactReadOnly(workspace, artifact, { contentProvider: artifactContentProvider }),
+      ),
+    ),
+    register(SAVE_ARTIFACT_COMMAND, async (item: unknown) => {
+      const artifact = readArtifactCommandArgument(item);
+      if (artifact === undefined) return;
+      await withArtifactsWorkspace((workspace) => saveArtifactToWorkspace(workspace, artifact));
+    }),
+    register(OPEN_ARTIFACT_ON_WEB_COMMAND, async (item: unknown) => {
+      const published = (item as { published?: unknown } | null)?.published;
+      if (published === null || typeof published !== 'object') return;
+      await openPublishedArtifact(published as Parameters<typeof openPublishedArtifact>[0]);
+    }),
+    register('agi-workforce.showConnectors', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      await vscode.commands.executeCommand(`${CONNECTORS_VIEW_ID}.focus`);
+      connectorsTreeProvider.refresh();
+    }),
+    register(REFRESH_CONNECTORS_COMMAND, () => {
+      connectorsTreeProvider.refresh();
+    }),
+    register(MANAGE_CONNECTORS_COMMAND, async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(connectorsWebUrl(getCloudWebOrigin())));
+    }),
     register('agi-workforce.openCloudTask', async (runId: unknown) => {
       if (typeof runId !== 'string' || runId === '') return;
       const resolution = await resolveCloudAgentRunClient(context.secrets);
