@@ -27,7 +27,7 @@ import { SITE_ALLOWLIST_STORAGE_KEY } from '../src/background/policy';
 const SRC_ROOT = resolve(process.cwd(), 'src');
 const DEFINITION_FILE = 'background/policy.ts';
 
-const PENDING_MIGRATION = new Set(['side_panel.ts', 'inPagePanel/setup.ts']);
+const PENDING_MIGRATION = new Set(['side_panel.ts']);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
