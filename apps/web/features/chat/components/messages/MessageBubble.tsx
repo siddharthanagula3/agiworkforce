@@ -170,6 +170,7 @@ import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
+import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
@@ -618,11 +619,7 @@ interface MessageBubbleProps {
   /** True while the conversation streams: paging mid-turn is not offered. */
   isConversationStreaming?: boolean;
   /** Re-generates an image result in-place (edit/aspect-ratio change). */
-  onRegenerateImage?: (opts: {
-    prompt: string;
-    aspectRatio: ImageAspectRatio;
-    modelId?: string;
-  }) => Promise<string>;
+  onRegenerateImage?: (opts: ImageRevisionRequest) => Promise<string>;
   /** Resume status observation for an already-started durable video task. */
   onResumeVideo?: (messageId: string) => void;
   /** Start a new generation only after a durable video task is terminally failed. */

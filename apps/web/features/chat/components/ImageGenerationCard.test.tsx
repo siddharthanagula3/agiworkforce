@@ -1,7 +1,18 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImageGenerationCard, ShareModal, imageDownloadFilename } from './ImageGenerationCard';
 import { IMAGE_MODELS, resolveImageGenerationRequestOptions } from '../lib/imageGenerationOptions';
+
+const { admissionFor } = vi.hoisted(() => ({ admissionFor: vi.fn() }));
+
+vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
+  useMediaModelAvailability: () => ({
+    status: 'ready',
+    error: null,
+    admissionFor,
+    retry: vi.fn(),
+  }),
+}));
 
 const OPENAI_IMAGE_MODEL_ID = (() => {
   const model = IMAGE_MODELS.find((candidate) => candidate.provider === 'openai');
@@ -329,5 +340,135 @@ describe('ShareModal link', () => {
     expect(
       external.filter((href) => /twitter|x\.com|linkedin|reddit|facebook/.test(href ?? '')),
     ).toEqual([]);
+  });
+});
+
+describe('ImageGenerationCard revision requests', () => {
+  const SOURCE_BYTES = 'source-image-bytes';
+  const SOURCE_BASE64 = Buffer.from(SOURCE_BYTES).toString('base64');
+  const MASK_BYTES = 'mask-image-bytes';
+  const MASK_BASE64 = Buffer.from(MASK_BYTES).toString('base64');
+
+  function renderEditPanel(supportsEdit: boolean) {
+    admissionFor.mockReturnValue(
+      supportsEdit
+        ? { model_id: OPENAI_IMAGE_MODEL_ID, kind: 'image', state: 'enabled', supports_edit: true }
+        : { model_id: OPENAI_IMAGE_MODEL_ID, kind: 'image', state: 'enabled' },
+    );
+    const onRegenerate = vi.fn().mockResolvedValue('/api/files/next');
+    render(
+      <ImageGenerationCard
+        imageUrl="/api/files/original"
+        isGenerating={false}
+        prompt="Draw a star"
+        aspectRatio="1:1"
+        modelId={OPENAI_IMAGE_MODEL_ID}
+        onRegenerate={onRegenerate}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /new version/i }));
+    return onRegenerate;
+  }
+
+  function attachMask() {
+    const maskInput = screen.getByLabelText('Mask image');
+    fireEvent.change(maskInput, {
+      target: { files: [new File([MASK_BYTES], 'mask.png', { type: 'image/png' })] },
+    });
+  }
+
+  beforeEach(() => {
+    admissionFor.mockReset();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob([SOURCE_BYTES], { type: 'image/png' }),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sends a prompt edit with the generated image as the source', async () => {
+    const onRegenerate = renderEditPanel(true);
+
+    fireEvent.change(screen.getByPlaceholderText('Describe a change to this image...'), {
+      target: { value: 'add a moon' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply this change to the image' }));
+
+    await waitFor(() =>
+      expect(onRegenerate).toHaveBeenCalledWith({
+        prompt: 'Draw a star. Edit: add a moon',
+        aspectRatio: '1:1',
+        modelId: OPENAI_IMAGE_MODEL_ID,
+        edit: { operation: 'edit', sourceImageBase64: SOURCE_BASE64 },
+      }),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/files/original', {
+      credentials: 'same-origin',
+    });
+  });
+
+  it('sends a variation of the source image with no mask', async () => {
+    const onRegenerate = renderEditPanel(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Variation' }));
+
+    await waitFor(() =>
+      expect(onRegenerate).toHaveBeenCalledWith({
+        prompt: 'Draw a star',
+        aspectRatio: '1:1',
+        modelId: OPENAI_IMAGE_MODEL_ID,
+        edit: { operation: 'variation', sourceImageBase64: SOURCE_BASE64 },
+      }),
+    );
+  });
+
+  it('sends an inpaint once a mask image is attached', async () => {
+    const onRegenerate = renderEditPanel(true);
+
+    attachMask();
+    await screen.findByText('mask.png');
+    fireEvent.change(screen.getByPlaceholderText('Describe a change to this image...'), {
+      target: { value: 'repaint the sky' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply this change to the image' }));
+
+    await waitFor(() =>
+      expect(onRegenerate).toHaveBeenCalledWith({
+        prompt: 'Draw a star. Edit: repaint the sky',
+        aspectRatio: '1:1',
+        modelId: OPENAI_IMAGE_MODEL_ID,
+        edit: {
+          operation: 'inpaint',
+          sourceImageBase64: SOURCE_BASE64,
+          maskImageBase64: MASK_BASE64,
+        },
+      }),
+    );
+  });
+
+  it('hides the mask control and names the reason when the model cannot edit', async () => {
+    const onRegenerate = renderEditPanel(false);
+
+    expect(screen.queryByLabelText('Mask image')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add mask' })).toBeNull();
+    expect(screen.getByText('This model cannot edit an existing image')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Variation' })).toBeDisabled();
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Describe a change to generate a new version...'),
+      { target: { value: 'add a moon' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /generate a new version/i }));
+
+    await waitFor(() =>
+      expect(onRegenerate).toHaveBeenCalledWith({
+        prompt: 'Draw a star. Edit: add a moon',
+        aspectRatio: '1:1',
+        modelId: OPENAI_IMAGE_MODEL_ID,
+      }),
+    );
   });
 });

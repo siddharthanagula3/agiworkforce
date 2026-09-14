@@ -246,6 +246,7 @@ import {
   resolveImageGenerationRequestOptions,
   type ImageAspectRatio,
   type ImageEditRequest,
+  type ImageRevisionRequest,
 } from '../lib/imageGenerationOptions';
 import { resolveMediaPaywallSlot, runMediaPaywallRecovery } from '../lib/mediaPaywallRecovery';
 import { normalizeRequiredTier, paywallRecoveryLabel } from '../components/InlinePaywallCard';
@@ -2243,12 +2244,13 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // Returns a Promise<string> so the card can update its local display state.
   // ---------------------------------------------------------------------------
   const handleRegenerateImageInPlace = useCallback(
-    async (
-      messageId: string,
-      opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-    ): Promise<string> => {
+    async (messageId: string, opts: ImageRevisionRequest): Promise<string> => {
       let generatedImage: GeneratedImageResult | null = null;
-      const imageRequest = resolveImageGenerationRequestOptions(opts.aspectRatio, opts.modelId);
+      const imageRequest = resolveImageGenerationRequestOptions(
+        opts.aspectRatio,
+        opts.modelId,
+        opts.edit,
+      );
       const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
       const requestedModel = imageRequest.model;
       // AUDIT-FIX ROOT-CAUSE: capture the owning conversation up front; the
