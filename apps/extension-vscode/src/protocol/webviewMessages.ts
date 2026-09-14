@@ -176,6 +176,23 @@ const runSlashCommand = z.object({
   payload: z.object({ name: z.string().min(1).max(120) }),
 });
 
+export const APPROVAL_DECISIONS = ['once', 'session', 'deny', 'abort'] as const;
+export const ApprovalDecisionSchema = z.enum(APPROVAL_DECISIONS);
+export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
+
+const respondToApproval = z.object({
+  type: z.literal('respondToApproval'),
+  payload: z.object({
+    requestId: z.string().min(1).max(200),
+    decision: ApprovalDecisionSchema,
+  }),
+});
+
+const openToolDiff = z.object({
+  type: z.literal('openToolDiff'),
+  payload: z.object({ path: z.string().min(1).max(4096) }),
+});
+
 const dismissEditorContext = z.object({
   type: z.literal('dismissEditorContext'),
   payload: z.object({ id: z.string().min(1).max(2048) }),
@@ -222,6 +239,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   requestContextMenuState,
   attachContext,
   dismissEditorContext,
+  openToolDiff,
+  respondToApproval,
   attachFiles,
   removePendingAttachment,
   clearActiveProject,
