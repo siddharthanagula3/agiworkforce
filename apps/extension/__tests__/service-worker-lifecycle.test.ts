@@ -40,6 +40,16 @@ describe('the worker is only woken when there is work', () => {
     expect(background).toContain('void chrome.alarms.clear(MAINTENANCE_ALARM)');
   });
 
+  it('clears a task alarm whose task is gone instead of waking for it forever', () => {
+    const alarmHandler = background.slice(
+      background.indexOf('chrome.alarms.onAlarm.addListener'),
+      background.indexOf('chrome.runtime.onSuspendCanceled.addListener'),
+    );
+    expect(alarmHandler).toMatch(
+      /if \(!task\?\.enabled\) \{[\s\S]*?await chrome\.alarms\.clear\(alarm\.name\);\s*return;/,
+    );
+  });
+
   it('clears the alarms older builds registered, which Chrome would keep firing', () => {
     expect(background).toContain("const RETIRED_ALARM_NAMES = ['keep-alive', SYNC_SWEEP_ALARM]");
     expect(background).toMatch(
@@ -109,6 +119,13 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
       /case 'GET_COMPUTER_USE_STATE'[\s\S]*computerUseRuns\.getActive\(\)[\s\S]*running: true[\s\S]*runId: activeLease\.runId/,
     );
     expect(panel).toContain('void adoptBackgroundRun();');
+  });
+
+  it('attaches the debugger detach listener in the first turn of the worker', () => {
+    expect(background).toMatch(/^ensureOnDetachListener\(\);$/m);
+    expect(background).toContain(
+      "import { ensureOnDetachListener } from './features/computer-use/cdpDriver';",
+    );
   });
 
   it("treats Chrome's own debugger Cancel as a stop, not a hiccup", () => {
