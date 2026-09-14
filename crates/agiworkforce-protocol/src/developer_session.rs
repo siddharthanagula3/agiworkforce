@@ -465,11 +465,67 @@ impl LocalModelProvider {
     }
 }
 
+/// Why a model on this host cannot be used right now.
+///
+/// The same vocabulary a failed turn would have produced, because it is
+/// derived from the same code. A list that invented its own words could
+/// promise a model that a turn then refuses, which is worse than saying
+/// nothing: the user picks it, spends a turn, and is told something the host
+/// already knew.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ModelUnreachable {
+    pub code: TurnFailureCode,
+    pub action: TurnFailureAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<String>,
+}
+
+/// One model this host knows about, and whether it can actually reach it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HostModelSummary {
+    pub id: String,
+    /// Route name as the host knows it, not a display name.
+    pub provider: String,
+    /// Whether a turn on this model could start. Not whether it is allowed:
+    /// a session in Local privacy mode still refuses a network route however
+    /// reachable it is, and that decision stays with the client.
+    pub reachable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub unreachable: Option<ModelUnreachable>,
+    /// The boundary a turn on this model would cross, so a client can apply
+    /// its own privacy rule without a second lookup.
+    pub trust_mode: DeveloperSessionTrustMode,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ModelListParams {
+    /// Recompute instead of answering from what this session already resolved.
+    ///
+    /// Reachability costs a local probe per local runtime and a credential
+    /// lookup per route, so it is resolved once and reused. A client asks for
+    /// a fresh answer after the user signs in or starts a local server.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub refresh: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct LocalModelListResponse {
     pub models: Vec<LocalModelSummary>,
+    /// Every route this host knows about with its verdict. Absent from a host
+    /// that predates it, where a client has nothing to go on but `models` and
+    /// its own history, which is what this replaces.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_models: Vec<HostModelSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
