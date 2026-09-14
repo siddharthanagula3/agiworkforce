@@ -12,6 +12,7 @@ import {
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
   UNKNOWN_PROVIDER_BRAND_COLOR,
+  type ModelRoute,
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
@@ -1773,6 +1774,19 @@ export class ChatStateManager {
       this._pendingApprovals.delete(requestId);
       this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
     }
+  }
+
+  /**
+   * The route the next turn would actually take, so a picker can tell a model
+   * this session can run from one it cannot. Undefined before a session starts.
+   */
+  activeRoute(): ModelRoute | undefined {
+    const thread = this._thread;
+    if (thread === undefined) return undefined;
+    return {
+      trustMode: thread.trustMode,
+      ...(thread.provider === undefined ? {} : { provider: thread.provider }),
+    };
   }
 
   pushEditorContext(): void {
