@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 
 const TRANSLATION_SCOPE_FALLBACK =
-  'Translates the public site, pricing, and some chat labels. Settings and most other screens are still English.';
+  "Translates pricing, marketing pages, device sign-in, and the app's navigation - sidebar, menus, and the composer's own labels. Settings field labels and your conversations are unaffected.";
 
 export function LanguageSelector() {
   const { t, i18n } = useTranslation('settings');
