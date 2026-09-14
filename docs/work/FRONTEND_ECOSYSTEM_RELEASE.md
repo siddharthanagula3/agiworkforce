@@ -201,3 +201,126 @@ extension state plus the desktop pairing record).
 | Chrome Extension  | YES for chat flows                              | page-context flow after one human click on Chrome's permission prompt (founder item)                                                |
 | VS Code Extension | YES                                             | eight items landed (context, editor utilities, approval card, tool rows, slash Enter, lifetime, route-aware picker, typed failures) |
 | CLI               | YES                                             | TUI polish cb17e54eb; tool turns clean over stdio                                                                                   |
+
+## 8. Release report (2026-09-14, wave in progress)
+
+Ninety-four commits since origin 9c8e3d2ca (35 fixes, 24 features, 7 test-only,
+6 refactors, 19 doc checkpoints; 369 files, about 25k lines added and 5k
+removed), pushed in three checkpoints through b4fecf1ac with the pre-push chain
+green each time. Every commit came through a captured gate or a lead fix.
+Three packages still running when this section was written: protocol-3 (the
+reachable-models list), chrome-5 (shared sign-out and the panel's unpair), and
+the control-driven web pass.
+
+### Completed
+
+- Shared vocabulary owners in `packages/contracts/types`: run states, tool-call
+  states, approval verbs, agent task states; read by web, mobile, VS Code and
+  Chrome. Provider display names mirrored between TypeScript and the CLI's Rust
+  table with a test that fails on drift.
+- Product-route registry shared by the web proxy, the Electron window policy
+  and the web click interceptor; the shell never renders the marketing site.
+- Electron: hidden title bar with a token-driven inset, native menu and
+  shortcuts, product-only navigation, a Desktop settings group inside the
+  shared settings modal (`SettingsNavKey`), local coding sessions served from
+  one `agi app-server` per approved folder with listing, transcript, composer,
+  Stop, approvals and a model choice that starts on a runnable model.
+- CLI: Gemini schema rejection, glued one-shot notices, MCP tool names,
+  double Enter, overlay bleed, Esc and Ctrl-L, stats in one place, trust words
+  Local / Your key / Managed, a session picker, and a pure JSON stdout under the
+  stdio transport with the continuation streamed as deltas.
+- Protocol 8 widened additively: typed turn failures with a code, provider,
+  retryable flag and action; thread summaries carrying git branch, worktree
+  root, client and a desktop source.
+- VS Code: editor, selection and problems attached to every turn; the editor
+  utilities run on the local session; approvals as one card in the transcript
+  scoped per tool for the session; tool rows with command, output and exit
+  status; slash Enter; the app-server dies with the window; the Tauri-era
+  bridge removed; a route-aware model picker; typed failures rendered as one
+  sentence with the runtime's action as a button; sessions naming the surface
+  and branch that opened them.
+- Chrome: plain chat turns (no forced tools), SSE framing tolerance on the
+  client and a server fix, empty states that wait for their list, the run
+  vocabulary from the owner, the allowlist "Add" requesting the real host
+  permission, a sticky model choice, a reload mid-stream keeping the partial
+  reply as Cancelled with Retry, the in-page panel's silent completion fixed.
+- Browser tool for other clients: the shell advertises its bridge to local
+  clients through a 0600 file; the CLI offers `browser_*` tools only when a
+  browser is paired and answering; VS Code inherits them; the capability prompt
+  names the client and follows the app's theme.
+- Mobile: resume keeps the conversation, a keychain failure is said plainly,
+  the first local send runs on the recommended ready model, settings rows
+  settle, Dynamic Type re-measures, the Models handoff shows it is working,
+  44 pt header controls, the switcher snapshot carries no conversation, a
+  notifications row, one wordmark, no Android-only model on iOS.
+- Web (baseline defects only): the theme switch for signed-in users, the code
+  page's hydration flash, the appearance-settings revert on reload (in review),
+  a desktop-route button on theme classes, a shared host-bridge test stub.
+
+### Architecture
+
+The web application is the renderer everywhere it can be: Electron loads it
+over the `HostBridge` contract and adds what a browser cannot (a native
+runtime, the CLI's sessions, the paired browser); Tauri would host the same
+renderer over the same contract if it returns (decision 4.1). VS Code is a
+window over the CLI: the app-server's protocol 8 carries sessions, turns,
+approvals, failures and now the models a host can reach. The Chrome extension
+is one speaker of a wire contract the shell also speaks, and other local
+clients reach the browser through the shell, never around it. Vocabulary that
+must agree across surfaces lives in one owner package; a Rust mirror is pinned
+by a test rather than trusted.
+
+### Shared sessions
+
+CLI ⇄ VS Code ⇄ Desktop share one store and one app-server: a session started
+in any of the three lists in the others with its surface, model, trust word and
+branch, and a message sent from the desktop appears in `agi session show`.
+Verified live in both directions for CLI and VS Code, and for the desktop
+against the CLI and the app-server call VS Code makes.
+
+### Browser integration
+
+The side panel works standalone (signed in through the sync host). Page
+context asks Chrome for the real host permission; the happy path needs one
+human click on Chrome's prompt (founder item). The CLI read a real paired
+Chrome page and returned its title on the cheap model; VS Code was proven at
+the app-server boundary. The panel's sign-out ending the shared web session and
+the panel's unpair reaching the shell are chrome-5, in flight.
+
+### Desktop
+
+Electron is the desktop product: product-only, native chrome, shared settings,
+local coding sessions, the browser bridge for local clients. Tauri stays frozen
+pending decision 4.1; its rows in the matrix are BLOCKED on that decision.
+
+### Verification
+
+Section 6 is the matrix. Classes used: VERIFIED for anything exercised in the
+running client (most rows), SOURCE-CONFIRMED where read but not run, INFERRED
+where a shared call stands in for a client not driven, BLOCKED where a founder
+item or a decision gates it. Every live QA turn ran on a cheap route.
+
+### Remaining blockers
+
+Founder items (section 4 and the founder file): the Tauri decision; the
+zero-price router on paid plans; a native sign-in path for the QA account; the
+Clerk development instance's Native API; one click on Chrome's host-permission
+prompt. Not founder-gated but open: on-device generation on the simulator
+(needs one run on a real device), the one-owner rule for the title-strip inset
+in `globals.css`, and whatever the web pass and chrome-5 still return.
+
+### Screen Studio flows
+
+Section 7 is the gate. Recordable today: Web (chat, settings, projects, the
+code surface), Electron (chat, settings, local coding sessions), VS Code (the
+whole coding workflow), CLI (chat, tools, approvals, the session picker),
+Chrome (side panel chat, projects, artifacts, history; page context after the
+human click), Mobile Local mode on the signed simulator build. Not yet: Mobile
+Cloud, Tauri.
+
+### Release status
+
+READY WITH MINOR POLISH for Web, Electron, VS Code, CLI and the Chrome side
+panel; NOT READY for Mobile Cloud mode (two founder items) and Tauri (decision
+4.1). The polish owed is listed in section 3 as the open rows and in the three
+running packages.
