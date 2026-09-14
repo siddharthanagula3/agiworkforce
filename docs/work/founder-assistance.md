@@ -569,7 +569,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0188 in production before the next deploy
+## [Database] Apply migrations 0183 to 0189 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -580,7 +580,7 @@ refuses to promote while a draft migration is unapplied.
    0175 to 0182 batch used: `pnpm db:migrate -- apply --target branch`, then
    `pnpm db:migrate -- apply --target production --confirm-production`, with
    the production URL exported for the command.
-2. The six drafts: `0183_video_generation_completion_notice.sql` (a claim
+2. The seven drafts: `0183_video_generation_completion_notice.sql` (a claim
    column so a finished video job is announced once), `0184_organization_shared_artifacts.sql`
    (artifact visibility plus the workspace grant table),
    `0185_org_shared_artifact_policy_recursion.sql` (splits the grant policy per
@@ -597,14 +597,23 @@ refuses to promote while a draft migration is unapplied.
    `0188_github_installation_verified_repositories.sql` (a
    `verified_repositories` column on `github_installations`, so a connected
    installation lists and clones only the repositories the linking GitHub
-   account proved it can reach). Apply all six together. The deployment carrying
-   0187 and 0188 must not go out before they are applied: the device pairing
-   insert and the GitHub connect flow both name the new columns.
+   account proved it can reach) and
+   `0189_user_memories_per_user_identity.sql` (moves the `user_memories` row key
+   from a global `id` to `(user_id, id)` and adds the `import_key` dedupe column,
+   so one account can no longer occupy another's memory row id). Apply all seven
+   in ascending order, 0183 first and 0189 last: each assumes the ones before it
+   have run. The deployment carrying 0187, 0188 and 0189 must not go out before
+   they are applied: the device pairing insert, the GitHub connect flow and the
+   memory import insert all name the new columns, and the memory sync and
+   auto-memory inserts name `(user_id, id)` as their conflict target, which the
+   old single-column key cannot satisfy.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0188 as applied; the deploy job's migration verify step passes; a video
+lists 0189 as applied; the deploy job's migration verify step passes; importing
+the same memory text twice adds it once and a memory sync push applies rather
+than conflicts; a video
 job completion produces one notice; an artifact and a conversation can each be
 shared with the workspace, read by a member, and refused to a signed-out
 visitor holding the link; a desktop pairs and refreshes without error; and the
