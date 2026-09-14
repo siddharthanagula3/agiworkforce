@@ -144,7 +144,12 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   context.subscriptions.push(
     vscode.workspace.onDidGrantWorkspaceTrust(refreshRuntimeSurfaces),
-    vscode.workspace.onDidChangeWorkspaceFolders(refreshRuntimeSurfaces),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void localRuntimes.retainWorkspaces(
+        (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+      );
+      refreshRuntimeSurfaces();
+    }),
   );
 
   if (chatState !== undefined && providerState !== undefined) {

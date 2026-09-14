@@ -22,6 +22,29 @@ describe('LocalRuntimePool', () => {
     expect(dispose).toHaveBeenCalledTimes(2);
   });
 
+  it('disposes the server of a workspace folder that is no longer open', async () => {
+    const clients: Array<{ cwd: string; dispose: ReturnType<typeof vi.fn> }> = [];
+    const pool = new LocalRuntimePool((cwd) => {
+      const client = {
+        cwd,
+        restart: vi.fn(async () => undefined),
+        dispose: vi.fn(async () => undefined),
+      };
+      clients.push(client);
+      return client;
+    });
+
+    const kept = pool.forWorkspace('/workspace/a');
+    pool.forWorkspace('/workspace/b');
+
+    await pool.retainWorkspaces(['/workspace/a']);
+
+    expect(clients[0]?.dispose).not.toHaveBeenCalled();
+    expect(clients[1]?.dispose).toHaveBeenCalledOnce();
+    expect(pool.forWorkspace('/workspace/a')).toBe(kept);
+    expect(pool.forWorkspace('/workspace/b')).not.toBe(clients[1]);
+  });
+
   it('restarts every workspace process while preserving stable client ownership', async () => {
     const clients: Array<{
       cwd: string;
